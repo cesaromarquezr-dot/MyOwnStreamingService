@@ -1,215 +1,262 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:netflix/main.dart';
+import 'app_core.dart';
 
-class signup extends StatefulWidget {
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
+
   @override
-  _signupState createState() => _signupState();
+  State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _signupState extends State<signup> {
-  bool isCheckbox = false;
+class _SignupScreenState extends State<SignupScreen> {
+  final usernameController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final confirmController = TextEditingController();
+
+  SubscriptionPlan selectedPlan = SubscriptionPlan.monthly;
+  bool rememberLogin = false;
+  bool obscurePassword = true;
+  bool obscureConfirm = true;
+  bool creatingAccount = false;
+
   @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-        child: Scaffold(
-          resizeToAvoidBottomInset: false,
-          body: Stack(
-            children: [
-              Image.network(
-                "https://images.unsplash.com/photo-1512070800540-0d4192faa057?ixid=MnwxMjA3fDB8MHxzZWFyY2h8MTB8fG5ldGZsaXglMjBiYWNrcm91bmR8ZW58MHwxfDB8fA%3D%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
-                height: double.infinity,
-                fit: BoxFit.cover,
-              ),
-              Container(
-                height: 800,
-                width: MediaQuery.of(context).size.width,
-                decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25),
-                    gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black45,
-                          Colors.black54,
-                        ]
-                    )
-                ),
-                margin: EdgeInsets.symmetric(vertical: 100,horizontal: 25),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.only(left: 35,top: 50),
-                      child: Image.asset('assets/symble.png',height: 80,width: 500,),
-                    ),
-                    Container(
-                      margin: EdgeInsets.all(25),
-                      child: TextField(
-                        decoration: InputDecoration(
-                            suffixIcon: Icon(FontAwesomeIcons.globe,color: Colors.red,),
-                            hintText: "Email or Phone No",
-                            hintStyle: TextStyle(
-                                color: Colors.black87,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w500,
-                              letterSpacing: 1
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(15),
-                                borderSide: BorderSide(color: Colors.black,width: 5)
-                            )
-                        ),
-                      ),
-                    ),
-                    Container(
-                      margin: EdgeInsets.symmetric(horizontal: 25),
-                      child: TextField(
-                        obscureText: true,
-                        decoration: InputDecoration(
-                            hintText: "Password",
-                            hintStyle: TextStyle(
-                                color: Colors.black87,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 1
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(15),
-                                borderSide: BorderSide(color: Colors.black,width: 5)
-                            )
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 25,),
-                    Container(
-                      margin: EdgeInsets.symmetric(horizontal: 25),
-                      child: TextField(
-                        obscureText: true,
-                        decoration: InputDecoration(
-                            hintText: "Confirm Password",
-                            hintStyle: TextStyle(
-                                color: Colors.black87,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 1
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(15),
-                                borderSide: BorderSide(color: Colors.black,width: 5)
-                            )
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 25,),
-                    Container(
-                      height: 40,
-                      alignment: Alignment.center,
-                      width: MediaQuery.of(context).size.width-100,
-                      margin: EdgeInsets.symmetric(horizontal: 25),
-                      decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(width: 2,color: Colors.red),
-                          boxShadow: [
-                            BoxShadow(
-                                blurRadius: 50,
-                                spreadRadius: 3,
-                                color: Colors.red
-                            )
-                          ]
-                      ),
-                      child: InkWell(
-                        onTap: (){
-                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => Home()));
-                        },
-                        child: Text("SIGN UP",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 20,
-                              letterSpacing: 3
-                          ),),
-                      ),
-                    ),
-                    SizedBox(height: 30,),
-                    InkWell(
-                      onTap: (){
-                        setState(() {
-                          isCheckbox = true;
-                        });
-                      },
-                      onDoubleTap: (){
-                        setState(() {
-                          isCheckbox = false;
-                        });
-                      },
-                      child: Container(
-                        margin: EdgeInsets.only(left: 80),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Icon(
-                              FontAwesomeIcons.checkSquare,
-                              size: 20,
-                              color:isCheckbox ? Colors.orangeAccent: Colors.white,),
-                            SizedBox(width: 20,),
-                            Text("Remenber my login",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontStyle: FontStyle.italic
-                              ),)
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 25,),
-                    Container(
-                      margin: EdgeInsets.only(left: 40),
-                      child: Row(
-                        children: [
-                          Text("Already Have an Account? ",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontStyle: FontStyle.italic,
-                                letterSpacing: 1
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: (){
-                              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => Home()));
-                            },
-                            child: Text("Sign In",
-                              style: TextStyle(
-                                  color: Colors.red,
-                                  fontSize: 18,
-                                  fontStyle: FontStyle.italic,
-                                  letterSpacing: 1,
-                                  decorationColor: Colors.red,
-                                  decoration: TextDecoration.underline,
-                                  decorationThickness: 1.5
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
-              )
-            ],
-          ),
-        )
+  void dispose() {
+    usernameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> createAccount() async {
+    if (creatingAccount) return;
+
+    final username = usernameController.text.trim();
+    final email = emailController.text.trim();
+    final password = passwordController.text;
+
+    if (username.isEmpty || email.isEmpty || password.isEmpty ||
+        confirmController.text.isEmpty) {
+      showMessage('Please fill in every field.');
+      return;
+    }
+
+    if (password.length < 6) {
+      showMessage('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (password != confirmController.text) {
+      showMessage('Passwords do not match.');
+      return;
+    }
+
+    setState(() => creatingAccount = true);
+
+    try {
+      await AppController.instance.createAccountWithBackend(
+  username: username,
+  email: email,
+  password: password,
+  plan: selectedPlan,
+  firstProfileName: username,
+);
+
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/main', (route) => false);
+    } catch (error) {
+      if (!mounted) return;
+      String message = 'Unable to create account.';
+      final errorText = error.toString();
+
+      if (errorText.contains('Username is already')) {
+        message = 'That username is already in use.';
+      } else if (errorText.contains('Email is already')) {
+        message = 'That email is already in use.';
+      } else if (errorText.contains('Password')) {
+        message = errorText;
+      } else if (errorText.isNotEmpty) {
+        message = errorText.replaceFirst('BackendApiException:', '').trim();
+      }
+      showMessage(message);
+    } finally {
+      if (mounted) setState(() => creatingAccount = false);
+    }
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: const Text('Create Account'),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 550),
+            child: Column(
+              children: [
+                Image.asset('assets/logo.png', height: 80),
+                const SizedBox(height: 30),
+                TextField(
+                  controller: usernameController,
+                  enabled: !creatingAccount,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    labelStyle: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                TextField(
+                  controller: emailController,
+                  enabled: !creatingAccount,
+                  style: const TextStyle(color: Colors.white),
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    labelStyle: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                TextField(
+                  controller: passwordController,
+                  enabled: !creatingAccount,
+                  obscureText: obscurePassword,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    suffixIcon: IconButton(
+                      onPressed: creatingAccount
+                          ? null
+                          : () => setState(() => obscurePassword = !obscurePassword),
+                      icon: Icon(
+                        obscurePassword ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                TextField(
+                  controller: confirmController,
+                  enabled: !creatingAccount,
+                  obscureText: obscureConfirm,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    suffixIcon: IconButton(
+                      onPressed: creatingAccount
+                          ? null
+                          : () => setState(() => obscureConfirm = !obscureConfirm),
+                      icon: Icon(
+                        obscureConfirm ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Choose your subscription',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                RadioListTile<SubscriptionPlan>(
+                  value: SubscriptionPlan.monthly,
+                  groupValue: selectedPlan,
+                  onChanged: creatingAccount ? null : (value) {
+                    if (value != null) setState(() => selectedPlan = value);
+                  },
+                  title: const Text(
+                    '\$8 USD / month',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: const Text(
+                    'Billed every month',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                RadioListTile<SubscriptionPlan>(
+                  value: SubscriptionPlan.yearly,
+                  groupValue: selectedPlan,
+                  onChanged: creatingAccount ? null : (value) {
+                    if (value != null) setState(() => selectedPlan = value);
+                  },
+                  title: const Text(
+                    '\$50 USD / year',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: const Text(
+                    'Save \$46 compared with monthly billing',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                CheckboxListTile(
+                  value: rememberLogin,
+                  onChanged: creatingAccount ? null : (value) =>
+                      setState(() => rememberLogin = value ?? false),
+                  title: const Text(
+                    'Remember my login',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: creatingAccount ? null : createAccount,
+                    child: creatingAccount
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text(
+                            'CREATE ACCOUNT',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: creatingAccount
+                      ? null
+                      : () => Navigator.pushNamedAndRemoveUntil(
+                            context, '/login', (route) => false),
+                  child: const Text('Already have an account? Sign in'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class signup extends SignupScreen {
+  const signup({super.key});
 }

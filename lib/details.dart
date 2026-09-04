@@ -1,70 +1,443 @@
-import 'package:netflix/recently%20watched.dart';
+import 'package:flutter/material.dart';
 
-import 'hollywood.dart';
+import 'app_core.dart';
+import 'player.dart';
+import 'trailer.dart';
 
+class MediaDetailsScreen extends StatelessWidget {
+  final MediaItem media;
 
-List<recent> getRecent()
-{
-  // ignore: deprecated_member_use
-  List<recent> watched = new List();
-  recent rs = new recent();
+  const MediaDetailsScreen({
+    super.key,
+    required this.media,
+  });
 
-  //1
-  rs.imgurl = "https://i.pinimg.com/236x/d3/7a/03/d37a037c2a43340c0df7f6ab91e9b204.jpg";
-  rs.name = "Arrow";
-  watched.add(rs);
-  rs = new recent();
+  void showExtras(
+    BuildContext context,
+    MediaItem item,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey.shade900,
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: item.extras.isEmpty
+                ? const SizedBox(
+                    height: 150,
+                    child: Center(
+                      child: Text(
+                        'No extras were imported for this title.',
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      const Text(
+                        'EXTRAS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      ...item.extras.map(
+                        (extra) => ListTile(
+                          leading: const Icon(
+                            Icons.movie_filter,
+                            color: Colors.white,
+                          ),
+                          title: Text(
+                            extra.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                            ),
+                          ),
+                          subtitle: extra.description == null
+                              ? null
+                              : Text(
+                                  extra.description!,
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
+    );
+  }
 
-  //2
-  rs.imgurl = "https://i.pinimg.com/236x/6a/48/b3/6a48b3e46b400cef3352e852b2fa012d.jpg";
-  rs.name = "Vampire Dairies";
-  watched.add(rs);
-  rs = new recent();
+  void playMedia(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlayerScreen(
+          media: media,
+        ),
+      ),
+    );
+  }
 
-  //3
-  rs.imgurl = "https://i.pinimg.com/236x/f8/e6/fd/f8e6fd8e23848bc8ce934e56449941cb.jpg";
-  rs.name = "Dark";
-  watched.add(rs);
-  rs = new recent();
+  void playTrailer(BuildContext context) {
+    final trailer = media.trailer;
 
-  //4
-  rs.imgurl = "https://i.pinimg.com/236x/33/ae/7e/33ae7e4d6c49f9c378e7e9e03cd90833.jpg";
-  rs.name = "Lock And Key";
-  watched.add(rs);
-  rs = new recent();
+    if (trailer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No trailer is available for this title.',
+          ),
+        ),
+      );
+      return;
+    }
 
-  return watched;
-}
+    openTrailer(
+      context,
+      trailer,
+    );
+  }
 
-List<tophollywood> getHollywood()
-{
-  // ignore: deprecated_member_use
-  List<tophollywood> movie = new List();
-  tophollywood topmoviee = new tophollywood();
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppController.instance;
 
-  //1
-  topmoviee.imgurl = "https://i.pinimg.com/236x/fe/42/ec/fe42ec66f0ff5419f7f2dfc59e9d93dd.jpg";
-  topmoviee.name = "Stowaway";
-  movie.add(topmoviee);
-  topmoviee = new tophollywood();
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: Text(
+          media.title,
+          style: const TextStyle(
+            color: Colors.white,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (media.posterUrl != null &&
+                media.posterUrl!.isNotEmpty)
+              Image.network(
+                media.posterUrl!,
+                width: double.infinity,
+                height: 450,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  return Container(
+                    height: 450,
+                    color: Colors.grey.shade900,
+                    child: const Center(
+                      child: Icon(
+                        Icons.movie,
+                        color: Colors.white,
+                        size: 80,
+                      ),
+                    ),
+                  );
+                },
+              )
+            else
+              Container(
+                height: 450,
+                width: double.infinity,
+                color: Colors.grey.shade900,
+                child: const Center(
+                  child: Icon(
+                    Icons.movie,
+                    color: Colors.white,
+                    size: 80,
+                  ),
+                ),
+              ),
 
-  //2
-  topmoviee.imgurl = "https://i.pinimg.com/236x/c1/a9/b1/c1a9b1f728efae31d7c75d24b99c4d79.jpg";
-  topmoviee.name = "Invictus";
-  movie.add(topmoviee);
-  topmoviee = new tophollywood();
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    media.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
 
-  //3
-  topmoviee.imgurl = "https://i.pinimg.com/236x/49/c0/ba/49c0ba637f337e2ec1f8a59c8d6cea4d.jpg";
-  topmoviee.name = "Miracle";
-  movie.add(topmoviee);
-  topmoviee = new tophollywood();
+                  const SizedBox(height: 10),
 
-  //4
-  topmoviee.imgurl = "https://i.pinimg.com/236x/a5/65/9f/a5659f407ceaadb017fd85c3fc36e710.jpg";
-  topmoviee.name = "Antman";
-  movie.add(topmoviee);
-  topmoviee = new tophollywood();
+                  Text(
+                    '${media.year ?? ''} • ${media.mediaTypeName}',
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 16,
+                    ),
+                  ),
 
-  return movie;
+                  const SizedBox(height: 20),
+
+                  if (media.description.isNotEmpty)
+                    Text(
+                      media.description,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        height: 1.5,
+                      ),
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          playMedia(context);
+                        },
+                        icon: const Icon(
+                          Icons.play_arrow,
+                        ),
+                        label: const Text('PLAY'),
+                      ),
+
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          controller.toggleLike(media);
+                        },
+                        icon: Icon(
+                          media.liked
+                              ? Icons.thumb_up
+                              : Icons.thumb_up_outlined,
+                        ),
+                        label: const Text('LIKE'),
+                      ),
+
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          controller.toggleDislike(media);
+                        },
+                        icon: Icon(
+                          media.disliked
+                              ? Icons.thumb_down
+                              : Icons.thumb_down_outlined,
+                        ),
+                        label: const Text('DISLIKE'),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  if (media.genre.isNotEmpty) ...[
+                    const Text(
+                      'Genres',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: media.genre
+                          .map(
+                            (genre) => Chip(
+                              label: Text(genre),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 30),
+                  ],
+
+                  if (media.cast.isNotEmpty) ...[
+                    const Text(
+                      'Cast',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    SizedBox(
+                      height: 170,
+                      child: ListView.builder(
+                        scrollDirection:
+                            Axis.horizontal,
+                        itemCount:
+                            media.cast.length,
+                        itemBuilder: (_, index) {
+                          final person =
+                              media.cast[index];
+
+                          return Container(
+                            width: 120,
+                            margin:
+                                const EdgeInsets.only(
+                              right: 12,
+                            ),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 45,
+                                  backgroundImage:
+                                      person.photoUrl !=
+                                                  null &&
+                                              person
+                                                  .photoUrl!
+                                                  .isNotEmpty
+                                          ? NetworkImage(
+                                              person.photoUrl!,
+                                            )
+                                          : null,
+                                  child: person.photoUrl ==
+                                              null ||
+                                          person
+                                              .photoUrl!
+                                              .isEmpty
+                                      ? const Icon(
+                                          Icons.person,
+                                        )
+                                      : null,
+                                ),
+
+                                const SizedBox(height: 8),
+
+                                Text(
+                                  person.actorName,
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow
+                                          .ellipsis,
+                                  style:
+                                      const TextStyle(
+                                    color: Colors.white,
+                                  ),
+                                ),
+
+                                Text(
+                                  person.characterName,
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow
+                                          .ellipsis,
+                                  style:
+                                      const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 30),
+
+                  if (media.music.isNotEmpty) ...[
+                    const Text(
+                      'Music',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    ...media.music.map(
+                      (song) => ListTile(
+                        contentPadding:
+                            EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.music_note,
+                          color: Colors.white,
+                        ),
+                        title: Text(
+                          song.title,
+                          style:
+                              const TextStyle(
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          song.artistOrComposer,
+                          style:
+                              const TextStyle(
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 30),
+
+                  if (media.trailer != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          playTrailer(context);
+                        },
+                        icon: const Icon(
+                          Icons.ondemand_video,
+                        ),
+                        label: const Text(
+                          'WATCH TRAILER',
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 15),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        showExtras(
+                          context,
+                          media,
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.movie_filter,
+                      ),
+                      label: const Text(
+                        'EXTRAS',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
