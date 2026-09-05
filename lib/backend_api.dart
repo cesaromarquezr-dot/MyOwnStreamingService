@@ -657,47 +657,100 @@ class BackendApi {
 
   /// Creates a recommendation for the group.
   ///
+  /// A recommendation can be:
+  ///
+  /// - A catalog item, when mediaId is supplied.
+  /// - A manually entered movie/show that does not exist in the
+  ///   catalog, when mediaId is null.
+  ///
   /// activeParticipants contains the profile IDs that were
   /// active when voting started.
   ///
-  /// The backend records those profiles as the voters who
-  /// are eligible to participate in this recommendation.
+  /// votingDurationHours controls how long voting remains open.
+  /// The backend uses 24 hours when this value is omitted.
   Future<Map<String, dynamic>> createGroupRecommendation({
-    required String mediaId,
+    required String title,
+    required String type,
     required String profileId,
+    String? mediaId,
     Set<String>? activeParticipants,
+    int? votingDurationHours,
   }) async {
     _requireAuthentication();
 
-    if (mediaId.trim().isEmpty) {
+    final String cleanTitle =
+        title.trim();
+
+    if (cleanTitle.isEmpty) {
       throw BackendApiException(
-        'Media ID is required.',
+        'Recommendation title is required.',
       );
     }
 
-    if (profileId.trim().isEmpty) {
+    final String cleanType =
+        type.trim();
+
+    if (cleanType != 'movie' &&
+        cleanType != 'tvShow') {
+      throw BackendApiException(
+        'Recommendation type must be "movie" or "tvShow".',
+      );
+    }
+
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanProfileId.isEmpty) {
       throw BackendApiException(
         'Profile ID is required.',
       );
     }
 
-    final participants =
+    String? cleanMediaId =
+        mediaId?.trim();
+
+    if (cleanMediaId != null &&
+        cleanMediaId.isEmpty) {
+      cleanMediaId = null;
+    }
+
+    if (votingDurationHours != null &&
+        votingDurationHours <= 0) {
+      throw BackendApiException(
+        'Voting duration must be greater than zero.',
+      );
+    }
+
+    final Set<String> participants =
         <String>{
       ...?activeParticipants,
-      profileId.trim(),
+      cleanProfileId,
     };
+
+    final Map<String, dynamic> body =
+        <String, dynamic>{
+      'title': cleanTitle,
+      'type': cleanType,
+      'profileId': cleanProfileId,
+      'activeParticipants':
+          participants.toList(),
+    };
+
+    if (cleanMediaId != null) {
+      body['mediaId'] = cleanMediaId;
+    }
+
+    if (votingDurationHours != null) {
+      body['votingDurationHours'] =
+          votingDurationHours;
+    }
 
     final response = await http.post(
       Uri.parse(
         '$baseUrl/group/recommendations',
       ),
       headers: _headers,
-      body: jsonEncode({
-        'mediaId': mediaId.trim(),
-        'profileId': profileId.trim(),
-        'activeParticipants':
-            participants.toList(),
-      }),
+      body: jsonEncode(body),
     );
 
     return _requireSuccess(
@@ -801,7 +854,7 @@ class BackendApi {
   /// Closes voting on a group recommendation.
   ///
   /// If there is a majority YES, the backend also adds the
-  /// media to the account's shared group wishlist.
+  /// recommendation to the account's shared group wishlist.
   Future<Map<String, dynamic>>
       closeGroupRecommendationVoting({
     required String recommendationId,

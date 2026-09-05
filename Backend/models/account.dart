@@ -41,16 +41,22 @@ class Account {
   // The group wishlist belongs to the ACCOUNT rather than an
   // individual profile.
   //
-  // When a group recommendation receives a majority YES vote,
-  // the recommendation service adds the media ID here.
+  // Catalog media continues to use wishlistMediaIds.
   //
-  // The media is NOT automatically owned by every profile.
+  // Group recommendations that do NOT exist in the media catalog
+  // use wishlistRecommendationIds.
   //
-  // When someone acquires/rips the media, it can be removed from
-  // this shared wishlist and added to the selected profile's
-  // personal library.
+  // This allows the group recommendation system to support titles
+  // entered manually by users.
   //
   final List<String> wishlistMediaIds;
+
+  /// IDs of approved GroupRecommendation objects that were added
+  /// to the shared group wishlist.
+  ///
+  /// This is used when a recommendation does not have a catalog
+  /// mediaId.
+  final List<String> wishlistRecommendationIds;
 
   Account({
     required this.id,
@@ -60,9 +66,11 @@ class Account {
     this.subscription,
     List<Profile>? profiles,
     List<String>? wishlistMediaIds,
+    List<String>? wishlistRecommendationIds,
   })  : profiles = profiles ?? [],
-        wishlistMediaIds =
-            wishlistMediaIds ?? [];
+        wishlistMediaIds = wishlistMediaIds ?? [],
+        wishlistRecommendationIds =
+            wishlistRecommendationIds ?? [];
 
   // ------------------------------------------------------------
   // SUBSCRIPTION
@@ -71,8 +79,7 @@ class Account {
   bool get hasActiveSubscription {
     subscription?.expireIfNeeded();
 
-    return subscription?.isCurrentlyActive ??
-        false;
+    return subscription?.isCurrentlyActive ?? false;
   }
 
   // ------------------------------------------------------------
@@ -84,13 +91,13 @@ class Account {
   }
 
   Profile? getProfileById(String profileId) {
-    final id = profileId.trim();
+    final String id = profileId.trim();
 
     if (id.isEmpty) {
       return null;
     }
 
-    for (final profile in profiles) {
+    for (final Profile profile in profiles) {
       if (profile.id == id) {
         return profile;
       }
@@ -100,14 +107,14 @@ class Account {
   }
 
   Profile? getProfileByName(String name) {
-    final normalizedName =
+    final String normalizedName =
         name.trim().toLowerCase();
 
     if (normalizedName.isEmpty) {
       return null;
     }
 
-    for (final profile in profiles) {
+    for (final Profile profile in profiles) {
       if (profile.name.trim().toLowerCase() ==
           normalizedName) {
         return profile;
@@ -140,21 +147,19 @@ class Account {
   }
 
   bool removeProfile(String profileId) {
-    final id = profileId.trim();
+    final String id = profileId.trim();
 
     if (id.isEmpty) {
       return false;
     }
 
-    final originalLength =
-        profiles.length;
+    final int originalLength = profiles.length;
 
     profiles.removeWhere(
       (profile) => profile.id == id,
     );
 
-    return profiles.length !=
-        originalLength;
+    return profiles.length != originalLength;
   }
 
   // ------------------------------------------------------------
@@ -165,7 +170,7 @@ class Account {
     String profileId,
     String mediaId,
   ) {
-    final profile =
+    final Profile? profile =
         getProfileById(profileId);
 
     if (profile == null) {
@@ -179,7 +184,7 @@ class Account {
     String profileId,
     String mediaId,
   ) {
-    final profile =
+    final Profile? profile =
         getProfileById(profileId);
 
     if (profile == null) {
@@ -193,7 +198,7 @@ class Account {
     String profileId,
     String mediaId,
   ) {
-    final profile =
+    final Profile? profile =
         getProfileById(profileId);
 
     if (profile == null) {
@@ -207,7 +212,7 @@ class Account {
     String profileId,
     String mediaId,
   ) {
-    final profile =
+    final Profile? profile =
         getProfileById(profileId);
 
     if (profile == null) {
@@ -218,11 +223,11 @@ class Account {
   }
 
   // ------------------------------------------------------------
-  // GROUP WISHLIST
+  // GROUP WISHLIST - CATALOG MEDIA
   // ------------------------------------------------------------
 
   bool isInWishlist(String mediaId) {
-    final id = mediaId.trim();
+    final String id = mediaId.trim();
 
     if (id.isEmpty) {
       return false;
@@ -232,7 +237,7 @@ class Account {
   }
 
   bool addToWishlist(String mediaId) {
-    final id = mediaId.trim();
+    final String id = mediaId.trim();
 
     if (id.isEmpty) {
       return false;
@@ -248,13 +253,13 @@ class Account {
   }
 
   bool removeFromWishlist(String mediaId) {
-    final id = mediaId.trim();
+    final String id = mediaId.trim();
 
     if (id.isEmpty) {
       return false;
     }
 
-    final originalLength =
+    final int originalLength =
         wishlistMediaIds.length;
 
     wishlistMediaIds.remove(id);
@@ -264,7 +269,67 @@ class Account {
   }
 
   // ------------------------------------------------------------
-  // ACQUIRE GROUP WISHLIST ITEM
+  // GROUP WISHLIST - RECOMMENDATIONS
+  // ------------------------------------------------------------
+
+  /// Returns true if an approved group recommendation is already
+  /// in the shared wishlist.
+  bool isRecommendationInWishlist(
+    String recommendationId,
+  ) {
+    final String id = recommendationId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    return wishlistRecommendationIds.contains(id);
+  }
+
+  /// Adds an approved group recommendation to the shared
+  /// wishlist.
+  ///
+  /// This is used for recommendations that do not have a catalog
+  /// mediaId.
+  bool addRecommendationToWishlist(
+    String recommendationId,
+  ) {
+    final String id = recommendationId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    if (isRecommendationInWishlist(id)) {
+      return false;
+    }
+
+    wishlistRecommendationIds.add(id);
+
+    return true;
+  }
+
+  /// Removes a recommendation from the shared wishlist.
+  bool removeRecommendationFromWishlist(
+    String recommendationId,
+  ) {
+    final String id = recommendationId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    final int originalLength =
+        wishlistRecommendationIds.length;
+
+    wishlistRecommendationIds.remove(id);
+
+    return wishlistRecommendationIds.length !=
+        originalLength;
+  }
+
+  // ------------------------------------------------------------
+  // ACQUIRE GROUP WISHLIST ITEM - CATALOG MEDIA
   // ------------------------------------------------------------
   //
   // Removes the media from the shared account wishlist and,
@@ -274,18 +339,18 @@ class Account {
     String mediaId, {
     String? profileId,
   }) {
-    final id = mediaId.trim();
+    final String id = mediaId.trim();
 
     if (id.isEmpty) {
       return false;
     }
 
-    final removed =
+    final bool removed =
         removeFromWishlist(id);
 
     if (profileId != null &&
         profileId.trim().isNotEmpty) {
-      final profile =
+      final Profile? profile =
           getProfileById(profileId);
 
       profile?.addOwnedMedia(id);
@@ -301,7 +366,7 @@ class Account {
   Map<String, dynamic> toJson({
     bool includeSensitiveData = false,
   }) {
-    final data =
+    final Map<String, dynamic> data =
         <String, dynamic>{
       'id': id,
       'username': username,
@@ -309,7 +374,7 @@ class Account {
 
       'profiles': profiles
           .map(
-            (profile) =>
+            (Profile profile) =>
                 profile.toJson(),
           )
           .toList(),
@@ -320,9 +385,16 @@ class Account {
       'maxProfiles':
           maxProfiles,
 
-      // Shared account-level group wishlist.
+      // Shared account-level group wishlist
+      // containing catalog media.
       'wishlistMediaIds':
           wishlistMediaIds,
+
+      // Shared account-level group wishlist
+      // containing approved recommendations that
+      // may not exist in the catalog.
+      'wishlistRecommendationIds':
+          wishlistRecommendationIds,
 
       'subscription':
           subscription?.toJson(),
@@ -332,8 +404,7 @@ class Account {
     };
 
     if (includeSensitiveData) {
-      data['password'] =
-          password;
+      data['password'] = password;
     }
 
     return data;

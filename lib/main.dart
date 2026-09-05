@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -436,7 +438,6 @@ class HomeScreen extends StatelessWidget {
         ),
         actions: [
           ActivityButton(),
-
           IconButton(
             tooltip: 'Group',
             icon: const Icon(Icons.groups),
@@ -450,7 +451,6 @@ class HomeScreen extends StatelessWidget {
               );
             },
           ),
-
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'profiles') {
@@ -507,18 +507,14 @@ class HomeScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 8),
-
             Text(
               'Your personal library',
               style: TextStyle(
                 color: Colors.grey.shade400,
               ),
             ),
-
             const SizedBox(height: 25),
-
             if (library.isEmpty)
               Card(
                 child: Padding(
@@ -530,9 +526,7 @@ class HomeScreen extends StatelessWidget {
                         size: 70,
                         color: Colors.grey,
                       ),
-
                       const SizedBox(height: 15),
-
                       const Text(
                         'Your library is empty',
                         style: TextStyle(
@@ -540,9 +534,7 @@ class HomeScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       const SizedBox(height: 10),
-
                       Text(
                         'Add your own movies and TV shows to build your personal streaming library.',
                         textAlign: TextAlign.center,
@@ -550,9 +542,7 @@ class HomeScreen extends StatelessWidget {
                           color: Colors.grey.shade400,
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
                       ElevatedButton.icon(
                         onPressed: () {
                           Navigator.push(
@@ -572,7 +562,6 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
             if (controller.watched.isNotEmpty) ...[
               const SectionTitle(
                 title: 'Recently Watched',
@@ -582,7 +571,6 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 25),
             ],
-
             if (movies.isNotEmpty) ...[
               const SectionTitle(
                 title: 'Movies',
@@ -592,7 +580,6 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 25),
             ],
-
             if (tvShows.isNotEmpty) ...[
               const SectionTitle(
                 title: 'TV Shows',
@@ -602,7 +589,6 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 25),
             ],
-
             if (library.isNotEmpty) ...[
               const SectionTitle(
                 title: 'My Library',
@@ -612,7 +598,6 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 25),
             ],
-
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.push(
@@ -628,9 +613,7 @@ class HomeScreen extends StatelessWidget {
                 'Add Movie or Show',
               ),
             ),
-
             const SizedBox(height: 15),
-
             OutlinedButton.icon(
               onPressed: () {
                 Navigator.push(
@@ -671,7 +654,6 @@ class ActivityButton extends StatelessWidget {
           const Icon(
             Icons.notifications_outlined,
           ),
-
           if (controller.activity.isNotEmpty)
             Positioned(
               right: 0,
@@ -713,9 +695,7 @@ class ActivityButton extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       const SizedBox(height: 15),
-
                       Expanded(
                         child: activity.isEmpty
                             ? const Center(
@@ -917,9 +897,7 @@ class MediaCard extends StatelessWidget {
                       ),
               ),
             ),
-
             const SizedBox(height: 7),
-
             Text(
               media.title,
               maxLines: 2,
@@ -928,7 +906,6 @@ class MediaCard extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             if (media.releaseYear != null)
               Text(
                 media.releaseYear.toString(),
@@ -1119,13 +1096,10 @@ class _ImportMediaScreenState
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 10),
-
                   const Text(
                     'Connect this app to your home server and ARM to detect and import your own discs.',
                   ),
-
                   SwitchListTile(
                     contentPadding:
                         EdgeInsets.zero,
@@ -1144,7 +1118,6 @@ class _ImportMediaScreenState
                       });
                     },
                   ),
-
                   const ListTile(
                     contentPadding:
                         EdgeInsets.zero,
@@ -1158,24 +1131,18 @@ class _ImportMediaScreenState
                       'Waiting for home-server connection',
                     ),
                   ),
-
                   if (importing) ...[
                     const SizedBox(height: 10),
-
                     LinearProgressIndicator(
                       value: progress,
                     ),
-
                     const SizedBox(height: 8),
-
                     Text(
                       'Importing '
                       '${(progress * 100).round()}%',
                     ),
                   ],
-
                   const SizedBox(height: 10),
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -1194,9 +1161,7 @@ class _ImportMediaScreenState
               ),
             ),
           ),
-
           const SizedBox(height: 25),
-
           const Text(
             'Manual Import / Metadata',
             style: TextStyle(
@@ -1204,9 +1169,7 @@ class _ImportMediaScreenState
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 15),
-
           DropdownButtonFormField<String>(
             initialValue: selectedType,
             decoration: const InputDecoration(
@@ -1231,9 +1194,7 @@ class _ImportMediaScreenState
               });
             },
           ),
-
           const SizedBox(height: 15),
-
           TextField(
             controller: titleController,
             decoration: const InputDecoration(
@@ -1241,9 +1202,7 @@ class _ImportMediaScreenState
               border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 15),
-
           TextField(
             controller: yearController,
             keyboardType:
@@ -1253,9 +1212,7 @@ class _ImportMediaScreenState
               border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 15),
-
           TextField(
             controller: posterController,
             decoration: const InputDecoration(
@@ -1264,9 +1221,7 @@ class _ImportMediaScreenState
               border: OutlineInputBorder(),
             ),
           ),
-
           const SizedBox(height: 20),
-
           SizedBox(
             height: 50,
             child: ElevatedButton(
@@ -1276,9 +1231,7 @@ class _ImportMediaScreenState
               ),
             ),
           ),
-
           const SizedBox(height: 30),
-
           Text(
             'Current profile: '
             '${controller.currentProfile?.name ?? 'None'}',
@@ -1373,18 +1326,14 @@ class _PlayerScreenState
                     size: 100,
                     color: Colors.white,
                   ),
-
                   const SizedBox(height: 20),
-
                   Text(
                     'PLAYER',
                     style: TextStyle(
                       color: Colors.grey.shade400,
                     ),
                   ),
-
                   const SizedBox(height: 10),
-
                   Text(
                     media.title,
                     style: const TextStyle(
@@ -1396,7 +1345,6 @@ class _PlayerScreenState
               ),
             ),
           ),
-
           Slider(
             value: position,
             min: 0,
@@ -1419,7 +1367,6 @@ class _PlayerScreenState
                     }
                   },
           ),
-
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.only(
@@ -1452,7 +1399,6 @@ class _PlayerScreenState
                       'Audio & Subtitles',
                     ),
                   ),
-
                   OutlinedButton.icon(
                     onPressed: () {
                       Navigator.push(
@@ -1472,7 +1418,6 @@ class _PlayerScreenState
                       'GROUP SHARE',
                     ),
                   ),
-
                   OutlinedButton.icon(
                     onPressed: () {
                       ScaffoldMessenger.of(
@@ -1595,15 +1540,11 @@ class _ProfileScreenState
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 5),
-
           const Text(
             'Up to 7 profiles with no extra charge.',
           ),
-
           const SizedBox(height: 20),
-
           ...account.profiles.map(
             (profile) => Card(
               child: ListTile(
@@ -1661,9 +1602,7 @@ class _ProfileScreenState
               ),
             ),
           ),
-
           const SizedBox(height: 15),
-
           if (account.profiles.length < 7)
             ElevatedButton.icon(
               onPressed: () {
@@ -1680,9 +1619,7 @@ class _ProfileScreenState
                 'ADD PROFILE',
               ),
             ),
-
           const SizedBox(height: 30),
-
           Card(
             child: ListTile(
               leading: const Icon(
@@ -1709,9 +1646,7 @@ class _ProfileScreenState
               ),
             ),
           ),
-
           const SizedBox(height: 20),
-
           OutlinedButton(
             onPressed: () async {
               await controller.logoutFromBackend();
@@ -1781,7 +1716,6 @@ class _AddProfileDialogState
             'CANCEL',
           ),
         ),
-
         ElevatedButton(
           onPressed: () {
             final name =
@@ -1826,9 +1760,7 @@ class SubscribeDialog extends StatelessWidget {
           const Text(
             'Choose your subscription.',
           ),
-
           const SizedBox(height: 20),
-
           ListTile(
             title: const Text(
               '\$9.99 USD / month',
@@ -1844,7 +1776,6 @@ class SubscribeDialog extends StatelessWidget {
               Navigator.pop(context);
             },
           ),
-
           ListTile(
             title: const Text(
               '\$99.99 USD / year',
@@ -1912,8 +1843,10 @@ class _GroupHubScreenState
     }
 
     try {
-      await controller.loadGroupRecommendations();
-      await controller.loadGroupWishlist();
+      await Future.wait([
+        controller.loadGroupWishlist(),
+        controller.loadGroupRecommendations(),
+      ]);
     } catch (error) {
       if (!mounted) return;
 
@@ -1937,7 +1870,9 @@ class _GroupHubScreenState
     final text =
         messageController.text.trim();
 
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      return;
+    }
 
     AppController.instance.sendGroupMessage(
       message: text,
@@ -1960,59 +1895,26 @@ class _GroupHubScreenState
     }
   }
 
-  Future<void> vote(
-    Map<String, dynamic> recommendation,
-    String voteValue,
-  ) async {
+  Future<void> refreshRecommendations() async {
     final controller =
         AppController.instance;
 
-    final recommendationId =
-        recommendation['id']?.toString() ?? '';
-
-    final profileId =
-        controller.currentProfile?.id ?? '';
-
-    if (recommendationId.isEmpty ||
-        profileId.isEmpty) {
-      return;
-    }
-
     try {
-      await controller.voteOnGroupRecommendation(
-        recommendationId: recommendationId,
-        profileId: profileId,
-        vote: voteValue,
-      );
-
       await controller.loadGroupRecommendations();
 
-      if (!context.mounted) return;
-
-      setState(() {});
-
-      final updated =
-          controller.groupRecommendations
-              .where(
-                (item) =>
-                    item['id']?.toString() ==
-                    recommendationId,
-              )
-              .toList();
-
-      if (updated.isNotEmpty &&
-          updated.first['status']?.toString() ==
-              'approved') {
-        await controller.loadGroupWishlist();
-
-        if (!mounted) return;
-
-Navigator.pop(context);
+      if (mounted) {
+        setState(() {});
       }
     } catch (error) {
       if (!mounted) return;
 
-Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to refresh recommendations: $error',
+          ),
+        ),
+      );
     }
   }
 
@@ -2020,9 +1922,6 @@ Navigator.pop(context);
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
-
-    final currentProfile =
-        controller.currentProfile;
 
     return Scaffold(
       appBar: AppBar(
@@ -2044,137 +1943,79 @@ Navigator.pop(context);
               child: ListView(
                 physics:
                     const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(15),
+                padding:
+                    const EdgeInsets.all(15),
                 children: [
-                  // ==================================================
-                  // GROUP RECOMMENDATIONS
-                  // ==================================================
-
                   Row(
                     children: [
                       const Expanded(
                         child: Text(
-                          'Group Recommendations',
+                          'Group Chat',
                           style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
                       ),
-                      IconButton(
-                        tooltip:
-                            'Add recommendation',
-                        icon: const Icon(
-                          Icons.add_circle,
-                        ),
+                      ElevatedButton.icon(
                         onPressed:
                             openRecommendationDialog,
+                        icon: const Icon(
+                          Icons.movie_outlined,
+                        ),
+                        label: const Text(
+                          'RECOMMEND',
+                        ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 8),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed:
-                          openRecommendationDialog,
-                      icon: const Icon(
-                        Icons.movie_outlined,
-                      ),
-                      label: const Text(
-                        'ADD A MOVIE/SHOW RECOMMENDATION',
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 15),
 
-                  if (loading)
-                    const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Center(
-                        child:
-                            CircularProgressIndicator(),
-                      ),
-                    ),
-
-                  if (!loading &&
-                      controller
-                          .groupRecommendations
-                          .isEmpty)
-                    Card(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.groups_outlined,
-                              size: 50,
-                            ),
-                            const SizedBox(
-                              height: 10,
-                            ),
-                            const Text(
-                              'No group recommendations yet.',
-                              style:
-                                  TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(
-                              height: 5,
-                            ),
-                            Text(
-                              'Recommend a movie or show for everyone to vote on.',
-                              textAlign:
-                                  TextAlign.center,
-                              style: TextStyle(
-                                color: Colors
-                                    .grey
-                                    .shade400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                  ...controller
+                  if (controller
                       .groupRecommendations
-                      .map(
-                        (recommendation) =>
-                            GroupRecommendationCard(
-                          recommendation:
-                              recommendation,
-                          currentProfileId:
-                              currentProfile?.id,
-                          onVote: (value) =>
-                              vote(
-                            recommendation,
-                            value,
+                      .isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Group Recommendations',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-
-                  const SizedBox(height: 25),
-
-                  // ==================================================
-                  // GROUP CHAT
-                  // ==================================================
-
-                  const Text(
-                    'Group Chat',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                        IconButton(
+                          tooltip:
+                              'Refresh recommendations',
+                          icon: const Icon(
+                            Icons.refresh,
+                          ),
+                          onPressed:
+                              refreshRecommendations,
+                        ),
+                      ],
                     ),
-                  ),
-
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 8),
+                    ...controller
+                        .groupRecommendations
+                        .map(
+                          (recommendation) =>
+                              GroupRecommendationCard(
+                            recommendation:
+                                recommendation,
+                            onChanged: () {
+                              if (mounted) {
+                                setState(() {});
+                              }
+                            },
+                          ),
+                        ),
+                    const SizedBox(height: 20),
+                  ],
 
                   if (controller
                       .groupMessages
@@ -2228,10 +2069,6 @@ Navigator.pop(context);
 
                   const SizedBox(height: 25),
 
-                  // ==================================================
-                  // SHARED GROUP WISHLIST
-                  // ==================================================
-
                   Row(
                     children: [
                       const Expanded(
@@ -2239,7 +2076,8 @@ Navigator.pop(context);
                           'Shared Group Wishlist',
                           style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
                       ),
@@ -2258,7 +2096,9 @@ Navigator.pop(context);
                               setState(() {});
                             }
                           } catch (error) {
-                            if (!context.mounted) return;
+                            if (!context.mounted) {
+                              return;
+                            }
 
                             ScaffoldMessenger.of(
                               context,
@@ -2287,8 +2127,7 @@ Navigator.pop(context);
                         child: Column(
                           children: [
                             const Icon(
-                              Icons
-                                  .favorite_border,
+                              Icons.favorite_border,
                               size: 45,
                             ),
                             const SizedBox(
@@ -2296,8 +2135,7 @@ Navigator.pop(context);
                             ),
                             const Text(
                               'The group wishlist is empty.',
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontWeight:
                                     FontWeight.bold,
                               ),
@@ -2306,7 +2144,7 @@ Navigator.pop(context);
                               height: 5,
                             ),
                             Text(
-                              'Approved recommendations will appear here.',
+                              'Group wishlist items will appear here.',
                               textAlign:
                                   TextAlign.center,
                               style: TextStyle(
@@ -2338,10 +2176,6 @@ Navigator.pop(context);
             ),
           ),
 
-          // ==================================================
-          // MESSAGE INPUT
-          // ==================================================
-
           SafeArea(
             child: Padding(
               padding:
@@ -2363,9 +2197,7 @@ Navigator.pop(context);
                       ),
                     ),
                   ),
-
                   const SizedBox(width: 10),
-
                   IconButton(
                     icon: const Icon(
                       Icons.send,
@@ -2386,10 +2218,14 @@ Navigator.pop(context);
     DateTime timestamp,
   ) {
     final hour =
-        timestamp.hour.toString().padLeft(2, '0');
+        timestamp.hour
+            .toString()
+            .padLeft(2, '0');
 
     final minute =
-        timestamp.minute.toString().padLeft(2, '0');
+        timestamp.minute
+            .toString()
+            .padLeft(2, '0');
 
     return '$hour:$minute';
   }
@@ -2414,90 +2250,78 @@ class AddGroupRecommendationDialog
 class _AddGroupRecommendationDialogState
     extends State<
         AddGroupRecommendationDialog> {
-  final searchController =
+  final TextEditingController
+      titleController =
       TextEditingController();
 
-  final Set<String> selectedParticipantIds =
-      <String>{};
+  final TextEditingController
+      customDurationController =
+      TextEditingController();
 
-  MediaItem? selectedMedia;
+  String selectedType = 'movie';
+
+  String selectedDuration = '24h';
+
+  String customDurationUnit = 'hours';
 
   bool submitting = false;
 
   @override
-  void initState() {
-    super.initState();
-
-    final profile =
-        AppController.instance.currentProfile;
-
-    if (profile != null) {
-      selectedParticipantIds.add(
-        profile.id,
-      );
-    }
-  }
-
-  @override
   void dispose() {
-    searchController.dispose();
+    titleController.dispose();
+    customDurationController.dispose();
     super.dispose();
   }
 
-  List<MediaItem> get availableMedia {
-    final controller =
-        AppController.instance;
+  int? get selectedDurationHours {
+    switch (selectedDuration) {
+      case '24h':
+        return 24;
+      case '3d':
+        return 72;
+      case '1w':
+        return 168;
+      case 'custom':
+        final amount = int.tryParse(
+          customDurationController.text.trim(),
+        );
 
-    final Map<String, MediaItem> unique =
-        <String, MediaItem>{};
+        if (amount == null || amount <= 0) {
+          return null;
+        }
 
-    for (final media in controller.library) {
-      unique[media.id] = media;
+        if (customDurationUnit == 'days') {
+          return amount * 24;
+        }
+
+        return amount;
     }
 
-    for (final media
-        in controller.recommendations) {
-      unique[media.id] = media;
-    }
-
-    return unique.values.toList();
-  }
-
-  List<MediaItem> get filteredMedia {
-    final query =
-        searchController.text
-            .trim()
-            .toLowerCase();
-
-    if (query.isEmpty) {
-      return availableMedia;
-    }
-
-    return availableMedia
-        .where(
-          (media) => media.title
-              .toLowerCase()
-              .contains(query),
-        )
-        .toList();
+    return 24;
   }
 
   Future<void> submitRecommendation() async {
-    final controller =
-        AppController.instance;
+    if (submitting) {
+      return;
+    }
 
-    final media = selectedMedia;
+    final title =
+        titleController.text.trim();
 
-    if (media == null) {
+    if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Select a movie or show first.',
+            'Enter a movie or TV show title.',
           ),
         ),
       );
+
       return;
     }
+
+    final controller =
+        AppController.instance;
 
     final currentProfile =
         controller.currentProfile;
@@ -2510,12 +2334,25 @@ class _AddGroupRecommendationDialogState
           ),
         ),
       );
+
       return;
     }
 
-    selectedParticipantIds.add(
-      currentProfile.id,
-    );
+    final durationHours =
+        selectedDurationHours;
+
+    if (durationHours == null ||
+        durationHours <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enter a valid custom voting duration.',
+          ),
+        ),
+      );
+
+      return;
+    }
 
     setState(() {
       submitting = true;
@@ -2523,32 +2360,46 @@ class _AddGroupRecommendationDialogState
 
     try {
       await controller.createGroupRecommendation(
-        media: media,
+        title: title,
+        type: selectedType,
         profileId: currentProfile.id,
-        activeParticipants:
-            selectedParticipantIds,
+        votingDurationHours: durationHours,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
-      Navigator.pop(context);
-
-      if (!context.mounted) return;
+      Navigator.of(context).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '"${media.title}" was recommended to the group.',
+            '"$title" was recommended to the group. '
+            'Voting is open for ${_formatDuration(durationHours)}.',
           ),
         ),
       );
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
+      String message = error.toString();
+
+      if (message.startsWith('BackendApiException:')) {
+        message = message
+            .replaceFirst(
+              'BackendApiException:',
+              '',
+            )
+            .trim();
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Unable to create recommendation: $error',
+            'Unable to create recommendation: $message',
           ),
         ),
       );
@@ -2561,36 +2412,58 @@ class _AddGroupRecommendationDialogState
     }
   }
 
+  String _formatDuration(int hours) {
+    if (hours % 168 == 0) {
+      final weeks = hours ~/ 168;
+      return weeks == 1
+          ? '1 week'
+          : '$weeks weeks';
+    }
+
+    if (hours % 24 == 0) {
+      final days = hours ~/ 24;
+      return days == 1
+          ? '1 day'
+          : '$days days';
+    }
+
+    return hours == 1
+        ? '1 hour'
+        : '$hours hours';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
-
-    final profiles =
-        controller.currentAccount?.profiles ??
-            <Profile>[];
-
     return AlertDialog(
       title: const Text(
-        'Recommend for the Group',
+        'Recommend to the Group',
       ),
       content: SizedBox(
-        width: 600,
+        width: 500,
         child: SingleChildScrollView(
           child: Column(
+            mainAxisSize:
+                MainAxisSize.min,
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
+              const Text(
+                'Recommend any movie or TV show to the group. '
+                'It does not have to already exist in your library.',
+              ),
+              const SizedBox(
+                height: 20,
+              ),
               TextField(
                 controller:
-                    searchController,
-                onChanged: (_) {
-                  setState(() {});
-                },
+                    titleController,
+                enabled:
+                    !submitting,
+                autofocus: true,
                 decoration:
                     const InputDecoration(
                   labelText:
-                      'Search movies and shows',
+                      'Movie or TV show title',
                   hintText:
                       'Enter a title...',
                   prefixIcon:
@@ -2599,201 +2472,215 @@ class _AddGroupRecommendationDialogState
                       OutlineInputBorder(),
                 ),
               ),
-
-              const SizedBox(height: 15),
-
-              if (filteredMedia.isEmpty)
-                const Padding(
-                  padding:
-                      EdgeInsets.all(20),
-                  child: Center(
-                    child: Text(
-                      'No matching movies or shows found.',
-                      textAlign:
-                          TextAlign.center,
+              const SizedBox(
+                height: 15,
+              ),
+              DropdownButtonFormField<String>(
+                initialValue:
+                    selectedType,
+                decoration:
+                    const InputDecoration(
+                  labelText: 'Type',
+                  border:
+                      OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem<String>(
+                    value: 'movie',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.movie_outlined,
+                        ),
+                        SizedBox(
+                          width: 10,
+                        ),
+                        Text(
+                          'Movie',
+                        ),
+                      ],
                     ),
                   ),
-                )
-              else
-                SizedBox(
-                  height: 260,
-                  child: ListView.builder(
-                    itemCount:
-                        filteredMedia.length,
-                    itemBuilder:
-                        (_, index) {
-                      final media =
-                          filteredMedia[index];
-
-                      final selected =
-                          selectedMedia?.id ==
-                              media.id;
-
-                      return Card(
-                        child: ListTile(
-                          selected:
-                              selected,
-                          leading:
-                              SizedBox(
-                            width: 45,
-                            height: 65,
-                            child:
-                                ClipRRect(
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                6,
-                              ),
-                              child:
-                                  media.imageUrl ==
-                                          null
-                                      ? Container(
-                                          color: Colors
-                                              .grey
-                                              .shade900,
-                                          child:
-                                              const Icon(
-                                            Icons.movie,
-                                          ),
-                                        )
-                                      : Image.network(
-                                          media
-                                              .imageUrl!,
-                                          fit: BoxFit
-                                              .cover,
-                                          errorBuilder:
-                                              (_, __,
-                                                  ___) {
-                                            return Container(
-                                              color: Colors
-                                                  .grey
-                                                  .shade900,
-                                              child:
-                                                  const Icon(
-                                                Icons
-                                                    .broken_image,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                            ),
-                          ),
-                          title: Text(
-                            media.title,
-                            maxLines: 2,
-                            overflow:
-                                TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            mediaTypeLabel(
-                              media.type,
-                            ),
-                          ),
-                          trailing:
-                              selected
-                                  ? const Icon(
-                                      Icons
-                                          .check_circle,
-                                      color:
-                                          Colors.green,
-                                    )
-                                  : null,
-                          onTap: submitting
-                              ? null
-                              : () {
-                                  setState(() {
-                                    selectedMedia =
-                                        media;
-                                  });
-                                },
+                  DropdownMenuItem<String>(
+                    value: 'tvShow',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.tv_outlined,
                         ),
-                      );
-                    },
+                        SizedBox(
+                          width: 10,
+                        ),
+                        Text(
+                          'TV Show',
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
+                onChanged:
+                    submitting
+                        ? null
+                        : (value) {
+                            if (value == null) {
+                              return;
+                            }
 
-              const SizedBox(height: 20),
-
-              const Text(
-                'Active participants',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight:
-                      FontWeight.bold,
-                ),
+                            setState(() {
+                              selectedType =
+                                  value;
+                            });
+                          },
               ),
-
-              const SizedBox(height: 5),
-
-              Text(
-                'Select the profiles who are active right now and should vote.',
-                style: TextStyle(
-                  color:
-                      Colors.grey.shade400,
-                  fontSize: 13,
+              const SizedBox(height: 15),
+              DropdownButtonFormField<String>(
+                initialValue:
+                    selectedDuration,
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Voting duration',
+                  border:
+                      OutlineInputBorder(),
                 ),
+                items: const [
+                  DropdownMenuItem<String>(
+                    value: '24h',
+                    child: Text(
+                      '24 hours',
+                    ),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: '3d',
+                    child: Text(
+                      '3 days',
+                    ),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: '1w',
+                    child: Text(
+                      '1 week',
+                    ),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'custom',
+                    child: Text(
+                      'Custom',
+                    ),
+                  ),
+                ],
+                onChanged:
+                    submitting
+                        ? null
+                        : (value) {
+                            if (value == null) {
+                              return;
+                            }
+
+                            setState(() {
+                              selectedDuration =
+                                  value;
+                            });
+                          },
               ),
-
-              const SizedBox(height: 10),
-
-              ...profiles.map(
-                (profile) {
-                  final isCurrent =
-                      profile.id ==
-                          controller
-                              .currentProfile
-                              ?.id;
-
-                  final selected =
-                      selectedParticipantIds
-                          .contains(
-                    profile.id,
-                  );
-
-                  return CheckboxListTile(
-                    contentPadding:
-                        EdgeInsets.zero,
-                    value: selected,
-                    onChanged:
-                        submitting ||
-                                isCurrent
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  if (value ==
-                                      true) {
-                                    selectedParticipantIds
-                                        .add(
-                                      profile
-                                          .id,
-                                    );
-                                  } else {
-                                    selectedParticipantIds
-                                        .remove(
-                                      profile
-                                          .id,
-                                    );
-                                  }
-                                });
-                              },
-                    secondary:
-                        const CircleAvatar(
-                      child: Icon(
-                        Icons.person,
+              if (selectedDuration ==
+                  'custom') ...[
+                const SizedBox(height: 15),
+                Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller:
+                            customDurationController,
+                        enabled:
+                            !submitting,
+                        keyboardType:
+                            TextInputType.number,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Amount',
+                          hintText:
+                              'Example: 12',
+                          border:
+                              OutlineInputBorder(),
+                        ),
+                        onChanged: (_) {
+                          setState(() {});
+                        },
                       ),
                     ),
-                    title:
-                        Text(
-                      profile.name,
+                    const SizedBox(
+                      width: 10,
                     ),
-                    subtitle:
-                        isCurrent
-                            ? const Text(
-                                'Current profile',
-                              )
-                            : null,
-                  );
-                },
+                    Expanded(
+                      child:
+                          DropdownButtonFormField<
+                              String>(
+                        initialValue:
+                            customDurationUnit,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Unit',
+                          border:
+                              OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem<
+                              String>(
+                            value:
+                                'hours',
+                            child:
+                                Text(
+                              'Hours',
+                            ),
+                          ),
+                          DropdownMenuItem<
+                              String>(
+                            value:
+                                'days',
+                            child:
+                                Text(
+                              'Days',
+                            ),
+                          ),
+                        ],
+                        onChanged:
+                            submitting
+                                ? null
+                                : (value) {
+                                    if (value ==
+                                        null) {
+                                      return;
+                                    }
+
+                                    setState(() {
+                                      customDurationUnit =
+                                          value;
+                                    });
+                                  },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                selectedDuration ==
+                        'custom'
+                    ? selectedDurationHours ==
+                            null
+                        ? 'Enter a duration greater than 0.'
+                        : 'Voting will remain open for '
+                            '${_formatDuration(selectedDurationHours!)}.'
+                    : 'Voting will remain open for '
+                        '${_formatDuration(selectedDurationHours ?? 24)}.',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                ),
               ),
             ],
           ),
@@ -2801,52 +2688,42 @@ class _AddGroupRecommendationDialogState
       ),
       actions: [
         TextButton(
-          onPressed: submitting
-              ? null
-              : () =>
-                  Navigator.pop(context),
-          child:
-              const Text('CANCEL'),
+          onPressed:
+              submitting
+                  ? null
+                  : () {
+                      Navigator.of(
+                        context,
+                      ).pop();
+                    },
+          child: const Text(
+            'CANCEL',
+          ),
         ),
-
         ElevatedButton.icon(
           onPressed:
               submitting
                   ? null
                   : submitRecommendation,
-          icon: submitting
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child:
-                      CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Icon(
-                  Icons.send,
-                ),
+          icon:
+              submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child:
+                          CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.send,
+                    ),
           label: const Text(
             'RECOMMEND',
           ),
         ),
       ],
     );
-  }
-
-  String mediaTypeLabel(
-    String type,
-  ) {
-    final normalized =
-        type.toLowerCase();
-
-    if (normalized == 'tvshow' ||
-        normalized == 'tv_show' ||
-        normalized == 'tv show') {
-      return 'TV Show';
-    }
-
-    return 'Movie';
   }
 }
 
@@ -2855,84 +2732,420 @@ class _AddGroupRecommendationDialogState
 // ============================================================
 
 class GroupRecommendationCard
-    extends StatelessWidget {
-  final Map<String, dynamic>
-      recommendation;
-
-  final String? currentProfileId;
-
-  final Future<void> Function(
-    String vote,
-  ) onVote;
+    extends StatefulWidget {
+  final Map<String, dynamic> recommendation;
+  final VoidCallback onChanged;
 
   const GroupRecommendationCard({
     super.key,
     required this.recommendation,
-    required this.currentProfileId,
-    required this.onVote,
+    required this.onChanged,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final title =
-        recommendation['title']?.toString() ??
-            'Unknown title';
+  State<GroupRecommendationCard>
+      createState() =>
+          _GroupRecommendationCardState();
+}
 
-    final type =
-        recommendation['type']?.toString() ??
-            'movie';
+class _GroupRecommendationCardState
+    extends State<GroupRecommendationCard> {
+  Timer? countdownTimer;
+
+  Duration remaining = Duration.zero;
+
+  bool voting = false;
+  bool refreshingAfterDeadline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateRemaining();
+    _startCountdown();
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant GroupRecommendationCard oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.recommendation['votingEndsAt'] !=
+        widget.recommendation['votingEndsAt']) {
+      _updateRemaining();
+    }
+
+    _startCountdown();
+  }
+
+  @override
+  void dispose() {
+    countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCountdown() {
+    countdownTimer?.cancel();
 
     final status =
-        recommendation['status']?.toString() ??
-            'voting';
+        _statusString(widget.recommendation);
 
-    final yesVotes =
-        readInt(
-      recommendation['yesVotes'],
+    if (status != 'voting') {
+      return;
+    }
+
+    countdownTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (!mounted) return;
+
+        _updateRemaining();
+      },
+    );
+  }
+
+  void _updateRemaining() {
+    final endsAt =
+        _dateTimeValue(
+      widget.recommendation['votingEndsAt'],
     );
 
-    final noVotes =
-        readInt(
-      recommendation['noVotes'],
+    if (endsAt == null) {
+      if (mounted) {
+        setState(() {
+          remaining = Duration.zero;
+        });
+      }
+      return;
+    }
+
+    final difference =
+        endsAt.difference(DateTime.now());
+
+    if (difference <= Duration.zero) {
+      if (mounted) {
+        setState(() {
+          remaining = Duration.zero;
+        });
+      }
+
+      _refreshAfterDeadline();
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        remaining = difference;
+      });
+    }
+  }
+
+  Future<void> _refreshAfterDeadline() async {
+    if (refreshingAfterDeadline) {
+      return;
+    }
+
+    final status =
+        _statusString(widget.recommendation);
+
+    if (status != 'voting') {
+      return;
+    }
+
+    refreshingAfterDeadline = true;
+
+    countdownTimer?.cancel();
+
+    try {
+      final controller =
+          AppController.instance;
+
+      await controller.loadGroupRecommendations();
+
+      await controller.loadGroupWishlist();
+
+      if (!mounted) return;
+
+      widget.onChanged();
+    } catch (_) {
+      // The parent refresh can retry if the backend is
+      // temporarily unavailable at the exact deadline.
+    } finally {
+      refreshingAfterDeadline = false;
+    }
+  }
+
+  Future<void> _vote(String vote) async {
+    if (voting) {
+      return;
+    }
+
+    final controller =
+        AppController.instance;
+
+    final currentProfile =
+        controller.currentProfile;
+
+    if (currentProfile == null) {
+      _showMessage(
+        'No profile is currently selected.',
+      );
+      return;
+    }
+
+    final status =
+        _statusString(widget.recommendation);
+
+    if (status != 'voting' ||
+        remaining <= Duration.zero) {
+      await _refreshAfterDeadline();
+      return;
+    }
+
+    final participants =
+        _stringSet(
+      widget.recommendation['activeParticipants'],
     );
 
-    final totalVotes =
-        readInt(
-      recommendation['totalVotes'],
-    );
-
-    final activeParticipants =
-        readStringList(
-      recommendation['activeParticipants'],
-    );
+    if (participants.isNotEmpty &&
+        !participants.contains(
+          currentProfile.id,
+        )) {
+      _showMessage(
+        'Your profile is not eligible to vote on this recommendation.',
+      );
+      return;
+    }
 
     final votes =
-        readMap(
+        _votesMap(
+      widget.recommendation['votes'],
+    );
+
+    if (votes.containsKey(
+      currentProfile.id,
+    )) {
+      _showMessage(
+        'You have already voted on this recommendation.',
+      );
+      return;
+    }
+
+    setState(() {
+      voting = true;
+    });
+
+    try {
+      await controller.voteOnGroupRecommendation(
+        recommendationId:
+            _stringValue(
+              widget.recommendation['id'],
+            ),
+        profileId:
+            currentProfile.id,
+        vote: vote,
+      );
+
+      await controller.loadGroupRecommendations();
+
+      final updatedStatus =
+          _findUpdatedRecommendationStatus();
+
+      if (updatedStatus == 'approved') {
+        await controller.loadGroupWishlist();
+      }
+
+      if (!mounted) return;
+
+      widget.onChanged();
+
+      _showMessage(
+        vote == 'yes'
+            ? 'Your YES vote was recorded.'
+            : 'Your NO vote was recorded.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      String message = error.toString();
+
+      if (message.startsWith('BackendApiException:')) {
+        message = message
+            .replaceFirst(
+              'BackendApiException:',
+              '',
+            )
+            .trim();
+      }
+
+      _showMessage(
+        'Unable to record your vote: $message',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          voting = false;
+        });
+      }
+    }
+  }
+
+  String _findUpdatedRecommendationStatus() {
+    final id =
+        _stringValue(
+          widget.recommendation['id'],
+        );
+
+    final controller =
+        AppController.instance;
+
+    for (final recommendation
+        in controller.groupRecommendations) {
+      if (_stringValue(
+            recommendation['id'],
+          ) ==
+          id) {
+        return _statusString(
+          recommendation,
+        );
+      }
+    }
+
+    return _statusString(
+      widget.recommendation,
+    );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recommendation =
+        widget.recommendation;
+
+    final controller =
+        AppController.instance;
+
+    final currentProfile =
+        controller.currentProfile;
+
+    final title =
+        _stringValue(
+      recommendation['title'],
+      fallback: 'Untitled',
+    );
+
+    final type =
+        _stringValue(
+      recommendation['type'],
+      fallback: 'movie',
+    );
+
+    final status =
+        _statusString(recommendation);
+
+    final recommender = _profileName(
+  _stringValue(recommendation['recommendedByProfileId']),
+  controller,
+);
+
+    final votes =
+        _votesMap(
       recommendation['votes'],
     );
 
+    final yesVotes =
+        _intValue(
+          recommendation['yesVotes'],
+          fallback: votes.values
+              .where(
+                (vote) => vote == 'yes',
+              )
+              .length,
+        );
+
+    final noVotes =
+        _intValue(
+          recommendation['noVotes'],
+          fallback: votes.values
+              .where(
+                (vote) => vote == 'no',
+              )
+              .length,
+        );
+
+    final totalVotes =
+        yesVotes + noVotes;
+
+    final yesPercentage =
+        _percentage(
+      recommendation['yesPercentage'],
+      yesVotes,
+      totalVotes,
+    );
+
+    final noPercentage =
+        _percentage(
+      recommendation['noPercentage'],
+      noVotes,
+      totalVotes,
+    );
+
     final currentVote =
-        currentProfileId == null
+        currentProfile == null
             ? null
-            : votes[currentProfileId];
+            : votes[currentProfile.id];
+
+    final participants =
+        _stringSet(
+      recommendation['activeParticipants'],
+    );
 
     final isParticipant =
-        currentProfileId != null &&
-            activeParticipants.contains(
-              currentProfileId,
-            );
+        currentProfile != null &&
+        (participants.isEmpty ||
+            participants.contains(
+              currentProfile.id,
+            ));
 
-    final hasVoted =
-        currentVote != null;
+    final canVote =
+        status == 'voting' &&
+        remaining > Duration.zero &&
+        currentProfile != null &&
+        isParticipant &&
+        currentVote == null &&
+        !voting;
+
+    final typeIsMovie =
+        type.toLowerCase() == 'movie';
+
+    final icon =
+        typeIsMovie
+            ? Icons.movie_outlined
+            : Icons.tv_outlined;
+
+    final accentColor =
+        status == 'approved'
+            ? Colors.green
+            : status == 'rejected' ||
+                    status == 'expired'
+                ? Colors.red
+                : Colors.orange;
 
     return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 12,
+      margin: const EdgeInsets.only(
+        bottom: 10,
       ),
       child: Padding(
-        padding:
-            const EdgeInsets.all(15),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
@@ -2941,31 +3154,17 @@ class GroupRecommendationCard
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 55,
-                  height: 75,
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.grey.shade900,
-                    borderRadius:
-                        BorderRadius.circular(
-                      8,
-                    ),
+                CircleAvatar(
+                  backgroundColor:
+                      accentColor.withValues(
+                    alpha: .15,
                   ),
                   child: Icon(
-                    type.toLowerCase() ==
-                            'movie'
-                        ? Icons.movie
-                        : Icons.tv,
-                    size: 30,
+                    icon,
+                    color: accentColor,
                   ),
                 ),
-
-                const SizedBox(
-                  width: 12,
-                ),
-
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment:
@@ -2973,26 +3172,19 @@ class GroupRecommendationCard
                     children: [
                       Text(
                         title,
-                        style:
-                            const TextStyle(
-                          fontSize: 18,
+                        style: const TextStyle(
+                          fontSize: 19,
                           fontWeight:
                               FontWeight.bold,
                         ),
                       ),
-
-                      const SizedBox(
-                        height: 4,
-                      ),
-
+                      const SizedBox(height: 4),
                       Text(
-                        statusLabel(status),
-                        style:
-                            TextStyle(
+                        '${typeIsMovie ? 'Movie' : 'TV Show'} '
+                        'recommended by $recommender',
+                        style: TextStyle(
                           color:
-                              statusColor(status),
-                          fontWeight:
-                              FontWeight.bold,
+                              Colors.grey.shade400,
                         ),
                       ),
                     ],
@@ -3001,231 +3193,302 @@ class GroupRecommendationCard
               ],
             ),
 
-            const SizedBox(
-              height: 15,
-            ),
+            const SizedBox(height: 15),
 
             if (status == 'voting') ...[
               Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        const Text('YES'),
-                        const SizedBox(height: 4),
-                        Text(
-                          yesVotes.toString(),
-                          style:
-                              const TextStyle(
-                            fontSize: 24,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const Icon(
+                    Icons.schedule,
+                    size: 18,
+                    color: Colors.orange,
                   ),
-
+                  const SizedBox(width: 7),
                   Expanded(
-                    child: Column(
-                      children: [
-                        const Text('NO'),
-                        const SizedBox(height: 4),
-                        Text(
-                          noVotes.toString(),
-                          style:
-                              const TextStyle(
-                            fontSize: 24,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Expanded(
-                    child: Column(
-                      children: [
-                        const Text('VOTED'),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$totalVotes/${activeParticipants.length}',
-                          style:
-                              const TextStyle(
-                            fontSize: 20,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      remaining > Duration.zero
+                          ? 'Voting ends in ${_formatRemaining(remaining)}'
+                          : 'Voting ending...',
+                      style: const TextStyle(
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
               ),
-
-              const SizedBox(
-                height: 15,
+              const SizedBox(height: 15),
+            ] else ...[
+              const Row(
+                children: [
+                  Icon(
+                    Icons.lock_clock,
+                    size: 18,
+                  ),
+                  SizedBox(width: 7),
+                  Text(
+                    'Voting ended',
+                    style: TextStyle(
+                      fontWeight:
+                          FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 15),
+            ],
 
-              if (!isParticipant)
+            Row(
+              children: [
+                Expanded(
+                  child: _VotePercentage(
+                    label: 'YES',
+                    percentage:
+                        yesPercentage,
+                    votes: yesVotes,
+                    icon: Icons.check,
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: _VotePercentage(
+                    label: 'NO',
+                    percentage:
+                        noPercentage,
+                    votes: noVotes,
+                    icon: Icons.close,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            ClipRRect(
+              borderRadius:
+                  BorderRadius.circular(5),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: _percentageFlex(
+                      yesPercentage,
+                    ),
+                    child: Container(
+                      height: 8,
+                      color: Colors.green,
+                    ),
+                  ),
+                  Expanded(
+                    flex: _percentageFlex(
+                      noPercentage,
+                    ),
+                    child: Container(
+                      height: 8,
+                      color: Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            if (status == 'voting') ...[
+              if (currentVote != null)
                 Container(
                   width: double.infinity,
                   padding:
                       const EdgeInsets.all(12),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.grey.shade900,
+                  decoration: BoxDecoration(
                     borderRadius:
-                        BorderRadius.circular(
-                      8,
-                    ),
+                        BorderRadius.circular(8),
+                    color:
+                        Colors.blueGrey.shade900,
                   ),
-                  child: const Text(
-                    'You were not active when this vote started.',
+                  child: Row(
+                    children: [
+                      Icon(
+                        currentVote == 'yes'
+                            ? Icons.check_circle
+                            : Icons.cancel,
+                        color:
+                            currentVote == 'yes'
+                                ? Colors.green
+                                : Colors.red,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'You voted '
+                          '${currentVote.toUpperCase()}',
+                          style:
+                              const TextStyle(
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 )
-              else if (hasVoted)
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.all(12),
-                  decoration:
-                      BoxDecoration(
+              else if (!isParticipant &&
+                  currentProfile != null)
+                Text(
+                  'Your profile is not eligible to vote.',
+                  style: TextStyle(
                     color:
-                        Colors.grey.shade900,
-                    borderRadius:
-                        BorderRadius.circular(
-                      8,
-                    ),
+                        Colors.grey.shade400,
                   ),
-                  child: Text(
-                    'You voted ${currentVote.toString().toUpperCase()}.',
-                    style:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
+                )
+              else if (currentProfile == null)
+                Text(
+                  'Select a profile to vote.',
+                  style: TextStyle(
+                    color:
+                        Colors.grey.shade400,
                   ),
                 )
               else
                 Row(
                   children: [
                     Expanded(
-                      child:
-                          ElevatedButton.icon(
-                        onPressed: () =>
-                            onVote('yes'),
-                        icon:
-                            const Icon(
-                          Icons
-                              .thumb_up_outlined,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            canVote
+                                ? () =>
+                                    _vote('yes')
+                                : null,
+                        icon: const Icon(
+                          Icons.check,
                         ),
-                        label:
-                            const Text('YES'),
+                        label: const Text(
+                          'YES',
+                        ),
+                        style:
+                            ElevatedButton
+                                .styleFrom(
+                          backgroundColor:
+                              Colors.green
+                                  .shade700,
+                          foregroundColor:
+                              Colors.white,
+                        ),
                       ),
                     ),
-
                     const SizedBox(
                       width: 10,
                     ),
-
                     Expanded(
-                      child:
-                          OutlinedButton.icon(
-                        onPressed: () =>
-                            onVote('no'),
-                        icon:
-                            const Icon(
-                          Icons
-                              .thumb_down_outlined,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            canVote
+                                ? () =>
+                                    _vote('no')
+                                : null,
+                        icon: const Icon(
+                          Icons.close,
                         ),
-                        label:
-                            const Text('NO'),
+                        label: const Text(
+                          'NO',
+                        ),
+                        style:
+                            ElevatedButton
+                                .styleFrom(
+                          backgroundColor:
+                              Colors.red
+                                  .shade700,
+                          foregroundColor:
+                              Colors.white,
+                        ),
                       ),
                     ),
                   ],
                 ),
-            ] else if (status ==
-                'approved')
-              Container(
-                width: double.infinity,
+            ],
+
+            if (status == 'approved') ...[
+              const SizedBox(height: 5),
+              const Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Added to Group Wishlist',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            if (status == 'rejected') ...[
+              const SizedBox(height: 5),
+              const Row(
+                children: [
+                  Icon(
+                    Icons.cancel,
+                    color: Colors.red,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Recommendation rejected',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            if (status == 'expired') ...[
+              const SizedBox(height: 5),
+              const Row(
+                children: [
+                  Icon(
+                    Icons.timer_off,
+                    color: Colors.red,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Recommendation expired',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            if (totalVotes == 0 &&
+                status == 'voting')
+              Padding(
                 padding:
-                    const EdgeInsets.all(12),
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.green.shade900,
-                  borderRadius:
-                      BorderRadius.circular(8),
+                    const EdgeInsets.only(
+                  top: 8,
                 ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Approved! This movie/show is now on the shared group wishlist.',
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else if (status ==
-                'rejected')
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.all(12),
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.red.shade900,
-                  borderRadius:
-                      BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.cancel,
-                      color: Colors.red,
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'The group rejected this recommendation.',
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else if (status ==
-                'expired')
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.all(12),
-                decoration:
-                    BoxDecoration(
-                  color:
-                      Colors.grey.shade900,
-                  borderRadius:
-                      BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.timer_off),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'This recommendation has expired.',
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'No votes yet.',
+                  style: TextStyle(
+                    color:
+                        Colors.grey.shade500,
+                    fontSize: 12,
+                  ),
                 ),
               ),
           ],
@@ -3233,78 +3496,97 @@ class GroupRecommendationCard
       ),
     );
   }
+}
 
-  int readInt(dynamic value) {
-    if (value is int) {
-      return value;
-    }
+// ============================================================
+// VOTE PERCENTAGE
+// ============================================================
 
-    if (value is num) {
-      return value.toInt();
-    }
+class _VotePercentage extends StatelessWidget {
+  final String label;
+  final double percentage;
+  final int votes;
+  final IconData icon;
 
-    return int.tryParse(
-          value?.toString() ?? '',
-        ) ??
-        0;
+  const _VotePercentage({
+    required this.label,
+    required this.percentage,
+    required this.votes,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        label == 'YES'
+            ? Colors.green
+            : Colors.red;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withValues(
+            alpha: .4,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  '${_formatPercentageValue(percentage)}%',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '$votes vote${votes == 1 ? '' : 's'}',
+                  style: TextStyle(
+                    color:
+                        Colors.grey.shade500,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  List<String> readStringList(
-    dynamic value,
+  static String _formatPercentageValue(
+    double value,
   ) {
-    if (value is! List) {
-      return <String>[];
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
     }
 
-    return value
-        .map(
-          (item) => item.toString(),
-        )
-        .toList();
-  }
-
-  Map<String, dynamic> readMap(
-    dynamic value,
-  ) {
-    if (value is Map) {
-      return Map<String, dynamic>.from(
-        value,
-      );
-    }
-
-    return <String, dynamic>{};
-  }
-
-  String statusLabel(
-    String status,
-  ) {
-    switch (status) {
-      case 'approved':
-        return 'APPROVED';
-      case 'rejected':
-        return 'REJECTED';
-      case 'expired':
-        return 'EXPIRED';
-      case 'voting':
-      default:
-        return 'VOTING';
-    }
-  }
-
-  Color statusColor(
-    String status,
-  ) {
-    switch (status) {
-      case 'approved':
-        return Colors.green;
-      case 'rejected':
-        return Colors.red;
-      case 'expired':
-        return Colors.grey;
-      case 'voting':
-      default:
-        return Colors.orange;
-    }
+    return value.toStringAsFixed(1);
   }
 }
 
@@ -3512,9 +3794,7 @@ class SelectAcquisitionProfileDialog
             const Text(
               'Choose the profile whose personal library should receive this movie or show.',
             ),
-
             const SizedBox(height: 15),
-
             ...profiles.map(
               (profile) =>
                   ListTile(
@@ -3680,7 +3960,7 @@ class _WishlistDialogState
                           height: 8,
                         ),
                         Text(
-                          'Approved group recommendations will appear here.',
+                          'Shared items for the group will appear here.',
                           textAlign:
                               TextAlign.center,
                         ),
@@ -3779,16 +4059,12 @@ class GroupWatchDialog
               ),
               textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 20),
-
             const Text(
               'Invite the other profiles to watch together.',
               textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 25),
-
             ...account.profiles
                 .where(
                   (profile) =>
@@ -3810,9 +4086,7 @@ class GroupWatchDialog
                         const Text('INVITE'),
                   ),
                 ),
-
             const Spacer(),
-
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -3881,9 +4155,7 @@ class _GroupWatchPreferencesScreenState
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 25),
-
           const ListTile(
             leading: Icon(
               Icons.language,
@@ -3895,9 +4167,7 @@ class _GroupWatchPreferencesScreenState
               'Original audio',
             ),
           ),
-
           const SizedBox(height: 10),
-
           SwitchListTile(
             title: const Text(
               'Subtitles',
@@ -3910,9 +4180,7 @@ class _GroupWatchPreferencesScreenState
               });
             },
           ),
-
           const SizedBox(height: 35),
-
           SizedBox(
             height: 50,
             child: ElevatedButton(
@@ -3935,4 +4203,206 @@ class _GroupWatchPreferencesScreenState
       ),
     );
   }
+}
+
+// ============================================================
+// GROUP RECOMMENDATION HELPERS
+// ============================================================
+
+String _stringValue(
+  dynamic value, {
+  String fallback = '',
+}) {
+  if (value == null) {
+    return fallback;
+  }
+
+  final result = value.toString().trim();
+
+  return result.isEmpty
+      ? fallback
+      : result;
+}
+
+String _statusString(
+  Map<String, dynamic> recommendation,
+) {
+  return _stringValue(
+    recommendation['status'],
+    fallback: 'voting',
+  ).toLowerCase();
+}
+
+DateTime? _dateTimeValue(
+  dynamic value,
+) {
+  if (value is DateTime) {
+    return value;
+  }
+
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+
+  return null;
+}
+
+int _intValue(
+  dynamic value, {
+  int fallback = 0,
+}) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  if (value is num) {
+    return value.toInt();
+  }
+
+  return int.tryParse(
+        value?.toString() ?? '',
+      ) ??
+      fallback;
+}
+
+Map<String, String> _votesMap(
+  dynamic value,
+) {
+  if (value is! Map) {
+    return <String, String>{};
+  }
+
+  final result =
+      <String, String>{};
+
+  value.forEach(
+    (key, vote) {
+      final profileId =
+          key.toString();
+
+      final voteString =
+          vote.toString().toLowerCase();
+
+      if (voteString == 'yes' ||
+          voteString == 'no') {
+        result[profileId] =
+            voteString;
+      }
+    },
+  );
+
+  return result;
+}
+
+Set<String> _stringSet(
+  dynamic value,
+) {
+  if (value is! Iterable) {
+    return <String>{};
+  }
+
+  return value
+      .map(
+        (item) => item.toString(),
+      )
+      .where(
+        (item) => item.isNotEmpty,
+      )
+      .toSet();
+}
+
+double _percentage(
+  dynamic value,
+  int votes,
+  int totalVotes,
+) {
+  if (value is num) {
+    return value.toDouble();
+  }
+
+  if (totalVotes <= 0) {
+    return 0;
+  }
+
+  return (votes / totalVotes) * 100;
+}
+
+String _profileName(
+  String profileId,
+  AppController controller,
+) {
+  final account =
+      controller.currentAccount;
+
+  if (account != null) {
+    for (final profile
+        in account.profiles) {
+      if (profile.id == profileId) {
+        return profile.name;
+      }
+    }
+  }
+
+  return profileId.isEmpty
+      ? 'Unknown profile'
+      : profileId;
+}
+
+String _formatRemaining(
+  Duration duration,
+) {
+  if (duration <= Duration.zero) {
+    return '0 minutes';
+  }
+
+  final days = duration.inDays;
+  final hours =
+      duration.inHours.remainder(24);
+  final minutes =
+      duration.inMinutes.remainder(60);
+  final seconds =
+      duration.inSeconds.remainder(60);
+
+  if (days > 0) {
+    if (hours > 0) {
+      return '${days}d ${hours}h';
+    }
+
+    return '${days}d';
+  }
+
+  if (hours > 0) {
+    if (minutes > 0) {
+      return '${hours}h ${minutes}m';
+    }
+
+    return '${hours}h';
+  }
+
+  if (minutes > 0) {
+    if (seconds > 0) {
+      return '${minutes}m ${seconds}s';
+    }
+
+    return '${minutes}m';
+  }
+
+  return '${seconds}s';
+}
+
+int _percentageFlex(
+  double percentage,
+) {
+  final rounded =
+      percentage.round();
+
+  if (rounded <= 0) {
+    return 1;
+  }
+
+  return rounded;
 }

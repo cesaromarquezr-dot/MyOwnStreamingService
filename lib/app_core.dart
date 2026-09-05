@@ -271,16 +271,6 @@ class AppController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
-  //
-  // These are backed by the backend.
-  //
-  // Each item is stored as the JSON returned by:
-  //
-  // /api/v1/group/recommendations
-  //
-  // Keeping the raw recommendation map here allows the UI to use all of the
-  // backend information without creating a second frontend-only model.
-  // ---------------------------------------------------------------------------
 
   List<Map<String, dynamic>>
       groupRecommendations =
@@ -293,15 +283,6 @@ class AppController extends ChangeNotifier {
 
   // ---------------------------------------------------------------------------
   // GROUP WISHLIST
-  // ---------------------------------------------------------------------------
-  //
-  // This is the shared ACCOUNT-level wishlist.
-  //
-  // It is different from a profile's personal library.
-  //
-  // Approved group recommendations are placed here by the backend.
-  // When someone acquires/rips an item, it is removed from this list and
-  // added to the selected profile's personal library.
   // ---------------------------------------------------------------------------
 
   bool groupWishlistLoading = false;
@@ -350,9 +331,6 @@ class AppController extends ChangeNotifier {
 
   // ---------------------------------------------------------------------------
   // BACKEND SIGNUP
-  //
-  // Signup creates an inactive subscription and returns the payment session.
-  // No authentication token is stored here.
   // ---------------------------------------------------------------------------
 
   Future<Map<String, dynamic>>
@@ -490,13 +468,10 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..add(profiles.first.id);
 
-    // Signup must never leave an old authentication token active.
     backendApi.clearToken();
 
     recommendations.clear();
-
     groupRecommendations.clear();
-
     wishlist.clear();
 
     recommendationsError = null;
@@ -513,15 +488,11 @@ class AppController extends ChangeNotifier {
 
     notifyListeners();
 
-    // Return the complete backend response so signup.dart can
-    // retrieve the payment ID and temporary checkout token.
     return response;
   }
 
   // ---------------------------------------------------------------------------
   // BACKEND LOGIN
-  //
-  // Payment must already have activated the subscription before login.
   // ---------------------------------------------------------------------------
 
   Future<void> loginWithBackend({
@@ -584,8 +555,6 @@ class AppController extends ChangeNotifier {
       }
     }
 
-    // Default to expired. Only the backend explicitly saying
-    // "active" should make the local subscription active.
     SubscriptionStatus
         subscriptionStatus =
         SubscriptionStatus.expired;
@@ -652,9 +621,7 @@ class AppController extends ChangeNotifier {
       ..add(profiles.first.id);
 
     recommendations.clear();
-
     groupRecommendations.clear();
-
     wishlist.clear();
 
     recommendationsError = null;
@@ -672,11 +639,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     await loadRecommendations();
-
-    // Load the account-level shared wishlist after login.
     await loadGroupWishlist();
-
-    // Load existing group recommendations after login.
     await loadGroupRecommendations();
   }
 
@@ -1038,8 +1001,7 @@ class AppController extends ChangeNotifier {
   double getPlaybackProgress(
     String mediaId,
   ) {
-    return playbackProgress[mediaId] ??
-        0;
+    return playbackProgress[mediaId] ?? 0;
   }
 
   void updatePlaybackProgress(
@@ -1067,8 +1029,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    playbackProgress[media.id] =
-        1.0;
+    playbackProgress[media.id] = 1.0;
 
     notifyListeners();
   }
@@ -1305,12 +1266,34 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Creates a group recommendation.
+  ///
+  /// The recommendation does NOT have to exist in the catalog.
+  ///
+  /// title:
+  ///   The movie or TV show name entered by the user.
+  ///
+  /// type:
+  ///   "movie" or "tvShow".
+  ///
+  /// mediaId:
+  ///   Optional catalog media ID. Leave null for manually entered
+  ///   recommendations.
+  ///
+  /// activeParticipants:
+  ///   Profiles eligible to vote.
+  ///
+  /// votingDurationHours:
+  ///   How long voting remains open. The backend defaults to 24 hours
+  ///   when this is null.
   Future<Map<String, dynamic>?>
       createGroupRecommendation({
-    required MediaItem media,
+    required String title,
+    required String type,
     required String profileId,
-    Set<String>?
-        activeParticipants,
+    String? mediaId,
+    Set<String>? activeParticipants,
+    int? votingDurationHours,
   }) async {
     if (!backendApi.isAuthenticated) {
       throw BackendApiException(
@@ -1318,8 +1301,27 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedProfileId =
+    final String cleanedTitle =
+        title.trim();
+
+    final String cleanedType =
+        type.trim();
+
+    final String cleanedProfileId =
         profileId.trim();
+
+    if (cleanedTitle.isEmpty) {
+      throw ArgumentError(
+        'Recommendation title cannot be empty.',
+      );
+    }
+
+    if (cleanedType != 'movie' &&
+        cleanedType != 'tvShow') {
+      throw ArgumentError(
+        'Recommendation type must be "movie" or "tvShow".',
+      );
+    }
 
     if (cleanedProfileId.isEmpty) {
       throw ArgumentError(
@@ -1327,12 +1329,31 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final participants =
+    if (votingDurationHours != null &&
+        votingDurationHours <= 0) {
+      throw ArgumentError(
+        'Voting duration must be greater than zero.',
+      );
+    }
+
+    String? cleanedMediaId =
+        mediaId?.trim();
+
+    if (cleanedMediaId != null &&
+        cleanedMediaId.isEmpty) {
+      cleanedMediaId = null;
+    }
+
+    final Set<String> participants =
         activeParticipants == null
             ? <String>{}
             : Set<String>.from(
                 activeParticipants,
               );
+
+    participants.removeWhere(
+      (id) => id.trim().isEmpty,
+    );
 
     participants.add(
       cleanedProfileId,
@@ -1341,11 +1362,13 @@ class AppController extends ChangeNotifier {
     final response =
         await backendApi
             .createGroupRecommendation(
-      mediaId: media.id,
-      profileId:
-          cleanedProfileId,
-      activeParticipants:
-          participants,
+      title: cleanedTitle,
+      type: cleanedType,
+      profileId: cleanedProfileId,
+      mediaId: cleanedMediaId,
+      activeParticipants: participants,
+      votingDurationHours:
+          votingDurationHours,
     );
 
     final recommendation =
@@ -1354,10 +1377,9 @@ class AppController extends ChangeNotifier {
     if (recommendation is Map) {
       final recommendationMap =
           Map<String, dynamic>.from(
-            recommendation,
-          );
+        recommendation,
+      );
 
-      // Replace an existing copy if one exists.
       groupRecommendations
           .removeWhere(
         (item) =>
@@ -1371,16 +1393,24 @@ class AppController extends ChangeNotifier {
         recommendationMap,
       );
 
-      // Send a local chat representation so the current group chat UI
-      // immediately shows the recommendation.
-      final title =
+      final String titleForMessage =
           recommendationMap['title']
                   ?.toString() ??
-              media.title;
+              cleanedTitle;
+
+      final String icon =
+          cleanedType == 'tvShow'
+              ? '📺'
+              : '🎬';
+
+      final String typeLabel =
+          cleanedType == 'tvShow'
+              ? 'TV show'
+              : 'movie';
 
       sendGroupMessage(
         message:
-            '🎬 Recommended "$title" for group voting.',
+            '$icon ${currentProfile?.name ?? 'You'} recommended the $typeLabel "$titleForMessage"',
       );
 
       notifyListeners();
@@ -1505,8 +1535,8 @@ class AppController extends ChangeNotifier {
     if (recommendation is Map) {
       final recommendationMap =
           Map<String, dynamic>.from(
-            recommendation,
-          );
+        recommendation,
+      );
 
       groupRecommendations
           .removeWhere(
@@ -1520,8 +1550,58 @@ class AppController extends ChangeNotifier {
         recommendationMap,
       );
 
-      // If the backend approved the recommendation, refresh the shared
-      // account wishlist immediately.
+      final String title =
+          recommendationMap['title']
+                  ?.toString() ??
+              'this recommendation';
+
+      final String voterName =
+          _profileNameForId(
+        cleanedProfileId,
+      );
+
+      final int yesVotes =
+          _intFromValue(
+        recommendationMap['yesVotes'],
+      );
+
+      final int noVotes =
+          _intFromValue(
+        recommendationMap['noVotes'],
+      );
+
+      final double yesPercentage =
+          _doubleFromValue(
+        recommendationMap['yesPercentage'],
+        fallback:
+            _percentage(
+          yesVotes,
+          yesVotes + noVotes,
+        ),
+      );
+
+      final double noPercentage =
+          _doubleFromValue(
+        recommendationMap['noPercentage'],
+        fallback:
+            _percentage(
+          noVotes,
+          yesVotes + noVotes,
+        ),
+      );
+
+      // Keep the requested notification behavior in the current group chat.
+      //
+      // The recommendation vote itself is persisted by the backend.
+      // The actual group-message persistence will be wired when the backend
+      // group-chat endpoint is added.
+      sendGroupMessage(
+        message:
+            '$voterName voted ${cleanedVote.toUpperCase()} on "$title" — '
+            'YES ${_formatPercentage(yesPercentage)}% '
+            'NO ${_formatPercentage(noPercentage)}%',
+      );
+
       final status =
           recommendationMap['status']
               ?.toString()
@@ -1573,8 +1653,8 @@ class AppController extends ChangeNotifier {
     if (recommendation is Map) {
       final recommendationMap =
           Map<String, dynamic>.from(
-            recommendation,
-          );
+        recommendation,
+      );
 
       groupRecommendations
           .removeWhere(
@@ -1644,11 +1724,6 @@ class AppController extends ChangeNotifier {
 
   // ---------------------------------------------------------------------------
   // GROUP WISHLIST
-  // ---------------------------------------------------------------------------
-  //
-  // This wishlist is shared by the entire account.
-  //
-  // It is NOT tied to currentProfile.
   // ---------------------------------------------------------------------------
 
   Future<void>
@@ -1804,17 +1879,12 @@ class AppController extends ChangeNotifier {
           cleanedProfileId,
     );
 
-    // Remove the item from the shared account wishlist locally.
     wishlist.removeWhere(
       (item) =>
           item.id ==
           cleanedMediaId,
     );
 
-    // If the backend response includes enough information to construct
-    // a MediaItem, add it directly to the local library.
-    //
-    // Otherwise the UI can refresh/import the actual media object separately.
     final mediaData =
         response['media'];
 
@@ -1840,24 +1910,11 @@ class AppController extends ChangeNotifier {
 
     notifyListeners();
 
-    // Refresh the shared wishlist from the backend so the frontend and
-    // account-level state cannot become stale.
     await loadGroupWishlist();
   }
 
   // ---------------------------------------------------------------------------
   // BACKWARD-COMPATIBLE LOCAL WISHLIST API
-  // ---------------------------------------------------------------------------
-  //
-  // These methods are intentionally preserved because existing screens may
-  // already call them.
-  //
-  // For backend-backed group recommendations, prefer:
-  // - loadGroupWishlist()
-  // - isInGroupWishlist()
-  // - removeFromGroupWishlist()
-  // - acquireGroupWishlistItem()
-  //
   // ---------------------------------------------------------------------------
 
   bool isInWishlist(
@@ -2015,6 +2072,86 @@ class AppController extends ChangeNotifier {
     groupWishlistError = null;
 
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // GROUP RECOMMENDATION HELPERS
+  // ---------------------------------------------------------------------------
+
+  String _profileNameForId(
+    String profileId,
+  ) {
+    final account = currentAccount;
+
+    if (account != null) {
+      for (final profile
+          in account.profiles) {
+        if (profile.id == profileId) {
+          return profile.name;
+        }
+      }
+    }
+
+    if (currentProfile?.id ==
+        profileId) {
+      return currentProfile!.name;
+    }
+
+    return 'Profile';
+  }
+
+  int _intFromValue(
+    dynamic value,
+  ) {
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
+  }
+
+  double _doubleFromValue(
+    dynamic value, {
+    required double fallback,
+  }) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    final parsed =
+        double.tryParse(
+      value?.toString() ?? '',
+    );
+
+    return parsed ?? fallback;
+  }
+
+  double _percentage(
+    int votes,
+    int total,
+  ) {
+    if (total <= 0) {
+      return 0;
+    }
+
+    return (votes / total) * 100;
+  }
+
+  String _formatPercentage(
+    double value,
+  ) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+
+    return value.toStringAsFixed(1);
   }
 
   // ---------------------------------------------------------------------------

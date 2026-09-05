@@ -1,6 +1,6 @@
 import '../database/database.dart';
+import '../models/account.dart';
 import '../models/group_recommendation.dart';
-import '../models/media.dart';
 
 class GroupRecommendationService {
   final Database database;
@@ -8,11 +8,22 @@ class GroupRecommendationService {
   GroupRecommendationService(this.database);
 
   // CREATE RECOMMENDATION
+  //
+  // Recommendations can refer to any movie or TV show title.
+  // The title does NOT have to exist in the media catalog.
+  //
+  // mediaId is optional and is only used when the recommendation
+  // happens to correspond to an existing catalog item.
+  //
+  // Voting remains open for the entire votingDuration.
   GroupRecommendation createRecommendation({
     required String accountId,
-    required Media media,
+    required String title,
+    required String type,
+    String? mediaId,
     required String recommendedByProfileId,
     required Set<String> activeParticipants,
+    required Duration votingDuration,
   }) {
     if (accountId.trim().isEmpty) {
       throw ArgumentError(
@@ -20,21 +31,55 @@ class GroupRecommendationService {
       );
     }
 
-    if (media.id.trim().isEmpty) {
-      throw ArgumentError(
-        'Media ID cannot be empty.',
+    final Account? account =
+        database.getAccountById(accountId);
+
+    if (account == null) {
+      throw StateError(
+        'Account not found.',
       );
     }
 
-    if (media.title.trim().isEmpty) {
+    final String normalizedTitle = title.trim();
+
+    if (normalizedTitle.isEmpty) {
       throw ArgumentError(
-        'Media title cannot be empty.',
+        'Recommendation title cannot be empty.',
       );
     }
 
-    if (recommendedByProfileId.trim().isEmpty) {
+    final String normalizedType = type.trim();
+
+    if (normalizedType != 'movie' &&
+        normalizedType != 'tvShow') {
+      throw ArgumentError(
+        'Recommendation type must be "movie" or "tvShow".',
+      );
+    }
+
+    String? normalizedMediaId = mediaId?.trim();
+
+    if (normalizedMediaId != null &&
+        normalizedMediaId.isEmpty) {
+      normalizedMediaId = null;
+    }
+
+    final String normalizedProfileId =
+        recommendedByProfileId.trim();
+
+    if (normalizedProfileId.isEmpty) {
       throw ArgumentError(
         'Recommended-by profile ID cannot be empty.',
+      );
+    }
+
+    // The recommending profile must belong to the account.
+    if (account.getProfileById(
+          normalizedProfileId,
+        ) ==
+        null) {
+      throw ArgumentError(
+        'The recommending profile does not belong to this account.',
       );
     }
 
@@ -44,25 +89,62 @@ class GroupRecommendationService {
       );
     }
 
-    if (!activeParticipants.contains(
-      recommendedByProfileId,
+    final Set<String> normalizedParticipants =
+        activeParticipants
+            .map(
+              (profileId) => profileId.trim(),
+            )
+            .where(
+              (profileId) => profileId.isNotEmpty,
+            )
+            .toSet();
+
+    if (normalizedParticipants.isEmpty) {
+      throw ArgumentError(
+        'At least one active participant is required.',
+      );
+    }
+
+    for (final String profileId
+        in normalizedParticipants) {
+      if (account.getProfileById(profileId) ==
+          null) {
+        throw ArgumentError(
+          'Profile "$profileId" does not belong to this account.',
+        );
+      }
+    }
+
+    if (!normalizedParticipants.contains(
+      normalizedProfileId,
     )) {
       throw ArgumentError(
         'The recommending profile must be an active participant.',
       );
     }
 
-    final recommendation = GroupRecommendation(
+    if (votingDuration <= Duration.zero) {
+      throw ArgumentError(
+        'Voting duration must be greater than zero.',
+      );
+    }
+
+    final DateTime createdAt = DateTime.now();
+
+    final GroupRecommendation recommendation =
+        GroupRecommendation(
       id: _generateId(),
       accountId: accountId,
-      mediaId: media.id,
-      title: media.title,
-      type: media.type.name,
+      mediaId: normalizedMediaId,
+      title: normalizedTitle,
+      type: normalizedType,
       recommendedByProfileId:
-          recommendedByProfileId,
-      createdAt: DateTime.now(),
+          normalizedProfileId,
+      createdAt: createdAt,
+      votingEndsAt:
+          createdAt.add(votingDuration),
       activeParticipants:
-          Set<String>.from(activeParticipants),
+          normalizedParticipants,
     );
 
     database.saveGroupRecommendation(
@@ -73,11 +155,14 @@ class GroupRecommendationService {
   }
 
   // GET ONE RECOMMENDATION
+  //
+  // If the voting deadline has passed, finalize it before
+  // returning it.
   GroupRecommendation? getRecommendation({
     required String accountId,
     required String recommendationId,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -90,6 +175,10 @@ class GroupRecommendationService {
       return null;
     }
 
+    _finalizeIfVotingEnded(
+      recommendation,
+    );
+
     return recommendation;
   }
 
@@ -97,37 +186,72 @@ class GroupRecommendationService {
   List<GroupRecommendation> getRecommendations({
     required String accountId,
   }) {
-    return database
-        .getGroupRecommendations()
-        .where(
-          (recommendation) =>
-              recommendation.accountId == accountId,
-        )
-        .toList();
+    final List<GroupRecommendation> recommendations =
+        database
+            .getGroupRecommendations()
+            .where(
+              (recommendation) =>
+                  recommendation.accountId ==
+                  accountId,
+            )
+            .toList();
+
+    for (final GroupRecommendation recommendation
+        in recommendations) {
+      _finalizeIfVotingEnded(
+        recommendation,
+      );
+    }
+
+    return recommendations;
   }
 
-  // GET ACTIVE VOTING RECOMMENDATIONS FOR AN ACCOUNT
+  // GET ACTIVE VOTING RECOMMENDATIONS
   List<GroupRecommendation>
       getVotingRecommendations({
     required String accountId,
   }) {
-    return database
-        .getVotingGroupRecommendations()
-        .where(
-          (recommendation) =>
-              recommendation.accountId == accountId,
-        )
-        .toList();
+    final List<GroupRecommendation> recommendations =
+        database
+            .getVotingGroupRecommendations()
+            .where(
+              (recommendation) =>
+                  recommendation.accountId ==
+                  accountId,
+            )
+            .toList();
+
+    final List<GroupRecommendation> active =
+        <GroupRecommendation>[];
+
+    for (final GroupRecommendation recommendation
+        in recommendations) {
+      _finalizeIfVotingEnded(
+        recommendation,
+      );
+
+      if (recommendation.status ==
+          GroupRecommendationStatus.voting) {
+        active.add(recommendation);
+      }
+    }
+
+    return active;
   }
 
   // VOTE
+  //
+  // Each profile can vote exactly once.
+  //
+  // Voting NEVER ends early just because everyone has voted.
+  // The recommendation remains open until votingEndsAt.
   GroupRecommendation vote({
     required String accountId,
     required String recommendationId,
     required String profileId,
     required GroupRecommendationVote vote,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -144,9 +268,23 @@ class GroupRecommendationService {
       );
     }
 
-    if (profileId.trim().isEmpty) {
+    final String normalizedProfileId =
+        profileId.trim();
+
+    if (normalizedProfileId.isEmpty) {
       throw ArgumentError(
         'Profile ID cannot be empty.',
+      );
+    }
+
+    // Automatically finalize if the deadline has passed.
+    if (recommendation.hasVotingEnded) {
+      _finalizeIfVotingEnded(
+        recommendation,
+      );
+
+      throw StateError(
+        'Voting has ended for this recommendation.',
       );
     }
 
@@ -158,20 +296,30 @@ class GroupRecommendationService {
     }
 
     if (!recommendation.activeParticipants
-        .contains(profileId)) {
+        .contains(normalizedProfileId)) {
       throw StateError(
         'This profile was not active when voting started.',
       );
     }
 
-    recommendation.addVote(
-      profileId,
+    if (recommendation.hasVoted(
+      normalizedProfileId,
+    )) {
+      throw StateError(
+        'This profile has already voted on this recommendation.',
+      );
+    }
+
+    final bool accepted = recommendation.addVote(
+      normalizedProfileId,
       vote,
     );
 
-    _checkMajority(
-      recommendation,
-    );
+    if (!accepted) {
+      throw StateError(
+        'Vote could not be submitted.',
+      );
+    }
 
     database.saveGroupRecommendation(
       recommendation,
@@ -180,33 +328,23 @@ class GroupRecommendationService {
     return recommendation;
   }
 
-  // CHECK WHETHER A MAJORITY HAS BEEN REACHED
-  void _checkMajority(
-    GroupRecommendation recommendation,
-  ) {
-    final totalParticipants =
-        recommendation.activeParticipants.length;
-
-    final totalVotes =
-        recommendation.totalVotes;
-
-    if (totalVotes < totalParticipants) {
-      return;
-    }
-
-    if (recommendation.hasMajorityYes) {
-      recommendation.approve();
-    } else {
-      recommendation.reject();
-    }
-  }
-
-  // CLOSE VOTING
-  GroupRecommendation closeVoting({
+  // FINALIZE RECOMMENDATION
+  //
+  // YES > NO -> APPROVED
+  // NO > YES -> REJECTED
+  // YES == NO -> REJECTED
+  // 0 votes -> REJECTED
+  //
+  // If approved:
+  //
+  // - catalog recommendation -> add mediaId to Group Wishlist
+  // - arbitrary recommendation -> add recommendation ID to
+  //   Group Wishlist
+  GroupRecommendation finalizeRecommendation({
     required String accountId,
     required String recommendationId,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -228,25 +366,29 @@ class GroupRecommendationService {
       return recommendation;
     }
 
-    if (recommendation.hasMajorityYes) {
-      recommendation.approve();
-    } else {
-      recommendation.reject();
+    if (!recommendation.hasVotingEnded) {
+      throw StateError(
+        'Voting has not ended yet.',
+      );
     }
 
-    database.saveGroupRecommendation(
+    _finalizeRecommendation(
       recommendation,
     );
 
     return recommendation;
   }
 
-  // EXPIRE RECOMMENDATION
-  GroupRecommendation expireRecommendation({
+  // CLOSE VOTING
+  //
+  // Kept for compatibility with the existing route/API.
+  //
+  // The voting period cannot be closed before its deadline.
+  GroupRecommendation closeVoting({
     required String accountId,
     required String recommendationId,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -263,13 +405,162 @@ class GroupRecommendationService {
       );
     }
 
-    recommendation.expire();
+    if (recommendation.status !=
+        GroupRecommendationStatus.voting) {
+      return recommendation;
+    }
 
-    database.saveGroupRecommendation(
+    if (!recommendation.hasVotingEnded) {
+      throw StateError(
+        'Voting cannot be closed before the voting deadline.',
+      );
+    }
+
+    _finalizeRecommendation(
       recommendation,
     );
 
     return recommendation;
+  }
+
+  // EXPIRE RECOMMENDATION
+  //
+  // Kept for compatibility with the existing API.
+  //
+  // A recommendation whose deadline has passed is resolved using
+  // the actual vote result rather than simply being discarded.
+  GroupRecommendation expireRecommendation({
+    required String accountId,
+    required String recommendationId,
+  }) {
+    final GroupRecommendation? recommendation =
+        database.getGroupRecommendation(
+      recommendationId,
+    );
+
+    if (recommendation == null) {
+      throw StateError(
+        'Recommendation not found.',
+      );
+    }
+
+    if (recommendation.accountId != accountId) {
+      throw StateError(
+        'Recommendation does not belong to this account.',
+      );
+    }
+
+    if (recommendation.status !=
+        GroupRecommendationStatus.voting) {
+      return recommendation;
+    }
+
+    if (!recommendation.hasVotingEnded) {
+      throw StateError(
+        'Voting has not ended yet.',
+      );
+    }
+
+    _finalizeRecommendation(
+      recommendation,
+    );
+
+    return recommendation;
+  }
+
+  // AUTOMATICALLY FINALIZE WHEN THE DEADLINE PASSES
+  void _finalizeIfVotingEnded(
+    GroupRecommendation recommendation,
+  ) {
+    if (recommendation.status !=
+        GroupRecommendationStatus.voting) {
+      return;
+    }
+
+    if (!recommendation.hasVotingEnded) {
+      return;
+    }
+
+    _finalizeRecommendation(
+      recommendation,
+    );
+  }
+
+  // DETERMINE FINAL RESULT
+  //
+  // YES majority:
+  //   -> approve
+  //   -> add to Group Wishlist
+  //
+  // NO majority:
+  //   -> reject
+  //
+  // Tie:
+  //   -> reject
+  //
+  // No votes:
+  //   -> reject
+  void _finalizeRecommendation(
+    GroupRecommendation recommendation,
+  ) {
+    if (recommendation.status !=
+        GroupRecommendationStatus.voting) {
+      return;
+    }
+
+    if (recommendation.hasMajorityYes) {
+      recommendation.approve();
+
+      _addApprovedRecommendationToWishlist(
+        recommendation,
+      );
+    } else {
+      recommendation.reject();
+    }
+
+    database.saveGroupRecommendation(
+      recommendation,
+    );
+  }
+
+  // ADD APPROVED RECOMMENDATION TO GROUP WISHLIST
+  //
+  // If the recommendation points to catalog media, preserve the
+  // existing wishlistMediaIds behavior.
+  //
+  // If it is an arbitrary title that is not in the catalog, save
+  // the recommendation ID instead.
+  void _addApprovedRecommendationToWishlist(
+    GroupRecommendation recommendation,
+  ) {
+    final Account? account =
+        database.getAccountById(
+      recommendation.accountId,
+    );
+
+    if (account == null) {
+      return;
+    }
+
+    if (recommendation.mediaId != null &&
+        recommendation.mediaId!.trim().isNotEmpty) {
+      final String mediaId =
+          recommendation.mediaId!.trim();
+
+      if (!account.isInWishlist(mediaId)) {
+        account.addToWishlist(mediaId);
+      }
+
+      return;
+    }
+
+    if (!account.isRecommendationInWishlist(
+      recommendation.id,
+    )) {
+      account.addRecommendationToWishlist(
+        recommendation.id,
+      );
+    }
   }
 
   // GET RECOMMENDATIONS CREATED BY A PROFILE
@@ -278,31 +569,58 @@ class GroupRecommendationService {
     required String accountId,
     required String profileId,
   }) {
-    return database
-        .getGroupRecommendations()
-        .where(
-          (recommendation) =>
-              recommendation.accountId == accountId &&
-              recommendation.recommendedByProfileId ==
-                  profileId,
-        )
-        .toList();
+    final List<GroupRecommendation> recommendations =
+        database
+            .getGroupRecommendations()
+            .where(
+              (recommendation) =>
+                  recommendation.accountId ==
+                      accountId &&
+                  recommendation
+                          .recommendedByProfileId ==
+                      profileId,
+            )
+            .toList();
+
+    for (final GroupRecommendation recommendation
+        in recommendations) {
+      _finalizeIfVotingEnded(
+        recommendation,
+      );
+    }
+
+    return recommendations;
   }
 
-  // GET RECOMMENDATIONS FOR MEDIA
+  // GET RECOMMENDATIONS FOR CATALOG MEDIA
+  //
+  // Arbitrary recommendations have mediaId == null, so they
+  // naturally do not appear in this query.
   List<GroupRecommendation>
       getRecommendationsForMedia({
     required String accountId,
     required String mediaId,
   }) {
-    return database
-        .getGroupRecommendations()
-        .where(
-          (recommendation) =>
-              recommendation.accountId == accountId &&
-              recommendation.mediaId == mediaId,
-        )
-        .toList();
+    final List<GroupRecommendation> recommendations =
+        database
+            .getGroupRecommendations()
+            .where(
+              (recommendation) =>
+                  recommendation.accountId ==
+                      accountId &&
+                  recommendation.mediaId ==
+                      mediaId,
+            )
+            .toList();
+
+    for (final GroupRecommendation recommendation
+        in recommendations) {
+      _finalizeIfVotingEnded(
+        recommendation,
+      );
+    }
+
+    return recommendations;
   }
 
   // CHECK WHETHER A PROFILE HAS VOTED
@@ -311,7 +629,7 @@ class GroupRecommendationService {
     required String recommendationId,
     required String profileId,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -323,6 +641,10 @@ class GroupRecommendationService {
     if (recommendation.accountId != accountId) {
       return false;
     }
+
+    _finalizeIfVotingEnded(
+      recommendation,
+    );
 
     return recommendation.hasVoted(
       profileId,
@@ -335,7 +657,7 @@ class GroupRecommendationService {
     required String recommendationId,
     required String profileId,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -348,17 +670,24 @@ class GroupRecommendationService {
       return null;
     }
 
+    _finalizeIfVotingEnded(
+      recommendation,
+    );
+
     return recommendation.voteFor(
       profileId,
     );
   }
 
   // DELETE RECOMMENDATION
+  //
+  // Also removes it from the Group Wishlist if it had previously
+  // been approved.
   void deleteRecommendation({
     required String accountId,
     required String recommendationId,
   }) {
-    final recommendation =
+    final GroupRecommendation? recommendation =
         database.getGroupRecommendation(
       recommendationId,
     );
@@ -372,6 +701,22 @@ class GroupRecommendationService {
     if (recommendation.accountId != accountId) {
       throw StateError(
         'Recommendation does not belong to this account.',
+      );
+    }
+
+    final Account? account =
+        database.getAccountById(accountId);
+
+    if (account != null) {
+      if (recommendation.mediaId != null &&
+          recommendation.mediaId!.trim().isNotEmpty) {
+        account.removeFromWishlist(
+          recommendation.mediaId!.trim(),
+        );
+      }
+
+      account.removeRecommendationFromWishlist(
+        recommendation.id,
       );
     }
 
