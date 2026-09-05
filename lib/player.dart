@@ -17,8 +17,7 @@ class PlayerScreen extends StatefulWidget {
       _PlayerScreenState();
 }
 
-class _PlayerScreenState
-    extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen> {
   double position = 0.0;
 
   bool videoFinished = false;
@@ -35,20 +34,39 @@ class _PlayerScreenState
   String? selectedSubtitle;
 
   @override
+  void initState() {
+    super.initState();
+
+    position = AppController.instance
+        .getPlaybackProgress(widget.media.id)
+        .clamp(0.0, 1.0)
+        .toDouble();
+
+    videoFinished = position >= 1.0;
+  }
+
+  @override
   void dispose() {
     autoplayTimer?.cancel();
     super.dispose();
   }
 
   void updatePosition(double value) {
+    final newPosition =
+        value.clamp(0.0, 1.0).toDouble();
+
     setState(() {
-      position = value.clamp(0.0, 1.0);
+      position = newPosition;
     });
 
-    AppController.instance.updateProgress(
-      widget.media,
-      position,
+    AppController.instance.updatePlaybackProgress(
+      widget.media.id,
+      newPosition,
     );
+
+    if (newPosition >= 0.999) {
+      finishVideo();
+    }
   }
 
   void finishVideo() {
@@ -62,32 +80,41 @@ class _PlayerScreenState
       creditsStarted = true;
     });
 
-    AppController.instance.markFinished(
+    final controller = AppController.instance;
+
+    controller.updatePlaybackProgress(
+      widget.media.id,
+      1.0,
+    );
+
+    controller.finishWatching(
       widget.media,
     );
 
-    final nextEpisode =
-        AppController.instance.getNextEpisode(
-      widget.media,
+    final nextEpisodeTitle =
+        controller.getNextEpisode(
+      widget.media.id,
     );
 
-    if (nextEpisode == null ||
+    if (nextEpisodeTitle == null ||
+        nextEpisodeTitle.trim().isEmpty ||
         autoplayCancelled) {
       return;
     }
 
     startAutoplayCountdown(
-      nextEpisode,
+      nextEpisodeTitle,
     );
   }
 
   void startAutoplayCountdown(
-    MediaItem nextEpisode,
+    String nextEpisodeTitle,
   ) {
     autoplayTimer?.cancel();
 
     setState(() {
       autoplaySeconds = 10;
+      autoplayCancelled = false;
     });
 
     autoplayTimer = Timer.periodic(
@@ -105,7 +132,7 @@ class _PlayerScreenState
 
         if (autoplaySeconds <= 1) {
           timer.cancel();
-          playNextEpisode(nextEpisode);
+          playNextEpisode(nextEpisodeTitle);
           return;
         }
 
@@ -125,7 +152,7 @@ class _PlayerScreenState
   }
 
   void playNextEpisode(
-    MediaItem nextEpisode,
+    String nextEpisodeTitle,
   ) {
     autoplayTimer?.cancel();
 
@@ -133,13 +160,32 @@ class _PlayerScreenState
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PlayerScreen(
-          media: nextEpisode,
-        ),
-      ),
+    /*
+     * The current AppController stores only the NEXT EPISODE TITLE.
+     * It does not store a MediaItem for that episode.
+     *
+     * Therefore we cannot create a real next-episode PlayerScreen
+     * yet. Show the title instead of trying to pass a String where
+     * a MediaItem is required.
+     */
+    showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text('Up Next'),
+          content: Text(
+            nextEpisodeTitle,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('CLOSE'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -150,12 +196,9 @@ class _PlayerScreenState
       isScrollControlled: true,
       builder: (_) {
         return AudioSubtitleOptions(
-          media: widget.media,
           selectedAudio: selectedAudio,
-          subtitlesEnabled:
-              subtitlesEnabled,
-          selectedSubtitle:
-              selectedSubtitle,
+          subtitlesEnabled: subtitlesEnabled,
+          selectedSubtitle: selectedSubtitle,
           onAudioChanged: (value) {
             setState(() {
               selectedAudio = value;
@@ -177,19 +220,35 @@ class _PlayerScreenState
     final controller =
         AppController.instance;
 
-    if (controller.currentProfile == null) {
+    final currentProfile =
+        controller.currentProfile;
+
+    final account =
+        controller.currentAccount;
+
+    if (currentProfile == null ||
+        account == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No account or profile is selected.',
+          ),
+        ),
+      );
       return;
     }
 
-    controller.createGroupWatchInvite(
+    final session =
+        controller.createGroupWatchSession(
       widget.media,
     );
 
     ScaffoldMessenger.of(context)
         .showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Group watch invitation created.',
+          'Group watch session created for ${session.title}.',
         ),
       ),
     );
@@ -200,63 +259,17 @@ class _PlayerScreenState
       context: context,
       backgroundColor: Colors.grey.shade900,
       builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: widget.media.extras.isEmpty
-                ? const SizedBox(
-                    height: 150,
-                    child: Center(
-                      child: Text(
-                        'No extras are available.',
-                        style: TextStyle(
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  )
-                : ListView(
-                    shrinkWrap: true,
-                    children: [
-                      const Text(
-                        'EXTRAS',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      ...widget.media.extras.map(
-                        (extra) => ListTile(
-                          leading: const Icon(
-                            Icons.movie_filter,
-                            color: Colors.white,
-                          ),
-                          title: Text(
-                            extra.title,
-                            style:
-                                const TextStyle(
-                              color: Colors.white,
-                            ),
-                          ),
-                          subtitle:
-                              extra.description ==
-                                      null
-                                  ? null
-                                  : Text(
-                                      extra
-                                          .description!,
-                                      style:
-                                          const TextStyle(
-                                        color:
-                                            Colors.grey,
-                                      ),
-                                    ),
-                        ),
-                      ),
-                    ],
-                  ),
+        return const SafeArea(
+          child: SizedBox(
+            height: 180,
+            child: Center(
+              child: Text(
+                'No extras are available for this media item.',
+                style: TextStyle(
+                  color: Colors.white,
+                ),
+              ),
+            ),
           ),
         );
       },
@@ -296,12 +309,11 @@ class _PlayerScreenState
                   Container(
                     width: double.infinity,
                     color: Colors.black,
-                    child: widget.media.posterUrl !=
-                                null &&
-                            widget.media.posterUrl!
+                    child: widget.media.imageUrl != null &&
+                            widget.media.imageUrl!
                                 .isNotEmpty
                         ? Image.network(
-                            widget.media.posterUrl!,
+                            widget.media.imageUrl!,
                             fit: BoxFit.contain,
                             errorBuilder:
                                 (_, __, ___) {
@@ -348,8 +360,8 @@ class _PlayerScreenState
                       ),
                     ),
 
-                  if (widget.media.isEpisode &&
-                      videoFinished &&
+                  if (videoFinished &&
+                      creditsStarted &&
                       !autoplayCancelled)
                     Positioned(
                       right: 20,
@@ -358,6 +370,11 @@ class _PlayerScreenState
                           NextEpisodeCountdown(
                         seconds:
                             autoplaySeconds,
+                        nextEpisodeTitle:
+                            AppController.instance
+                                .getNextEpisode(
+                          widget.media.id,
+                        ),
                         onCancel:
                             cancelAutoplay,
                         onPlayNow: () {
@@ -365,14 +382,17 @@ class _PlayerScreenState
                               AppController
                                   .instance
                                   .getNextEpisode(
-                            widget.media,
+                            widget.media.id,
                           );
 
-                          if (next != null) {
-                            playNextEpisode(
-                              next,
-                            );
+                          if (next == null ||
+                              next.trim().isEmpty) {
+                            return;
                           }
+
+                          playNextEpisode(
+                            next,
+                          );
                         },
                       ),
                     ),
@@ -402,24 +422,34 @@ class _PlayerScreenState
             value: position,
             min: 0,
             max: 1,
-            onChanged: updatePosition,
+            onChanged: videoFinished
+                ? null
+                : updatePosition,
           ),
 
           Row(
             children: [
               IconButton(
-                onPressed: () {
-                  setState(() {
-                    position =
-                        (position - 0.05)
-                            .clamp(0.0, 1.0);
-                  });
-                  AppController.instance
-                      .updateProgress(
-                    widget.media,
-                    position,
-                  );
-                },
+                onPressed: videoFinished
+                    ? null
+                    : () {
+                        final newPosition =
+                            (position - 0.05)
+                                .clamp(0.0, 1.0)
+                                .toDouble();
+
+                        setState(() {
+                          position =
+                              newPosition;
+                        });
+
+                        AppController
+                            .instance
+                            .updatePlaybackProgress(
+                          widget.media.id,
+                          newPosition,
+                        );
+                      },
                 icon: const Icon(
                   Icons.replay_10,
                   color: Colors.white,
@@ -427,11 +457,11 @@ class _PlayerScreenState
               ),
 
               IconButton(
-                onPressed: () {
-                  if (!videoFinished) {
-                    finishVideo();
-                  }
-                },
+                onPressed: videoFinished
+                    ? null
+                    : () {
+                        finishVideo();
+                      },
                 icon: const Icon(
                   Icons.play_arrow,
                   color: Colors.white,
@@ -439,18 +469,31 @@ class _PlayerScreenState
               ),
 
               IconButton(
-                onPressed: () {
-                  setState(() {
-                    position =
-                        (position + 0.05)
-                            .clamp(0.0, 1.0);
-                  });
-                  AppController.instance
-                      .updateProgress(
-                    widget.media,
-                    position,
-                  );
-                },
+                onPressed: videoFinished
+                    ? null
+                    : () {
+                        final newPosition =
+                            (position + 0.05)
+                                .clamp(0.0, 1.0)
+                                .toDouble();
+
+                        setState(() {
+                          position =
+                              newPosition;
+                        });
+
+                        AppController
+                            .instance
+                            .updatePlaybackProgress(
+                          widget.media.id,
+                          newPosition,
+                        );
+
+                        if (newPosition >=
+                            0.999) {
+                          finishVideo();
+                        }
+                      },
                 icon: const Icon(
                   Icons.forward_10,
                   color: Colors.white,
@@ -491,21 +534,32 @@ class _PlayerScreenState
   }
 }
 
+// ============================================================
+// NEXT EPISODE COUNTDOWN
+// ============================================================
+
 class NextEpisodeCountdown
     extends StatelessWidget {
   final int seconds;
+  final String? nextEpisodeTitle;
   final VoidCallback onCancel;
   final VoidCallback onPlayNow;
 
   const NextEpisodeCountdown({
     super.key,
     required this.seconds,
+    required this.nextEpisodeTitle,
     required this.onCancel,
     required this.onPlayNow,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (nextEpisodeTitle == null ||
+        nextEpisodeTitle!.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Card(
       color: Colors.grey.shade900,
       child: Padding(
@@ -525,7 +579,18 @@ class NextEpisodeCountdown
             const SizedBox(height: 5),
 
             Text(
-              'Next episode starts in $seconds',
+              nextEpisodeTitle!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 5),
+
+            Text(
+              'Starts in $seconds',
               style: const TextStyle(
                 color: Colors.white70,
               ),
@@ -542,6 +607,9 @@ class NextEpisodeCountdown
                     'CANCEL',
                   ),
                 ),
+
+                const SizedBox(width: 8),
+
                 ElevatedButton(
                   onPressed: onPlayNow,
                   child: const Text(
@@ -557,20 +625,24 @@ class NextEpisodeCountdown
   }
 }
 
+// ============================================================
+// AUDIO / SUBTITLE OPTIONS
+// ============================================================
+
 class AudioSubtitleOptions
     extends StatefulWidget {
-  final MediaItem media;
   final String selectedAudio;
   final bool subtitlesEnabled;
   final String? selectedSubtitle;
 
-  final ValueChanged<String> onAudioChanged;
+  final ValueChanged<String>
+      onAudioChanged;
+
   final ValueChanged<String?>
       onSubtitleChanged;
 
   const AudioSubtitleOptions({
     super.key,
-    required this.media,
     required this.selectedAudio,
     required this.subtitlesEnabled,
     required this.selectedSubtitle,
@@ -587,7 +659,7 @@ class _AudioSubtitleOptionsState
     extends State<AudioSubtitleOptions> {
   late String selectedAudio;
   late bool subtitlesEnabled;
-  String? selectedSubtitle;
+  late String? selectedSubtitle;
 
   @override
   void initState() {
@@ -595,24 +667,21 @@ class _AudioSubtitleOptionsState
 
     selectedAudio =
         widget.selectedAudio;
+
     subtitlesEnabled =
         widget.subtitlesEnabled;
+
     selectedSubtitle =
         widget.selectedSubtitle;
   }
 
   @override
   Widget build(BuildContext context) {
-    final audioTracks =
-        widget.media.audioTracks;
-
-    final subtitleTracks =
-        widget.media.subtitleTracks;
-
     return SafeArea(
-      child: SingleChildScrollView(
+      child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment:
               CrossAxisAlignment.start,
           children: [
@@ -637,50 +706,28 @@ class _AudioSubtitleOptionsState
 
             const SizedBox(height: 10),
 
-            if (audioTracks.isEmpty)
-              const Text(
-                'Original audio',
+            RadioListTile<String>(
+              value: 'Original',
+              groupValue: selectedAudio,
+              onChanged: (value) {
+                if (value == null) return;
+
+                setState(() {
+                  selectedAudio =
+                      value;
+                });
+
+                widget.onAudioChanged(
+                  value,
+                );
+              },
+              title: const Text(
+                'Original',
                 style: TextStyle(
                   color: Colors.white,
                 ),
-              )
-            else
-              ...audioTracks.map(
-                (track) => RadioListTile<
-                    String>(
-                  value: track.language,
-                  groupValue:
-                      selectedAudio,
-                  onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-
-                    setState(() {
-                      selectedAudio =
-                          value;
-                    });
-
-                    widget.onAudioChanged(
-                      value,
-                    );
-                  },
-                  title: Text(
-                    track.language,
-                    style:
-                        const TextStyle(
-                      color: Colors.white,
-                    ),
-                  ),
-                  subtitle: Text(
-                    track.format,
-                    style:
-                        const TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
               ),
+            ),
 
             const SizedBox(height: 20),
 
@@ -702,13 +749,14 @@ class _AudioSubtitleOptionsState
                   if (!value) {
                     selectedSubtitle =
                         null;
+                  } else {
+                    selectedSubtitle =
+                        'Default';
                   }
                 });
 
                 widget.onSubtitleChanged(
-                  value
-                      ? selectedSubtitle
-                      : null,
+                  selectedSubtitle,
                 );
               },
               title: const Text(
@@ -720,42 +768,28 @@ class _AudioSubtitleOptionsState
             ),
 
             if (subtitlesEnabled)
-              ...subtitleTracks.map(
-                (track) {
-                  final label =
-                      track.sdh
-                          ? '${track.language} (SDH)'
-                          : track.language;
+              RadioListTile<String>(
+                value: 'Default',
+                groupValue:
+                    selectedSubtitle,
+                onChanged: (value) {
+                  if (value == null) return;
 
-                  return RadioListTile<
-                      String>(
-                    value: track.language,
-                    groupValue:
-                        selectedSubtitle,
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
+                  setState(() {
+                    selectedSubtitle =
+                        value;
+                  });
 
-                      setState(() {
-                        selectedSubtitle =
-                            value;
-                      });
-
-                      widget
-                          .onSubtitleChanged(
-                        value,
-                      );
-                    },
-                    title: Text(
-                      label,
-                      style:
-                          const TextStyle(
-                        color: Colors.white,
-                      ),
-                    ),
+                  widget.onSubtitleChanged(
+                    value,
                   );
                 },
+                title: const Text(
+                  'Default subtitles',
+                  style: TextStyle(
+                    color: Colors.white,
+                  ),
+                ),
               ),
           ],
         ),

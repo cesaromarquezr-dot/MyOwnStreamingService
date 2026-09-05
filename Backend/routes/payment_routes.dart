@@ -1,0 +1,856 @@
+import 'dart:convert';
+import 'dart:io';
+
+import '../middleware/authentication.dart';
+import '../models/account.dart';
+import '../models/subscription.dart';
+import '../services/payment_service.dart';
+import '../database/database.dart';
+
+class PaymentRoutes {
+  final AuthenticationMiddleware authenticationMiddleware;
+  final PaymentService paymentService;
+  final Database database;
+
+  PaymentRoutes({
+    required this.authenticationMiddleware,
+    required this.paymentService,
+    required this.database,
+  });
+
+  Future<void> handle(HttpRequest request) async {
+    try {
+      final path = request.uri.path;
+
+      /*
+       * ---------------------------------------------------------
+       * PRE-LOGIN CHECKOUT ROUTES
+       * ---------------------------------------------------------
+       *
+       * These routes are used immediately after signup.
+       *
+       * The user does NOT have a normal authentication token yet.
+       * Instead, the payment session has a temporary checkout token.
+       *
+       * The checkout token:
+       * - only grants access to that specific payment session
+       * - cannot be used as a normal login token
+       * - is never returned by normal payment status endpoints
+       * - is required to verify the payment before login is allowed
+       */
+
+      if (request.method == 'GET' &&
+          path.startsWith('/api/v1/payment/checkout/status/')) {
+        await _getCheckoutPaymentStatus(request);
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path.startsWith('/api/v1/payment/checkout/verify/')) {
+        await _verifyCheckoutPayment(request);
+        return;
+      }
+
+      /*
+       * ---------------------------------------------------------
+       * NORMAL AUTHENTICATED PAYMENT ROUTES
+       * ---------------------------------------------------------
+       *
+       * These routes are used after the account is authenticated.
+       */
+
+      await authenticationMiddleware.authenticate(
+  request,
+);
+
+final account =
+    _getAuthenticatedAccount(request);
+
+if (account == null) {
+  await _sendJson(
+    request.response,
+    HttpStatus.unauthorized,
+    {
+      'success': false,
+      'error': 'Authentication required.',
+    },
+  );
+  return;
+}
+
+      if (account == null) {
+        await _sendJson(
+          request.response,
+          HttpStatus.unauthorized,
+          {
+            'success': false,
+            'error':
+                'Authenticated account could not be found.',
+          },
+        );
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/payment/create') {
+        await _createPayment(
+          request,
+          account,
+        );
+        return;
+      }
+
+      if (request.method == 'GET' &&
+          path.startsWith('/api/v1/payment/status/')) {
+        await _getPaymentStatus(
+          request,
+          account,
+        );
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path.startsWith('/api/v1/payment/verify/')) {
+        await _verifyPayment(
+          request,
+          account,
+        );
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path.startsWith('/api/v1/payment/fail/')) {
+        await _failPayment(
+          request,
+          account,
+        );
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path.startsWith('/api/v1/payment/cancel/')) {
+        await _cancelPayment(
+          request,
+          account,
+        );
+        return;
+      }
+
+      await _sendJson(
+        request.response,
+        HttpStatus.notFound,
+        {
+          'success': false,
+          'error': 'Payment endpoint not found.',
+        },
+      );
+    } catch (error) {
+      print('Payment request error: $error');
+
+      if (!request.response.headers.contentType
+          .toString()
+          .contains('json')) {
+        await _sendJson(
+          request.response,
+          HttpStatus.internalServerError,
+          {
+            'success': false,
+            'error':
+                _cleanError(error),
+          },
+        );
+      }
+    }
+  }
+
+  /*
+   * ============================================================
+   * PRE-LOGIN CHECKOUT
+   * ============================================================
+   */
+
+  Future<void> _getCheckoutPaymentStatus(
+    HttpRequest request,
+  ) async {
+    final paymentId =
+        _getIdFromPath(request.uri.path);
+
+    if (paymentId == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': 'Payment ID is required.',
+        },
+      );
+      return;
+    }
+
+    final checkoutToken =
+        request.uri.queryParameters['checkoutToken']
+            ?.trim();
+
+    if (checkoutToken == null ||
+        checkoutToken.isEmpty) {
+      await _sendJson(
+        request.response,
+        HttpStatus.unauthorized,
+        {
+          'success': false,
+          'error':
+              'Checkout authorization is required.',
+        },
+      );
+      return;
+    }
+
+    final payment =
+        paymentService.getPaymentForCheckout(
+      paymentId: paymentId,
+      checkoutToken: checkoutToken,
+    );
+
+    if (payment == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.unauthorized,
+        {
+          'success': false,
+          'error':
+              'Invalid or expired checkout session.',
+        },
+      );
+      return;
+    }
+
+    await _sendJson(
+      request.response,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'payment': payment.toJson(),
+      },
+    );
+  }
+
+  Future<void> _verifyCheckoutPayment(
+    HttpRequest request,
+  ) async {
+    final paymentId =
+        _getIdFromPath(request.uri.path);
+
+    if (paymentId == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': 'Payment ID is required.',
+        },
+      );
+      return;
+    }
+
+    final body =
+        await _readJson(request);
+
+    final checkoutToken =
+        body['checkoutToken']
+            ?.toString()
+            .trim();
+
+    if (checkoutToken == null ||
+        checkoutToken.isEmpty) {
+      await _sendJson(
+        request.response,
+        HttpStatus.unauthorized,
+        {
+          'success': false,
+          'error':
+              'Checkout authorization is required.',
+        },
+      );
+      return;
+    }
+
+    final processorTransactionId =
+        body['processorTransactionId']
+            ?.toString()
+            .trim();
+
+    if (processorTransactionId == null ||
+        processorTransactionId.isEmpty) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'A payment processor transaction ID is required.',
+        },
+      );
+      return;
+    }
+
+    /*
+     * IMPORTANT:
+     *
+     * The frontend must NEVER send raw financial credentials.
+     *
+     * Do NOT accept:
+     *
+     * - card number
+     * - CVV
+     * - expiration date
+     * - PIN
+     * - bank account number
+     * - bank password
+     * - online banking credentials
+     *
+     * Only the payment processor's transaction/reference ID
+     * belongs in this request.
+     */
+
+    final payment =
+        paymentService.getPaymentForCheckout(
+      paymentId: paymentId,
+      checkoutToken: checkoutToken,
+    );
+
+    if (payment == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.unauthorized,
+        {
+          'success': false,
+          'error':
+              'Invalid or expired checkout session.',
+        },
+      );
+      return;
+    }
+
+    /*
+     * Retrieve the account associated with this payment session.
+     *
+     * This is safe because the checkout token was already validated
+     * against the payment session.
+     */
+
+    final account =
+        database.getAccountById(
+      payment.accountId,
+    );
+
+    if (account == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.notFound,
+        {
+          'success': false,
+          'error':
+              'Account associated with payment could not be found.',
+        },
+      );
+      return;
+    }
+
+    final verifiedPayment =
+        paymentService.verifyCheckoutPayment(
+      paymentId: paymentId,
+      checkoutToken: checkoutToken,
+      account: account,
+      processorTransactionId:
+          processorTransactionId,
+    );
+
+    /*
+     * IMPORTANT:
+     *
+     * No authentication token is created here.
+     *
+     * The account is now activated, so the frontend can perform
+     * the normal login request using the user's username/email
+     * and password.
+     */
+
+    await _sendJson(
+      request.response,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'payment': verifiedPayment.toJson(),
+        'subscription':
+            account.subscription?.toJson(),
+        'account':
+            account.toJson(),
+        'paymentRequired': false,
+        'message':
+            'Payment verified and subscription activated. You can now log in.',
+      },
+    );
+  }
+
+  /*
+   * ============================================================
+   * AUTHENTICATED PAYMENT CREATION
+   * ============================================================
+   */
+
+  Future<void> _createPayment(
+    HttpRequest request,
+    Account account,
+  ) async {
+    final body =
+        await _readJson(request);
+
+    final planValue =
+        body['plan']
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+    if (planValue == null ||
+        planValue.isEmpty) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'A subscription plan is required.',
+        },
+      );
+      return;
+    }
+
+    final plan =
+        _parsePlan(planValue);
+
+    if (plan == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'Invalid subscription plan. Use monthly or yearly.',
+        },
+      );
+      return;
+    }
+
+    final payment =
+        paymentService.createPaymentSession(
+      account: account,
+      plan: plan,
+    );
+
+    await _sendJson(
+      request.response,
+      HttpStatus.created,
+      {
+        'success': true,
+        'payment': payment.toJson(),
+        'message':
+            'Payment session created. Complete payment with the payment provider.',
+      },
+    );
+  }
+
+  /*
+   * ============================================================
+   * AUTHENTICATED PAYMENT STATUS
+   * ============================================================
+   */
+
+  Future<void> _getPaymentStatus(
+    HttpRequest request,
+    Account account,
+  ) async {
+    final paymentId =
+        _getIdFromPath(request.uri.path);
+
+    if (paymentId == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': 'Payment ID is required.',
+        },
+      );
+      return;
+    }
+
+    final payment =
+        paymentService.getPayment(paymentId);
+
+    if (payment == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.notFound,
+        {
+          'success': false,
+          'error':
+              'Payment session not found.',
+        },
+      );
+      return;
+    }
+
+    if (!paymentService.paymentBelongsToAccount(
+      payment,
+      account,
+    )) {
+      await _sendJson(
+        request.response,
+        HttpStatus.forbidden,
+        {
+          'success': false,
+          'error':
+              'You do not have access to this payment.',
+        },
+      );
+      return;
+    }
+
+    await _sendJson(
+      request.response,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'payment': payment.toJson(),
+      },
+    );
+  }
+
+  /*
+   * ============================================================
+   * AUTHENTICATED PAYMENT VERIFICATION
+   * ============================================================
+   */
+
+  Future<void> _verifyPayment(
+    HttpRequest request,
+    Account account,
+  ) async {
+    final paymentId =
+        _getIdFromPath(request.uri.path);
+
+    if (paymentId == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'Payment ID is required.',
+        },
+      );
+      return;
+    }
+
+    final body =
+        await _readJson(request);
+
+    final processorTransactionId =
+        body['processorTransactionId']
+            ?.toString()
+            .trim();
+
+    if (processorTransactionId == null ||
+        processorTransactionId.isEmpty) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'A payment processor transaction ID is required.',
+        },
+      );
+      return;
+    }
+
+    /*
+     * The client must NEVER send:
+     *
+     * - card number
+     * - CVV
+     * - PIN
+     * - bank account number
+     * - bank password
+     * - online banking credentials
+     *
+     * Only the processor's transaction/reference ID belongs here.
+     */
+
+    final payment =
+        paymentService.verifySuccessfulPayment(
+      paymentId: paymentId,
+      account: account,
+      processorTransactionId:
+          processorTransactionId,
+    );
+
+    await _sendJson(
+      request.response,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'payment': payment.toJson(),
+        'subscription':
+            account.subscription?.toJson(),
+        'account':
+            account.toJson(),
+        'message':
+            'Payment verified and subscription activated.',
+      },
+    );
+  }
+
+  /*
+   * ============================================================
+   * PAYMENT FAILURE
+   * ============================================================
+   */
+
+  Future<void> _failPayment(
+    HttpRequest request,
+    Account account,
+  ) async {
+    final paymentId =
+        _getIdFromPath(request.uri.path);
+
+    if (paymentId == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'Payment ID is required.',
+        },
+      );
+      return;
+    }
+
+    final body =
+        await _readJson(request);
+
+    final reason =
+        body['reason']
+            ?.toString()
+            .trim();
+
+    final payment =
+        paymentService.markFailed(
+      paymentId: paymentId,
+      account: account,
+      reason: reason,
+    );
+
+    await _sendJson(
+      request.response,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'payment': payment.toJson(),
+        'message':
+            'Payment marked as failed.',
+      },
+    );
+  }
+
+  /*
+   * ============================================================
+   * PAYMENT CANCELLATION
+   * ============================================================
+   */
+
+  Future<void> _cancelPayment(
+    HttpRequest request,
+    Account account,
+  ) async {
+    final paymentId =
+        _getIdFromPath(request.uri.path);
+
+    if (paymentId == null) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error':
+              'Payment ID is required.',
+        },
+      );
+      return;
+    }
+
+    final payment =
+        paymentService.cancelPayment(
+      paymentId: paymentId,
+      account: account,
+    );
+
+    await _sendJson(
+      request.response,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'payment': payment.toJson(),
+        'message':
+            'Payment cancelled.',
+      },
+    );
+  }
+
+  /*
+   * ============================================================
+   * AUTHENTICATED ACCOUNT LOOKUP
+   * ============================================================
+   */
+
+  Account? _getAuthenticatedAccount(
+    HttpRequest request,
+  ) {
+    /*
+     * AuthenticationMiddleware is responsible for validating
+     * the bearer token.
+     *
+     * The account is then retrieved using that token from the
+     * database.
+     */
+
+    final authorization =
+        request.headers.value(
+      'authorization',
+    );
+
+    if (authorization == null) {
+      return null;
+    }
+
+    if (!authorization
+        .toLowerCase()
+        .startsWith('bearer ')) {
+      return null;
+    }
+
+    final token =
+        authorization.substring(7).trim();
+
+    if (token.isEmpty) {
+      return null;
+    }
+
+    return database.getAccountForSession(
+      token,
+    );
+  }
+
+  /*
+   * ============================================================
+   * HELPERS
+   * ============================================================
+   */
+
+  SubscriptionPlan? _parsePlan(
+    String value,
+  ) {
+    switch (value) {
+      case 'monthly':
+        return SubscriptionPlan.monthly;
+
+      case 'yearly':
+        return SubscriptionPlan.yearly;
+
+      default:
+        return null;
+    }
+  }
+
+  String? _getIdFromPath(
+    String path,
+  ) {
+    final segments =
+        path.split('/');
+
+    if (segments.length < 5) {
+      return null;
+    }
+
+    final id =
+        segments.last.trim();
+
+    if (id.isEmpty) {
+      return null;
+    }
+
+    return id;
+  }
+
+  Future<Map<String, dynamic>> _readJson(
+    HttpRequest request,
+  ) async {
+    final contents =
+        await utf8.decoder
+            .bind(request)
+            .join();
+
+    if (contents.trim().isEmpty) {
+      return {};
+    }
+
+    try {
+      final decoded =
+          jsonDecode(contents);
+
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      return {};
+    } catch (_) {
+      throw Exception(
+        'Invalid JSON request body.',
+      );
+    }
+  }
+
+  Future<void> _sendJson(
+    HttpResponse response,
+    int statusCode,
+    Map<String, dynamic> data,
+  ) async {
+    response.statusCode =
+        statusCode;
+
+    response.headers.contentType =
+        ContentType.json;
+
+    response.write(
+      jsonEncode(data),
+    );
+
+    await response.close();
+  }
+
+  String _cleanError(
+    Object error,
+  ) {
+    final message =
+        error.toString();
+
+    if (message.startsWith(
+      'Exception: ',
+    )) {
+      return message.substring(11);
+    }
+
+    return message;
+  }
+}

@@ -1,25 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'app_core.dart';
+/// Simple trailer model used by TrailerScreen.
+///
+/// This is kept here because the current app_core.dart does not
+/// contain a Trailer model.
+class Trailer {
+  final String youtubeVideoId;
+  final String title;
+
+  const Trailer({
+    required this.youtubeVideoId,
+    required this.title,
+  });
+}
 
 /// Opens a trailer on YouTube.
 Future<void> openTrailer(
   BuildContext context,
   Trailer trailer,
 ) async {
-  final videoId = trailer.youtubeVideoId.trim();
+  final videoId =
+      trailer.youtubeVideoId.trim();
 
   if (videoId.isEmpty) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
       const SnackBar(
         content: Text(
           'This trailer does not have a YouTube video ID.',
         ),
       ),
     );
+
     return;
   }
 
@@ -32,13 +47,14 @@ Future<void> openTrailer(
   );
 
   try {
-    final bool launched = await launchUrl(
+    final launched = await launchUrl(
       youtubeUri,
       mode: LaunchMode.externalApplication,
     );
 
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
             'Unable to open the trailer.',
@@ -46,11 +62,12 @@ Future<void> openTrailer(
         ),
       );
     }
-  } catch (error) {
+  } catch (_) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      const SnackBar(
         content: Text(
           'Unable to open the trailer.',
         ),
@@ -67,7 +84,9 @@ class TrailerScreen extends StatelessWidget {
     required this.trailer,
   });
 
-  Future<void> launchTrailer(BuildContext context) async {
+  Future<void> launchTrailer(
+    BuildContext context,
+  ) async {
     await openTrailer(
       context,
       trailer,
@@ -92,18 +111,23 @@ class TrailerScreen extends StatelessWidget {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
+            constraints:
+                const BoxConstraints(
               maxWidth: 600,
             ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
               children: [
                 Container(
                   width: double.infinity,
                   height: 300,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111111),
-                    borderRadius: BorderRadius.circular(16),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        const Color(0xFF111111),
+                    borderRadius:
+                        BorderRadius.circular(16),
                     border: Border.all(
                       color: Colors.white12,
                     ),
@@ -125,14 +149,16 @@ class TrailerScreen extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 26,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
 
                 const SizedBox(height: 12),
 
                 Text(
-                  'YouTube ID: ${trailer.youtubeVideoId}',
+                  'YouTube ID: '
+                  '${trailer.youtubeVideoId}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.grey,
@@ -145,9 +171,12 @@ class TrailerScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   height: 52,
-                  child: ElevatedButton.icon(
+                  child:
+                      ElevatedButton.icon(
                     onPressed: () {
-                      launchTrailer(context);
+                      launchTrailer(
+                        context,
+                      );
                     },
                     icon: const Icon(
                       Icons.play_arrow,
@@ -155,7 +184,8 @@ class TrailerScreen extends StatelessWidget {
                     label: const Text(
                       'WATCH TRAILER',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
                   ),

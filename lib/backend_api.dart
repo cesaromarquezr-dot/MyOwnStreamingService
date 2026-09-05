@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 class BackendApiException implements Exception {
@@ -55,12 +56,55 @@ class BackendApi {
     return headers;
   }
 
+  // ==========================================================
+  // AUTH
+  // ==========================================================
+
+  /// Creates a new account and starts the payment process.
+  ///
+  /// IMPORTANT:
+  ///
+  /// Signup does NOT authenticate the user.
+  ///
+  /// The backend creates the account with an inactive
+  /// subscription and returns a payment session.
+  ///
+  /// The returned data contains:
+  ///
+  /// - account
+  /// - subscription
+  /// - payment
+  /// - payment ID
+  /// - checkout token
+  ///
+  /// The checkout token is only used for the payment process.
+  /// It is NOT an authentication token.
   Future<Map<String, dynamic>> signup({
     required String username,
     required String email,
     required String password,
     required String firstProfileName,
+    required String plan,
   }) async {
+    final cleanPlan =
+        plan.trim().toLowerCase();
+
+    if (cleanPlan != 'monthly' &&
+        cleanPlan != 'yearly') {
+      throw BackendApiException(
+        'Subscription plan must be monthly or yearly.',
+      );
+    }
+
+    /*
+     * Make absolutely sure signup starts without an
+     * authenticated session.
+     *
+     * This prevents an old token from accidentally being
+     * associated with the new signup request.
+     */
+    clearToken();
+
     final response = await http.post(
       Uri.parse('$baseUrl/auth/signup'),
       headers: _headers,
@@ -69,29 +113,73 @@ class BackendApi {
         'email': email,
         'password': password,
         'firstProfileName': firstProfileName,
+        'plan': cleanPlan,
       }),
     );
 
-    final data = _decodeResponse(response);
+    final data =
+        _decodeResponse(response);
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to create account.',
-        statusCode: response.statusCode,
+        statusCode:
+            response.statusCode,
       );
     }
 
-    final token = data['token']?.toString();
+    /*
+     * The backend should NOT return a normal auth token
+     * during signup.
+     *
+     * If one is accidentally returned, do not store it.
+     */
+    clearToken();
 
-    if (token != null && token.isNotEmpty) {
-      setToken(token);
+    final payment =
+        data['payment'];
+
+    if (payment is! Map) {
+      throw BackendApiException(
+        'Account was created but no payment session was returned.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    final paymentId =
+        payment['id']?.toString();
+
+    final checkoutToken =
+        payment['checkoutToken']?.toString();
+
+    if (paymentId == null ||
+        paymentId.isEmpty) {
+      throw BackendApiException(
+        'Payment session was created but no payment ID was returned.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    if (checkoutToken == null ||
+        checkoutToken.isEmpty) {
+      throw BackendApiException(
+        'Payment session was created but no checkout authorization was returned.',
+        statusCode:
+            response.statusCode,
+      );
     }
 
     return data;
   }
 
+  /// Logs into an account.
+  ///
+  /// The backend will reject login if the account's
+  /// subscription has not been activated through payment.
   Future<Map<String, dynamic>> login({
     required String usernameOrEmail,
     required String password,
@@ -100,28 +188,33 @@ class BackendApi {
       Uri.parse('$baseUrl/auth/login'),
       headers: _headers,
       body: jsonEncode({
-        'usernameOrEmail': usernameOrEmail,
+        'login': usernameOrEmail,
         'password': password,
       }),
     );
 
-    final data = _decodeResponse(response);
+    final data =
+        _decodeResponse(response);
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to log in.',
-        statusCode: response.statusCode,
+        statusCode:
+            response.statusCode,
       );
     }
 
-    final token = data['token']?.toString();
+    final token =
+        data['token']?.toString();
 
-    if (token == null || token.isEmpty) {
+    if (token == null ||
+        token.isEmpty) {
       throw BackendApiException(
         'Backend login succeeded but no authentication token was returned.',
-        statusCode: response.statusCode,
+        statusCode:
+            response.statusCode,
       );
     }
 
@@ -131,19 +224,27 @@ class BackendApi {
   }
 
   Future<Map<String, dynamic>> me() async {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before retrieving your account.',
+      );
+    }
+
     final response = await http.get(
       Uri.parse('$baseUrl/auth/me'),
       headers: _headers,
     );
 
-    final data = _decodeResponse(response);
+    final data =
+        _decodeResponse(response);
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to retrieve account.',
-        statusCode: response.statusCode,
+        statusCode:
+            response.statusCode,
       );
     }
 
@@ -165,24 +266,416 @@ class BackendApi {
     }
   }
 
+  // ==========================================================
+  // PAYMENT
+  // ==========================================================
+
+  /// Retrieves the status of a signup checkout session.
+  ///
+  /// This endpoint does NOT require a normal authentication token.
+  ///
+  /// Instead, the temporary checkout token returned during signup
+  /// authorizes access to this specific payment session.
+  Future<Map<String, dynamic>> getCheckoutPaymentStatus({
+    required String paymentId,
+    required String checkoutToken,
+  }) async {
+    if (paymentId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
+    }
+
+    if (checkoutToken.trim().isEmpty) {
+      throw BackendApiException(
+        'Checkout authorization is required.',
+      );
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/payment/checkout/status/${Uri.encodeComponent(paymentId)}',
+    ).replace(
+      queryParameters: {
+        'checkoutToken': checkoutToken,
+      },
+    );
+
+    /*
+     * Deliberately use headers without Authorization.
+     *
+     * A checkout session is pre-login and therefore must not
+     * depend on a normal authentication token.
+     */
+    final response = await http.get(
+      uri,
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to retrieve payment status.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
+  }
+
+  /// Verifies a completed signup payment.
+  ///
+  /// IMPORTANT:
+  ///
+  /// processorTransactionId is the payment provider's
+  /// transaction/reference ID.
+  ///
+  /// This method does NOT accept:
+  ///
+  /// - card numbers
+  /// - CVV
+  /// - PIN
+  /// - bank account numbers
+  /// - bank passwords
+  /// - online banking credentials
+  ///
+  /// The backend uses the checkout token to identify the
+  /// correct payment session and account.
+  Future<Map<String, dynamic>> verifyCheckoutPayment({
+    required String paymentId,
+    required String checkoutToken,
+    required String processorTransactionId,
+  }) async {
+    if (paymentId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
+    }
+
+    if (checkoutToken.trim().isEmpty) {
+      throw BackendApiException(
+        'Checkout authorization is required.',
+      );
+    }
+
+    if (processorTransactionId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment processor transaction ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/payment/checkout/verify/${Uri.encodeComponent(paymentId)}',
+      ),
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'checkoutToken': checkoutToken,
+        'processorTransactionId':
+            processorTransactionId,
+      }),
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to verify payment.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    /*
+     * Payment verification does NOT automatically create
+     * a normal authentication token.
+     *
+     * The user must log in normally after payment.
+     */
+    clearToken();
+
+    return data;
+  }
+
+  /// Creates a payment session for an already authenticated
+  /// account.
+  ///
+  /// This is useful for future subscription renewals or
+  /// subscription changes.
+  Future<Map<String, dynamic>> createPayment({
+    required String plan,
+  }) async {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before creating a payment.',
+      );
+    }
+
+    final cleanPlan =
+        plan.trim().toLowerCase();
+
+    if (cleanPlan != 'monthly' &&
+        cleanPlan != 'yearly') {
+      throw BackendApiException(
+        'Subscription plan must be monthly or yearly.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/payment/create'),
+      headers: _headers,
+      body: jsonEncode({
+        'plan': cleanPlan,
+      }),
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to create payment session.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
+  }
+
+  /// Gets the status of a payment belonging to the
+  /// authenticated account.
+  Future<Map<String, dynamic>> getPaymentStatus({
+    required String paymentId,
+  }) async {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before checking payment status.',
+      );
+    }
+
+    if (paymentId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
+    }
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/payment/status/${Uri.encodeComponent(paymentId)}',
+      ),
+      headers: _headers,
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to retrieve payment status.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
+  }
+
+  /// Verifies a payment for an already authenticated account.
+  Future<Map<String, dynamic>> verifyPayment({
+    required String paymentId,
+    required String processorTransactionId,
+  }) async {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before verifying a payment.',
+      );
+    }
+
+    if (paymentId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
+    }
+
+    if (processorTransactionId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment processor transaction ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/payment/verify/${Uri.encodeComponent(paymentId)}',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'processorTransactionId':
+            processorTransactionId,
+      }),
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to verify payment.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
+  }
+
+  /// Cancels an authenticated payment session.
+  Future<Map<String, dynamic>> cancelPayment({
+    required String paymentId,
+  }) async {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before cancelling a payment.',
+      );
+    }
+
+    if (paymentId.trim().isEmpty) {
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/payment/cancel/${Uri.encodeComponent(paymentId)}',
+      ),
+      headers: _headers,
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to cancel payment.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
+  }
+
+  // ==========================================================
+  // RECOMMENDATIONS
+  // ==========================================================
+
+  /// Gets recommendations for the currently authenticated
+  /// account/profile.
+  ///
+  /// The profile ID is optional so this method remains compatible
+  /// with AppController's existing:
+  ///
+  ///     await backendApi.getRecommendations();
+  ///
+  /// If a profile ID is supplied, it is sent to the backend.
+  Future<Map<String, dynamic>> getRecommendations({
+    String? profileId,
+    int limit = 20,
+  }) async {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before loading recommendations.',
+      );
+    }
+
+    final safeLimit =
+        limit.clamp(1, 100);
+
+    final queryParameters =
+        <String, String>{
+      'limit': safeLimit.toString(),
+    };
+
+    if (profileId != null &&
+        profileId.trim().isNotEmpty) {
+      queryParameters['profileId'] =
+          profileId.trim();
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/recommendations',
+    ).replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await http.get(
+      uri,
+      headers: _headers,
+    );
+
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to retrieve recommendations.',
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
+  }
+
+  // ==========================================================
+  // ARM
+  // ==========================================================
+
   Future<List<dynamic>> getArmDrives() async {
     final response = await http.get(
       Uri.parse('$baseUrl/arm/drives'),
       headers: _headers,
     );
 
-    final data = _decodeResponse(response);
+    final data =
+        _decodeResponse(response);
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to retrieve ARM drives.',
-        statusCode: response.statusCode,
+        statusCode:
+            response.statusCode,
       );
     }
 
-    final drives = data['drives'];
+    final drives =
+        data['drives'];
 
     if (drives is List) {
       return drives;
@@ -190,6 +683,10 @@ class BackendApi {
 
     return [];
   }
+
+  // ==========================================================
+  // RESPONSE DECODING
+  // ==========================================================
 
   Map<String, dynamic> _decodeResponse(
     http.Response response,
@@ -199,7 +696,8 @@ class BackendApi {
     }
 
     try {
-      final decoded = jsonDecode(response.body);
+      final decoded =
+          jsonDecode(response.body);
 
       if (decoded is Map<String, dynamic>) {
         return decoded;

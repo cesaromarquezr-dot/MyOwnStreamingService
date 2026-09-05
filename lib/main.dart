@@ -107,6 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
 
   bool obscurePassword = true;
+  bool loggingIn = false;
 
   @override
   void dispose() {
@@ -115,34 +116,69 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void login() {
+  Future<void> login() async {
+    if (loggingIn) return;
+
     final username = usernameController.text.trim();
     final password = passwordController.text;
 
-    final controller = AppController.instance;
-
-    final success = controller.login(
-      username,
-      password,
-    );
-
-    if (!success) {
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Incorrect username/email or password.',
+            'Enter your username/email and password.',
           ),
         ),
       );
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const MainScreen(),
-      ),
-    );
+    setState(() {
+      loggingIn = true;
+    });
+
+    final controller = AppController.instance;
+
+    try {
+      await controller.loginWithBackend(
+        usernameOrEmail: username,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const MainScreen(),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      String message = error.toString();
+
+      if (message.startsWith('BackendApiException:')) {
+        message = message
+            .replaceFirst(
+              'BackendApiException:',
+              '',
+            )
+            .trim();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          loggingIn = false;
+        });
+      }
+    }
   }
 
   @override
@@ -173,6 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 40),
                 TextField(
                   controller: usernameController,
+                  enabled: !loggingIn,
                   decoration: const InputDecoration(
                     labelText: 'Username or Email',
                     prefixIcon: Icon(Icons.person),
@@ -182,6 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20),
                 TextField(
                   controller: passwordController,
+                  enabled: !loggingIn,
                   obscureText: obscurePassword,
                   decoration: InputDecoration(
                     labelText: 'Password',
@@ -193,11 +231,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? Icons.visibility
                             : Icons.visibility_off,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          obscurePassword = !obscurePassword;
-                        });
-                      },
+                      onPressed: loggingIn
+                          ? null
+                          : () {
+                              setState(() {
+                                obscurePassword =
+                                    !obscurePassword;
+                              });
+                            },
                     ),
                   ),
                 ),
@@ -206,29 +247,41 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: login,
+                    onPressed: loggingIn ? null : login,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text(
-                      'LOGIN',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: loggingIn
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'LOGIN',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 20),
                 TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SignupScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: loggingIn
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const SignupScreen(),
+                            ),
+                          );
+                        },
                   child: const Text(
                     'Create a new account',
                   ),
@@ -255,8 +308,6 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int selectedIndex = 0;
-
-  final controller = AppController.instance;
 
   @override
   Widget build(BuildContext context) {
@@ -347,12 +398,34 @@ class HomeScreen extends StatelessWidget {
     final profile = controller.currentProfile;
 
     if (profile == null) {
-      return const Center(
-        child: Text('No profile selected.'),
+      return const Scaffold(
+        body: Center(
+          child: Text('No profile selected.'),
+        ),
       );
     }
 
-    final library = profile.library;
+    final library = controller.library;
+
+    final movies = library
+        .where(
+          (media) =>
+              media.type.toLowerCase() == 'movie',
+        )
+        .toList();
+
+    final tvShows = library
+        .where(
+          (media) {
+            final type =
+                media.type.toLowerCase();
+
+            return type == 'tvshow' ||
+                type == 'tv_show' ||
+                type == 'tv show';
+          },
+        )
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -364,6 +437,7 @@ class HomeScreen extends StatelessWidget {
         ),
         actions: [
           ActivityButton(),
+
           IconButton(
             tooltip: 'Group',
             icon: const Icon(Icons.groups),
@@ -371,18 +445,21 @@ class HomeScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const GroupHubScreen(),
+                  builder: (_) =>
+                      const GroupHubScreen(),
                 ),
               );
             },
           ),
+
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'profiles') {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const ProfileScreen(),
+                    builder: (_) =>
+                        const ProfileScreen(),
                   ),
                 );
               }
@@ -391,17 +468,18 @@ class HomeScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const ImportMediaScreen(),
+                    builder: (_) =>
+                        const ImportMediaScreen(),
                   ),
                 );
               }
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(
+              PopupMenuItem<String>(
                 value: 'profiles',
                 child: Text('Profiles'),
               ),
-              PopupMenuItem(
+              PopupMenuItem<String>(
                 value: 'import',
                 child: Text('Add Movie or Show'),
               ),
@@ -412,8 +490,13 @@ class HomeScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: () async {
           onRefresh?.call();
+
+          if (controller.backendApi.isAuthenticated) {
+            await controller.loadRecommendations();
+          }
         },
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(20),
           children: [
             Text(
@@ -423,63 +506,108 @@ class HomeScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+
             const SizedBox(height: 8),
+
             Text(
               'Your personal library',
               style: TextStyle(
                 color: Colors.grey.shade400,
               ),
             ),
+
             const SizedBox(height: 25),
 
-            if (library.media.isEmpty)
-              EmptyLibraryCard(
-                onAddPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ImportMediaScreen(),
-                    ),
-                  );
-                },
+            if (library.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(30),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.video_library_outlined,
+                        size: 70,
+                        color: Colors.grey,
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      const Text(
+                        'Your library is empty',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      Text(
+                        'Add your own movies and TV shows to build your personal streaming library.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const ImportMediaScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text(
+                          'Add Movie or Show',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
-            if (library.continueWatching.isNotEmpty) ...[
-              const SectionTitle(
-                title: 'Continue Watching',
-              ),
-              MediaHorizontalList(
-                media: library.continueWatching,
-              ),
-              const SizedBox(height: 25),
-            ],
-
-            if (library.recentlyWatched.isNotEmpty) ...[
+            if (controller.watched.isNotEmpty) ...[
               const SectionTitle(
                 title: 'Recently Watched',
               ),
               MediaHorizontalList(
-                media: library.recentlyWatched,
+                media: controller.watched,
               ),
               const SizedBox(height: 25),
             ],
 
-            if (library.movies.isNotEmpty) ...[
+            if (movies.isNotEmpty) ...[
               const SectionTitle(
                 title: 'Movies',
               ),
               MediaHorizontalList(
-                media: library.movies,
+                media: movies,
               ),
               const SizedBox(height: 25),
             ],
 
-            if (library.tvShows.isNotEmpty) ...[
+            if (tvShows.isNotEmpty) ...[
               const SectionTitle(
                 title: 'TV Shows',
               ),
               MediaHorizontalList(
-                media: library.tvShows,
+                media: tvShows,
+              ),
+              const SizedBox(height: 25),
+            ],
+
+            if (library.isNotEmpty) ...[
+              const SectionTitle(
+                title: 'My Library',
+              ),
+              MediaHorizontalList(
+                media: library,
               ),
               const SizedBox(height: 25),
             ],
@@ -489,7 +617,8 @@ class HomeScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const ImportMediaScreen(),
+                    builder: (_) =>
+                        const ImportMediaScreen(),
                   ),
                 );
               },
@@ -506,7 +635,8 @@ class HomeScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const GroupHubScreen(),
+                    builder: (_) =>
+                        const GroupHubScreen(),
                   ),
                 );
               },
@@ -537,8 +667,11 @@ class ActivityButton extends StatelessWidget {
       tooltip: 'Activity',
       icon: Stack(
         children: [
-          const Icon(Icons.notifications_outlined),
-          if (controller.activityFeed.isNotEmpty)
+          const Icon(
+            Icons.notifications_outlined,
+          ),
+
+          if (controller.activity.isNotEmpty)
             Positioned(
               right: 0,
               top: 0,
@@ -558,126 +691,108 @@ class ActivityButton extends StatelessWidget {
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.grey.shade900,
-          builder: (_) => const ActivityPanel(),
+          builder: (context) {
+            final activity =
+                AppController.instance.activity;
+
+            return SafeArea(
+              child: SizedBox(
+                height:
+                    MediaQuery.of(context).size.height * .7,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Activity',
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      Expanded(
+                        child: activity.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'No activity yet.',
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount:
+                                    activity.length,
+                                itemBuilder: (_, index) {
+                                  final event =
+                                      activity[index];
+
+                                  return ListTile(
+                                    leading:
+                                        const CircleAvatar(
+                                      child: Icon(
+                                        Icons.notifications,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      event.title,
+                                    ),
+                                    subtitle: Text(
+                                      event.action,
+                                    ),
+                                    trailing: Text(
+                                      _formatActivityTime(
+                                        event.timestamp,
+                                      ),
+                                      style: TextStyle(
+                                        color: Colors
+                                            .grey
+                                            .shade500,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
   }
-}
 
-// ============================================================
-// ACTIVITY PANEL
-// ============================================================
+  String _formatActivityTime(
+    DateTime timestamp,
+  ) {
+    final difference =
+        DateTime.now().difference(timestamp);
 
-class ActivityPanel extends StatelessWidget {
-  const ActivityPanel({super.key});
+    if (difference.inSeconds < 60) {
+      return 'Just now';
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final controller = AppController.instance;
+    if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    }
 
-    return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * .7,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Activity',
-                style: TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 15),
-              Expanded(
-                child: controller.activityFeed.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No activity yet.',
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount:
-                            controller.activityFeed.length,
-                        itemBuilder: (_, index) {
-                          final event =
-                              controller.activityFeed[index];
+    if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    }
 
-                          return ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.person),
-                            ),
-                            title: Text(event.message),
-                            subtitle: Text(
-                              event.profileName,
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+    if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    }
 
-// ============================================================
-// EMPTY LIBRARY
-// ============================================================
-
-class EmptyLibraryCard extends StatelessWidget {
-  final VoidCallback onAddPressed;
-
-  const EmptyLibraryCard({
-    super.key,
-    required this.onAddPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          children: [
-            const Icon(
-              Icons.video_library_outlined,
-              size: 70,
-              color: Colors.grey,
-            ),
-            const SizedBox(height: 15),
-            const Text(
-              'Your library is empty',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Add your own movies and TV shows to build your personal streaming library.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade400,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: onAddPressed,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Add Movie or Show',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return '${timestamp.month}/'
+        '${timestamp.day}/'
+        '${timestamp.year}';
   }
 }
 
@@ -768,12 +883,14 @@ class MediaCard extends StatelessWidget {
           );
         },
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: media.posterUrl == null
+                borderRadius:
+                    BorderRadius.circular(10),
+                child: media.imageUrl == null
                     ? Container(
                         width: double.infinity,
                         color: Colors.grey.shade900,
@@ -783,12 +900,14 @@ class MediaCard extends StatelessWidget {
                         ),
                       )
                     : Image.network(
-                        media.posterUrl!,
+                        media.imageUrl!,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
+                        errorBuilder:
+                            (_, __, ___) {
                           return Container(
-                            color: Colors.grey.shade900,
+                            color:
+                                Colors.grey.shade900,
                             child: const Icon(
                               Icons.broken_image,
                             ),
@@ -797,7 +916,9 @@ class MediaCard extends StatelessWidget {
                       ),
               ),
             ),
+
             const SizedBox(height: 7),
+
             Text(
               media.title,
               maxLines: 2,
@@ -806,7 +927,44 @@ class MediaCard extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+
+            if (media.releaseYear != null)
+              Text(
+                media.releaseYear.toString(),
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 12,
+                ),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ACTORS
+// ============================================================
+
+class ActorsFallbackScreen extends StatelessWidget {
+  const ActorsFallbackScreen({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Actors'),
+      ),
+      body: const Center(
+        child: Text(
+          'Actors',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
@@ -830,9 +988,8 @@ class _ImportMediaScreenState
   final titleController = TextEditingController();
   final yearController = TextEditingController();
   final posterController = TextEditingController();
-  final trailerController = TextEditingController();
 
-  MediaType selectedType = MediaType.movie;
+  String selectedType = 'movie';
 
   bool connectArm = false;
   bool importing = false;
@@ -843,11 +1000,12 @@ class _ImportMediaScreenState
     titleController.dispose();
     yearController.dispose();
     posterController.dispose();
-    trailerController.dispose();
     super.dispose();
   }
 
   Future<void> simulateImport() async {
+    if (importing) return;
+
     setState(() {
       importing = true;
       progress = 0;
@@ -888,18 +1046,15 @@ class _ImportMediaScreenState
       return;
     }
 
-    int? year;
+    final yearText =
+        yearController.text.trim();
 
-    if (yearController.text.trim().isNotEmpty) {
-      year = int.tryParse(
-        yearController.text.trim(),
-      );
-    }
+    final year = yearText.isEmpty
+        ? null
+        : int.tryParse(yearText);
 
-    final trailerId =
-        trailerController.text.trim().isEmpty
-            ? null
-            : trailerController.text.trim();
+    final posterText =
+        posterController.text.trim();
 
     final media = MediaItem(
       id: DateTime.now()
@@ -907,31 +1062,18 @@ class _ImportMediaScreenState
           .toString(),
       title: title,
       type: selectedType,
-      year: year,
-      posterUrl:
-          posterController.text.trim().isEmpty
+      imageUrl:
+          posterText.isEmpty
               ? null
-              : posterController.text.trim(),
+              : posterText,
       description:
           'Imported into your personal library.',
-      genre: [],
-      tags: [],
-      themes: [],
-      cast: [],
-      music: [],
-      trailer: trailerId == null
-          ? null
-          : Trailer(
-              youtubeVideoId: trailerId,
-              title: '$title Trailer',
-            ),
-      audioTracks: [],
-      subtitleTracks: [],
-      chapters: [],
-      extras: [],
+      releaseYear: year,
     );
 
-    AppController.instance.addMedia(media);
+    AppController.instance.addToLibrary(
+      media,
+    );
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -944,14 +1086,14 @@ class _ImportMediaScreenState
     titleController.clear();
     yearController.clear();
     posterController.clear();
-    trailerController.clear();
 
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
     return Scaffold(
       appBar: AppBar(
@@ -976,12 +1118,16 @@ class _ImportMediaScreenState
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
                   const SizedBox(height: 10),
+
                   const Text(
                     'Connect this app to your home server and ARM to detect and import your own discs.',
                   ),
+
                   SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding:
+                        EdgeInsets.zero,
                     title: const Text(
                       'Connect to ARM',
                     ),
@@ -997,8 +1143,10 @@ class _ImportMediaScreenState
                       });
                     },
                   ),
+
                   const ListTile(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding:
+                        EdgeInsets.zero,
                     leading: Icon(
                       Icons.disc_full,
                     ),
@@ -1009,17 +1157,24 @@ class _ImportMediaScreenState
                       'Waiting for home-server connection',
                     ),
                   ),
+
                   if (importing) ...[
                     const SizedBox(height: 10),
+
                     LinearProgressIndicator(
                       value: progress,
                     ),
+
                     const SizedBox(height: 8),
+
                     Text(
-                      'Importing ${(progress * 100).round()}%',
+                      'Importing '
+                      '${(progress * 100).round()}%',
                     ),
                   ],
+
                   const SizedBox(height: 10),
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -1051,19 +1206,19 @@ class _ImportMediaScreenState
 
           const SizedBox(height: 15),
 
-          DropdownButtonFormField<MediaType>(
+          DropdownButtonFormField<String>(
             initialValue: selectedType,
             decoration: const InputDecoration(
               labelText: 'Type',
               border: OutlineInputBorder(),
             ),
             items: const [
-              DropdownMenuItem(
-                value: MediaType.movie,
+              DropdownMenuItem<String>(
+                value: 'movie',
                 child: Text('Movie'),
               ),
-              DropdownMenuItem(
-                value: MediaType.tvShow,
+              DropdownMenuItem<String>(
+                value: 'tvShow',
                 child: Text('TV Show'),
               ),
             ],
@@ -1090,7 +1245,8 @@ class _ImportMediaScreenState
 
           TextField(
             controller: yearController,
-            keyboardType: TextInputType.number,
+            keyboardType:
+                TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Year',
               border: OutlineInputBorder(),
@@ -1102,17 +1258,8 @@ class _ImportMediaScreenState
           TextField(
             controller: posterController,
             decoration: const InputDecoration(
-              labelText: 'Poster URL (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-
-          const SizedBox(height: 15),
-
-          TextField(
-            controller: trailerController,
-            decoration: const InputDecoration(
-              labelText: 'YouTube Trailer ID (optional)',
+              labelText:
+                  'Poster URL (optional)',
               border: OutlineInputBorder(),
             ),
           ),
@@ -1161,86 +1308,45 @@ class PlayerScreen extends StatefulWidget {
       _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
-  double position = 0;
-
+class _PlayerScreenState
+    extends State<PlayerScreen> {
+  late double position;
   bool videoFinished = false;
-  bool creditsStarted = false;
-  bool autoplayCancelled = false;
 
-  int autoplaySeconds = 10;
+  @override
+  void initState() {
+    super.initState();
 
-  Future<void> finishVideo() async {
+    position = AppController.instance
+        .getPlaybackProgress(
+          widget.media.id,
+        );
+
+    position =
+        position.clamp(0.0, 1.0).toDouble();
+
+    videoFinished = position >= 1.0;
+  }
+
+  void finishVideo() {
     if (videoFinished) return;
 
     setState(() {
       videoFinished = true;
-      position = 1;
+      position = 1.0;
     });
 
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
-    controller.updateProgress(
+    controller.updatePlaybackProgress(
+      widget.media.id,
+      1.0,
+    );
+
+    controller.finishWatching(
       widget.media,
-      1,
     );
-
-    if (!widget.media.isEpisode) {
-      controller.markFinished(widget.media);
-      return;
-    }
-
-    final nextEpisode =
-        controller.getNextEpisode(widget.media);
-
-    if (nextEpisode == null) {
-      setState(() {
-        creditsStarted = true;
-      });
-      return;
-    }
-
-    setState(() {
-      creditsStarted = true;
-      autoplayCancelled = false;
-      autoplaySeconds = 10;
-    });
-
-    while (
-        autoplaySeconds > 0 &&
-        mounted &&
-        !autoplayCancelled) {
-      await Future.delayed(
-        const Duration(seconds: 1),
-      );
-
-      if (!mounted || autoplayCancelled) {
-        return;
-      }
-
-      setState(() {
-        autoplaySeconds--;
-      });
-    }
-
-    if (!mounted || autoplayCancelled) {
-      return;
-    }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PlayerScreen(
-          media: nextEpisode,
-        ),
-      ),
-    );
-  }
-
-  void cancelAutoplay() {
-    setState(() {
-      autoplayCancelled = true;
-    });
   }
 
   @override
@@ -1253,299 +1359,143 @@ class _PlayerScreenState extends State<PlayerScreen> {
         backgroundColor: Colors.black,
         title: Text(media.title),
       ),
-      body: Stack(
+      body: Column(
         children: [
-          Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.play_circle_fill,
-                        size: 100,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'PLAYER',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                        ),
-                      ),
-                    ],
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.play_circle_fill,
+                    size: 100,
+                    color: Colors.white,
                   ),
-                ),
-              ),
 
-              Slider(
-                value: position,
-                onChanged: videoFinished
-                    ? null
-                    : (value) {
-                        setState(() {
-                          position = value;
-                        });
+                  const SizedBox(height: 20),
 
-                        if (value >= .999) {
-                          finishVideo();
-                        }
-                      },
-              ),
-
-              SafeArea(
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 10,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (_) =>
-                              AudioSubtitleOptions(
-                            media: media,
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.language,
-                      ),
-                      label: const Text(
-                        'Audio & Subtitles',
-                      ),
+                  Text(
+                    'PLAYER',
+                    style: TextStyle(
+                      color: Colors.grey.shade400,
                     ),
+                  ),
 
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                GroupWatchDialog(
-                              media: media,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.groups,
-                      ),
-                      label: const Text(
-                        'GROUP SHARE',
-                      ),
-                    ),
+                  const SizedBox(height: 10),
 
-                    OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.movie_filter,
-                      ),
-                      label: const Text(
-                        'EXTRAS',
-                      ),
+                  Text(
+                    media.title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 15),
-            ],
+            ),
           ),
 
-          if (creditsStarted &&
-              media.isEpisode &&
-              !autoplayCancelled)
-            Positioned(
-              bottom: 120,
-              left: 20,
-              right: 20,
-              child: NextEpisodeCountdown(
-                seconds: autoplaySeconds,
-                nextEpisode:
+          Slider(
+            value: position,
+            min: 0,
+            max: 1,
+            onChanged: videoFinished
+                ? null
+                : (value) {
+                    setState(() {
+                      position = value;
+                    });
+
                     AppController.instance
-                        .getNextEpisode(media),
-                onCancel: cancelAutoplay,
-                onPlayNow: () {
-                  final next =
-                      AppController.instance
-                          .getNextEpisode(media);
+                        .updatePlaybackProgress(
+                      media.id,
+                      value,
+                    );
 
-                  if (next == null) return;
+                    if (value >= .999) {
+                      finishVideo();
+                    }
+                  },
+          ),
 
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PlayerScreen(
-                        media: next,
-                      ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(
+                left: 15,
+                right: 15,
+                bottom: 15,
+              ),
+              child: Wrap(
+                alignment:
+                    WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Audio and subtitle tracks are not available for this media item.',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.language,
                     ),
-                  );
-                },
+                    label: const Text(
+                      'Audio & Subtitles',
+                    ),
+                  ),
+
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              GroupWatchDialog(
+                            media: media,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.groups,
+                    ),
+                    label: const Text(
+                      'GROUP SHARE',
+                    ),
+                  ),
+
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'No extras are available for this media item.',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.movie_filter,
+                    ),
+                    label: const Text(
+                      'EXTRAS',
+                    ),
+                  ),
+                ],
               ),
             ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-// ============================================================
-// NEXT EPISODE COUNTDOWN
-// ============================================================
-
-class NextEpisodeCountdown extends StatelessWidget {
-  final int seconds;
-  final MediaItem? nextEpisode;
-  final VoidCallback onCancel;
-  final VoidCallback onPlayNow;
-
-  const NextEpisodeCountdown({
-    super.key,
-    required this.seconds,
-    required this.nextEpisode,
-    required this.onCancel,
-    required this.onPlayNow,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (nextEpisode == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      color: Colors.black87,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Next episode in $seconds',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              nextEpisode!.title,
-            ),
-            const SizedBox(height: 15),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: onCancel,
-                    child: const Text(
-                      'CANCEL',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: onPlayNow,
-                    child: const Text(
-                      'PLAY NOW',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// AUDIO / SUBTITLE OPTIONS
-// ============================================================
-
-class AudioSubtitleOptions
-    extends StatelessWidget {
-  final MediaItem media;
-
-  const AudioSubtitleOptions({
-    super.key,
-    required this.media,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Text(
-              'Audio',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            if (media.audioTracks.isEmpty)
-              const ListTile(
-                title: Text(
-                  'No imported audio tracks.',
-                ),
-              ),
-
-            ...media.audioTracks.map(
-              (track) => ListTile(
-                leading: const Icon(
-                  Icons.volume_up,
-                ),
-                title: Text(
-                  track.language,
-                ),
-                subtitle: Text(
-                  track.format,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            const Text(
-              'Subtitles',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            if (media.subtitleTracks.isEmpty)
-              const ListTile(
-                title: Text(
-                  'No imported subtitle tracks.',
-                ),
-              ),
-
-            ...media.subtitleTracks.map(
-              (track) => ListTile(
-                leading: const Icon(
-                  Icons.subtitles,
-                ),
-                title: Text(
-                  track.language,
-                ),
-                subtitle: Text(
-                  track.sdh ? 'SDH' : 'Standard',
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1560,77 +1510,18 @@ class TrailersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile =
-        AppController.instance.currentProfile;
-
-    if (profile == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text('No profile selected.'),
-        ),
-      );
-    }
-
-    final trailers = profile.library.media
-        .where((media) => media.trailer != null)
-        .toList();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trailers'),
       ),
-      body: trailers.isEmpty
-          ? const Center(
-              child: Text(
-                'No trailers in your library yet.',
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: trailers.length,
-              itemBuilder: (_, index) {
-                final media = trailers[index];
-
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.play_circle,
-                      color: Colors.red,
-                    ),
-                    title: Text(
-                      media.trailer!.title,
-                    ),
-                    subtitle: Text(
-                      media.title,
-                    ),
-                    trailing: const Icon(
-                      Icons.open_in_new,
-                    ),
-                    onTap: () {
-                      openTrailer(
-                        context,
-                        media.trailer!,
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+      body: const Center(
+        child: Text(
+          'Trailers will appear here when trailer metadata is added to MediaItem.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
-}
-
-void openTrailer(
-  BuildContext context,
-  Trailer trailer,
-) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        'Open YouTube trailer: ${trailer.youtubeVideoId}',
-      ),
-    ),
-  );
 }
 
 // ============================================================
@@ -1642,50 +1533,16 @@ class MusicScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile =
-        AppController.instance.currentProfile;
-
-    if (profile == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text('No profile selected.'),
-        ),
-      );
-    }
-
-    final music = <MusicItem>[];
-
-    for (final media in profile.library.media) {
-      music.addAll(media.music);
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Music'),
       ),
-      body: music.isEmpty
-          ? const Center(
-              child: Text(
-                'No music discovered yet.',
-              ),
-            )
-          : ListView.builder(
-              itemCount: music.length,
-              itemBuilder: (_, index) {
-                final item = music[index];
-
-                return ListTile(
-                  leading: const Icon(
-                    Icons.music_note,
-                  ),
-                  title: Text(item.title),
-                  subtitle: Text(
-                    '${item.artistOrComposer} • '
-                    '${item.type.name}',
-                  ),
-                );
-              },
-            ),
+      body: const Center(
+        child: Text(
+          'Music will appear here when music metadata is added to MediaItem.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }
@@ -1704,11 +1561,13 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState
     extends State<ProfileScreen> {
-  final controller = AppController.instance;
+  final controller =
+      AppController.instance;
 
   @override
   Widget build(BuildContext context) {
-    final account = controller.account;
+    final account =
+        controller.currentAccount;
 
     if (account == null) {
       return const Scaffold(
@@ -1728,7 +1587,8 @@ class _ProfileScreenState
         padding: const EdgeInsets.all(20),
         children: [
           Text(
-            'Profiles ${account.profiles.length}/7',
+            'Profiles '
+            '${account.profiles.length}/7',
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.bold,
@@ -1753,18 +1613,24 @@ class _ProfileScreenState
                           : NetworkImage(
                               profile.avatarUrl!,
                             ),
-                  child: profile.avatarUrl == null
-                      ? const Icon(Icons.person)
-                      : null,
+                  child:
+                      profile.avatarUrl == null
+                          ? const Icon(
+                              Icons.person,
+                            )
+                          : null,
                 ),
                 title: Text(profile.name),
                 subtitle: Text(
                   profile.id ==
-                          controller.currentProfile?.id
+                          controller
+                              .currentProfile
+                              ?.id
                       ? 'Current profile'
                       : 'Profile',
                 ),
-                trailing: PopupMenuButton<String>(
+                trailing:
+                    PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'switch') {
                       controller.switchProfile(
@@ -1781,11 +1647,11 @@ class _ProfileScreenState
                     }
                   },
                   itemBuilder: (_) => const [
-                    PopupMenuItem(
+                    PopupMenuItem<String>(
                       value: 'switch',
                       child: Text('Switch'),
                     ),
-                    PopupMenuItem(
+                    PopupMenuItem<String>(
                       value: 'delete',
                       child: Text('Delete'),
                     ),
@@ -1822,13 +1688,11 @@ class _ProfileScreenState
                 Icons.workspace_premium,
               ),
               title: Text(
-                account.subscription?.plan.name
-                        .toUpperCase() ??
-                    'NO SUBSCRIPTION',
+                account.subscription.plan.name
+                    .toUpperCase(),
               ),
               subtitle: Text(
-                account.subscription?.status.name ??
-                    'None',
+                account.subscription.status.name,
               ),
               trailing: TextButton(
                 onPressed: () {
@@ -1848,8 +1712,11 @@ class _ProfileScreenState
           const SizedBox(height: 20),
 
           OutlinedButton(
-            onPressed: () {
-              controller.logout();
+            onPressed: () async {
+              await controller
+                  .logoutFromBackend();
+
+              if (!mounted) return;
 
               Navigator.pushAndRemoveUntil(
                 context,
@@ -1884,7 +1751,8 @@ class AddProfileDialog extends StatefulWidget {
 
 class _AddProfileDialogState
     extends State<AddProfileDialog> {
-  final nameController = TextEditingController();
+  final nameController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -1913,6 +1781,7 @@ class _AddProfileDialogState
             'CANCEL',
           ),
         ),
+
         ElevatedButton(
           onPressed: () {
             final name =
@@ -1944,7 +1813,8 @@ class SubscribeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
     return AlertDialog(
       title: const Text(
@@ -1961,7 +1831,7 @@ class SubscribeDialog extends StatelessWidget {
 
           ListTile(
             title: const Text(
-              '\$8 USD / month',
+              '\$9.99 USD / month',
             ),
             subtitle: const Text(
               'No free trial',
@@ -1977,10 +1847,10 @@ class SubscribeDialog extends StatelessWidget {
 
           ListTile(
             title: const Text(
-              '\$50 USD / year',
+              '\$99.99 USD / year',
             ),
             subtitle: const Text(
-              'Save \$46 compared with 12 monthly payments',
+              'Save \$19.89 compared with 12 monthly payments',
             ),
             onTap: () {
               controller.subscribe(
@@ -2010,7 +1880,8 @@ class GroupHubScreen extends StatefulWidget {
 
 class _GroupHubScreenState
     extends State<GroupHubScreen> {
-  final messageController = TextEditingController();
+  final messageController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -2018,42 +1889,73 @@ class _GroupHubScreenState
     super.dispose();
   }
 
+  void sendMessage() {
+    final text =
+        messageController.text.trim();
+
+    if (text.isEmpty) return;
+
+    AppController.instance.sendGroupMessage(
+      message: text,
+    );
+
+    messageController.clear();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Group',
-        ),
+        title: const Text('Group'),
       ),
       body: Column(
         children: [
           Expanded(
-            child: controller.groupMessages.isEmpty
+            child: controller
+                    .groupMessages
+                    .isEmpty
                 ? const Center(
                     child: Text(
                       'No group messages yet.',
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(15),
-                    itemCount:
-                        controller.groupMessages.length,
+                    padding:
+                        const EdgeInsets.all(15),
+                    itemCount: controller
+                        .groupMessages
+                        .length,
                     itemBuilder: (_, index) {
                       final message =
-                          controller.groupMessages[index];
+                          controller
+                              .groupMessages[index];
 
                       return ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.person),
+                        leading:
+                            const CircleAvatar(
+                          child: Icon(
+                            Icons.person,
+                          ),
                         ),
                         title: Text(
-                          message.profileId,
+                          message.sender,
                         ),
                         subtitle: Text(
-                          message.text,
+                          message.message,
+                        ),
+                        trailing: Text(
+                          _formatTime(
+                            message.timestamp,
+                          ),
+                          style: TextStyle(
+                            color:
+                                Colors.grey.shade500,
+                            fontSize: 12,
+                          ),
                         ),
                       );
                     },
@@ -2066,12 +1968,16 @@ class _GroupHubScreenState
               children: [
                 Expanded(
                   child: TextField(
-                    controller: messageController,
+                    controller:
+                        messageController,
+                    onSubmitted: (_) =>
+                        sendMessage(),
                     decoration:
                         const InputDecoration(
                       hintText:
                           'Message the group...',
-                      border: OutlineInputBorder(),
+                      border:
+                          OutlineInputBorder(),
                     ),
                   ),
                 ),
@@ -2079,21 +1985,10 @@ class _GroupHubScreenState
                 const SizedBox(width: 10),
 
                 IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: () {
-                    final text =
-                        messageController.text.trim();
-
-                    if (text.isEmpty) return;
-
-                    controller.sendGroupMessage(
-                      text,
-                    );
-
-                    messageController.clear();
-
-                    setState(() {});
-                  },
+                  icon: const Icon(
+                    Icons.send,
+                  ),
+                  onPressed: sendMessage,
                 ),
               ],
             ),
@@ -2109,15 +2004,29 @@ class _GroupHubScreenState
                       const WishlistDialog(),
                 );
               },
-              icon: const Icon(Icons.how_to_vote),
+              icon: const Icon(
+                Icons.favorite_outline,
+              ),
               label: const Text(
-                'WISHLIST & VOTING',
+                'WISHLIST',
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatTime(
+    DateTime timestamp,
+  ) {
+    final hour =
+        timestamp.hour.toString().padLeft(2, '0');
+
+    final minute =
+        timestamp.minute.toString().padLeft(2, '0');
+
+    return '$hour:$minute';
   }
 }
 
@@ -2135,7 +2044,8 @@ class WishlistDialog extends StatefulWidget {
 
 class _WishlistDialogState
     extends State<WishlistDialog> {
-  final titleController = TextEditingController();
+  final titleController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -2143,9 +2053,34 @@ class _WishlistDialogState
     super.dispose();
   }
 
+  void addWishlistItem() {
+    final title =
+        titleController.text.trim();
+
+    if (title.isEmpty) {
+      return;
+    }
+
+    final media = MediaItem(
+      id: DateTime.now()
+          .microsecondsSinceEpoch
+          .toString(),
+      title: title,
+      type: 'movie',
+    );
+
+    AppController.instance.addToWishlist(
+      media,
+    );
+
+    titleController.clear();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
     return AlertDialog(
       title: const Text(
@@ -2166,38 +2101,26 @@ class _WishlistDialogState
 
             ...controller.wishlist.map(
               (item) => ListTile(
-                title: Text(item.title),
-                subtitle: Text(
-                  '${item.yesVotes} yes / '
-                  '${item.noVotes} no',
+                leading: const Icon(
+                  Icons.movie_outlined,
                 ),
-                trailing: Wrap(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.thumb_up,
-                      ),
-                      onPressed: () {
-                        controller.voteWishlist(
-                          item.id,
-                          true,
-                        );
-                        setState(() {});
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.thumb_down,
-                      ),
-                      onPressed: () {
-                        controller.voteWishlist(
-                          item.id,
-                          false,
-                        );
-                        setState(() {});
-                      },
-                    ),
-                  ],
+                title: Text(
+                  item.title,
+                ),
+                subtitle: Text(
+                  item.type,
+                ),
+                trailing: IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline,
+                  ),
+                  onPressed: () {
+                    controller
+                        .removeFromWishlist(
+                      item.id,
+                    );
+                    setState(() {});
+                  },
                 ),
               ),
             ),
@@ -2205,10 +2128,16 @@ class _WishlistDialogState
             const SizedBox(height: 15),
 
             TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
+              controller:
+                  titleController,
+              onSubmitted: (_) =>
+                  addWishlistItem(),
+              decoration:
+                  const InputDecoration(
                 labelText:
                     'Movie or show suggestion',
+                border:
+                    OutlineInputBorder(),
               ),
             ),
           ],
@@ -2222,22 +2151,9 @@ class _WishlistDialogState
             'CLOSE',
           ),
         ),
+
         ElevatedButton(
-          onPressed: () {
-            final title =
-                titleController.text.trim();
-
-            if (title.isEmpty) return;
-
-            controller.addWishlistItem(
-              title,
-              MediaType.movie,
-            );
-
-            setState(() {
-              titleController.clear();
-            });
-          },
+          onPressed: addWishlistItem,
           child: const Text(
             'ADD',
           ),
@@ -2251,7 +2167,8 @@ class _WishlistDialogState
 // GROUP WATCH
 // ============================================================
 
-class GroupWatchDialog extends StatelessWidget {
+class GroupWatchDialog
+    extends StatelessWidget {
   final MediaItem media;
 
   const GroupWatchDialog({
@@ -2261,7 +2178,25 @@ class GroupWatchDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
+
+    final account =
+        controller.currentAccount;
+
+    final currentProfile =
+        controller.currentProfile;
+
+    if (account == null ||
+        currentProfile == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'No account or profile selected.',
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -2279,32 +2214,37 @@ class GroupWatchDialog extends StatelessWidget {
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
               ),
+              textAlign: TextAlign.center,
             ),
 
             const SizedBox(height: 20),
 
             const Text(
-              'Invite the other active profiles. Everyone must accept before the group watch session starts.',
+              'Invite the other profiles to watch together.',
               textAlign: TextAlign.center,
             ),
 
             const SizedBox(height: 25),
 
-            ...controller.account!.profiles
+            ...account.profiles
                 .where(
                   (profile) =>
                       profile.id !=
-                      controller.currentProfile!.id,
+                      currentProfile.id,
                 )
                 .map(
                   (profile) => ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.person),
+                    leading:
+                        const CircleAvatar(
+                      child: Icon(
+                        Icons.person,
+                      ),
                     ),
-                    title: Text(profile.name),
-                    trailing: const Text(
-                      'INVITE',
+                    title: Text(
+                      profile.name,
                     ),
+                    trailing:
+                        const Text('INVITE'),
                   ),
                 ),
 
@@ -2351,30 +2291,17 @@ class GroupWatchPreferencesScreen
   });
 
   @override
-  State<GroupWatchPreferencesScreen> createState() =>
-      _GroupWatchPreferencesScreenState();
+  State<GroupWatchPreferencesScreen>
+      createState() =>
+          _GroupWatchPreferencesScreenState();
 }
 
 class _GroupWatchPreferencesScreenState
     extends State<GroupWatchPreferencesScreen> {
-  String audioLanguage = 'Original';
   bool subtitlesEnabled = false;
-  String? subtitleLanguage;
 
   @override
   Widget build(BuildContext context) {
-    final audioLanguages =
-        widget.media.audioTracks
-            .map((track) => track.language)
-            .toSet()
-            .toList();
-
-    final subtitleLanguages =
-        widget.media.subtitleTracks
-            .map((track) => track.language)
-            .toSet()
-            .toList();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -2384,44 +2311,29 @@ class _GroupWatchPreferencesScreenState
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
-            'Choose your audio language',
-            style: TextStyle(
-              fontSize: 20,
+          Text(
+            widget.media.title,
+            style: const TextStyle(
+              fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 25),
 
-          DropdownButtonFormField<String>(
-            initialValue:
-                audioLanguages.contains(
-              audioLanguage,
-            )
-                    ? audioLanguage
-                    : null,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
+          const ListTile(
+            leading: Icon(
+              Icons.language,
             ),
-            items: audioLanguages
-                .map(
-                  (language) =>
-                      DropdownMenuItem<String>(
-                    value: language,
-                    child: Text(language),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              setState(() {
-                audioLanguage =
-                    value ?? audioLanguage;
-              });
-            },
+            title: Text(
+              'Audio',
+            ),
+            subtitle: Text(
+              'Original audio',
+            ),
           ),
 
-          const SizedBox(height: 25),
+          const SizedBox(height: 10),
 
           SwitchListTile(
             title: const Text(
@@ -2430,44 +2342,11 @@ class _GroupWatchPreferencesScreenState
             value: subtitlesEnabled,
             onChanged: (value) {
               setState(() {
-                subtitlesEnabled = value;
+                subtitlesEnabled =
+                    value;
               });
             },
           ),
-
-          if (subtitlesEnabled) ...[
-            const SizedBox(height: 10),
-
-            DropdownButtonFormField<String>(
-              initialValue:
-                  subtitleLanguages.contains(
-                subtitleLanguage,
-              )
-                      ? subtitleLanguage
-                      : null,
-              decoration:
-                  const InputDecoration(
-                labelText:
-                    'Subtitle language',
-                border: OutlineInputBorder(),
-              ),
-              items: subtitleLanguages
-                  .map(
-                    (language) =>
-                        DropdownMenuItem<String>(
-                      value: language,
-                      child: Text(language),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                setState(() {
-                  subtitleLanguage =
-                      value;
-                });
-              },
-            ),
-          ],
 
           const SizedBox(height: 35),
 
@@ -2475,10 +2354,18 @@ class _GroupWatchPreferencesScreenState
             height: 50,
             child: ElevatedButton(
               onPressed: () {
+                final controller =
+                    AppController.instance;
+
+                controller
+                    .createGroupWatchSession(
+                  widget.media,
+                );
+
                 Navigator.pop(context);
               },
               child: const Text(
-                'SAVE PREFERENCES',
+                'START GROUP WATCH',
               ),
             ),
           ),

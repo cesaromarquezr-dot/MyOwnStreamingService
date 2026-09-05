@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+
 import 'app_core.dart';
 import 'details.dart';
 
 class SmartSearch {
   static List<MediaItem> search(
     String query,
-    UserLibrary library,
+    List<MediaItem> library,
   ) {
     final q = query.trim().toLowerCase();
 
@@ -13,61 +14,62 @@ class SmartSearch {
       return [];
     }
 
-    // Collection searches.
-    if (q == 'trilogy' || q == 'trilogies') {
-      return library.media
-          .where((m) => m.tags.contains('trilogy'))
-          .toList();
-    }
+    return library.where((media) {
+      final title =
+          media.title.toLowerCase();
 
-    if (q == 'saga' || q == 'sagas') {
-      return library.media
-          .where((m) => m.tags.contains('saga'))
-          .toList();
-    }
+      final description =
+          media.description?.toLowerCase() ?? '';
 
-    if (q == 'franchise' || q == 'franchises') {
-      return library.media
-          .where((m) => m.tags.contains('franchise'))
-          .toList();
-    }
+      final type =
+          media.type.toLowerCase();
 
-    return library.media.where((media) {
-      if (media.title.toLowerCase().contains(q)) {
+      final year =
+          media.releaseYear?.toString() ?? '';
+
+      final rating =
+          media.rating?.toString() ?? '';
+
+      // Title search.
+      if (title.contains(q)) {
         return true;
       }
 
-      if (media.description.toLowerCase().contains(q)) {
+      // Description search.
+      if (description.contains(q)) {
         return true;
       }
 
-      if (media.genre.any(
-        (genre) => genre.toLowerCase().contains(q),
-      )) {
+      // Type search.
+      if (type.contains(q)) {
         return true;
       }
 
-      if (media.tags.any(
-        (tag) => tag.toLowerCase().contains(q),
-      )) {
+      // Year search.
+      if (year == q) {
         return true;
       }
 
-      if (media.themes.any(
-        (theme) => theme.toLowerCase().contains(q),
-      )) {
+      // Rating search.
+      if (rating == q) {
         return true;
       }
 
-      if (media.cast.any(
-        (person) =>
-            person.actorName.toLowerCase().contains(q) ||
-            person.characterName.toLowerCase().contains(q),
-      )) {
+      // Friendly type aliases.
+      if ((q == 'movie' || q == 'movies') &&
+          type == 'movie') {
         return true;
       }
 
-      if (media.year?.toString() == q) {
+      if ((q == 'tv' ||
+              q == 'tv show' ||
+              q == 'tv shows' ||
+              q == 'series' ||
+              q == 'show' ||
+              q == 'shows') &&
+          (type == 'tvshow' ||
+              type == 'tv_show' ||
+              type == 'tv show')) {
         return true;
       }
 
@@ -89,23 +91,23 @@ class _SmartSearchScreenState
   final TextEditingController controller =
       TextEditingController();
 
-  List<MediaItem> results = [];
+  List<MediaItem> results =
+      <MediaItem>[];
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   void performSearch(String value) {
-    final profile =
-        AppController.instance.currentProfile;
-
-    if (profile == null) {
-      setState(() {
-        results = [];
-      });
-      return;
-    }
+    final library =
+        AppController.instance.library;
 
     setState(() {
       results = SmartSearch.search(
         value,
-        profile.library,
+        library,
       );
     });
   }
@@ -116,7 +118,9 @@ class _SmartSearchScreenState
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: const Text('Smart Search'),
+        title: const Text(
+          'Smart Search',
+        ),
       ),
       body: Column(
         children: [
@@ -125,20 +129,47 @@ class _SmartSearchScreenState
             child: TextField(
               controller: controller,
               onChanged: performSearch,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
+              style: const TextStyle(
+                color: Colors.white,
+              ),
+              decoration:
+                  InputDecoration(
                 hintText:
-                    'Movie, actor, character, genre, year, saga...',
+                    'Movie, show, year, description...',
                 hintStyle:
-                    const TextStyle(color: Colors.grey),
-                prefixIcon: const Icon(
+                    const TextStyle(
+                  color: Colors.grey,
+                ),
+                prefixIcon:
+                    const Icon(
                   Icons.search,
                   color: Colors.white,
                 ),
+                suffixIcon:
+                    controller.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(
+                              Icons.clear,
+                              color: Colors.white70,
+                            ),
+                            onPressed: () {
+                              controller.clear();
+                              performSearch('');
+                              setState(() {});
+                            },
+                          ),
                 filled: true,
-                fillColor: Colors.grey.shade900,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                fillColor:
+                    Colors.grey.shade900,
+                border:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    12,
+                  ),
+                  borderSide:
+                      BorderSide.none,
                 ),
               ),
             ),
@@ -146,41 +177,92 @@ class _SmartSearchScreenState
 
           Expanded(
             child: results.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'No results',
-                      style: TextStyle(
-                        color: Colors.white70,
+                      controller.text.trim().isEmpty
+                          ? 'Search your library'
+                          : 'No results',
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white70,
+                        fontSize: 16,
                       ),
                     ),
                   )
                 : ListView.builder(
-                    itemCount: results.length,
+                    itemCount:
+                        results.length,
                     itemBuilder: (_, index) {
-                      final media = results[index];
+                      final media =
+                          results[index];
+
+                      final type =
+                          media.type
+                              .toLowerCase();
+
+                      final typeLabel =
+                          type == 'movie'
+                              ? 'Movie'
+                              : 'TV Show';
 
                       return ListTile(
-                        leading: media.posterUrl != null &&
-                                media.posterUrl!.isNotEmpty
-                            ? Image.network(
-                                media.posterUrl!,
-                                width: 55,
-                                fit: BoxFit.cover,
-                              )
-                            : const Icon(
-                                Icons.movie,
-                                color: Colors.white,
-                              ),
+                        leading:
+                            SizedBox(
+                          width: 55,
+                          height: 75,
+                          child: media.imageUrl !=
+                                      null &&
+                                  media.imageUrl!
+                                      .isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    6,
+                                  ),
+                                  child:
+                                      Image.network(
+                                    media.imageUrl!,
+                                    fit: BoxFit
+                                        .cover,
+                                    errorBuilder:
+                                        (_, __, ___) {
+                                      return const Icon(
+                                        Icons
+                                            .movie,
+                                        color: Colors
+                                            .white,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.movie,
+                                  color:
+                                      Colors.white,
+                                  size: 35,
+                                ),
+                        ),
                         title: Text(
                           media.title,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.white,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
                         subtitle: Text(
-                          '${media.year ?? ''} • ${media.type == MediaType.movie ? 'Movie' : 'TV Show'}',
-                          style: const TextStyle(
-                            color: Colors.grey,
+                          _subtitleFor(
+                            media,
+                            typeLabel,
+                          ),
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.grey,
                           ),
                         ),
                         onTap: () {
@@ -201,5 +283,29 @@ class _SmartSearchScreenState
         ],
       ),
     );
+  }
+
+  String _subtitleFor(
+    MediaItem media,
+    String typeLabel,
+  ) {
+    final parts =
+        <String>[];
+
+    if (media.releaseYear != null) {
+      parts.add(
+        media.releaseYear.toString(),
+      );
+    }
+
+    parts.add(typeLabel);
+
+    if (media.rating != null) {
+      parts.add(
+        '★ ${media.rating!.toStringAsFixed(1)}',
+      );
+    }
+
+    return parts.join(' • ');
   }
 }
