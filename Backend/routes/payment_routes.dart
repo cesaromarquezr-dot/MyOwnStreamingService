@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
+import '../database/database.dart';
 import '../middleware/authentication.dart';
 import '../models/account.dart';
 import '../models/subscription.dart';
 import '../services/payment_service.dart';
-import '../database/database.dart';
 
 class PaymentRoutes {
   final AuthenticationMiddleware authenticationMiddleware;
@@ -59,24 +60,7 @@ class PaymentRoutes {
        * These routes are used after the account is authenticated.
        */
 
-      await authenticationMiddleware.authenticate(
-  request,
-);
-
-final account =
-    _getAuthenticatedAccount(request);
-
-if (account == null) {
-  await _sendJson(
-    request.response,
-    HttpStatus.unauthorized,
-    {
-      'success': false,
-      'error': 'Authentication required.',
-    },
-  );
-  return;
-}
+      final account = authenticationMiddleware.authenticate(request);
 
       if (account == null) {
         await _sendJson(
@@ -84,8 +68,7 @@ if (account == null) {
           HttpStatus.unauthorized,
           {
             'success': false,
-            'error':
-                'Authenticated account could not be found.',
+            'error': 'Authentication required.',
           },
         );
         return;
@@ -145,7 +128,10 @@ if (account == null) {
         },
       );
     } catch (error) {
-      print('Payment request error: $error');
+      developer.log(
+        'Payment request error: $error',
+        name: 'PaymentRoutes',
+      );
 
       if (!request.response.headers.contentType
           .toString()
@@ -155,8 +141,7 @@ if (account == null) {
           HttpStatus.internalServerError,
           {
             'success': false,
-            'error':
-                _cleanError(error),
+            'error': _cleanError(error),
           },
         );
       }
@@ -172,8 +157,9 @@ if (account == null) {
   Future<void> _getCheckoutPaymentStatus(
     HttpRequest request,
   ) async {
-    final paymentId =
-        _getIdFromPath(request.uri.path);
+    final paymentId = _getIdFromPath(
+      request.uri.path,
+    );
 
     if (paymentId == null) {
       await _sendJson(
@@ -189,10 +175,10 @@ if (account == null) {
 
     final checkoutToken =
         request.uri.queryParameters['checkoutToken']
-            ?.trim();
+                ?.trim() ??
+            '';
 
-    if (checkoutToken == null ||
-        checkoutToken.isEmpty) {
+    if (checkoutToken.isEmpty) {
       await _sendJson(
         request.response,
         HttpStatus.unauthorized,
@@ -205,24 +191,18 @@ if (account == null) {
       return;
     }
 
+    /*
+     * getPaymentForCheckout() already guarantees a valid
+     * PaymentSession or throws an exception.
+     *
+     * Therefore, there must NOT be a "payment == null" check here.
+     */
+
     final payment =
         paymentService.getPaymentForCheckout(
       paymentId: paymentId,
       checkoutToken: checkoutToken,
     );
-
-    if (payment == null) {
-      await _sendJson(
-        request.response,
-        HttpStatus.unauthorized,
-        {
-          'success': false,
-          'error':
-              'Invalid or expired checkout session.',
-        },
-      );
-      return;
-    }
 
     await _sendJson(
       request.response,
@@ -237,8 +217,9 @@ if (account == null) {
   Future<void> _verifyCheckoutPayment(
     HttpRequest request,
   ) async {
-    final paymentId =
-        _getIdFromPath(request.uri.path);
+    final paymentId = _getIdFromPath(
+      request.uri.path,
+    );
 
     if (paymentId == null) {
       await _sendJson(
@@ -252,16 +233,15 @@ if (account == null) {
       return;
     }
 
-    final body =
-        await _readJson(request);
+    final body = await _readJson(request);
 
     final checkoutToken =
         body['checkoutToken']
-            ?.toString()
-            .trim();
+                ?.toString()
+                .trim() ??
+            '';
 
-    if (checkoutToken == null ||
-        checkoutToken.isEmpty) {
+    if (checkoutToken.isEmpty) {
       await _sendJson(
         request.response,
         HttpStatus.unauthorized,
@@ -276,11 +256,11 @@ if (account == null) {
 
     final processorTransactionId =
         body['processorTransactionId']
-            ?.toString()
-            .trim();
+                ?.toString()
+                .trim() ??
+            '';
 
-    if (processorTransactionId == null ||
-        processorTransactionId.isEmpty) {
+    if (processorTransactionId.isEmpty) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -312,24 +292,16 @@ if (account == null) {
      * belongs in this request.
      */
 
+    /*
+     * getPaymentForCheckout() returns a non-null PaymentSession.
+     * It throws if the checkout session is invalid or expired.
+     */
+
     final payment =
         paymentService.getPaymentForCheckout(
       paymentId: paymentId,
       checkoutToken: checkoutToken,
     );
-
-    if (payment == null) {
-      await _sendJson(
-        request.response,
-        HttpStatus.unauthorized,
-        {
-          'success': false,
-          'error':
-              'Invalid or expired checkout session.',
-        },
-      );
-      return;
-    }
 
     /*
      * Retrieve the account associated with this payment session.
@@ -402,17 +374,16 @@ if (account == null) {
     HttpRequest request,
     Account account,
   ) async {
-    final body =
-        await _readJson(request);
+    final body = await _readJson(request);
 
     final planValue =
         body['plan']
-            ?.toString()
-            .trim()
-            .toLowerCase();
+                ?.toString()
+                .trim()
+                .toLowerCase() ??
+            '';
 
-    if (planValue == null ||
-        planValue.isEmpty) {
+    if (planValue.isEmpty) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -425,8 +396,7 @@ if (account == null) {
       return;
     }
 
-    final plan =
-        _parsePlan(planValue);
+    final plan = _parsePlan(planValue);
 
     if (plan == null) {
       await _sendJson(
@@ -469,8 +439,9 @@ if (account == null) {
     HttpRequest request,
     Account account,
   ) async {
-    final paymentId =
-        _getIdFromPath(request.uri.path);
+    final paymentId = _getIdFromPath(
+      request.uri.path,
+    );
 
     if (paymentId == null) {
       await _sendJson(
@@ -484,6 +455,11 @@ if (account == null) {
       return;
     }
 
+    /*
+     * getPayment() returns PaymentSession?, so this null check
+     * IS required here.
+     */
+
     final payment =
         paymentService.getPayment(paymentId);
 
@@ -493,8 +469,7 @@ if (account == null) {
         HttpStatus.notFound,
         {
           'success': false,
-          'error':
-              'Payment session not found.',
+          'error': 'Payment session not found.',
         },
       );
       return;
@@ -536,8 +511,9 @@ if (account == null) {
     HttpRequest request,
     Account account,
   ) async {
-    final paymentId =
-        _getIdFromPath(request.uri.path);
+    final paymentId = _getIdFromPath(
+      request.uri.path,
+    );
 
     if (paymentId == null) {
       await _sendJson(
@@ -552,16 +528,15 @@ if (account == null) {
       return;
     }
 
-    final body =
-        await _readJson(request);
+    final body = await _readJson(request);
 
     final processorTransactionId =
         body['processorTransactionId']
-            ?.toString()
-            .trim();
+                ?.toString()
+                .trim() ??
+            '';
 
-    if (processorTransactionId == null ||
-        processorTransactionId.isEmpty) {
+    if (processorTransactionId.isEmpty) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -582,7 +557,6 @@ if (account == null) {
      * - PIN
      * - bank account number
      * - bank password
-     * - online banking credentials
      *
      * Only the processor's transaction/reference ID belongs here.
      */
@@ -621,8 +595,9 @@ if (account == null) {
     HttpRequest request,
     Account account,
   ) async {
-    final paymentId =
-        _getIdFromPath(request.uri.path);
+    final paymentId = _getIdFromPath(
+      request.uri.path,
+    );
 
     if (paymentId == null) {
       await _sendJson(
@@ -637,19 +612,23 @@ if (account == null) {
       return;
     }
 
-    final body =
-        await _readJson(request);
+    final body = await _readJson(request);
 
     final reason =
         body['reason']
-            ?.toString()
-            .trim();
+                ?.toString()
+                .trim() ??
+            '';
+
+    /*
+     * markFailed() returns a non-null PaymentSession.
+     */
 
     final payment =
         paymentService.markFailed(
       paymentId: paymentId,
       account: account,
-      reason: reason,
+      reason: reason.isEmpty ? null : reason,
     );
 
     await _sendJson(
@@ -674,8 +653,9 @@ if (account == null) {
     HttpRequest request,
     Account account,
   ) async {
-    final paymentId =
-        _getIdFromPath(request.uri.path);
+    final paymentId = _getIdFromPath(
+      request.uri.path,
+    );
 
     if (paymentId == null) {
       await _sendJson(
@@ -689,6 +669,10 @@ if (account == null) {
       );
       return;
     }
+
+    /*
+     * cancelPayment() returns a non-null PaymentSession.
+     */
 
     final payment =
         paymentService.cancelPayment(
@@ -705,50 +689,6 @@ if (account == null) {
         'message':
             'Payment cancelled.',
       },
-    );
-  }
-
-  /*
-   * ============================================================
-   * AUTHENTICATED ACCOUNT LOOKUP
-   * ============================================================
-   */
-
-  Account? _getAuthenticatedAccount(
-    HttpRequest request,
-  ) {
-    /*
-     * AuthenticationMiddleware is responsible for validating
-     * the bearer token.
-     *
-     * The account is then retrieved using that token from the
-     * database.
-     */
-
-    final authorization =
-        request.headers.value(
-      'authorization',
-    );
-
-    if (authorization == null) {
-      return null;
-    }
-
-    if (!authorization
-        .toLowerCase()
-        .startsWith('bearer ')) {
-      return null;
-    }
-
-    final token =
-        authorization.substring(7).trim();
-
-    if (token.isEmpty) {
-      return null;
-    }
-
-    return database.getAccountForSession(
-      token,
     );
   }
 
@@ -776,15 +716,13 @@ if (account == null) {
   String? _getIdFromPath(
     String path,
   ) {
-    final segments =
-        path.split('/');
+    final segments = path.split('/');
 
     if (segments.length < 5) {
       return null;
     }
 
-    final id =
-        segments.last.trim();
+    final id = segments.last.trim();
 
     if (id.isEmpty) {
       return null;
@@ -806,8 +744,7 @@ if (account == null) {
     }
 
     try {
-      final decoded =
-          jsonDecode(contents);
+      final decoded = jsonDecode(contents);
 
       if (decoded is Map<String, dynamic>) {
         return decoded;
@@ -826,8 +763,7 @@ if (account == null) {
     int statusCode,
     Map<String, dynamic> data,
   ) async {
-    response.statusCode =
-        statusCode;
+    response.statusCode = statusCode;
 
     response.headers.contentType =
         ContentType.json;
@@ -842,8 +778,7 @@ if (account == null) {
   String _cleanError(
     Object error,
   ) {
-    final message =
-        error.toString();
+    final message = error.toString();
 
     if (message.startsWith(
       'Exception: ',

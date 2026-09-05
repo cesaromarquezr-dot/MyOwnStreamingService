@@ -335,7 +335,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                           ),
                   ),
-
                   if (!videoFinished)
                     Center(
                       child: IconButton(
@@ -347,7 +346,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                     ),
-
                   if (videoFinished &&
                       creditsStarted)
                     const Center(
@@ -359,7 +357,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                     ),
-
                   if (videoFinished &&
                       creditsStarted &&
                       !autoplayCancelled)
@@ -399,7 +396,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ],
               ),
             ),
-
             _buildControls(),
           ],
         ),
@@ -426,7 +422,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ? null
                 : updatePosition,
           ),
-
           Row(
             children: [
               IconButton(
@@ -455,7 +450,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white,
                 ),
               ),
-
               IconButton(
                 onPressed: videoFinished
                     ? null
@@ -467,7 +461,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white,
                 ),
               ),
-
               IconButton(
                 onPressed: videoFinished
                     ? null
@@ -499,9 +492,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white,
                 ),
               ),
-
               const Spacer(),
-
               IconButton(
                 onPressed:
                     openAudioSubtitleOptions,
@@ -510,7 +501,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white,
                 ),
               ),
-
               IconButton(
                 onPressed: showGroupShare,
                 icon: const Icon(
@@ -518,7 +508,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white,
                 ),
               ),
-
               IconButton(
                 onPressed: showExtras,
                 icon: const Icon(
@@ -575,9 +564,7 @@ class NextEpisodeCountdown
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 5),
-
             Text(
               nextEpisodeTitle!,
               style: const TextStyle(
@@ -586,18 +573,14 @@ class NextEpisodeCountdown
               ),
               textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 5),
-
             Text(
               'Starts in $seconds',
               style: const TextStyle(
                 color: Colors.white70,
               ),
             ),
-
             const SizedBox(height: 10),
-
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -607,9 +590,7 @@ class NextEpisodeCountdown
                     'CANCEL',
                   ),
                 ),
-
                 const SizedBox(width: 8),
-
                 ElevatedButton(
                   onPressed: onPlayNow,
                   child: const Text(
@@ -693,9 +674,7 @@ class _AudioSubtitleOptionsState
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 20),
-
             const Text(
               'AUDIO',
               style: TextStyle(
@@ -703,34 +682,33 @@ class _AudioSubtitleOptionsState
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 10),
 
-            RadioListTile<String>(
-              value: 'Original',
+            RadioGroup<String>(
               groupValue: selectedAudio,
               onChanged: (value) {
                 if (value == null) return;
 
                 setState(() {
-                  selectedAudio =
-                      value;
+                  selectedAudio = value;
                 });
 
                 widget.onAudioChanged(
                   value,
                 );
               },
-              title: const Text(
-                'Original',
-                style: TextStyle(
-                  color: Colors.white,
+              child: const RadioListTile<String>(
+                value: 'Original',
+                title: Text(
+                  'Original',
+                  style: TextStyle(
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
 
             const SizedBox(height: 20),
-
             const Text(
               'SUBTITLES',
               style: TextStyle(
@@ -768,8 +746,7 @@ class _AudioSubtitleOptionsState
             ),
 
             if (subtitlesEnabled)
-              RadioListTile<String>(
-                value: 'Default',
+              RadioGroup<String>(
                 groupValue:
                     selectedSubtitle,
                 onChanged: (value) {
@@ -784,10 +761,14 @@ class _AudioSubtitleOptionsState
                     value,
                   );
                 },
-                title: const Text(
-                  'Default subtitles',
-                  style: TextStyle(
-                    color: Colors.white,
+                child:
+                    const RadioListTile<String>(
+                  value: 'Default',
+                  title: Text(
+                    'Default subtitles',
+                    style: TextStyle(
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),

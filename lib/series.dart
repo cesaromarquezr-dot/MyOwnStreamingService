@@ -99,7 +99,6 @@ class SeriesScreen extends StatelessWidget {
                                   ),
                                 ),
                         ),
-
                         Padding(
                           padding:
                               const EdgeInsets.all(8),
@@ -115,7 +114,6 @@ class SeriesScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-
                         if (show.releaseYear != null)
                           Padding(
                             padding:
@@ -144,6 +142,6 @@ class SeriesScreen extends StatelessWidget {
 }
 
 /// Compatibility with your old class name.
-class series extends SeriesScreen {
-  const series({super.key});
+class Series extends SeriesScreen {
+  const Series({super.key});
 }

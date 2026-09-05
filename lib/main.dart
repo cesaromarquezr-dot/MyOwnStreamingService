@@ -417,8 +417,7 @@ class HomeScreen extends StatelessWidget {
     final tvShows = library
         .where(
           (media) {
-            final type =
-                media.type.toLowerCase();
+            final type = media.type.toLowerCase();
 
             return type == 'tvshow' ||
                 type == 'tv_show' ||
@@ -493,6 +492,8 @@ class HomeScreen extends StatelessWidget {
 
           if (controller.backendApi.isAuthenticated) {
             await controller.loadRecommendations();
+            await controller.loadGroupWishlist();
+            await controller.loadGroupRecommendations();
           }
         },
         child: ListView(
@@ -1713,10 +1714,9 @@ class _ProfileScreenState
 
           OutlinedButton(
             onPressed: () async {
-              await controller
-                  .logoutFromBackend();
+              await controller.logoutFromBackend();
 
-              if (!mounted) return;
+              if (!context.mounted) return;
 
               Navigator.pushAndRemoveUntil(
                 context,
@@ -1883,10 +1883,54 @@ class _GroupHubScreenState
   final messageController =
       TextEditingController();
 
+  bool loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    loadGroupData();
+  }
+
   @override
   void dispose() {
     messageController.dispose();
     super.dispose();
+  }
+
+  Future<void> loadGroupData() async {
+    final controller =
+        AppController.instance;
+
+    if (!controller.backendApi.isAuthenticated) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        loading = true;
+      });
+    }
+
+    try {
+      await controller.loadGroupRecommendations();
+      await controller.loadGroupWishlist();
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to load group data: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
+    }
   }
 
   void sendMessage() {
@@ -1900,7 +1944,76 @@ class _GroupHubScreenState
     );
 
     messageController.clear();
+
     setState(() {});
+  }
+
+  Future<void> openRecommendationDialog() async {
+    await showDialog(
+      context: context,
+      builder: (_) =>
+          const AddGroupRecommendationDialog(),
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> vote(
+    Map<String, dynamic> recommendation,
+    String voteValue,
+  ) async {
+    final controller =
+        AppController.instance;
+
+    final recommendationId =
+        recommendation['id']?.toString() ?? '';
+
+    final profileId =
+        controller.currentProfile?.id ?? '';
+
+    if (recommendationId.isEmpty ||
+        profileId.isEmpty) {
+      return;
+    }
+
+    try {
+      await controller.voteOnGroupRecommendation(
+        recommendationId: recommendationId,
+        profileId: profileId,
+        vote: voteValue,
+      );
+
+      await controller.loadGroupRecommendations();
+
+      if (!context.mounted) return;
+
+      setState(() {});
+
+      final updated =
+          controller.groupRecommendations
+              .where(
+                (item) =>
+                    item['id']?.toString() ==
+                    recommendationId,
+              )
+              .toList();
+
+      if (updated.isNotEmpty &&
+          updated.first['status']?.toString() ==
+              'approved') {
+        await controller.loadGroupWishlist();
+
+        if (!mounted) return;
+
+Navigator.pop(context);
+      }
+    } catch (error) {
+      if (!mounted) return;
+
+Navigator.pop(context);
+    }
   }
 
   @override
@@ -1908,107 +2021,359 @@ class _GroupHubScreenState
     final controller =
         AppController.instance;
 
+    final currentProfile =
+        controller.currentProfile;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Group'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh),
+            onPressed:
+                loading ? null : loadGroupData,
+          ),
+        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: controller
-                    .groupMessages
-                    .isEmpty
-                ? const Center(
-                    child: Text(
-                      'No group messages yet.',
-                    ),
-                  )
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.all(15),
-                    itemCount: controller
-                        .groupMessages
-                        .length,
-                    itemBuilder: (_, index) {
-                      final message =
-                          controller
-                              .groupMessages[index];
+            child: RefreshIndicator(
+              onRefresh: loadGroupData,
+              child: ListView(
+                physics:
+                    const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(15),
+                children: [
+                  // ==================================================
+                  // GROUP RECOMMENDATIONS
+                  // ==================================================
 
-                      return ListTile(
-                        leading:
-                            const CircleAvatar(
-                          child: Icon(
-                            Icons.person,
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Group Recommendations',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        title: Text(
-                          message.sender,
+                      ),
+                      IconButton(
+                        tooltip:
+                            'Add recommendation',
+                        icon: const Icon(
+                          Icons.add_circle,
                         ),
-                        subtitle: Text(
-                          message.message,
+                        onPressed:
+                            openRecommendationDialog,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          openRecommendationDialog,
+                      icon: const Icon(
+                        Icons.movie_outlined,
+                      ),
+                      label: const Text(
+                        'ADD A MOVIE/SHOW RECOMMENDATION',
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  if (loading)
+                    const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Center(
+                        child:
+                            CircularProgressIndicator(),
+                      ),
+                    ),
+
+                  if (!loading &&
+                      controller
+                          .groupRecommendations
+                          .isEmpty)
+                    Card(
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.groups_outlined,
+                              size: 50,
+                            ),
+                            const SizedBox(
+                              height: 10,
+                            ),
+                            const Text(
+                              'No group recommendations yet.',
+                              style:
+                                  TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(
+                              height: 5,
+                            ),
+                            Text(
+                              'Recommend a movie or show for everyone to vote on.',
+                              textAlign:
+                                  TextAlign.center,
+                              style: TextStyle(
+                                color: Colors
+                                    .grey
+                                    .shade400,
+                              ),
+                            ),
+                          ],
                         ),
-                        trailing: Text(
-                          _formatTime(
-                            message.timestamp,
+                      ),
+                    ),
+
+                  ...controller
+                      .groupRecommendations
+                      .map(
+                        (recommendation) =>
+                            GroupRecommendationCard(
+                          recommendation:
+                              recommendation,
+                          currentProfileId:
+                              currentProfile?.id,
+                          onVote: (value) =>
+                              vote(
+                            recommendation,
+                            value,
                           ),
+                        ),
+                      ),
+
+                  const SizedBox(height: 25),
+
+                  // ==================================================
+                  // GROUP CHAT
+                  // ==================================================
+
+                  const Text(
+                    'Group Chat',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  if (controller
+                      .groupMessages
+                      .isEmpty)
+                    Card(
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.all(20),
+                        child: Text(
+                          'No group messages yet.',
                           style: TextStyle(
                             color:
-                                Colors.grey.shade500,
-                            fontSize: 12,
+                                Colors.grey.shade400,
                           ),
                         ),
-                      );
-                    },
-                  ),
-          ),
+                      ),
+                    )
+                  else
+                    ...controller
+                        .groupMessages
+                        .map(
+                          (message) =>
+                              ListTile(
+                            contentPadding:
+                                EdgeInsets.zero,
+                            leading:
+                                const CircleAvatar(
+                              child: Icon(
+                                Icons.person,
+                              ),
+                            ),
+                            title: Text(
+                              message.sender,
+                            ),
+                            subtitle: Text(
+                              message.message,
+                            ),
+                            trailing: Text(
+                              _formatTime(
+                                message.timestamp,
+                              ),
+                              style: TextStyle(
+                                color: Colors
+                                    .grey
+                                    .shade500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
 
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller:
-                        messageController,
-                    onSubmitted: (_) =>
-                        sendMessage(),
-                    decoration:
-                        const InputDecoration(
-                      hintText:
-                          'Message the group...',
-                      border:
-                          OutlineInputBorder(),
-                    ),
-                  ),
-                ),
+                  const SizedBox(height: 25),
 
-                const SizedBox(width: 10),
+                  // ==================================================
+                  // SHARED GROUP WISHLIST
+                  // ==================================================
 
-                IconButton(
-                  icon: const Icon(
-                    Icons.send,
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Shared Group Wishlist',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip:
+                            'Refresh wishlist',
+                        icon: const Icon(
+                          Icons.refresh,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await controller
+                                .loadGroupWishlist();
+
+                            if (context.mounted) {
+                              setState(() {});
+                            }
+                          } catch (error) {
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Unable to load wishlist: $error',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
                   ),
-                  onPressed: sendMessage,
-                ),
-              ],
+
+                  const SizedBox(height: 10),
+
+                  if (controller
+                      .wishlist
+                      .isEmpty)
+                    Card(
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons
+                                  .favorite_border,
+                              size: 45,
+                            ),
+                            const SizedBox(
+                              height: 10,
+                            ),
+                            const Text(
+                              'The group wishlist is empty.',
+                              style:
+                                  TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(
+                              height: 5,
+                            ),
+                            Text(
+                              'Approved recommendations will appear here.',
+                              textAlign:
+                                  TextAlign.center,
+                              style: TextStyle(
+                                color: Colors
+                                    .grey
+                                    .shade400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ...controller
+                        .wishlist
+                        .map(
+                          (item) =>
+                              GroupWishlistCard(
+                            item: item,
+                            onChanged: () {
+                              setState(() {});
+                            },
+                          ),
+                        ),
+
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
 
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: OutlinedButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) =>
-                      const WishlistDialog(),
-                );
-              },
-              icon: const Icon(
-                Icons.favorite_outline,
-              ),
-              label: const Text(
-                'WISHLIST',
+          // ==================================================
+          // MESSAGE INPUT
+          // ==================================================
+
+          SafeArea(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller:
+                          messageController,
+                      onSubmitted: (_) =>
+                          sendMessage(),
+                      decoration:
+                          const InputDecoration(
+                        hintText:
+                            'Message the group...',
+                        border:
+                            OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  IconButton(
+                    icon: const Icon(
+                      Icons.send,
+                    ),
+                    onPressed:
+                        sendMessage,
+                  ),
+                ],
               ),
             ),
           ),
@@ -2031,10 +2396,1193 @@ class _GroupHubScreenState
 }
 
 // ============================================================
+// ADD GROUP RECOMMENDATION
+// ============================================================
+
+class AddGroupRecommendationDialog
+    extends StatefulWidget {
+  const AddGroupRecommendationDialog({
+    super.key,
+  });
+
+  @override
+  State<AddGroupRecommendationDialog>
+      createState() =>
+          _AddGroupRecommendationDialogState();
+}
+
+class _AddGroupRecommendationDialogState
+    extends State<
+        AddGroupRecommendationDialog> {
+  final searchController =
+      TextEditingController();
+
+  final Set<String> selectedParticipantIds =
+      <String>{};
+
+  MediaItem? selectedMedia;
+
+  bool submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (profile != null) {
+      selectedParticipantIds.add(
+        profile.id,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  List<MediaItem> get availableMedia {
+    final controller =
+        AppController.instance;
+
+    final Map<String, MediaItem> unique =
+        <String, MediaItem>{};
+
+    for (final media in controller.library) {
+      unique[media.id] = media;
+    }
+
+    for (final media
+        in controller.recommendations) {
+      unique[media.id] = media;
+    }
+
+    return unique.values.toList();
+  }
+
+  List<MediaItem> get filteredMedia {
+    final query =
+        searchController.text
+            .trim()
+            .toLowerCase();
+
+    if (query.isEmpty) {
+      return availableMedia;
+    }
+
+    return availableMedia
+        .where(
+          (media) => media.title
+              .toLowerCase()
+              .contains(query),
+        )
+        .toList();
+  }
+
+  Future<void> submitRecommendation() async {
+    final controller =
+        AppController.instance;
+
+    final media = selectedMedia;
+
+    if (media == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Select a movie or show first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final currentProfile =
+        controller.currentProfile;
+
+    if (currentProfile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No profile is currently selected.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    selectedParticipantIds.add(
+      currentProfile.id,
+    );
+
+    setState(() {
+      submitting = true;
+    });
+
+    try {
+      await controller.createGroupRecommendation(
+        media: media,
+        profileId: currentProfile.id,
+        activeParticipants:
+            selectedParticipantIds,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${media.title}" was recommended to the group.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to create recommendation: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          submitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller =
+        AppController.instance;
+
+    final profiles =
+        controller.currentAccount?.profiles ??
+            <Profile>[];
+
+    return AlertDialog(
+      title: const Text(
+        'Recommend for the Group',
+      ),
+      content: SizedBox(
+        width: 600,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller:
+                    searchController,
+                onChanged: (_) {
+                  setState(() {});
+                },
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Search movies and shows',
+                  hintText:
+                      'Enter a title...',
+                  prefixIcon:
+                      Icon(Icons.search),
+                  border:
+                      OutlineInputBorder(),
+                ),
+              ),
+
+              const SizedBox(height: 15),
+
+              if (filteredMedia.isEmpty)
+                const Padding(
+                  padding:
+                      EdgeInsets.all(20),
+                  child: Center(
+                    child: Text(
+                      'No matching movies or shows found.',
+                      textAlign:
+                          TextAlign.center,
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 260,
+                  child: ListView.builder(
+                    itemCount:
+                        filteredMedia.length,
+                    itemBuilder:
+                        (_, index) {
+                      final media =
+                          filteredMedia[index];
+
+                      final selected =
+                          selectedMedia?.id ==
+                              media.id;
+
+                      return Card(
+                        child: ListTile(
+                          selected:
+                              selected,
+                          leading:
+                              SizedBox(
+                            width: 45,
+                            height: 65,
+                            child:
+                                ClipRRect(
+                              borderRadius:
+                                  BorderRadius
+                                      .circular(
+                                6,
+                              ),
+                              child:
+                                  media.imageUrl ==
+                                          null
+                                      ? Container(
+                                          color: Colors
+                                              .grey
+                                              .shade900,
+                                          child:
+                                              const Icon(
+                                            Icons.movie,
+                                          ),
+                                        )
+                                      : Image.network(
+                                          media
+                                              .imageUrl!,
+                                          fit: BoxFit
+                                              .cover,
+                                          errorBuilder:
+                                              (_, __,
+                                                  ___) {
+                                            return Container(
+                                              color: Colors
+                                                  .grey
+                                                  .shade900,
+                                              child:
+                                                  const Icon(
+                                                Icons
+                                                    .broken_image,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                            ),
+                          ),
+                          title: Text(
+                            media.title,
+                            maxLines: 2,
+                            overflow:
+                                TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            mediaTypeLabel(
+                              media.type,
+                            ),
+                          ),
+                          trailing:
+                              selected
+                                  ? const Icon(
+                                      Icons
+                                          .check_circle,
+                                      color:
+                                          Colors.green,
+                                    )
+                                  : null,
+                          onTap: submitting
+                              ? null
+                              : () {
+                                  setState(() {
+                                    selectedMedia =
+                                        media;
+                                  });
+                                },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                'Active participants',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 5),
+
+              Text(
+                'Select the profiles who are active right now and should vote.',
+                style: TextStyle(
+                  color:
+                      Colors.grey.shade400,
+                  fontSize: 13,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              ...profiles.map(
+                (profile) {
+                  final isCurrent =
+                      profile.id ==
+                          controller
+                              .currentProfile
+                              ?.id;
+
+                  final selected =
+                      selectedParticipantIds
+                          .contains(
+                    profile.id,
+                  );
+
+                  return CheckboxListTile(
+                    contentPadding:
+                        EdgeInsets.zero,
+                    value: selected,
+                    onChanged:
+                        submitting ||
+                                isCurrent
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  if (value ==
+                                      true) {
+                                    selectedParticipantIds
+                                        .add(
+                                      profile
+                                          .id,
+                                    );
+                                  } else {
+                                    selectedParticipantIds
+                                        .remove(
+                                      profile
+                                          .id,
+                                    );
+                                  }
+                                });
+                              },
+                    secondary:
+                        const CircleAvatar(
+                      child: Icon(
+                        Icons.person,
+                      ),
+                    ),
+                    title:
+                        Text(
+                      profile.name,
+                    ),
+                    subtitle:
+                        isCurrent
+                            ? const Text(
+                                'Current profile',
+                              )
+                            : null,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: submitting
+              ? null
+              : () =>
+                  Navigator.pop(context),
+          child:
+              const Text('CANCEL'),
+        ),
+
+        ElevatedButton.icon(
+          onPressed:
+              submitting
+                  ? null
+                  : submitRecommendation,
+          icon: submitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child:
+                      CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(
+                  Icons.send,
+                ),
+          label: const Text(
+            'RECOMMEND',
+          ),
+        ),
+      ],
+    );
+  }
+
+  String mediaTypeLabel(
+    String type,
+  ) {
+    final normalized =
+        type.toLowerCase();
+
+    if (normalized == 'tvshow' ||
+        normalized == 'tv_show' ||
+        normalized == 'tv show') {
+      return 'TV Show';
+    }
+
+    return 'Movie';
+  }
+}
+
+// ============================================================
+// GROUP RECOMMENDATION CARD
+// ============================================================
+
+class GroupRecommendationCard
+    extends StatelessWidget {
+  final Map<String, dynamic>
+      recommendation;
+
+  final String? currentProfileId;
+
+  final Future<void> Function(
+    String vote,
+  ) onVote;
+
+  const GroupRecommendationCard({
+    super.key,
+    required this.recommendation,
+    required this.currentProfileId,
+    required this.onVote,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title =
+        recommendation['title']?.toString() ??
+            'Unknown title';
+
+    final type =
+        recommendation['type']?.toString() ??
+            'movie';
+
+    final status =
+        recommendation['status']?.toString() ??
+            'voting';
+
+    final yesVotes =
+        readInt(
+      recommendation['yesVotes'],
+    );
+
+    final noVotes =
+        readInt(
+      recommendation['noVotes'],
+    );
+
+    final totalVotes =
+        readInt(
+      recommendation['totalVotes'],
+    );
+
+    final activeParticipants =
+        readStringList(
+      recommendation['activeParticipants'],
+    );
+
+    final votes =
+        readMap(
+      recommendation['votes'],
+    );
+
+    final currentVote =
+        currentProfileId == null
+            ? null
+            : votes[currentProfileId];
+
+    final isParticipant =
+        currentProfileId != null &&
+            activeParticipants.contains(
+              currentProfileId,
+            );
+
+    final hasVoted =
+        currentVote != null;
+
+    return Card(
+      margin:
+          const EdgeInsets.only(
+        bottom: 12,
+      ),
+      child: Padding(
+        padding:
+            const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 55,
+                  height: 75,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.grey.shade900,
+                    borderRadius:
+                        BorderRadius.circular(
+                      8,
+                    ),
+                  ),
+                  child: Icon(
+                    type.toLowerCase() ==
+                            'movie'
+                        ? Icons.movie
+                        : Icons.tv,
+                    size: 30,
+                  ),
+                ),
+
+                const SizedBox(
+                  width: 12,
+                ),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style:
+                            const TextStyle(
+                          fontSize: 18,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 4,
+                      ),
+
+                      Text(
+                        statusLabel(status),
+                        style:
+                            TextStyle(
+                          color:
+                              statusColor(status),
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(
+              height: 15,
+            ),
+
+            if (status == 'voting') ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        const Text('YES'),
+                        const SizedBox(height: 4),
+                        Text(
+                          yesVotes.toString(),
+                          style:
+                              const TextStyle(
+                            fontSize: 24,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Expanded(
+                    child: Column(
+                      children: [
+                        const Text('NO'),
+                        const SizedBox(height: 4),
+                        Text(
+                          noVotes.toString(),
+                          style:
+                              const TextStyle(
+                            fontSize: 24,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Expanded(
+                    child: Column(
+                      children: [
+                        const Text('VOTED'),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalVotes/${activeParticipants.length}',
+                          style:
+                              const TextStyle(
+                            fontSize: 20,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(
+                height: 15,
+              ),
+
+              if (!isParticipant)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.all(12),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.grey.shade900,
+                    borderRadius:
+                        BorderRadius.circular(
+                      8,
+                    ),
+                  ),
+                  child: const Text(
+                    'You were not active when this vote started.',
+                  ),
+                )
+              else if (hasVoted)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.all(12),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.grey.shade900,
+                    borderRadius:
+                        BorderRadius.circular(
+                      8,
+                    ),
+                  ),
+                  child: Text(
+                    'You voted ${currentVote.toString().toUpperCase()}.',
+                    style:
+                        const TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child:
+                          ElevatedButton.icon(
+                        onPressed: () =>
+                            onVote('yes'),
+                        icon:
+                            const Icon(
+                          Icons
+                              .thumb_up_outlined,
+                        ),
+                        label:
+                            const Text('YES'),
+                      ),
+                    ),
+
+                    const SizedBox(
+                      width: 10,
+                    ),
+
+                    Expanded(
+                      child:
+                          OutlinedButton.icon(
+                        onPressed: () =>
+                            onVote('no'),
+                        icon:
+                            const Icon(
+                          Icons
+                              .thumb_down_outlined,
+                        ),
+                        label:
+                            const Text('NO'),
+                      ),
+                    ),
+                  ],
+                ),
+            ] else if (status ==
+                'approved')
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.all(12),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      Colors.green.shade900,
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Approved! This movie/show is now on the shared group wishlist.',
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (status ==
+                'rejected')
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.all(12),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      Colors.red.shade900,
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.cancel,
+                      color: Colors.red,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'The group rejected this recommendation.',
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (status ==
+                'expired')
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.all(12),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      Colors.grey.shade900,
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.timer_off),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'This recommendation has expired.',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int readInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
+  }
+
+  List<String> readStringList(
+    dynamic value,
+  ) {
+    if (value is! List) {
+      return <String>[];
+    }
+
+    return value
+        .map(
+          (item) => item.toString(),
+        )
+        .toList();
+  }
+
+  Map<String, dynamic> readMap(
+    dynamic value,
+  ) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(
+        value,
+      );
+    }
+
+    return <String, dynamic>{};
+  }
+
+  String statusLabel(
+    String status,
+  ) {
+    switch (status) {
+      case 'approved':
+        return 'APPROVED';
+      case 'rejected':
+        return 'REJECTED';
+      case 'expired':
+        return 'EXPIRED';
+      case 'voting':
+      default:
+        return 'VOTING';
+    }
+  }
+
+  Color statusColor(
+    String status,
+  ) {
+    switch (status) {
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      case 'expired':
+        return Colors.grey;
+      case 'voting':
+      default:
+        return Colors.orange;
+    }
+  }
+}
+
+// ============================================================
+// GROUP WISHLIST CARD
+// ============================================================
+
+class GroupWishlistCard
+    extends StatelessWidget {
+  final WishlistItem item;
+  final VoidCallback onChanged;
+
+  const GroupWishlistCard({
+    super.key,
+    required this.item,
+    required this.onChanged,
+  });
+
+  Future<void> remove(
+    BuildContext context,
+  ) async {
+    final controller =
+        AppController.instance;
+
+    try {
+      await controller.removeFromGroupWishlist(
+        item.id,
+      );
+
+      await controller.loadGroupWishlist();
+
+      if (!context.mounted) return;
+
+      onChanged();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${item.title} removed from the group wishlist.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to remove item: $error',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> acquire(
+    BuildContext context,
+  ) async {
+    final controller =
+        AppController.instance;
+
+    final account =
+        controller.currentAccount;
+
+    if (account == null ||
+        account.profiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No profiles are available.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final selectedProfile =
+        await showDialog<Profile>(
+      context: context,
+      builder: (_) =>
+          SelectAcquisitionProfileDialog(
+        profiles: account.profiles,
+        currentProfile:
+            controller.currentProfile,
+      ),
+    );
+
+    if (selectedProfile == null) {
+      return;
+    }
+
+    try {
+      await controller.acquireGroupWishlistItem(
+        mediaId: item.id,
+        profileId: selectedProfile.id,
+      );
+
+      await controller.loadGroupWishlist();
+
+      if (!context.mounted) return;
+
+      onChanged();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${item.title} was acquired for ${selectedProfile.name}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to acquire item: $error',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
+      child: ListTile(
+        leading:
+            const CircleAvatar(
+          child: Icon(
+            Icons.movie_outlined,
+          ),
+        ),
+        title: Text(
+          item.title,
+          maxLines: 2,
+          overflow:
+              TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          item.type,
+        ),
+        trailing:
+            PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'acquire') {
+              acquire(context);
+            }
+
+            if (value == 'remove') {
+              remove(context);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem<String>(
+              value: 'acquire',
+              child: Text(
+                'Acquire / Rip',
+              ),
+            ),
+            PopupMenuItem<String>(
+              value: 'remove',
+              child: Text(
+                'Remove',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// SELECT ACQUISITION PROFILE
+// ============================================================
+
+class SelectAcquisitionProfileDialog
+    extends StatelessWidget {
+  final List<Profile> profiles;
+  final Profile? currentProfile;
+
+  const SelectAcquisitionProfileDialog({
+    super.key,
+    required this.profiles,
+    required this.currentProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(
+        'Add to Which Profile?',
+      ),
+      content: SizedBox(
+        width: 450,
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            const Text(
+              'Choose the profile whose personal library should receive this movie or show.',
+            ),
+
+            const SizedBox(height: 15),
+
+            ...profiles.map(
+              (profile) =>
+                  ListTile(
+                leading:
+                    CircleAvatar(
+                  backgroundImage:
+                      profile.avatarUrl ==
+                              null
+                          ? null
+                          : NetworkImage(
+                              profile
+                                  .avatarUrl!,
+                            ),
+                  child:
+                      profile.avatarUrl ==
+                              null
+                          ? const Icon(
+                              Icons.person,
+                            )
+                          : null,
+                ),
+                title:
+                    Text(
+                  profile.name,
+                ),
+                subtitle:
+                    profile.id ==
+                            currentProfile
+                                ?.id
+                        ? const Text(
+                            'Current profile',
+                          )
+                        : null,
+                trailing:
+                    const Icon(
+                  Icons.chevron_right,
+                ),
+                onTap: () {
+                  Navigator.pop(
+                    context,
+                    profile,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.pop(
+            context,
+          ),
+          child:
+              const Text('CANCEL'),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
 // WISHLIST
 // ============================================================
 
-class WishlistDialog extends StatefulWidget {
+class WishlistDialog
+    extends StatefulWidget {
   const WishlistDialog({super.key});
 
   @override
@@ -2044,37 +3592,47 @@ class WishlistDialog extends StatefulWidget {
 
 class _WishlistDialogState
     extends State<WishlistDialog> {
-  final titleController =
-      TextEditingController();
+  bool loading = false;
 
   @override
-  void dispose() {
-    titleController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    loadWishlist();
   }
 
-  void addWishlistItem() {
-    final title =
-        titleController.text.trim();
+  Future<void> loadWishlist() async {
+    final controller =
+        AppController.instance;
 
-    if (title.isEmpty) {
+    if (!controller.backendApi.isAuthenticated) {
       return;
     }
 
-    final media = MediaItem(
-      id: DateTime.now()
-          .microsecondsSinceEpoch
-          .toString(),
-      title: title,
-      type: 'movie',
-    );
+    if (mounted) {
+      setState(() {
+        loading = true;
+      });
+    }
 
-    AppController.instance.addToWishlist(
-      media,
-    );
+    try {
+      await controller.loadGroupWishlist();
+    } catch (error) {
+      if (!mounted) return;
 
-    titleController.clear();
-    setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to load group wishlist: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -2087,76 +3645,81 @@ class _WishlistDialogState
         'Group Wishlist',
       ),
       content: SizedBox(
-        width: 500,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (controller.wishlist.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'No wishlist items.',
-                ),
-              ),
+        width: 600,
+        height: 500,
+        child: loading
+            ? const Center(
+                child:
+                    CircularProgressIndicator(),
+              )
+            : controller
+                    .wishlist
+                    .isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment:
+                          MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.favorite_border,
+                          size: 60,
+                        ),
+                        SizedBox(
+                          height: 15,
+                        ),
+                        Text(
+                          'No group wishlist items.',
+                          style:
+                              TextStyle(
+                            fontSize: 18,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(
+                          height: 8,
+                        ),
+                        Text(
+                          'Approved group recommendations will appear here.',
+                          textAlign:
+                              TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount:
+                        controller.wishlist.length,
+                    itemBuilder:
+                        (_, index) {
+                      final item =
+                          controller
+                              .wishlist[index];
 
-            ...controller.wishlist.map(
-              (item) => ListTile(
-                leading: const Icon(
-                  Icons.movie_outlined,
-                ),
-                title: Text(
-                  item.title,
-                ),
-                subtitle: Text(
-                  item.type,
-                ),
-                trailing: IconButton(
-                  icon: const Icon(
-                    Icons.delete_outline,
+                      return GroupWishlistCard(
+                        item: item,
+                        onChanged: () {
+                          setState(() {});
+                        },
+                      );
+                    },
                   ),
-                  onPressed: () {
-                    controller
-                        .removeFromWishlist(
-                      item.id,
-                    );
-                    setState(() {});
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            TextField(
-              controller:
-                  titleController,
-              onSubmitted: (_) =>
-                  addWishlistItem(),
-              decoration:
-                  const InputDecoration(
-                labelText:
-                    'Movie or show suggestion',
-                border:
-                    OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
       ),
       actions: [
         TextButton(
           onPressed: () =>
               Navigator.pop(context),
-          child: const Text(
-            'CLOSE',
-          ),
+          child:
+              const Text('CLOSE'),
         ),
-
-        ElevatedButton(
-          onPressed: addWishlistItem,
-          child: const Text(
-            'ADD',
+        ElevatedButton.icon(
+          onPressed:
+              loading ? null : loadWishlist,
+          icon: const Icon(
+            Icons.refresh,
           ),
+          label:
+              const Text('REFRESH'),
         ),
       ],
     );
@@ -2357,8 +3920,7 @@ class _GroupWatchPreferencesScreenState
                 final controller =
                     AppController.instance;
 
-                controller
-                    .createGroupWatchSession(
+                controller.createGroupWatchSession(
                   widget.media,
                 );
 

@@ -1,16 +1,16 @@
 // backend/services/recommendations_service.dart
 
-/// Recommendation engine.
-///
-/// This service intentionally does NOT know anything about HTTP,
-/// authentication, or the database.
-///
-/// The route/controller layer should load the user's data and available
-/// media, convert that information into RecommendationMedia objects,
-/// and pass it into this service.
-///
-/// This keeps the recommendation algorithm independent from the rest
-/// of the backend and makes it easier to test and expand later.
+// Recommendation engine.
+//
+// This service intentionally does NOT know anything about HTTP,
+// authentication, or the database.
+//
+// The route/controller layer should load the user's data and available
+// media, convert that information into RecommendationMedia objects,
+// and pass it into this service.
+//
+// This keeps the recommendation algorithm independent from the rest
+// of the backend and makes it easier to test and expand later.
 
 enum RecommendationReasonType {
   actor,

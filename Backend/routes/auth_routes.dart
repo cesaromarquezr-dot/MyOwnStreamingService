@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../middleware/authentication.dart';
@@ -82,7 +83,10 @@ class AuthRoutes {
         },
       );
     } catch (error) {
-      print('Authentication route error: $error');
+      developer.log(
+        'Authentication route error: $error',
+        name: 'AuthRoutes',
+      );
 
       if (!request.response.headers.contentType
           .toString()

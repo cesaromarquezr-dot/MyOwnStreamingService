@@ -652,6 +652,302 @@ class BackendApi {
   }
 
   // ==========================================================
+  // GROUP RECOMMENDATIONS
+  // ==========================================================
+
+  /// Creates a recommendation for the group.
+  ///
+  /// activeParticipants contains the profile IDs that were
+  /// active when voting started.
+  ///
+  /// The backend records those profiles as the voters who
+  /// are eligible to participate in this recommendation.
+  Future<Map<String, dynamic>> createGroupRecommendation({
+    required String mediaId,
+    required String profileId,
+    Set<String>? activeParticipants,
+  }) async {
+    _requireAuthentication();
+
+    if (mediaId.trim().isEmpty) {
+      throw BackendApiException(
+        'Media ID is required.',
+      );
+    }
+
+    if (profileId.trim().isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final participants =
+        <String>{
+      ...?activeParticipants,
+      profileId.trim(),
+    };
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/recommendations',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'mediaId': mediaId.trim(),
+        'profileId': profileId.trim(),
+        'activeParticipants':
+            participants.toList(),
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to create group recommendation.',
+    );
+  }
+
+  /// Gets all group recommendations for the account.
+  Future<Map<String, dynamic>>
+      getGroupRecommendations() async {
+    _requireAuthentication();
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/group/recommendations',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve group recommendations.',
+    );
+  }
+
+  /// Gets one group recommendation.
+  Future<Map<String, dynamic>>
+      getGroupRecommendation({
+    required String recommendationId,
+  }) async {
+    _requireAuthentication();
+
+    if (recommendationId.trim().isEmpty) {
+      throw BackendApiException(
+        'Recommendation ID is required.',
+      );
+    }
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve group recommendation.',
+    );
+  }
+
+  /// Votes YES or NO on a group recommendation.
+  Future<Map<String, dynamic>>
+      voteOnGroupRecommendation({
+    required String recommendationId,
+    required String profileId,
+    required String vote,
+  }) async {
+    _requireAuthentication();
+
+    if (recommendationId.trim().isEmpty) {
+      throw BackendApiException(
+        'Recommendation ID is required.',
+      );
+    }
+
+    if (profileId.trim().isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final cleanVote =
+        vote.trim().toLowerCase();
+
+    if (cleanVote != 'yes' &&
+        cleanVote != 'no') {
+      throw BackendApiException(
+        'Vote must be either "yes" or "no".',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}/vote',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': profileId.trim(),
+        'vote': cleanVote,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to submit group recommendation vote.',
+    );
+  }
+
+  /// Closes voting on a group recommendation.
+  ///
+  /// If there is a majority YES, the backend also adds the
+  /// media to the account's shared group wishlist.
+  Future<Map<String, dynamic>>
+      closeGroupRecommendationVoting({
+    required String recommendationId,
+  }) async {
+    _requireAuthentication();
+
+    if (recommendationId.trim().isEmpty) {
+      throw BackendApiException(
+        'Recommendation ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}/close',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to close group recommendation voting.',
+    );
+  }
+
+  /// Deletes a group recommendation.
+  Future<Map<String, dynamic>>
+      deleteGroupRecommendation({
+    required String recommendationId,
+  }) async {
+    _requireAuthentication();
+
+    if (recommendationId.trim().isEmpty) {
+      throw BackendApiException(
+        'Recommendation ID is required.',
+      );
+    }
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to delete group recommendation.',
+    );
+  }
+
+  // ==========================================================
+  // GROUP WISHLIST
+  // ==========================================================
+
+  /// Gets the shared wishlist for the authenticated account.
+  ///
+  /// Unlike a personal profile library, this wishlist belongs
+  /// to the account and is shared by the group's profiles.
+  Future<Map<String, dynamic>>
+      getGroupWishlist() async {
+    _requireAuthentication();
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/group/wishlist',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve group wishlist.',
+    );
+  }
+
+  /// Removes a media item from the shared group wishlist.
+  Future<Map<String, dynamic>>
+      removeFromGroupWishlist({
+    required String mediaId,
+  }) async {
+    _requireAuthentication();
+
+    if (mediaId.trim().isEmpty) {
+      throw BackendApiException(
+        'Media ID is required.',
+      );
+    }
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/group/wishlist/${Uri.encodeComponent(mediaId)}',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to remove media from group wishlist.',
+    );
+  }
+
+  /// Marks a group wishlist item as acquired.
+  ///
+  /// The backend:
+  ///
+  /// 1. Removes the media from the shared group wishlist.
+  /// 2. Adds the media to the selected profile's library.
+  ///
+  /// profileId determines which profile receives ownership.
+  Future<Map<String, dynamic>>
+      acquireGroupWishlistItem({
+    required String mediaId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    if (mediaId.trim().isEmpty) {
+      throw BackendApiException(
+        'Media ID is required.',
+      );
+    }
+
+    if (profileId.trim().isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/wishlist/${Uri.encodeComponent(mediaId)}/acquire',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': profileId.trim(),
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to acquire group wishlist item.',
+    );
+  }
+
+  // ==========================================================
   // ARM
   // ==========================================================
 
@@ -682,6 +978,38 @@ class BackendApi {
     }
 
     return [];
+  }
+
+  // ==========================================================
+  // INTERNAL HELPERS
+  // ==========================================================
+
+  void _requireAuthentication() {
+    if (!isAuthenticated) {
+      throw BackendApiException(
+        'You must be logged in before using this feature.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> _requireSuccess(
+    http.Response response,
+    String fallbackError,
+  ) async {
+    final data =
+        _decodeResponse(response);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            fallbackError,
+        statusCode:
+            response.statusCode,
+      );
+    }
+
+    return data;
   }
 
   // ==========================================================

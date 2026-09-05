@@ -1,5 +1,6 @@
 import '../models/account.dart';
 import '../models/media.dart';
+import '../models/group_recommendation.dart';
 
 class Database {
   Database._();
@@ -29,6 +30,52 @@ class Database {
   final Map<String, Media> mediaById = {};
 
   // ------------------------------------------------------------
+  // GROUP RECOMMENDATIONS
+  // ------------------------------------------------------------
+
+  final Map<String, GroupRecommendation>
+      groupRecommendationsById =
+      <String, GroupRecommendation>{};
+
+  void saveGroupRecommendation(
+    GroupRecommendation recommendation,
+  ) {
+    groupRecommendationsById[recommendation.id] =
+        recommendation;
+  }
+
+  GroupRecommendation? getGroupRecommendation(
+    String recommendationId,
+  ) {
+    return groupRecommendationsById[recommendationId];
+  }
+
+  List<GroupRecommendation> getGroupRecommendations() {
+    return groupRecommendationsById.values.toList();
+  }
+
+  List<GroupRecommendation>
+      getVotingGroupRecommendations() {
+    return groupRecommendationsById.values
+        .where(
+          (recommendation) =>
+              recommendation.status ==
+              GroupRecommendationStatus.voting,
+        )
+        .toList();
+  }
+
+  void deleteGroupRecommendation(
+    String recommendationId,
+  ) {
+    groupRecommendationsById.remove(recommendationId);
+  }
+
+  void clearGroupRecommendations() {
+    groupRecommendationsById.clear();
+  }
+
+  // ------------------------------------------------------------
   // CLEAR DATABASE
   // ------------------------------------------------------------
 
@@ -38,6 +85,7 @@ class Database {
     accountIdByEmail.clear();
     sessions.clear();
     mediaById.clear();
+    groupRecommendationsById.clear();
   }
 
   // ------------------------------------------------------------

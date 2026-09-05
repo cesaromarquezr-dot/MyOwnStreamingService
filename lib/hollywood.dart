@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 /// Actor/Actress discovered from media imported into the user's library.
 class Actor {
   final String id;
@@ -57,11 +58,11 @@ class CastMember {
 }
 
 /// Legacy model retained so your old code can still reference it.
-class tophollywood {
+class TopHollywood {
   String? imgurl;
   String? name;
 
-  tophollywood({
+  TopHollywood({
     this.imgurl,
     this.name,
   });
@@ -90,6 +91,6 @@ class ActorsScreen extends StatelessWidget {
 }
 
 /// Compatibility name for older code.
-class actors extends ActorsScreen {
-  const actors({super.key});
+class Actors extends ActorsScreen {
+  const Actors({super.key});
 }

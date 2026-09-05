@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
+
 import '../middleware/authentication.dart';
 import '../services/search_service.dart';
 
@@ -45,45 +47,24 @@ class SearchRoutes {
       }
 
       // --------------------------------------------------------
-// AUTHENTICATION
-// --------------------------------------------------------
+      // AUTHENTICATION
+      // --------------------------------------------------------
 
-await authenticationMiddleware.authenticate(
-  request,
-);
+      final account =
+          authenticationMiddleware.authenticate(request);
 
-final authorization =
-    request.headers.value('authorization');
+      if (account == null) {
+        await _sendJson(
+          request.response,
+          HttpStatus.unauthorized,
+          {
+            'success': false,
+            'error': 'Authentication required.',
+          },
+        );
+        return;
+      }
 
-if (authorization == null ||
-    !authorization
-        .toLowerCase()
-        .startsWith('bearer ')) {
-  await _sendJson(
-    request.response,
-    HttpStatus.unauthorized,
-    {
-      'success': false,
-      'error': 'Authentication required.',
-    },
-  );
-  return;
-}
-
-final token =
-    authorization.substring(7).trim();
-
-if (token.isEmpty) {
-  await _sendJson(
-    request.response,
-    HttpStatus.unauthorized,
-    {
-      'success': false,
-      'error': 'Authentication required.',
-    },
-  );
-  return;
-}
       // --------------------------------------------------------
       // QUERY
       // --------------------------------------------------------
@@ -153,9 +134,12 @@ if (token.isEmpty) {
               .toList(),
         },
       );
-    } catch (error) {
-      print(
+    } catch (error, stackTrace) {
+      developer.log(
         'Search request error: $error',
+        name: 'SearchRoutes',
+        error: error,
+        stackTrace: stackTrace,
       );
 
       if (!request.response.headers.contentType

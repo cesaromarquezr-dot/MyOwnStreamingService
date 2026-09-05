@@ -441,83 +441,67 @@ class _SignupScreenState extends State<SignupScreen> {
                   height: 15,
                 ),
 
-                RadioListTile<
-                    SubscriptionPlan>(
-                  value:
-                      SubscriptionPlan
-                          .monthly,
-                  groupValue:
-                      selectedPlan,
-                  onChanged:
-                      creatingAccount
-                          ? null
-                          : (value) {
-                              if (value !=
-                                  null) {
-                                setState(
-                                  () {
-                                    selectedPlan =
-                                        value;
-                                  },
-                                );
-                              }
-                            },
-                  title: const Text(
-                    '\$9.99 USD / month',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.white,
-                    ),
-                  ),
-                  subtitle:
-                      const Text(
-                    'Billed every month',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.grey,
-                    ),
-                  ),
-                ),
+                RadioGroup<SubscriptionPlan>(
+                  groupValue: selectedPlan,
+                      onChanged: (value) {
+  if (creatingAccount || value == null) {
+    return;
+  }
 
-                RadioListTile<
-                    SubscriptionPlan>(
-                  value:
-                      SubscriptionPlan
-                          .yearly,
-                  groupValue:
-                      selectedPlan,
-                  onChanged:
-                      creatingAccount
-                          ? null
-                          : (value) {
-                              if (value !=
-                                  null) {
-                                setState(
-                                  () {
-                                    selectedPlan =
-                                        value;
-                                  },
-                                );
-                              }
-                            },
-                  title: const Text(
-                    '\$99.99 USD / year',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.white,
-                    ),
-                  ),
-                  subtitle:
-                      const Text(
-                    'Billed once per year',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.grey,
-                    ),
+  setState(() {
+    selectedPlan = value;
+  });
+},
+                  child: Column(
+                    children: [
+                      RadioListTile<
+                          SubscriptionPlan>(
+                        value:
+                            SubscriptionPlan
+                                .monthly,
+                        title: const Text(
+                          '\$9.99 USD / month',
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.white,
+                          ),
+                        ),
+                        subtitle:
+                            const Text(
+                          'Billed every month',
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.grey,
+                          ),
+                        ),
+                      ),
+
+                      RadioListTile<
+                          SubscriptionPlan>(
+                        value:
+                            SubscriptionPlan
+                                .yearly,
+                        title: const Text(
+                          '\$99.99 USD / year',
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.white,
+                          ),
+                        ),
+                        subtitle:
+                            const Text(
+                          'Billed once per year',
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -640,8 +624,8 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 }
 
-class signup extends SignupScreen {
-  const signup({
+class Signup extends SignupScreen {
+  const Signup({
     super.key,
   });
 }

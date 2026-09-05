@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 
-class recent {
+class Recent {
   String? imgurl;
+
   String? name;
 
-  recent({
+  Recent({
     this.imgurl,
     this.name,
   });
 }
 
 /// Reusable recently-watched card.
+
 class RecentlyWatchedCard extends StatelessWidget {
   final String? imgurl;
+
   final String? name;
 
   const RecentlyWatchedCard({
@@ -80,8 +84,9 @@ class RecentlyWatchedCard extends StatelessWidget {
 }
 
 /// Compatibility name for your old series.dart.
-class recentlywatched extends RecentlyWatchedCard {
-  const recentlywatched({
+
+class RecentlyWatched extends RecentlyWatchedCard {
+  const RecentlyWatched({
     super.key,
     super.imgurl,
     super.name,

@@ -16,6 +16,10 @@ class Account {
 
   Subscription? subscription;
 
+  // ------------------------------------------------------------
+  // PROFILES
+  // ------------------------------------------------------------
+  //
   // Every profile has its own:
   // - owned media
   // - watched media
@@ -25,9 +29,28 @@ class Account {
   // - watch history
   //
   // This keeps profiles completely independent.
+  //
   final List<Profile> profiles;
 
   static const int maxProfiles = 7;
+
+  // ------------------------------------------------------------
+  // GROUP WISHLIST
+  // ------------------------------------------------------------
+  //
+  // The group wishlist belongs to the ACCOUNT rather than an
+  // individual profile.
+  //
+  // When a group recommendation receives a majority YES vote,
+  // the recommendation service adds the media ID here.
+  //
+  // The media is NOT automatically owned by every profile.
+  //
+  // When someone acquires/rips the media, it can be removed from
+  // this shared wishlist and added to the selected profile's
+  // personal library.
+  //
+  final List<String> wishlistMediaIds;
 
   Account({
     required this.id,
@@ -36,7 +59,10 @@ class Account {
     required this.password,
     this.subscription,
     List<Profile>? profiles,
-  }) : profiles = profiles ?? [];
+    List<String>? wishlistMediaIds,
+  })  : profiles = profiles ?? [],
+        wishlistMediaIds =
+            wishlistMediaIds ?? [];
 
   // ------------------------------------------------------------
   // SUBSCRIPTION
@@ -45,24 +71,19 @@ class Account {
   bool get hasActiveSubscription {
     subscription?.expireIfNeeded();
 
-    return subscription?.isCurrentlyActive ?? false;
+    return subscription?.isCurrentlyActive ??
+        false;
   }
 
   // ------------------------------------------------------------
-  // PROFILE LIMIT
+  // PROFILE HELPERS
   // ------------------------------------------------------------
 
   bool get canAddProfile {
     return profiles.length < maxProfiles;
   }
 
-  // ------------------------------------------------------------
-  // PROFILE LOOKUPS
-  // ------------------------------------------------------------
-
-  Profile? getProfileById(
-    String profileId,
-  ) {
+  Profile? getProfileById(String profileId) {
     final id = profileId.trim();
 
     if (id.isEmpty) {
@@ -78,9 +99,7 @@ class Account {
     return null;
   }
 
-  Profile? getProfileByName(
-    String name,
-  ) {
+  Profile? getProfileByName(String name) {
     final normalizedName =
         name.trim().toLowerCase();
 
@@ -102,13 +121,7 @@ class Account {
     return getProfileById(profileId) != null;
   }
 
-  // ------------------------------------------------------------
-  // PROFILE MANAGEMENT
-  // ------------------------------------------------------------
-
-  bool addExistingProfile(
-    Profile profile,
-  ) {
+  bool addExistingProfile(Profile profile) {
     if (!canAddProfile) {
       return false;
     }
@@ -122,12 +135,11 @@ class Account {
     }
 
     profiles.add(profile);
+
     return true;
   }
 
-  bool removeProfile(
-    String profileId,
-  ) {
+  bool removeProfile(String profileId) {
     final id = profileId.trim();
 
     if (id.isEmpty) {
@@ -141,17 +153,13 @@ class Account {
       (profile) => profile.id == id,
     );
 
-    return profiles.length != originalLength;
+    return profiles.length !=
+        originalLength;
   }
 
   // ------------------------------------------------------------
-  // PROFILE STATE
+  // PROFILE MEDIA HELPERS
   // ------------------------------------------------------------
-
-  //
-  // These helpers make it clear that media state belongs to
-  // the selected profile, not to the account as a whole.
-  //
 
   bool profileOwnsMedia(
     String profileId,
@@ -210,6 +218,83 @@ class Account {
   }
 
   // ------------------------------------------------------------
+  // GROUP WISHLIST
+  // ------------------------------------------------------------
+
+  bool isInWishlist(String mediaId) {
+    final id = mediaId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    return wishlistMediaIds.contains(id);
+  }
+
+  bool addToWishlist(String mediaId) {
+    final id = mediaId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    if (isInWishlist(id)) {
+      return false;
+    }
+
+    wishlistMediaIds.add(id);
+
+    return true;
+  }
+
+  bool removeFromWishlist(String mediaId) {
+    final id = mediaId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    final originalLength =
+        wishlistMediaIds.length;
+
+    wishlistMediaIds.remove(id);
+
+    return wishlistMediaIds.length !=
+        originalLength;
+  }
+
+  // ------------------------------------------------------------
+  // ACQUIRE GROUP WISHLIST ITEM
+  // ------------------------------------------------------------
+  //
+  // Removes the media from the shared account wishlist and,
+  // optionally, adds it to a specific profile's library.
+  //
+  bool markWishlistItemAcquired(
+    String mediaId, {
+    String? profileId,
+  }) {
+    final id = mediaId.trim();
+
+    if (id.isEmpty) {
+      return false;
+    }
+
+    final removed =
+        removeFromWishlist(id);
+
+    if (profileId != null &&
+        profileId.trim().isNotEmpty) {
+      final profile =
+          getProfileById(profileId);
+
+      profile?.addOwnedMedia(id);
+    }
+
+    return removed;
+  }
+
+  // ------------------------------------------------------------
   // JSON
   // ------------------------------------------------------------
 
@@ -222,17 +307,22 @@ class Account {
       'username': username,
       'email': email,
 
-      'profiles': profiles.map(
-        (profile) {
-          return profile.toJson();
-        },
-      ).toList(),
+      'profiles': profiles
+          .map(
+            (profile) =>
+                profile.toJson(),
+          )
+          .toList(),
 
       'profileCount':
           profiles.length,
 
       'maxProfiles':
           maxProfiles,
+
+      // Shared account-level group wishlist.
+      'wishlistMediaIds':
+          wishlistMediaIds,
 
       'subscription':
           subscription?.toJson(),
@@ -241,13 +331,9 @@ class Account {
           hasActiveSubscription,
     };
 
-    // Never expose the password during normal API responses.
-    //
-    // This parameter exists only for controlled internal/prototype
-    // use and will eventually become unnecessary once passwords
-    // are stored as secure hashes.
     if (includeSensitiveData) {
-      data['password'] = password;
+      data['password'] =
+          password;
     }
 
     return data;

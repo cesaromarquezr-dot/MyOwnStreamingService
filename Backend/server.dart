@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'config.dart';
@@ -10,12 +11,14 @@ import 'routes/recommendations_routes.dart';
 import 'routes/search_routes.dart';
 import 'routes/payment_routes.dart';
 import 'routes/arm_routes.dart';
+import 'routes/group_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
 import 'services/search_service.dart';
 import 'services/subscription_service.dart';
 import 'services/payment_service.dart';
+import 'services/group_recommendation_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -51,6 +54,15 @@ Future<void> main() async {
   );
 
   // ------------------------------------------------------------
+  // GROUP RECOMMENDATION SERVICE
+  // ------------------------------------------------------------
+
+  final groupRecommendationService =
+      GroupRecommendationService(
+    database,
+  );
+
+  // ------------------------------------------------------------
   // AUTHENTICATION
   // ------------------------------------------------------------
 
@@ -64,10 +76,10 @@ Future<void> main() async {
   // ------------------------------------------------------------
 
   final authRoutes = AuthRoutes(
-  authService: authService,
-  authentication: authentication,
-  paymentService: paymentService,
-);
+    authService: authService,
+    authentication: authentication,
+    paymentService: paymentService,
+  );
 
   // ------------------------------------------------------------
   // RECOMMENDATION ROUTES
@@ -101,6 +113,17 @@ Future<void> main() async {
   );
 
   // ------------------------------------------------------------
+  // GROUP ROUTES
+  // ------------------------------------------------------------
+
+  final groupRoutes = GroupRoutes(
+    database: database,
+    authenticationMiddleware: authentication,
+    recommendationService:
+        groupRecommendationService,
+  );
+
+  // ------------------------------------------------------------
   // ARM CONNECTION
   // ------------------------------------------------------------
 
@@ -130,36 +153,71 @@ Future<void> main() async {
     AppConfig.port,
   );
 
-  print('');
-  print('==========================================');
-  print(' Personal Streaming Service Backend');
-  print('==========================================');
-  print('');
-  print('Backend started successfully.');
-  print('Address: ${AppConfig.baseUrl}');
-  print('API:     ${AppConfig.apiBaseUrl}');
-  print('');
-  print(
+  developer.log('');
+
+  developer.log(
+    '==========================================',
+  );
+
+  developer.log(
+    ' Personal Streaming Service Backend',
+  );
+
+  developer.log(
+    '==========================================',
+  );
+
+  developer.log('');
+
+  developer.log(
+    'Backend started successfully.',
+  );
+
+  developer.log(
+    'Address: ${AppConfig.baseUrl}',
+  );
+
+  developer.log(
+    'API:     ${AppConfig.apiBaseUrl}',
+  );
+
+  developer.log('');
+
+  developer.log(
     'Health:  ${AppConfig.baseUrl}/api/v1/health',
   );
-  print(
+
+  developer.log(
     'ARM:     ${AppConfig.apiBaseUrl}/arm/',
   );
-  print(
+
+  developer.log(
     'Recommendations: '
     '${AppConfig.apiBaseUrl}/recommendations',
   );
-  print(
+
+  developer.log(
     'Search: '
     '${AppConfig.apiBaseUrl}/search',
   );
-  print(
+
+  developer.log(
     'Payments: '
     '${AppConfig.apiBaseUrl}/payment/',
   );
-  print('');
-  print('Waiting for requests...');
-  print('');
+
+  developer.log(
+    'Group: '
+    '${AppConfig.apiBaseUrl}/group/',
+  );
+
+  developer.log('');
+
+  developer.log(
+    'Waiting for requests...',
+  );
+
+  developer.log('');
 
   await for (final request in server) {
     await _handleRequest(
@@ -168,6 +226,7 @@ Future<void> main() async {
       recommendationsRoutes,
       searchRoutes,
       paymentRoutes,
+      groupRoutes,
       armRoutes,
     );
   }
@@ -183,6 +242,7 @@ Future<void> _handleRequest(
   RecommendationsRoutes recommendationsRoutes,
   SearchRoutes searchRoutes,
   PaymentRoutes paymentRoutes,
+  GroupRoutes groupRoutes,
   ArmRoutes armRoutes,
 ) async {
   try {
@@ -257,6 +317,15 @@ Future<void> _handleRequest(
     }
 
     // ----------------------------------------------------------
+    // GROUP ROUTES
+    // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/group/')) {
+      await groupRoutes.handle(request);
+      return;
+    }
+
+    // ----------------------------------------------------------
     // ARM ROUTES
     // ----------------------------------------------------------
 
@@ -279,7 +348,10 @@ Future<void> _handleRequest(
       },
     );
   } catch (error) {
-    print('Request error: $error');
+    developer.log(
+      'Request error: $error',
+      name: 'Server',
+    );
 
     if (!request.response.headers.contentType
         .toString()
