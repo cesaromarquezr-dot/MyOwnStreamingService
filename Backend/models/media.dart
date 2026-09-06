@@ -12,6 +12,13 @@ class Media {
   final String? posterUrl;
   final String? description;
 
+  // Trailer / preview video.
+  //
+  // This can contain a YouTube trailer URL or another supported
+  // trailer source. It is optional because not every media item
+  // will have a trailer.
+  final String? trailerUrl;
+
   // Discovery / recommendation metadata.
   final List<String> genres;
   final List<String> tags;
@@ -54,6 +61,7 @@ class Media {
     this.year,
     this.posterUrl,
     this.description,
+    this.trailerUrl,
     this.genres = const [],
     this.tags = const [],
     this.themes = const [],
@@ -89,6 +97,7 @@ class Media {
       'year': year,
       'posterUrl': posterUrl,
       'description': description,
+      'trailerUrl': trailerUrl,
 
       'genres': List<String>.from(genres),
       'tags': List<String>.from(tags),
@@ -130,6 +139,7 @@ class Media {
       year: _parseInt(json['year']),
       posterUrl: json['posterUrl']?.toString(),
       description: json['description']?.toString(),
+      trailerUrl: _nullableString(json['trailerUrl']),
 
       genres: _stringList(json['genres']),
       tags: _stringList(json['tags']),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
 
@@ -36,6 +37,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool groupWatchActionInProgress = false;
   bool groupWatchSyncing = false;
 
+  YoutubePlayerController? youtubeController;
+  bool youtubePlayerReady = false;
+  bool youtubeUrlInvalid = false;
+
+  StreamSubscription<YoutubeVideoState>?
+      youtubeVideoStateSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -47,26 +55,313 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     videoFinished = position >= 1.0;
 
+    _initializeYoutubePlayer();
     _initializeGroupWatch();
+  }
+  void _initializeYoutubePlayer() {
+  final trailerUrl =
+      widget.media.trailerUrl?.trim();
+
+  if (trailerUrl == null ||
+      trailerUrl.isEmpty) {
+    return;
+  }
+
+  final videoId =
+      _extractYoutubeVideoId(trailerUrl);
+
+  if (videoId == null ||
+      videoId.isEmpty) {
+    youtubeUrlInvalid = true;
+    return;
+  }
+
+  youtubeController =
+      YoutubePlayerController.fromVideoId(
+    videoId: videoId,
+    autoPlay: false,
+    params: const YoutubePlayerParams(
+      showControls: true,
+      showFullscreenButton: true,
+      enableCaption: true,
+      captionLanguage: 'en',
+      color: 'red',
+      playsInline: true,
+    ),
+  );
+
+  youtubeController!.listen(
+    _onYoutubePlayerChanged,
+  );
+
+  youtubeVideoStateSubscription =
+      youtubeController!
+          .videoStateStream
+          .listen(
+    _onYoutubeVideoStateChanged,
+  );
+}
+
+String? _extractYoutubeVideoId(
+  String url,
+) {
+  final uri = Uri.tryParse(url);
+
+  if (uri == null) {
+    return null;
+  }
+
+  if (uri.host == 'youtu.be' ||
+      uri.host == 'www.youtu.be') {
+    final id =
+        uri.pathSegments.isNotEmpty
+            ? uri.pathSegments.first
+            : null;
+
+    return _cleanYoutubeVideoId(id);
+  }
+
+  if (uri.host == 'youtube.com' ||
+      uri.host == 'www.youtube.com' ||
+      uri.host == 'm.youtube.com') {
+    if (uri.path == '/watch') {
+      return _cleanYoutubeVideoId(
+        uri.queryParameters['v'],
+      );
+    }
+
+    if (uri.pathSegments.length >= 2 &&
+        uri.pathSegments.first == 'shorts') {
+      return _cleanYoutubeVideoId(
+        uri.pathSegments[1],
+      );
+    }
+
+    if (uri.pathSegments.length >= 2 &&
+        uri.pathSegments.first == 'embed') {
+      return _cleanYoutubeVideoId(
+        uri.pathSegments[1],
+      );
+    }
+  }
+
+  return null;
+}
+
+String? _cleanYoutubeVideoId(
+  String? value,
+) {
+  if (value == null) {
+    return null;
+  }
+
+  final id = value.trim();
+
+  if (id.isEmpty) {
+    return null;
+  }
+
+  if (id.length != 11) {
+    return null;
+  }
+
+  final valid =
+      RegExp(r'^[A-Za-z0-9_-]{11}$');
+
+  if (!valid.hasMatch(id)) {
+    return null;
+  }
+
+  return id;
+}
+
+  void _onYoutubePlayerChanged(
+    YoutubePlayerValue value,
+  ) {
+    if (!mounted) {
+      return;
+    }
+
+    final ready =
+        value.playerState !=
+            PlayerState.unknown;
+
+    if (ready &&
+        !youtubePlayerReady) {
+      setState(() {
+        youtubePlayerReady = true;
+      });
+
+      if (position > 0.0 &&
+          position < 1.0) {
+        _seekYoutubeByNormalizedPosition(
+          position,
+        );
+      }
+    }
+
+    if (value.playerState ==
+            PlayerState.ended &&
+        !videoFinished) {
+      finishVideo();
+    }
+  }
+
+  Future<void> _onYoutubeVideoStateChanged(
+    YoutubeVideoState state,
+  ) async {
+    if (!mounted ||
+        youtubeController == null) {
+      return;
+    }
+
+    final duration =
+        await youtubeController!.duration;
+
+    if (duration <= 0) {
+      return;
+    }
+
+    final normalizedPosition =
+        (state.position.inMilliseconds /
+                (duration * 1000))
+            .clamp(0.0, 1.0)
+            .toDouble();
+
+    if ((position - normalizedPosition).abs() >
+        0.005) {
+      position = normalizedPosition;
+
+      AppController.instance
+          .updatePlaybackProgress(
+        widget.media.id,
+        normalizedPosition,
+      );
+
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 
   @override
   void dispose() {
     autoplayTimer?.cancel();
     groupWatchTimer?.cancel();
+
+    youtubeVideoStateSubscription
+        ?.cancel();
+
+    youtubeController?.close();
+
     super.dispose();
   }
 
-  void _initializeGroupWatch() {
-    final controller = AppController.instance;
-    final activeSession = controller.activeGroupWatchSession;
+  void _playYoutubeVideo() {
+    final controller = youtubeController;
 
-    if (activeSession == null ||
-        activeSession.mediaId != widget.media.id) {
+    if (controller == null) {
+      finishVideo();
       return;
     }
 
-    groupWatchSessionId = activeSession.id;
+    controller.playVideo();
+  }
+
+  void _pauseYoutubeVideo() {
+    youtubeController?.pauseVideo();
+  }
+
+  Future<void> _seekYoutubeByNormalizedPosition(
+    double normalizedPosition,
+  ) async {
+    final controller = youtubeController;
+
+    if (controller == null) {
+      return;
+    }
+
+    final duration =
+        await controller.duration;
+
+    if (duration <= 0) {
+      return;
+    }
+
+    final seconds =
+        (duration *
+                normalizedPosition)
+            .clamp(0.0, duration);
+
+    await controller.seekTo(
+      seconds: seconds,
+    );
+  }
+
+  Future<void> _seekYoutubeBySeconds(
+    int seconds,
+  ) async {
+    final controller = youtubeController;
+
+    if (controller == null) {
+      return;
+    }
+
+    final current =
+        await controller.currentTime;
+
+    final duration =
+        await controller.duration;
+
+    var target =
+        current + seconds;
+
+    if (target < 0) {
+      target = 0;
+    }
+
+    if (target > duration) {
+      target = duration;
+    }
+
+    await controller.seekTo(
+      seconds: target,
+    );
+  }
+
+  void _handleMainPlayPause() {
+    final controller = youtubeController;
+
+    if (controller == null) {
+      finishVideo();
+      return;
+    }
+
+    final state =
+        controller.value.playerState;
+
+    if (state == PlayerState.playing) {
+      _pauseYoutubeVideo();
+    } else {
+      _playYoutubeVideo();
+    }
+  }
+
+  void _initializeGroupWatch() {
+    final controller =
+        AppController.instance;
+
+    final activeSession =
+        controller.activeGroupWatchSession;
+
+    if (activeSession == null ||
+        activeSession.mediaId !=
+            widget.media.id) {
+      return;
+    }
+
+    groupWatchSessionId =
+        activeSession.id;
 
     _startGroupWatchPolling();
   }
@@ -94,48 +389,74 @@ class _PlayerScreenState extends State<PlayerScreen> {
     groupWatchSyncing = true;
 
     try {
-      final controller = AppController.instance;
+      final controller =
+          AppController.instance;
 
       final session =
-          await controller.refreshGroupWatchSession(
+          await controller
+              .refreshGroupWatchSession(
         groupWatchSessionId!,
       );
 
-      if (!mounted || session == null) {
+      if (!mounted ||
+          session == null) {
         return;
       }
 
-      if (session.mediaId != widget.media.id) {
+      if (session.mediaId !=
+          widget.media.id) {
         return;
       }
 
-      /*
-       * The backend stores Group Watch playbackPosition as
-       * Duration. The current demo player represents progress
-       * as a normalized 0.0 - 1.0 value.
-       *
-       * Until MediaItem contains an actual duration, use the
-       * existing normalized representation by mapping the
-       * backend's microseconds back into 0.0 - 1.0.
-       */
       final sharedPosition =
-          session.playbackPosition.inMicroseconds /
+          session.playbackPosition
+                  .inMicroseconds /
               1000000.0;
 
       final normalizedPosition =
-          sharedPosition.clamp(0.0, 1.0).toDouble();
+          sharedPosition
+              .clamp(0.0, 1.0)
+              .toDouble();
 
-      if ((position - normalizedPosition).abs() >
+      if ((position -
+                  normalizedPosition)
+              .abs() >
           0.01) {
         setState(() {
-          position = normalizedPosition;
-          videoFinished = position >= 1.0;
+          position =
+              normalizedPosition;
+
+          videoFinished =
+              position >= 1.0;
         });
 
         controller.updatePlaybackProgress(
           widget.media.id,
           position,
         );
+
+        _seekYoutubeByNormalizedPosition(
+          normalizedPosition,
+        );
+      }
+
+      final youtube =
+          youtubeController;
+
+      if (session.isPlaying) {
+        if (youtube != null &&
+            youtube.value.playerState !=
+                PlayerState.playing) {
+          youtube.playVideo();
+        }
+      }
+
+      if (session.isPaused) {
+        if (youtube != null &&
+            youtube.value.playerState ==
+                PlayerState.playing) {
+          youtube.pauseVideo();
+        }
       }
 
       if (session.isEnded) {
@@ -162,15 +483,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       position = newPosition;
     });
 
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
     controller.updatePlaybackProgress(
       widget.media.id,
       newPosition,
     );
 
+    _seekYoutubeByNormalizedPosition(
+      newPosition,
+    );
+
     if (groupWatchSessionId != null) {
-      _sendGroupWatchPosition(newPosition);
+      _sendGroupWatchPosition(
+        newPosition,
+      );
     }
 
     if (newPosition >= 0.999) {
@@ -181,8 +509,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _sendGroupWatchPosition(
     double newPosition,
   ) async {
-    final controller = AppController.instance;
-    final profile = controller.currentProfile;
+    final controller =
+        AppController.instance;
+
+    final profile =
+        controller.currentProfile;
 
     if (groupWatchSessionId == null ||
         profile == null) {
@@ -190,12 +521,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     try {
-      await controller.updateGroupWatchPosition(
-        sessionId: groupWatchSessionId!,
+      await controller
+          .updateGroupWatchPosition(
+        sessionId:
+            groupWatchSessionId!,
         profileId: profile.id,
         position: Duration(
           microseconds:
-              (newPosition * 1000000).round(),
+              (newPosition * 1000000)
+                  .round(),
         ),
       );
     } catch (_) {
@@ -208,13 +542,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
+    youtubeController?.pauseVideo();
+
     setState(() {
       position = 1.0;
       videoFinished = true;
       creditsStarted = true;
     });
 
-    final controller = AppController.instance;
+    final controller =
+        AppController.instance;
 
     controller.updatePlaybackProgress(
       widget.media.id,
@@ -270,7 +607,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
         if (autoplaySeconds <= 1) {
           timer.cancel();
-          playNextEpisode(nextEpisodeTitle);
+
+          playNextEpisode(
+            nextEpisodeTitle,
+          );
+
           return;
         }
 
@@ -302,16 +643,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Up Next'),
+          title: const Text(
+            'Up Next',
+          ),
           content: Text(
             nextEpisodeTitle,
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(
+                  context,
+                );
               },
-              child: const Text('CLOSE'),
+              child: const Text(
+                'CLOSE',
+              ),
             ),
           ],
         );
@@ -322,13 +669,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void openAudioSubtitleOptions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey.shade900,
+      backgroundColor:
+          Colors.grey.shade900,
       isScrollControlled: true,
       builder: (_) {
         return AudioSubtitleOptions(
-          selectedAudio: selectedAudio,
-          subtitlesEnabled: subtitlesEnabled,
-          selectedSubtitle: selectedSubtitle,
+          selectedAudio:
+              selectedAudio,
+          subtitlesEnabled:
+              subtitlesEnabled,
+          selectedSubtitle:
+              selectedSubtitle,
           onAudioChanged: (value) {
             _changeAudioTrack(value);
           },
@@ -347,11 +698,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
       selectedAudio = value;
     });
 
-    final sessionId = groupWatchSessionId;
-    final profile =
-        AppController.instance.currentProfile;
+    final sessionId =
+        groupWatchSessionId;
 
-    if (sessionId == null || profile == null) {
+    final profile =
+        AppController.instance
+            .currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
       return;
     }
 
@@ -383,14 +738,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ) async {
     setState(() {
       selectedSubtitle = value;
-      subtitlesEnabled = value != null;
+      subtitlesEnabled =
+          value != null;
     });
 
-    final sessionId = groupWatchSessionId;
-    final profile =
-        AppController.instance.currentProfile;
+    final sessionId =
+        groupWatchSessionId;
 
-    if (sessionId == null || profile == null) {
+    final profile =
+        AppController.instance
+            .currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
       return;
     }
 
@@ -437,15 +797,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ),
       );
+
       return;
     }
 
-    final availableProfiles = account.profiles
-        .where(
-          (profile) =>
-              profile.id != currentProfile.id,
-        )
-        .toList();
+    final availableProfiles =
+        account.profiles
+            .where(
+              (profile) =>
+                  profile.id !=
+                  currentProfile.id,
+            )
+            .toList();
 
     if (availableProfiles.isEmpty) {
       ScaffoldMessenger.of(context)
@@ -456,6 +819,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ),
       );
+
       return;
     }
 
@@ -464,27 +828,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
       context: context,
       builder: (_) {
         return GroupWatchInviteDialog(
-          profiles: availableProfiles,
+          profiles:
+              availableProfiles,
         );
       },
     );
 
     if (!mounted ||
-        selectedProfileIds == null ||
+        selectedProfileIds ==
+            null ||
         selectedProfileIds.isEmpty) {
       return;
     }
 
     setState(() {
-      groupWatchActionInProgress = true;
+      groupWatchActionInProgress =
+          true;
     });
 
     try {
       final session =
-          await controller.createBackendGroupWatchSession(
+          await controller
+              .createBackendGroupWatchSession(
         widget.media,
-        profileId: currentProfile.id,
-        invitedProfileIds: selectedProfileIds,
+        profileId:
+            currentProfile.id,
+        invitedProfileIds:
+            selectedProfileIds,
       );
 
       if (!mounted) {
@@ -492,7 +862,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
 
       setState(() {
-        groupWatchSessionId = session.id;
+        groupWatchSessionId =
+            session.id;
       });
 
       _startGroupWatchPolling();
@@ -521,18 +892,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress = false;
+          groupWatchActionInProgress =
+              false;
         });
       }
     }
   }
 
   Future<void> _playGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-    final profile =
-        AppController.instance.currentProfile;
+    final sessionId =
+        groupWatchSessionId;
 
-    if (sessionId == null || profile == null) {
+    final profile =
+        AppController.instance
+            .currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
       return;
     }
 
@@ -541,11 +917,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     setState(() {
-      groupWatchActionInProgress = true;
+      groupWatchActionInProgress =
+          true;
     });
 
     try {
-      final controller = AppController.instance;
+      final controller =
+          AppController.instance;
+
       final session =
           controller.getGroupWatchSession(
         sessionId,
@@ -557,16 +936,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
       if (session.isWaiting ||
           session.isReady) {
-        await controller.startGroupWatchSession(
+        await controller
+            .startGroupWatchSession(
           sessionId: sessionId,
           profileId: profile.id,
         );
       } else {
-        await controller.playGroupWatchSession(
+        await controller
+            .playGroupWatchSession(
           sessionId: sessionId,
           profileId: profile.id,
         );
       }
+
+      _playYoutubeVideo();
 
       await _refreshGroupWatchState();
     } catch (error) {
@@ -585,18 +968,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress = false;
+          groupWatchActionInProgress =
+              false;
         });
       }
     }
   }
 
   Future<void> _pauseGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-    final profile =
-        AppController.instance.currentProfile;
+    final sessionId =
+        groupWatchSessionId;
 
-    if (sessionId == null || profile == null) {
+    final profile =
+        AppController.instance
+            .currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
       return;
     }
 
@@ -619,7 +1007,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     setState(() {
-      groupWatchActionInProgress = true;
+      groupWatchActionInProgress =
+          true;
     });
 
     try {
@@ -630,6 +1019,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         reason: reason,
       );
 
+      _pauseYoutubeVideo();
+
       await _refreshGroupWatchState();
     } catch (error) {
       if (!mounted) {
@@ -647,26 +1038,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress = false;
+          groupWatchActionInProgress =
+              false;
         });
       }
     }
   }
 
   Future<void> _resumeGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-    final profile =
-        AppController.instance.currentProfile;
+    final sessionId =
+        groupWatchSessionId;
 
-    if (sessionId == null || profile == null) {
+    final profile =
+        AppController.instance
+            .currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
       return;
     }
 
     if (!AppController.instance
-    .canResumeGroupWatchSession(
-  sessionId,
-  profileId: profile.id,
-)) {
+        .canResumeGroupWatchSession(
+      sessionId,
+      profileId: profile.id,
+    )) {
       ScaffoldMessenger.of(context)
           .showSnackBar(
         const SnackBar(
@@ -675,6 +1071,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ),
       );
+
       return;
     }
 
@@ -683,7 +1080,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     setState(() {
-      groupWatchActionInProgress = true;
+      groupWatchActionInProgress =
+          true;
     });
 
     try {
@@ -693,6 +1091,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         profileId: profile.id,
       );
 
+      _playYoutubeVideo();
+
       await _refreshGroupWatchState();
     } catch (error) {
       if (!mounted) {
@@ -710,7 +1110,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress = false;
+          groupWatchActionInProgress =
+              false;
         });
       }
     }
@@ -719,7 +1120,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void showExtras() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey.shade900,
+      backgroundColor:
+          Colors.grey.shade900,
       builder: (_) {
         return const SafeArea(
           child: SizedBox(
@@ -738,6 +1140,65 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  Widget _buildVideoArea(
+    GroupWatchSession? groupSession,
+  ) {
+    final controller =
+        youtubeController;
+
+    if (youtubeUrlInvalid) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'The trailer URL is not a valid YouTube URL.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 16,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (controller != null) {
+      return YoutubePlayer(
+        controller: controller,
+        aspectRatio: 16 / 9,
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      color: Colors.black,
+      child: widget.media.imageUrl != null &&
+              widget.media.imageUrl!
+                  .isNotEmpty
+          ? Image.network(
+              widget.media.imageUrl!,
+              fit: BoxFit.contain,
+              errorBuilder:
+                  (_, __, ___) {
+                return const Center(
+                  child: Icon(
+                    Icons.movie,
+                    color: Colors.white,
+                    size: 100,
+                  ),
+                );
+              },
+            )
+          : const Center(
+              child: Icon(
+                Icons.movie,
+                color: Colors.white,
+                size: 100,
+              ),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller =
@@ -746,7 +1207,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final groupSession =
         groupWatchSessionId == null
             ? null
-            : controller.getGroupWatchSession(
+            : controller
+                .getGroupWatchSession(
                 groupWatchSessionId!,
               );
 
@@ -754,6 +1216,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
         title: Text(
           widget.media.title,
           style: const TextStyle(
@@ -783,50 +1246,58 @@ class _PlayerScreenState extends State<PlayerScreen> {
               child: Stack(
                 children: [
                   Container(
-                    width: double.infinity,
+                    width:
+                        double.infinity,
                     color: Colors.black,
-                    child: widget.media.imageUrl != null &&
-                            widget.media.imageUrl!
-                                .isNotEmpty
-                        ? Image.network(
-                            widget.media.imageUrl!,
-                            fit: BoxFit.contain,
-                            errorBuilder:
-                                (_, __, ___) {
-                              return const Center(
-                                child: Icon(
-                                  Icons.movie,
-                                  color:
-                                      Colors.white,
-                                  size: 100,
-                                ),
-                              );
-                            },
-                          )
-                        : const Center(
-                            child: Icon(
-                              Icons.movie,
-                              color: Colors.white,
-                              size: 100,
+                    child: _buildVideoArea(
+                      groupSession,
+                    ),
+                  ),
+                  if (controller
+                          .activeGroupWatchSession ==
+                      null &&
+                      youtubeController !=
+                          null &&
+                      !videoFinished)
+                    Positioned(
+                      left: 20,
+                      right: 20,
+                      bottom: 20,
+                      child: Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          Material(
+                            color: Colors.black
+                                .withValues(
+                              alpha: 0.65,
+                            ),
+                            borderRadius:
+                                BorderRadius.circular(
+                              30,
+                            ),
+                            child: IconButton(
+                              onPressed:
+                                  youtubePlayerReady
+                                      ? _handleMainPlayPause
+                                      : null,
+                              iconSize: 38,
+                              icon: Icon(
+                                youtubeController!
+                                        .value
+                                        .playerState ==
+                                    PlayerState.playing
+                                    ? Icons.pause_circle
+                                    : Icons.play_circle,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                  ),
-                  if (!videoFinished &&
-                      groupSession?.isPaused != true)
-                    Center(
-                      child: IconButton(
-                        onPressed:
-                            groupSession != null
-                                ? _playGroupWatch
-                                : finishVideo,
-                        iconSize: 80,
-                        icon: const Icon(
-                          Icons.play_circle_fill,
-                          color: Colors.white,
-                        ),
+                        ],
                       ),
                     ),
-                  if (groupSession?.isPaused == true)
+                  if (groupSession?.isPaused ==
+                      true)
                     _buildGroupWatchPausedOverlay(
                       groupSession!,
                     ),
@@ -892,38 +1363,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
     GroupWatchSession session,
   ) {
     final profile =
-        AppController.instance.currentProfile;
+        AppController.instance
+            .currentProfile;
 
     final isPaused =
         session.isPaused;
 
     final canResume =
         profile != null &&
-        session.canResume(profile.id);
+        session.canResume(
+          profile.id,
+        );
 
     String text;
 
     if (session.invitationsExpired &&
         session.isWaiting) {
-      text = 'This invite has expired';
+      text =
+          'This invite has expired';
     } else if (isPaused) {
       if (session.pauseReason != null &&
-          session.pauseReason!.trim().isNotEmpty) {
+          session.pauseReason!
+              .trim()
+              .isNotEmpty) {
         text =
             'Paused — ${session.pauseReason}';
       } else {
-        text = 'Group Watch paused';
+        text =
+            'Group Watch paused';
       }
     } else if (session.isPlaying) {
-      text = 'Group Watch is playing';
+      text =
+          'Group Watch is playing';
     } else {
-      text = 'Group Watch ready';
+      text =
+          'Group Watch ready';
     }
 
     return Container(
       width: double.infinity,
       color: const Color(0xFF202020),
-      padding: const EdgeInsets.symmetric(
+      padding:
+          const EdgeInsets.symmetric(
         horizontal: 14,
         vertical: 8,
       ),
@@ -968,16 +1449,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
     GroupWatchSession session,
   ) {
     final profile =
-        AppController.instance.currentProfile;
+        AppController.instance
+            .currentProfile;
 
     final canResume =
         profile != null &&
-        session.canResume(profile.id);
+        session.canResume(
+          profile.id,
+        );
 
     return Center(
       child: Container(
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(20),
+        margin:
+            const EdgeInsets.all(24),
+        padding:
+            const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.black.withValues(
             alpha: 0.82,
@@ -986,7 +1472,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
               BorderRadius.circular(12),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             const Icon(
               Icons.pause_circle_filled,
@@ -999,11 +1486,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 22,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
-            if (session.pauseReason != null &&
-                session.pauseReason!.trim().isNotEmpty) ...[
+            if (session.pauseReason !=
+                    null &&
+                session.pauseReason!
+                    .trim()
+                    .isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
                 session.pauseReason!,
@@ -1011,7 +1502,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white70,
                   fontSize: 16,
                 ),
-                textAlign: TextAlign.center,
+                textAlign:
+                    TextAlign.center,
               ),
             ],
             const SizedBox(height: 16),
@@ -1031,7 +1523,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 style: TextStyle(
                   color: Colors.white70,
                 ),
-                textAlign: TextAlign.center,
+                textAlign:
+                    TextAlign.center,
               ),
           ],
         ),
@@ -1045,9 +1538,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final isGroupPaused =
         groupSession?.isPaused == true;
 
+    final hasYoutube =
+        youtubeController != null;
+
     return Container(
       color: const Color(0xFF111111),
-      padding: const EdgeInsets.fromLTRB(
+      padding:
+          const EdgeInsets.fromLTRB(
         12,
         8,
         12,
@@ -1060,7 +1557,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             min: 0,
             max: 1,
             onChanged:
-                videoFinished || isGroupPaused
+                videoFinished ||
+                        isGroupPaused ||
+                        !hasYoutube
                     ? null
                     : updatePosition,
           ),
@@ -1068,16 +1567,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               IconButton(
                 onPressed:
-                    videoFinished || isGroupPaused
+                    videoFinished ||
+                            isGroupPaused ||
+                            !hasYoutube
                         ? null
                         : () {
-                            final newPosition =
-                                (position - 0.05)
-                                    .clamp(0.0, 1.0)
-                                    .toDouble();
-
-                            updatePosition(
-                              newPosition,
+                            _seekYoutubeBySeconds(
+                              -10,
                             );
                           },
                 icon: const Icon(
@@ -1090,13 +1586,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onPressed:
                       groupWatchActionInProgress
                           ? null
-                          : groupSession.isPaused
+                          : groupSession
+                                  .isPaused
                               ? null
-                              : groupSession.isPlaying
+                              : groupSession
+                                      .isPlaying
                                   ? _pauseGroupWatch
                                   : _playGroupWatch,
                   icon: Icon(
-                    groupSession.isPlaying
+                    groupSession
+                            .isPlaying
                         ? Icons.pause
                         : Icons.play_arrow,
                     color: Colors.white,
@@ -1104,26 +1603,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 )
               else
                 IconButton(
-                  onPressed: videoFinished
-                      ? null
-                      : finishVideo,
-                  icon: const Icon(
-                    Icons.play_arrow,
+                  onPressed:
+                      videoFinished
+                          ? null
+                          : hasYoutube
+                              ? _handleMainPlayPause
+                              : finishVideo,
+                  icon: Icon(
+                    hasYoutube &&
+                            youtubeController!
+                                .value
+                                .playerState ==
+                        PlayerState.playing
+                        ? Icons.pause
+                        : Icons.play_arrow,
                     color: Colors.white,
                   ),
                 ),
               IconButton(
                 onPressed:
-                    videoFinished || isGroupPaused
+                    videoFinished ||
+                            isGroupPaused ||
+                            !hasYoutube
                         ? null
                         : () {
-                            final newPosition =
-                                (position + 0.05)
-                                    .clamp(0.0, 1.0)
-                                    .toDouble();
-
-                            updatePosition(
-                              newPosition,
+                            _seekYoutubeBySeconds(
+                              10,
                             );
                           },
                 icon: const Icon(
@@ -1161,7 +1666,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
               IconButton(
-                onPressed: showExtras,
+                onPressed:
+                    showExtras,
                 icon: const Icon(
                   Icons.movie_filter,
                   color: Colors.white,
@@ -1175,14 +1681,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showGroupWatchSessionInfo() {
-    final sessionId = groupWatchSessionId;
+    final sessionId =
+        groupWatchSessionId;
 
     if (sessionId == null) {
       return;
     }
 
     final session =
-        AppController.instance.getGroupWatchSession(
+        AppController.instance
+            .getGroupWatchSession(
       sessionId,
     );
 
@@ -1192,13 +1700,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey.shade900,
+      backgroundColor:
+          Colors.grey.shade900,
       builder: (_) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding:
+                const EdgeInsets.all(20),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
@@ -1207,7 +1718,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1232,7 +1744,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     color: Colors.white70,
                   ),
                 ),
-                if (session.pauseReason != null &&
+                if (session.pauseReason !=
+                        null &&
                     session.pauseReason!
                         .trim()
                         .isNotEmpty) ...[
@@ -1247,7 +1760,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
                   },
                   child: const Text(
                     'CLOSE',
@@ -1308,7 +1823,8 @@ class GroupWatchInviteDialog
 
 class _GroupWatchInviteDialogState
     extends State<GroupWatchInviteDialog> {
-  final Set<String> selectedProfileIds =
+  final Set<String>
+      selectedProfileIds =
       <String>{};
 
   @override
@@ -1320,10 +1836,12 @@ class _GroupWatchInviteDialogState
       content: SizedBox(
         width: 420,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             const Align(
-              alignment: Alignment.centerLeft,
+              alignment:
+                  Alignment.centerLeft,
               child: Text(
                 'Choose who you want to invite.',
               ),
@@ -1332,7 +1850,8 @@ class _GroupWatchInviteDialogState
             ...widget.profiles.map(
               (profile) {
                 final selected =
-                    selectedProfileIds.contains(
+                    selectedProfileIds
+                        .contains(
                   profile.id,
                 );
 
@@ -1341,11 +1860,13 @@ class _GroupWatchInviteDialogState
                   onChanged: (value) {
                     setState(() {
                       if (value == true) {
-                        selectedProfileIds.add(
+                        selectedProfileIds
+                            .add(
                           profile.id,
                         );
                       } else {
-                        selectedProfileIds.remove(
+                        selectedProfileIds
+                            .remove(
                           profile.id,
                         );
                       }
@@ -1363,7 +1884,9 @@ class _GroupWatchInviteDialogState
       actions: [
         TextButton(
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.pop(
+              context,
+            );
           },
           child: const Text(
             'CANCEL',
@@ -1371,7 +1894,8 @@ class _GroupWatchInviteDialogState
         ),
         ElevatedButton(
           onPressed:
-              selectedProfileIds.isEmpty
+              selectedProfileIds
+                      .isEmpty
                   ? null
                   : () {
                       Navigator.pop(
@@ -1407,12 +1931,15 @@ class GroupWatchPauseReasonDialog
         'Why did you pause?',
       ),
       content: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize:
+            MainAxisSize.min,
         children: [
           ListTile(
             leading: const Text(
               '🔋',
-              style: TextStyle(fontSize: 24),
+              style: TextStyle(
+                fontSize: 24,
+              ),
             ),
             title: const Text(
               'Voy a cargar',
@@ -1427,7 +1954,9 @@ class GroupWatchPauseReasonDialog
           ListTile(
             leading: const Text(
               '🍿',
-              style: TextStyle(fontSize: 24),
+              style: TextStyle(
+                fontSize: 24,
+              ),
             ),
             title: const Text(
               'Voy por un snack',
@@ -1442,7 +1971,9 @@ class GroupWatchPauseReasonDialog
           ListTile(
             leading: const Text(
               '💬',
-              style: TextStyle(fontSize: 24),
+              style: TextStyle(
+                fontSize: 24,
+              ),
             ),
             title: const Text(
               'Otro',
@@ -1458,11 +1989,16 @@ class GroupWatchPauseReasonDialog
 
               if (!context.mounted ||
                   reason == null ||
-                  reason.trim().isEmpty) {
+                  reason
+                      .trim()
+                      .isEmpty) {
                 return;
               }
 
-              Navigator.of(context).pop(reason.trim());
+              Navigator.of(context)
+                  .pop(
+                reason.trim(),
+              );
             },
           ),
         ],
@@ -1484,8 +2020,10 @@ class GroupWatchCustomPauseReasonDialog
 }
 
 class _GroupWatchCustomPauseReasonDialogState
-    extends State<GroupWatchCustomPauseReasonDialog> {
-  final TextEditingController controller =
+    extends State<
+        GroupWatchCustomPauseReasonDialog> {
+  final TextEditingController
+      controller =
       TextEditingController();
 
   @override
@@ -1504,14 +2042,17 @@ class _GroupWatchCustomPauseReasonDialogState
         controller: controller,
         autofocus: true,
         maxLines: 3,
-        decoration: const InputDecoration(
+        decoration:
+            const InputDecoration(
           hintText: 'Enter a reason',
         ),
       ),
       actions: [
         TextButton(
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.pop(
+              context,
+            );
           },
           child: const Text(
             'CANCEL',
@@ -1562,23 +2103,28 @@ class NextEpisodeCountdown
   @override
   Widget build(BuildContext context) {
     if (nextEpisodeTitle == null ||
-        nextEpisodeTitle!.trim().isEmpty) {
+        nextEpisodeTitle!
+            .trim()
+            .isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Card(
       color: Colors.grey.shade900,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding:
+            const EdgeInsets.all(14),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             const Text(
               'Up Next',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
             const SizedBox(height: 5),
@@ -1588,7 +2134,8 @@ class NextEpisodeCountdown
                 color: Colors.white,
                 fontSize: 16,
               ),
-              textAlign: TextAlign.center,
+              textAlign:
+                  TextAlign.center,
             ),
             const SizedBox(height: 5),
             Text(
@@ -1599,7 +2146,8 @@ class NextEpisodeCountdown
             ),
             const SizedBox(height: 10),
             Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 TextButton(
                   onPressed: onCancel,
@@ -1654,7 +2202,8 @@ class AudioSubtitleOptions
 }
 
 class _AudioSubtitleOptionsState
-    extends State<AudioSubtitleOptions> {
+    extends State<
+        AudioSubtitleOptions> {
   late String selectedAudio;
   late bool subtitlesEnabled;
   late String? selectedSubtitle;
@@ -1677,9 +2226,11 @@ class _AudioSubtitleOptionsState
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding:
+            const EdgeInsets.all(20),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           crossAxisAlignment:
               CrossAxisAlignment.start,
           children: [
@@ -1688,7 +2239,8 @@ class _AudioSubtitleOptionsState
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
             const SizedBox(height: 20),
@@ -1696,12 +2248,14 @@ class _AudioSubtitleOptionsState
               'AUDIO',
               style: TextStyle(
                 color: Colors.white70,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
             const SizedBox(height: 10),
             const ListTile(
-              contentPadding: EdgeInsets.zero,
+              contentPadding:
+                  EdgeInsets.zero,
               leading: Icon(
                 Icons.info_outline,
                 color: Colors.white70,
@@ -1724,12 +2278,14 @@ class _AudioSubtitleOptionsState
               'SUBTITLES',
               style: TextStyle(
                 color: Colors.white70,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
             const SizedBox(height: 10),
             const ListTile(
-              contentPadding: EdgeInsets.zero,
+              contentPadding:
+                  EdgeInsets.zero,
               leading: Icon(
                 Icons.info_outline,
                 color: Colors.white70,
@@ -1749,7 +2305,8 @@ class _AudioSubtitleOptionsState
             ),
             const SizedBox(height: 10),
             SwitchListTile(
-              value: subtitlesEnabled,
+              value:
+                  subtitlesEnabled,
               onChanged: null,
               title: const Text(
                 'Subtitles',

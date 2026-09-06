@@ -48,8 +48,10 @@ class MediaItem {
   final String? description;
   final int? releaseYear;
   final double? rating;
+  final String? trailerUrl;
 
   MediaItem({
+    this.trailerUrl,
     required this.id,
     required this.title,
     required this.type,
@@ -76,6 +78,7 @@ class MediaItem {
           : double.tryParse(
               json['rating']?.toString() ?? '',
             ),
+      trailerUrl: json['trailerUrl']?.toString(),
     );
   }
 
@@ -88,6 +91,7 @@ class MediaItem {
       'description': description,
       'releaseYear': releaseYear,
       'rating': rating,
+      'trailerUrl': trailerUrl,
     };
   }
 }

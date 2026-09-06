@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-
 import 'app_core.dart';
 import 'signup.dart';
 import 'movies.dart';
@@ -966,8 +965,10 @@ class _ImportMediaScreenState
   final yearController = TextEditingController();
   final posterController = TextEditingController();
 
-  String selectedType = 'movie';
+  // Trailer URL entered during manual import.
+  final trailerController = TextEditingController();
 
+  String selectedType = 'movie';
   bool connectArm = false;
   bool importing = false;
   double progress = 0;
@@ -977,6 +978,7 @@ class _ImportMediaScreenState
     titleController.dispose();
     yearController.dispose();
     posterController.dispose();
+    trailerController.dispose();
     super.dispose();
   }
 
@@ -1033,6 +1035,9 @@ class _ImportMediaScreenState
     final posterText =
         posterController.text.trim();
 
+    final trailerText =
+        trailerController.text.trim();
+
     final media = MediaItem(
       id: DateTime.now()
           .microsecondsSinceEpoch
@@ -1046,6 +1051,10 @@ class _ImportMediaScreenState
       description:
           'Imported into your personal library.',
       releaseYear: year,
+      trailerUrl:
+          trailerText.isEmpty
+              ? null
+              : trailerText,
     );
 
     AppController.instance.addToLibrary(
@@ -1063,6 +1072,7 @@ class _ImportMediaScreenState
     titleController.clear();
     yearController.clear();
     posterController.clear();
+    trailerController.clear();
 
     setState(() {});
   }
@@ -1220,6 +1230,19 @@ class _ImportMediaScreenState
               border: OutlineInputBorder(),
             ),
           ),
+
+          // Trailer URL.
+          const SizedBox(height: 15),
+          TextField(
+            controller: trailerController,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'Trailer URL (optional)',
+              hintText: 'Paste YouTube trailer URL...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+
           const SizedBox(height: 20),
           SizedBox(
             height: 50,
@@ -1283,7 +1306,6 @@ class MusicScreen extends StatelessWidget {
       body: const Center(
         child: Text(
           'Music will appear here when music metadata is added to MediaItem.',
-          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -1569,7 +1591,6 @@ class SubscribeDialog extends StatelessWidget {
               controller.subscribe(
                 SubscriptionPlan.monthly,
               );
-
               Navigator.pop(context);
             },
           ),
@@ -1584,7 +1605,6 @@ class SubscribeDialog extends StatelessWidget {
               controller.subscribe(
                 SubscriptionPlan.yearly,
               );
-
               Navigator.pop(context);
             },
           ),
@@ -1767,9 +1787,7 @@ class _GroupHubScreenState
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 15),
-
                   if (controller
                       .groupRecommendations
                       .isNotEmpty) ...[
@@ -1813,7 +1831,6 @@ class _GroupHubScreenState
                         ),
                     const SizedBox(height: 20),
                   ],
-
                   if (controller
                       .groupMessages
                       .isEmpty)
@@ -1863,9 +1880,7 @@ class _GroupHubScreenState
                             ),
                           ),
                         ),
-
                   const SizedBox(height: 25),
-
                   Row(
                     children: [
                       const Expanded(
@@ -1911,9 +1926,7 @@ class _GroupHubScreenState
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 10),
-
                   if (controller
                       .wishlist
                       .isEmpty)
@@ -1966,13 +1979,11 @@ class _GroupHubScreenState
                             },
                           ),
                         ),
-
                   const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
-
           SafeArea(
             child: Padding(
               padding:
@@ -2056,11 +2067,8 @@ class _AddGroupRecommendationDialogState
       TextEditingController();
 
   String selectedType = 'movie';
-
   String selectedDuration = '24h';
-
   String customDurationUnit = 'hours';
-
   bool submitting = false;
 
   @override
@@ -2074,10 +2082,13 @@ class _AddGroupRecommendationDialogState
     switch (selectedDuration) {
       case '24h':
         return 24;
+
       case '3d':
         return 72;
+
       case '1w':
         return 168;
+
       case 'custom':
         final amount = int.tryParse(
           customDurationController.text.trim(),
@@ -2113,7 +2124,6 @@ class _AddGroupRecommendationDialogState
           ),
         ),
       );
-
       return;
     }
 
@@ -2131,7 +2141,6 @@ class _AddGroupRecommendationDialogState
           ),
         ),
       );
-
       return;
     }
 
@@ -2147,7 +2156,6 @@ class _AddGroupRecommendationDialogState
           ),
         ),
       );
-
       return;
     }
 
@@ -2212,6 +2220,7 @@ class _AddGroupRecommendationDialogState
   String _formatDuration(int hours) {
     if (hours % 168 == 0) {
       final weeks = hours ~/ 168;
+
       return weeks == 1
           ? '1 week'
           : '$weeks weeks';
@@ -2219,6 +2228,7 @@ class _AddGroupRecommendationDialogState
 
     if (hours % 24 == 0) {
       final days = hours ~/ 24;
+
       return days == 1
           ? '1 day'
           : '$days days';
@@ -2548,9 +2558,7 @@ class GroupRecommendationCard
 class _GroupRecommendationCardState
     extends State<GroupRecommendationCard> {
   Timer? countdownTimer;
-
   Duration remaining = Duration.zero;
-
   bool voting = false;
   bool refreshingAfterDeadline = false;
 
@@ -2595,7 +2603,6 @@ class _GroupRecommendationCardState
       const Duration(seconds: 1),
       (_) {
         if (!mounted) return;
-
         _updateRemaining();
       },
     );
@@ -2613,6 +2620,7 @@ class _GroupRecommendationCardState
           remaining = Duration.zero;
         });
       }
+
       return;
     }
 
@@ -2650,7 +2658,6 @@ class _GroupRecommendationCardState
     }
 
     refreshingAfterDeadline = true;
-
     countdownTimer?.cancel();
 
     try {
@@ -2658,15 +2665,12 @@ class _GroupRecommendationCardState
           AppController.instance;
 
       await controller.loadGroupRecommendations();
-
       await controller.loadGroupWishlist();
 
       if (!mounted) return;
 
       widget.onChanged();
     } catch (_) {
-      // The parent refresh can retry if the backend is
-      // temporarily unavailable at the exact deadline.
     } finally {
       refreshingAfterDeadline = false;
     }
@@ -2850,9 +2854,11 @@ class _GroupRecommendationCardState
         _statusString(recommendation);
 
     final recommender = _profileName(
-  _stringValue(recommendation['recommendedByProfileId']),
-  controller,
-);
+      _stringValue(
+        recommendation['recommendedByProfileId'],
+      ),
+      controller,
+    );
 
     final votes =
         _votesMap(
@@ -2879,11 +2885,9 @@ class _GroupRecommendationCardState
               .length,
         );
 
-    final totalVotes =
-        yesVotes + noVotes;
+    final totalVotes = yesVotes + noVotes;
 
-    final yesPercentage =
-        _percentage(
+    final yesPercentage = _percentage(
       recommendation['yesPercentage'],
       yesVotes,
       totalVotes,
@@ -2989,9 +2993,7 @@ class _GroupRecommendationCardState
                 ),
               ],
             ),
-
             const SizedBox(height: 15),
-
             if (status == 'voting') ...[
               Row(
                 children: [
@@ -3034,7 +3036,6 @@ class _GroupRecommendationCardState
               ),
               const SizedBox(height: 15),
             ],
-
             Row(
               children: [
                 Expanded(
@@ -3058,9 +3059,7 @@ class _GroupRecommendationCardState
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
             ClipRRect(
               borderRadius:
                   BorderRadius.circular(5),
@@ -3087,9 +3086,7 @@ class _GroupRecommendationCardState
                 ],
               ),
             ),
-
             const SizedBox(height: 15),
-
             if (status == 'voting') ...[
               if (currentVote != null)
                 Container(
@@ -3202,7 +3199,6 @@ class _GroupRecommendationCardState
                   ],
                 ),
             ],
-
             if (status == 'approved') ...[
               const SizedBox(height: 5),
               const Row(
@@ -3225,7 +3221,6 @@ class _GroupRecommendationCardState
                 ],
               ),
             ],
-
             if (status == 'rejected') ...[
               const SizedBox(height: 5),
               const Row(
@@ -3248,7 +3243,6 @@ class _GroupRecommendationCardState
                 ],
               ),
             ],
-
             if (status == 'expired') ...[
               const SizedBox(height: 5),
               const Row(
@@ -3271,7 +3265,6 @@ class _GroupRecommendationCardState
                 ],
               ),
             ],
-
             if (totalVotes == 0 &&
                 status == 'voting')
               Padding(
@@ -4157,10 +4150,13 @@ String _formatRemaining(
   }
 
   final days = duration.inDays;
+
   final hours =
       duration.inHours.remainder(24);
+
   final minutes =
       duration.inMinutes.remainder(60);
+
   final seconds =
       duration.inSeconds.remainder(60);
 
