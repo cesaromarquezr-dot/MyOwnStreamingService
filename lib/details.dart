@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
 import 'player.dart';
@@ -21,6 +22,73 @@ class MediaDetailsScreen extends StatelessWidget {
       ),
     );
   }
+
+void watchTrailer(BuildContext context) {
+  final trailerUrl = media.trailerUrl?.trim();
+
+  if (trailerUrl == null || trailerUrl.isEmpty) {
+    return;
+  }
+
+  String? videoId;
+
+  try {
+    final uri = Uri.parse(trailerUrl);
+
+    // Standard YouTube URL:
+    // https://www.youtube.com/watch?v=VIDEO_ID
+    if (uri.host.contains('youtube.com')) {
+      videoId = uri.queryParameters['v'];
+
+      // YouTube Shorts:
+      // https://www.youtube.com/shorts/VIDEO_ID
+      if (videoId == null &&
+          uri.pathSegments.length >= 2 &&
+          uri.pathSegments.first == 'shorts') {
+        videoId = uri.pathSegments[1];
+      }
+
+      // YouTube embed:
+      // https://www.youtube.com/embed/VIDEO_ID
+      if (videoId == null &&
+          uri.pathSegments.length >= 2 &&
+          uri.pathSegments.first == 'embed') {
+        videoId = uri.pathSegments[1];
+      }
+    }
+
+    // Short YouTube URL:
+    // https://youtu.be/VIDEO_ID
+    if (videoId == null && uri.host == 'youtu.be') {
+      if (uri.pathSegments.isNotEmpty) {
+        videoId = uri.pathSegments.first;
+      }
+    }
+  } catch (_) {
+    videoId = null;
+  }
+
+  if (videoId == null || videoId.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'The YouTube trailer URL is invalid.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TrailerPlayerScreen(
+        title: media.title,
+        videoId: videoId!,
+      ),
+    ),
+  );
+}
 
   void toggleLike(BuildContext context) {
     final controller = AppController.instance;
@@ -202,6 +270,10 @@ class MediaDetailsScreen extends StatelessWidget {
     final bool disliked =
         controller.isDisliked(media.id);
 
+    final bool hasTrailer =
+        media.trailerUrl != null &&
+        media.trailerUrl!.trim().isNotEmpty;
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -322,6 +394,21 @@ class MediaDetailsScreen extends StatelessWidget {
                           ),
                           label: const Text(
                             'WATCH',
+                          ),
+                        ),
+
+                      // WATCH TRAILER APPEARS WHEN
+                      // A YOUTUBE TRAILER URL EXISTS.
+                      if (hasTrailer)
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            watchTrailer(context);
+                          },
+                          icon: const Icon(
+                            Icons.ondemand_video,
+                          ),
+                          label: const Text(
+                            'WATCH TRAILER',
                           ),
                         ),
 
@@ -488,6 +575,12 @@ class MediaDetailsScreen extends StatelessWidget {
                       media.rating!.toStringAsFixed(1),
                     ),
 
+                  if (hasTrailer)
+                    buildInfoRow(
+                      'Trailer',
+                      'YouTube',
+                    ),
+
                   const SizedBox(height: 30),
 
                   if (owned)
@@ -546,6 +639,71 @@ class MediaDetailsScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class TrailerPlayerScreen extends StatefulWidget {
+  final String title;
+  final String videoId;
+
+  const TrailerPlayerScreen({
+    super.key,
+    required this.title,
+    required this.videoId,
+  });
+
+  @override
+  State<TrailerPlayerScreen> createState() =>
+      _TrailerPlayerScreenState();
+}
+
+class _TrailerPlayerScreenState
+    extends State<TrailerPlayerScreen> {
+  late YoutubePlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = YoutubePlayerController.fromVideoId(
+      videoId: widget.videoId,
+      autoPlay: true,
+      params: const YoutubePlayerParams(
+        mute: false,
+        showControls: true,
+        showFullscreenButton: true,
+        enableCaption: true,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          '${widget.title} Trailer',
+          style: const TextStyle(
+            color: Colors.white,
+          ),
+        ),
+      ),
+      body: Center(
+        child: YoutubePlayer(
+          controller: _controller,
+          aspectRatio: 16 / 9,
+        ),
       ),
     );
   }

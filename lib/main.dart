@@ -7,14 +7,11 @@ import 'series.dart';
 import 'smart_search.dart';
 import 'hollywood.dart';
 import 'details.dart';
-
 void main() {
   runApp(const MyStreamingService());
 }
-
 class MyStreamingService extends StatelessWidget {
   const MyStreamingService({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -33,26 +30,20 @@ class MyStreamingService extends StatelessWidget {
     );
   }
 }
-
 // ============================================================
 // SPLASH SCREEN
 // ============================================================
-
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
-
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
-
 class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -61,7 +52,6 @@ class _SplashScreenState extends State<SplashScreen> {
       );
     });
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,38 +80,29 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
-
 // ============================================================
 // LOGIN
 // ============================================================
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
-
 class _LoginScreenState extends State<LoginScreen> {
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
-
   bool obscurePassword = true;
   bool loggingIn = false;
-
   @override
   void dispose() {
     usernameController.dispose();
     passwordController.dispose();
     super.dispose();
   }
-
   Future<void> login() async {
     if (loggingIn) return;
-
     final username = usernameController.text.trim();
     final password = passwordController.text;
-
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -462,14 +443,13 @@ class HomeScreen extends StatelessWidget {
               }
 
               if (value == 'import') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const ImportMediaScreen(),
-                  ),
-                );
-              }
+  Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const ImportMediaScreen(),
+    ),
+  );
+}
             },
             itemBuilder: (_) => const [
               PopupMenuItem<String>(
@@ -543,13 +523,17 @@ class HomeScreen extends StatelessWidget {
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
                         onPressed: () {
-                          Navigator.push(
+                          Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
                                   const ImportMediaScreen(),
                             ),
-                          );
+                          ).then((added) {
+                            if (added == true) {
+                              onRefresh?.call();
+                            }
+                          });
                         },
                         icon: const Icon(Icons.add),
                         label: const Text(
@@ -598,13 +582,17 @@ class HomeScreen extends StatelessWidget {
             ],
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.push(
+                Navigator.push<bool>(
                   context,
                   MaterialPageRoute(
                     builder: (_) =>
                         const ImportMediaScreen(),
                   ),
-                );
+                ).then((added) {
+                  if (added == true) {
+                    onRefresh?.call();
+                  }
+                });
               },
               icon: const Icon(Icons.add),
               label: const Text(
@@ -1074,7 +1062,7 @@ class _ImportMediaScreenState
     posterController.clear();
     trailerController.clear();
 
-    setState(() {});
+    Navigator.pop(context, true);
   }
 
   @override
@@ -2038,7 +2026,6 @@ class _GroupHubScreenState
     return '$hour:$minute';
   }
 }
-
 // ============================================================
 // ADD GROUP RECOMMENDATION
 // ============================================================
