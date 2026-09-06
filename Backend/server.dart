@@ -19,6 +19,7 @@ import 'services/search_service.dart';
 import 'services/subscription_service.dart';
 import 'services/payment_service.dart';
 import 'services/group_recommendation_service.dart';
+import 'services/group_watch_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -61,6 +62,15 @@ Future<void> main() async {
       GroupRecommendationService(
     database,
   );
+
+  // ------------------------------------------------------------
+  // GROUP WATCH SERVICE
+  // ------------------------------------------------------------
+
+  final groupWatchService =
+    GroupWatchService(
+  database: database,
+);
 
   // ------------------------------------------------------------
   // AUTHENTICATION
@@ -121,6 +131,7 @@ Future<void> main() async {
     authenticationMiddleware: authentication,
     recommendationService:
         groupRecommendationService,
+    watchService: groupWatchService,
   );
 
   // ------------------------------------------------------------

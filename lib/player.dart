@@ -13,8 +13,7 @@ class PlayerScreen extends StatefulWidget {
   });
 
   @override
-  State<PlayerScreen> createState() =>
-      _PlayerScreenState();
+  State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
@@ -27,11 +26,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int autoplaySeconds = 10;
 
   Timer? autoplayTimer;
+  Timer? groupWatchTimer;
 
-  String selectedAudio = 'Original';
-
+  String selectedAudio = '';
   bool subtitlesEnabled = false;
   String? selectedSubtitle;
+
+  String? groupWatchSessionId;
+  bool groupWatchActionInProgress = false;
+  bool groupWatchSyncing = false;
 
   @override
   void initState() {
@@ -43,12 +46,112 @@ class _PlayerScreenState extends State<PlayerScreen> {
         .toDouble();
 
     videoFinished = position >= 1.0;
+
+    _initializeGroupWatch();
   }
 
   @override
   void dispose() {
     autoplayTimer?.cancel();
+    groupWatchTimer?.cancel();
     super.dispose();
+  }
+
+  void _initializeGroupWatch() {
+    final controller = AppController.instance;
+    final activeSession = controller.activeGroupWatchSession;
+
+    if (activeSession == null ||
+        activeSession.mediaId != widget.media.id) {
+      return;
+    }
+
+    groupWatchSessionId = activeSession.id;
+
+    _startGroupWatchPolling();
+  }
+
+  void _startGroupWatchPolling() {
+    groupWatchTimer?.cancel();
+
+    groupWatchTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) {
+        _refreshGroupWatchState();
+      },
+    );
+
+    _refreshGroupWatchState();
+  }
+
+  Future<void> _refreshGroupWatchState() async {
+    if (!mounted ||
+        groupWatchSessionId == null ||
+        groupWatchSyncing) {
+      return;
+    }
+
+    groupWatchSyncing = true;
+
+    try {
+      final controller = AppController.instance;
+
+      final session =
+          await controller.refreshGroupWatchSession(
+        groupWatchSessionId!,
+      );
+
+      if (!mounted || session == null) {
+        return;
+      }
+
+      if (session.mediaId != widget.media.id) {
+        return;
+      }
+
+      /*
+       * The backend stores Group Watch playbackPosition as
+       * Duration. The current demo player represents progress
+       * as a normalized 0.0 - 1.0 value.
+       *
+       * Until MediaItem contains an actual duration, use the
+       * existing normalized representation by mapping the
+       * backend's microseconds back into 0.0 - 1.0.
+       */
+      final sharedPosition =
+          session.playbackPosition.inMicroseconds /
+              1000000.0;
+
+      final normalizedPosition =
+          sharedPosition.clamp(0.0, 1.0).toDouble();
+
+      if ((position - normalizedPosition).abs() >
+          0.01) {
+        setState(() {
+          position = normalizedPosition;
+          videoFinished = position >= 1.0;
+        });
+
+        controller.updatePlaybackProgress(
+          widget.media.id,
+          position,
+        );
+      }
+
+      if (session.isEnded) {
+        if (mounted) {
+          setState(() {
+            groupWatchSessionId = null;
+          });
+        }
+
+        groupWatchTimer?.cancel();
+      }
+    } catch (_) {
+      // Polling errors should not interrupt normal playback.
+    } finally {
+      groupWatchSyncing = false;
+    }
   }
 
   void updatePosition(double value) {
@@ -59,13 +162,44 @@ class _PlayerScreenState extends State<PlayerScreen> {
       position = newPosition;
     });
 
-    AppController.instance.updatePlaybackProgress(
+    final controller = AppController.instance;
+
+    controller.updatePlaybackProgress(
       widget.media.id,
       newPosition,
     );
 
+    if (groupWatchSessionId != null) {
+      _sendGroupWatchPosition(newPosition);
+    }
+
     if (newPosition >= 0.999) {
       finishVideo();
+    }
+  }
+
+  Future<void> _sendGroupWatchPosition(
+    double newPosition,
+  ) async {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+
+    if (groupWatchSessionId == null ||
+        profile == null) {
+      return;
+    }
+
+    try {
+      await controller.updateGroupWatchPosition(
+        sessionId: groupWatchSessionId!,
+        profileId: profile.id,
+        position: Duration(
+          microseconds:
+              (newPosition * 1000000).round(),
+        ),
+      );
+    } catch (_) {
+      // Do not interrupt playback for a synchronization failure.
     }
   }
 
@@ -86,6 +220,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       widget.media.id,
       1.0,
     );
+
+    if (groupWatchSessionId != null) {
+      _sendGroupWatchPosition(1.0);
+    }
 
     controller.finishWatching(
       widget.media,
@@ -160,14 +298,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    /*
-     * The current AppController stores only the NEXT EPISODE TITLE.
-     * It does not store a MediaItem for that episode.
-     *
-     * Therefore we cannot create a real next-episode PlayerScreen
-     * yet. Show the title instead of trying to pass a String where
-     * a MediaItem is required.
-     */
     showDialog(
       context: context,
       builder: (_) {
@@ -200,23 +330,94 @@ class _PlayerScreenState extends State<PlayerScreen> {
           subtitlesEnabled: subtitlesEnabled,
           selectedSubtitle: selectedSubtitle,
           onAudioChanged: (value) {
-            setState(() {
-              selectedAudio = value;
-            });
+            _changeAudioTrack(value);
           },
           onSubtitleChanged: (value) {
-            setState(() {
-              selectedSubtitle = value;
-              subtitlesEnabled =
-                  value != null;
-            });
+            _changeSubtitleTrack(value);
           },
         );
       },
     );
   }
 
-  void showGroupShare() {
+  Future<void> _changeAudioTrack(
+    String value,
+  ) async {
+    setState(() {
+      selectedAudio = value;
+    });
+
+    final sessionId = groupWatchSessionId;
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null || profile == null) {
+      return;
+    }
+
+    try {
+      await AppController.instance
+          .setGroupWatchAudioTrack(
+        sessionId: sessionId,
+        profileId: profile.id,
+        audioTrackId: value,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _changeSubtitleTrack(
+    String? value,
+  ) async {
+    setState(() {
+      selectedSubtitle = value;
+      subtitlesEnabled = value != null;
+    });
+
+    final sessionId = groupWatchSessionId;
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null || profile == null) {
+      return;
+    }
+
+    try {
+      await AppController.instance
+          .setGroupWatchSubtitleTrack(
+        sessionId: sessionId,
+        profileId: profile.id,
+        subtitleTrackId: value,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> showGroupShare() async {
     final controller =
         AppController.instance;
 
@@ -239,19 +440,280 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final session =
-        controller.createGroupWatchSession(
-      widget.media,
+    final availableProfiles = account.profiles
+        .where(
+          (profile) =>
+              profile.id != currentProfile.id,
+        )
+        .toList();
+
+    if (availableProfiles.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'There are no other profiles available to invite.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final selectedProfileIds =
+        await showDialog<Set<String>>(
+      context: context,
+      builder: (_) {
+        return GroupWatchInviteDialog(
+          profiles: availableProfiles,
+        );
+      },
     );
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      SnackBar(
-        content: Text(
-          'Group watch session created for ${session.title}.',
+    if (!mounted ||
+        selectedProfileIds == null ||
+        selectedProfileIds.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      groupWatchActionInProgress = true;
+    });
+
+    try {
+      final session =
+          await controller.createBackendGroupWatchSession(
+        widget.media,
+        profileId: currentProfile.id,
+        invitedProfileIds: selectedProfileIds,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        groupWatchSessionId = session.id;
+      });
+
+      _startGroupWatchPolling();
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            'Group watch session created for ${session.title}.',
+          ),
         ),
-      ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          groupWatchActionInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _playGroupWatch() async {
+    final sessionId = groupWatchSessionId;
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null || profile == null) {
+      return;
+    }
+
+    if (groupWatchActionInProgress) {
+      return;
+    }
+
+    setState(() {
+      groupWatchActionInProgress = true;
+    });
+
+    try {
+      final controller = AppController.instance;
+      final session =
+          controller.getGroupWatchSession(
+        sessionId,
+      );
+
+      if (session == null) {
+        return;
+      }
+
+      if (session.isWaiting ||
+          session.isReady) {
+        await controller.startGroupWatchSession(
+          sessionId: sessionId,
+          profileId: profile.id,
+        );
+      } else {
+        await controller.playGroupWatchSession(
+          sessionId: sessionId,
+          profileId: profile.id,
+        );
+      }
+
+      await _refreshGroupWatchState();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          groupWatchActionInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pauseGroupWatch() async {
+    final sessionId = groupWatchSessionId;
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null || profile == null) {
+      return;
+    }
+
+    if (groupWatchActionInProgress) {
+      return;
+    }
+
+    final reason =
+        await showDialog<String>(
+      context: context,
+      builder: (_) {
+        return const GroupWatchPauseReasonDialog();
+      },
     );
+
+    if (!mounted ||
+        reason == null ||
+        reason.trim().isEmpty) {
+      return;
+    }
+
+    setState(() {
+      groupWatchActionInProgress = true;
+    });
+
+    try {
+      await AppController.instance
+          .pauseGroupWatchSession(
+        sessionId: sessionId,
+        profileId: profile.id,
+        reason: reason,
+      );
+
+      await _refreshGroupWatchState();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          groupWatchActionInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _resumeGroupWatch() async {
+    final sessionId = groupWatchSessionId;
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null || profile == null) {
+      return;
+    }
+
+    if (!AppController.instance
+    .canResumeGroupWatchSession(
+  sessionId,
+  profileId: profile.id,
+)) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Only the person who paused the Group Watch can resume it.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (groupWatchActionInProgress) {
+      return;
+    }
+
+    setState(() {
+      groupWatchActionInProgress = true;
+    });
+
+    try {
+      await AppController.instance
+          .resumeGroupWatchSession(
+        sessionId: sessionId,
+        profileId: profile.id,
+      );
+
+      await _refreshGroupWatchState();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          groupWatchActionInProgress = false;
+        });
+      }
+    }
   }
 
   void showExtras() {
@@ -278,6 +740,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final controller =
+        AppController.instance;
+
+    final groupSession =
+        groupWatchSessionId == null
+            ? null
+            : controller.getGroupWatchSession(
+                groupWatchSessionId!,
+              );
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -303,6 +775,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (groupSession != null)
+              _buildGroupWatchBanner(
+                groupSession,
+              ),
             Expanded(
               child: Stack(
                 children: [
@@ -335,16 +811,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                           ),
                   ),
-                  if (!videoFinished)
+                  if (!videoFinished &&
+                      groupSession?.isPaused != true)
                     Center(
                       child: IconButton(
-                        onPressed: finishVideo,
+                        onPressed:
+                            groupSession != null
+                                ? _playGroupWatch
+                                : finishVideo,
                         iconSize: 80,
                         icon: const Icon(
                           Icons.play_circle_fill,
                           color: Colors.white,
                         ),
                       ),
+                    ),
+                  if (groupSession?.isPaused == true)
+                    _buildGroupWatchPausedOverlay(
+                      groupSession!,
                     ),
                   if (videoFinished &&
                       creditsStarted)
@@ -368,7 +852,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         seconds:
                             autoplaySeconds,
                         nextEpisodeTitle:
-                            AppController.instance
+                            controller
                                 .getNextEpisode(
                           widget.media.id,
                         ),
@@ -376,8 +860,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             cancelAutoplay,
                         onPlayNow: () {
                           final next =
-                              AppController
-                                  .instance
+                              controller
                                   .getNextEpisode(
                             widget.media.id,
                           );
@@ -396,14 +879,172 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ],
               ),
             ),
-            _buildControls(),
+            _buildControls(
+              groupSession,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildGroupWatchBanner(
+    GroupWatchSession session,
+  ) {
+    final profile =
+        AppController.instance.currentProfile;
+
+    final isPaused =
+        session.isPaused;
+
+    final canResume =
+        profile != null &&
+        session.canResume(profile.id);
+
+    String text;
+
+    if (session.invitationsExpired &&
+        session.isWaiting) {
+      text = 'This invite has expired';
+    } else if (isPaused) {
+      if (session.pauseReason != null &&
+          session.pauseReason!.trim().isNotEmpty) {
+        text =
+            'Paused — ${session.pauseReason}';
+      } else {
+        text = 'Group Watch paused';
+      }
+    } else if (session.isPlaying) {
+      text = 'Group Watch is playing';
+    } else {
+      text = 'Group Watch ready';
+    }
+
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF202020),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 8,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.people,
+            color: Colors.white70,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white,
+              ),
+            ),
+          ),
+          if (isPaused && canResume)
+            TextButton(
+              onPressed:
+                  groupWatchActionInProgress
+                      ? null
+                      : _resumeGroupWatch,
+              child: const Text(
+                'RESUME',
+              ),
+            ),
+          if (isPaused && !canResume)
+            const Text(
+              'Waiting...',
+              style: TextStyle(
+                color: Colors.white70,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupWatchPausedOverlay(
+    GroupWatchSession session,
+  ) {
+    final profile =
+        AppController.instance.currentProfile;
+
+    final canResume =
+        profile != null &&
+        session.canResume(profile.id);
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(
+            alpha: 0.82,
+          ),
+          borderRadius:
+              BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.pause_circle_filled,
+              color: Colors.white,
+              size: 64,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Group Watch Paused',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (session.pauseReason != null &&
+                session.pauseReason!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                session.pauseReason!,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (canResume)
+              ElevatedButton(
+                onPressed:
+                    groupWatchActionInProgress
+                        ? null
+                        : _resumeGroupWatch,
+                child: const Text(
+                  'RESUME',
+                ),
+              )
+            else
+              const Text(
+                'Waiting for the person who paused to resume.',
+                style: TextStyle(
+                  color: Colors.white70,
+                ),
+                textAlign: TextAlign.center,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControls(
+    GroupWatchSession? groupSession,
+  ) {
+    final isGroupPaused =
+        groupSession?.isPaused == true;
+
     return Container(
       color: const Color(0xFF111111),
       padding: const EdgeInsets.fromLTRB(
@@ -418,75 +1059,73 @@ class _PlayerScreenState extends State<PlayerScreen> {
             value: position,
             min: 0,
             max: 1,
-            onChanged: videoFinished
-                ? null
-                : updatePosition,
+            onChanged:
+                videoFinished || isGroupPaused
+                    ? null
+                    : updatePosition,
           ),
           Row(
             children: [
               IconButton(
-                onPressed: videoFinished
-                    ? null
-                    : () {
-                        final newPosition =
-                            (position - 0.05)
-                                .clamp(0.0, 1.0)
-                                .toDouble();
+                onPressed:
+                    videoFinished || isGroupPaused
+                        ? null
+                        : () {
+                            final newPosition =
+                                (position - 0.05)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble();
 
-                        setState(() {
-                          position =
-                              newPosition;
-                        });
-
-                        AppController
-                            .instance
-                            .updatePlaybackProgress(
-                          widget.media.id,
-                          newPosition,
-                        );
-                      },
+                            updatePosition(
+                              newPosition,
+                            );
+                          },
                 icon: const Icon(
                   Icons.replay_10,
                   color: Colors.white,
                 ),
               ),
-              IconButton(
-                onPressed: videoFinished
-                    ? null
-                    : () {
-                        finishVideo();
-                      },
-                icon: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
+              if (groupSession != null)
+                IconButton(
+                  onPressed:
+                      groupWatchActionInProgress
+                          ? null
+                          : groupSession.isPaused
+                              ? null
+                              : groupSession.isPlaying
+                                  ? _pauseGroupWatch
+                                  : _playGroupWatch,
+                  icon: Icon(
+                    groupSession.isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                )
+              else
+                IconButton(
+                  onPressed: videoFinished
+                      ? null
+                      : finishVideo,
+                  icon: const Icon(
+                    Icons.play_arrow,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
               IconButton(
-                onPressed: videoFinished
-                    ? null
-                    : () {
-                        final newPosition =
-                            (position + 0.05)
-                                .clamp(0.0, 1.0)
-                                .toDouble();
+                onPressed:
+                    videoFinished || isGroupPaused
+                        ? null
+                        : () {
+                            final newPosition =
+                                (position + 0.05)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble();
 
-                        setState(() {
-                          position =
-                              newPosition;
-                        });
-
-                        AppController
-                            .instance
-                            .updatePlaybackProgress(
-                          widget.media.id,
-                          newPosition,
-                        );
-
-                        if (newPosition >=
-                            0.999) {
-                          finishVideo();
-                        }
-                      },
+                            updatePosition(
+                              newPosition,
+                            );
+                          },
                 icon: const Icon(
                   Icons.forward_10,
                   color: Colors.white,
@@ -501,13 +1140,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   color: Colors.white,
                 ),
               ),
-              IconButton(
-                onPressed: showGroupShare,
-                icon: const Icon(
-                  Icons.people,
-                  color: Colors.white,
+              if (groupSession == null)
+                IconButton(
+                  onPressed:
+                      groupWatchActionInProgress
+                          ? null
+                          : showGroupShare,
+                  icon: const Icon(
+                    Icons.people,
+                    color: Colors.white,
+                  ),
+                )
+              else
+                IconButton(
+                  onPressed:
+                      _showGroupWatchSessionInfo,
+                  icon: const Icon(
+                    Icons.people,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
               IconButton(
                 onPressed: showExtras,
                 icon: const Icon(
@@ -519,6 +1171,371 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showGroupWatchSessionInfo() {
+    final sessionId = groupWatchSessionId;
+
+    if (sessionId == null) {
+      return;
+    }
+
+    final session =
+        AppController.instance.getGroupWatchSession(
+      sessionId,
+    );
+
+    if (session == null) {
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey.shade900,
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Group Watch',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  session.title,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Status: ${_groupWatchStatusLabel(session)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Participants: ${session.participants.length}',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                  ),
+                ),
+                if (session.pauseReason != null &&
+                    session.pauseReason!
+                        .trim()
+                        .isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    session.pauseReason!,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'CLOSE',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _groupWatchStatusLabel(
+    GroupWatchSession session,
+  ) {
+    if (session.isWaiting) {
+      return 'Waiting';
+    }
+
+    if (session.isReady) {
+      return 'Ready';
+    }
+
+    if (session.isPlaying) {
+      return 'Playing';
+    }
+
+    if (session.isPaused) {
+      return 'Paused';
+    }
+
+    if (session.isEnded) {
+      return 'Ended';
+    }
+
+    return 'Unknown';
+  }
+}
+
+// ============================================================
+// GROUP WATCH INVITE DIALOG
+// ============================================================
+
+class GroupWatchInviteDialog
+    extends StatefulWidget {
+  final List<Profile> profiles;
+
+  const GroupWatchInviteDialog({
+    super.key,
+    required this.profiles,
+  });
+
+  @override
+  State<GroupWatchInviteDialog> createState() =>
+      _GroupWatchInviteDialogState();
+}
+
+class _GroupWatchInviteDialogState
+    extends State<GroupWatchInviteDialog> {
+  final Set<String> selectedProfileIds =
+      <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(
+        'Start Group Watch',
+      ),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Choose who you want to invite.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...widget.profiles.map(
+              (profile) {
+                final selected =
+                    selectedProfileIds.contains(
+                  profile.id,
+                );
+
+                return CheckboxListTile(
+                  value: selected,
+                  onChanged: (value) {
+                    setState(() {
+                      if (value == true) {
+                        selectedProfileIds.add(
+                          profile.id,
+                        );
+                      } else {
+                        selectedProfileIds.remove(
+                          profile.id,
+                        );
+                      }
+                    });
+                  },
+                  title: Text(
+                    profile.name,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text(
+            'CANCEL',
+          ),
+        ),
+        ElevatedButton(
+          onPressed:
+              selectedProfileIds.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(
+                        context,
+                        Set<String>.from(
+                          selectedProfileIds,
+                        ),
+                      );
+                    },
+          child: const Text(
+            'INVITE',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// GROUP WATCH PAUSE REASON DIALOG
+// ============================================================
+
+class GroupWatchPauseReasonDialog
+    extends StatelessWidget {
+  const GroupWatchPauseReasonDialog({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(
+        'Why did you pause?',
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Text(
+              '🔋',
+              style: TextStyle(fontSize: 24),
+            ),
+            title: const Text(
+              'Voy a cargar',
+            ),
+            onTap: () {
+              Navigator.pop(
+                context,
+                'Voy a cargar',
+              );
+            },
+          ),
+          ListTile(
+            leading: const Text(
+              '🍿',
+              style: TextStyle(fontSize: 24),
+            ),
+            title: const Text(
+              'Voy por un snack',
+            ),
+            onTap: () {
+              Navigator.pop(
+                context,
+                'Voy por un snack',
+              );
+            },
+          ),
+          ListTile(
+            leading: const Text(
+              '💬',
+              style: TextStyle(fontSize: 24),
+            ),
+            title: const Text(
+              'Otro',
+            ),
+            onTap: () async {
+              final reason =
+                  await showDialog<String>(
+                context: context,
+                builder: (_) {
+                  return const GroupWatchCustomPauseReasonDialog();
+                },
+              );
+
+              if (!context.mounted ||
+                  reason == null ||
+                  reason.trim().isEmpty) {
+                return;
+              }
+
+              Navigator.of(context).pop(reason.trim());
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class GroupWatchCustomPauseReasonDialog
+    extends StatefulWidget {
+  const GroupWatchCustomPauseReasonDialog({
+    super.key,
+  });
+
+  @override
+  State<GroupWatchCustomPauseReasonDialog>
+      createState() =>
+          _GroupWatchCustomPauseReasonDialogState();
+}
+
+class _GroupWatchCustomPauseReasonDialogState
+    extends State<GroupWatchCustomPauseReasonDialog> {
+  final TextEditingController controller =
+      TextEditingController();
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(
+        'Why did you pause?',
+      ),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          hintText: 'Enter a reason',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text(
+            'CANCEL',
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final value =
+                controller.text.trim();
+
+            if (value.isEmpty) {
+              return;
+            }
+
+            Navigator.pop(
+              context,
+              value,
+            );
+          },
+          child: const Text(
+            'DONE',
+          ),
+        ),
+      ],
     );
   }
 }
@@ -683,31 +1700,25 @@ class _AudioSubtitleOptionsState
               ),
             ),
             const SizedBox(height: 10),
-
-            RadioGroup<String>(
-              groupValue: selectedAudio,
-              onChanged: (value) {
-                if (value == null) return;
-
-                setState(() {
-                  selectedAudio = value;
-                });
-
-                widget.onAudioChanged(
-                  value,
-                );
-              },
-              child: const RadioListTile<String>(
-                value: 'Original',
-                title: Text(
-                  'Original',
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.info_outline,
+                color: Colors.white70,
+              ),
+              title: Text(
+                'Audio track metadata is not available for this media item.',
+                style: TextStyle(
+                  color: Colors.white,
+                ),
+              ),
+              subtitle: Text(
+                'No track choices will be invented.',
+                style: TextStyle(
+                  color: Colors.white54,
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
             const Text(
               'SUBTITLES',
@@ -716,62 +1727,43 @@ class _AudioSubtitleOptionsState
                 fontWeight: FontWeight.bold,
               ),
             ),
-
-            SwitchListTile(
-              value: subtitlesEnabled,
-              onChanged: (value) {
-                setState(() {
-                  subtitlesEnabled =
-                      value;
-
-                  if (!value) {
-                    selectedSubtitle =
-                        null;
-                  } else {
-                    selectedSubtitle =
-                        'Default';
-                  }
-                });
-
-                widget.onSubtitleChanged(
-                  selectedSubtitle,
-                );
-              },
-              title: const Text(
-                'Subtitles',
+            const SizedBox(height: 10),
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.info_outline,
+                color: Colors.white70,
+              ),
+              title: Text(
+                'Subtitle track metadata is not available for this media item.',
                 style: TextStyle(
                   color: Colors.white,
                 ),
               ),
-            ),
-
-            if (subtitlesEnabled)
-              RadioGroup<String>(
-                groupValue:
-                    selectedSubtitle,
-                onChanged: (value) {
-                  if (value == null) return;
-
-                  setState(() {
-                    selectedSubtitle =
-                        value;
-                  });
-
-                  widget.onSubtitleChanged(
-                    value,
-                  );
-                },
-                child:
-                    const RadioListTile<String>(
-                  value: 'Default',
-                  title: Text(
-                    'Default subtitles',
-                    style: TextStyle(
-                      color: Colors.white,
-                    ),
-                  ),
+              subtitle: Text(
+                'No subtitle choices will be invented.',
+                style: TextStyle(
+                  color: Colors.white54,
                 ),
               ),
+            ),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              value: subtitlesEnabled,
+              onChanged: null,
+              title: const Text(
+                'Subtitles',
+                style: TextStyle(
+                  color: Colors.white54,
+                ),
+              ),
+              subtitle: const Text(
+                'Unavailable until subtitle metadata is provided.',
+                style: TextStyle(
+                  color: Colors.white38,
+                ),
+              ),
+            ),
           ],
         ),
       ),

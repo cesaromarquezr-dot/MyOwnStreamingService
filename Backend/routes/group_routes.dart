@@ -4,17 +4,21 @@ import 'dart:io';
 import '../database/database.dart';
 import '../middleware/authentication.dart';
 import '../models/group_recommendation.dart';
+import '../models/group_watch_session.dart';
 import '../services/group_recommendation_service.dart';
+import '../services/group_watch_service.dart';
 
 class GroupRoutes {
   final Database database;
   final AuthenticationMiddleware authenticationMiddleware;
   final GroupRecommendationService recommendationService;
+  final GroupWatchService watchService;
 
   GroupRoutes({
     required this.database,
     required this.authenticationMiddleware,
     required this.recommendationService,
+    required this.watchService,
   });
 
   Future<void> handle(HttpRequest request) async {
@@ -37,27 +41,1353 @@ class GroupRoutes {
       final accountId = account.id;
       final path = request.uri.path;
 
+      // ==========================================================
+      // GROUP WATCH
+      // ==========================================================
+
+      // ----------------------------------------------------------
+      // CREATE GROUP WATCH SESSION
+      // ----------------------------------------------------------
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/group/watch') {
+        final body = await _readJsonBody(request);
+
+        final String mediaId =
+            body['mediaId']?.toString().trim() ?? '';
+
+        final String title =
+            body['title']?.toString().trim() ?? '';
+
+        final String type =
+            body['type']?.toString().trim() ?? '';
+
+        final String profileId =
+            body['profileId']?.toString().trim() ?? '';
+
+        final Set<String> invitedProfileIds =
+            _readStringSet(
+          body['invitedProfileIds'],
+        );
+
+        if (mediaId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': 'mediaId is required.',
+            },
+          );
+          return;
+        }
+
+        if (title.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': 'title is required.',
+            },
+          );
+          return;
+        }
+
+        if (type != 'movie' && type != 'tvShow') {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'type must be either "movie" or "tvShow".',
+            },
+          );
+          return;
+        }
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': 'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        final hostProfile =
+            account.getProfileById(profileId);
+
+        if (hostProfile == null) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final media =
+            database.getMediaById(mediaId);
+
+        if (media == null) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Selected media was not found.',
+            },
+          );
+          return;
+        }
+
+        invitedProfileIds.remove(profileId);
+
+        final bool allInvitedProfilesBelongToAccount =
+            invitedProfileIds.every(
+          (participantId) =>
+              account.getProfileById(
+                participantId,
+              ) !=
+              null,
+        );
+
+        if (!allInvitedProfilesBelongToAccount) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'One or more invited profiles do not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final dynamic durationRaw =
+            body['invitationDurationHours'];
+
+        double invitationDurationHours;
+
+        if (durationRaw == null) {
+          invitationDurationHours = 24;
+        } else if (durationRaw is num) {
+          invitationDurationHours =
+              durationRaw.toDouble();
+        } else {
+          invitationDurationHours =
+              double.tryParse(
+                    durationRaw.toString(),
+                  ) ??
+                  0;
+        }
+
+        if (invitationDurationHours <= 0) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'invitationDurationHours must be greater than zero.',
+            },
+          );
+          return;
+        }
+
+        final Duration invitationDuration =
+            Duration(
+          milliseconds:
+              (invitationDurationHours *
+                      Duration.millisecondsPerHour)
+                  .round(),
+        );
+
+        if (invitationDuration <= Duration.zero) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'Invitation duration is invalid.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.createSession(
+            accountId: accountId,
+            hostProfileId: profileId,
+            mediaId: mediaId,
+            title: title,
+            type: type,
+            invitedProfileIds:
+                invitedProfileIds,
+            invitationDuration:
+                invitationDuration,
+          );
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.created,
+            <String, dynamic>{
+              'session': session.toJson(),
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // GET GROUP WATCH SESSIONS FOR ACCOUNT
+      // ----------------------------------------------------------
+
+      if (request.method == 'GET' &&
+          path == '/api/v1/group/watch') {
+        final List<GroupWatchSession> sessions =
+            watchService.getSessionsForAccount(
+          accountId,
+        );
+
+        for (final GroupWatchSession session
+            in sessions) {
+          database.saveGroupWatchSession(
+            session,
+          );
+        }
+
+        await _sendJson(
+          request,
+          HttpStatus.ok,
+          <String, dynamic>{
+            'sessions': sessions
+                .map(
+                  (session) => session.toJson(),
+                )
+                .toList(),
+          },
+        );
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // GET SINGLE GROUP WATCH SESSION
+      // ----------------------------------------------------------
+
+      final groupWatchPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)$',
+      );
+
+      final groupWatchMatch =
+          groupWatchPath.firstMatch(path);
+
+      if (request.method == 'GET' &&
+          groupWatchMatch != null) {
+        final String sessionId =
+            groupWatchMatch.group(1)!;
+
+        final GroupWatchSession? session =
+            watchService.getSession(
+          sessionId,
+        );
+
+        // FIXED: null-aware check
+        if (session?.accountId != accountId) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
+        database.saveGroupWatchSession(
+          session!,
+        );
+
+        await _sendJson(
+          request,
+          HttpStatus.ok,
+          <String, dynamic>{
+            'session': session.toJson(),
+          },
+        );
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // ACCEPT GROUP WATCH INVITATION
+      // ----------------------------------------------------------
+
+      final groupWatchAcceptPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/accept$',
+      );
+
+      final groupWatchAcceptMatch =
+          groupWatchAcceptPath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchAcceptMatch != null) {
+        final String sessionId =
+            groupWatchAcceptMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        if (account.getProfileById(profileId) ==
+            null) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.acceptInvitation(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'message':
+                  'Group Watch invitation accepted.',
+            },
+          );
+        } catch (error) {
+          final String errorMessage =
+              error.toString();
+
+          final int status =
+              errorMessage.contains(
+                'This invite has expired.',
+              )
+                  ? HttpStatus.gone
+                  : HttpStatus.badRequest;
+
+          await _sendJson(
+            request,
+            status,
+            <String, dynamic>{
+              'error': errorMessage,
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // DECLINE GROUP WATCH INVITATION
+      // ----------------------------------------------------------
+
+      final groupWatchDeclinePath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/decline$',
+      );
+
+      final groupWatchDeclineMatch =
+          groupWatchDeclinePath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchDeclineMatch != null) {
+        final String sessionId =
+            groupWatchDeclineMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        if (account.getProfileById(profileId) ==
+            null) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.declineInvitation(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'message':
+                  'Group Watch invitation declined.',
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // SET AUDIO TRACK
+      // ----------------------------------------------------------
+
+      final groupWatchAudioPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/audio$',
+      );
+
+      final groupWatchAudioMatch =
+          groupWatchAudioPath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchAudioMatch != null) {
+        final String sessionId =
+            groupWatchAudioMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        final String? audioTrackId =
+    body['audioTrackId']
+        ?.toString()
+        .trim();
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        if (account.getProfileById(profileId) ==
+            null) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.setAudioTrack(
+            sessionId: sessionId,
+            profileId: profileId,
+            audioTrackId:
+                audioTrackId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // SET SUBTITLE TRACK
+      // ----------------------------------------------------------
+
+      final groupWatchSubtitlePath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/subtitles$',
+      );
+
+      final groupWatchSubtitleMatch =
+          groupWatchSubtitlePath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchSubtitleMatch != null) {
+        final String sessionId =
+            groupWatchSubtitleMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        final String? subtitleTrackId =
+    body['subtitleTrackId']
+        ?.toString()
+        .trim();
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        if (account.getProfileById(profileId) ==
+            null) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.setSubtitleTrack(
+            sessionId: sessionId,
+            profileId: profileId,
+            subtitleTrackId:
+                subtitleTrackId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // START GROUP WATCH
+      // ----------------------------------------------------------
+
+      final groupWatchStartPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/start$',
+      );
+
+      final groupWatchStartMatch =
+          groupWatchStartPath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchStartMatch != null) {
+        final String sessionId =
+            groupWatchStartMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.startSession(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'message':
+                  'Group Watch started.',
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // PLAY
+      // ----------------------------------------------------------
+
+      final groupWatchPlayPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/play$',
+      );
+
+      final groupWatchPlayMatch =
+          groupWatchPlayPath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchPlayMatch != null) {
+        final String sessionId =
+            groupWatchPlayMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.play(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // PAUSE
+      // ----------------------------------------------------------
+
+      final groupWatchPausePath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/pause$',
+      );
+
+      final groupWatchPauseMatch =
+          groupWatchPausePath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchPauseMatch != null) {
+        final String sessionId =
+            groupWatchPauseMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        final String reason =
+            body['reason']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        if (reason.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'reason is required.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.pause(
+            sessionId: sessionId,
+            profileId: profileId,
+            reason: reason,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'message':
+                  'Group Watch paused.',
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // RESUME
+      // ----------------------------------------------------------
+
+      final groupWatchResumePath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/resume$',
+      );
+
+      final groupWatchResumeMatch =
+          groupWatchResumePath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchResumeMatch != null) {
+        final String sessionId =
+            groupWatchResumeMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.resume(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'message':
+                  'Group Watch resumed.',
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // UPDATE SHARED PLAYBACK POSITION
+      // ----------------------------------------------------------
+
+      final groupWatchPositionPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/position$',
+      );
+
+      final groupWatchPositionMatch =
+          groupWatchPositionPath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchPositionMatch != null) {
+        final String sessionId =
+            groupWatchPositionMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        final dynamic positionRaw =
+            body['positionMilliseconds'];
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        final int? positionMilliseconds =
+            _readInt(positionRaw);
+
+        if (positionMilliseconds == null ||
+            positionMilliseconds < 0) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'positionMilliseconds must be a non-negative integer.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.updatePlaybackPosition(
+            sessionId: sessionId,
+            profileId: profileId,
+            position: Duration(
+              milliseconds:
+                  positionMilliseconds,
+            ),
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'playbackPositionMilliseconds':
+                  session.playbackPosition
+                      .inMilliseconds,
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // END GROUP WATCH
+      // ----------------------------------------------------------
+
+      final groupWatchEndPath =
+          RegExp(
+        r'^/api/v1/group/watch/([^/]+)/end$',
+      );
+
+      final groupWatchEndMatch =
+          groupWatchEndPath.firstMatch(
+        path,
+      );
+
+      if (request.method == 'POST' &&
+          groupWatchEndMatch != null) {
+        final String sessionId =
+            groupWatchEndMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession session =
+              watchService.endSession(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          if (session.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          database.saveGroupWatchSession(
+            session,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'session': session.toJson(),
+              'message':
+                  'Group Watch ended.',
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // DELETE GROUP WATCH SESSION
+      // ----------------------------------------------------------
+
+      if (request.method == 'DELETE' &&
+          groupWatchMatch != null) {
+        final String sessionId =
+            groupWatchMatch.group(1)!;
+
+        final body =
+            await _readJsonBody(request);
+
+        final String profileId =
+            body['profileId']
+                    ?.toString()
+                    .trim() ??
+                '';
+
+        if (profileId.isEmpty) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error':
+                  'profileId is required.',
+            },
+          );
+          return;
+        }
+
+        try {
+          final GroupWatchSession? session =
+              watchService.getSession(
+            sessionId,
+          );
+
+          // FIXED: null-aware check
+          if (session?.accountId != accountId) {
+            await _sendJson(
+              request,
+              HttpStatus.notFound,
+              <String, dynamic>{
+                'error':
+                    'Group Watch session not found.',
+              },
+            );
+            return;
+          }
+
+          watchService.deleteSession(
+            sessionId: sessionId,
+            profileId: profileId,
+          );
+
+          database.deleteGroupWatchSession(
+            sessionId,
+          );
+
+          await _sendJson(
+            request,
+            HttpStatus.ok,
+            <String, dynamic>{
+              'message':
+                  'Group Watch session deleted.',
+            },
+          );
+        } catch (error) {
+          await _sendJson(
+            request,
+            HttpStatus.badRequest,
+            <String, dynamic>{
+              'error': error.toString(),
+            },
+          );
+        }
+
+        return;
+      }
+
+      // ==========================================================
+      // GROUP RECOMMENDATIONS
+      // ==========================================================
+
       // ----------------------------------------------------------
       // CREATE RECOMMENDATION
       // ----------------------------------------------------------
-      //
-      // A recommendation can now be for ANY movie or TV show.
-      // It does not have to exist in the media catalog.
-      //
-      // Expected body:
-      //
-      // {
-      //   "title": "Interstellar",
-      //   "type": "movie",
-      //   "profileId": "profile_123",
-      //   "votingDurationHours": 24
-      // }
-      //
-      // activeParticipants is optional.
-      //
-      // If it is not supplied, every profile belonging to the
-      // account becomes eligible to vote.
-      //
 
       if (request.method == 'POST' &&
           path == '/api/v1/group/recommendations') {
@@ -101,8 +1431,7 @@ class GroupRoutes {
             request,
             HttpStatus.badRequest,
             <String, dynamic>{
-              'error':
-                  'type is required.',
+              'error': 'type is required.',
             },
           );
           return;
@@ -151,26 +1480,12 @@ class GroupRoutes {
           return;
         }
 
-        // --------------------------------------------------------
-        // VOTING DURATION
-        // --------------------------------------------------------
-        //
-        // The frontend can send:
-        //
-        // 24       -> 24 hours
-        // 72       -> 3 days
-        // 168      -> 1 week
-        //
-        // Custom durations are also supported.
-        //
-
         final dynamic durationRaw =
             body['votingDurationHours'];
 
         double votingDurationHours;
 
         if (durationRaw == null) {
-          // Default duration.
           votingDurationHours = 24;
         } else if (durationRaw is num) {
           votingDurationHours =
@@ -215,16 +1530,6 @@ class GroupRoutes {
           );
           return;
         }
-
-        // --------------------------------------------------------
-        // ACTIVE PARTICIPANTS
-        // --------------------------------------------------------
-        //
-        // No participant-selection UI is required.
-        //
-        // If the frontend does not provide activeParticipants,
-        // every profile on the account becomes eligible.
-        //
 
         if (activeParticipants.isEmpty) {
           activeParticipants.addAll(
@@ -339,13 +1644,6 @@ class GroupRoutes {
       // ----------------------------------------------------------
       // GET SHARED GROUP WISHLIST
       // ----------------------------------------------------------
-      //
-      // This now returns BOTH:
-      //
-      // 1. Catalog media wishlist items.
-      // 2. Approved recommendations that may not exist in the
-      //    catalog.
-      //
 
       if (request.method == 'GET' &&
           path ==
@@ -353,10 +1651,6 @@ class GroupRoutes {
         final List<Map<String, dynamic>>
             wishlist =
             <Map<String, dynamic>>[];
-
-        // --------------------------------------------------------
-        // CATALOG MEDIA WISHLIST
-        // --------------------------------------------------------
 
         for (final mediaId
             in account.wishlistMediaIds) {
@@ -391,10 +1685,6 @@ class GroupRoutes {
             },
           );
         }
-
-        // --------------------------------------------------------
-        // APPROVED RECOMMENDATIONS
-        // --------------------------------------------------------
 
         for (final recommendationId
             in account
@@ -704,7 +1994,7 @@ class GroupRoutes {
       }
 
       // ----------------------------------------------------------
-      // REMOVE CATALOG MEDIA FROM GROUP WISHLIST
+      // REMOVE ITEM FROM GROUP WISHLIST
       // ----------------------------------------------------------
 
       final wishlistMediaPath =
@@ -722,7 +2012,6 @@ class GroupRoutes {
         final itemId =
             wishlistMediaMatch.group(1)!;
 
-        // First try the existing catalog-media wishlist.
         final removedMedia =
             account.removeFromWishlist(
           itemId,
@@ -743,7 +2032,6 @@ class GroupRoutes {
           return;
         }
 
-        // Then try recommendation-based wishlist.
         final removedRecommendation =
             account
                 .removeRecommendationFromWishlist(
@@ -779,7 +2067,7 @@ class GroupRoutes {
       }
 
       // ----------------------------------------------------------
-      // MARK CATALOG WISHLIST ITEM AS ACQUIRED
+      // MARK WISHLIST ITEM AS ACQUIRED
       // ----------------------------------------------------------
 
       final acquirePath =
@@ -832,10 +2120,6 @@ class GroupRoutes {
           );
           return;
         }
-
-        // --------------------------------------------------------
-        // CATALOG MEDIA
-        // --------------------------------------------------------
 
         if (account.isInWishlist(
           itemId,
@@ -896,19 +2180,6 @@ class GroupRoutes {
 
           return;
         }
-
-        // --------------------------------------------------------
-        // RECOMMENDATION
-        // --------------------------------------------------------
-        //
-        // A manually entered recommendation may not have a
-        // catalog mediaId, so it cannot automatically be added
-        // to Profile.ownedMedia.
-        //
-        // For now, acquisition removes the recommendation from
-        // the shared wishlist while preserving the recommendation
-        // record itself.
-        //
 
         if (account
             .isRecommendationInWishlist(
@@ -1008,8 +2279,6 @@ class GroupRoutes {
                 recommendationId,
           );
 
-          // If the recommendation was also in the
-          // shared wishlist, remove its reference.
           account
               .removeRecommendationFromWishlist(
             recommendationId,
@@ -1054,8 +2323,7 @@ class GroupRoutes {
         request,
         HttpStatus.internalServerError,
         <String, dynamic>{
-          'error':
-              error.toString(),
+          'error': error.toString(),
         },
       );
     }
@@ -1111,6 +2379,28 @@ class GroupRoutes {
           (item) => item.isNotEmpty,
         )
         .toSet();
+  }
+
+  // ------------------------------------------------------------
+  // INTEGER
+  // ------------------------------------------------------------
+
+  int? _readInt(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(
+      value.toString(),
+    );
   }
 
   // ------------------------------------------------------------

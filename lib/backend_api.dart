@@ -1001,6 +1001,656 @@ class BackendApi {
   }
 
   // ==========================================================
+  // GROUP WATCH
+  // ==========================================================
+
+  /// Creates a new Group Watch session and sends invitations
+  /// to the selected profiles.
+  ///
+  /// The host profile is automatically included by the backend.
+  Future<Map<String, dynamic>> createGroupWatchSession({
+    required String mediaId,
+    required String title,
+    required String type,
+    required String profileId,
+    Set<String>? invitedProfileIds,
+    int? invitationDurationHours,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanMediaId = mediaId.trim();
+    final String cleanTitle = title.trim();
+    final String cleanType = type.trim();
+    final String cleanProfileId = profileId.trim();
+
+    if (cleanMediaId.isEmpty) {
+      throw BackendApiException(
+        'Media ID is required.',
+      );
+    }
+
+    if (cleanTitle.isEmpty) {
+      throw BackendApiException(
+        'Title is required.',
+      );
+    }
+
+    if (cleanType != 'movie' &&
+        cleanType != 'tvShow') {
+      throw BackendApiException(
+        'Group Watch type must be "movie" or "tvShow".',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    if (invitationDurationHours != null &&
+        invitationDurationHours <= 0) {
+      throw BackendApiException(
+        'Invitation duration must be greater than zero.',
+      );
+    }
+
+    final Set<String> invitedProfiles =
+        <String>{
+      ...?invitedProfileIds,
+    }
+        .map((profile) => profile.trim())
+        .where((profile) => profile.isNotEmpty)
+        .toSet();
+
+    final Map<String, dynamic> body =
+        <String, dynamic>{
+      'mediaId': cleanMediaId,
+      'title': cleanTitle,
+      'type': cleanType,
+      'profileId': cleanProfileId,
+      'invitedProfileIds':
+          invitedProfiles.toList(),
+    };
+
+    if (invitationDurationHours != null) {
+      body['invitationDurationHours'] =
+          invitationDurationHours;
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch',
+      ),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to create Group Watch session.',
+    );
+  }
+
+  /// Gets all Group Watch sessions belonging to the
+  /// authenticated account.
+  Future<Map<String, dynamic>>
+      getGroupWatchSessions() async {
+    _requireAuthentication();
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/group/watch',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve Group Watch sessions.',
+    );
+  }
+
+  /// Gets one Group Watch session.
+  Future<Map<String, dynamic>>
+      getGroupWatchSession({
+    required String sessionId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve Group Watch session.',
+    );
+  }
+
+  /// Accepts a Group Watch invitation.
+  Future<Map<String, dynamic>>
+      acceptGroupWatchInvitation({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/accept',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to accept Group Watch invitation.',
+    );
+  }
+
+  /// Declines a Group Watch invitation.
+  Future<Map<String, dynamic>>
+      declineGroupWatchInvitation({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/decline',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to decline Group Watch invitation.',
+    );
+  }
+
+  /// Sets the audio track for one participant.
+  ///
+  /// Audio selection is individual. Each participant can select
+  /// a different available audio track.
+  Future<Map<String, dynamic>>
+      setGroupWatchAudioTrack({
+    required String sessionId,
+    required String profileId,
+    String? audioTrackId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final String? cleanAudioTrackId =
+        audioTrackId?.trim();
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/audio',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+        'audioTrackId':
+            cleanAudioTrackId?.isEmpty == true
+                ? null
+                : cleanAudioTrackId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to set Group Watch audio track.',
+    );
+  }
+
+  /// Sets the subtitle track for one participant.
+  ///
+  /// Subtitle selection is individual. Each participant can
+  /// select a different available subtitle track.
+  Future<Map<String, dynamic>>
+      setGroupWatchSubtitleTrack({
+    required String sessionId,
+    required String profileId,
+    String? subtitleTrackId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final String? cleanSubtitleTrackId =
+        subtitleTrackId?.trim();
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/subtitles',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+        'subtitleTrackId':
+            cleanSubtitleTrackId?.isEmpty == true
+                ? null
+                : cleanSubtitleTrackId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to set Group Watch subtitle track.',
+    );
+  }
+
+  /// Starts Group Watch playback.
+  ///
+  /// Only the host can start the session.
+  Future<Map<String, dynamic>>
+      startGroupWatchSession({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/start',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to start Group Watch.',
+    );
+  }
+
+  /// Resumes group playback.
+  Future<Map<String, dynamic>>
+      playGroupWatchSession({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/play',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to resume Group Watch playback.',
+    );
+  }
+
+  /// Pauses group playback.
+  ///
+  /// The reason is stored by the backend and can be posted
+  /// into Group Chat by AppController.
+  Future<Map<String, dynamic>>
+      pauseGroupWatchSession({
+    required String sessionId,
+    required String profileId,
+    required String reason,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+    final String cleanReason =
+        reason.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    if (cleanReason.isEmpty) {
+      throw BackendApiException(
+        'Pause reason is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/pause',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+        'reason': cleanReason,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to pause Group Watch.',
+    );
+  }
+
+  /// Resumes Group Watch after a participant paused it.
+  ///
+  /// The backend only permits the participant who paused
+  /// the session to resume it.
+  Future<Map<String, dynamic>>
+      resumeGroupWatchSession({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/resume',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to resume Group Watch.',
+    );
+  }
+
+  /// Updates the globally synchronized Group Watch position.
+  ///
+  /// The position is sent as seconds and may contain a fractional
+  /// value for sub-second precision.
+  Future<Map<String, dynamic>>
+      updateGroupWatchPosition({
+    required String sessionId,
+    required String profileId,
+    required Duration position,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    if (position.isNegative) {
+      throw BackendApiException(
+        'Playback position cannot be negative.',
+      );
+    }
+
+    final double positionSeconds =
+        position.inMilliseconds / 1000.0;
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/position',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+        'positionSeconds':
+            positionSeconds,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to update Group Watch position.',
+    );
+  }
+
+  /// Ends a Group Watch session.
+  ///
+  /// Only the host can end the session.
+  Future<Map<String, dynamic>>
+      endGroupWatchSession({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/end',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to end Group Watch.',
+    );
+  }
+
+  /// Deletes a Group Watch session.
+  ///
+  /// Only the host can delete the session.
+  Future<Map<String, dynamic>>
+      deleteGroupWatchSession({
+    required String sessionId,
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+
+    final String cleanSessionId =
+        sessionId.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanSessionId.isEmpty) {
+      throw BackendApiException(
+        'Group Watch session ID is required.',
+      );
+    }
+
+    if (cleanProfileId.isEmpty) {
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
+    }
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': cleanProfileId,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to delete Group Watch session.',
+    );
+  }
+
+  // ==========================================================
   // ARM
   // ==========================================================
 

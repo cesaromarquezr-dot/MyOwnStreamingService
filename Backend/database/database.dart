@@ -1,6 +1,7 @@
 import '../models/account.dart';
 import '../models/media.dart';
 import '../models/group_recommendation.dart';
+import '../models/group_watch_session.dart';
 
 class Database {
   Database._();
@@ -76,6 +77,102 @@ class Database {
   }
 
   // ------------------------------------------------------------
+  // GROUP WATCH
+  // ------------------------------------------------------------
+
+  final Map<String, GroupWatchSession>
+      groupWatchSessionsById =
+      <String, GroupWatchSession>{};
+
+  void saveGroupWatchSession(
+    GroupWatchSession session,
+  ) {
+    groupWatchSessionsById[session.id] = session;
+  }
+
+  GroupWatchSession? getGroupWatchSession(
+    String sessionId,
+  ) {
+    return groupWatchSessionsById[sessionId];
+  }
+
+  List<GroupWatchSession> getGroupWatchSessions() {
+    return groupWatchSessionsById.values.toList();
+  }
+
+  List<GroupWatchSession> getGroupWatchSessionsForAccount(
+    String accountId,
+  ) {
+    final String cleanAccountId =
+        accountId.trim();
+
+    if (cleanAccountId.isEmpty) {
+      return <GroupWatchSession>[];
+    }
+
+    return groupWatchSessionsById.values
+        .where(
+          (session) =>
+              session.accountId == cleanAccountId,
+        )
+        .toList();
+  }
+
+  List<GroupWatchSession> getGroupWatchSessionsForProfile(
+    String profileId,
+  ) {
+    final String cleanProfileId =
+        profileId.trim();
+
+    if (cleanProfileId.isEmpty) {
+      return <GroupWatchSession>[];
+    }
+
+    return groupWatchSessionsById.values
+        .where(
+          (session) =>
+              session.hasParticipant(cleanProfileId),
+        )
+        .toList();
+  }
+
+  List<GroupWatchSession>
+      getActiveGroupWatchSessions() {
+    return groupWatchSessionsById.values
+        .where(
+          (session) =>
+              session.status ==
+                  GroupWatchSessionStatus.playing ||
+              session.status ==
+                  GroupWatchSessionStatus.paused,
+        )
+        .toList();
+  }
+
+  List<GroupWatchSession>
+      getWaitingGroupWatchSessions() {
+    return groupWatchSessionsById.values
+        .where(
+          (session) =>
+              session.status ==
+                  GroupWatchSessionStatus.waiting ||
+              session.status ==
+                  GroupWatchSessionStatus.ready,
+        )
+        .toList();
+  }
+
+  void deleteGroupWatchSession(
+    String sessionId,
+  ) {
+    groupWatchSessionsById.remove(sessionId);
+  }
+
+  void clearGroupWatchSessions() {
+    groupWatchSessionsById.clear();
+  }
+
+  // ------------------------------------------------------------
   // CLEAR DATABASE
   // ------------------------------------------------------------
 
@@ -86,6 +183,7 @@ class Database {
     sessions.clear();
     mediaById.clear();
     groupRecommendationsById.clear();
+    groupWatchSessionsById.clear();
   }
 
   // ------------------------------------------------------------
@@ -157,6 +255,11 @@ class Database {
     sessions.removeWhere(
       (_, storedAccountId) =>
           storedAccountId == accountId,
+    );
+
+    groupWatchSessionsById.removeWhere(
+      (_, session) =>
+          session.accountId == accountId,
     );
   }
 
