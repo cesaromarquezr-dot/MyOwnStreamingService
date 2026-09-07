@@ -547,8 +547,7 @@ class GroupWatchSession {
       'isPlaying': isPlaying,
       'pausedByProfileId':
           pausedByProfileId,
-      'pauseReason':
-          pauseReason,
+      'pauseReason': pauseReason,
     };
   }
 }
@@ -1222,8 +1221,9 @@ class AppController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Profile addProfile(
-    String name,
-  ) {
+    String name, {
+    String? avatarUrl,
+  }) {
     if (currentAccount == null) {
       throw StateError(
         'No account is currently signed in.',
@@ -1239,12 +1239,15 @@ class AppController extends ChangeNotifier {
       );
     }
 
+    final cleanedName = name.trim();
+
     final profile =
         Profile(
       id: _generateId('profile'),
-      name: name.trim().isEmpty
+      name: cleanedName.isEmpty
           ? 'Profile ${currentAccount!.profiles.length + 1}'
-          : name.trim(),
+          : cleanedName,
+      avatarUrl: avatarUrl,
     );
 
     currentAccount!

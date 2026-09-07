@@ -1,11 +1,8 @@
 name: netflix
 description: A new Flutter application.
 
-# The following line prevents the package from being accidentally published to
-# pub.dev using `pub publish`. This is preferred for private packages.
 publish_to: 'none'
 
-# The following defines the version and build number for your application.
 version: 1.0.0+1
 
 environment:
@@ -15,18 +12,12 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
   cupertino_icons: ^1.0.2
-
-  # Font Awesome icons.
   font_awesome_flutter: ^11.0.0
-
-  # Network images.
   cached_network_image: ^3.3.1
-
-  # HTTP requests to the personal streaming service backend.
   http: ^1.5.0
   url_launcher: ^6.3.2
+  image_picker: ^1.1.2
 
   # YouTube trailer playback.
   youtube_player_flutter: ^10.0.1
@@ -36,19 +27,8 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# For information regarding the generic Dart part of this file, see:
-# https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter.
 flutter:
-
-  # The following line ensures that Material Icons font is
-  # included in your application.
   uses-material-design: true
 
-  # Application assets.
   assets:
-    - assets/logo.png
-    - assets/symble.png
-
-  # To add custom fonts, add them here when needed.
+    - assets/symbol.jpg

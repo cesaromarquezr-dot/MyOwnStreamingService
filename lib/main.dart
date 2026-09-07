@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'signup.dart';
@@ -7,6 +8,7 @@ import 'series.dart';
 import 'smart_search.dart';
 import 'hollywood.dart';
 import 'details.dart';
+import 'profiles.dart';
 void main() {
   runApp(const MyStreamingService());
 }
@@ -25,6 +27,42 @@ class MyStreamingService extends StatelessWidget {
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
+        cardTheme: CardThemeData(
+          color: const Color(0xFF141414),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: const Color(0xFF151515),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF151515),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.redAccent),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: const Color(0xFF0E0E0E),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
       ),
       home: const SplashScreen(),
     );
@@ -128,10 +166,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
+      // Capture the NavigatorState while LoginScreen is still mounted.
+      // ProfileSelectionScreen lives after this route is replaced, so its
+      // callback must not try to use LoginScreen's BuildContext.
+      final navigator = Navigator.of(context);
+
+      navigator.pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const MainScreen(),
+          builder: (_) => ProfileSelectionScreen(
+            onProfileSelected: () {
+              navigator.pushReplacement(
+                PageRouteBuilder(
+                  pageBuilder: (_, __, ___) => const MainScreen(),
+                  transitionDuration: const Duration(milliseconds: 450),
+                  transitionsBuilder: (_, animation, __, child) =>
+                      FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       );
     } catch (error) {
@@ -290,72 +346,530 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int selectedIndex = 0;
 
+  void _openMore() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _MoreActionsSheet(
+        onImport: () {
+          Navigator.pop(context);
+          _openImport();
+        },
+        onProfiles: () {
+          Navigator.pop(context);
+          _openProfiles();
+        },
+        onWishlist: () {
+          Navigator.pop(context);
+          showDialog<void>(
+            context: context,
+            builder: (_) => const WishlistDialog(),
+          );
+        },
+      ),
+    );
+  }
+
+  void _openImport() {
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ImportMediaScreen()),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _openProfiles() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _openGroup() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const GroupHubScreen()),
+    );
+  }
+
+  void _openNotifications() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _ActivitySheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(
-        onRefresh: () => setState(() {}),
-      ),
+      HomeScreen(onRefresh: () => setState(() {})),
       const MoviesScreen(),
       const SeriesScreen(),
       const ActorsScreen(),
       const MusicScreen(),
       const TrailersScreen(),
       const SmartSearchScreen(),
-      const ProfileScreen(),
     ];
 
     return Scaffold(
-      body: pages[selectedIndex],
-      bottomNavigationBar: NavigationBar(
+      backgroundColor: const Color(0xFF070707),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: KeyedSubtree(
+          key: ValueKey(selectedIndex),
+          child: pages[selectedIndex],
+        ),
+      ),
+      bottomNavigationBar: _StreamingNavigationBar(
         selectedIndex: selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            selectedIndex = index;
-          });
+        onSelect: (index) {
+          if (index == selectedIndex) return;
+          setState(() => selectedIndex = index);
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
+        onNotifications: _openNotifications,
+        onGroup: _openGroup,
+        onProfile: _openProfiles,
+        onMore: _openMore,
+      ),
+    );
+  }
+}
+
+class _StreamingNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onNotifications;
+  final VoidCallback onGroup;
+  final VoidCallback onProfile;
+  final VoidCallback onMore;
+
+  const _StreamingNavigationBar({
+    required this.selectedIndex,
+    required this.onSelect,
+    required this.onNotifications,
+    required this.onGroup,
+    required this.onProfile,
+    required this.onMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <_NavItemData>[
+      const _NavItemData(Icons.home_outlined, Icons.home, 'Home'),
+      const _NavItemData(Icons.movie_outlined, Icons.movie, 'Movies'),
+      const _NavItemData(Icons.tv_outlined, Icons.tv, 'TV Shows'),
+      const _NavItemData(Icons.people_outline, Icons.people, 'Actors'),
+      const _NavItemData(Icons.music_note_outlined, Icons.music_note, 'Music'),
+      const _NavItemData(Icons.play_arrow_outlined, Icons.play_arrow, 'Trailers'),
+      const _NavItemData(Icons.search_outlined, Icons.search, 'Search'),
+    ];
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: const Color(0xF20E0E0E),
+          border: Border(
+            top: BorderSide(color: Colors.white.withValues(alpha: .07)),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.movie_outlined),
-            selectedIcon: Icon(Icons.movie),
-            label: 'Movies',
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 28,
+              offset: Offset(0, -8),
+              color: Color(0x66000000),
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              for (var i = 0; i < items.length; i++)
+                _NavButton(
+                  data: items[i],
+                  selected: selectedIndex == i,
+                  onTap: () => onSelect(i),
+                ),
+              _NavButton(
+                data: const _NavItemData(
+                  Icons.notifications_none_rounded,
+                  Icons.notifications_rounded,
+                  'Notifications',
+                ),
+                selected: false,
+                showBadge: AppController.instance.activity.isNotEmpty,
+                onTap: onNotifications,
+              ),
+              _NavButton(
+                data: const _NavItemData(
+                  Icons.groups_outlined,
+                  Icons.groups_rounded,
+                  'Group Chat',
+                ),
+                selected: false,
+                onTap: onGroup,
+              ),
+              _NavButton(
+                data: const _NavItemData(
+                  Icons.account_circle_outlined,
+                  Icons.account_circle_rounded,
+                  'Profile',
+                ),
+                selected: false,
+                onTap: onProfile,
+              ),
+              _NavButton(
+                data: const _NavItemData(
+                  Icons.more_horiz_rounded,
+                  Icons.more_horiz_rounded,
+                  'More',
+                ),
+                selected: false,
+                onTap: onMore,
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.tv_outlined),
-            selectedIcon: Icon(Icons.tv),
-            label: 'TV Shows',
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItemData {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+
+  const _NavItemData(this.icon, this.selectedIcon, this.label);
+}
+
+class _NavButton extends StatefulWidget {
+  final _NavItemData data;
+  final bool selected;
+  final bool showBadge;
+  final VoidCallback onTap;
+
+  const _NavButton({
+    required this.data,
+    required this.selected,
+    required this.onTap,
+    this.showBadge = false,
+  });
+
+  @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.selected;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: AnimatedScale(
+        scale: pressed ? .94 : 1,
+        duration: const Duration(milliseconds: 100),
+        child: Material(
+          color: active ? Colors.white.withValues(alpha: .10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTapDown: (_) => setState(() => pressed = true),
+            onTapCancel: () => setState(() => pressed = false),
+            onTap: () {
+              setState(() => pressed = false);
+              widget.onTap();
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              width: active ? 92 : 68,
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Icon(
+                          active ? widget.data.selectedIcon : widget.data.icon,
+                          key: ValueKey(active),
+                          size: 23,
+                          color: active ? Colors.white : Colors.white70,
+                        ),
+                      ),
+                      if (widget.showBadge)
+                        Positioned(
+                          right: -4,
+                          top: -2,
+                          child: Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.data.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: active ? Colors.white : Colors.white54,
+                      fontSize: 10,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    width: active ? 18 : 0,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Actors',
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreActionsSheet extends StatelessWidget {
+  final VoidCallback onImport;
+  final VoidCallback onProfiles;
+  final VoidCallback onWishlist;
+
+  const _MoreActionsSheet({
+    required this.onImport,
+    required this.onProfiles,
+    required this.onWishlist,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PremiumSheet(
+      title: 'More',
+      subtitle: 'Manage your streaming service',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SheetAction(
+            icon: Icons.library_add_outlined,
+            title: 'Add Movie or Show',
+            subtitle: 'Import media into your library',
+            onTap: onImport,
           ),
-          NavigationDestination(
-            icon: Icon(Icons.music_note_outlined),
-            selectedIcon: Icon(Icons.music_note),
-            label: 'Music',
+          _SheetAction(
+            icon: Icons.manage_accounts_outlined,
+            title: 'Manage Profiles',
+            subtitle: 'Switch, create, or remove profiles',
+            onTap: onProfiles,
           ),
-          NavigationDestination(
-            icon: Icon(Icons.play_arrow_outlined),
-            selectedIcon: Icon(Icons.play_arrow),
-            label: 'Trailers',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.search_outlined),
-            selectedIcon: Icon(Icons.search),
-            label: 'Search',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_circle_outlined),
-            selectedIcon: Icon(Icons.account_circle),
-            label: 'Profile',
+          _SheetAction(
+            icon: Icons.favorite_outline_rounded,
+            title: 'Group Wishlist',
+            subtitle: 'See shared movies and shows',
+            onTap: onWishlist,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SheetAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _SheetAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: Colors.white),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 3),
+                      Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumSheet extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  const _PremiumSheet({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(10),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141414),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.white.withValues(alpha: .08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text(subtitle, style: const TextStyle(color: Colors.white54)),
+            const SizedBox(height: 16),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivitySheet extends StatelessWidget {
+  const _ActivitySheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final activity = AppController.instance.activity;
+    return _PremiumSheet(
+      title: 'Notifications',
+      subtitle: activity.isEmpty ? 'You are all caught up' : 'Recent activity',
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * .55,
+        child: activity.isEmpty
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.notifications_none_rounded, size: 54, color: Colors.white38),
+                    SizedBox(height: 12),
+                    Text('No activity yet.', style: TextStyle(color: Colors.white60)),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                itemCount: activity.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, index) {
+                  final event = activity[index];
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .045),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Color(0x22FF0000),
+                          child: Icon(Icons.notifications_none_rounded, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(event.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 4),
+                              Text(event.action, style: const TextStyle(color: Colors.white60)),
+                              const SizedBox(height: 5),
+                              Text(
+                                event.timestamp.toString(),
+                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -365,13 +879,44 @@ class _MainScreenState extends State<MainScreen> {
 // HOME
 // ============================================================
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final VoidCallback? onRefresh;
 
-  const HomeScreen({
-    super.key,
-    this.onRefresh,
-  });
+  const HomeScreen({super.key, this.onRefresh});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _heroController;
+
+  @override
+  void initState() {
+    super.initState();
+    _heroController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _heroController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final controller = AppController.instance;
+    if (controller.backendApi.isAuthenticated) {
+      await controller.loadRecommendations();
+      await controller.loadGroupWishlist();
+      await controller.loadGroupRecommendations();
+    }
+    widget.onRefresh?.call();
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -380,243 +925,251 @@ class HomeScreen extends StatelessWidget {
 
     if (profile == null) {
       return const Scaffold(
-        body: Center(
-          child: Text('No profile selected.'),
-        ),
+        backgroundColor: Color(0xFF070707),
+        body: Center(child: Text('No profile selected.')),
       );
     }
 
     final library = controller.library;
 
-    final movies = library
-        .where(
-          (media) =>
-              media.type.toLowerCase() == 'movie',
-        )
-        .toList();
-
-    final tvShows = library
-        .where(
-          (media) {
-            final type = media.type.toLowerCase();
-
-            return type == 'tvshow' ||
-                type == 'tv_show' ||
-                type == 'tv show';
-          },
-        )
-        .toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'My Streaming Service',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
+    // Deliberately keep the empty home completely clean. All management
+    // actions live in the navigation bar's More menu.
+    if (library.isEmpty) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF070707),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Your library is empty',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please add using the 3 dots in the navbar.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          ActivityButton(),
-          IconButton(
-            tooltip: 'Group',
-            icon: const Icon(Icons.groups),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const GroupHubScreen(),
-                ),
-              );
-            },
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'profiles') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const ProfileScreen(),
-                  ),
-                );
-              }
+      );
+    }
 
-              if (value == 'import') {
-  Navigator.push<bool>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const ImportMediaScreen(),
-    ),
-  );
-}
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem<String>(
-                value: 'profiles',
-                child: Text('Profiles'),
+    final watched = controller.watched;
+    final movies = library
+        .where((media) => media.type.toLowerCase() == 'movie')
+        .toList();
+    final tvShows = library.where((media) {
+      final type = media.type.toLowerCase();
+      return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
+    }).toList();
+    final heroMedia = watched.isNotEmpty ? watched.first : library.first;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF070707),
+      body: RefreshIndicator(
+        color: Colors.white,
+        backgroundColor: const Color(0xFF171717),
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              floating: true,
+              elevation: 0,
+              backgroundColor: const Color(0xE6070707),
+              surfaceTintColor: Colors.transparent,
+              titleSpacing: 20,
+              title: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      gradient: const LinearGradient(
+                        colors: [Colors.red, Color(0xFF8B0000)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 23),
+                  ),
+                  const SizedBox(width: 11),
+                  const Text(
+                    'STREAM',
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 1.6),
+                  ),
+                ],
               ),
-              PopupMenuItem<String>(
-                value: 'import',
-                child: Text('Add Movie or Show'),
+            ),
+            SliverToBoxAdapter(
+              child: FadeTransition(
+                opacity: CurvedAnimation(parent: _heroController, curve: Curves.easeOut),
+                child: _HomeHero(
+                  media: heroMedia,
+                  profileName: profile.name,
+                  onPlay: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MediaDetailsScreen(media: heroMedia),
+                      ),
+                    );
+                  },
+                ),
               ),
+            ),
+            if (watched.isNotEmpty) ...[
+              const SliverToBoxAdapter(
+                child: _PremiumSectionHeader(
+                  title: 'Continue Watching',
+                  subtitle: 'Pick up where you left off',
+                ),
+              ),
+              SliverToBoxAdapter(child: MediaHorizontalList(media: watched)),
             ],
+            if (movies.isNotEmpty) ...[
+              const SliverToBoxAdapter(
+                child: _PremiumSectionHeader(
+                  title: 'Movies',
+                  subtitle: 'From your collection',
+                ),
+              ),
+              SliverToBoxAdapter(child: MediaHorizontalList(media: movies)),
+            ],
+            if (tvShows.isNotEmpty) ...[
+              const SliverToBoxAdapter(
+                child: _PremiumSectionHeader(
+                  title: 'TV Shows',
+                  subtitle: 'Your series collection',
+                ),
+              ),
+              SliverToBoxAdapter(child: MediaHorizontalList(media: tvShows)),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeHero extends StatelessWidget {
+  final MediaItem media;
+  final String profileName;
+  final VoidCallback onPlay;
+
+  const _HomeHero({
+    required this.media,
+    required this.profileName,
+    required this.onPlay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 430,
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: const Color(0xFF151515),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (media.imageUrl != null)
+            Image.network(
+              media.imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: .08),
+                  Colors.black.withValues(alpha: .26),
+                  Colors.black.withValues(alpha: .95),
+                ],
+                stops: const [0, .42, 1],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  media.type.toUpperCase(),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: Colors.white70),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  media.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 31, height: 1.05, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 7),
+                Text('Welcome back, $profileName', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 17),
+                FilledButton.icon(
+                  onPressed: onPlay,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Open', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          onRefresh?.call();
+    );
+  }
+}
 
-          if (controller.backendApi.isAuthenticated) {
-            await controller.loadRecommendations();
-            await controller.loadGroupWishlist();
-            await controller.loadGroupRecommendations();
-          }
-        },
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text(
-              'Welcome, ${profile.name}',
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your personal library',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-              ),
-            ),
-            const SizedBox(height: 25),
-            if (library.isEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(30),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.video_library_outlined,
-                        size: 70,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 15),
-                      const Text(
-                        'Your library is empty',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Add your own movies and TV shows to build your personal streaming library.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const ImportMediaScreen(),
-                            ),
-                          ).then((added) {
-                            if (added == true) {
-                              onRefresh?.call();
-                            }
-                          });
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text(
-                          'Add Movie or Show',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (controller.watched.isNotEmpty) ...[
-              const SectionTitle(
-                title: 'Recently Watched',
-              ),
-              MediaHorizontalList(
-                media: controller.watched,
-              ),
-              const SizedBox(height: 25),
-            ],
-            if (movies.isNotEmpty) ...[
-              const SectionTitle(
-                title: 'Movies',
-              ),
-              MediaHorizontalList(
-                media: movies,
-              ),
-              const SizedBox(height: 25),
-            ],
-            if (tvShows.isNotEmpty) ...[
-              const SectionTitle(
-                title: 'TV Shows',
-              ),
-              MediaHorizontalList(
-                media: tvShows,
-              ),
-              const SizedBox(height: 25),
-            ],
-            if (library.isNotEmpty) ...[
-              const SectionTitle(
-                title: 'My Library',
-              ),
-              MediaHorizontalList(
-                media: library,
-              ),
-              const SizedBox(height: 25),
-            ],
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const ImportMediaScreen(),
-                  ),
-                ).then((added) {
-                  if (added == true) {
-                    onRefresh?.call();
-                  }
-                });
-              },
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Add Movie or Show',
-              ),
-            ),
-            const SizedBox(height: 15),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const GroupHubScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.groups),
-              label: const Text(
-                'Group Chat & Watch Together',
-              ),
-            ),
-          ],
-        ),
+class _PremiumSectionHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _PremiumSectionHeader({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        ],
       ),
     );
   }
@@ -1308,169 +1861,118 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() =>
-      _ProfileScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState
-    extends State<ProfileScreen> {
-  final controller =
-      AppController.instance;
+class _ProfileScreenState extends State<ProfileScreen> {
+  final controller = AppController.instance;
 
   @override
   Widget build(BuildContext context) {
-    final account =
-        controller.currentAccount;
+    final account = controller.currentAccount;
 
     if (account == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text(
-            'No account is logged in.',
-          ),
-        ),
-      );
+      return const Scaffold(body: Center(child: Text('No account is logged in.')));
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFF070707),
       appBar: AppBar(
-        title: const Text('Profiles'),
+        title: const Text('Profiles', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
         children: [
-          Text(
-            'Profiles '
-            '${account.profiles.length}/7',
-            style: const TextStyle(
-              fontSize: 25,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Up to 7 profiles with no extra charge.',
-          ),
-          const SizedBox(height: 20),
+          const Text('Who is watching?', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text('${account.profiles.length}/7 profiles', style: const TextStyle(color: Colors.white54)),
+          const SizedBox(height: 24),
           ...account.profiles.map(
-            (profile) => Card(
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundImage:
-                      profile.avatarUrl == null
-                          ? null
-                          : NetworkImage(
-                              profile.avatarUrl!,
-                            ),
-                  child:
-                      profile.avatarUrl == null
-                          ? const Icon(
-                              Icons.person,
-                            )
-                          : null,
-                ),
-                title: Text(profile.name),
-                subtitle: Text(
-                  profile.id ==
-                          controller
-                              .currentProfile
-                              ?.id
-                      ? 'Current profile'
-                      : 'Profile',
-                ),
-                trailing:
-                    PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'switch') {
-                      controller.switchProfile(
-                        profile.id,
-                      );
-                      setState(() {});
-                    }
-
-                    if (value == 'delete') {
-                      controller.removeProfile(
-                        profile.id,
-                      );
-                      setState(() {});
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem<String>(
-                      value: 'switch',
-                      child: Text('Switch'),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Text('Delete'),
-                    ),
-                  ],
-                ),
+            (profile) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ProfileManagementCard(
+                profile: profile,
+                current: controller.currentProfile?.id == profile.id,
+                onSwitch: () {
+                  controller.switchProfile(profile.id);
+                  setState(() {});
+                },
+                onDelete: () {
+                  controller.removeProfile(profile.id);
+                  setState(() {});
+                },
               ),
             ),
           ),
-          const SizedBox(height: 15),
           if (account.profiles.length < 7)
-            ElevatedButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) =>
-                      const AddProfileDialog(),
-                ).then((_) {
-                  setState(() {});
-                });
-              },
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'ADD PROFILE',
-              ),
-            ),
-          const SizedBox(height: 30),
-          Card(
-            child: ListTile(
-              leading: const Icon(
-                Icons.workspace_premium,
-              ),
-              title: Text(
-                account.subscription.plan.name
-                    .toUpperCase(),
-              ),
-              subtitle: Text(
-                account.subscription.status.name,
-              ),
-              trailing: TextButton(
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: OutlinedButton.icon(
                 onPressed: () {
                   showDialog(
                     context: context,
-                    builder: (_) =>
-                        const SubscribeDialog(),
-                  );
+                    builder: (_) => const AddProfileDialog(),
+                  ).then((_) {
+                    if (mounted) setState(() {});
+                  });
                 },
-                child: const Text(
-                  'Manage',
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('CREATE PROFILE'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .045),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: .07)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.workspace_premium_outlined, size: 28),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(account.subscription.plan.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 3),
+                      Text(account.subscription.status.name, style: const TextStyle(color: Colors.white54)),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => showDialog(context: context, builder: (_) => const SubscribeDialog()),
+                  child: const Text('Manage'),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
-          OutlinedButton(
+          const SizedBox(height: 18),
+          OutlinedButton.icon(
             onPressed: () async {
               await controller.logoutFromBackend();
-
               if (!context.mounted) return;
-
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const LoginScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (_) => false,
               );
             },
-            child: const Text(
-              'LOG OUT',
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('LOG OUT'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              side: BorderSide(color: Colors.red.withValues(alpha: .35)),
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ],
@@ -1479,22 +1981,109 @@ class _ProfileScreenState
   }
 }
 
-// ============================================================
-// ADD PROFILE
-// ============================================================
+class _ProfileManagementCard extends StatelessWidget {
+  final Profile profile;
+  final bool current;
+  final VoidCallback onSwitch;
+  final VoidCallback onDelete;
+
+  const _ProfileManagementCard({
+    required this.profile,
+    required this.current,
+    required this.onSwitch,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: current ? Colors.white.withValues(alpha: .09) : Colors.white.withValues(alpha: .045),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onSwitch,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              _MainProfileAvatar(profile: profile, size: 58),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(profile.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(current ? 'Current profile' : 'Tap to switch', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'switch') onSwitch();
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'switch', child: Text('Switch')), 
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MainProfileAvatar extends StatelessWidget {
+  final Profile profile;
+  final double size;
+
+  const _MainProfileAvatar({required this.profile, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = profile.avatarUrl;
+    if (avatar != null && avatar.startsWith('avatar:')) {
+      final index = int.tryParse(avatar.substring(6)) ?? 0;
+      const icons = [
+        Icons.person_rounded,
+        Icons.face_rounded,
+        Icons.pets_rounded,
+        Icons.smart_toy_rounded,
+        Icons.rocket_launch_rounded,
+        Icons.auto_awesome_rounded,
+      ];
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: .08),
+        ),
+        child: Icon(icons[index % icons.length], size: size * .48, color: Colors.white70),
+      );
+    }
+    if (avatar != null && (avatar.startsWith('http://') || avatar.startsWith('https://'))) {
+      return CircleAvatar(radius: size / 2, backgroundImage: NetworkImage(avatar));
+    }
+    if (avatar != null && avatar.isNotEmpty) {
+      return CircleAvatar(radius: size / 2, backgroundImage: FileImage(File(avatar)));
+    }
+    return CircleAvatar(radius: size / 2, child: Text(profile.name.isEmpty ? '?' : profile.name[0].toUpperCase()));
+  }
+}
 
 class AddProfileDialog extends StatefulWidget {
   const AddProfileDialog({super.key});
 
   @override
-  State<AddProfileDialog> createState() =>
-      _AddProfileDialogState();
+  State<AddProfileDialog> createState() => _AddProfileDialogState();
 }
 
-class _AddProfileDialogState
-    extends State<AddProfileDialog> {
-  final nameController =
-      TextEditingController();
+class _AddProfileDialogState extends State<AddProfileDialog> {
+  final nameController = TextEditingController();
 
   @override
   void dispose() {
@@ -1505,40 +2094,26 @@ class _AddProfileDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text(
-        'Add Profile',
-      ),
+      title: const Text('Create Profile'),
       content: TextField(
         controller: nameController,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
         decoration: const InputDecoration(
           labelText: 'Profile name',
+          prefixIcon: Icon(Icons.person_outline_rounded),
         ),
       ),
       actions: [
-        TextButton(
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+        FilledButton(
           onPressed: () {
-            Navigator.pop(context);
-          },
-          child: const Text(
-            'CANCEL',
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final name =
-                nameController.text.trim();
-
+            final name = nameController.text.trim();
             if (name.isEmpty) return;
-
-            AppController.instance.addProfile(
-              name,
-            );
-
+            AppController.instance.addProfile(name);
             Navigator.pop(context);
           },
-          child: const Text(
-            'ADD',
-          ),
+          child: const Text('CREATE'),
         ),
       ],
     );
@@ -1610,15 +2185,11 @@ class GroupHubScreen extends StatefulWidget {
   const GroupHubScreen({super.key});
 
   @override
-  State<GroupHubScreen> createState() =>
-      _GroupHubScreenState();
+  State<GroupHubScreen> createState() => _GroupHubScreenState();
 }
 
-class _GroupHubScreenState
-    extends State<GroupHubScreen> {
-  final messageController =
-      TextEditingController();
-
+class _GroupHubScreenState extends State<GroupHubScreen> {
+  final messageController = TextEditingController();
   bool loading = false;
 
   @override
@@ -1634,111 +2205,67 @@ class _GroupHubScreenState
   }
 
   Future<void> loadGroupData() async {
-    final controller =
-        AppController.instance;
-
-    if (!controller.backendApi.isAuthenticated) {
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        loading = true;
-      });
-    }
-
+    final controller = AppController.instance;
+    if (!controller.backendApi.isAuthenticated) return;
+    if (mounted) setState(() => loading = true);
     try {
       await Future.wait([
         controller.loadGroupWishlist(),
         controller.loadGroupRecommendations(),
       ]);
     } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to load group data: $error',
-          ),
-        ),
-      );
+      if (mounted) _showMessage('Unable to load group data: $error');
     } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void sendMessage() {
-    final text =
-        messageController.text.trim();
-
-    if (text.isEmpty) {
-      return;
-    }
-
-    AppController.instance.sendGroupMessage(
-      message: text,
-    );
-
+    final text = messageController.text.trim();
+    if (text.isEmpty) return;
+    AppController.instance.sendGroupMessage(message: text);
     messageController.clear();
-
     setState(() {});
   }
 
   Future<void> openRecommendationDialog() async {
-    await showDialog(
-      context: context,
-      builder: (_) =>
-          const AddGroupRecommendationDialog(),
-    );
-
-    if (mounted) {
-      setState(() {});
-    }
+    await showDialog(context: context, builder: (_) => const AddGroupRecommendationDialog());
+    if (mounted) setState(() {});
   }
 
   Future<void> refreshRecommendations() async {
-    final controller =
-        AppController.instance;
-
     try {
-      await controller.loadGroupRecommendations();
-
-      if (mounted) {
-        setState(() {});
-      }
+      await AppController.instance.loadGroupRecommendations();
+      if (mounted) setState(() {});
     } catch (error) {
-      if (!mounted) return;
+      if (mounted) _showMessage('Unable to refresh recommendations: $error');
+    }
+  }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to refresh recommendations: $error',
-          ),
-        ),
-      );
+  Future<void> refreshWishlist() async {
+    try {
+      await AppController.instance.loadGroupWishlist();
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) _showMessage('Unable to refresh wishlist: $error');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
-
+    final controller = AppController.instance;
     return Scaffold(
+      backgroundColor: const Color(0xFF070707),
       appBar: AppBar(
-        title: const Text('Group'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh),
-            onPressed:
-                loading ? null : loadGroupData,
-          ),
-        ],
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Group', style: TextStyle(fontWeight: FontWeight.w900)),
+        actions: [IconButton(tooltip: 'Refresh', onPressed: loading ? null : loadGroupData, icon: const Icon(Icons.refresh_rounded))],
       ),
       body: Column(
         children: [
@@ -1746,263 +2273,61 @@ class _GroupHubScreenState
             child: RefreshIndicator(
               onRefresh: loadGroupData,
               child: ListView(
-                physics:
-                    const AlwaysScrollableScrollPhysics(),
-                padding:
-                    const EdgeInsets.all(15),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
                 children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Group Chat',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed:
-                            openRecommendationDialog,
-                        icon: const Icon(
-                          Icons.movie_outlined,
-                        ),
-                        label: const Text(
-                          'RECOMMEND',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  if (controller
-                      .groupRecommendations
-                      .isNotEmpty) ...[
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Group Recommendations',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight:
-                                  FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip:
-                              'Refresh recommendations',
-                          icon: const Icon(
-                            Icons.refresh,
-                          ),
-                          onPressed:
-                              refreshRecommendations,
-                        ),
-                      ],
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF242424), Color(0xFF101010)]),
+                      border: Border.all(color: Colors.white.withValues(alpha: .07)),
                     ),
-                    const SizedBox(height: 8),
-                    ...controller
-                        .groupRecommendations
-                        .map(
-                          (recommendation) =>
-                              GroupRecommendationCard(
-                            recommendation:
-                                recommendation,
-                            onChanged: () {
-                              if (mounted) {
-                                setState(() {});
-                              }
-                            },
-                          ),
-                        ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (controller
-                      .groupMessages
-                      .isEmpty)
-                    Card(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.all(20),
-                        child: Text(
-                          'No group messages yet.',
-                          style: TextStyle(
-                            color:
-                                Colors.grey.shade400,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    ...controller
-                        .groupMessages
-                        .map(
-                          (message) =>
-                              ListTile(
-                            contentPadding:
-                                EdgeInsets.zero,
-                            leading:
-                                const CircleAvatar(
-                              child: Icon(
-                                Icons.person,
-                              ),
-                            ),
-                            title: Text(
-                              message.sender,
-                            ),
-                            subtitle: Text(
-                              message.message,
-                            ),
-                            trailing: Text(
-                              _formatTime(
-                                message.timestamp,
-                              ),
-                              style: TextStyle(
-                                color: Colors
-                                    .grey
-                                    .shade500,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                  const SizedBox(height: 25),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Shared Group Wishlist',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip:
-                            'Refresh wishlist',
-                        icon: const Icon(
-                          Icons.refresh,
-                        ),
-                        onPressed: () async {
-                          try {
-                            await controller
-                                .loadGroupWishlist();
-
-                            if (context.mounted) {
-                              setState(() {});
-                            }
-                          } catch (error) {
-                            if (!context.mounted) {
-                              return;
-                            }
-
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Unable to load wishlist: $error',
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                    ],
+                    child: Row(children: [
+                      Container(width: 54, height: 54, decoration: BoxDecoration(color: Colors.red.withValues(alpha: .14), borderRadius: BorderRadius.circular(17)), child: const Icon(Icons.groups_rounded, size: 28)),
+                      const SizedBox(width: 14),
+                      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Watch together', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                        SizedBox(height: 4),
+                        Text('Chat, recommend titles, and build a shared watchlist.', style: TextStyle(color: Colors.white60, height: 1.35)),
+                      ])),
+                    ]),
                   ),
+                  const SizedBox(height: 20),
+                  _GroupSectionHeader(title: 'Group Chat', icon: Icons.chat_bubble_outline_rounded, action: _SmallHeaderButton(icon: Icons.movie_outlined, label: 'Recommend', onTap: openRecommendationDialog)),
                   const SizedBox(height: 10),
-                  if (controller
-                      .wishlist
-                      .isEmpty)
-                    Card(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.favorite_border,
-                              size: 45,
-                            ),
-                            const SizedBox(
-                              height: 10,
-                            ),
-                            const Text(
-                              'The group wishlist is empty.',
-                              style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(
-                              height: 5,
-                            ),
-                            Text(
-                              'Group wishlist items will appear here.',
-                              textAlign:
-                                  TextAlign.center,
-                              style: TextStyle(
-                                color: Colors
-                                    .grey
-                                    .shade400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
+                  if (controller.groupMessages.isEmpty)
+                    const _GroupEmptyCard(icon: Icons.forum_outlined, title: 'No messages yet', subtitle: 'Start the conversation below.')
                   else
-                    ...controller
-                        .wishlist
-                        .map(
-                          (item) =>
-                              GroupWishlistCard(
-                            item: item,
-                            onChanged: () {
-                              setState(() {});
-                            },
-                          ),
-                        ),
+                    ...controller.groupMessages.map((message) => _GroupMessageBubble(sender: message.sender, message: message.message, time: _formatTime(message.timestamp))),
+                  if (controller.groupRecommendations.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    _GroupSectionHeader(title: 'Recommendations', icon: Icons.auto_awesome_outlined, action: IconButton(onPressed: refreshRecommendations, icon: const Icon(Icons.refresh_rounded))),
+                    const SizedBox(height: 10),
+                    ...controller.groupRecommendations.map((recommendation) => GroupRecommendationCard(recommendation: recommendation, onChanged: () { if (mounted) setState(() {}); })),
+                  ],
+                  const SizedBox(height: 22),
+                  _GroupSectionHeader(title: 'Shared Wishlist', icon: Icons.favorite_outline_rounded, action: IconButton(onPressed: refreshWishlist, icon: const Icon(Icons.refresh_rounded))),
+                  const SizedBox(height: 10),
+                  if (controller.wishlist.isEmpty)
+                    const _GroupEmptyCard(icon: Icons.favorite_border_rounded, title: 'Your group wishlist is empty', subtitle: 'Approved recommendations will appear here.')
+                  else
+                    ...controller.wishlist.map((item) => GroupWishlistCard(item: item, onChanged: () { if (mounted) setState(() {}); })),
                   const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
           SafeArea(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller:
-                          messageController,
-                      onSubmitted: (_) =>
-                          sendMessage(),
-                      decoration:
-                          const InputDecoration(
-                        hintText:
-                            'Message the group...',
-                        border:
-                            OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.send,
-                    ),
-                    onPressed:
-                        sendMessage,
-                  ),
-                ],
-              ),
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              decoration: BoxDecoration(color: const Color(0xFF101010), border: Border(top: BorderSide(color: Colors.white.withValues(alpha: .07)))),
+              child: Row(children: [
+                Expanded(child: TextField(controller: messageController, onSubmitted: (_) => sendMessage(), textInputAction: TextInputAction.send, decoration: InputDecoration(hintText: 'Message the group...', filled: true, fillColor: Colors.white.withValues(alpha: .05), prefixIcon: const Icon(Icons.chat_bubble_outline_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none)))),
+                const SizedBox(width: 8),
+                Material(color: Colors.red, borderRadius: BorderRadius.circular(17), child: InkWell(onTap: sendMessage, borderRadius: BorderRadius.circular(17), child: const SizedBox(width: 52, height: 52, child: Icon(Icons.send_rounded)))),
+              ]),
             ),
           ),
         ],
@@ -2010,22 +2335,45 @@ class _GroupHubScreenState
     );
   }
 
-  String _formatTime(
-    DateTime timestamp,
-  ) {
-    final hour =
-        timestamp.hour
-            .toString()
-            .padLeft(2, '0');
-
-    final minute =
-        timestamp.minute
-            .toString()
-            .padLeft(2, '0');
-
-    return '$hour:$minute';
-  }
+  String _formatTime(DateTime timestamp) => '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
 }
+
+class _GroupSectionHeader extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget? action;
+  const _GroupSectionHeader({required this.title, required this.icon, this.action});
+  @override
+  Widget build(BuildContext context) => Row(children: [Icon(icon, size: 20, color: Colors.white70), const SizedBox(width: 9), Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900))), if (action != null) action!]);
+}
+
+class _SmallHeaderButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SmallHeaderButton({required this.icon, required this.label, required this.onTap});
+  @override
+  Widget build(BuildContext context) => TextButton.icon(onPressed: onTap, icon: Icon(icon, size: 17), label: Text(label), style: TextButton.styleFrom(foregroundColor: Colors.white));
+}
+
+class _GroupEmptyCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  const _GroupEmptyCard({required this.icon, required this.title, required this.subtitle});
+  @override
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: .06))), child: Column(children: [Icon(icon, size: 42, color: Colors.white38), const SizedBox(height: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 12))]));
+}
+
+class _GroupMessageBubble extends StatelessWidget {
+  final String sender;
+  final String message;
+  final String time;
+  const _GroupMessageBubble({required this.sender, required this.message, required this.time});
+  @override
+  Widget build(BuildContext context) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(13), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const CircleAvatar(radius: 20, child: Icon(Icons.person_rounded, size: 20)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(sender, style: const TextStyle(fontWeight: FontWeight.w800))), Text(time, style: const TextStyle(color: Colors.white38, fontSize: 11))]), const SizedBox(height: 4), Text(message, style: const TextStyle(color: Colors.white70, height: 1.35))]))]));
+}
+
 // ============================================================
 // ADD GROUP RECOMMENDATION
 // ============================================================
@@ -3787,194 +4135,135 @@ class _WishlistDialogState
 // GROUP WATCH
 // ============================================================
 
-class GroupWatchDialog
-    extends StatelessWidget {
+class GroupWatchDialog extends StatefulWidget {
   final MediaItem media;
+  const GroupWatchDialog({super.key, required this.media});
+  @override
+  State<GroupWatchDialog> createState() => _GroupWatchDialogState();
+}
 
-  const GroupWatchDialog({
-    super.key,
-    required this.media,
-  });
+class _GroupWatchDialogState extends State<GroupWatchDialog> {
+  final Set<String> selectedProfiles = <String>{};
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
-
-    final account =
-        controller.currentAccount;
-
-    final currentProfile =
-        controller.currentProfile;
-
-    if (account == null ||
-        currentProfile == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text(
-            'No account or profile selected.',
-          ),
-        ),
-      );
+    final controller = AppController.instance;
+    final account = controller.currentAccount;
+    final currentProfile = controller.currentProfile;
+    if (account == null || currentProfile == null) {
+      return const Scaffold(body: Center(child: Text('No account or profile selected.')));
     }
-
+    final invitees = account.profiles.where((profile) => profile.id != currentProfile.id).toList();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Group Watch',
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Text(
-              'Watch ${media.title} together',
-              style: const TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Invite the other profiles to watch together.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 25),
-            ...account.profiles
-                .where(
-                  (profile) =>
-                      profile.id !=
-                      currentProfile.id,
-                )
-                .map(
-                  (profile) => ListTile(
-                    leading:
-                        const CircleAvatar(
-                      child: Icon(
-                        Icons.person,
-                      ),
+      backgroundColor: const Color(0xFF070707),
+      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const Text('Group Watch', style: TextStyle(fontWeight: FontWeight.w900))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
+        children: [
+          Container(
+            height: 260,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(25), color: const Color(0xFF151515)),
+            child: Stack(fit: StackFit.expand, children: [
+              if (widget.media.imageUrl != null) Image.network(widget.media.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withValues(alpha: .92)]))),
+              Positioned(left: 18, right: 18, bottom: 18, child: Text(widget.media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900))),
+            ]),
+          ),
+          const SizedBox(height: 22),
+          const Text('Invite people', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          const Text('Select the profiles you want to watch with.', style: TextStyle(color: Colors.white54)),
+          const SizedBox(height: 12),
+          if (invitees.isEmpty)
+            const _GroupEmptyCard(icon: Icons.people_outline_rounded, title: 'No other profiles', subtitle: 'Create another profile to invite someone.')
+          else
+            ...invitees.map((profile) {
+              final selected = selectedProfiles.contains(profile.id);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: selected ? Colors.red.withValues(alpha: .10) : Colors.white.withValues(alpha: .045),
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    onTap: () => setState(() => selected ? selectedProfiles.remove(profile.id) : selectedProfiles.add(profile.id)),
+                    borderRadius: BorderRadius.circular(18),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(children: [
+                        _MainProfileAvatar(profile: profile, size: 48),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(selected ? 'Selected' : 'Tap to invite', style: const TextStyle(color: Colors.white70, fontSize: 12))])),
+                        Icon(selected ? Icons.check_circle_rounded : Icons.circle_outlined, color: selected ? Colors.redAccent : Colors.white30),
+                      ]),
                     ),
-                    title: Text(
-                      profile.name,
-                    ),
-                    trailing:
-                        const Text('INVITE'),
                   ),
                 ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          GroupWatchPreferencesScreen(
-                        media: media,
-                      ),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'CONTINUE',
-                ),
-              ),
-            ),
-          ],
-        ),
+              );
+            }),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GroupWatchPreferencesScreen(media: widget.media))),
+            icon: const Icon(Icons.tune_rounded),
+            label: Text(selectedProfiles.isEmpty ? 'CONTINUE' : 'CONTINUE WITH ${selectedProfiles.length} INVITE${selectedProfiles.length == 1 ? '' : 'S'}'),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ============================================================
-// GROUP WATCH PREFERENCES
-// ============================================================
-
-class GroupWatchPreferencesScreen
-    extends StatefulWidget {
+class GroupWatchPreferencesScreen extends StatefulWidget {
   final MediaItem media;
-
-  const GroupWatchPreferencesScreen({
-    super.key,
-    required this.media,
-  });
-
+  const GroupWatchPreferencesScreen({super.key, required this.media});
   @override
-  State<GroupWatchPreferencesScreen>
-      createState() =>
-          _GroupWatchPreferencesScreenState();
+  State<GroupWatchPreferencesScreen> createState() => _GroupWatchPreferencesScreenState();
 }
 
-class _GroupWatchPreferencesScreenState
-    extends State<GroupWatchPreferencesScreen> {
+class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScreen> {
   bool subtitlesEnabled = false;
+  String audio = 'Original audio';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Group Watch Preferences',
-        ),
-      ),
+      backgroundColor: const Color(0xFF070707),
+      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const Text('Your preferences', style: TextStyle(fontWeight: FontWeight.w900))),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
         children: [
-          Text(
-            widget.media.title,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.white.withValues(alpha: .07))),
+            child: Row(children: [const Icon(Icons.groups_rounded, size: 30), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.media.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 3), const Text('Choose your language settings before starting.', style: TextStyle(color: Colors.white54, fontSize: 12))]))]),
+          ),
+          const SizedBox(height: 22),
+          const Text('Audio', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
+            child: DropdownButtonFormField<String>(
+              initialValue: audio,
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.language_rounded), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+              items: const [DropdownMenuItem(value: 'Original audio', child: Text('Original audio'))],
+              onChanged: (value) { if (value != null) setState(() => audio = value); },
             ),
           ),
-          const SizedBox(height: 25),
-          const ListTile(
-            leading: Icon(
-              Icons.language,
-            ),
-            title: Text(
-              'Audio',
-            ),
-            subtitle: Text(
-              'Original audio',
-            ),
+          const SizedBox(height: 18),
+          Container(
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
+            child: SwitchListTile.adaptive(title: const Text('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: const Text('Use subtitles for this session', style: TextStyle(color: Colors.white70, fontSize: 12)), value: subtitlesEnabled, onChanged: (value) => setState(() => subtitlesEnabled = value)),
           ),
-          const SizedBox(height: 10),
-          SwitchListTile(
-            title: const Text(
-              'Subtitles',
-            ),
-            value: subtitlesEnabled,
-            onChanged: (value) {
-              setState(() {
-                subtitlesEnabled =
-                    value;
-              });
+          const SizedBox(height: 28),
+          FilledButton.icon(
+            onPressed: () {
+              AppController.instance.createGroupWatchSession(widget.media);
+              Navigator.pop(context);
             },
-          ),
-          const SizedBox(height: 35),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton(
-              onPressed: () {
-                final controller =
-                    AppController.instance;
-
-                controller.createGroupWatchSession(
-                  widget.media,
-                );
-
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'START GROUP WATCH',
-              ),
-            ),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('START GROUP WATCH'),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
           ),
         ],
       ),

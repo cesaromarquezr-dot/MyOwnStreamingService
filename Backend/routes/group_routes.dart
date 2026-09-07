@@ -147,26 +147,18 @@ class GroupRoutes {
 
         invitedProfileIds.remove(profileId);
 
-        final bool allInvitedProfilesBelongToAccount =
-            invitedProfileIds.every(
-          (participantId) =>
-              account.getProfileById(
-                participantId,
-              ) !=
-              null,
-        );
-
-        if (!allInvitedProfilesBelongToAccount) {
-          await _sendJson(
-            request,
-            HttpStatus.forbidden,
-            <String, dynamic>{
-              'error':
-                  'One or more invited profiles do not belong to the account.',
-            },
-          );
-          return;
-        }
+        // IMPORTANT:
+        // Invited profiles may belong to OTHER accounts.
+        //
+        // The GroupWatchService performs the actual validation
+        // that each invited profile exists and that its account
+        // owns the selected media.
+        //
+        // We intentionally do NOT require:
+        //
+        // account.getProfileById(invitedProfileId) != null
+        //
+        // because Group Watch supports cross-account invitations.
 
         final dynamic durationRaw =
             body['invitationDurationHours'];
@@ -290,7 +282,7 @@ class GroupRoutes {
       }
 
       // ----------------------------------------------------------
-      // GET SINGLE GROUP WATCH SESSION
+      // GROUP WATCH SESSION PATH
       // ----------------------------------------------------------
 
       final groupWatchPath =
@@ -300,6 +292,10 @@ class GroupRoutes {
 
       final groupWatchMatch =
           groupWatchPath.firstMatch(path);
+
+      // ----------------------------------------------------------
+      // GET SINGLE GROUP WATCH SESSION
+      // ----------------------------------------------------------
 
       if (request.method == 'GET' &&
           groupWatchMatch != null) {
@@ -311,8 +307,11 @@ class GroupRoutes {
           sessionId,
         );
 
-        // FIXED: null-aware check
-        if (session?.accountId != accountId) {
+        if (session == null ||
+            !_sessionVisibleToAccount(
+              session,
+              accountId,
+            )) {
           await _sendJson(
             request,
             HttpStatus.notFound,
@@ -325,7 +324,7 @@ class GroupRoutes {
         }
 
         database.saveGroupWatchSession(
-          session!,
+          session,
         );
 
         await _sendJson(
@@ -349,9 +348,7 @@ class GroupRoutes {
       );
 
       final groupWatchAcceptMatch =
-          groupWatchAcceptPath.firstMatch(
-        path,
-      );
+          groupWatchAcceptPath.firstMatch(path);
 
       if (request.method == 'POST' &&
           groupWatchAcceptMatch != null) {
@@ -379,8 +376,10 @@ class GroupRoutes {
           return;
         }
 
-        if (account.getProfileById(profileId) ==
-            null) {
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
           await _sendJson(
             request,
             HttpStatus.forbidden,
@@ -392,24 +391,33 @@ class GroupRoutes {
           return;
         }
 
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.acceptInvitation(
             sessionId: sessionId,
             profileId: profileId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -430,8 +438,11 @@ class GroupRoutes {
 
           final int status =
               errorMessage.contains(
-                'This invite has expired.',
-              )
+                        'This invitation link is expired.',
+                      ) ||
+                      errorMessage.contains(
+                        'This invite has expired.',
+                      )
                   ? HttpStatus.gone
                   : HttpStatus.badRequest;
 
@@ -487,8 +498,10 @@ class GroupRoutes {
           return;
         }
 
-        if (account.getProfileById(profileId) ==
-            null) {
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
           await _sendJson(
             request,
             HttpStatus.forbidden,
@@ -500,24 +513,33 @@ class GroupRoutes {
           return;
         }
 
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.declineInvitation(
             sessionId: sessionId,
             profileId: profileId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -533,11 +555,24 @@ class GroupRoutes {
             },
           );
         } catch (error) {
+          final String errorMessage =
+              error.toString();
+
+          final int status =
+              errorMessage.contains(
+                        'This invitation link is expired.',
+                      ) ||
+                      errorMessage.contains(
+                        'This invite has expired.',
+                      )
+                  ? HttpStatus.gone
+                  : HttpStatus.badRequest;
+
           await _sendJson(
             request,
-            HttpStatus.badRequest,
+            status,
             <String, dynamic>{
-              'error': error.toString(),
+              'error': errorMessage,
             },
           );
         }
@@ -574,9 +609,9 @@ class GroupRoutes {
                 '';
 
         final String? audioTrackId =
-    body['audioTrackId']
-        ?.toString()
-        .trim();
+            body['audioTrackId']
+                ?.toString()
+                .trim();
 
         if (profileId.isEmpty) {
           await _sendJson(
@@ -590,14 +625,37 @@ class GroupRoutes {
           return;
         }
 
-        if (account.getProfileById(profileId) ==
-            null) {
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
           await _sendJson(
             request,
             HttpStatus.forbidden,
             <String, dynamic>{
               'error':
                   'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
             },
           );
           return;
@@ -611,18 +669,6 @@ class GroupRoutes {
             audioTrackId:
                 audioTrackId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -677,9 +723,9 @@ class GroupRoutes {
                 '';
 
         final String? subtitleTrackId =
-    body['subtitleTrackId']
-        ?.toString()
-        .trim();
+            body['subtitleTrackId']
+                ?.toString()
+                .trim();
 
         if (profileId.isEmpty) {
           await _sendJson(
@@ -693,14 +739,37 @@ class GroupRoutes {
           return;
         }
 
-        if (account.getProfileById(profileId) ==
-            null) {
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
           await _sendJson(
             request,
             HttpStatus.forbidden,
             <String, dynamic>{
               'error':
                   'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
             },
           );
           return;
@@ -714,18 +783,6 @@ class GroupRoutes {
             subtitleTrackId:
                 subtitleTrackId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -791,24 +848,48 @@ class GroupRoutes {
           return;
         }
 
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.startSession(
             sessionId: sessionId,
             profileId: profileId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -876,24 +957,48 @@ class GroupRoutes {
           return;
         }
 
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.play(
             sessionId: sessionId,
             profileId: profileId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -977,6 +1082,42 @@ class GroupRoutes {
           return;
         }
 
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.pause(
@@ -984,18 +1125,6 @@ class GroupRoutes {
             profileId: profileId,
             reason: reason,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -1063,24 +1192,48 @@ class GroupRoutes {
           return;
         }
 
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.resume(
             sessionId: sessionId,
             profileId: profileId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -1136,8 +1289,32 @@ class GroupRoutes {
                     .trim() ??
                 '';
 
-        final dynamic positionRaw =
+        // The current Flutter client sends positionSeconds.
+        //
+        // The backend historically expected
+        // positionMilliseconds.
+        //
+        // Accept both so the API remains compatible.
+        final dynamic millisecondsRaw =
             body['positionMilliseconds'];
+
+        final dynamic secondsRaw =
+            body['positionSeconds'];
+
+        int? positionMilliseconds;
+
+        if (millisecondsRaw != null) {
+          positionMilliseconds =
+              _readInt(millisecondsRaw);
+        } else if (secondsRaw != null) {
+          final double? seconds =
+              _readDouble(secondsRaw);
+
+          if (seconds != null) {
+            positionMilliseconds =
+                (seconds * 1000).round();
+          }
+        }
 
         if (profileId.isEmpty) {
           await _sendJson(
@@ -1151,8 +1328,20 @@ class GroupRoutes {
           return;
         }
 
-        final int? positionMilliseconds =
-            _readInt(positionRaw);
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
 
         if (positionMilliseconds == null ||
             positionMilliseconds < 0) {
@@ -1161,7 +1350,28 @@ class GroupRoutes {
             HttpStatus.badRequest,
             <String, dynamic>{
               'error':
-                  'positionMilliseconds must be a non-negative integer.',
+                  'positionMilliseconds or positionSeconds must be a non-negative number.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
             },
           );
           return;
@@ -1177,18 +1387,6 @@ class GroupRoutes {
                   positionMilliseconds,
             ),
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -1227,9 +1425,7 @@ class GroupRoutes {
       );
 
       final groupWatchEndMatch =
-          groupWatchEndPath.firstMatch(
-        path,
-      );
+          groupWatchEndPath.firstMatch(path);
 
       if (request.method == 'POST' &&
           groupWatchEndMatch != null) {
@@ -1257,24 +1453,48 @@ class GroupRoutes {
           return;
         }
 
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
+        final existingSession =
+            watchService.getSession(
+          sessionId,
+        );
+
+        if (existingSession == null ||
+            !_sessionVisibleToAccount(
+              existingSession,
+              accountId,
+            )) {
+          await _sendJson(
+            request,
+            HttpStatus.notFound,
+            <String, dynamic>{
+              'error':
+                  'Group Watch session not found.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession session =
               watchService.endSession(
             sessionId: sessionId,
             profileId: profileId,
           );
-
-          if (session.accountId != accountId) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Group Watch session not found.',
-              },
-            );
-            return;
-          }
 
           database.saveGroupWatchSession(
             session,
@@ -1332,14 +1552,32 @@ class GroupRoutes {
           return;
         }
 
+        if (!_profileBelongsToAccount(
+          profileId,
+          accountId,
+        )) {
+          await _sendJson(
+            request,
+            HttpStatus.forbidden,
+            <String, dynamic>{
+              'error':
+                  'This profile does not belong to the account.',
+            },
+          );
+          return;
+        }
+
         try {
           final GroupWatchSession? session =
               watchService.getSession(
             sessionId,
           );
 
-          // FIXED: null-aware check
-          if (session?.accountId != accountId) {
+          if (session == null ||
+              !_sessionVisibleToAccount(
+                session,
+                accountId,
+              )) {
             await _sendJson(
               request,
               HttpStatus.notFound,
@@ -2003,9 +2241,7 @@ class GroupRoutes {
       );
 
       final wishlistMediaMatch =
-          wishlistMediaPath.firstMatch(
-        path,
-      );
+          wishlistMediaPath.firstMatch(path);
 
       if (request.method == 'DELETE' &&
           wishlistMediaMatch != null) {
@@ -2329,9 +2565,68 @@ class GroupRoutes {
     }
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
+  // GROUP WATCH AUTHORIZATION HELPERS
+  // ============================================================
+
+  /// Determines whether an account can see/interact with a
+  /// Group Watch session.
+  ///
+  /// The account is allowed when:
+  ///
+  /// 1. It is the account that created the session, OR
+  /// 2. One of its profiles is a participant in the session.
+  ///
+  /// This is what allows:
+  ///
+  /// Account A
+  ///   Cesar
+  ///   Alex
+  ///
+  /// to host a session and invite:
+  ///
+  /// Account B
+  ///   John
+  ///
+  /// without giving Account B access to unrelated sessions.
+  bool _sessionVisibleToAccount(
+    GroupWatchSession session,
+    String accountId,
+  ) {
+    final cleanAccountId =
+        accountId.trim();
+
+    if (cleanAccountId.isEmpty) {
+      return false;
+    }
+
+    if (session.accountId ==
+        cleanAccountId) {
+      return true;
+    }
+
+    return session.participants.values.any(
+      (participant) =>
+          participant.accountId ==
+          cleanAccountId,
+    );
+  }
+
+  /// Verifies that the profile being used by the request belongs
+  /// to the authenticated account.
+  bool _profileBelongsToAccount(
+    String profileId,
+    String accountId,
+  ) {
+    return database.profileBelongsToAccount(
+      profileId,
+      accountId,
+    );
+  }
+
+  // ============================================================
   // JSON BODY
-  // ------------------------------------------------------------
+  // ============================================================
 
   Future<Map<String, dynamic>> _readJsonBody(
     HttpRequest request,
@@ -2359,9 +2654,9 @@ class GroupRoutes {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // STRING SET
-  // ------------------------------------------------------------
+  // ============================================================
 
   Set<String> _readStringSet(
     dynamic value,
@@ -2381,9 +2676,9 @@ class GroupRoutes {
         .toSet();
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // INTEGER
-  // ------------------------------------------------------------
+  // ============================================================
 
   int? _readInt(dynamic value) {
     if (value == null) {
@@ -2403,9 +2698,31 @@ class GroupRoutes {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
+  // DOUBLE
+  // ============================================================
+
+  double? _readDouble(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is double) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+      value.toString(),
+    );
+  }
+
+  // ============================================================
   // JSON RESPONSE
-  // ------------------------------------------------------------
+  // ============================================================
 
   Future<void> _sendJson(
     HttpRequest request,

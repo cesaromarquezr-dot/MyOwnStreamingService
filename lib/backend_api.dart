@@ -68,17 +68,6 @@ class BackendApi {
   ///
   /// The backend creates the account with an inactive
   /// subscription and returns a payment session.
-  ///
-  /// The returned data contains:
-  ///
-  /// - account
-  /// - subscription
-  /// - payment
-  /// - payment ID
-  /// - checkout token
-  ///
-  /// The checkout token is only used for the payment process.
-  /// It is NOT an authentication token.
   Future<Map<String, dynamic>> signup({
     required String username,
     required String email,
@@ -86,23 +75,14 @@ class BackendApi {
     required String firstProfileName,
     required String plan,
   }) async {
-    final cleanPlan =
-        plan.trim().toLowerCase();
+    final cleanPlan = plan.trim().toLowerCase();
 
-    if (cleanPlan != 'monthly' &&
-        cleanPlan != 'yearly') {
+    if (cleanPlan != 'monthly' && cleanPlan != 'yearly') {
       throw BackendApiException(
         'Subscription plan must be monthly or yearly.',
       );
     }
 
-    /*
-     * Make absolutely sure signup starts without an
-     * authenticated session.
-     *
-     * This prevents an old token from accidentally being
-     * associated with the new signup request.
-     */
     clearToken();
 
     final response = await http.post(
@@ -117,59 +97,40 @@ class BackendApi {
       }),
     );
 
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to create account.',
-        statusCode:
-            response.statusCode,
+        data['error']?.toString() ?? 'Unable to create account.',
+        statusCode: response.statusCode,
       );
     }
 
-    /*
-     * The backend should NOT return a normal auth token
-     * during signup.
-     *
-     * If one is accidentally returned, do not store it.
-     */
     clearToken();
 
-    final payment =
-        data['payment'];
+    final payment = data['payment'];
 
     if (payment is! Map) {
       throw BackendApiException(
         'Account was created but no payment session was returned.',
-        statusCode:
-            response.statusCode,
+        statusCode: response.statusCode,
       );
     }
 
-    final paymentId =
-        payment['id']?.toString();
+    final paymentId = payment['id']?.toString();
+    final checkoutToken = payment['checkoutToken']?.toString();
 
-    final checkoutToken =
-        payment['checkoutToken']?.toString();
-
-    if (paymentId == null ||
-        paymentId.isEmpty) {
+    if (paymentId == null || paymentId.isEmpty) {
       throw BackendApiException(
         'Payment session was created but no payment ID was returned.',
-        statusCode:
-            response.statusCode,
+        statusCode: response.statusCode,
       );
     }
 
-    if (checkoutToken == null ||
-        checkoutToken.isEmpty) {
+    if (checkoutToken == null || checkoutToken.isEmpty) {
       throw BackendApiException(
         'Payment session was created but no checkout authorization was returned.',
-        statusCode:
-            response.statusCode,
+        statusCode: response.statusCode,
       );
     }
 
@@ -177,9 +138,6 @@ class BackendApi {
   }
 
   /// Logs into an account.
-  ///
-  /// The backend will reject login if the account's
-  /// subscription has not been activated through payment.
   Future<Map<String, dynamic>> login({
     required String usernameOrEmail,
     required String password,
@@ -193,28 +151,21 @@ class BackendApi {
       }),
     );
 
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to log in.',
-        statusCode:
-            response.statusCode,
+        data['error']?.toString() ?? 'Unable to log in.',
+        statusCode: response.statusCode,
       );
     }
 
-    final token =
-        data['token']?.toString();
+    final token = data['token']?.toString();
 
-    if (token == null ||
-        token.isEmpty) {
+    if (token == null || token.isEmpty) {
       throw BackendApiException(
         'Backend login succeeded but no authentication token was returned.',
-        statusCode:
-            response.statusCode,
+        statusCode: response.statusCode,
       );
     }
 
@@ -235,16 +186,12 @@ class BackendApi {
       headers: _headers,
     );
 
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to retrieve account.',
-        statusCode:
-            response.statusCode,
+        data['error']?.toString() ?? 'Unable to retrieve account.',
+        statusCode: response.statusCode,
       );
     }
 
@@ -270,20 +217,12 @@ class BackendApi {
   // PAYMENT
   // ==========================================================
 
-  /// Retrieves the status of a signup checkout session.
-  ///
-  /// This endpoint does NOT require a normal authentication token.
-  ///
-  /// Instead, the temporary checkout token returned during signup
-  /// authorizes access to this specific payment session.
   Future<Map<String, dynamic>> getCheckoutPaymentStatus({
     required String paymentId,
     required String checkoutToken,
   }) async {
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException(
-        'Payment ID is required.',
-      );
+      throw BackendApiException('Payment ID is required.');
     }
 
     if (checkoutToken.trim().isEmpty) {
@@ -300,12 +239,6 @@ class BackendApi {
       },
     );
 
-    /*
-     * Deliberately use headers without Authorization.
-     *
-     * A checkout session is pre-login and therefore must not
-     * depend on a normal authentication token.
-     */
     final response = await http.get(
       uri,
       headers: const {
@@ -314,49 +247,26 @@ class BackendApi {
       },
     );
 
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to retrieve payment status.',
-        statusCode:
-            response.statusCode,
+        statusCode: response.statusCode,
       );
     }
 
     return data;
   }
 
-  /// Verifies a completed signup payment.
-  ///
-  /// IMPORTANT:
-  ///
-  /// processorTransactionId is the payment provider's
-  /// transaction/reference ID.
-  ///
-  /// This method does NOT accept:
-  ///
-  /// - card numbers
-  /// - CVV
-  /// - PIN
-  /// - bank account numbers
-  /// - bank passwords
-  /// - online banking credentials
-  ///
-  /// The backend uses the checkout token to identify the
-  /// correct payment session and account.
   Future<Map<String, dynamic>> verifyCheckoutPayment({
     required String paymentId,
     required String checkoutToken,
     required String processorTransactionId,
   }) async {
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException(
-        'Payment ID is required.',
-      );
+      throw BackendApiException('Payment ID is required.');
     }
 
     if (checkoutToken.trim().isEmpty) {
@@ -381,40 +291,24 @@ class BackendApi {
       },
       body: jsonEncode({
         'checkoutToken': checkoutToken,
-        'processorTransactionId':
-            processorTransactionId,
+        'processorTransactionId': processorTransactionId,
       }),
     );
 
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to verify payment.',
-        statusCode:
-            response.statusCode,
+        data['error']?.toString() ?? 'Unable to verify payment.',
+        statusCode: response.statusCode,
       );
     }
 
-    /*
-     * Payment verification does NOT automatically create
-     * a normal authentication token.
-     *
-     * The user must log in normally after payment.
-     */
     clearToken();
 
     return data;
   }
 
-  /// Creates a payment session for an already authenticated
-  /// account.
-  ///
-  /// This is useful for future subscription renewals or
-  /// subscription changes.
   Future<Map<String, dynamic>> createPayment({
     required String plan,
   }) async {
@@ -424,11 +318,9 @@ class BackendApi {
       );
     }
 
-    final cleanPlan =
-        plan.trim().toLowerCase();
+    final cleanPlan = plan.trim().toLowerCase();
 
-    if (cleanPlan != 'monthly' &&
-        cleanPlan != 'yearly') {
+    if (cleanPlan != 'monthly' && cleanPlan != 'yearly') {
       throw BackendApiException(
         'Subscription plan must be monthly or yearly.',
       );
@@ -442,24 +334,12 @@ class BackendApi {
       }),
     );
 
-    final data =
-        _decodeResponse(response);
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to create payment session.',
-        statusCode:
-            response.statusCode,
-      );
-    }
-
-    return data;
+    return _requireSuccess(
+      response,
+      'Unable to create payment session.',
+    );
   }
 
-  /// Gets the status of a payment belonging to the
-  /// authenticated account.
   Future<Map<String, dynamic>> getPaymentStatus({
     required String paymentId,
   }) async {
@@ -470,9 +350,7 @@ class BackendApi {
     }
 
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException(
-        'Payment ID is required.',
-      );
+      throw BackendApiException('Payment ID is required.');
     }
 
     final response = await http.get(
@@ -482,23 +360,12 @@ class BackendApi {
       headers: _headers,
     );
 
-    final data =
-        _decodeResponse(response);
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to retrieve payment status.',
-        statusCode:
-            response.statusCode,
-      );
-    }
-
-    return data;
+    return _requireSuccess(
+      response,
+      'Unable to retrieve payment status.',
+    );
   }
 
-  /// Verifies a payment for an already authenticated account.
   Future<Map<String, dynamic>> verifyPayment({
     required String paymentId,
     required String processorTransactionId,
@@ -510,9 +377,7 @@ class BackendApi {
     }
 
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException(
-        'Payment ID is required.',
-      );
+      throw BackendApiException('Payment ID is required.');
     }
 
     if (processorTransactionId.trim().isEmpty) {
@@ -527,28 +392,16 @@ class BackendApi {
       ),
       headers: _headers,
       body: jsonEncode({
-        'processorTransactionId':
-            processorTransactionId,
+        'processorTransactionId': processorTransactionId,
       }),
     );
 
-    final data =
-        _decodeResponse(response);
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to verify payment.',
-        statusCode:
-            response.statusCode,
-      );
-    }
-
-    return data;
+    return _requireSuccess(
+      response,
+      'Unable to verify payment.',
+    );
   }
 
-  /// Cancels an authenticated payment session.
   Future<Map<String, dynamic>> cancelPayment({
     required String paymentId,
   }) async {
@@ -559,9 +412,7 @@ class BackendApi {
     }
 
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException(
-        'Payment ID is required.',
-      );
+      throw BackendApiException('Payment ID is required.');
     }
 
     final response = await http.post(
@@ -571,35 +422,16 @@ class BackendApi {
       headers: _headers,
     );
 
-    final data =
-        _decodeResponse(response);
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to cancel payment.',
-        statusCode:
-            response.statusCode,
-      );
-    }
-
-    return data;
+    return _requireSuccess(
+      response,
+      'Unable to cancel payment.',
+    );
   }
 
   // ==========================================================
   // RECOMMENDATIONS
   // ==========================================================
 
-  /// Gets recommendations for the currently authenticated
-  /// account/profile.
-  ///
-  /// The profile ID is optional so this method remains compatible
-  /// with AppController's existing:
-  ///
-  ///     await backendApi.getRecommendations();
-  ///
-  /// If a profile ID is supplied, it is sent to the backend.
   Future<Map<String, dynamic>> getRecommendations({
     String? profileId,
     int limit = 20,
@@ -610,18 +442,14 @@ class BackendApi {
       );
     }
 
-    final safeLimit =
-        limit.clamp(1, 100);
+    final safeLimit = limit.clamp(1, 100);
 
-    final queryParameters =
-        <String, String>{
+    final queryParameters = <String, String>{
       'limit': safeLimit.toString(),
     };
 
-    if (profileId != null &&
-        profileId.trim().isNotEmpty) {
-      queryParameters['profileId'] =
-          profileId.trim();
+    if (profileId != null && profileId.trim().isNotEmpty) {
+      queryParameters['profileId'] = profileId.trim();
     }
 
     final uri = Uri.parse(
@@ -635,39 +463,16 @@ class BackendApi {
       headers: _headers,
     );
 
-    final data =
-        _decodeResponse(response);
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to retrieve recommendations.',
-        statusCode:
-            response.statusCode,
-      );
-    }
-
-    return data;
+    return _requireSuccess(
+      response,
+      'Unable to retrieve recommendations.',
+    );
   }
 
   // ==========================================================
   // GROUP RECOMMENDATIONS
   // ==========================================================
 
-  /// Creates a recommendation for the group.
-  ///
-  /// A recommendation can be:
-  ///
-  /// - A catalog item, when mediaId is supplied.
-  /// - A manually entered movie/show that does not exist in the
-  ///   catalog, when mediaId is null.
-  ///
-  /// activeParticipants contains the profile IDs that were
-  /// active when voting started.
-  ///
-  /// votingDurationHours controls how long voting remains open.
-  /// The backend uses 24 hours when this value is omitted.
   Future<Map<String, dynamic>> createGroupRecommendation({
     required String title,
     required String type,
@@ -678,8 +483,9 @@ class BackendApi {
   }) async {
     _requireAuthentication();
 
-    final String cleanTitle =
-        title.trim();
+    final cleanTitle = title.trim();
+    final cleanType = type.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanTitle.isEmpty) {
       throw BackendApiException(
@@ -687,30 +493,19 @@ class BackendApi {
       );
     }
 
-    final String cleanType =
-        type.trim();
-
-    if (cleanType != 'movie' &&
-        cleanType != 'tvShow') {
+    if (cleanType != 'movie' && cleanType != 'tvShow') {
       throw BackendApiException(
         'Recommendation type must be "movie" or "tvShow".',
       );
     }
 
-    final String cleanProfileId =
-        profileId.trim();
-
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
-    String? cleanMediaId =
-        mediaId?.trim();
+    String? cleanMediaId = mediaId?.trim();
 
-    if (cleanMediaId != null &&
-        cleanMediaId.isEmpty) {
+    if (cleanMediaId != null && cleanMediaId.isEmpty) {
       cleanMediaId = null;
     }
 
@@ -721,19 +516,16 @@ class BackendApi {
       );
     }
 
-    final Set<String> participants =
-        <String>{
+    final participants = <String>{
       ...?activeParticipants,
       cleanProfileId,
     };
 
-    final Map<String, dynamic> body =
-        <String, dynamic>{
+    final body = <String, dynamic>{
       'title': cleanTitle,
       'type': cleanType,
       'profileId': cleanProfileId,
-      'activeParticipants':
-          participants.toList(),
+      'activeParticipants': participants.toList(),
     };
 
     if (cleanMediaId != null) {
@@ -741,14 +533,11 @@ class BackendApi {
     }
 
     if (votingDurationHours != null) {
-      body['votingDurationHours'] =
-          votingDurationHours;
+      body['votingDurationHours'] = votingDurationHours;
     }
 
     final response = await http.post(
-      Uri.parse(
-        '$baseUrl/group/recommendations',
-      ),
+      Uri.parse('$baseUrl/group/recommendations'),
       headers: _headers,
       body: jsonEncode(body),
     );
@@ -759,15 +548,11 @@ class BackendApi {
     );
   }
 
-  /// Gets all group recommendations for the account.
-  Future<Map<String, dynamic>>
-      getGroupRecommendations() async {
+  Future<Map<String, dynamic>> getGroupRecommendations() async {
     _requireAuthentication();
 
     final response = await http.get(
-      Uri.parse(
-        '$baseUrl/group/recommendations',
-      ),
+      Uri.parse('$baseUrl/group/recommendations'),
       headers: _headers,
     );
 
@@ -777,9 +562,7 @@ class BackendApi {
     );
   }
 
-  /// Gets one group recommendation.
-  Future<Map<String, dynamic>>
-      getGroupRecommendation({
+  Future<Map<String, dynamic>> getGroupRecommendation({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -803,9 +586,7 @@ class BackendApi {
     );
   }
 
-  /// Votes YES or NO on a group recommendation.
-  Future<Map<String, dynamic>>
-      voteOnGroupRecommendation({
+  Future<Map<String, dynamic>> voteOnGroupRecommendation({
     required String recommendationId,
     required String profileId,
     required String vote,
@@ -824,11 +605,9 @@ class BackendApi {
       );
     }
 
-    final cleanVote =
-        vote.trim().toLowerCase();
+    final cleanVote = vote.trim().toLowerCase();
 
-    if (cleanVote != 'yes' &&
-        cleanVote != 'no') {
+    if (cleanVote != 'yes' && cleanVote != 'no') {
       throw BackendApiException(
         'Vote must be either "yes" or "no".',
       );
@@ -851,12 +630,7 @@ class BackendApi {
     );
   }
 
-  /// Closes voting on a group recommendation.
-  ///
-  /// If there is a majority YES, the backend also adds the
-  /// recommendation to the account's shared group wishlist.
-  Future<Map<String, dynamic>>
-      closeGroupRecommendationVoting({
+  Future<Map<String, dynamic>> closeGroupRecommendationVoting({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -880,9 +654,7 @@ class BackendApi {
     );
   }
 
-  /// Deletes a group recommendation.
-  Future<Map<String, dynamic>>
-      deleteGroupRecommendation({
+  Future<Map<String, dynamic>> deleteGroupRecommendation({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -910,18 +682,11 @@ class BackendApi {
   // GROUP WISHLIST
   // ==========================================================
 
-  /// Gets the shared wishlist for the authenticated account.
-  ///
-  /// Unlike a personal profile library, this wishlist belongs
-  /// to the account and is shared by the group's profiles.
-  Future<Map<String, dynamic>>
-      getGroupWishlist() async {
+  Future<Map<String, dynamic>> getGroupWishlist() async {
     _requireAuthentication();
 
     final response = await http.get(
-      Uri.parse(
-        '$baseUrl/group/wishlist',
-      ),
+      Uri.parse('$baseUrl/group/wishlist'),
       headers: _headers,
     );
 
@@ -931,17 +696,13 @@ class BackendApi {
     );
   }
 
-  /// Removes a media item from the shared group wishlist.
-  Future<Map<String, dynamic>>
-      removeFromGroupWishlist({
+  Future<Map<String, dynamic>> removeFromGroupWishlist({
     required String mediaId,
   }) async {
     _requireAuthentication();
 
     if (mediaId.trim().isEmpty) {
-      throw BackendApiException(
-        'Media ID is required.',
-      );
+      throw BackendApiException('Media ID is required.');
     }
 
     final response = await http.delete(
@@ -957,31 +718,18 @@ class BackendApi {
     );
   }
 
-  /// Marks a group wishlist item as acquired.
-  ///
-  /// The backend:
-  ///
-  /// 1. Removes the media from the shared group wishlist.
-  /// 2. Adds the media to the selected profile's library.
-  ///
-  /// profileId determines which profile receives ownership.
-  Future<Map<String, dynamic>>
-      acquireGroupWishlistItem({
+  Future<Map<String, dynamic>> acquireGroupWishlistItem({
     required String mediaId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
     if (mediaId.trim().isEmpty) {
-      throw BackendApiException(
-        'Media ID is required.',
-      );
+      throw BackendApiException('Media ID is required.');
     }
 
     if (profileId.trim().isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1007,7 +755,8 @@ class BackendApi {
   /// Creates a new Group Watch session and sends invitations
   /// to the selected profiles.
   ///
-  /// The host profile is automatically included by the backend.
+  /// Profiles may belong to different accounts when the backend
+  /// confirms that they own the same media.
   Future<Map<String, dynamic>> createGroupWatchSession({
     required String mediaId,
     required String title,
@@ -1018,34 +767,27 @@ class BackendApi {
   }) async {
     _requireAuthentication();
 
-    final String cleanMediaId = mediaId.trim();
-    final String cleanTitle = title.trim();
-    final String cleanType = type.trim();
-    final String cleanProfileId = profileId.trim();
+    final cleanMediaId = mediaId.trim();
+    final cleanTitle = title.trim();
+    final cleanType = type.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanMediaId.isEmpty) {
-      throw BackendApiException(
-        'Media ID is required.',
-      );
+      throw BackendApiException('Media ID is required.');
     }
 
     if (cleanTitle.isEmpty) {
-      throw BackendApiException(
-        'Title is required.',
-      );
+      throw BackendApiException('Title is required.');
     }
 
-    if (cleanType != 'movie' &&
-        cleanType != 'tvShow') {
+    if (cleanType != 'movie' && cleanType != 'tvShow') {
       throw BackendApiException(
         'Group Watch type must be "movie" or "tvShow".',
       );
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     if (invitationDurationHours != null &&
@@ -1055,22 +797,19 @@ class BackendApi {
       );
     }
 
-    final Set<String> invitedProfiles =
-        <String>{
+    final invitedProfiles = <String>{
       ...?invitedProfileIds,
     }
         .map((profile) => profile.trim())
         .where((profile) => profile.isNotEmpty)
         .toSet();
 
-    final Map<String, dynamic> body =
-        <String, dynamic>{
+    final body = <String, dynamic>{
       'mediaId': cleanMediaId,
       'title': cleanTitle,
       'type': cleanType,
       'profileId': cleanProfileId,
-      'invitedProfileIds':
-          invitedProfiles.toList(),
+      'invitedProfileIds': invitedProfiles.toList(),
     };
 
     if (invitationDurationHours != null) {
@@ -1079,9 +818,7 @@ class BackendApi {
     }
 
     final response = await http.post(
-      Uri.parse(
-        '$baseUrl/group/watch',
-      ),
+      Uri.parse('$baseUrl/group/watch'),
       headers: _headers,
       body: jsonEncode(body),
     );
@@ -1092,16 +829,11 @@ class BackendApi {
     );
   }
 
-  /// Gets all Group Watch sessions belonging to the
-  /// authenticated account.
-  Future<Map<String, dynamic>>
-      getGroupWatchSessions() async {
+  Future<Map<String, dynamic>> getGroupWatchSessions() async {
     _requireAuthentication();
 
     final response = await http.get(
-      Uri.parse(
-        '$baseUrl/group/watch',
-      ),
+      Uri.parse('$baseUrl/group/watch'),
       headers: _headers,
     );
 
@@ -1111,15 +843,12 @@ class BackendApi {
     );
   }
 
-  /// Gets one Group Watch session.
-  Future<Map<String, dynamic>>
-      getGroupWatchSession({
+  Future<Map<String, dynamic>> getGroupWatchSession({
     required String sessionId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
+    final cleanSessionId = sessionId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1140,18 +869,14 @@ class BackendApi {
     );
   }
 
-  /// Accepts a Group Watch invitation.
-  Future<Map<String, dynamic>>
-      acceptGroupWatchInvitation({
+  Future<Map<String, dynamic>> acceptGroupWatchInvitation({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1160,9 +885,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1181,18 +904,14 @@ class BackendApi {
     );
   }
 
-  /// Declines a Group Watch invitation.
-  Future<Map<String, dynamic>>
-      declineGroupWatchInvitation({
+  Future<Map<String, dynamic>> declineGroupWatchInvitation({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1201,9 +920,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1222,22 +939,16 @@ class BackendApi {
     );
   }
 
-  /// Sets the audio track for one participant.
-  ///
-  /// Audio selection is individual. Each participant can select
-  /// a different available audio track.
-  Future<Map<String, dynamic>>
-      setGroupWatchAudioTrack({
+  Future<Map<String, dynamic>> setGroupWatchAudioTrack({
     required String sessionId,
     required String profileId,
     String? audioTrackId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
+    final cleanAudioTrackId = audioTrackId?.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1246,13 +957,8 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
-
-    final String? cleanAudioTrackId =
-        audioTrackId?.trim();
 
     final response = await http.post(
       Uri.parse(
@@ -1274,22 +980,16 @@ class BackendApi {
     );
   }
 
-  /// Sets the subtitle track for one participant.
-  ///
-  /// Subtitle selection is individual. Each participant can
-  /// select a different available subtitle track.
-  Future<Map<String, dynamic>>
-      setGroupWatchSubtitleTrack({
+  Future<Map<String, dynamic>> setGroupWatchSubtitleTrack({
     required String sessionId,
     required String profileId,
     String? subtitleTrackId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
+    final cleanSubtitleTrackId = subtitleTrackId?.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1298,13 +998,8 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
-
-    final String? cleanSubtitleTrackId =
-        subtitleTrackId?.trim();
 
     final response = await http.post(
       Uri.parse(
@@ -1326,20 +1021,14 @@ class BackendApi {
     );
   }
 
-  /// Starts Group Watch playback.
-  ///
-  /// Only the host can start the session.
-  Future<Map<String, dynamic>>
-      startGroupWatchSession({
+  Future<Map<String, dynamic>> startGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1348,9 +1037,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1369,18 +1056,14 @@ class BackendApi {
     );
   }
 
-  /// Resumes group playback.
-  Future<Map<String, dynamic>>
-      playGroupWatchSession({
+  Future<Map<String, dynamic>> playGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1389,9 +1072,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1410,24 +1091,16 @@ class BackendApi {
     );
   }
 
-  /// Pauses group playback.
-  ///
-  /// The reason is stored by the backend and can be posted
-  /// into Group Chat by AppController.
-  Future<Map<String, dynamic>>
-      pauseGroupWatchSession({
+  Future<Map<String, dynamic>> pauseGroupWatchSession({
     required String sessionId,
     required String profileId,
     required String reason,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
-    final String cleanReason =
-        reason.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
+    final cleanReason = reason.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1436,15 +1109,11 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     if (cleanReason.isEmpty) {
-      throw BackendApiException(
-        'Pause reason is required.',
-      );
+      throw BackendApiException('Pause reason is required.');
     }
 
     final response = await http.post(
@@ -1464,21 +1133,14 @@ class BackendApi {
     );
   }
 
-  /// Resumes Group Watch after a participant paused it.
-  ///
-  /// The backend only permits the participant who paused
-  /// the session to resume it.
-  Future<Map<String, dynamic>>
-      resumeGroupWatchSession({
+  Future<Map<String, dynamic>> resumeGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1487,9 +1149,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1510,20 +1170,19 @@ class BackendApi {
 
   /// Updates the globally synchronized Group Watch position.
   ///
-  /// The position is sent as seconds and may contain a fractional
-  /// value for sub-second precision.
-  Future<Map<String, dynamic>>
-      updateGroupWatchPosition({
+  /// IMPORTANT:
+  ///
+  /// The backend route expects `positionMilliseconds`.
+  /// We therefore send the Duration directly as milliseconds.
+  Future<Map<String, dynamic>> updateGroupWatchPosition({
     required String sessionId,
     required String profileId,
     required Duration position,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1532,9 +1191,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     if (position.isNegative) {
@@ -1543,8 +1200,8 @@ class BackendApi {
       );
     }
 
-    final double positionSeconds =
-        position.inMilliseconds / 1000.0;
+    final int positionMilliseconds =
+        position.inMilliseconds;
 
     final response = await http.post(
       Uri.parse(
@@ -1553,8 +1210,8 @@ class BackendApi {
       headers: _headers,
       body: jsonEncode({
         'profileId': cleanProfileId,
-        'positionSeconds':
-            positionSeconds,
+        'positionMilliseconds':
+            positionMilliseconds,
       }),
     );
 
@@ -1564,20 +1221,14 @@ class BackendApi {
     );
   }
 
-  /// Ends a Group Watch session.
-  ///
-  /// Only the host can end the session.
-  Future<Map<String, dynamic>>
-      endGroupWatchSession({
+  Future<Map<String, dynamic>> endGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1586,9 +1237,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.post(
@@ -1607,20 +1256,14 @@ class BackendApi {
     );
   }
 
-  /// Deletes a Group Watch session.
-  ///
-  /// Only the host can delete the session.
-  Future<Map<String, dynamic>>
-      deleteGroupWatchSession({
+  Future<Map<String, dynamic>> deleteGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
-    final String cleanSessionId =
-        sessionId.trim();
-    final String cleanProfileId =
-        profileId.trim();
+    final cleanSessionId = sessionId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1629,9 +1272,7 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException(
-        'Profile ID is required.',
-      );
+      throw BackendApiException('Profile ID is required.');
     }
 
     final response = await http.delete(
@@ -1660,21 +1301,17 @@ class BackendApi {
       headers: _headers,
     );
 
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to retrieve ARM drives.',
-        statusCode:
-            response.statusCode,
+        statusCode: response.statusCode,
       );
     }
 
-    final drives =
-        data['drives'];
+    final drives = data['drives'];
 
     if (drives is List) {
       return drives;
@@ -1699,16 +1336,12 @@ class BackendApi {
     http.Response response,
     String fallbackError,
   ) async {
-    final data =
-        _decodeResponse(response);
+    final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ??
-            fallbackError,
-        statusCode:
-            response.statusCode,
+        data['error']?.toString() ?? fallbackError,
+        statusCode: response.statusCode,
       );
     }
 
@@ -1727,8 +1360,7 @@ class BackendApi {
     }
 
     try {
-      final decoded =
-          jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
 
       if (decoded is Map<String, dynamic>) {
         return decoded;

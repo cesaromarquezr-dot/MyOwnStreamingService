@@ -14,6 +14,13 @@ enum GroupWatchInvitationStatus {
 }
 
 class GroupWatchParticipant {
+  /// The account that owns this profile.
+  ///
+  /// This allows Group Watch sessions to contain profiles
+  /// belonging to different accounts.
+  final String accountId;
+
+  /// The profile participating in the Group Watch.
   final String profileId;
 
   GroupWatchInvitationStatus invitationStatus;
@@ -24,6 +31,7 @@ class GroupWatchParticipant {
   DateTime? joinedAt;
 
   GroupWatchParticipant({
+    required this.accountId,
     required this.profileId,
     this.invitationStatus = GroupWatchInvitationStatus.pending,
     this.audioTrackId,
@@ -39,6 +47,7 @@ class GroupWatchParticipant {
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
+      'accountId': accountId,
       'profileId': profileId,
       'invitationStatus': invitationStatus.name,
       'audioTrackId': audioTrackId,
@@ -58,18 +67,20 @@ class GroupWatchParticipant {
         json['joinedAt'] as String?;
 
     return GroupWatchParticipant(
-      profileId: json['profileId'] as String,
+      accountId: json['accountId']?.toString() ?? '',
+      profileId: json['profileId']?.toString() ?? '',
       invitationStatus:
           GroupWatchInvitationStatus.values.firstWhere(
         (status) => status.name == invitationStatus,
         orElse: () =>
             GroupWatchInvitationStatus.pending,
       ),
-      audioTrackId: json['audioTrackId'] as String?,
+      audioTrackId:
+          json['audioTrackId']?.toString(),
       subtitleTrackId:
-          json['subtitleTrackId'] as String?,
+          json['subtitleTrackId']?.toString(),
       joinedAt: joinedAtString != null
-          ? DateTime.parse(joinedAtString)
+          ? DateTime.tryParse(joinedAtString)
           : null,
     );
   }
@@ -77,6 +88,11 @@ class GroupWatchParticipant {
 
 class GroupWatchSession {
   final String id;
+
+  /// The account that created/owns the Group Watch session.
+  ///
+  /// This is the host account. Participants do NOT have to
+  /// belong to this account.
   final String accountId;
 
   /// The profile that created/hosts the Group Watch.
@@ -115,6 +131,10 @@ class GroupWatchSession {
   String? pauseReason;
 
   /// All invited/accepted participants.
+  ///
+  /// The key is the profile ID.
+  ///
+  /// Participants may belong to different accounts.
   final Map<String, GroupWatchParticipant> participants;
 
   GroupWatchSession({
@@ -148,23 +168,58 @@ class GroupWatchSession {
     return participants[profileId];
   }
 
-  bool hasParticipant(String profileId) {
+  bool hasParticipant(
+    String profileId,
+  ) {
     return participants.containsKey(profileId);
   }
 
-  bool hasAccepted(String profileId) {
+  bool hasAccepted(
+    String profileId,
+  ) {
     return participants[profileId]?.hasAccepted ?? false;
   }
 
+  /// Returns all accepted profile IDs.
   List<String> get acceptedParticipantIds {
     return participants.values
-        .where((participant) => participant.hasAccepted)
-        .map((participant) => participant.profileId)
+        .where(
+          (participant) => participant.hasAccepted,
+        )
+        .map(
+          (participant) => participant.profileId,
+        )
+        .toList();
+  }
+
+  /// Returns all accepted participants.
+  List<GroupWatchParticipant>
+      get acceptedParticipants {
+    return participants.values
+        .where(
+          (participant) => participant.hasAccepted,
+        )
         .toList();
   }
 
   int get acceptedParticipantCount {
     return acceptedParticipantIds.length;
+  }
+
+  /// Returns the account ID associated with a participant.
+  String? accountIdForProfile(
+    String profileId,
+  ) {
+    return participants[profileId]?.accountId;
+  }
+
+  /// Returns whether the supplied profile belongs to
+  /// the supplied account within this session.
+  bool profileBelongsToAccount({
+    required String profileId,
+    required String accountId,
+  }) {
+    return participants[profileId]?.accountId == accountId;
   }
 
   bool get hasStarted {
@@ -176,31 +231,44 @@ class GroupWatchSession {
   // ---------------------------------------------------------------------------
 
   bool get areInvitationsOpen {
-    if (hasStarted) return false;
+    if (hasStarted) {
+      return false;
+    }
+
     if (status == GroupWatchSessionStatus.ended) {
       return false;
     }
 
-    return DateTime.now().isBefore(invitationExpiresAt);
+    return DateTime.now().isBefore(
+      invitationExpiresAt,
+    );
   }
 
   bool get invitationsHaveExpired {
     return !areInvitationsOpen;
   }
 
-  bool canAcceptInvitation(String profileId) {
+  bool canAcceptInvitation(
+    String profileId,
+  ) {
     final GroupWatchParticipant? participant =
         participants[profileId];
 
-    if (participant == null) return false;
+    if (participant == null) {
+      return false;
+    }
 
-    if (hasStarted) return false;
+    if (hasStarted) {
+      return false;
+    }
 
     if (status == GroupWatchSessionStatus.ended) {
       return false;
     }
 
-    if (DateTime.now().isAfter(invitationExpiresAt) ||
+    if (DateTime.now().isAfter(
+          invitationExpiresAt,
+        ) ||
         DateTime.now().isAtSameMomentAs(
           invitationExpiresAt,
         )) {
@@ -211,7 +279,9 @@ class GroupWatchSession {
         GroupWatchInvitationStatus.pending;
   }
 
-  bool acceptInvitation(String profileId) {
+  bool acceptInvitation(
+    String profileId,
+  ) {
     if (!canAcceptInvitation(profileId)) {
       return false;
     }
@@ -221,18 +291,25 @@ class GroupWatchSession {
 
     participant.invitationStatus =
         GroupWatchInvitationStatus.accepted;
+
     participant.joinedAt = DateTime.now();
 
     return true;
   }
 
-  bool declineInvitation(String profileId) {
+  bool declineInvitation(
+    String profileId,
+  ) {
     final GroupWatchParticipant? participant =
         participants[profileId];
 
-    if (participant == null) return false;
+    if (participant == null) {
+      return false;
+    }
 
-    if (hasStarted) return false;
+    if (hasStarted) {
+      return false;
+    }
 
     if (participant.invitationStatus !=
         GroupWatchInvitationStatus.pending) {
@@ -267,7 +344,9 @@ class GroupWatchSession {
     final GroupWatchParticipant? participant =
         participants[profileId];
 
-    if (participant == null) return false;
+    if (participant == null) {
+      return false;
+    }
 
     if (!participant.hasAccepted) {
       return false;
@@ -289,7 +368,9 @@ class GroupWatchSession {
     final GroupWatchParticipant? participant =
         participants[profileId];
 
-    if (participant == null) return false;
+    if (participant == null) {
+      return false;
+    }
 
     if (!participant.hasAccepted) {
       return false;
@@ -299,7 +380,8 @@ class GroupWatchSession {
       return false;
     }
 
-    participant.subtitleTrackId = subtitleTrackId;
+    participant.subtitleTrackId =
+        subtitleTrackId;
 
     return true;
   }
@@ -313,7 +395,9 @@ class GroupWatchSession {
       return false;
     }
 
-    if (hasStarted) return false;
+    if (hasStarted) {
+      return false;
+    }
 
     return acceptedParticipantCount > 0;
   }
@@ -398,8 +482,11 @@ class GroupWatchSession {
     return true;
   }
 
-  /// Only the person who paused the Group Watch can resume it.
-  bool resume(String profileId) {
+  /// Only the person who paused the Group Watch
+  /// can resume it.
+  bool resume(
+    String profileId,
+  ) {
     if (status == GroupWatchSessionStatus.ended) {
       return false;
     }
@@ -423,8 +510,8 @@ class GroupWatchSession {
 
   /// Updates the global playback position.
   ///
-  /// The backend can use this when a participant reports the
-  /// current playback position.
+  /// The backend can use this when a participant reports
+  /// the current playback position.
   bool updatePlaybackPosition({
     required String profileId,
     required Duration position,
@@ -470,25 +557,48 @@ class GroupWatchSession {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
+
+      // Host account.
       'accountId': accountId,
+
       'hostProfileId': hostProfileId,
       'mediaId': mediaId,
       'title': title,
       'type': type,
+
       'createdAt': createdAt.toIso8601String(),
+
       'invitationExpiresAt':
           invitationExpiresAt.toIso8601String(),
-      'startedAt': startedAt?.toIso8601String(),
-      'endedAt': endedAt?.toIso8601String(),
+
+      'startedAt':
+          startedAt?.toIso8601String(),
+
+      'endedAt':
+          endedAt?.toIso8601String(),
+
       'status': status.name,
+
       'playbackPositionMs':
           playbackPosition.inMilliseconds,
+
       'isPlaying': isPlaying,
-      'pausedByProfileId': pausedByProfileId,
-      'pauseReason': pauseReason,
+
+      'pausedByProfileId':
+          pausedByProfileId,
+
+      'pauseReason':
+          pauseReason,
+
       'participants': participants.map(
-        (profileId, participant) =>
-            MapEntry(profileId, participant.toJson()),
+        (
+          profileId,
+          participant,
+        ) =>
+            MapEntry(
+          profileId,
+          participant.toJson(),
+        ),
       ),
     };
   }
@@ -502,8 +612,14 @@ class GroupWatchSession {
     final Map<String, dynamic> participantsJson =
         rawParticipants is Map
             ? rawParticipants.map(
-                (key, value) =>
-                    MapEntry(key.toString(), value),
+                (
+                  key,
+                  value,
+                ) =>
+                    MapEntry(
+                  key.toString(),
+                  value,
+                ),
               )
             : <String, dynamic>{};
 
@@ -523,65 +639,119 @@ class GroupWatchSession {
     final int playbackPositionMs =
         rawPlaybackPositionMs is int
             ? rawPlaybackPositionMs
-            : int.tryParse(
-                    rawPlaybackPositionMs?.toString() ??
-                        '',
-                  ) ??
-                0;
+            : rawPlaybackPositionMs is num
+                ? rawPlaybackPositionMs.toInt()
+                : int.tryParse(
+                      rawPlaybackPositionMs
+                              ?.toString() ??
+                          '',
+                    ) ??
+                    0;
+
+    final String sessionAccountId =
+        json['accountId']?.toString() ?? '';
 
     return GroupWatchSession(
       id: json['id'] as String,
-      accountId: json['accountId'] as String,
+
+      // This remains the HOST account.
+      accountId: sessionAccountId,
+
       hostProfileId:
           json['hostProfileId'] as String,
-      mediaId: json['mediaId'] as String,
-      title: json['title'] as String,
-      type: json['type'] as String,
-      createdAt: DateTime.parse(createdAtString),
+
+      mediaId:
+          json['mediaId'] as String,
+
+      title:
+          json['title'] as String,
+
+      type:
+          json['type'] as String,
+
+      createdAt:
+          DateTime.parse(
+        createdAtString,
+      ),
+
       invitationExpiresAt:
-          DateTime.parse(invitationExpiresAtString),
-      startedAt: json['startedAt'] != null
-          ? DateTime.parse(
-              json['startedAt'] as String,
-            )
-          : null,
-      endedAt: json['endedAt'] != null
-          ? DateTime.parse(
-              json['endedAt'] as String,
-            )
-          : null,
+          DateTime.parse(
+        invitationExpiresAtString,
+      ),
+
+      startedAt:
+          json['startedAt'] != null
+              ? DateTime.parse(
+                  json['startedAt'] as String,
+                )
+              : null,
+
+      endedAt:
+          json['endedAt'] != null
+              ? DateTime.parse(
+                  json['endedAt'] as String,
+                )
+              : null,
+
       status:
           GroupWatchSessionStatus.values.firstWhere(
         (status) => status.name == statusString,
         orElse: () =>
             GroupWatchSessionStatus.waiting,
       ),
+
       playbackPosition:
-          Duration(milliseconds: playbackPositionMs),
+          Duration(
+        milliseconds:
+            playbackPositionMs,
+      ),
+
       isPlaying:
-          json['isPlaying'] as bool? ?? false,
+          json['isPlaying'] as bool? ??
+              false,
+
       pausedByProfileId:
-          json['pausedByProfileId'] as String?,
+          json['pausedByProfileId']
+              ?.toString(),
+
       pauseReason:
-          json['pauseReason'] as String?,
+          json['pauseReason']
+              ?.toString(),
+
       participants:
-          participantsJson.map((profileId, value) {
-        final Map<String, dynamic> participantJson =
-            value is Map
-                ? Map<String, dynamic>.from(value)
-                : <String, dynamic>{
-                    'profileId': profileId,
-                  };
-
-        participantJson['profileId'] ??= profileId;
-
-        return MapEntry(
+          participantsJson.map(
+        (
           profileId,
-          GroupWatchParticipant.fromJson(
-            participantJson,
-          ),
-        );
-      }),
+          value,
+        ) {
+          final Map<String, dynamic>
+              participantJson =
+              value is Map
+                  ? Map<String, dynamic>.from(
+                      value,
+                    )
+                  : <String, dynamic>{
+                      'profileId':
+                          profileId,
+                    };
+
+          participantJson['profileId'] ??=
+              profileId;
+
+          // Older sessions did not store the
+          // participant's account ID. Keep those
+          // sessions readable rather than crashing.
+          participantJson['accountId'] ??=
+              sessionAccountId;
+
+          return MapEntry(
+            profileId,
+            GroupWatchParticipant.fromJson(
+              participantJson,
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -8,9 +8,22 @@ import 'app_core.dart';
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
 
+  /// Optional Group Watch session.
+  ///
+  /// Normal playback can continue using:
+  /// PlayerScreen(media: media)
+  ///
+  /// Group Watch playback can use:
+  /// PlayerScreen(
+  ///   media: media,
+  ///   groupWatchSessionId: session.id,
+  /// )
+  final String? groupWatchSessionId;
+
   const PlayerScreen({
     super.key,
     required this.media,
+    this.groupWatchSessionId,
   });
 
   @override
@@ -23,11 +36,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool videoFinished = false;
   bool creditsStarted = false;
   bool autoplayCancelled = false;
+  bool controlsVisible = true;
 
   int autoplaySeconds = 10;
 
   Timer? autoplayTimer;
   Timer? groupWatchTimer;
+  Timer? groupWatchPositionTimer;
+  Timer? controlsTimer;
 
   String selectedAudio = '';
   bool subtitlesEnabled = false;
@@ -36,6 +52,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? groupWatchSessionId;
   bool groupWatchActionInProgress = false;
   bool groupWatchSyncing = false;
+
+  /// Prevents excessive position writes to the Group Watch backend.
+  DateTime? _lastGroupWatchPositionSent;
+
+  /// Prevents remote polling from fighting a local seek/playback update.
+  DateTime? _lastLocalPlaybackAction;
 
   YoutubePlayerController? youtubeController;
   bool youtubePlayerReady = false;
@@ -57,123 +79,108 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     _initializeYoutubePlayer();
     _initializeGroupWatch();
+    _startControlsTimer();
   }
+
   void _initializeYoutubePlayer() {
-  final trailerUrl =
-      widget.media.trailerUrl?.trim();
+    final trailerUrl = widget.media.trailerUrl?.trim();
 
-  if (trailerUrl == null ||
-      trailerUrl.isEmpty) {
-    return;
-  }
-
-  final videoId =
-      _extractYoutubeVideoId(trailerUrl);
-
-  if (videoId == null ||
-      videoId.isEmpty) {
-    youtubeUrlInvalid = true;
-    return;
-  }
-
-  youtubeController =
-      YoutubePlayerController.fromVideoId(
-    videoId: videoId,
-    autoPlay: false,
-    params: const YoutubePlayerParams(
-      showControls: true,
-      showFullscreenButton: true,
-      enableCaption: true,
-      captionLanguage: 'en',
-      color: 'red',
-      playsInline: true,
-    ),
-  );
-
-  youtubeController!.listen(
-    _onYoutubePlayerChanged,
-  );
-
-  youtubeVideoStateSubscription =
-      youtubeController!
-          .videoStateStream
-          .listen(
-    _onYoutubeVideoStateChanged,
-  );
-}
-
-String? _extractYoutubeVideoId(
-  String url,
-) {
-  final uri = Uri.tryParse(url);
-
-  if (uri == null) {
-    return null;
-  }
-
-  if (uri.host == 'youtu.be' ||
-      uri.host == 'www.youtu.be') {
-    final id =
-        uri.pathSegments.isNotEmpty
-            ? uri.pathSegments.first
-            : null;
-
-    return _cleanYoutubeVideoId(id);
-  }
-
-  if (uri.host == 'youtube.com' ||
-      uri.host == 'www.youtube.com' ||
-      uri.host == 'm.youtube.com') {
-    if (uri.path == '/watch') {
-      return _cleanYoutubeVideoId(
-        uri.queryParameters['v'],
-      );
+    if (trailerUrl == null || trailerUrl.isEmpty) {
+      return;
     }
 
-    if (uri.pathSegments.length >= 2 &&
-        uri.pathSegments.first == 'shorts') {
-      return _cleanYoutubeVideoId(
-        uri.pathSegments[1],
-      );
+    final videoId = _extractYoutubeVideoId(trailerUrl);
+
+    if (videoId == null || videoId.isEmpty) {
+      youtubeUrlInvalid = true;
+      return;
     }
 
-    if (uri.pathSegments.length >= 2 &&
-        uri.pathSegments.first == 'embed') {
-      return _cleanYoutubeVideoId(
-        uri.pathSegments[1],
-      );
+    youtubeController = YoutubePlayerController.fromVideoId(
+      videoId: videoId,
+      autoPlay: false,
+      params: const YoutubePlayerParams(
+        showControls: true,
+        showFullscreenButton: true,
+        enableCaption: true,
+        captionLanguage: 'en',
+        color: 'red',
+        playsInline: true,
+      ),
+    );
+
+    youtubeController!.listen(
+      _onYoutubePlayerChanged,
+    );
+
+    youtubeVideoStateSubscription =
+        youtubeController!.videoStateStream.listen(
+      _onYoutubeVideoStateChanged,
+    );
+  }
+
+  String? _extractYoutubeVideoId(String url) {
+    final uri = Uri.tryParse(url);
+
+    if (uri == null) {
+      return null;
     }
-  }
 
-  return null;
-}
+    if (uri.host == 'youtu.be' ||
+        uri.host == 'www.youtu.be') {
+      final id = uri.pathSegments.isNotEmpty
+          ? uri.pathSegments.first
+          : null;
 
-String? _cleanYoutubeVideoId(
-  String? value,
-) {
-  if (value == null) {
+      return _cleanYoutubeVideoId(id);
+    }
+
+    if (uri.host == 'youtube.com' ||
+        uri.host == 'www.youtube.com' ||
+        uri.host == 'm.youtube.com') {
+      if (uri.path == '/watch') {
+        return _cleanYoutubeVideoId(
+          uri.queryParameters['v'],
+        );
+      }
+
+      if (uri.pathSegments.length >= 2 &&
+          uri.pathSegments.first == 'shorts') {
+        return _cleanYoutubeVideoId(
+          uri.pathSegments[1],
+        );
+      }
+
+      if (uri.pathSegments.length >= 2 &&
+          uri.pathSegments.first == 'embed') {
+        return _cleanYoutubeVideoId(
+          uri.pathSegments[1],
+        );
+      }
+    }
+
     return null;
   }
 
-  final id = value.trim();
+  String? _cleanYoutubeVideoId(String? value) {
+    if (value == null) {
+      return null;
+    }
 
-  if (id.isEmpty) {
-    return null;
+    final id = value.trim();
+
+    if (id.isEmpty || id.length != 11) {
+      return null;
+    }
+
+    final valid = RegExp(r'^[A-Za-z0-9_-]{11}$');
+
+    if (!valid.hasMatch(id)) {
+      return null;
+    }
+
+    return id;
   }
-
-  if (id.length != 11) {
-    return null;
-  }
-
-  final valid =
-      RegExp(r'^[A-Za-z0-9_-]{11}$');
-
-  if (!valid.hasMatch(id)) {
-    return null;
-  }
-
-  return id;
-}
 
   void _onYoutubePlayerChanged(
     YoutubePlayerValue value,
@@ -183,25 +190,23 @@ String? _cleanYoutubeVideoId(
     }
 
     final ready =
-        value.playerState !=
-            PlayerState.unknown;
+        value.playerState != PlayerState.unknown;
 
-    if (ready &&
-        !youtubePlayerReady) {
+    if (ready && !youtubePlayerReady) {
       setState(() {
         youtubePlayerReady = true;
       });
 
-      if (position > 0.0 &&
-          position < 1.0) {
-        _seekYoutubeByNormalizedPosition(
-          position,
-        );
+      if (position > 0.0 && position < 1.0) {
+        _seekYoutubeByNormalizedPosition(position);
       }
     }
 
-    if (value.playerState ==
-            PlayerState.ended &&
+    if (value.playerState == PlayerState.playing) {
+      _startControlsTimer();
+    }
+
+    if (value.playerState == PlayerState.ended &&
         !videoFinished) {
       finishVideo();
     }
@@ -210,8 +215,7 @@ String? _cleanYoutubeVideoId(
   Future<void> _onYoutubeVideoStateChanged(
     YoutubeVideoState state,
   ) async {
-    if (!mounted ||
-        youtubeController == null) {
+    if (!mounted || youtubeController == null) {
       return;
     }
 
@@ -228,12 +232,10 @@ String? _cleanYoutubeVideoId(
             .clamp(0.0, 1.0)
             .toDouble();
 
-    if ((position - normalizedPosition).abs() >
-        0.005) {
+    if ((position - normalizedPosition).abs() > 0.005) {
       position = normalizedPosition;
 
-      AppController.instance
-          .updatePlaybackProgress(
+      AppController.instance.updatePlaybackProgress(
         widget.media.id,
         normalizedPosition,
       );
@@ -242,19 +244,73 @@ String? _cleanYoutubeVideoId(
         setState(() {});
       }
     }
+
+    if (groupWatchSessionId != null) {
+      _queueGroupWatchPositionSync(
+        state.position.inMilliseconds / 1000.0,
+      );
+    }
   }
 
   @override
   void dispose() {
     autoplayTimer?.cancel();
     groupWatchTimer?.cancel();
+    groupWatchPositionTimer?.cancel();
+    controlsTimer?.cancel();
 
-    youtubeVideoStateSubscription
-        ?.cancel();
-
+    youtubeVideoStateSubscription?.cancel();
     youtubeController?.close();
 
     super.dispose();
+  }
+
+  void _startControlsTimer() {
+    controlsTimer?.cancel();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      controlsVisible = true;
+    });
+
+    controlsTimer = Timer(
+      const Duration(seconds: 4),
+      () {
+        if (!mounted) {
+          return;
+        }
+
+        final controller = youtubeController;
+
+        if (controller != null &&
+            controller.value.playerState ==
+                PlayerState.playing) {
+          setState(() {
+            controlsVisible = false;
+          });
+        }
+      },
+    );
+  }
+
+  void _toggleControls() {
+    if (!mounted) {
+      return;
+    }
+
+    if (!controlsVisible) {
+      _startControlsTimer();
+      return;
+    }
+
+    setState(() {
+      controlsVisible = false;
+    });
+
+    controlsTimer?.cancel();
   }
 
   void _playYoutubeVideo() {
@@ -265,11 +321,24 @@ String? _cleanYoutubeVideoId(
       return;
     }
 
+    _lastLocalPlaybackAction = DateTime.now();
+
     controller.playVideo();
+    _startControlsTimer();
   }
 
   void _pauseYoutubeVideo() {
+    _lastLocalPlaybackAction = DateTime.now();
+
     youtubeController?.pauseVideo();
+
+    if (mounted) {
+      setState(() {
+        controlsVisible = true;
+      });
+    }
+
+    controlsTimer?.cancel();
   }
 
   Future<void> _seekYoutubeByNormalizedPosition(
@@ -281,17 +350,17 @@ String? _cleanYoutubeVideoId(
       return;
     }
 
-    final duration =
-        await controller.duration;
+    final duration = await controller.duration;
 
     if (duration <= 0) {
       return;
     }
 
     final seconds =
-        (duration *
-                normalizedPosition)
+        (duration * normalizedPosition)
             .clamp(0.0, duration);
+
+    _lastLocalPlaybackAction = DateTime.now();
 
     await controller.seekTo(
       seconds: seconds,
@@ -309,12 +378,10 @@ String? _cleanYoutubeVideoId(
 
     final current =
         await controller.currentTime;
-
     final duration =
         await controller.duration;
 
-    var target =
-        current + seconds;
+    var target = current + seconds;
 
     if (target < 0) {
       target = 0;
@@ -324,9 +391,19 @@ String? _cleanYoutubeVideoId(
       target = duration;
     }
 
+    _lastLocalPlaybackAction = DateTime.now();
+
     await controller.seekTo(
       seconds: target,
     );
+
+    _startControlsTimer();
+
+    if (groupWatchSessionId != null) {
+      await _sendGroupWatchActualPosition(
+        target,
+      );
+    }
   }
 
   void _handleMainPlayPause() {
@@ -337,8 +414,7 @@ String? _cleanYoutubeVideoId(
       return;
     }
 
-    final state =
-        controller.value.playerState;
+    final state = controller.value.playerState;
 
     if (state == PlayerState.playing) {
       _pauseYoutubeVideo();
@@ -347,32 +423,103 @@ String? _cleanYoutubeVideoId(
     }
   }
 
+  // ============================================================
+  // GROUP WATCH INITIALIZATION
+  // ============================================================
+
   void _initializeGroupWatch() {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
+
+    String? sessionId =
+        widget.groupWatchSessionId;
+
+    sessionId ??=
+        controller.activeGroupWatchSession?.id;
+
+    if (sessionId == null ||
+        sessionId.trim().isEmpty) {
+      return;
+    }
 
     final activeSession =
-        controller.activeGroupWatchSession;
+        controller.getGroupWatchSession(
+      sessionId,
+    );
 
-    if (activeSession == null ||
-        activeSession.mediaId !=
-            widget.media.id) {
+    if (activeSession == null) {
+      return;
+    }
+
+    if (activeSession.mediaId != widget.media.id) {
       return;
     }
 
     groupWatchSessionId =
         activeSession.id;
 
+    _loadInitialGroupWatchState(
+      activeSession,
+    );
+
     _startGroupWatchPolling();
+  }
+
+  void _loadInitialGroupWatchState(
+    GroupWatchSession session,
+  ) {
+    final controller = AppController.instance;
+
+    final sharedSeconds =
+        session.playbackPosition.inMilliseconds /
+            1000.0;
+
+    if (sharedSeconds > 0) {
+      _applyGroupWatchPosition(
+        sharedSeconds,
+        seekPlayer: false,
+      );
+    }
+
+    final profile =
+        controller.currentProfile;
+
+    if (profile != null) {
+      final participant =
+          session.participantForProfile(
+        profile.id,
+      );
+
+      if (participant != null) {
+        setState(() {
+          selectedAudio =
+              participant.audioTrackId ?? '';
+
+          selectedSubtitle =
+              participant.subtitleTrackId;
+
+          subtitlesEnabled =
+              participant.subtitleTrackId != null;
+        });
+      }
+    }
   }
 
   void _startGroupWatchPolling() {
     groupWatchTimer?.cancel();
+    groupWatchPositionTimer?.cancel();
 
     groupWatchTimer = Timer.periodic(
       const Duration(seconds: 2),
       (_) {
         _refreshGroupWatchState();
+      },
+    );
+
+    groupWatchPositionTimer =
+        Timer.periodic(
+      const Duration(seconds: 2),
+      (_) {
+        _syncCurrentPositionToGroupWatch();
       },
     );
 
@@ -393,87 +540,279 @@ String? _cleanYoutubeVideoId(
           AppController.instance;
 
       final session =
-          await controller
-              .refreshGroupWatchSession(
+          await controller.refreshGroupWatchSession(
         groupWatchSessionId!,
       );
 
-      if (!mounted ||
-          session == null) {
+      if (!mounted || session == null) {
         return;
       }
 
-      if (session.mediaId !=
-          widget.media.id) {
+      if (session.mediaId != widget.media.id) {
         return;
       }
 
-      final sharedPosition =
-          session.playbackPosition
-                  .inMicroseconds /
-              1000000.0;
-
-      final normalizedPosition =
-          sharedPosition
-              .clamp(0.0, 1.0)
-              .toDouble();
-
-      if ((position -
-                  normalizedPosition)
-              .abs() >
-          0.01) {
-        setState(() {
-          position =
-              normalizedPosition;
-
-          videoFinished =
-              position >= 1.0;
-        });
-
-        controller.updatePlaybackProgress(
-          widget.media.id,
-          position,
-        );
-
-        _seekYoutubeByNormalizedPosition(
-          normalizedPosition,
-        );
-      }
-
-      final youtube =
-          youtubeController;
-
-      if (session.isPlaying) {
-        if (youtube != null &&
-            youtube.value.playerState !=
-                PlayerState.playing) {
-          youtube.playVideo();
-        }
-      }
-
-      if (session.isPaused) {
-        if (youtube != null &&
-            youtube.value.playerState ==
-                PlayerState.playing) {
-          youtube.pauseVideo();
-        }
-      }
-
-      if (session.isEnded) {
-        if (mounted) {
-          setState(() {
-            groupWatchSessionId = null;
-          });
-        }
-
-        groupWatchTimer?.cancel();
-      }
+      _applyRemoteGroupWatchState(
+        session,
+      );
     } catch (_) {
-      // Polling errors should not interrupt normal playback.
+      // Synchronization failures should never interrupt playback.
     } finally {
       groupWatchSyncing = false;
     }
   }
+
+  Future<void> _applyRemoteGroupWatchState(
+    GroupWatchSession session,
+  ) async {
+    final youtube = youtubeController;
+
+    if (youtube == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+
+    // Give a local action a short amount of time to settle before
+    // allowing polling to immediately override it.
+    if (_lastLocalPlaybackAction != null &&
+        now.difference(
+              _lastLocalPlaybackAction!,
+            ) <
+            const Duration(milliseconds: 700)) {
+      return;
+    }
+
+    final sharedSeconds =
+        session.playbackPosition.inMilliseconds /
+            1000.0;
+
+    final currentSeconds =
+        await youtube.currentTime;
+
+    // Synchronize position only when the difference is meaningful.
+    //
+    // Small differences are ignored so normal playback does not
+    // constantly seek back and forth.
+    if ((currentSeconds - sharedSeconds).abs() >
+        1.25) {
+      await _seekYoutubeByAbsoluteSeconds(
+        sharedSeconds,
+      );
+    }
+
+    if (session.isPlaying) {
+      if (youtube.value.playerState !=
+          PlayerState.playing) {
+        youtube.playVideo();
+      }
+    } else if (session.isPaused) {
+      if (youtube.value.playerState ==
+          PlayerState.playing) {
+        youtube.pauseVideo();
+      }
+    }
+
+    if (session.isEnded) {
+      if (mounted) {
+        setState(() {
+          groupWatchSessionId = null;
+        });
+      }
+
+      groupWatchTimer?.cancel();
+      groupWatchPositionTimer?.cancel();
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _seekYoutubeByAbsoluteSeconds(
+    double seconds,
+  ) async {
+    final controller = youtubeController;
+
+    if (controller == null) {
+      return;
+    }
+
+    final duration =
+        await controller.duration;
+
+    if (duration <= 0) {
+      return;
+    }
+
+    final target =
+        seconds.clamp(0.0, duration);
+
+    _lastLocalPlaybackAction = DateTime.now();
+
+    await controller.seekTo(
+      seconds: target,
+    );
+  }
+
+  void _applyGroupWatchPosition(
+    double seconds, {
+    bool seekPlayer = true,
+  }) {
+    final controller = youtubeController;
+
+    if (controller == null) {
+      return;
+    }
+
+    _getNormalizedPositionFromSeconds(
+      seconds,
+    ).then(
+      (normalized) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          position = normalized;
+          videoFinished = normalized >= 1.0;
+        });
+
+        AppController.instance.updatePlaybackProgress(
+          widget.media.id,
+          normalized,
+        );
+
+        if (seekPlayer) {
+          _seekYoutubeByAbsoluteSeconds(
+            seconds,
+          );
+        }
+      },
+    );
+  }
+
+  Future<double> _getNormalizedPositionFromSeconds(
+    double seconds,
+  ) async {
+    final controller = youtubeController;
+
+    if (controller == null) {
+      return position;
+    }
+
+    final duration =
+        await controller.duration;
+
+    if (duration <= 0) {
+      return position;
+    }
+
+    return (seconds / duration)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  // ============================================================
+  // GROUP WATCH POSITION SYNCHRONIZATION
+  // ============================================================
+
+  void _queueGroupWatchPositionSync(
+    double seconds,
+  ) {
+    if (groupWatchSessionId == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+
+    if (_lastGroupWatchPositionSent != null &&
+        now.difference(
+              _lastGroupWatchPositionSent!,
+            ) <
+            const Duration(seconds: 2)) {
+      return;
+    }
+
+    _sendGroupWatchActualPosition(
+      seconds,
+    );
+  }
+
+  Future<void> _syncCurrentPositionToGroupWatch() async {
+    final sessionId =
+        groupWatchSessionId;
+
+    final youtube = youtubeController;
+
+    if (sessionId == null ||
+        youtube == null ||
+        !mounted) {
+      return;
+    }
+
+    final state =
+        youtube.value.playerState;
+
+    if (state != PlayerState.playing) {
+      return;
+    }
+
+    try {
+      final current =
+          await youtube.currentTime;
+
+      await _sendGroupWatchActualPosition(
+        current,
+      );
+    } catch (_) {
+      // Ignore synchronization failures.
+    }
+  }
+
+  Future<void> _sendGroupWatchActualPosition(
+    double seconds,
+  ) async {
+    final sessionId =
+        groupWatchSessionId;
+
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+
+    if (_lastGroupWatchPositionSent != null &&
+        now.difference(
+              _lastGroupWatchPositionSent!,
+            ) <
+            const Duration(milliseconds: 750)) {
+      return;
+    }
+
+    _lastGroupWatchPositionSent = now;
+
+    try {
+      await AppController.instance
+          .updateGroupWatchPosition(
+        sessionId: sessionId,
+        profileId: profile.id,
+        position: Duration(
+          milliseconds: (seconds * 1000).round(),
+        ),
+      );
+    } catch (_) {
+      // Do not interrupt playback for a synchronization failure.
+    }
+  }
+
+  // ============================================================
+  // NORMAL PLAYBACK POSITION
+  // ============================================================
 
   void updatePosition(double value) {
     final newPosition =
@@ -496,7 +835,7 @@ String? _cleanYoutubeVideoId(
     );
 
     if (groupWatchSessionId != null) {
-      _sendGroupWatchPosition(
+      _sendNormalizedGroupWatchPosition(
         newPosition,
       );
     }
@@ -506,36 +845,45 @@ String? _cleanYoutubeVideoId(
     }
   }
 
-  Future<void> _sendGroupWatchPosition(
-    double newPosition,
+  Future<void> _sendNormalizedGroupWatchPosition(
+    double normalizedPosition,
   ) async {
-    final controller =
-        AppController.instance;
+    final sessionId =
+        groupWatchSessionId;
 
     final profile =
-        controller.currentProfile;
+        AppController.instance.currentProfile;
 
-    if (groupWatchSessionId == null ||
-        profile == null) {
+    final youtube = youtubeController;
+
+    if (sessionId == null ||
+        profile == null ||
+        youtube == null) {
       return;
     }
 
     try {
-      await controller
-          .updateGroupWatchPosition(
-        sessionId:
-            groupWatchSessionId!,
-        profileId: profile.id,
-        position: Duration(
-          microseconds:
-              (newPosition * 1000000)
-                  .round(),
-        ),
+      final duration =
+          await youtube.duration;
+
+      if (duration <= 0) {
+        return;
+      }
+
+      final seconds =
+          duration * normalizedPosition;
+
+      await _sendGroupWatchActualPosition(
+        seconds,
       );
     } catch (_) {
-      // Do not interrupt playback for a synchronization failure.
+      // Ignore synchronization failures.
     }
   }
+
+  // ============================================================
+  // VIDEO FINISH / AUTOPLAY
+  // ============================================================
 
   void finishVideo() {
     if (videoFinished) {
@@ -548,6 +896,7 @@ String? _cleanYoutubeVideoId(
       position = 1.0;
       videoFinished = true;
       creditsStarted = true;
+      controlsVisible = true;
     });
 
     final controller =
@@ -559,7 +908,11 @@ String? _cleanYoutubeVideoId(
     );
 
     if (groupWatchSessionId != null) {
-      _sendGroupWatchPosition(1.0);
+      _sendGroupWatchActualPosition(
+        0,
+      );
+
+      _sendGroupWatchFinishedPosition();
     }
 
     controller.finishWatching(
@@ -580,6 +933,46 @@ String? _cleanYoutubeVideoId(
     startAutoplayCountdown(
       nextEpisodeTitle,
     );
+  }
+
+  Future<void> _sendGroupWatchFinishedPosition() async {
+    final sessionId =
+        groupWatchSessionId;
+
+    final profile =
+        AppController.instance.currentProfile;
+
+    if (sessionId == null ||
+        profile == null) {
+      return;
+    }
+
+    final youtube = youtubeController;
+
+    if (youtube == null) {
+      return;
+    }
+
+    try {
+      final duration =
+          await youtube.duration;
+
+      if (duration <= 0) {
+        return;
+      }
+
+      await AppController.instance
+          .updateGroupWatchPosition(
+        sessionId: sessionId,
+        profileId: profile.id,
+        position: Duration(
+          milliseconds:
+              (duration * 1000).round(),
+        ),
+      );
+    } catch (_) {
+      // Ignore synchronization failures.
+    }
   }
 
   void startAutoplayCountdown(
@@ -642,50 +1035,85 @@ String? _cleanYoutubeVideoId(
     showDialog(
       context: context,
       builder: (_) {
-        return AlertDialog(
-          title: const Text(
-            'Up Next',
-          ),
-          content: Text(
-            nextEpisodeTitle,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(
-                  context,
-                );
-              },
-              child: const Text(
-                'CLOSE',
+        return _PremiumDialog(
+          title: 'Up Next',
+          icon: Icons.play_circle_fill_rounded,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                nextEpisodeTitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(
+                    Icons.play_arrow_rounded,
+                  ),
+                  label: const Text('PLAY NOW'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text(
+                  'CLOSE',
+                  style: TextStyle(
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
+  // ============================================================
+  // AUDIO / SUBTITLES
+  // ============================================================
+
   void openAudioSubtitleOptions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          Colors.grey.shade900,
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) {
         return AudioSubtitleOptions(
-          selectedAudio:
-              selectedAudio,
+          selectedAudio: selectedAudio,
           subtitlesEnabled:
               subtitlesEnabled,
           selectedSubtitle:
               selectedSubtitle,
-          onAudioChanged: (value) {
-            _changeAudioTrack(value);
-          },
-          onSubtitleChanged: (value) {
-            _changeSubtitleTrack(value);
-          },
+          onAudioChanged:
+              _changeAudioTrack,
+          onSubtitleChanged:
+              _changeSubtitleTrack,
         );
       },
     );
@@ -702,8 +1130,7 @@ String? _cleanYoutubeVideoId(
         groupWatchSessionId;
 
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     if (sessionId == null ||
         profile == null) {
@@ -722,13 +1149,8 @@ String? _cleanYoutubeVideoId(
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
+      _showSnackBar(
+        error.toString(),
       );
     }
   }
@@ -746,8 +1168,7 @@ String? _cleanYoutubeVideoId(
         groupWatchSessionId;
 
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     if (sessionId == null ||
         profile == null) {
@@ -766,16 +1187,34 @@ String? _cleanYoutubeVideoId(
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
+      _showSnackBar(
+        error.toString(),
       );
     }
   }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior:
+              SnackBarBehavior.floating,
+          backgroundColor:
+              const Color(0xFF242424),
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(14),
+          ),
+          content: Text(message),
+        ),
+      );
+  }
+
+  // ============================================================
+  // GROUP WATCH CREATION FROM PLAYER
+  // ============================================================
 
   Future<void> showGroupShare() async {
     final controller =
@@ -789,15 +1228,9 @@ String? _cleanYoutubeVideoId(
 
     if (currentProfile == null ||
         account == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No account or profile is selected.',
-          ),
-        ),
+      _showSnackBar(
+        'No account or profile is selected.',
       );
-
       return;
     }
 
@@ -811,15 +1244,9 @@ String? _cleanYoutubeVideoId(
             .toList();
 
     if (availableProfiles.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'There are no other profiles available to invite.',
-          ),
-        ),
+      _showSnackBar(
+        'There are no other profiles available to invite.',
       );
-
       return;
     }
 
@@ -835,8 +1262,7 @@ String? _cleanYoutubeVideoId(
     );
 
     if (!mounted ||
-        selectedProfileIds ==
-            null ||
+        selectedProfileIds == null ||
         selectedProfileIds.isEmpty) {
       return;
     }
@@ -868,26 +1294,16 @@ String? _cleanYoutubeVideoId(
 
       _startGroupWatchPolling();
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            'Group watch session created for ${session.title}.',
-          ),
-        ),
+      _showSnackBar(
+        'Group Watch session created for ${session.title}.',
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
+      _showSnackBar(
+        error.toString(),
       );
     } finally {
       if (mounted) {
@@ -899,13 +1315,16 @@ String? _cleanYoutubeVideoId(
     }
   }
 
+  // ============================================================
+  // GROUP WATCH PLAY
+  // ============================================================
+
   Future<void> _playGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
 
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     if (sessionId == null ||
         profile == null) {
@@ -934,6 +1353,33 @@ String? _cleanYoutubeVideoId(
         return;
       }
 
+      if (session.invitationsExpired &&
+          session.isWaiting) {
+        _showSnackBar(
+          'This invitation link is expired.',
+        );
+        return;
+      }
+
+      final currentYoutube =
+          youtubeController;
+
+      if (currentYoutube != null) {
+        final currentSeconds =
+            await currentYoutube.currentTime;
+
+        await controller
+            .updateGroupWatchPosition(
+          sessionId: sessionId,
+          profileId: profile.id,
+          position: Duration(
+            milliseconds:
+                (currentSeconds * 1000)
+                    .round(),
+          ),
+        );
+      }
+
       if (session.isWaiting ||
           session.isReady) {
         await controller
@@ -957,13 +1403,8 @@ String? _cleanYoutubeVideoId(
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
+      _showSnackBar(
+        error.toString(),
       );
     } finally {
       if (mounted) {
@@ -975,13 +1416,16 @@ String? _cleanYoutubeVideoId(
     }
   }
 
+  // ============================================================
+  // GROUP WATCH PAUSE
+  // ============================================================
+
   Future<void> _pauseGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
 
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     if (sessionId == null ||
         profile == null) {
@@ -1012,6 +1456,25 @@ String? _cleanYoutubeVideoId(
     });
 
     try {
+      final youtube =
+          youtubeController;
+
+      if (youtube != null) {
+        final currentSeconds =
+            await youtube.currentTime;
+
+        await AppController.instance
+            .updateGroupWatchPosition(
+          sessionId: sessionId,
+          profileId: profile.id,
+          position: Duration(
+            milliseconds:
+                (currentSeconds * 1000)
+                    .round(),
+          ),
+        );
+      }
+
       await AppController.instance
           .pauseGroupWatchSession(
         sessionId: sessionId,
@@ -1027,13 +1490,8 @@ String? _cleanYoutubeVideoId(
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
+      _showSnackBar(
+        error.toString(),
       );
     } finally {
       if (mounted) {
@@ -1045,13 +1503,16 @@ String? _cleanYoutubeVideoId(
     }
   }
 
+  // ============================================================
+  // GROUP WATCH RESUME
+  // ============================================================
+
   Future<void> _resumeGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
 
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     if (sessionId == null ||
         profile == null) {
@@ -1063,15 +1524,9 @@ String? _cleanYoutubeVideoId(
       sessionId,
       profileId: profile.id,
     )) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Only the person who paused the Group Watch can resume it.',
-          ),
-        ),
+      _showSnackBar(
+        'Only the person who paused the Group Watch can resume it.',
       );
-
       return;
     }
 
@@ -1099,13 +1554,8 @@ String? _cleanYoutubeVideoId(
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString(),
-          ),
-        ),
+      _showSnackBar(
+        error.toString(),
       );
     } finally {
       if (mounted) {
@@ -1117,20 +1567,35 @@ String? _cleanYoutubeVideoId(
     }
   }
 
+  // ============================================================
+  // EXTRAS
+  // ============================================================
+
   void showExtras() {
     showModalBottomSheet(
       context: context,
       backgroundColor:
-          Colors.grey.shade900,
+          Colors.transparent,
       builder: (_) {
         return const SafeArea(
-          child: SizedBox(
-            height: 180,
-            child: Center(
+          child: _PremiumBottomSheet(
+            icon:
+                Icons.movie_filter_rounded,
+            title: 'Extras',
+            child: Padding(
+              padding:
+                  EdgeInsets.only(
+                left: 20,
+                right: 20,
+                bottom: 25,
+              ),
               child: Text(
                 'No extras are available for this media item.',
+                textAlign:
+                    TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Colors.white60,
+                  fontSize: 15,
                 ),
               ),
             ),
@@ -1140,6 +1605,10 @@ String? _cleanYoutubeVideoId(
     );
   }
 
+  // ============================================================
+  // VIDEO AREA
+  // ============================================================
+
   Widget _buildVideoArea(
     GroupWatchSession? groupSession,
   ) {
@@ -1147,18 +1616,10 @@ String? _cleanYoutubeVideoId(
         youtubeController;
 
     if (youtubeUrlInvalid) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
+      return const _PlayerMessage(
+        icon: Icons.link_off_rounded,
+        message:
             'The trailer URL is not a valid YouTube URL.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-            ),
-          ),
-        ),
       );
     }
 
@@ -1172,7 +1633,8 @@ String? _cleanYoutubeVideoId(
     return Container(
       width: double.infinity,
       color: Colors.black,
-      child: widget.media.imageUrl != null &&
+      child: widget.media.imageUrl !=
+                  null &&
               widget.media.imageUrl!
                   .isNotEmpty
           ? Image.network(
@@ -1180,21 +1642,18 @@ String? _cleanYoutubeVideoId(
               fit: BoxFit.contain,
               errorBuilder:
                   (_, __, ___) {
-                return const Center(
-                  child: Icon(
-                    Icons.movie,
-                    color: Colors.white,
-                    size: 100,
-                  ),
+                return const _PlayerMessage(
+                  icon:
+                      Icons.movie_rounded,
+                  message:
+                      'No preview available.',
                 );
               },
             )
-          : const Center(
-              child: Icon(
-                Icons.movie,
-                color: Colors.white,
-                size: 100,
-              ),
+          : const _PlayerMessage(
+              icon: Icons.movie_rounded,
+              message:
+                  'No preview available.',
             ),
     );
   }
@@ -1214,27 +1673,6 @@ String? _cleanYoutubeVideoId(
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(
-          widget.media.title,
-          style: const TextStyle(
-            color: Colors.white,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed:
-                openAudioSubtitleOptions,
-            icon: const Icon(
-              Icons.audiotrack,
-            ),
-            tooltip:
-                'Audio & Subtitles',
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -1245,73 +1683,45 @@ String? _cleanYoutubeVideoId(
             Expanded(
               child: Stack(
                 children: [
-                  Container(
-                    width:
-                        double.infinity,
-                    color: Colors.black,
-                    child: _buildVideoArea(
-                      groupSession,
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior:
+                          HitTestBehavior
+                              .opaque,
+                      onTap:
+                          _toggleControls,
+                      child: Container(
+                        color: Colors.black,
+                        alignment:
+                            Alignment.center,
+                        child:
+                            _buildVideoArea(
+                          groupSession,
+                        ),
+                      ),
                     ),
                   ),
-                  if (controller
-                          .activeGroupWatchSession ==
-                      null &&
+
+                  _buildTopBar(
+                    groupSession,
+                  ),
+
+                  if (groupSession == null &&
                       youtubeController !=
                           null &&
                       !videoFinished)
-                    Positioned(
-                      left: 20,
-                      right: 20,
-                      bottom: 20,
-                      child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
-                        children: [
-                          Material(
-                            color: Colors.black
-                                .withValues(
-                              alpha: 0.65,
-                            ),
-                            borderRadius:
-                                BorderRadius.circular(
-                              30,
-                            ),
-                            child: IconButton(
-                              onPressed:
-                                  youtubePlayerReady
-                                      ? _handleMainPlayPause
-                                      : null,
-                              iconSize: 38,
-                              icon: Icon(
-                                youtubeController!
-                                        .value
-                                        .playerState ==
-                                    PlayerState.playing
-                                    ? Icons.pause_circle
-                                    : Icons.play_circle,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildCenterPlayerControl(),
+
                   if (groupSession?.isPaused ==
                       true)
                     _buildGroupWatchPausedOverlay(
                       groupSession!,
                     ),
+
                   if (videoFinished &&
                       creditsStarted)
-                    const Center(
-                      child: Text(
-                        'Credits',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 24,
-                        ),
-                      ),
-                    ),
+                    _buildCreditsOverlay(),
+
                   if (videoFinished &&
                       creditsStarted &&
                       !autoplayCancelled)
@@ -1337,7 +1747,9 @@ String? _cleanYoutubeVideoId(
                           );
 
                           if (next == null ||
-                              next.trim().isEmpty) {
+                              next
+                                  .trim()
+                                  .isEmpty) {
                             return;
                           }
 
@@ -1359,28 +1771,293 @@ String? _cleanYoutubeVideoId(
     );
   }
 
+  // ============================================================
+  // TOP BAR
+  // ============================================================
+
+  Widget _buildTopBar(
+    GroupWatchSession? groupSession,
+  ) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      child: AnimatedOpacity(
+        opacity:
+            controlsVisible ? 1 : 0,
+        duration:
+            const Duration(
+          milliseconds: 200,
+        ),
+        child: Container(
+          padding:
+              const EdgeInsets.fromLTRB(
+            12,
+            10,
+            12,
+            30,
+          ),
+          decoration:
+              BoxDecoration(
+            gradient:
+                LinearGradient(
+              begin:
+                  Alignment.topCenter,
+              end:
+                  Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(
+                  alpha: 0.78,
+                ),
+                Colors.transparent,
+              ],
+            ),
+          ),
+          child: Row(
+            children: [
+              _PlayerIconButton(
+                icon:
+                    Icons.arrow_back_rounded,
+                onPressed: () {
+                  Navigator.of(
+                    context,
+                  ).pop();
+                },
+              ),
+              const SizedBox(
+                width: 12,
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: [
+                    Text(
+                      widget.media.title,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
+                    ),
+                    if (groupSession !=
+                        null)
+                      const Padding(
+                        padding:
+                            EdgeInsets.only(
+                          top: 2,
+                        ),
+                        child: Text(
+                          'GROUP WATCH',
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.white60,
+                            fontSize: 10,
+                            fontWeight:
+                                FontWeight
+                                    .w700,
+                            letterSpacing:
+                                1.2,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              _PlayerIconButton(
+                icon:
+                    Icons.audiotrack_rounded,
+                onPressed:
+                    openAudioSubtitleOptions,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // CENTER CONTROLS
+  // ============================================================
+
+  Widget _buildCenterPlayerControl() {
+    final playing =
+        youtubeController?.value
+                .playerState ==
+            PlayerState.playing;
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        ignoring:
+            !controlsVisible,
+        child: AnimatedOpacity(
+          opacity:
+              controlsVisible ? 1 : 0,
+          duration:
+              const Duration(
+            milliseconds: 180,
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: [
+                _SeekButton(
+                  icon:
+                      Icons.replay_10_rounded,
+                  onPressed:
+                      youtubePlayerReady
+                          ? () {
+                              _seekYoutubeBySeconds(
+                                -10,
+                              );
+                            }
+                          : null,
+                ),
+                const SizedBox(
+                  width: 18,
+                ),
+                GestureDetector(
+                  onTap:
+                      youtubePlayerReady
+                          ? _handleMainPlayPause
+                          : null,
+                  child:
+                      AnimatedContainer(
+                    duration:
+                        const Duration(
+                      milliseconds: 180,
+                    ),
+                    width: 72,
+                    height: 72,
+                    decoration:
+                        BoxDecoration(
+                      color: Colors.black
+                          .withValues(
+                        alpha: 0.58,
+                      ),
+                      shape:
+                          BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white
+                            .withValues(
+                          alpha: 0.25,
+                        ),
+                      ),
+                    ),
+                    child: Icon(
+                      playing
+                          ? Icons
+                              .pause_rounded
+                          : Icons
+                              .play_arrow_rounded,
+                      color:
+                          Colors.white,
+                      size: 42,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 18,
+                ),
+                _SeekButton(
+                  icon:
+                      Icons.forward_10_rounded,
+                  onPressed:
+                      youtubePlayerReady
+                          ? () {
+                              _seekYoutubeBySeconds(
+                                10,
+                              );
+                            }
+                          : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreditsOverlay() {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          alignment:
+              Alignment.center,
+          decoration:
+              BoxDecoration(
+            gradient:
+                LinearGradient(
+              begin:
+                  Alignment.topCenter,
+              end:
+                  Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(
+                  alpha: 0.15,
+                ),
+                Colors.black.withValues(
+                  alpha: 0.75,
+                ),
+              ],
+            ),
+          ),
+          child: const Padding(
+            padding:
+                EdgeInsets.only(
+              bottom: 100,
+            ),
+            child: Text(
+              'Credits',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 24,
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // GROUP WATCH BANNER
+  // ============================================================
+
   Widget _buildGroupWatchBanner(
     GroupWatchSession session,
   ) {
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     final isPaused =
         session.isPaused;
 
     final canResume =
         profile != null &&
-        session.canResume(
-          profile.id,
-        );
+            session.canResume(
+              profile.id,
+            );
 
     String text;
 
     if (session.invitationsExpired &&
         session.isWaiting) {
       text =
-          'This invite has expired';
+          'This invitation link is expired.';
     } else if (isPaused) {
       if (session.pauseReason != null &&
           session.pauseReason!
@@ -1395,49 +2072,96 @@ String? _cleanYoutubeVideoId(
     } else if (session.isPlaying) {
       text =
           'Group Watch is playing';
+    } else if (session.isReady) {
+      text =
+          'Everyone is ready';
     } else {
       text =
-          'Group Watch ready';
+          'Group Watch lobby';
     }
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFF202020),
       padding:
           const EdgeInsets.symmetric(
         horizontal: 14,
-        vertical: 8,
+        vertical: 9,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF151515),
+        border: Border(
+          bottom:
+              BorderSide(
+            color: Colors.white
+                .withValues(
+              alpha: 0.06,
+            ),
+          ),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.people,
-            color: Colors.white70,
+          Container(
+            width: 32,
+            height: 32,
+            decoration:
+                BoxDecoration(
+              color: Colors.white
+                  .withValues(
+                alpha: 0.08,
+              ),
+              shape:
+                  BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons
+                  .people_alt_rounded,
+              color:
+                  Colors.white70,
+              size: 17,
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(
+            width: 10,
+          ),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              maxLines: 1,
+              overflow:
+                  TextOverflow.ellipsis,
+              style:
+                  const TextStyle(
                 color: Colors.white,
+                fontSize: 13,
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
           ),
-          if (isPaused && canResume)
+          if (isPaused &&
+              canResume)
             TextButton(
               onPressed:
                   groupWatchActionInProgress
                       ? null
                       : _resumeGroupWatch,
-              child: const Text(
+              child:
+                  const Text(
                 'RESUME',
               ),
             ),
-          if (isPaused && !canResume)
+          if (isPaused &&
+              !canResume)
             const Text(
               'Waiting...',
-              style: TextStyle(
-                color: Colors.white70,
+              style:
+                  TextStyle(
+                color:
+                    Colors.white54,
+                fontSize: 12,
               ),
             ),
         ],
@@ -1445,127 +2169,281 @@ String? _cleanYoutubeVideoId(
     );
   }
 
+  // ============================================================
+  // GROUP WATCH PAUSED OVERLAY
+  // ============================================================
+
   Widget _buildGroupWatchPausedOverlay(
     GroupWatchSession session,
   ) {
     final profile =
-        AppController.instance
-            .currentProfile;
+        AppController.instance.currentProfile;
 
     final canResume =
         profile != null &&
-        session.canResume(
-          profile.id,
-        );
+            session.canResume(
+              profile.id,
+            );
 
-    return Center(
+    return Positioned.fill(
       child: Container(
-        margin:
-            const EdgeInsets.all(24),
-        padding:
-            const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(
-            alpha: 0.82,
-          ),
-          borderRadius:
-              BorderRadius.circular(12),
+        color: Colors.black
+            .withValues(
+          alpha: 0.58,
         ),
-        child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.pause_circle_filled,
-              color: Colors.white,
-              size: 64,
+        child: Center(
+          child: Container(
+            constraints:
+                const BoxConstraints(
+              maxWidth: 390,
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Group Watch Paused',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+            margin:
+                const EdgeInsets.all(
+              24,
             ),
-            if (session.pauseReason !=
-                    null &&
-                session.pauseReason!
-                    .trim()
-                    .isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                session.pauseReason!,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                ),
-                textAlign:
-                    TextAlign.center,
+            padding:
+                const EdgeInsets.all(
+              24,
+            ),
+            decoration:
+                BoxDecoration(
+              color:
+                  const Color(0xFF171717),
+              borderRadius:
+                  BorderRadius.circular(
+                22,
               ),
-            ],
-            const SizedBox(height: 16),
-            if (canResume)
-              ElevatedButton(
-                onPressed:
-                    groupWatchActionInProgress
-                        ? null
-                        : _resumeGroupWatch,
-                child: const Text(
-                  'RESUME',
+              border: Border.all(
+                color: Colors.white
+                    .withValues(
+                  alpha: 0.10,
                 ),
-              )
-            else
-              const Text(
-                'Waiting for the person who paused to resume.',
-                style: TextStyle(
-                  color: Colors.white70,
-                ),
-                textAlign:
-                    TextAlign.center,
               ),
-          ],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black
+                      .withValues(
+                    alpha: 0.5,
+                  ),
+                  blurRadius: 35,
+                  offset:
+                      const Offset(
+                    0,
+                    15,
+                  ),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration:
+                      BoxDecoration(
+                    color: Colors.white
+                        .withValues(
+                      alpha: 0.08,
+                    ),
+                    shape:
+                        BoxShape.circle,
+                  ),
+                  child:
+                      const Icon(
+                    Icons
+                        .pause_rounded,
+                    color:
+                        Colors.white,
+                    size: 36,
+                  ),
+                ),
+                const SizedBox(
+                  height: 16,
+                ),
+                const Text(
+                  'Group Watch Paused',
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 22,
+                    fontWeight:
+                        FontWeight.w800,
+                  ),
+                ),
+                if (session
+                            .pauseReason !=
+                        null &&
+                    session
+                        .pauseReason!
+                        .trim()
+                        .isNotEmpty) ...[
+                  const SizedBox(
+                    height: 9,
+                  ),
+                  Text(
+                    session
+                        .pauseReason!,
+                    textAlign:
+                        TextAlign
+                            .center,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.white60,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+                const SizedBox(
+                  height: 20,
+                ),
+                if (canResume)
+                  SizedBox(
+                    width:
+                        double.infinity,
+                    child:
+                        ElevatedButton(
+                      onPressed:
+                          groupWatchActionInProgress
+                              ? null
+                              : _resumeGroupWatch,
+                      style:
+                          ElevatedButton
+                              .styleFrom(
+                        backgroundColor:
+                            Colors.white,
+                        foregroundColor:
+                            Colors.black,
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
+                          vertical: 14,
+                        ),
+                        shape:
+                            RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            14,
+                          ),
+                        ),
+                      ),
+                      child:
+                          const Text(
+                        'RESUME',
+                        style:
+                            TextStyle(
+                          fontWeight:
+                              FontWeight
+                                  .w800,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const Text(
+                    'Waiting for the person who paused to resume.',
+                    textAlign:
+                        TextAlign.center,
+                    style:
+                        TextStyle(
+                      color:
+                          Colors.white54,
+                      fontSize: 14,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
+  // ============================================================
+  // BOTTOM CONTROLS
+  // ============================================================
+
   Widget _buildControls(
     GroupWatchSession? groupSession,
   ) {
     final isGroupPaused =
-        groupSession?.isPaused == true;
+        groupSession?.isPaused ==
+            true;
 
     final hasYoutube =
         youtubeController != null;
 
-    return Container(
-      color: const Color(0xFF111111),
+    final playing =
+        youtubeController?.value
+                .playerState ==
+            PlayerState.playing;
+
+    return AnimatedContainer(
+      duration:
+          const Duration(
+        milliseconds: 200,
+      ),
+      color:
+          const Color(0xFF0A0A0A),
       padding:
           const EdgeInsets.fromLTRB(
         12,
-        8,
+        6,
         12,
-        12,
+        10,
       ),
       child: Column(
         children: [
-          Slider(
-            value: position,
-            min: 0,
-            max: 1,
-            onChanged:
-                videoFinished ||
-                        isGroupPaused ||
-                        !hasYoutube
-                    ? null
-                    : updatePosition,
+          SliderTheme(
+            data:
+                SliderTheme.of(
+              context,
+            ).copyWith(
+              trackHeight: 3,
+              thumbShape:
+                  const RoundSliderThumbShape(
+                enabledThumbRadius: 6,
+              ),
+              overlayShape:
+                  const RoundSliderOverlayShape(
+                overlayRadius: 15,
+              ),
+              activeTrackColor:
+                  Colors.white,
+              inactiveTrackColor:
+                  Colors.white
+                      .withValues(
+                alpha: 0.18,
+              ),
+              thumbColor:
+                  Colors.white,
+              overlayColor:
+                  Colors.white
+                      .withValues(
+                alpha: 0.10,
+              ),
+            ),
+            child: Slider(
+              value: position,
+              min: 0,
+              max: 1,
+              onChanged:
+                  videoFinished ||
+                          isGroupPaused ||
+                          !hasYoutube
+                      ? null
+                      : updatePosition,
+            ),
           ),
           Row(
             children: [
-              IconButton(
+              _BottomControlButton(
+                icon:
+                    Icons.replay_10_rounded,
                 onPressed:
                     videoFinished ||
                             isGroupPaused ||
@@ -1576,13 +2454,16 @@ String? _cleanYoutubeVideoId(
                               -10,
                             );
                           },
-                icon: const Icon(
-                  Icons.replay_10,
-                  color: Colors.white,
-                ),
               ),
-              if (groupSession != null)
-                IconButton(
+              if (groupSession !=
+                  null)
+                _BottomControlButton(
+                  icon:
+                      groupSession.isPlaying
+                          ? Icons
+                              .pause_rounded
+                          : Icons
+                              .play_arrow_rounded,
                   onPressed:
                       groupWatchActionInProgress
                           ? null
@@ -1593,34 +2474,25 @@ String? _cleanYoutubeVideoId(
                                       .isPlaying
                                   ? _pauseGroupWatch
                                   : _playGroupWatch,
-                  icon: Icon(
-                    groupSession
-                            .isPlaying
-                        ? Icons.pause
-                        : Icons.play_arrow,
-                    color: Colors.white,
-                  ),
+                  large: true,
                 )
               else
-                IconButton(
+                _BottomControlButton(
+                  icon: playing
+                      ? Icons.pause_rounded
+                      : Icons
+                          .play_arrow_rounded,
                   onPressed:
                       videoFinished
                           ? null
                           : hasYoutube
                               ? _handleMainPlayPause
                               : finishVideo,
-                  icon: Icon(
-                    hasYoutube &&
-                            youtubeController!
-                                .value
-                                .playerState ==
-                        PlayerState.playing
-                        ? Icons.pause
-                        : Icons.play_arrow,
-                    color: Colors.white,
-                  ),
+                  large: true,
                 ),
-              IconButton(
+              _BottomControlButton(
+                icon:
+                    Icons.forward_10_rounded,
                 onPressed:
                     videoFinished ||
                             isGroupPaused ||
@@ -1631,47 +2503,36 @@ String? _cleanYoutubeVideoId(
                               10,
                             );
                           },
-                icon: const Icon(
-                  Icons.forward_10,
-                  color: Colors.white,
-                ),
               ),
               const Spacer(),
-              IconButton(
+              _BottomControlButton(
+                icon:
+                    Icons.subtitles_rounded,
                 onPressed:
                     openAudioSubtitleOptions,
-                icon: const Icon(
-                  Icons.subtitles,
-                  color: Colors.white,
-                ),
               ),
-              if (groupSession == null)
-                IconButton(
+              if (groupSession ==
+                  null)
+                _BottomControlButton(
+                  icon: Icons
+                      .people_alt_rounded,
                   onPressed:
                       groupWatchActionInProgress
                           ? null
                           : showGroupShare,
-                  icon: const Icon(
-                    Icons.people,
-                    color: Colors.white,
-                  ),
                 )
               else
-                IconButton(
+                _BottomControlButton(
+                  icon: Icons
+                      .people_alt_rounded,
                   onPressed:
                       _showGroupWatchSessionInfo,
-                  icon: const Icon(
-                    Icons.people,
-                    color: Colors.white,
-                  ),
                 ),
-              IconButton(
+              _BottomControlButton(
+                icon: Icons
+                    .movie_filter_rounded,
                 onPressed:
                     showExtras,
-                icon: const Icon(
-                  Icons.movie_filter,
-                  color: Colors.white,
-                ),
               ),
             ],
           ),
@@ -1679,6 +2540,10 @@ String? _cleanYoutubeVideoId(
       ),
     );
   }
+
+  // ============================================================
+  // GROUP WATCH INFO
+  // ============================================================
 
   void _showGroupWatchSessionInfo() {
     final sessionId =
@@ -1701,71 +2566,86 @@ String? _cleanYoutubeVideoId(
     showModalBottomSheet(
       context: context,
       backgroundColor:
-          Colors.grey.shade900,
+          Colors.transparent,
       builder: (_) {
-        return SafeArea(
+        return _PremiumBottomSheet(
+          icon:
+              Icons.people_alt_rounded,
+          title: 'Group Watch',
           child: Padding(
             padding:
-                const EdgeInsets.all(20),
+                const EdgeInsets.fromLTRB(
+              20,
+              0,
+              20,
+              25,
+            ),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
               crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
               children: [
-                const Text(
-                  'Group Watch',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 Text(
                   session.title,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white70,
+                    fontSize: 15,
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Status: ${_groupWatchStatusLabel(session)}',
-                  style: const TextStyle(
-                    color: Colors.white,
+                const SizedBox(
+                  height: 18,
+                ),
+                _InfoRow(
+                  label: 'Status',
+                  value:
+                      _groupWatchStatusLabel(
+                    session,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Participants: ${session.participants.length}',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                  ),
+                const SizedBox(
+                  height: 10,
                 ),
-                if (session.pauseReason !=
+                _InfoRow(
+                  label:
+                      'Participants',
+                  value:
+                      '${session.participants.length}',
+                ),
+                if (session
+                            .pauseReason !=
                         null &&
-                    session.pauseReason!
+                    session
+                        .pauseReason!
                         .trim()
                         .isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    session.pauseReason!,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                    ),
+                  const SizedBox(
+                    height: 10,
+                  ),
+                  _InfoRow(
+                    label: 'Reason',
+                    value:
+                        session.pauseReason!,
                   ),
                 ],
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(
-                      context,
-                    );
-                  },
-                  child: const Text(
-                    'CLOSE',
+                const SizedBox(
+                  height: 20,
+                ),
+                SizedBox(
+                  width:
+                      double.infinity,
+                  child:
+                      TextButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        context,
+                      );
+                    },
+                    child:
+                        const Text(
+                      'CLOSE',
+                    ),
                   ),
                 ),
               ],
@@ -1804,6 +2684,431 @@ String? _cleanYoutubeVideoId(
 }
 
 // ============================================================
+// REUSABLE PLAYER UI
+// ============================================================
+
+class _PlayerIconButton
+    extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _PlayerIconButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius:
+            BorderRadius.circular(
+          13,
+        ),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration:
+              BoxDecoration(
+            color: Colors.black
+                .withValues(
+              alpha: 0.42,
+            ),
+            borderRadius:
+                BorderRadius.circular(
+              13,
+            ),
+            border: Border.all(
+              color: Colors.white
+                  .withValues(
+                alpha: 0.10,
+              ),
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 21,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SeekButton
+    extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  const _SeekButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black
+          .withValues(
+        alpha: 0.45,
+      ),
+      shape:
+          const CircleBorder(),
+      child: InkWell(
+        onTap: onPressed,
+        customBorder:
+            const CircleBorder(),
+        child: SizedBox(
+          width: 52,
+          height: 52,
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 27,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomControlButton
+    extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool large;
+
+  const _BottomControlButton({
+    required this.icon,
+    required this.onPressed,
+    this.large = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        size: large ? 28 : 23,
+      ),
+      color: Colors.white,
+      disabledColor:
+          Colors.white24,
+      tooltip: null,
+    );
+  }
+}
+
+class _PlayerMessage
+    extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const _PlayerMessage({
+    required this.icon,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize:
+            MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: Colors.white30,
+            size: 64,
+          ),
+          const SizedBox(
+            height: 14,
+          ),
+          Text(
+            message,
+            textAlign:
+                TextAlign.center,
+            style:
+                const TextStyle(
+              color:
+                  Colors.white60,
+              fontSize: 15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumDialog
+    extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  const _PremiumDialog({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor:
+          Colors.transparent,
+      insetPadding:
+          const EdgeInsets.all(
+        24,
+      ),
+      child: Container(
+        padding:
+            const EdgeInsets.all(
+          24,
+        ),
+        decoration:
+            BoxDecoration(
+          color:
+              const Color(0xFF171717),
+          borderRadius:
+              BorderRadius.circular(
+            24,
+          ),
+          border: Border.all(
+            color: Colors.white
+                .withValues(
+              alpha: 0.09,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black
+                  .withValues(
+                alpha: 0.55,
+              ),
+              blurRadius: 35,
+              offset:
+                  const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration:
+                  BoxDecoration(
+                color: Colors.white
+                    .withValues(
+                  alpha: 0.07,
+                ),
+                shape:
+                    BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 30,
+              ),
+            ),
+            const SizedBox(
+              height: 15,
+            ),
+            Text(
+              title,
+              style:
+                  const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight:
+                    FontWeight.w800,
+              ),
+            ),
+            const SizedBox(
+              height: 18,
+            ),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumBottomSheet
+    extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  const _PremiumBottomSheet({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration:
+          const BoxDecoration(
+        color:
+            Color(0xFF111111),
+        borderRadius:
+            BorderRadius.vertical(
+          top: Radius.circular(
+            28,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            const SizedBox(
+              height: 10,
+            ),
+            Container(
+              width: 42,
+              height: 4,
+              decoration:
+                  BoxDecoration(
+                color:
+                    Colors.white24,
+                borderRadius:
+                    BorderRadius.circular(
+                  10,
+                ),
+              ),
+            ),
+            const SizedBox(
+              height: 20,
+            ),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 20,
+                ),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration:
+                      BoxDecoration(
+                    color: Colors.white
+                        .withValues(
+                      alpha: 0.07,
+                    ),
+                    shape:
+                        BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    color:
+                        Colors.white,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(
+                  width: 12,
+                ),
+                Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 21,
+                    fontWeight:
+                        FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(
+              height: 20,
+            ),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow
+    extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ),
+      decoration:
+          BoxDecoration(
+        color: Colors.white
+            .withValues(
+          alpha: 0.045,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          13,
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style:
+                const TextStyle(
+              color:
+                  Colors.white54,
+              fontSize: 13,
+            ),
+          ),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              textAlign:
+                  TextAlign.right,
+              overflow:
+                  TextOverflow.ellipsis,
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white,
+                fontSize: 13,
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
 // GROUP WATCH INVITE DIALOG
 // ============================================================
 
@@ -1817,8 +3122,9 @@ class GroupWatchInviteDialog
   });
 
   @override
-  State<GroupWatchInviteDialog> createState() =>
-      _GroupWatchInviteDialogState();
+  State<GroupWatchInviteDialog>
+      createState() =>
+          _GroupWatchInviteDialogState();
 }
 
 class _GroupWatchInviteDialogState
@@ -1829,87 +3135,260 @@ class _GroupWatchInviteDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text(
-        'Start Group Watch',
+    return Dialog(
+      backgroundColor:
+          Colors.transparent,
+      insetPadding:
+          const EdgeInsets.all(
+        20,
       ),
-      content: SizedBox(
-        width: 420,
+      child: Container(
+        constraints:
+            const BoxConstraints(
+          maxWidth: 440,
+          maxHeight: 600,
+        ),
+        padding:
+            const EdgeInsets.all(
+          22,
+        ),
+        decoration:
+            BoxDecoration(
+          color:
+              const Color(0xFF171717),
+          borderRadius:
+              BorderRadius.circular(
+            24,
+          ),
+          border: Border.all(
+            color: Colors.white
+                .withValues(
+              alpha: 0.09,
+            ),
+          ),
+        ),
         child: Column(
           mainAxisSize:
               MainAxisSize.min,
           children: [
-            const Align(
-              alignment:
-                  Alignment.centerLeft,
-              child: Text(
-                'Choose who you want to invite.',
+            const Icon(
+              Icons.people_alt_rounded,
+              color: Colors.white,
+              size: 34,
+            ),
+            const SizedBox(
+              height: 12,
+            ),
+            const Text(
+              'Start Group Watch',
+              style:
+                  TextStyle(
+                color: Colors.white,
+                fontSize: 23,
+                fontWeight:
+                    FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 12),
-            ...widget.profiles.map(
-              (profile) {
-                final selected =
-                    selectedProfileIds
-                        .contains(
-                  profile.id,
-                );
+            const SizedBox(
+              height: 7,
+            ),
+            const Text(
+              'Choose who you want to invite.',
+              textAlign:
+                  TextAlign.center,
+              style:
+                  TextStyle(
+                color:
+                    Colors.white54,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(
+              height: 18,
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: widget.profiles
+                    .map(
+                      (profile) {
+                        final selected =
+                            selectedProfileIds
+                                .contains(
+                          profile.id,
+                        );
 
-                return CheckboxListTile(
-                  value: selected,
-                  onChanged: (value) {
-                    setState(() {
-                      if (value == true) {
-                        selectedProfileIds
-                            .add(
-                          profile.id,
+                        return AnimatedContainer(
+                          duration:
+                              const Duration(
+                            milliseconds:
+                                160,
+                          ),
+                          margin:
+                              const EdgeInsets
+                                  .only(
+                            bottom: 8,
+                          ),
+                          decoration:
+                              BoxDecoration(
+                            color: selected
+                                ? Colors.white
+                                    .withValues(
+                                    alpha:
+                                        0.10,
+                                  )
+                                : Colors.white
+                                    .withValues(
+                                    alpha:
+                                        0.035,
+                                  ),
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              14,
+                            ),
+                            border:
+                                Border.all(
+                              color: selected
+                                  ? Colors
+                                      .white
+                                      .withValues(
+                                      alpha:
+                                          0.20,
+                                    )
+                                  : Colors
+                                      .transparent,
+                            ),
+                          ),
+                          child:
+                              CheckboxListTile(
+                            value:
+                                selected,
+                            onChanged:
+                                (value) {
+                              setState(() {
+                                if (value ==
+                                    true) {
+                                  selectedProfileIds
+                                      .add(
+                                    profile.id,
+                                  );
+                                } else {
+                                  selectedProfileIds
+                                      .remove(
+                                    profile.id,
+                                  );
+                                }
+                              });
+                            },
+                            activeColor:
+                                Colors
+                                    .white,
+                            checkColor:
+                                Colors
+                                    .black,
+                            controlAffinity:
+                                ListTileControlAffinity
+                                    .trailing,
+                            title: Text(
+                              profile
+                                  .name,
+                              style:
+                                  const TextStyle(
+                                color:
+                                    Colors
+                                        .white,
+                                fontWeight:
+                                    FontWeight
+                                        .w600,
+                              ),
+                            ),
+                          ),
                         );
-                      } else {
-                        selectedProfileIds
-                            .remove(
-                          profile.id,
-                        );
-                      }
-                    });
-                  },
-                  title: Text(
-                    profile.name,
+                      },
+                    )
+                    .toList(),
+              ),
+            ),
+            const SizedBox(
+              height: 15,
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child:
+                      TextButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        context,
+                      );
+                    },
+                    child:
+                        const Text(
+                      'CANCEL',
+                      style:
+                          TextStyle(
+                        color:
+                            Colors.white60,
+                      ),
+                    ),
                   ),
-                );
-              },
+                ),
+                const SizedBox(
+                  width: 10,
+                ),
+                Expanded(
+                  child:
+                      ElevatedButton(
+                    onPressed:
+                        selectedProfileIds
+                                .isEmpty
+                            ? null
+                            : () {
+                                Navigator.pop(
+                                  context,
+                                  Set<String>.from(
+                                    selectedProfileIds,
+                                  ),
+                                );
+                              },
+                    style:
+                        ElevatedButton.styleFrom(
+                      backgroundColor:
+                          Colors.white,
+                      foregroundColor:
+                          Colors.black,
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        vertical: 14,
+                      ),
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius
+                                .circular(
+                          13,
+                        ),
+                      ),
+                    ),
+                    child:
+                        const Text(
+                      'INVITE',
+                      style:
+                          TextStyle(
+                        fontWeight:
+                            FontWeight
+                                .w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(
-              context,
-            );
-          },
-          child: const Text(
-            'CANCEL',
-          ),
-        ),
-        ElevatedButton(
-          onPressed:
-              selectedProfileIds
-                      .isEmpty
-                  ? null
-                  : () {
-                      Navigator.pop(
-                        context,
-                        Set<String>.from(
-                          selectedProfileIds,
-                        ),
-                      );
-                    },
-          child: const Text(
-            'INVITE',
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1926,82 +3405,210 @@ class GroupWatchPauseReasonDialog
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text(
-        'Why did you pause?',
+    return Dialog(
+      backgroundColor:
+          Colors.transparent,
+      insetPadding:
+          const EdgeInsets.all(
+        24,
       ),
-      content: Column(
-        mainAxisSize:
-            MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Text(
-              '🔋',
-              style: TextStyle(
-                fontSize: 24,
-              ),
-            ),
-            title: const Text(
-              'Voy a cargar',
-            ),
-            onTap: () {
-              Navigator.pop(
-                context,
-                'Voy a cargar',
-              );
-            },
+      child: Container(
+        padding:
+            const EdgeInsets.all(
+          22,
+        ),
+        decoration:
+            BoxDecoration(
+          color:
+              const Color(0xFF171717),
+          borderRadius:
+              BorderRadius.circular(
+            24,
           ),
-          ListTile(
-            leading: const Text(
-              '🍿',
-              style: TextStyle(
-                fontSize: 24,
-              ),
+          border: Border.all(
+            color: Colors.white
+                .withValues(
+              alpha: 0.09,
             ),
-            title: const Text(
-              'Voy por un snack',
-            ),
-            onTap: () {
-              Navigator.pop(
-                context,
-                'Voy por un snack',
-              );
-            },
           ),
-          ListTile(
-            leading: const Text(
-              '💬',
-              style: TextStyle(
-                fontSize: 24,
+        ),
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons
+                  .pause_circle_outline_rounded,
+              color: Colors.white,
+              size: 38,
+            ),
+            const SizedBox(
+              height: 12,
+            ),
+            const Text(
+              'Why did you pause?',
+              style:
+                  TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight:
+                    FontWeight.w800,
               ),
             ),
-            title: const Text(
-              'Otro',
+            const SizedBox(
+              height: 16,
             ),
-            onTap: () async {
-              final reason =
-                  await showDialog<String>(
-                context: context,
-                builder: (_) {
-                  return const GroupWatchCustomPauseReasonDialog();
-                },
-              );
+            _PauseReasonTile(
+              emoji: '🔋',
+              title:
+                  'Voy a cargar',
+              onTap: () {
+                Navigator.pop(
+                  context,
+                  'Voy a cargar',
+                );
+              },
+            ),
+            _PauseReasonTile(
+              emoji: '🍿',
+              title:
+                  'Voy por un snack',
+              onTap: () {
+                Navigator.pop(
+                  context,
+                  'Voy por un snack',
+                );
+              },
+            ),
+            _PauseReasonTile(
+              emoji: '💬',
+              title: 'Otro',
+              onTap: () async {
+                final reason =
+                    await showDialog<
+                        String>(
+                  context: context,
+                  builder: (_) {
+                    return const GroupWatchCustomPauseReasonDialog();
+                  },
+                );
 
-              if (!context.mounted ||
-                  reason == null ||
-                  reason
-                      .trim()
-                      .isEmpty) {
-                return;
-              }
+                if (!context.mounted ||
+                    reason == null ||
+                    reason
+                        .trim()
+                        .isEmpty) {
+                  return;
+                }
 
-              Navigator.of(context)
-                  .pop(
-                reason.trim(),
-              );
-            },
+                Navigator.of(
+                  context,
+                ).pop(
+                  reason.trim(),
+                );
+              },
+            ),
+            const SizedBox(
+              height: 6,
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                );
+              },
+              child:
+                  const Text(
+                'CANCEL',
+                style:
+                    TextStyle(
+                  color:
+                      Colors.white54,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PauseReasonTile
+    extends StatelessWidget {
+  final String emoji;
+  final String title;
+  final VoidCallback onTap;
+
+  const _PauseReasonTile({
+    required this.emoji,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          const EdgeInsets.only(
+        bottom: 8,
+      ),
+      child: Material(
+        color: Colors.white
+            .withValues(
+          alpha: 0.045,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          14,
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius:
+              BorderRadius.circular(
+            14,
           ),
-        ],
+          child: Padding(
+            padding:
+                const EdgeInsets
+                    .symmetric(
+              horizontal: 15,
+              vertical: 13,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  emoji,
+                  style:
+                      const TextStyle(
+                    fontSize: 23,
+                  ),
+                ),
+                const SizedBox(
+                  width: 13,
+                ),
+                Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 15,
+                    fontWeight:
+                        FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons
+                      .chevron_right_rounded,
+                  color:
+                      Colors.white38,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2034,49 +3641,133 @@ class _GroupWatchCustomPauseReasonDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text(
-        'Why did you pause?',
-      ),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        maxLines: 3,
+    return Dialog(
+      backgroundColor:
+          Colors.transparent,
+      child: Container(
+        padding:
+            const EdgeInsets.all(
+          22,
+        ),
         decoration:
-            const InputDecoration(
-          hintText: 'Enter a reason',
+            BoxDecoration(
+          color:
+              const Color(0xFF171717),
+          borderRadius:
+              BorderRadius.circular(
+            22,
+          ),
+        ),
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min,
+          children: [
+            const Text(
+              'Why did you pause?',
+              style:
+                  TextStyle(
+                color: Colors.white,
+                fontSize: 21,
+                fontWeight:
+                    FontWeight.w800,
+              ),
+            ),
+            const SizedBox(
+              height: 18,
+            ),
+            TextField(
+              controller:
+                  controller,
+              autofocus: true,
+              maxLines: 3,
+              style:
+                  const TextStyle(
+                color: Colors.white,
+              ),
+              decoration:
+                  InputDecoration(
+                hintText:
+                    'Enter a reason',
+                hintStyle:
+                    const TextStyle(
+                  color:
+                      Colors.white38,
+                ),
+                filled: true,
+                fillColor:
+                    Colors.white
+                        .withValues(
+                  alpha: 0.05,
+                ),
+                border:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius
+                          .circular(
+                    14,
+                  ),
+                  borderSide:
+                      BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(
+              height: 16,
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child:
+                      TextButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        context,
+                      );
+                    },
+                    child:
+                        const Text(
+                      'CANCEL',
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child:
+                      ElevatedButton(
+                    onPressed: () {
+                      final value =
+                          controller
+                              .text
+                              .trim();
+
+                      if (value
+                          .isEmpty) {
+                        return;
+                      }
+
+                      Navigator.pop(
+                        context,
+                        value,
+                      );
+                    },
+                    style:
+                        ElevatedButton
+                            .styleFrom(
+                      backgroundColor:
+                          Colors.white,
+                      foregroundColor:
+                          Colors.black,
+                    ),
+                    child:
+                        const Text(
+                      'DONE',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(
-              context,
-            );
-          },
-          child: const Text(
-            'CANCEL',
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final value =
-                controller.text.trim();
-
-            if (value.isEmpty) {
-              return;
-            }
-
-            Navigator.pop(
-              context,
-              value,
-            );
-          },
-          child: const Text(
-            'DONE',
-          ),
-        ),
-      ],
     );
   }
 }
@@ -2109,63 +3800,193 @@ class NextEpisodeCountdown
       return const SizedBox.shrink();
     }
 
-    return Card(
-      color: Colors.grey.shade900,
-      child: Padding(
-        padding:
-            const EdgeInsets.all(14),
-        child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          children: [
-            const Text(
-              'Up Next',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+    return Container(
+      constraints:
+          const BoxConstraints(
+        maxWidth: 330,
+      ),
+      padding:
+          const EdgeInsets.all(
+        16,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF171717)
+                .withValues(
+          alpha: 0.96,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
+        border: Border.all(
+          color: Colors.white
+              .withValues(
+            alpha: 0.10,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black
+                .withValues(
+              alpha: 0.5,
             ),
-            const SizedBox(height: 5),
-            Text(
-              nextEpisodeTitle!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
+            blurRadius: 25,
+            offset:
+                const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize:
+            MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration:
+                    BoxDecoration(
+                  color: Colors.white
+                      .withValues(
+                    alpha: 0.08,
+                  ),
+                  shape:
+                      BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons
+                      .play_arrow_rounded,
+                  color:
+                      Colors.white,
+                  size: 21,
+                ),
               ),
-              textAlign:
-                  TextAlign.center,
-            ),
-            const SizedBox(height: 5),
-            Text(
-              'Starts in $seconds',
-              style: const TextStyle(
-                color: Colors.white70,
+              const SizedBox(
+                width: 10,
               ),
+              const Expanded(
+                child: Text(
+                  'Up Next',
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 17,
+                    fontWeight:
+                        FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                '$seconds',
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.white70,
+                  fontSize: 15,
+                  fontWeight:
+                      FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(
+            height: 10,
+          ),
+          Text(
+            nextEpisodeTitle!,
+            maxLines: 2,
+            overflow:
+                TextOverflow.ellipsis,
+            textAlign:
+                TextAlign.center,
+            style:
+                const TextStyle(
+              color:
+                  Colors.white70,
+              fontSize: 14,
             ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisSize:
-                  MainAxisSize.min,
-              children: [
-                TextButton(
-                  onPressed: onCancel,
-                  child: const Text(
+          ),
+          const SizedBox(
+            height: 14,
+          ),
+          Row(
+            children: [
+              Expanded(
+                child:
+                    OutlinedButton(
+                  onPressed:
+                      onCancel,
+                  style:
+                      OutlinedButton
+                          .styleFrom(
+                    foregroundColor:
+                        Colors.white70,
+                    side:
+                        BorderSide(
+                      color: Colors
+                          .white
+                          .withValues(
+                        alpha: 0.15,
+                      ),
+                    ),
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius
+                              .circular(
+                        12,
+                      ),
+                    ),
+                  ),
+                  child:
+                      const Text(
                     'CANCEL',
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: onPlayNow,
-                  child: const Text(
+              ),
+              const SizedBox(
+                width: 8,
+              ),
+              Expanded(
+                child:
+                    ElevatedButton(
+                  onPressed:
+                      onPlayNow,
+                  style:
+                      ElevatedButton
+                          .styleFrom(
+                    backgroundColor:
+                        Colors.white,
+                    foregroundColor:
+                        Colors.black,
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius
+                              .circular(
+                        12,
+                      ),
+                    ),
+                  ),
+                  child:
+                      const Text(
                     'PLAY NOW',
+                    style:
+                        TextStyle(
+                      fontWeight:
+                          FontWeight
+                              .w800,
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -2197,8 +4018,9 @@ class AudioSubtitleOptions
   });
 
   @override
-  State<AudioSubtitleOptions> createState() =>
-      _AudioSubtitleOptionsState();
+  State<AudioSubtitleOptions>
+      createState() =>
+          _AudioSubtitleOptionsState();
 }
 
 class _AudioSubtitleOptionsState
@@ -2224,105 +4046,274 @@ class _AudioSubtitleOptionsState
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding:
-            const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Audio & Subtitles',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'AUDIO',
-              style: TextStyle(
-                color: Colors.white70,
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const ListTile(
-              contentPadding:
-                  EdgeInsets.zero,
-              leading: Icon(
-                Icons.info_outline,
-                color: Colors.white70,
-              ),
-              title: Text(
-                'Audio track metadata is not available for this media item.',
-                style: TextStyle(
-                  color: Colors.white,
-                ),
-              ),
-              subtitle: Text(
-                'No track choices will be invented.',
-                style: TextStyle(
-                  color: Colors.white54,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'SUBTITLES',
-              style: TextStyle(
-                color: Colors.white70,
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const ListTile(
-              contentPadding:
-                  EdgeInsets.zero,
-              leading: Icon(
-                Icons.info_outline,
-                color: Colors.white70,
-              ),
-              title: Text(
-                'Subtitle track metadata is not available for this media item.',
-                style: TextStyle(
-                  color: Colors.white,
-                ),
-              ),
-              subtitle: Text(
-                'No subtitle choices will be invented.',
-                style: TextStyle(
-                  color: Colors.white54,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SwitchListTile(
-              value:
-                  subtitlesEnabled,
-              onChanged: null,
-              title: const Text(
-                'Subtitles',
-                style: TextStyle(
-                  color: Colors.white54,
-                ),
-              ),
-              subtitle: const Text(
-                'Unavailable until subtitle metadata is provided.',
-                style: TextStyle(
-                  color: Colors.white38,
-                ),
-              ),
-            ),
-          ],
+    return Container(
+      decoration:
+          const BoxDecoration(
+        color:
+            Color(0xFF111111),
+        borderRadius:
+            BorderRadius.vertical(
+          top: Radius.circular(
+            28,
+          ),
         ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            20,
+            10,
+            20,
+            24,
+          ),
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.white24,
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                      10,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(
+                height: 20,
+              ),
+              const Row(
+                children: [
+                  Icon(
+                    Icons.tune_rounded,
+                    color:
+                        Colors.white,
+                    size: 25,
+                  ),
+                  SizedBox(
+                    width: 10,
+                  ),
+                  Text(
+                    'Audio & Subtitles',
+                    style:
+                        TextStyle(
+                      color:
+                          Colors.white,
+                      fontSize: 23,
+                      fontWeight:
+                          FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(
+                height: 24,
+              ),
+              const Text(
+                'AUDIO',
+                style:
+                    TextStyle(
+                  color:
+                      Colors.white54,
+                  fontSize: 11,
+                  fontWeight:
+                      FontWeight.w800,
+                  letterSpacing:
+                      1.2,
+                ),
+              ),
+              const SizedBox(
+                height: 9,
+              ),
+              _OptionInfoCard(
+                icon:
+                    Icons.audiotrack_rounded,
+                title:
+                    'Audio track metadata is not available',
+                subtitle:
+                    'No track choices will be invented.',
+              ),
+              const SizedBox(
+                height: 22,
+              ),
+              const Text(
+                'SUBTITLES',
+                style:
+                    TextStyle(
+                  color:
+                      Colors.white54,
+                  fontSize: 11,
+                  fontWeight:
+                      FontWeight.w800,
+                  letterSpacing:
+                      1.2,
+                ),
+              ),
+              const SizedBox(
+                height: 9,
+              ),
+              _OptionInfoCard(
+                icon:
+                    Icons.subtitles_rounded,
+                title:
+                    'Subtitle track metadata is not available',
+                subtitle:
+                    'No subtitle choices will be invented.',
+              ),
+              const SizedBox(
+                height: 10,
+              ),
+              Container(
+                decoration:
+                    BoxDecoration(
+                  color: Colors.white
+                      .withValues(
+                    alpha: 0.035,
+                  ),
+                  borderRadius:
+                      BorderRadius
+                          .circular(
+                    14,
+                  ),
+                ),
+                child:
+                    SwitchListTile(
+                  value:
+                      subtitlesEnabled,
+                  onChanged: null,
+                  title:
+                      const Text(
+                    'Subtitles',
+                    style:
+                        TextStyle(
+                      color:
+                          Colors.white54,
+                      fontWeight:
+                          FontWeight
+                              .w600,
+                    ),
+                  ),
+                  subtitle:
+                      const Text(
+                    'Unavailable until subtitle metadata is provided.',
+                    style:
+                        TextStyle(
+                      color:
+                          Colors.white38,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionInfoCard
+    extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _OptionInfoCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.all(
+        14,
+      ),
+      decoration:
+          BoxDecoration(
+        color: Colors.white
+            .withValues(
+          alpha: 0.045,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          14,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment
+                .start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration:
+                BoxDecoration(
+              color: Colors.white
+                  .withValues(
+                alpha: 0.07,
+              ),
+              shape:
+                  BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color:
+                  Colors.white60,
+              size: 20,
+            ),
+          ),
+          const SizedBox(
+            width: 12,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 13,
+                    fontWeight:
+                        FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(
+                  height: 4,
+                ),
+                Text(
+                  subtitle,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white38,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import '../database/database.dart';
+import '../models/account.dart';
+import '../models/media.dart';
 import '../models/group_watch_session.dart';
 
 class GroupWatchService {
@@ -57,6 +59,45 @@ class GroupWatchService {
       );
     }
 
+    // ------------------------------------------------------------
+    // Validate host account and profile.
+    // ------------------------------------------------------------
+
+    final Account? hostAccount =
+        database.getAccountById(cleanAccountId);
+
+    if (hostAccount == null) {
+      throw StateError(
+        'The host account was not found.',
+      );
+    }
+
+    if (!hostAccount.hasProfile(cleanHostProfileId)) {
+      throw StateError(
+        'The host profile does not belong to the authenticated account.',
+      );
+    }
+
+    // ------------------------------------------------------------
+    // Validate media.
+    // ------------------------------------------------------------
+
+    final Media? media =
+        database.getMediaById(cleanMediaId);
+
+    if (media == null) {
+      throw StateError(
+        'The selected media was not found.',
+      );
+    }
+
+    // ------------------------------------------------------------
+    // Build participant list.
+    //
+    // Profiles can belong to different accounts, but every invited
+    // profile must own the same media.
+    // ------------------------------------------------------------
+
     final Set<String> participants =
         invitedProfileIds
             .map((profileId) => profileId.trim())
@@ -66,17 +107,51 @@ class GroupWatchService {
     // The host must always be part of the session.
     participants.add(cleanHostProfileId);
 
+    final Map<String, GroupWatchParticipant>
+        participantMap =
+        <String, GroupWatchParticipant>{};
+
+    for (final String profileId in participants) {
+      final Account? participantAccount =
+          database.getAccountForProfile(profileId);
+
+      if (participantAccount == null) {
+        throw StateError(
+          'The profile "$profileId" was not found.',
+        );
+      }
+
+      final bool ownsMedia =
+          _accountOwnsMedia(
+        participantAccount,
+        cleanMediaId,
+      );
+
+      if (!ownsMedia) {
+        throw StateError(
+          'The selected profile does not own this media.',
+        );
+      }
+
+      participantMap[profileId] =
+          GroupWatchParticipant(
+        accountId: participantAccount.id,
+        profileId: profileId,
+      );
+    }
+
+    // Make absolutely sure the host is represented with the
+    // authenticated account ID.
+    participantMap[cleanHostProfileId] =
+        GroupWatchParticipant(
+      accountId: cleanAccountId,
+      profileId: cleanHostProfileId,
+    );
+
     final DateTime createdAt = DateTime.now();
 
-    final Map<String, GroupWatchParticipant> participantMap =
-        <String, GroupWatchParticipant>{
-      for (final String profileId in participants)
-        profileId: GroupWatchParticipant(
-          profileId: profileId,
-        ),
-    };
-
-    final GroupWatchSession session = GroupWatchSession(
+    final GroupWatchSession session =
+        GroupWatchSession(
       id: _generateSessionId(),
       accountId: cleanAccountId,
       hostProfileId: cleanHostProfileId,
@@ -101,14 +176,17 @@ class GroupWatchService {
   GroupWatchSession? getSession(
     String sessionId,
   ) {
-    final String cleanSessionId = sessionId.trim();
+    final String cleanSessionId =
+        sessionId.trim();
 
     if (cleanSessionId.isEmpty) {
       return null;
     }
 
     final GroupWatchSession? session =
-        database.getGroupWatchSession(cleanSessionId);
+        database.getGroupWatchSession(
+      cleanSessionId,
+    );
 
     if (session == null) {
       return null;
@@ -127,7 +205,8 @@ class GroupWatchService {
   List<GroupWatchSession> getSessionsForAccount(
     String accountId,
   ) {
-    final String cleanAccountId = accountId.trim();
+    final String cleanAccountId =
+        accountId.trim();
 
     if (cleanAccountId.isEmpty) {
       return <GroupWatchSession>[];
@@ -138,7 +217,8 @@ class GroupWatchService {
       cleanAccountId,
     );
 
-    for (final GroupWatchSession session in sessions) {
+    for (final GroupWatchSession session
+        in sessions) {
       final bool changed =
           _expireInvitationsIfNecessary(session);
 
@@ -148,7 +228,8 @@ class GroupWatchService {
     }
 
     sessions.sort(
-      (a, b) => b.createdAt.compareTo(a.createdAt),
+      (a, b) =>
+          b.createdAt.compareTo(a.createdAt),
     );
 
     return sessions;
@@ -157,7 +238,8 @@ class GroupWatchService {
   List<GroupWatchSession> getSessionsForProfile(
     String profileId,
   ) {
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
       return <GroupWatchSession>[];
@@ -168,7 +250,8 @@ class GroupWatchService {
       cleanProfileId,
     );
 
-    for (final GroupWatchSession session in sessions) {
+    for (final GroupWatchSession session
+        in sessions) {
       final bool changed =
           _expireInvitationsIfNecessary(session);
 
@@ -178,7 +261,8 @@ class GroupWatchService {
     }
 
     sessions.sort(
-      (a, b) => b.createdAt.compareTo(a.createdAt),
+      (a, b) =>
+          b.createdAt.compareTo(a.createdAt),
     );
 
     return sessions;
@@ -195,32 +279,77 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     _expireAndSaveIfNecessary(session);
 
     if (session.hasStarted) {
       throw StateError(
-        'This invite has expired.',
+        'This invitation link is expired.',
       );
     }
 
     if (!session.areInvitationsOpen) {
       throw StateError(
-        'This invite has expired.',
+        'This invitation link is expired.',
       );
     }
 
     final GroupWatchParticipant? participant =
-        session.participantFor(cleanProfileId);
+        session.participantFor(
+      cleanProfileId,
+    );
 
     if (participant == null) {
       throw StateError(
         'This profile was not invited to the Group Watch.',
+      );
+    }
+
+    // ------------------------------------------------------------
+    // Verify that the profile still exists.
+    // ------------------------------------------------------------
+
+    final Account? participantAccount =
+        database.getAccountForProfile(
+      cleanProfileId,
+    );
+
+    if (participantAccount == null) {
+      throw StateError(
+        'This profile is no longer available.',
+      );
+    }
+
+    // ------------------------------------------------------------
+    // Verify ownership again at acceptance time.
+    //
+    // This prevents somebody from accepting an old invitation
+    // after their media ownership has changed.
+    // ------------------------------------------------------------
+
+    if (!_accountOwnsMedia(
+      participantAccount,
+      session.mediaId,
+    )) {
+      throw StateError(
+        'You no longer own this media, so you cannot join this Group Watch.',
+      );
+    }
+
+    // Make sure the participant's stored account ID
+    // matches the account that actually owns the profile.
+    if (participant.accountId !=
+        participantAccount.id) {
+      throw StateError(
+        'This invitation is no longer valid for this profile.',
       );
     }
 
@@ -239,12 +368,14 @@ class GroupWatchService {
     if (participant.invitationStatus ==
         GroupWatchInvitationStatus.expired) {
       throw StateError(
-        'This invite has expired.',
+        'This invitation link is expired.',
       );
     }
 
     final bool accepted =
-        session.acceptInvitation(cleanProfileId);
+        session.acceptInvitation(
+      cleanProfileId,
+    );
 
     if (!accepted) {
       throw StateError(
@@ -264,16 +395,21 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     _expireAndSaveIfNecessary(session);
 
     final GroupWatchParticipant? participant =
-        session.participantFor(cleanProfileId);
+        session.participantFor(
+      cleanProfileId,
+    );
 
     if (participant == null) {
       throw StateError(
@@ -283,14 +419,14 @@ class GroupWatchService {
 
     if (session.hasStarted) {
       throw StateError(
-        'This invite has expired.',
+        'This invitation link is expired.',
       );
     }
 
     if (participant.invitationStatus ==
         GroupWatchInvitationStatus.expired) {
       throw StateError(
-        'This invite has expired.',
+        'This invitation link is expired.',
       );
     }
 
@@ -307,7 +443,9 @@ class GroupWatchService {
     }
 
     final bool declined =
-        session.declineInvitation(cleanProfileId);
+        session.declineInvitation(
+      cleanProfileId,
+    );
 
     if (!declined) {
       throw StateError(
@@ -332,10 +470,13 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     if (session.hasStarted) {
@@ -380,10 +521,13 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     if (session.hasStarted) {
@@ -431,15 +575,30 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
-    if (session.hostProfileId != cleanProfileId) {
+    if (session.hostProfileId !=
+        cleanProfileId) {
       throw StateError(
         'Only the Group Watch host can start playback.',
+      );
+    }
+
+    // Verify that the host still belongs to
+    // the account that created the session.
+    if (!database.profileBelongsToAccount(
+      cleanProfileId,
+      session.accountId,
+    )) {
+      throw StateError(
+        'The Group Watch host is no longer valid.',
       );
     }
 
@@ -451,7 +610,7 @@ class GroupWatchService {
 
     if (!session.areInvitationsOpen) {
       throw StateError(
-        'This invite has expired.',
+        'This invitation link is expired.',
       );
     }
 
@@ -461,21 +620,23 @@ class GroupWatchService {
       );
     }
 
-    // Actual audio/subtitle availability validation will be
-    // connected to media metadata.
+    // Audio/subtitle availability validation can be
+    // connected to media metadata when track data is
+    // exposed by the media catalog.
     for (final GroupWatchParticipant participant
         in session.participants.values) {
       if (!participant.hasAccepted) {
         continue;
       }
 
-      // A null audio track is allowed when the media has
-      // no selectable alternative.
+      // A null audio track is allowed when the media
+      // has no selectable alternative.
       //
       // A null subtitle track is also allowed.
     }
 
-    final bool started = session.start();
+    final bool started =
+        session.start();
 
     if (!started) {
       throw StateError(
@@ -499,10 +660,13 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     if (!session.hasStarted) {
@@ -524,7 +688,8 @@ class GroupWatchService {
       );
     }
 
-    final bool played = session.play();
+    final bool played =
+        session.play();
 
     if (!played) {
       throw StateError(
@@ -549,15 +714,22 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
-    final String cleanReason = reason.trim();
+    final String cleanProfileId =
+        profileId.trim();
+
+    final String cleanReason =
+        reason.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     if (cleanReason.isEmpty) {
-      throw ArgumentError('Pause reason is required.');
+      throw ArgumentError(
+        'Pause reason is required.',
+      );
     }
 
     if (!session.hasStarted) {
@@ -579,7 +751,8 @@ class GroupWatchService {
       );
     }
 
-    final bool paused = session.pause(
+    final bool paused =
+        session.pause(
       profileId: cleanProfileId,
       reason: cleanReason,
     );
@@ -606,10 +779,13 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     if (session.status !=
@@ -652,10 +828,13 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
     if (position.isNegative) {
@@ -711,13 +890,17 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
-    if (session.hostProfileId != cleanProfileId) {
+    if (session.hostProfileId !=
+        cleanProfileId) {
       throw StateError(
         'Only the Group Watch host can end the session.',
       );
@@ -746,23 +929,27 @@ class GroupWatchService {
     final GroupWatchSession session =
         _requireSession(sessionId);
 
-    final String cleanProfileId = profileId.trim();
+    final String cleanProfileId =
+        profileId.trim();
 
     if (cleanProfileId.isEmpty) {
-      throw ArgumentError('Profile ID is required.');
+      throw ArgumentError(
+        'Profile ID is required.',
+      );
     }
 
-    if (session.hostProfileId != cleanProfileId) {
+    if (session.hostProfileId !=
+        cleanProfileId) {
       throw StateError(
         'Only the Group Watch host can delete the session.',
       );
     }
 
     database.deleteGroupWatchSession(
-  session.id,
-);
+      session.id,
+    );
 
-return true;
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -799,12 +986,16 @@ return true;
       }
 
       session.expirePendingInvitations();
+
       return true;
     }
 
-    final DateTime now = DateTime.now();
+    final DateTime now =
+        DateTime.now();
 
-    if (now.isBefore(session.invitationExpiresAt)) {
+    if (now.isBefore(
+      session.invitationExpiresAt,
+    )) {
       return false;
     }
 
@@ -820,6 +1011,7 @@ return true;
     }
 
     session.expirePendingInvitations();
+
     return true;
   }
 
@@ -827,11 +1019,39 @@ return true;
     GroupWatchSession session,
   ) {
     final bool changed =
-        _expireInvitationsIfNecessary(session);
+        _expireInvitationsIfNecessary(
+      session,
+    );
 
     if (changed) {
       database.saveGroupWatchSession(session);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MEDIA OWNERSHIP
+  // ---------------------------------------------------------------------------
+
+  bool _accountOwnsMedia(
+    Account account,
+    String mediaId,
+  ) {
+    final String cleanMediaId =
+        mediaId.trim();
+
+    if (cleanMediaId.isEmpty) {
+      return false;
+    }
+
+    for (final profile in account.profiles) {
+      if (profile.ownedMediaIds.contains(
+        cleanMediaId,
+      )) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -841,7 +1061,8 @@ return true;
   GroupWatchSession _requireSession(
     String sessionId,
   ) {
-    final String cleanSessionId = sessionId.trim();
+    final String cleanSessionId =
+        sessionId.trim();
 
     if (cleanSessionId.isEmpty) {
       throw ArgumentError(
@@ -864,7 +1085,8 @@ return true;
   }
 
   String _generateSessionId() {
-    final Random random = Random();
+    final Random random =
+        Random();
 
     String id;
 
@@ -872,7 +1094,9 @@ return true;
       id =
           '${DateTime.now().microsecondsSinceEpoch}'
           '-${random.nextInt(1000000)}';
-    } while (database.getGroupWatchSession(id) != null);
+    } while (
+        database.getGroupWatchSession(id) !=
+            null);
 
     return id;
   }

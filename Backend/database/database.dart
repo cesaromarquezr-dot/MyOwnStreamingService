@@ -2,6 +2,7 @@ import '../models/account.dart';
 import '../models/media.dart';
 import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
+import '../models/profile.dart';
 
 class Database {
   Database._();
@@ -100,6 +101,14 @@ class Database {
     return groupWatchSessionsById.values.toList();
   }
 
+  /// Returns every Group Watch session visible to an account.
+  ///
+  /// An account can see a session when:
+  ///
+  /// 1. It owns/hosts the session, OR
+  /// 2. One of its profiles is participating in the session.
+  ///
+  /// This allows Group Watch to work across different accounts.
   List<GroupWatchSession> getGroupWatchSessionsForAccount(
     String accountId,
   ) {
@@ -112,13 +121,33 @@ class Database {
 
     return groupWatchSessionsById.values
         .where(
-          (session) =>
-              session.accountId == cleanAccountId,
+          (session) {
+            // The account is the host.
+            if (session.accountId ==
+                cleanAccountId) {
+              return true;
+            }
+
+            // The account has a profile participating
+            // in this Group Watch session.
+            return session.participants.values.any(
+              (participant) =>
+                  participant.accountId ==
+                  cleanAccountId,
+            );
+          },
         )
         .toList();
   }
 
-  List<GroupWatchSession> getGroupWatchSessionsForProfile(
+  /// Returns every Group Watch session involving
+  /// the specified profile.
+  ///
+  /// Profile IDs are globally searchable, which allows
+  /// participants from different accounts to use the
+  /// same Group Watch session.
+  List<GroupWatchSession>
+      getGroupWatchSessionsForProfile(
     String profileId,
   ) {
     final String cleanProfileId =
@@ -131,11 +160,14 @@ class Database {
     return groupWatchSessionsById.values
         .where(
           (session) =>
-              session.hasParticipant(cleanProfileId),
+              session.hasParticipant(
+            cleanProfileId,
+          ),
         )
         .toList();
   }
 
+  /// Returns all currently playing or paused sessions.
   List<GroupWatchSession>
       getActiveGroupWatchSessions() {
     return groupWatchSessionsById.values
@@ -149,6 +181,7 @@ class Database {
         .toList();
   }
 
+  /// Returns all sessions that have not ended.
   List<GroupWatchSession>
       getWaitingGroupWatchSessions() {
     return groupWatchSessionsById.values
@@ -191,12 +224,24 @@ class Database {
   // ------------------------------------------------------------
 
   Account? getAccountById(String id) {
-    return accountsById[id];
+    final cleanId = id.trim();
+
+    if (cleanId.isEmpty) {
+      return null;
+    }
+
+    return accountsById[cleanId];
   }
 
-  Account? getAccountByUsername(String username) {
+  Account? getAccountByUsername(
+    String username,
+  ) {
     final normalizedUsername =
         username.trim().toLowerCase();
+
+    if (normalizedUsername.isEmpty) {
+      return null;
+    }
 
     final accountId =
         accountIdByUsername[normalizedUsername];
@@ -208,9 +253,15 @@ class Database {
     return accountsById[accountId];
   }
 
-  Account? getAccountByEmail(String email) {
+  Account? getAccountByEmail(
+    String email,
+  ) {
     final normalizedEmail =
         email.trim().toLowerCase();
+
+    if (normalizedEmail.isEmpty) {
+      return null;
+    }
 
     final accountId =
         accountIdByEmail[normalizedEmail];
@@ -223,53 +274,177 @@ class Database {
   }
 
   // ------------------------------------------------------------
+  // PROFILE LOOKUPS
+  // ------------------------------------------------------------
+
+  /// Finds the account containing the specified profile.
+  ///
+  /// Profile IDs are globally searchable because Group Watch
+  /// supports participants from different accounts.
+  Account? getAccountForProfile(
+    String profileId,
+  ) {
+    final cleanProfileId =
+        profileId.trim();
+
+    if (cleanProfileId.isEmpty) {
+      return null;
+    }
+
+    for (final account in accountsById.values) {
+      if (account.hasProfile(cleanProfileId)) {
+        return account;
+      }
+    }
+
+    return null;
+  }
+
+  /// Finds a profile by ID regardless of which account
+  /// owns the profile.
+  Profile? getProfileById(
+    String profileId,
+  ) {
+    final cleanProfileId =
+        profileId.trim();
+
+    if (cleanProfileId.isEmpty) {
+      return null;
+    }
+
+    for (final account in accountsById.values) {
+      final profile =
+          account.getProfileById(
+        cleanProfileId,
+      );
+
+      if (profile != null) {
+        return profile;
+      }
+    }
+
+    return null;
+  }
+
+  /// Returns the account ID associated with a profile.
+  String? getAccountIdForProfile(
+    String profileId,
+  ) {
+    return getAccountForProfile(
+      profileId,
+    )?.id;
+  }
+
+  /// Returns true when the profile exists.
+  bool hasProfile(
+    String profileId,
+  ) {
+    return getProfileById(
+      profileId,
+    ) != null;
+  }
+
+  /// Returns true when a profile belongs to
+  /// the specified account.
+  bool profileBelongsToAccount(
+    String profileId,
+    String accountId,
+  ) {
+    final cleanProfileId =
+        profileId.trim();
+
+    final cleanAccountId =
+        accountId.trim();
+
+    if (cleanProfileId.isEmpty ||
+        cleanAccountId.isEmpty) {
+      return false;
+    }
+
+    final account =
+        getAccountForProfile(
+      cleanProfileId,
+    );
+
+    return account?.id ==
+        cleanAccountId;
+  }
+
+  // ------------------------------------------------------------
   // ACCOUNT STORAGE
   // ------------------------------------------------------------
 
-  void saveAccount(Account account) {
+  void saveAccount(
+    Account account,
+  ) {
     final username =
         account.username.trim().toLowerCase();
 
     final email =
         account.email.trim().toLowerCase();
 
-    accountsById[account.id] = account;
+    accountsById[account.id] =
+        account;
 
-    accountIdByUsername[username] = account.id;
+    accountIdByUsername[username] =
+        account.id;
 
-    accountIdByEmail[email] = account.id;
+    accountIdByEmail[email] =
+        account.id;
   }
 
-  void deleteAccount(String accountId) {
-    final account = accountsById[accountId];
+  void deleteAccount(
+    String accountId,
+  ) {
+    final account =
+        accountsById[accountId];
 
     if (account == null) {
       return;
     }
 
-    accountsByUsernameRemove(account.username);
-    accountsByEmailRemove(account.email);
+    accountsByUsernameRemove(
+      account.username,
+    );
 
-    accountsById.remove(accountId);
+    accountsByEmailRemove(
+      account.email,
+    );
+
+    accountsById.remove(
+      accountId,
+    );
 
     sessions.removeWhere(
       (_, storedAccountId) =>
-          storedAccountId == accountId,
+          storedAccountId ==
+          accountId,
     );
 
+    // Only delete Group Watch sessions hosted
+    // by the deleted account.
+    //
+    // If another account is participating in a
+    // session hosted elsewhere, that session must
+    // remain available to the other participants.
     groupWatchSessionsById.removeWhere(
       (_, session) =>
-          session.accountId == accountId,
+          session.accountId ==
+          accountId,
     );
   }
 
-  void accountsByUsernameRemove(String username) {
+  void accountsByUsernameRemove(
+    String username,
+  ) {
     accountIdByUsername.remove(
       username.trim().toLowerCase(),
     );
   }
 
-  void accountsByEmailRemove(String email) {
+  void accountsByEmailRemove(
+    String email,
+  ) {
     accountIdByEmail.remove(
       email.trim().toLowerCase(),
     );
@@ -288,7 +463,8 @@ class Database {
       return;
     }
 
-    sessions[token] = accountId;
+    sessions[token] =
+        accountId;
   }
 
   String? getAccountIdForSession(
@@ -305,16 +481,22 @@ class Database {
     String token,
   ) {
     final accountId =
-        getAccountIdForSession(token);
+        getAccountIdForSession(
+      token,
+    );
 
     if (accountId == null) {
       return null;
     }
 
-    return getAccountById(accountId);
+    return getAccountById(
+      accountId,
+    );
   }
 
-  void deleteSession(String token) {
+  void deleteSession(
+    String token,
+  ) {
     sessions.remove(token);
   }
 
@@ -322,29 +504,48 @@ class Database {
   // MEDIA STORAGE
   // ------------------------------------------------------------
 
-  void saveMedia(Media media) {
+  void saveMedia(
+    Media media,
+  ) {
     if (media.id.trim().isEmpty) {
       return;
     }
 
-    mediaById[media.id] = media;
+    mediaById[media.id] =
+        media;
   }
 
-  Media? getMediaById(String id) {
-    return mediaById[id];
+  Media? getMediaById(
+    String id,
+  ) {
+    final cleanId =
+        id.trim();
+
+    if (cleanId.isEmpty) {
+      return null;
+    }
+
+    return mediaById[cleanId];
   }
 
   List<Media> getAllMedia() {
-    final media = mediaById.values.toList();
+    final media =
+        mediaById.values.toList();
 
     media.sort(
       (a, b) {
-        final aDate = a.releaseDate;
-        final bDate = b.releaseDate;
+        final aDate =
+            a.releaseDate;
 
-        if (aDate != null && bDate != null) {
+        final bDate =
+            b.releaseDate;
+
+        if (aDate != null &&
+            bDate != null) {
           final dateComparison =
-              bDate.compareTo(aDate);
+              bDate.compareTo(
+            aDate,
+          );
 
           if (dateComparison != 0) {
             return dateComparison;
@@ -355,11 +556,16 @@ class Database {
           return 1;
         }
 
-        final aYear = a.year ?? 0;
-        final bYear = b.year ?? 0;
+        final aYear =
+            a.year ?? 0;
+
+        final bYear =
+            b.year ?? 0;
 
         final yearComparison =
-            bYear.compareTo(aYear);
+            bYear.compareTo(
+          aYear,
+        );
 
         if (yearComparison != 0) {
           return yearComparison;
@@ -380,7 +586,8 @@ class Database {
     return getAllMedia()
         .where(
           (media) =>
-              media.type == MediaType.movie,
+              media.type ==
+              MediaType.movie,
         )
         .toList();
   }
@@ -389,7 +596,8 @@ class Database {
     return getAllMedia()
         .where(
           (media) =>
-              media.type == MediaType.tvShow,
+              media.type ==
+              MediaType.tvShow,
         )
         .toList();
   }
@@ -400,16 +608,25 @@ class Database {
     return getAllMedia()
         .where(
           (media) =>
-              media.seriesId == seriesId,
+              media.seriesId ==
+              seriesId,
         )
         .toList();
   }
 
-  void deleteMedia(String mediaId) {
-    mediaById.remove(mediaId);
+  void deleteMedia(
+    String mediaId,
+  ) {
+    mediaById.remove(
+      mediaId,
+    );
   }
 
-  bool hasMedia(String mediaId) {
-    return mediaById.containsKey(mediaId);
+  bool hasMedia(
+    String mediaId,
+  ) {
+    return mediaById.containsKey(
+      mediaId,
+    );
   }
 }
