@@ -410,6 +410,11 @@ class HomeCustomizationStore {
   }
 }
 
+enum _CustomizationPage {
+  home,
+  details,
+}
+
 class CustomizeHomeScreen extends StatefulWidget {
   final bool firstSetup;
 
@@ -421,16 +426,38 @@ class CustomizeHomeScreen extends StatefulWidget {
 
 class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
-
-
+  late DetailsCustomization detailsDraft;
+  _CustomizationPage selectedPage = _CustomizationPage.home;
+static const detailsSectionNames = <String>[
+  'Poster',
+  'Title',
+  'Metadata',
+  'Ownership',
+  'Description',
+  'Seasons',
+  'Play',
+  'Trailer',
+  'Group Watch',
+  'Audio & Subtitles',
+  'Reactions',
+  'Information',
+  'Library',
+];
   @override
   void initState() {
     super.initState();
     draft = HomeCustomizationStore.settings.copy();
+    detailsDraft = DetailsCustomizationStore.settingsFor(
+      AppController.instance.currentProfile,
+    );
   }
 
   void _save() {
     HomeCustomizationStore.apply(draft);
+    DetailsCustomizationStore.apply(
+      AppController.instance.currentProfile,
+      detailsDraft,
+    );
     Navigator.of(context).pop(true);
   }
 
@@ -450,8 +477,14 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       child: SwitchListTile.adaptive(
         value: value,
         onChanged: onChanged,
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: Colors.white54),
+        ),
         activeThumbColor: Colors.redAccent,
       ),
     );
@@ -463,12 +496,17 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     required List<String> values,
     required ValueChanged<String> onChanged,
   }) {
+    final safeValue = values.contains(value) ? value : values.first;
+
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: safeValue,
       decoration: InputDecoration(labelText: label),
       items: [
         for (final item in values)
-          DropdownMenuItem(value: item, child: Text(item)),
+          DropdownMenuItem<String>(
+            value: item,
+            child: Text(item),
+          ),
       ],
       onChanged: (next) {
         if (next != null) onChanged(next);
@@ -476,19 +514,542 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  Widget _pageSelector() {
+    return Row(
+      children: [
+        Expanded(
+          child: _customizationButton(
+            label: 'HOME PAGE',
+            icon: Icons.home_rounded,
+            selected: selectedPage == _CustomizationPage.home,
+            onPressed: () {
+              setState(() {
+                selectedPage = _CustomizationPage.home;
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _customizationButton(
+            label: 'DETAILS PAGE',
+            icon: Icons.movie_outlined,
+            selected: selectedPage == _CustomizationPage.details,
+            onPressed: () {
+              setState(() {
+                selectedPage = _CustomizationPage.details;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _customizationButton({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      height: 52,
+      child: selected
+          ? ElevatedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+    );
+  }
+
+  Widget _headerCard() {
+    final isHome = selectedPage == _CustomizationPage.home;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(
+          colors: [
+            Colors.red.withValues(alpha: .22),
+            const Color(0xFF171717),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isHome ? Icons.home_rounded : Icons.movie_outlined,
+            color: Colors.redAccent,
+            size: 30,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isHome
+                ? (widget.firstSetup
+                    ? 'How do you want your main screen to look?'
+                    : 'Build your Home screen your way.')
+                : 'Build your Details page your way.',
+            style: const TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.w900,
+              height: 1.08,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isHome
+                ? 'Choose what appears, change the presentation, position your navigation, and drag Home sections into the order you want.'
+                : 'Choose which Details sections appear, control metadata and poster presentation, and drag sections into the order you want.',
+            style: const TextStyle(
+              color: Colors.white60,
+              height: 1.45,
+            ),
+          ),
+          if (!isHome) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Profile: ${AppController.instance.currentProfile?.name ?? 'No profile selected'}',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'These Details settings belong only to the currently selected profile.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomePage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'PRESENTATION',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Hero style',
+          value: draft.heroStyle,
+          values: const ['Cinematic', 'Minimal', 'Compact'],
+          onChanged: (value) => setState(() => draft.heroStyle = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Media card size',
+          value: draft.cardSize,
+          values: const ['Small', 'Medium', 'Large'],
+          onChanged: (value) => setState(() => draft.cardSize = value),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'NAVIGATION & STORAGE',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Where do you want your navbar?',
+          value: draft.navbarPosition,
+          values: const ['Bottom', 'Top', 'Left', 'Right', 'Floating'],
+          onChanged: (value) => setState(() => draft.navbarPosition = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Where should the storage bar appear?',
+          value: draft.storageBarPosition,
+          values: const ['Top', 'Bottom', 'Above Navbar', 'Hidden'],
+          onChanged: (value) => setState(() => draft.storageBarPosition = value),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Storage capacity is not exposed by app_core.dart yet, so the current bar shows library occupancy. It is ready to use real server/device storage once those metrics are added.',
+          style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'SECTIONS',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _toggle(
+          'Hero banner',
+          'Show the featured title at the top.',
+          draft.showHero,
+          (v) => setState(() => draft.showHero = v),
+        ),
+        _toggle(
+          'Continue Watching',
+          'Resume movies and episodes you started.',
+          draft.showContinueWatching,
+          (v) => setState(() => draft.showContinueWatching = v),
+        ),
+        _toggle(
+          'Recently Watched',
+          'Show titles you watched most recently.',
+          draft.showRecentlyWatched,
+          (v) => setState(() => draft.showRecentlyWatched = v),
+        ),
+        _toggle(
+          'Movies',
+          'Show your movie collection.',
+          draft.showMovies,
+          (v) => setState(() => draft.showMovies = v),
+        ),
+        _toggle(
+          'TV Shows',
+          'Show your TV collection.',
+          draft.showTvShows,
+          (v) => setState(() => draft.showTvShows = v),
+        ),
+        _toggle(
+          'New Additions',
+          'Show the newest titles in your library.',
+          draft.showNewAdditions,
+          (v) => setState(() => draft.showNewAdditions = v),
+        ),
+        _toggle(
+          'All Library',
+          'Show everything in one section.',
+          draft.showAllLibrary,
+          (v) => setState(() => draft.showAllLibrary = v),
+        ),
+        const SizedBox(height: 24),
+        _sectionOrder(
+          title: 'SECTION ORDER',
+          subtitle: 'Drag Home sections to change their order.',
+          items: draft.sectionOrder,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailsPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'DETAILS PRESENTATION',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Poster style',
+          value: detailsDraft.posterStyle,
+          values: const ['Standard', 'Full Screen', 'Compact', 'Side'],
+          onChanged: (value) => setState(() => detailsDraft.posterStyle = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Title alignment',
+          value: detailsDraft.titleAlignment,
+          values: const ['Left', 'Center', 'Right'],
+          onChanged: (value) => setState(() => detailsDraft.titleAlignment = value),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'DETAILS SECTIONS',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _toggle(
+          'Poster',
+          'Show the poster or artwork.',
+          detailsDraft.showPoster,
+          (v) => setState(() => detailsDraft.showPoster = v),
+        ),
+        _toggle(
+          'Title',
+          'Show the media title.',
+          detailsDraft.showTitle,
+          (v) => setState(() => detailsDraft.showTitle = v),
+        ),
+        _toggle(
+          'Metadata',
+          'Show release year, rating and other metadata.',
+          detailsDraft.showMetadata,
+          (v) => setState(() => detailsDraft.showMetadata = v),
+        ),
+        _toggle(
+          'Ownership',
+          'Show whether the title belongs to your library.',
+          detailsDraft.showOwnership,
+          (v) => setState(() => detailsDraft.showOwnership = v),
+        ),
+        _toggle(
+          'Description',
+          'Show the title description.',
+          detailsDraft.showDescription,
+          (v) => setState(() => detailsDraft.showDescription = v),
+        ),
+        _toggle(
+          'Seasons',
+          'Show the Seasons section for TV shows.',
+          detailsDraft.showSeasons,
+          (v) => setState(() => detailsDraft.showSeasons = v),
+        ),
+        _toggle(
+          'Play',
+          'Show the Play button.',
+          detailsDraft.showPlay,
+          (v) => setState(() => detailsDraft.showPlay = v),
+        ),
+        _toggle(
+          'Trailer',
+          'Show the trailer button when a trailer exists.',
+          detailsDraft.showTrailer,
+          (v) => setState(() => detailsDraft.showTrailer = v),
+        ),
+        _toggle(
+          'Group Watch',
+          'Show Group Watch controls.',
+          detailsDraft.showGroupWatch,
+          (v) => setState(() => detailsDraft.showGroupWatch = v),
+        ),
+        _toggle(
+          'Audio & Subtitles',
+          'Show language and subtitle controls.',
+          detailsDraft.showAudioSubtitles,
+          (v) => setState(() => detailsDraft.showAudioSubtitles = v),
+        ),
+        _toggle(
+          'Reactions',
+          'Show Like and Dislike controls.',
+          detailsDraft.showReactions,
+          (v) => setState(() => detailsDraft.showReactions = v),
+        ),
+        _toggle(
+          'Information',
+          'Show additional information.',
+          detailsDraft.showInformation,
+          (v) => setState(() => detailsDraft.showInformation = v),
+        ),
+        _toggle(
+          'Library',
+          'Show Add/Remove from Library controls.',
+          detailsDraft.showLibrary,
+          (v) => setState(() => detailsDraft.showLibrary = v),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'SEASONS',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Season placement',
+          value: detailsDraft.seasonPlacement,
+          values: const ['Left', 'Center', 'Right'],
+          onChanged: (value) => setState(() => detailsDraft.seasonPlacement = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Season order',
+          value: detailsDraft.seasonOrder,
+          values: const ['Top to Bottom', 'Bottom to Top'],
+          onChanged: (value) => setState(() => detailsDraft.seasonOrder = value),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'METADATA',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _toggle(
+          'Release year',
+          'Show the release year in the Details metadata.',
+          detailsDraft.showReleaseYear,
+          (v) => setState(() => detailsDraft.showReleaseYear = v),
+        ),
+        _toggle(
+          'Rating',
+          'Show the title rating.',
+          detailsDraft.showRating,
+          (v) => setState(() => detailsDraft.showRating = v),
+        ),
+        _toggle(
+          'Content rating',
+          'Show the content rating when available.',
+          detailsDraft.showContentRating,
+          (v) => setState(() => detailsDraft.showContentRating = v),
+        ),
+        _toggle(
+          'Runtime',
+          'Show runtime when available.',
+          detailsDraft.showRuntime,
+          (v) => setState(() => detailsDraft.showRuntime = v),
+        ),
+        const SizedBox(height: 24),
+        _sectionOrder(
+          title: 'DETAILS SECTION ORDER',
+          subtitle: 'Drag Details sections to change their order.',
+          items: detailsDraft.sectionOrder,
+          onChanged: (newOrder) {
+            setState(() {
+              detailsDraft.sectionOrder = newOrder;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionOrder({
+    required String title,
+    required String subtitle,
+    required List<String> items,
+    ValueChanged<List<String>>? onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: const TextStyle(color: Colors.white54),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 360),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .035),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: .06)),
+          ),
+          child: ReorderableListView.builder(
+            shrinkWrap: true,
+            buildDefaultDragHandles: true,
+            itemCount: items.length,
+            onReorder: (oldIndex, newIndex) {
+              final reordered = List<String>.from(items);
+              if (newIndex > oldIndex) {
+                newIndex -= 1;
+              }
+              final item = reordered.removeAt(oldIndex);
+              reordered.insert(newIndex, item);
+
+              if (onChanged != null) {
+                onChanged(reordered);
+              } else {
+                setState(() {
+                  draft.sectionOrder = reordered;
+                });
+              }
+            },
+            itemBuilder: (context, index) {
+              final name = items[index];
+              return ListTile(
+                key: ValueKey('${title}_$name'),
+                leading: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.red.withValues(alpha: .12),
+                  child: Text(
+                    '${index + 1}',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                title: Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                trailing: const Icon(
+                  Icons.drag_indicator_rounded,
+                  color: Colors.white38,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isHome = selectedPage == _CustomizationPage.home;
+
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
       appBar: AppBar(
         backgroundColor: const Color(0xFF070707),
         surfaceTintColor: Colors.transparent,
-        title: Text(widget.firstSetup ? 'Make Home Yours' : 'Customize Home'),
+        title: Text(
+          widget.firstSetup ? 'Make Home Yours' : 'Customize App',
+        ),
         automaticallyImplyLeading: !widget.firstSetup,
         actions: [
           TextButton(
             onPressed: _save,
-            child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text(
+              'SAVE',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
           ),
         ],
       ),
@@ -496,131 +1057,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.red.withValues(alpha: .22),
-                    const Color(0xFF171717),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(color: Colors.white.withValues(alpha: .08)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.auto_awesome_rounded, color: Colors.redAccent, size: 30),
-                  const SizedBox(height: 12),
-                  Text(
-                    widget.firstSetup
-                        ? 'How do you want your main screen to look?'
-                        : 'Build your Home screen your way.',
-                    style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, height: 1.08),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Choose what appears, change the presentation, position your navigation, and drag sections into the order you want.',
-                    style: TextStyle(color: Colors.white60, height: 1.45),
-                  ),
-                ],
-              ),
-            ),
+            _pageSelector(),
+            const SizedBox(height: 18),
+            _headerCard(),
             const SizedBox(height: 24),
-            const Text('PRESENTATION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
-            const SizedBox(height: 10),
-            _dropdown(
-              label: 'Hero style',
-              value: draft.heroStyle,
-              values: const ['Cinematic', 'Minimal', 'Compact'],
-              onChanged: (value) => setState(() => draft.heroStyle = value),
-            ),
-            const SizedBox(height: 12),
-            _dropdown(
-              label: 'Media card size',
-              value: draft.cardSize,
-              values: const ['Small', 'Medium', 'Large'],
-              onChanged: (value) => setState(() => draft.cardSize = value),
-            ),
-            const SizedBox(height: 24),
-            const Text('NAVIGATION & STORAGE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
-            const SizedBox(height: 10),
-            _dropdown(
-              label: 'Where do you want your navbar?',
-              value: draft.navbarPosition,
-              values: const ['Bottom', 'Top', 'Left', 'Right', 'Floating'],
-              onChanged: (value) => setState(() => draft.navbarPosition = value),
-            ),
-            const SizedBox(height: 12),
-            _dropdown(
-              label: 'Where should the storage bar appear?',
-              value: draft.storageBarPosition,
-              values: const ['Top', 'Bottom', 'Above Navbar', 'Hidden'],
-              onChanged: (value) => setState(() => draft.storageBarPosition = value),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Storage capacity is not exposed by app_core.dart yet, so the current bar shows library occupancy. It is ready to use real server/device storage once those metrics are added.',
-              style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
-            ),
-            const SizedBox(height: 24),
-            const Text('SECTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
-            const SizedBox(height: 10),
-            _toggle('Hero banner', 'Show the featured title at the top.', draft.showHero, (v) => setState(() => draft.showHero = v)),
-            _toggle('Continue Watching', 'Resume movies and episodes you started.', draft.showContinueWatching, (v) => setState(() => draft.showContinueWatching = v)),
-            _toggle('Recently Watched', 'Show titles you watched most recently.', draft.showRecentlyWatched, (v) => setState(() => draft.showRecentlyWatched = v)),
-            _toggle('Movies', 'Show your movie collection.', draft.showMovies, (v) => setState(() => draft.showMovies = v)),
-            _toggle('TV Shows', 'Show your TV collection.', draft.showTvShows, (v) => setState(() => draft.showTvShows = v)),
-            _toggle('New Additions', 'Show the newest titles in your library.', draft.showNewAdditions, (v) => setState(() => draft.showNewAdditions = v)),
-            _toggle('All Library', 'Show everything in one section.', draft.showAllLibrary, (v) => setState(() => draft.showAllLibrary = v)),
-            const SizedBox(height: 24),
-            const Text('SECTION ORDER', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
-            const SizedBox(height: 6),
-            const Text('Drag sections to change their order.', style: TextStyle(color: Colors.white54)),
-            const SizedBox(height: 10),
-            Container(
-              constraints: const BoxConstraints(maxHeight: 360),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .035),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withValues(alpha: .06)),
-              ),
-              child: ReorderableListView.builder(
-                shrinkWrap: true,
-                buildDefaultDragHandles: true,
-                itemCount: draft.sectionOrder.length,
-                onReorder: (oldIndex, newIndex) {
-                  setState(() {
-                    if (newIndex > oldIndex) newIndex -= 1;
-                    final item = draft.sectionOrder.removeAt(oldIndex);
-                    draft.sectionOrder.insert(newIndex, item);
-                  });
-                },
-                itemBuilder: (context, index) {
-                  final name = draft.sectionOrder[index];
-                  return ListTile(
-                    key: ValueKey(name),
-                    leading: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.red.withValues(alpha: .12),
-                      child: Text('${index + 1}', style: const TextStyle(fontWeight: FontWeight.w900)),
-                    ),
-                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    trailing: const Icon(Icons.drag_indicator_rounded, color: Colors.white38),
-                  );
-                },
-              ),
-            ),
+            if (isHome) _buildHomePage() else _buildDetailsPage(),
             const SizedBox(height: 26),
             SizedBox(
               height: 54,
               child: ElevatedButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.check_rounded),
-                label: Text(widget.firstSetup ? 'ENTER MY HOME' : 'SAVE CHANGES'),
+                label: Text(
+                  widget.firstSetup ? 'ENTER MY HOME' : 'SAVE CHANGES',
+                ),
               ),
             ),
           ],
@@ -1181,8 +1631,8 @@ class _MoreActionsSheet extends StatelessWidget {
           ),
           _SheetAction(
             icon: Icons.tune_rounded,
-            title: 'Customize Home',
-            subtitle: 'Change sections, order, and appearance',
+            title: 'Customize App',
+            subtitle: 'Customize Home and Details together',
             onTap: onCustomize,
           ),
         ],
@@ -1893,6 +2343,11 @@ class MediaHorizontalList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardWidth = switch (HomeCustomizationStore.settings.cardSize) {
+      'Small' => 125.0,
+      'Large' => 175.0,
+      _ => 145.0,
+    };
     final cardHeight = switch (HomeCustomizationStore.settings.cardSize) {
       'Small' => 215.0,
       'Large' => 285.0,
@@ -1934,18 +2389,21 @@ class MediaCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: InkWell(
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => MediaDetailsScreen(
-                media: media,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => MediaDetailsScreen(
+                  media: media,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
         child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
@@ -1998,6 +2456,7 @@ class MediaCard extends StatelessWidget {
                 ),
               ),
           ],
+        ),
         ),
       ),
     );

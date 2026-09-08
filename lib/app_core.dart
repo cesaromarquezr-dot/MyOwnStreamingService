@@ -3888,3 +3888,135 @@ Profile? _profileFromList(
 
   return null;
 }
+// -----------------------------------------------------------------------------
+// DETAILS CUSTOMIZATION
+// -----------------------------------------------------------------------------
+
+class DetailsCustomization {
+  bool showPoster;
+  bool showTitle;
+  bool showMetadata;
+  bool showOwnership;
+  bool showDescription;
+  bool showSeasons;
+  bool showPlay;
+  bool showTrailer;
+  bool showGroupWatch;
+  bool showAudioSubtitles;
+  bool showReactions;
+  bool showInformation;
+  bool showLibrary;
+
+  bool showReleaseYear;
+  bool showRating;
+  bool showContentRating;
+  bool showRuntime;
+
+  String posterStyle;
+  String titleAlignment;
+  String seasonPlacement;
+  String seasonOrder;
+
+  List<String> sectionOrder;
+
+  DetailsCustomization({
+    this.showPoster = true,
+    this.showTitle = true,
+    this.showMetadata = true,
+    this.showOwnership = true,
+    this.showDescription = true,
+    this.showSeasons = true,
+    this.showPlay = true,
+    this.showTrailer = true,
+    this.showGroupWatch = true,
+    this.showAudioSubtitles = true,
+    this.showReactions = true,
+    this.showInformation = true,
+    this.showLibrary = true,
+    this.showReleaseYear = true,
+    this.showRating = true,
+    this.showContentRating = true,
+    this.showRuntime = true,
+    this.posterStyle = 'Standard',
+    this.titleAlignment = 'Left',
+    this.seasonPlacement = 'Center',
+    this.seasonOrder = 'Top to Bottom',
+    List<String>? sectionOrder,
+  }) : sectionOrder = sectionOrder ??
+            [
+              'Poster',
+              'Title',
+              'Metadata',
+              'Ownership',
+              'Description',
+              'Seasons',
+              'Play',
+              'Trailer',
+              'Group Watch',
+              'Audio & Subtitles',
+              'Reactions',
+              'Information',
+              'Library',
+            ];
+
+  DetailsCustomization copy() {
+    return DetailsCustomization(
+      showPoster: showPoster,
+      showTitle: showTitle,
+      showMetadata: showMetadata,
+      showOwnership: showOwnership,
+      showDescription: showDescription,
+      showSeasons: showSeasons,
+      showPlay: showPlay,
+      showTrailer: showTrailer,
+      showGroupWatch: showGroupWatch,
+      showAudioSubtitles: showAudioSubtitles,
+      showReactions: showReactions,
+      showInformation: showInformation,
+      showLibrary: showLibrary,
+      showReleaseYear: showReleaseYear,
+      showRating: showRating,
+      showContentRating: showContentRating,
+      showRuntime: showRuntime,
+      posterStyle: posterStyle,
+      titleAlignment: titleAlignment,
+      seasonPlacement: seasonPlacement,
+      seasonOrder: seasonOrder,
+      sectionOrder: List<String>.from(sectionOrder),
+    );
+  }
+}
+
+class DetailsCustomizationStore {
+  DetailsCustomizationStore._();
+
+  static final Map<String, DetailsCustomization> _settings =
+      <String, DetailsCustomization>{};
+
+  static DetailsCustomization settingsFor(Profile? profile) {
+    final key = profile?.id ?? 'default';
+
+    return _settings
+        .putIfAbsent(
+          key,
+          () => DetailsCustomization(),
+        )
+        .copy();
+  }
+
+  static void apply(
+    Profile? profile,
+    DetailsCustomization value,
+  ) {
+    final key = profile?.id ?? 'default';
+    _settings[key] = value.copy();
+  }
+
+  static void removeProfile(Profile profile) {
+    _settings.remove(profile.id);
+  }
+
+  static void clear() {
+    _settings.clear();
+  }
+}
