@@ -602,30 +602,24 @@ class _SignupScreenState extends State<SignupScreen> {
                 const SizedBox(height: 15),
 
                 TextButton(
-                  onPressed: creatingAccount
-                      ? null
-                      : () {
-                          Navigator
-                              .pushNamedAndRemoveUntil(
-                            context,
-                            '/login',
-                            (route) => false,
-                          );
-                        },
-                  style: TextButton.styleFrom(
-                    foregroundColor:
-                        Colors.white.withValues(alpha: 0.75),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text(
-                    'Already have an account?  Sign in',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+  onPressed: creatingAccount
+      ? null
+      : () {
+          Navigator.of(context).pop();
+        },
+  style: TextButton.styleFrom(
+    foregroundColor: Colors.white.withValues(alpha: 0.75),
+    padding: const EdgeInsets.symmetric(
+      vertical: 12,
+    ),
+  ),
+  child: const Text(
+    'Already have an account?  Sign in',
+    style: TextStyle(
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+),
 
                 const SizedBox(height: 4),
 
