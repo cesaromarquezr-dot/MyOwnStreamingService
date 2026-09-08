@@ -331,6 +331,10 @@ class _LoginScreenState extends State<LoginScreen> {
 // HOME CUSTOMIZATION
 // ============================================================
 
+// ============================================================
+// HOME CUSTOMIZATION + MAIN SCREEN NAVIGATION
+// ============================================================
+
 class HomeCustomization {
   bool showHero;
   bool showContinueWatching;
@@ -341,6 +345,8 @@ class HomeCustomization {
   bool showAllLibrary;
   String heroStyle;
   String cardSize;
+  String navbarPosition;
+  String storageBarPosition;
   List<String> sectionOrder;
 
   HomeCustomization({
@@ -353,6 +359,8 @@ class HomeCustomization {
     this.showAllLibrary = false,
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
+    this.navbarPosition = 'Bottom',
+    this.storageBarPosition = 'Above Navbar',
     List<String>? sectionOrder,
   }) : sectionOrder = sectionOrder ?? [
           'Continue Watching',
@@ -373,6 +381,8 @@ class HomeCustomization {
         showAllLibrary: showAllLibrary,
         heroStyle: heroStyle,
         cardSize: cardSize,
+        navbarPosition: navbarPosition,
+        storageBarPosition: storageBarPosition,
         sectionOrder: List<String>.from(sectionOrder),
       );
 }
@@ -393,6 +403,8 @@ class HomeCustomizationStore {
     settings.showAllLibrary = value.showAllLibrary;
     settings.heroStyle = value.heroStyle;
     settings.cardSize = value.cardSize;
+    settings.navbarPosition = value.navbarPosition;
+    settings.storageBarPosition = value.storageBarPosition;
     settings.sectionOrder = List<String>.from(value.sectionOrder);
     hasConfigured = true;
   }
@@ -410,14 +422,6 @@ class CustomizeHomeScreen extends StatefulWidget {
 class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
 
-  static const sectionNames = <String>[
-    'Continue Watching',
-    'Recently Watched',
-    'Movies',
-    'TV Shows',
-    'New Additions',
-    'All Library',
-  ];
 
   @override
   void initState() {
@@ -430,7 +434,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     Navigator.of(context).pop(true);
   }
 
-  Widget _toggle(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+  Widget _toggle(
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -445,6 +454,25 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
         activeThumbColor: Colors.redAccent,
       ),
+    );
+  }
+
+  Widget _dropdown({
+    required String label,
+    required String value,
+    required List<String> values,
+    required ValueChanged<String> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(labelText: label),
+      items: [
+        for (final item in values)
+          DropdownMenuItem(value: item, child: Text(item)),
+      ],
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
     );
   }
 
@@ -495,7 +523,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Choose what appears, change the presentation, and drag sections into the order you want.',
+                    'Choose what appears, change the presentation, position your navigation, and drag sections into the order you want.',
                     style: TextStyle(color: Colors.white60, height: 1.45),
                   ),
                 ],
@@ -504,30 +532,39 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             const SizedBox(height: 24),
             const Text('PRESENTATION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
+            _dropdown(
+              label: 'Hero style',
               value: draft.heroStyle,
-              decoration: const InputDecoration(labelText: 'Hero style'),
-              items: const [
-                DropdownMenuItem(value: 'Cinematic', child: Text('Cinematic')),
-                DropdownMenuItem(value: 'Minimal', child: Text('Minimal')),
-                DropdownMenuItem(value: 'Compact', child: Text('Compact')),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => draft.heroStyle = value);
-              },
+              values: const ['Cinematic', 'Minimal', 'Compact'],
+              onChanged: (value) => setState(() => draft.heroStyle = value),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
+            _dropdown(
+              label: 'Media card size',
               value: draft.cardSize,
-              decoration: const InputDecoration(labelText: 'Media card size'),
-              items: const [
-                DropdownMenuItem(value: 'Small', child: Text('Small')),
-                DropdownMenuItem(value: 'Medium', child: Text('Medium')),
-                DropdownMenuItem(value: 'Large', child: Text('Large')),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => draft.cardSize = value);
-              },
+              values: const ['Small', 'Medium', 'Large'],
+              onChanged: (value) => setState(() => draft.cardSize = value),
+            ),
+            const SizedBox(height: 24),
+            const Text('NAVIGATION & STORAGE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+            const SizedBox(height: 10),
+            _dropdown(
+              label: 'Where do you want your navbar?',
+              value: draft.navbarPosition,
+              values: const ['Bottom', 'Top', 'Left', 'Right', 'Floating'],
+              onChanged: (value) => setState(() => draft.navbarPosition = value),
+            ),
+            const SizedBox(height: 12),
+            _dropdown(
+              label: 'Where should the storage bar appear?',
+              value: draft.storageBarPosition,
+              values: const ['Top', 'Bottom', 'Above Navbar', 'Hidden'],
+              onChanged: (value) => setState(() => draft.storageBarPosition = value),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Storage capacity is not exposed by app_core.dart yet, so the current bar shows library occupancy. It is ready to use real server/device storage once those metrics are added.',
+              style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
             ),
             const SizedBox(height: 24),
             const Text('SECTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
@@ -665,12 +702,16 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _openProfiles() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileSelectionScreen(
+          onProfileSelected: (context) {
+            Navigator.of(context).pop();
+            if (mounted) setState(() {});
+          },
+        ),
+      ),
+    );
   }
 
   void _openGroup() {
@@ -689,6 +730,18 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _pageBody(List<Widget> pages) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: KeyedSubtree(
+        key: ValueKey(selectedIndex),
+        child: pages[selectedIndex],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -701,34 +754,113 @@ class _MainScreenState extends State<MainScreen> {
       const SmartSearchScreen(),
     ];
 
+    final settings = HomeCustomizationStore.settings;
+    final navbar = _StreamingNavigationBar(
+      selectedIndex: selectedIndex,
+      position: settings.navbarPosition,
+      onSelect: (index) {
+        if (index == selectedIndex) return;
+        setState(() => selectedIndex = index);
+      },
+      onNotifications: _openNotifications,
+      onGroup: _openGroup,
+      onProfile: _openProfiles,
+      onMore: _openMore,
+    );
+    final storageBar = _StorageProgressBar(
+      placement: settings.storageBarPosition,
+    );
+    final page = _pageBody(pages);
+
+    Widget content;
+    switch (settings.navbarPosition) {
+      case 'Top':
+        content = Column(
+          children: [
+            navbar,
+            if (settings.storageBarPosition == 'Top') storageBar,
+            Expanded(child: page),
+            if (settings.storageBarPosition == 'Bottom') storageBar,
+          ],
+        );
+        break;
+      case 'Left':
+        content = Row(
+          children: [
+            navbar,
+            Expanded(
+              child: Column(
+                children: [
+                  if (settings.storageBarPosition == 'Top') storageBar,
+                  Expanded(child: page),
+                  if (settings.storageBarPosition == 'Bottom') storageBar,
+                ],
+              ),
+            ),
+          ],
+        );
+        break;
+      case 'Right':
+        content = Row(
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  if (settings.storageBarPosition == 'Top') storageBar,
+                  Expanded(child: page),
+                  if (settings.storageBarPosition == 'Bottom') storageBar,
+                ],
+              ),
+            ),
+            navbar,
+          ],
+        );
+        break;
+      case 'Floating':
+        content = Stack(
+          children: [
+            Positioned.fill(
+              child: Column(
+                children: [
+                  if (settings.storageBarPosition == 'Top') storageBar,
+                  Expanded(child: page),
+                  if (settings.storageBarPosition == 'Bottom') storageBar,
+                ],
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: SafeArea(top: false, child: navbar),
+            ),
+          ],
+        );
+        break;
+      case 'Bottom':
+      default:
+        content = Column(
+          children: [
+            if (settings.storageBarPosition == 'Top') storageBar,
+            Expanded(child: page),
+            if (settings.storageBarPosition == 'Above Navbar') storageBar,
+            if (settings.storageBarPosition == 'Bottom') storageBar,
+            navbar,
+          ],
+        );
+        break;
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: KeyedSubtree(
-          key: ValueKey(selectedIndex),
-          child: pages[selectedIndex],
-        ),
-      ),
-      bottomNavigationBar: _StreamingNavigationBar(
-        selectedIndex: selectedIndex,
-        onSelect: (index) {
-          if (index == selectedIndex) return;
-          setState(() => selectedIndex = index);
-        },
-        onNotifications: _openNotifications,
-        onGroup: _openGroup,
-        onProfile: _openProfiles,
-        onMore: _openMore,
-      ),
+      body: content,
     );
   }
 }
 
 class _StreamingNavigationBar extends StatelessWidget {
   final int selectedIndex;
+  final String position;
   final ValueChanged<int> onSelect;
   final VoidCallback onNotifications;
   final VoidCallback onGroup;
@@ -737,6 +869,7 @@ class _StreamingNavigationBar extends StatelessWidget {
 
   const _StreamingNavigationBar({
     required this.selectedIndex,
+    required this.position,
     required this.onSelect,
     required this.onNotifications,
     required this.onGroup,
@@ -756,75 +889,135 @@ class _StreamingNavigationBar extends StatelessWidget {
       const _NavItemData(Icons.search_outlined, Icons.search, 'Search'),
     ];
 
+    final vertical = position == 'Left' || position == 'Right';
+    final floating = position == 'Floating';
+
+    final actions = [
+      for (var i = 0; i < items.length; i++)
+        _NavButton(
+          data: items[i],
+          selected: selectedIndex == i,
+          vertical: vertical,
+          onTap: () => onSelect(i),
+        ),
+      _NavButton(
+        data: const _NavItemData(Icons.notifications_none_rounded, Icons.notifications_rounded, 'Notifications'),
+        selected: false,
+        vertical: vertical,
+        showBadge: AppController.instance.activity.isNotEmpty,
+        onTap: onNotifications,
+      ),
+      _NavButton(
+        data: const _NavItemData(Icons.groups_outlined, Icons.groups_rounded, 'Group Chat'),
+        selected: false,
+        vertical: vertical,
+        onTap: onGroup,
+      ),
+      _NavButton(
+        data: const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
+        selected: false,
+        vertical: vertical,
+        onTap: onProfile,
+      ),
+      _NavButton(
+        data: const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
+        selected: false,
+        vertical: vertical,
+        onTap: onMore,
+      ),
+    ];
+
+    final bar = Container(
+      width: vertical ? 92 : null,
+      height: vertical ? null : 76,
+      decoration: BoxDecoration(
+        color: const Color(0xF20E0E0E),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        borderRadius: floating ? BorderRadius.circular(24) : BorderRadius.zero,
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 28,
+            offset: Offset(0, -8),
+            color: Color(0x66000000),
+          ),
+        ],
+      ),
+      child: vertical
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+              child: Column(mainAxisSize: MainAxisSize.min, children: actions),
+            )
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+            ),
+    );
+
     return SafeArea(
       top: false,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 76),
-        decoration: BoxDecoration(
-          color: const Color(0xF20E0E0E),
-          border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: .07)),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 28,
-              offset: Offset(0, -8),
-              color: Color(0x66000000),
+      left: false,
+      right: false,
+      bottom: !floating,
+      minimum: const EdgeInsets.only(top: 2),
+      child: bar,
+    );
+  }
+}
+
+class _StorageProgressBar extends StatelessWidget {
+  final String placement;
+
+  const _StorageProgressBar({required this.placement});
+
+  @override
+  Widget build(BuildContext context) {
+    if (placement == 'Hidden') return const SizedBox.shrink();
+
+    final controller = AppController.instance;
+    const capacity = 100;
+    final used = controller.library.length;
+    final progress = (used / capacity).clamp(0.0, 1.0).toDouble();
+    final remaining = capacity - used;
+
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xE60E0E0E),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: .05)),
+          bottom: BorderSide(color: Colors.white.withValues(alpha: .05)),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storage_rounded, size: 15, color: Colors.white54),
+          const SizedBox(width: 8),
+          const Text('Library storage', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white70)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                minHeight: 5,
+                value: progress,
+                backgroundColor: Colors.white.withValues(alpha: .08),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.redAccent),
+              ),
             ),
-          ],
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: [
-              for (var i = 0; i < items.length; i++)
-                _NavButton(
-                  data: items[i],
-                  selected: selectedIndex == i,
-                  onTap: () => onSelect(i),
-                ),
-              _NavButton(
-                data: const _NavItemData(
-                  Icons.notifications_none_rounded,
-                  Icons.notifications_rounded,
-                  'Notifications',
-                ),
-                selected: false,
-                showBadge: AppController.instance.activity.isNotEmpty,
-                onTap: onNotifications,
-              ),
-              _NavButton(
-                data: const _NavItemData(
-                  Icons.groups_outlined,
-                  Icons.groups_rounded,
-                  'Group Chat',
-                ),
-                selected: false,
-                onTap: onGroup,
-              ),
-              _NavButton(
-                data: const _NavItemData(
-                  Icons.account_circle_outlined,
-                  Icons.account_circle_rounded,
-                  'Profile',
-                ),
-                selected: false,
-                onTap: onProfile,
-              ),
-              _NavButton(
-                data: const _NavItemData(
-                  Icons.more_horiz_rounded,
-                  Icons.more_horiz_rounded,
-                  'More',
-                ),
-                selected: false,
-                onTap: onMore,
-              ),
-            ],
           ),
-        ),
+          const SizedBox(width: 10),
+          Text(
+            '$used / $capacity titles',
+            style: const TextStyle(fontSize: 10, color: Colors.white54),
+          ),
+          if (remaining > 0) ...[
+            const SizedBox(width: 8),
+            Text('$remaining left', style: const TextStyle(fontSize: 10, color: Colors.white38)),
+          ],
+        ],
       ),
     );
   }
@@ -842,6 +1035,7 @@ class _NavButton extends StatefulWidget {
   final _NavItemData data;
   final bool selected;
   final bool showBadge;
+  final bool vertical;
   final VoidCallback onTap;
 
   const _NavButton({
@@ -849,6 +1043,7 @@ class _NavButton extends StatefulWidget {
     required this.selected,
     required this.onTap,
     this.showBadge = false,
+    this.vertical = false,
   });
 
   @override
@@ -861,8 +1056,12 @@ class _NavButtonState extends State<_NavButton> {
   @override
   Widget build(BuildContext context) {
     final active = widget.selected;
+    final buttonWidth = widget.vertical ? 78.0 : (active ? 92.0 : 68.0);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3),
+      padding: widget.vertical
+          ? const EdgeInsets.symmetric(vertical: 3)
+          : const EdgeInsets.symmetric(horizontal: 3),
       child: AnimatedScale(
         scale: pressed ? .94 : 1,
         duration: const Duration(milliseconds: 100),
@@ -880,8 +1079,8 @@ class _NavButtonState extends State<_NavButton> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
-              width: active ? 92 : 68,
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+              width: buttonWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -904,10 +1103,7 @@ class _NavButtonState extends State<_NavButton> {
                           child: Container(
                             width: 7,
                             height: 7,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
+                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                           ),
                         ),
                     ],
@@ -917,6 +1113,7 @@ class _NavButtonState extends State<_NavButton> {
                     widget.data.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: active ? Colors.white : Colors.white54,
                       fontSize: 10,
@@ -1696,11 +1893,6 @@ class MediaHorizontalList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardWidth = switch (HomeCustomizationStore.settings.cardSize) {
-      'Small' => 125.0,
-      'Large' => 175.0,
-      _ => 145.0,
-    };
     final cardHeight = switch (HomeCustomizationStore.settings.cardSize) {
       'Small' => 215.0,
       'Large' => 285.0,
