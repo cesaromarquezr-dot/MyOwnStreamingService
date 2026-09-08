@@ -831,8 +831,6 @@ class _EditProfileSheetState
     });
 
     try {
-      final controller = AppController.instance;
-
       // Profile update will be connected to the actual
       // AppController implementation once its profile
       // update API is available.

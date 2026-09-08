@@ -326,6 +326,273 @@ class _LoginScreenState extends State<LoginScreen> {
 // MAIN SCREEN
 // ============================================================
 
+
+// ============================================================
+// HOME CUSTOMIZATION
+// ============================================================
+
+class HomeCustomization {
+  bool showHero;
+  bool showContinueWatching;
+  bool showRecentlyWatched;
+  bool showMovies;
+  bool showTvShows;
+  bool showNewAdditions;
+  bool showAllLibrary;
+  String heroStyle;
+  String cardSize;
+  List<String> sectionOrder;
+
+  HomeCustomization({
+    this.showHero = true,
+    this.showContinueWatching = true,
+    this.showRecentlyWatched = true,
+    this.showMovies = true,
+    this.showTvShows = true,
+    this.showNewAdditions = true,
+    this.showAllLibrary = false,
+    this.heroStyle = 'Cinematic',
+    this.cardSize = 'Medium',
+    List<String>? sectionOrder,
+  }) : sectionOrder = sectionOrder ?? [
+          'Continue Watching',
+          'Recently Watched',
+          'Movies',
+          'TV Shows',
+          'New Additions',
+          'All Library',
+        ];
+
+  HomeCustomization copy() => HomeCustomization(
+        showHero: showHero,
+        showContinueWatching: showContinueWatching,
+        showRecentlyWatched: showRecentlyWatched,
+        showMovies: showMovies,
+        showTvShows: showTvShows,
+        showNewAdditions: showNewAdditions,
+        showAllLibrary: showAllLibrary,
+        heroStyle: heroStyle,
+        cardSize: cardSize,
+        sectionOrder: List<String>.from(sectionOrder),
+      );
+}
+
+class HomeCustomizationStore {
+  HomeCustomizationStore._();
+
+  static final HomeCustomization settings = HomeCustomization();
+  static bool hasConfigured = false;
+
+  static void apply(HomeCustomization value) {
+    settings.showHero = value.showHero;
+    settings.showContinueWatching = value.showContinueWatching;
+    settings.showRecentlyWatched = value.showRecentlyWatched;
+    settings.showMovies = value.showMovies;
+    settings.showTvShows = value.showTvShows;
+    settings.showNewAdditions = value.showNewAdditions;
+    settings.showAllLibrary = value.showAllLibrary;
+    settings.heroStyle = value.heroStyle;
+    settings.cardSize = value.cardSize;
+    settings.sectionOrder = List<String>.from(value.sectionOrder);
+    hasConfigured = true;
+  }
+}
+
+class CustomizeHomeScreen extends StatefulWidget {
+  final bool firstSetup;
+
+  const CustomizeHomeScreen({super.key, this.firstSetup = false});
+
+  @override
+  State<CustomizeHomeScreen> createState() => _CustomizeHomeScreenState();
+}
+
+class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
+  late HomeCustomization draft;
+
+  static const sectionNames = <String>[
+    'Continue Watching',
+    'Recently Watched',
+    'Movies',
+    'TV Shows',
+    'New Additions',
+    'All Library',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    draft = HomeCustomizationStore.settings.copy();
+  }
+
+  void _save() {
+    HomeCustomizationStore.apply(draft);
+    Navigator.of(context).pop(true);
+  }
+
+  Widget _toggle(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .06)),
+      ),
+      child: SwitchListTile.adaptive(
+        value: value,
+        onChanged: onChanged,
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
+        activeThumbColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF070707),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF070707),
+        surfaceTintColor: Colors.transparent,
+        title: Text(widget.firstSetup ? 'Make Home Yours' : 'Customize Home'),
+        automaticallyImplyLeading: !widget.firstSetup,
+        actions: [
+          TextButton(
+            onPressed: _save,
+            child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(26),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.red.withValues(alpha: .22),
+                    const Color(0xFF171717),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Colors.redAccent, size: 30),
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.firstSetup
+                        ? 'How do you want your main screen to look?'
+                        : 'Build your Home screen your way.',
+                    style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, height: 1.08),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Choose what appears, change the presentation, and drag sections into the order you want.',
+                    style: TextStyle(color: Colors.white60, height: 1.45),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text('PRESENTATION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: draft.heroStyle,
+              decoration: const InputDecoration(labelText: 'Hero style'),
+              items: const [
+                DropdownMenuItem(value: 'Cinematic', child: Text('Cinematic')),
+                DropdownMenuItem(value: 'Minimal', child: Text('Minimal')),
+                DropdownMenuItem(value: 'Compact', child: Text('Compact')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => draft.heroStyle = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: draft.cardSize,
+              decoration: const InputDecoration(labelText: 'Media card size'),
+              items: const [
+                DropdownMenuItem(value: 'Small', child: Text('Small')),
+                DropdownMenuItem(value: 'Medium', child: Text('Medium')),
+                DropdownMenuItem(value: 'Large', child: Text('Large')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => draft.cardSize = value);
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text('SECTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+            const SizedBox(height: 10),
+            _toggle('Hero banner', 'Show the featured title at the top.', draft.showHero, (v) => setState(() => draft.showHero = v)),
+            _toggle('Continue Watching', 'Resume movies and episodes you started.', draft.showContinueWatching, (v) => setState(() => draft.showContinueWatching = v)),
+            _toggle('Recently Watched', 'Show titles you watched most recently.', draft.showRecentlyWatched, (v) => setState(() => draft.showRecentlyWatched = v)),
+            _toggle('Movies', 'Show your movie collection.', draft.showMovies, (v) => setState(() => draft.showMovies = v)),
+            _toggle('TV Shows', 'Show your TV collection.', draft.showTvShows, (v) => setState(() => draft.showTvShows = v)),
+            _toggle('New Additions', 'Show the newest titles in your library.', draft.showNewAdditions, (v) => setState(() => draft.showNewAdditions = v)),
+            _toggle('All Library', 'Show everything in one section.', draft.showAllLibrary, (v) => setState(() => draft.showAllLibrary = v)),
+            const SizedBox(height: 24),
+            const Text('SECTION ORDER', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+            const SizedBox(height: 6),
+            const Text('Drag sections to change their order.', style: TextStyle(color: Colors.white54)),
+            const SizedBox(height: 10),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 360),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .035),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withValues(alpha: .06)),
+              ),
+              child: ReorderableListView.builder(
+                shrinkWrap: true,
+                buildDefaultDragHandles: true,
+                itemCount: draft.sectionOrder.length,
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    final item = draft.sectionOrder.removeAt(oldIndex);
+                    draft.sectionOrder.insert(newIndex, item);
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final name = draft.sectionOrder[index];
+                  return ListTile(
+                    key: ValueKey(name),
+                    leading: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.red.withValues(alpha: .12),
+                      child: Text('${index + 1}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    trailing: const Icon(Icons.drag_indicator_rounded, color: Colors.white38),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 26),
+            SizedBox(
+              height: 54,
+              child: ElevatedButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.check_rounded),
+                label: Text(widget.firstSetup ? 'ENTER MY HOME' : 'SAVE CHANGES'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -335,6 +602,22 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || HomeCustomizationStore.hasConfigured) return;
+      Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => const CustomizeHomeScreen(firstSetup: true),
+        ),
+      ).then((_) {
+        if (mounted) setState(() {});
+      });
+    });
+  }
 
   void _openMore() {
     showModalBottomSheet<void>(
@@ -356,6 +639,17 @@ class _MainScreenState extends State<MainScreen> {
             context: context,
             builder: (_) => const WishlistDialog(),
           );
+        },
+        onCustomize: () {
+          Navigator.pop(context);
+          Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => const CustomizeHomeScreen(),
+            ),
+          ).then((_) {
+            if (mounted) setState(() {});
+          });
         },
       ),
     );
@@ -464,10 +758,8 @@ class _StreamingNavigationBar extends StatelessWidget {
 
     return SafeArea(
       top: false,
-      left: false,
-      right: false,
-      minimum: const EdgeInsets.only(top: 2),
       child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
         decoration: BoxDecoration(
           color: const Color(0xF20E0E0E),
           border: Border(
@@ -481,13 +773,11 @@ class _StreamingNavigationBar extends StatelessWidget {
             ),
           ],
         ),
-        child: SizedBox(
-          height: 76,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: Row(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
                 _NavButton(
@@ -533,7 +823,6 @@ class _StreamingNavigationBar extends StatelessWidget {
                 onTap: onMore,
               ),
             ],
-            ),
           ),
         ),
       ),
@@ -658,11 +947,13 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onImport;
   final VoidCallback onProfiles;
   final VoidCallback onWishlist;
+  final VoidCallback onCustomize;
 
   const _MoreActionsSheet({
     required this.onImport,
     required this.onProfiles,
     required this.onWishlist,
+    required this.onCustomize,
   });
 
   @override
@@ -690,6 +981,12 @@ class _MoreActionsSheet extends StatelessWidget {
             title: 'Group Wishlist',
             subtitle: 'See shared movies and shows',
             onTap: onWishlist,
+          ),
+          _SheetAction(
+            icon: Icons.tune_rounded,
+            title: 'Customize Home',
+            subtitle: 'Change sections, order, and appearance',
+            onTap: onCustomize,
           ),
         ],
       ),
@@ -963,14 +1260,60 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final watched = controller.watched;
-    final movies = library
+    final libraryItems = List<MediaItem>.from(library);
+    final movies = libraryItems
         .where((media) => media.type.toLowerCase() == 'movie')
         .toList();
-    final tvShows = library.where((media) {
+    final tvShows = libraryItems.where((media) {
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
     }).toList();
-    final heroMedia = watched.isNotEmpty ? watched.first : library.first;
+    final recentlyWatched = List<MediaItem>.from(watched);
+    final newAdditions = List<MediaItem>.from(libraryItems.reversed);
+    final heroMedia = watched.isNotEmpty ? watched.first : libraryItems.first;
+    final customization = HomeCustomizationStore.settings;
+
+    final sections = <String, Widget>{
+      'Continue Watching': _HomeMediaSection(
+        title: 'Continue Watching',
+        subtitle: 'Pick up where you left off',
+        media: watched,
+      ),
+      'Recently Watched': _HomeMediaSection(
+        title: 'Recently Watched',
+        subtitle: 'Your latest activity',
+        media: recentlyWatched,
+      ),
+      'Movies': _HomeMediaSection(
+        title: 'Movies',
+        subtitle: 'From your collection',
+        media: movies,
+      ),
+      'TV Shows': _HomeMediaSection(
+        title: 'TV Shows',
+        subtitle: 'Your series collection',
+        media: tvShows,
+      ),
+      'New Additions': _HomeMediaSection(
+        title: 'New Additions',
+        subtitle: 'Recently added to your library',
+        media: newAdditions,
+      ),
+      'All Library': _HomeMediaSection(
+        title: 'All Library',
+        subtitle: '${libraryItems.length} title${libraryItems.length == 1 ? '' : 's'} in your library',
+        media: libraryItems,
+      ),
+    };
+
+    final enabled = <String>{
+      if (customization.showContinueWatching) 'Continue Watching',
+      if (customization.showRecentlyWatched) 'Recently Watched',
+      if (customization.showMovies) 'Movies',
+      if (customization.showTvShows) 'TV Shows',
+      if (customization.showNewAdditions) 'New Additions',
+      if (customization.showAllLibrary) 'All Library',
+    };
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
@@ -1011,54 +1354,55 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-            SliverToBoxAdapter(
-              child: FadeTransition(
-                opacity: CurvedAnimation(parent: _heroController, curve: Curves.easeOut),
-                child: _HomeHero(
-                  media: heroMedia,
-                  profileName: profile.name,
-                  onPlay: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MediaDetailsScreen(media: heroMedia),
-                      ),
-                    );
-                  },
+            if (customization.showHero)
+              SliverToBoxAdapter(
+                child: FadeTransition(
+                  opacity: CurvedAnimation(parent: _heroController, curve: Curves.easeOut),
+                  child: _HomeHero(
+                    media: heroMedia,
+                    profileName: profile.name,
+                    onPlay: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MediaDetailsScreen(media: heroMedia),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-            if (watched.isNotEmpty) ...[
-              const SliverToBoxAdapter(
-                child: _PremiumSectionHeader(
-                  title: 'Continue Watching',
-                  subtitle: 'Pick up where you left off',
-                ),
-              ),
-              SliverToBoxAdapter(child: MediaHorizontalList(media: watched)),
-            ],
-            if (movies.isNotEmpty) ...[
-              const SliverToBoxAdapter(
-                child: _PremiumSectionHeader(
-                  title: 'Movies',
-                  subtitle: 'From your collection',
-                ),
-              ),
-              SliverToBoxAdapter(child: MediaHorizontalList(media: movies)),
-            ],
-            if (tvShows.isNotEmpty) ...[
-              const SliverToBoxAdapter(
-                child: _PremiumSectionHeader(
-                  title: 'TV Shows',
-                  subtitle: 'Your series collection',
-                ),
-              ),
-              SliverToBoxAdapter(child: MediaHorizontalList(media: tvShows)),
-            ],
+            for (final name in customization.sectionOrder)
+              if (enabled.contains(name) && sections[name] != null)
+                SliverToBoxAdapter(child: sections[name]!),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HomeMediaSection extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<MediaItem> media;
+
+  const _HomeMediaSection({
+    required this.title,
+    required this.subtitle,
+    required this.media,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (media.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PremiumSectionHeader(title: title, subtitle: subtitle),
+        MediaHorizontalList(media: media),
+      ],
     );
   }
 }
@@ -1352,8 +1696,19 @@ class MediaHorizontalList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardWidth = switch (HomeCustomizationStore.settings.cardSize) {
+      'Small' => 125.0,
+      'Large' => 175.0,
+      _ => 145.0,
+    };
+    final cardHeight = switch (HomeCustomizationStore.settings.cardSize) {
+      'Small' => 215.0,
+      'Large' => 285.0,
+      _ => 245.0,
+    };
+
     return SizedBox(
-      height: 245,
+      height: cardHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: media.length,
@@ -1375,16 +1730,18 @@ class MediaHorizontalList extends StatelessWidget {
 
 class MediaCard extends StatelessWidget {
   final MediaItem media;
+  final double width;
 
   const MediaCard({
     super.key,
     required this.media,
+    this.width = 145,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 145,
+      width: width,
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () {
