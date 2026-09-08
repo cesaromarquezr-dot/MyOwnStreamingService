@@ -163,9 +163,9 @@ class GroupRecommendationService {
     required String recommendationId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+        database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       return null;
@@ -187,14 +187,9 @@ class GroupRecommendationService {
     required String accountId,
   }) {
     final List<GroupRecommendation> recommendations =
-        database
-            .getGroupRecommendations()
-            .where(
-              (recommendation) =>
-                  recommendation.accountId ==
-                  accountId,
-            )
-            .toList();
+    database.getGroupRecommendationsForAccount(
+  accountId,
+);
 
     for (final GroupRecommendation recommendation
         in recommendations) {
@@ -212,14 +207,9 @@ class GroupRecommendationService {
     required String accountId,
   }) {
     final List<GroupRecommendation> recommendations =
-        database
-            .getVotingGroupRecommendations()
-            .where(
-              (recommendation) =>
-                  recommendation.accountId ==
-                  accountId,
-            )
-            .toList();
+    database.getVotingGroupRecommendationsForAccount(
+  accountId,
+);
 
     final List<GroupRecommendation> active =
         <GroupRecommendation>[];
@@ -252,9 +242,9 @@ class GroupRecommendationService {
     required GroupRecommendationVote vote,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       throw StateError(
@@ -345,9 +335,9 @@ class GroupRecommendationService {
     required String recommendationId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       throw StateError(
@@ -389,9 +379,9 @@ class GroupRecommendationService {
     required String recommendationId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       throw StateError(
@@ -434,9 +424,9 @@ class GroupRecommendationService {
     required String recommendationId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       throw StateError(
@@ -547,17 +537,21 @@ class GroupRecommendationService {
       final String mediaId =
           recommendation.mediaId!.trim();
 
-      if (!account.isInWishlist(mediaId)) {
-        account.addToWishlist(mediaId);
+      if (!account.wishlistMediaIds.contains(
+        mediaId,
+      )) {
+        account.wishlistMediaIds.add(
+          mediaId,
+        );
       }
 
       return;
     }
 
-    if (!account.isRecommendationInWishlist(
+    if (!account.wishlistRecommendationIds.contains(
       recommendation.id,
     )) {
-      account.addRecommendationToWishlist(
+      account.wishlistRecommendationIds.add(
         recommendation.id,
       );
     }
@@ -570,25 +564,23 @@ class GroupRecommendationService {
     required String profileId,
   }) {
     final List<GroupRecommendation> recommendations =
-        database
-            .getGroupRecommendations()
-            .where(
-              (recommendation) =>
-                  recommendation.accountId ==
-                      accountId &&
-                  recommendation
-                          .recommendedByProfileId ==
-                      profileId,
-            )
-            .toList();
+    database
+        .getGroupRecommendationsForAccount(
+      accountId,
+    )
+        .where(
+          (recommendation) =>
+              recommendation.recommendedByProfileId ==
+              profileId,
+        )
+        .toList();
 
-    for (final GroupRecommendation recommendation
-        in recommendations) {
-      _finalizeIfVotingEnded(
-        recommendation,
-      );
-    }
-
+for (final GroupRecommendation recommendation
+    in recommendations) {
+  _finalizeIfVotingEnded(
+    recommendation,
+  );
+}
     return recommendations;
   }
 
@@ -602,16 +594,15 @@ class GroupRecommendationService {
     required String mediaId,
   }) {
     final List<GroupRecommendation> recommendations =
-        database
-            .getGroupRecommendations()
-            .where(
-              (recommendation) =>
-                  recommendation.accountId ==
-                      accountId &&
-                  recommendation.mediaId ==
-                      mediaId,
-            )
-            .toList();
+    database
+        .getGroupRecommendationsForAccount(
+      accountId,
+    )
+        .where(
+          (recommendation) =>
+              recommendation.mediaId == mediaId,
+        )
+        .toList();
 
     for (final GroupRecommendation recommendation
         in recommendations) {
@@ -630,9 +621,9 @@ class GroupRecommendationService {
     required String profileId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       return false;
@@ -658,9 +649,9 @@ class GroupRecommendationService {
     required String profileId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       return null;
@@ -688,9 +679,9 @@ class GroupRecommendationService {
     required String recommendationId,
   }) {
     final GroupRecommendation? recommendation =
-        database.getGroupRecommendation(
-      recommendationId,
-    );
+    database.getGroupRecommendationById(
+  recommendationId,
+);
 
     if (recommendation == null) {
       throw StateError(
@@ -710,12 +701,12 @@ class GroupRecommendationService {
     if (account != null) {
       if (recommendation.mediaId != null &&
           recommendation.mediaId!.trim().isNotEmpty) {
-        account.removeFromWishlist(
+        account.wishlistMediaIds.remove(
           recommendation.mediaId!.trim(),
         );
       }
 
-      account.removeRecommendationFromWishlist(
+      account.wishlistRecommendationIds.remove(
         recommendation.id,
       );
     }

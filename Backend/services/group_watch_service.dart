@@ -184,9 +184,9 @@ class GroupWatchService {
     }
 
     final GroupWatchSession? session =
-        database.getGroupWatchSession(
-      cleanSessionId,
-    );
+    database.getGroupWatchSessionById(
+  cleanSessionId,
+);
 
     if (session == null) {
       return null;
@@ -593,14 +593,27 @@ class GroupWatchService {
 
     // Verify that the host still belongs to
     // the account that created the session.
-    if (!database.profileBelongsToAccount(
-      cleanProfileId,
-      session.accountId,
-    )) {
-      throw StateError(
-        'The Group Watch host is no longer valid.',
-      );
-    }
+    final hostAccount =
+    database.getAccountById(
+  session.accountId,
+);
+
+if (hostAccount == null) {
+  throw StateError(
+    'The Group Watch host account is no longer valid.',
+  );
+}
+
+final hostProfile =
+    hostAccount.getProfileById(
+  session.hostProfileId,
+);
+
+if (hostProfile == null) {
+  throw StateError(
+    'The Group Watch host is no longer valid.',
+  );
+}
 
     if (session.hasStarted) {
       return session;
@@ -1071,9 +1084,9 @@ class GroupWatchService {
     }
 
     final GroupWatchSession? session =
-        database.getGroupWatchSession(
-      cleanSessionId,
-    );
+    database.getGroupWatchSessionById(
+  cleanSessionId,
+);
 
     if (session == null) {
       throw StateError(
@@ -1091,13 +1104,13 @@ class GroupWatchService {
     String id;
 
     do {
-      id =
-          '${DateTime.now().microsecondsSinceEpoch}'
-          '-${random.nextInt(1000000)}';
-    } while (
-        database.getGroupWatchSession(id) !=
-            null);
+  id =
+      '${DateTime.now().microsecondsSinceEpoch}'
+      '-${random.nextInt(1000000)}';
+} while (
+    database.getGroupWatchSessionById(id) !=
+        null);
 
-    return id;
+return id;
   }
 }

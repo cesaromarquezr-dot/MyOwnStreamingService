@@ -6,4 +6,4 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  # Stage 1 uses only Dart built-in libraries.
+  password_guard: ^1.0.5

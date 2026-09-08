@@ -18,21 +18,15 @@ class AuthRoutes {
     required this.paymentService,
   });
 
-  Future<void> handle(HttpRequest request) async {
-    _addCorsHeaders(request.response);
-
-    if (request.method == 'OPTIONS') {
-      request.response.statusCode = HttpStatus.noContent;
-      await request.response.close();
-      return;
-    }
-
-    final path = request.uri.path;
-
+  Future<void> handle(
+    HttpRequest request,
+  ) async {
     try {
-      // --------------------------------------------------------
-      // AUTHENTICATION
-      // --------------------------------------------------------
+      final path = request.uri.path;
+
+      // -----------------------------------------------------------------------
+      // SIGNUP
+      // -----------------------------------------------------------------------
 
       if (request.method == 'POST' &&
           path == '/api/v1/auth/signup') {
@@ -40,11 +34,19 @@ class AuthRoutes {
         return;
       }
 
+      // -----------------------------------------------------------------------
+      // LOGIN
+      // -----------------------------------------------------------------------
+
       if (request.method == 'POST' &&
           path == '/api/v1/auth/login') {
         await _login(request);
         return;
       }
+
+      // -----------------------------------------------------------------------
+      // LOGOUT
+      // -----------------------------------------------------------------------
 
       if (request.method == 'POST' &&
           path == '/api/v1/auth/logout') {
@@ -52,15 +54,39 @@ class AuthRoutes {
         return;
       }
 
+      // -----------------------------------------------------------------------
+      // CURRENT ACCOUNT
+      // -----------------------------------------------------------------------
+
       if (request.method == 'GET' &&
           path == '/api/v1/auth/me') {
         await _me(request);
         return;
       }
 
-      // --------------------------------------------------------
+      // -----------------------------------------------------------------------
+      // CURRENT SESSION
+      // -----------------------------------------------------------------------
+
+      if (request.method == 'GET' &&
+          path == '/api/v1/auth/session') {
+        await _session(request);
+        return;
+      }
+
+      // -----------------------------------------------------------------------
+      // LOGOUT ALL SESSIONS
+      // -----------------------------------------------------------------------
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/auth/logout-all') {
+        await _logoutAll(request);
+        return;
+      }
+
+      // -----------------------------------------------------------------------
       // PROFILES
-      // --------------------------------------------------------
+      // -----------------------------------------------------------------------
 
       if (request.method == 'POST' &&
           path == '/api/v1/profiles') {
@@ -70,176 +96,109 @@ class AuthRoutes {
 
       if (request.method == 'DELETE' &&
           path.startsWith('/api/v1/profiles/')) {
-        await _deleteProfile(request);
+        await _removeProfile(request);
         return;
       }
 
-      await _sendJson(
+      _sendJson(
         request.response,
-        HttpStatus.notFound,
-        {
+        statusCode: HttpStatus.notFound,
+        body: {
           'success': false,
-          'error': 'Route not found.',
+          'error': 'Authentication route not found.',
         },
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
       developer.log(
-        'Authentication route error: $error',
+        'Authentication route error.',
+        error: error,
+        stackTrace: stackTrace,
         name: 'AuthRoutes',
       );
 
       if (!request.response.headers.contentType
           .toString()
-          .contains('json')) {
-        await _sendJson(
+          .contains('application/json')) {
+        _sendJson(
           request.response,
-          HttpStatus.badRequest,
-          {
+          statusCode: HttpStatus.internalServerError,
+          body: {
             'success': false,
-            'error': _cleanError(error),
+            'error': _errorMessage(error),
           },
         );
       }
     }
   }
 
-  // ------------------------------------------------------------
-  // SIGN UP
-  // ------------------------------------------------------------
+  // ===========================================================================
+  // SIGNUP
+  // ===========================================================================
 
   Future<void> _signup(
     HttpRequest request,
   ) async {
-    final body = await _readJson(request);
+    final body =
+        await _readJsonBody(request);
 
-    final username = body['username'];
-    final email = body['email'];
-    final password = body['password'];
-    final firstProfileName =
-        body['firstProfileName'];
-
-    if (username is! String ||
-        email is! String ||
-        password is! String ||
-        firstProfileName is! String) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'username, email, password and firstProfileName are required.',
-        },
-      );
-
-      return;
-    }
-
-    final cleanUsername = username.trim();
-    final cleanEmail = email.trim();
-    final cleanPassword = password;
-    final cleanProfileName =
-        firstProfileName.trim();
-
-    if (cleanUsername.isEmpty ||
-        cleanEmail.isEmpty ||
-        cleanPassword.isEmpty ||
-        cleanProfileName.isEmpty) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'username, email, password and firstProfileName cannot be empty.',
-        },
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // SUBSCRIPTION PLAN
-    // ----------------------------------------------------------
-
-    final planValue =
-        body['plan']?.toString().trim().toLowerCase();
-
-    SubscriptionPlan plan;
-
-    if (planValue == 'yearly') {
-      plan = SubscriptionPlan.yearly;
-    } else if (planValue == 'monthly' ||
-        planValue == null ||
-        planValue.isEmpty) {
-      plan = SubscriptionPlan.monthly;
-    } else {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'plan must be either monthly or yearly.',
-        },
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // ACCOUNT CREATION
-    // ----------------------------------------------------------
-    //
-    // AuthService creates the account with an INACTIVE
-    // subscription.
-    //
-    // No login session is created here.
-    //
-
-    final account = authService.createAccount(
-      username: cleanUsername,
-      email: cleanEmail,
-      password: cleanPassword,
-      firstProfileName: cleanProfileName,
-      plan: plan,
+    final username =
+        _readRequiredString(
+      body,
+      'username',
     );
 
-    // ----------------------------------------------------------
-    // PAYMENT CHECKOUT SESSION
-    // ----------------------------------------------------------
-    //
-    // A temporary checkout token is created specifically for
-    // completing this signup payment.
-    //
-    // This is NOT a login token and cannot be used to access
-    // the account.
-    //
-    // The payment service determines the actual price.
-    //
-    // Raw card/bank information is never passed to AuthRoutes.
-    //
+    final email =
+        _readRequiredString(
+      body,
+      'email',
+    );
 
+    final password =
+        _readRequiredString(
+      body,
+      'password',
+    );
+
+    final firstProfileName =
+        _readRequiredString(
+      body,
+      'firstProfileName',
+    );
+
+    final planValue =
+        body['plan']
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+    final plan =
+        _parseSubscriptionPlan(
+      planValue,
+    );
+
+    final account =
+        await authService.createAccount(
+      username: username,
+      email: email,
+      password: password,
+      plan: plan,
+      firstProfileName:
+          firstProfileName,
+    );
+
+    // Signup does not create a normal login session.
+    //
+    // The subscription must be activated through the payment flow first.
     final payment =
         paymentService.createPaymentSession(
       account: account,
       plan: plan,
     );
 
-    // ----------------------------------------------------------
-    // SIGNUP RESPONSE
-    // ----------------------------------------------------------
-    //
-    // The frontend should use payment.id and checkoutToken to
-    // continue to the payment screen.
-    //
-    // There is intentionally NO authentication token here.
-    //
-
-    await _sendJson(
+    _sendJson(
       request.response,
-      HttpStatus.created,
-      {
+      statusCode: HttpStatus.created,
+      body: {
         'success': true,
         'message':
             'Account created. Complete payment to activate your subscription.',
@@ -254,273 +213,320 @@ class AuthRoutes {
     );
   }
 
-  // ------------------------------------------------------------
+  // ===========================================================================
   // LOGIN
-  // ------------------------------------------------------------
+  // ===========================================================================
 
   Future<void> _login(
     HttpRequest request,
   ) async {
-    final body = await _readJson(request);
+    final body =
+        await _readJsonBody(request);
 
-    final login = body['login'];
-    final password = body['password'];
+    final login =
+        _readRequiredString(
+      body,
+      'login',
+    );
 
-    if (login is! String ||
-        password is! String) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'login and password are required.',
-        },
-      );
+    final password =
+        _readRequiredString(
+      body,
+      'password',
+    );
 
-      return;
-    }
-
-    final cleanLogin = login.trim();
-
-    if (cleanLogin.isEmpty ||
-        password.isEmpty) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'login and password cannot be empty.',
-        },
-      );
-
-      return;
-    }
-
-    // AuthService.login() checks the subscription before creating
-    // an authentication session.
-    //
-    // Therefore an unpaid/inactive account cannot log in.
-    final token = authService.login(
-      login: cleanLogin,
+    final token =
+        await authService.login(
+      login: login,
       password: password,
     );
 
     final account =
-        authService.accountFromToken(token);
+        authService.accountFromToken(
+      token,
+    );
 
-    await _sendJson(
+    final session =
+        authService.sessionFromToken(
+      token,
+    );
+
+    _sendJson(
       request.response,
-      HttpStatus.ok,
-      {
+      statusCode: HttpStatus.ok,
+      body: {
         'success': true,
         'message': 'Login successful.',
         'token': token,
-        'account': account?.toJson(),
+        'expiresAt':
+            session?.expiresAt
+                .toIso8601String(),
+        'account':
+            account?.toJson(),
       },
     );
   }
 
-  // ------------------------------------------------------------
+  // ===========================================================================
   // LOGOUT
-  // ------------------------------------------------------------
+  // ===========================================================================
 
   Future<void> _logout(
     HttpRequest request,
   ) async {
     final account =
-        authentication.authenticate(request);
+        authentication.authenticate(
+      request,
+    );
 
     if (account == null) {
-      await _sendUnauthorized(
+      _sendAuthenticationRequired(
         request.response,
       );
       return;
     }
 
     final token =
-        _getBearerToken(request);
-
-    if (token != null) {
-      authService.logout(token);
-    }
-
-    await _sendJson(
-      request.response,
-      HttpStatus.ok,
-      {
-        'success': true,
-        'message':
-            'Logged out successfully.',
-      },
+        authentication.extractToken(
+      request,
     );
-  }
 
-  // ------------------------------------------------------------
-  // CURRENT ACCOUNT
-  // ------------------------------------------------------------
-
-  Future<void> _me(
-    HttpRequest request,
-  ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
-      await _sendUnauthorized(
+    if (token == null) {
+      _sendAuthenticationRequired(
         request.response,
       );
       return;
     }
 
-    await _sendJson(
+    authService.logout(
+      token,
+    );
+
+    _sendJson(
       request.response,
-      HttpStatus.ok,
-      {
+      statusCode: HttpStatus.ok,
+      body: {
+        'success': true,
+        'message': 'Logged out successfully.',
+      },
+    );
+  }
+
+  // ===========================================================================
+  // CURRENT ACCOUNT
+  // ===========================================================================
+
+  Future<void> _me(
+    HttpRequest request,
+  ) async {
+    final account =
+        authentication.authenticate(
+      request,
+    );
+
+    if (account == null) {
+      _sendAuthenticationRequired(
+        request.response,
+      );
+      return;
+    }
+
+    _sendJson(
+      request.response,
+      statusCode: HttpStatus.ok,
+      body: {
         'success': true,
         'account': account.toJson(),
       },
     );
   }
 
-  // ------------------------------------------------------------
+  // ===========================================================================
+  // CURRENT SESSION
+  // ===========================================================================
+
+  Future<void> _session(
+    HttpRequest request,
+  ) async {
+    final account =
+        authentication.authenticate(
+      request,
+    );
+
+    if (account == null) {
+      _sendAuthenticationRequired(
+        request.response,
+      );
+      return;
+    }
+
+    final token =
+        authentication.extractToken(
+      request,
+    );
+
+    if (token == null) {
+      _sendAuthenticationRequired(
+        request.response,
+      );
+      return;
+    }
+
+    final session =
+        authService.sessionFromToken(
+      token,
+    );
+
+    if (session == null) {
+      _sendAuthenticationRequired(
+        request.response,
+      );
+      return;
+    }
+
+    _sendJson(
+      request.response,
+      statusCode: HttpStatus.ok,
+      body: {
+        'success': true,
+        'session': {
+          'createdAt':
+              session.createdAt
+                  .toIso8601String(),
+          'expiresAt':
+              session.expiresAt
+                  .toIso8601String(),
+          'lastUsedAt':
+              session.lastUsedAt
+                  .toIso8601String(),
+        },
+        'accountId': account.id,
+      },
+    );
+  }
+
+  // ===========================================================================
+  // LOGOUT ALL
+  // ===========================================================================
+
+  Future<void> _logoutAll(
+    HttpRequest request,
+  ) async {
+    final account =
+        authentication.authenticate(
+      request,
+    );
+
+    if (account == null) {
+      _sendAuthenticationRequired(
+        request.response,
+      );
+      return;
+    }
+
+    authService.logoutAllSessions(
+      account.id,
+    );
+
+    _sendJson(
+      request.response,
+      statusCode: HttpStatus.ok,
+      body: {
+        'success': true,
+        'message':
+            'All sessions have been logged out.',
+      },
+    );
+  }
+
+  // ===========================================================================
   // ADD PROFILE
-  // ------------------------------------------------------------
+  // ===========================================================================
 
   Future<void> _addProfile(
     HttpRequest request,
   ) async {
     final account =
-        authentication.authenticate(request);
+        authentication.authenticate(
+      request,
+    );
 
     if (account == null) {
-      await _sendUnauthorized(
+      _sendAuthenticationRequired(
         request.response,
       );
       return;
     }
 
-    if (account.profiles.length >= 7) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'An account can have a maximum of 7 profiles.',
-          'profileCount':
-              account.profiles.length,
-          'maxProfiles': 7,
-        },
-      );
+    final body =
+        await _readJsonBody(request);
 
-      return;
-    }
+    final name =
+        _readRequiredString(
+      body,
+      'name',
+    );
 
-    final body = await _readJson(request);
+    final avatarUrl =
+        body['avatarUrl']?.toString();
 
-    final name = body['name'];
-
-    if (name is! String) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'Profile name is required.',
-        },
-      );
-
-      return;
-    }
-
-    final cleanName = name.trim();
-
-    if (cleanName.isEmpty) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'Profile name cannot be empty.',
-        },
-      );
-
-      return;
-    }
-
-    String? avatarUrl;
-
-    if (body['avatarUrl'] is String) {
-      final value =
-          (body['avatarUrl'] as String).trim();
-
-      if (value.isNotEmpty) {
-        avatarUrl = value;
-      }
-    }
-
-    final profile = authService.addProfile(
+    final profile =
+        authService.addProfile(
       account: account,
-      name: cleanName,
+      name: name,
       avatarUrl: avatarUrl,
     );
 
-    await _sendJson(
+    _sendJson(
       request.response,
-      HttpStatus.created,
-      {
+      statusCode: HttpStatus.created,
+      body: {
         'success': true,
-        'message':
-            'Profile created successfully.',
         'profile': profile.toJson(),
+        'profiles': account.profiles
+            .map(
+              (profile) =>
+                  profile.toJson(),
+            )
+            .toList(),
         'profileCount':
             account.profiles.length,
-        'maxProfiles': 7,
+        'maxProfiles':7,
       },
     );
   }
 
-  // ------------------------------------------------------------
-  // DELETE PROFILE
-  // ------------------------------------------------------------
+  // ===========================================================================
+  // REMOVE PROFILE
+  // ===========================================================================
 
-  Future<void> _deleteProfile(
+  Future<void> _removeProfile(
     HttpRequest request,
   ) async {
     final account =
-        authentication.authenticate(request);
+        authentication.authenticate(
+      request,
+    );
 
     if (account == null) {
-      await _sendUnauthorized(
+      _sendAuthenticationRequired(
         request.response,
       );
       return;
     }
 
-    const prefix =
+    final prefix =
         '/api/v1/profiles/';
 
     final profileId =
-        request.uri.path.substring(
-      prefix.length,
-    );
+        request.uri.path
+            .substring(prefix.length)
+            .trim();
 
-    if (profileId.trim().isEmpty) {
-      await _sendJson(
-        request.response,
-        HttpStatus.badRequest,
-        {
-          'success': false,
-          'error':
-              'Profile ID is required.',
-        },
+    if (profileId.isEmpty) {
+      throw Exception(
+        'Profile ID is required.',
       );
-
-      return;
     }
 
     authService.removeProfile(
@@ -528,39 +534,48 @@ class AuthRoutes {
       profileId: profileId,
     );
 
-    await _sendJson(
+    _sendJson(
       request.response,
-      HttpStatus.ok,
-      {
+      statusCode: HttpStatus.ok,
+      body: {
         'success': true,
         'message':
-            'Profile deleted successfully.',
-        'profiles': account.profiles.map(
-          (profile) {
-            return profile.toJson();
-          },
-        ).toList(),
+            'Profile removed successfully.',
+        'profiles': account.profiles
+            .map(
+              (profile) =>
+                  profile.toJson(),
+            )
+            .toList(),
+        'profileCount':
+            account.profiles.length,
+        'maxProfiles':
+            7,
       },
     );
   }
 
-  // ------------------------------------------------------------
-  // READ JSON BODY
-  // ------------------------------------------------------------
+  // ===========================================================================
+  // HELPERS
+  // ===========================================================================
 
-  Future<Map<String, dynamic>> _readJson(
+  Future<Map<String, dynamic>>
+      _readJsonBody(
     HttpRequest request,
   ) async {
-    final content =
+    final body =
         await utf8.decoder
             .bind(request)
             .join();
 
-    if (content.trim().isEmpty) {
-      return {};
+    if (body.trim().isEmpty) {
+      throw Exception(
+        'Request body is required.',
+      );
     }
 
-    final decoded = jsonDecode(content);
+    final decoded =
+        jsonDecode(body);
 
     if (decoded is! Map) {
       throw Exception(
@@ -573,48 +588,68 @@ class AuthRoutes {
     );
   }
 
-  // ------------------------------------------------------------
-  // AUTHORIZATION HEADER
-  // ------------------------------------------------------------
-
-  String? _getBearerToken(
-    HttpRequest request,
+  String _readRequiredString(
+    Map<String, dynamic> body,
+    String key,
   ) {
-    final authorization =
-        request.headers.value(
-      HttpHeaders.authorizationHeader,
-    );
+    final value =
+        body[key]?.toString().trim();
 
-    if (authorization == null) {
-      return null;
+    if (value == null ||
+        value.isEmpty) {
+      throw Exception(
+        '$key is required.',
+      );
     }
 
-    if (!authorization
-        .startsWith('Bearer ')) {
-      return null;
-    }
-
-    final token =
-        authorization.substring(7).trim();
-
-    if (token.isEmpty) {
-      return null;
-    }
-
-    return token;
+    return value;
   }
 
-  // ------------------------------------------------------------
-  // UNAUTHORIZED
-  // ------------------------------------------------------------
+  SubscriptionPlan
+      _parseSubscriptionPlan(
+    String? value,
+  ) {
+    switch (value) {
+      case 'yearly':
+        return SubscriptionPlan.yearly;
 
-  Future<void> _sendUnauthorized(
+      case 'monthly':
+      case null:
+      case '':
+        return SubscriptionPlan.monthly;
+
+      default:
+        throw Exception(
+          'Invalid subscription plan.',
+        );
+    }
+  }
+
+  String _errorMessage(
+    Object error,
+  ) {
+    final text =
+        error.toString();
+
+    if (text.startsWith(
+      'Exception: ',
+    )) {
+      return text.substring(
+        'Exception: '.length,
+      );
+    }
+
+    return text;
+  }
+
+  void _sendAuthenticationRequired(
     HttpResponse response,
-  ) async {
-    await _sendJson(
+  ) {
+    _sendJson(
       response,
-      HttpStatus.unauthorized,
-      {
+      statusCode:
+          HttpStatus.unauthorized,
+      body: {
         'success': false,
         'error':
             'Authentication required.',
@@ -622,61 +657,21 @@ class AuthRoutes {
     );
   }
 
-  // ------------------------------------------------------------
-  // JSON RESPONSE
-  // ------------------------------------------------------------
-
-  Future<void> _sendJson(
-    HttpResponse response,
-    int statusCode,
-    Map<String, dynamic> data,
-  ) async {
-    response.statusCode = statusCode;
+  void _sendJson(
+    HttpResponse response, {
+    required int statusCode,
+    required Map<String, dynamic> body,
+  }) {
+    response.statusCode =
+        statusCode;
 
     response.headers.contentType =
         ContentType.json;
 
     response.write(
-      jsonEncode(data),
+      jsonEncode(body),
     );
 
-    await response.close();
-  }
-
-  // ------------------------------------------------------------
-  // CORS
-  // ------------------------------------------------------------
-
-  void _addCorsHeaders(
-    HttpResponse response,
-  ) {
-    response.headers.set(
-      'Access-Control-Allow-Origin',
-      '*',
-    );
-
-    response.headers.set(
-      'Access-Control-Allow-Methods',
-      'GET, POST, DELETE, OPTIONS',
-    );
-
-    response.headers.set(
-      'Access-Control-Allow-Headers',
-      'Origin, Content-Type, Accept, Authorization',
-    );
-  }
-
-  // ------------------------------------------------------------
-  // ERROR CLEANUP
-  // ------------------------------------------------------------
-
-  String _cleanError(Object error) {
-    final message = error.toString();
-
-    if (message.startsWith('Exception: ')) {
-      return message.substring(11);
-    }
-
-    return message;
+    response.close();
   }
 }

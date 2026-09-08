@@ -2138,14 +2138,13 @@ class GroupRoutes {
           );
 
           final bool isInWishlist =
-              recommendation.mediaId != null
-                  ? account.isInWishlist(
-                      recommendation.mediaId!,
-                    )
-                  : account
-                      .isRecommendationInWishlist(
-                      recommendation.id,
-                    );
+    recommendation.mediaId != null
+        ? account.wishlistMediaIds.contains(
+            recommendation.mediaId!,
+          )
+        : account.wishlistRecommendationIds.contains(
+            recommendation.id,
+          );
 
           await _sendJson(
             request,
@@ -2198,14 +2197,13 @@ class GroupRoutes {
           );
 
           final bool isInWishlist =
-              recommendation.mediaId != null
-                  ? account.isInWishlist(
-                      recommendation.mediaId!,
-                    )
-                  : account
-                      .isRecommendationInWishlist(
-                      recommendation.id,
-                    );
+    recommendation.mediaId != null
+        ? account.wishlistMediaIds.contains(
+            recommendation.mediaId!,
+          )
+        : account.wishlistRecommendationIds.contains(
+            recommendation.id,
+          );
 
           await _sendJson(
             request,
@@ -2249,9 +2247,13 @@ class GroupRoutes {
             wishlistMediaMatch.group(1)!;
 
         final removedMedia =
-            account.removeFromWishlist(
-          itemId,
-        );
+    account.wishlistMediaIds.remove(itemId);
+
+if (!removedMedia) {
+  throw Exception(
+    'Media not found in wishlist.',
+  );
+}
 
         if (removedMedia) {
           await _sendJson(
@@ -2268,11 +2270,12 @@ class GroupRoutes {
           return;
         }
 
-        final removedRecommendation =
-            account
-                .removeRecommendationFromWishlist(
-          itemId,
-        );
+        final removedRecommendation =account.wishlistRecommendationIds.remove(itemId);
+        if (!removedRecommendation) {
+  throw Exception(
+    'Recommendation not found in wishlist.',
+  );
+}
 
         if (removedRecommendation) {
           await _sendJson(
@@ -2303,200 +2306,217 @@ class GroupRoutes {
       }
 
       // ----------------------------------------------------------
-      // MARK WISHLIST ITEM AS ACQUIRED
-      // ----------------------------------------------------------
+// MARK WISHLIST ITEM AS ACQUIRED
+// ----------------------------------------------------------
 
-      final acquirePath =
-          RegExp(
-        r'^/api/v1/group/wishlist/([^/]+)/acquire$',
+final acquirePath =
+    RegExp(
+  r'^/api/v1/group/wishlist/([^/]+)/acquire$',
+);
+
+final acquireMatch =
+    acquirePath.firstMatch(path);
+
+if (request.method == 'POST' &&
+    acquireMatch != null) {
+  final itemId =
+      acquireMatch.group(1)!;
+
+  final body =
+      await _readJsonBody(request);
+
+  final profileId =
+      body['profileId']
+              ?.toString()
+              .trim() ??
+          '';
+
+  if (profileId.isEmpty) {
+    await _sendJson(
+      request,
+      HttpStatus.badRequest,
+      <String, dynamic>{
+        'error':
+            'profileId is required.',
+      },
+    );
+    return;
+  }
+
+  final profile =
+      account.getProfileById(
+    profileId,
+  );
+
+  if (profile == null) {
+    await _sendJson(
+      request,
+      HttpStatus.forbidden,
+      <String, dynamic>{
+        'error':
+            'This profile does not belong to the account.',
+      },
+    );
+    return;
+  }
+
+  // --------------------------------------------------------
+  // MEDIA WISHLIST ITEM
+  // --------------------------------------------------------
+
+  if (account.wishlistMediaIds.contains(
+    itemId,
+  )) {
+    final media =
+        database.getMediaById(
+      itemId,
+    );
+
+    if (media == null) {
+      await _sendJson(
+        request,
+        HttpStatus.notFound,
+        <String, dynamic>{
+          'error':
+              'Media not found.',
+        },
       );
+      return;
+    }
 
-      final acquireMatch =
-          acquirePath.firstMatch(path);
+    // Remove from account wishlist.
+    final removed =
+        account.wishlistMediaIds.remove(
+      itemId,
+    );
 
-      if (request.method == 'POST' &&
-          acquireMatch != null) {
-        final itemId =
-            acquireMatch.group(1)!;
+    if (!removed) {
+      await _sendJson(
+        request,
+        HttpStatus.badRequest,
+        <String, dynamic>{
+          'error':
+              'Unable to acquire wishlist item.',
+        },
+      );
+      return;
+    }
 
-        final body =
-            await _readJsonBody(request);
+    // Add the media to the selected profile's library.
+    profile.ownedMediaIds.add(
+  itemId,
+);
 
-        final profileId =
-            body['profileId']
-                    ?.toString()
-                    .trim() ??
-                '';
-
-        if (profileId.isEmpty) {
-          await _sendJson(
-            request,
-            HttpStatus.badRequest,
-            <String, dynamic>{
-              'error':
-                  'profileId is required.',
-            },
-          );
-          return;
-        }
-
-        final profile =
-            account.getProfileById(
-          profileId,
-        );
-
-        if (profile == null) {
-          await _sendJson(
-            request,
-            HttpStatus.forbidden,
-            <String, dynamic>{
-              'error':
-                  'This profile does not belong to the account.',
-            },
-          );
-          return;
-        }
-
-        if (account.isInWishlist(
+    await _sendJson(
+      request,
+      HttpStatus.ok,
+      <String, dynamic>{
+        'message':
+            'Media acquired and added to the selected profile library.',
+        'mediaId':
+            itemId,
+        'profileId':
+            profileId,
+        'isInWishlist':
+            account.wishlistMediaIds.contains(
           itemId,
-        )) {
-          final media =
-              database.getMediaById(
-            itemId,
-          );
-
-          if (media == null) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Media not found.',
-              },
-            );
-            return;
-          }
-
-          final acquired =
-              account.markWishlistItemAcquired(
-            itemId,
-            profileId: profileId,
-          );
-
-          if (!acquired) {
-            await _sendJson(
-              request,
-              HttpStatus.badRequest,
-              <String, dynamic>{
-                'error':
-                    'Unable to acquire wishlist item.',
-              },
-            );
-            return;
-          }
-
-          await _sendJson(
-            request,
-            HttpStatus.ok,
-            <String, dynamic>{
-              'message':
-                  'Media acquired and added to the selected profile library.',
-              'mediaId': itemId,
-              'profileId': profileId,
-              'isInWishlist':
-                  account.isInWishlist(
-                itemId,
-              ),
-              'isOwned':
-                  profile.ownsMedia(
-                itemId,
-              ),
-            },
-          );
-
-          return;
-        }
-
-        if (account
-            .isRecommendationInWishlist(
+        ),
+        'isOwned':
+            profile.ownsMedia(
           itemId,
-        )) {
-          final recommendation =
-              recommendationService
-                  .getRecommendation(
-            accountId: accountId,
-            recommendationId: itemId,
-          );
+        ),
+      },
+    );
 
-          if (recommendation == null) {
-            await _sendJson(
-              request,
-              HttpStatus.notFound,
-              <String, dynamic>{
-                'error':
-                    'Recommendation not found.',
-              },
-            );
-            return;
-          }
+    return;
+  }
 
-          final removed = account
-              .removeRecommendationFromWishlist(
-            itemId,
-          );
+  // --------------------------------------------------------
+  // RECOMMENDATION WISHLIST ITEM
+  // --------------------------------------------------------
 
-          if (!removed) {
-            await _sendJson(
-              request,
-              HttpStatus.badRequest,
-              <String, dynamic>{
-                'error':
-                    'Unable to acquire recommendation.',
-              },
-            );
-            return;
-          }
+  if (account.wishlistRecommendationIds.contains(
+    itemId,
+  )) {
+    final recommendation =
+        recommendationService
+            .getRecommendation(
+      accountId: accountId,
+      recommendationId: itemId,
+    );
 
-          await _sendJson(
-            request,
-            HttpStatus.ok,
-            <String, dynamic>{
-              'message':
-                  'Recommendation acquired and removed from the group wishlist.',
-              'recommendationId':
-                  recommendation.id,
-              'title':
-                  recommendation.title,
-              'type':
-                  recommendation.type,
-              'profileId':
-                  profileId,
-              'isInWishlist':
-                  account
-                      .isRecommendationInWishlist(
-                recommendation.id,
-              ),
-              'isOwned':
-                  false,
-              'catalogMedia':
-                  false,
-            },
-          );
+    if (recommendation == null) {
+      await _sendJson(
+        request,
+        HttpStatus.notFound,
+        <String, dynamic>{
+          'error':
+              'Recommendation not found.',
+        },
+      );
+      return;
+    }
 
-          return;
-        }
+    final removed =
+        account.wishlistRecommendationIds.remove(
+      itemId,
+    );
 
-        await _sendJson(
-          request,
-          HttpStatus.notFound,
-          <String, dynamic>{
-            'error':
-                'Item is not in the group wishlist.',
-          },
-        );
+    if (!removed) {
+      await _sendJson(
+        request,
+        HttpStatus.badRequest,
+        <String, dynamic>{
+          'error':
+              'Unable to acquire recommendation.',
+        },
+      );
+      return;
+    }
 
-        return;
-      }
+    await _sendJson(
+      request,
+      HttpStatus.ok,
+      <String, dynamic>{
+        'message':
+            'Recommendation acquired and removed from the group wishlist.',
+        'recommendationId':
+            recommendation.id,
+        'title':
+            recommendation.title,
+        'type':
+            recommendation.type,
+        'profileId':
+            profileId,
+        'isInWishlist':
+            account.wishlistRecommendationIds.contains(
+          recommendation.id,
+        ),
+        'isOwned':
+            false,
+        'catalogMedia':
+            false,
+      },
+    );
+
+    return;
+  }
+
+  // --------------------------------------------------------
+  // NOT FOUND
+  // --------------------------------------------------------
+
+  await _sendJson(
+    request,
+    HttpStatus.notFound,
+    <String, dynamic>{
+      'error':
+          'Item is not in the group wishlist.',
+    },
+  );
+
+  return;
+}
 
       // ----------------------------------------------------------
       // DELETE RECOMMENDATION
@@ -2515,10 +2535,16 @@ class GroupRoutes {
                 recommendationId,
           );
 
-          account
-              .removeRecommendationFromWishlist(
-            recommendationId,
-          );
+          final removed =
+    account.wishlistRecommendationIds.remove(
+  recommendationId,
+);
+
+if (!removed) {
+  throw Exception(
+    'Recommendation not found in wishlist.',
+  );
+}
 
           await _sendJson(
             request,
@@ -2618,10 +2644,12 @@ class GroupRoutes {
     String profileId,
     String accountId,
   ) {
-    return database.profileBelongsToAccount(
-      profileId,
-      accountId,
-    );
+    final accountForProfile =
+    database.getAccountForProfile(
+  profileId,
+);
+
+return accountForProfile?.id == accountId;
   }
 
   // ============================================================

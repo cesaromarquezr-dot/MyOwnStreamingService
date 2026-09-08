@@ -166,24 +166,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // Capture the NavigatorState while LoginScreen is still mounted.
-      // ProfileSelectionScreen lives after this route is replaced, so its
-      // callback must not try to use LoginScreen's BuildContext.
-      final navigator = Navigator.of(context);
-
-      navigator.pushReplacement(
+      Navigator.pushReplacement(
+        context,
         MaterialPageRoute(
           builder: (_) => ProfileSelectionScreen(
-            onProfileSelected: () {
-              navigator.pushReplacement(
-                PageRouteBuilder(
-                  pageBuilder: (_, __, ___) => const MainScreen(),
-                  transitionDuration: const Duration(milliseconds: 450),
-                  transitionsBuilder: (_, animation, __, child) =>
-                      FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
+            onProfileSelected: (context) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => const MainScreen(),
                 ),
               );
             },
@@ -474,8 +464,10 @@ class _StreamingNavigationBar extends StatelessWidget {
 
     return SafeArea(
       top: false,
+      left: false,
+      right: false,
+      minimum: const EdgeInsets.only(top: 2),
       child: Container(
-        height: 76,
         decoration: BoxDecoration(
           color: const Color(0xF20E0E0E),
           border: Border(
@@ -489,11 +481,13 @@ class _StreamingNavigationBar extends StatelessWidget {
             ),
           ],
         ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
+        child: SizedBox(
+          height: 76,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
                 _NavButton(
@@ -539,6 +533,7 @@ class _StreamingNavigationBar extends StatelessWidget {
                 onTap: onMore,
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -597,7 +592,7 @@ class _NavButtonState extends State<_NavButton> {
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
               width: active ? 92 : 68,
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -2362,7 +2357,7 @@ class _GroupEmptyCard extends StatelessWidget {
   final String subtitle;
   const _GroupEmptyCard({required this.icon, required this.title, required this.subtitle});
   @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: .06))), child: Column(children: [Icon(icon, size: 42, color: Colors.white38), const SizedBox(height: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 12))]));
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: .06))), child: Column(children: [Icon(icon, size: 42, color: Colors.white38), const SizedBox(height: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 12))]));
 }
 
 class _GroupMessageBubble extends StatelessWidget {
@@ -4193,7 +4188,7 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
                       child: Row(children: [
                         _MainProfileAvatar(profile: profile, size: 48),
                         const SizedBox(width: 12),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(selected ? 'Selected' : 'Tap to invite', style: const TextStyle(color: Colors.white70, fontSize: 12))])),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(selected ? 'Selected' : 'Tap to invite', style: const TextStyle(color: Colors.white38, fontSize: 12))])),
                         Icon(selected ? Icons.check_circle_rounded : Icons.circle_outlined, color: selected ? Colors.redAccent : Colors.white30),
                       ]),
                     ),
@@ -4253,7 +4248,7 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
           const SizedBox(height: 18),
           Container(
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
-            child: SwitchListTile.adaptive(title: const Text('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: const Text('Use subtitles for this session', style: TextStyle(color: Colors.white70, fontSize: 12)), value: subtitlesEnabled, onChanged: (value) => setState(() => subtitlesEnabled = value)),
+            child: SwitchListTile.adaptive(title: const Text('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: const Text('Use subtitles for this session', style: TextStyle(color: Colors.white38, fontSize: 12)), value: subtitlesEnabled, onChanged: (value) => setState(() => subtitlesEnabled = value)),
           ),
           const SizedBox(height: 28),
           FilledButton.icon(

@@ -7,98 +7,50 @@ class Account {
   String username;
   String email;
 
-  // Prototype only.
+  // SECURITY:
+  // This contains an Argon2id password hash.
   //
-  // DO NOT use plain-text passwords in production.
-  // This will be replaced with secure password hashing
-  // before production use.
-  String password;
+  // It must NEVER contain the user's plaintext password.
+  String passwordHash;
 
   Subscription? subscription;
 
-  // ------------------------------------------------------------
-  // PROFILES
-  // ------------------------------------------------------------
-  //
-  // Every profile has its own:
-  // - owned media
-  // - watched media
-  // - liked media
-  // - disliked media
-  // - watch progress
-  // - watch history
-  //
-  // This keeps profiles completely independent.
-  //
   final List<Profile> profiles;
 
   static const int maxProfiles = 7;
 
-  // ------------------------------------------------------------
-  // GROUP WISHLIST
-  // ------------------------------------------------------------
-  //
-  // The group wishlist belongs to the ACCOUNT rather than an
-  // individual profile.
-  //
-  // Catalog media continues to use wishlistMediaIds.
-  //
-  // Group recommendations that do NOT exist in the media catalog
-  // use wishlistRecommendationIds.
-  //
-  // This allows the group recommendation system to support titles
-  // entered manually by users.
-  //
+  // Account-level shared wishlist.
   final List<String> wishlistMediaIds;
-
-  /// IDs of approved GroupRecommendation objects that were added
-  /// to the shared group wishlist.
-  ///
-  /// This is used when a recommendation does not have a catalog
-  /// mediaId.
   final List<String> wishlistRecommendationIds;
 
   Account({
     required this.id,
     required this.username,
     required this.email,
-    required this.password,
+    required this.passwordHash,
     this.subscription,
     List<Profile>? profiles,
     List<String>? wishlistMediaIds,
     List<String>? wishlistRecommendationIds,
   })  : profiles = profiles ?? [],
-        wishlistMediaIds = wishlistMediaIds ?? [],
+        wishlistMediaIds =
+            wishlistMediaIds ?? [],
         wishlistRecommendationIds =
             wishlistRecommendationIds ?? [];
 
-  // ------------------------------------------------------------
-  // SUBSCRIPTION
-  // ------------------------------------------------------------
-
-  bool get hasActiveSubscription {
-    subscription?.expireIfNeeded();
-
-    return subscription?.isCurrentlyActive ?? false;
-  }
-
-  // ------------------------------------------------------------
-  // PROFILE HELPERS
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // PROFILE MANAGEMENT
+  // ---------------------------------------------------------------------------
 
   bool get canAddProfile {
     return profiles.length < maxProfiles;
   }
 
-  Profile? getProfileById(String profileId) {
-    final String id = profileId.trim();
-
-    if (id.isEmpty) {
-      return null;
-    }
-
-    for (final Profile profile in profiles) {
-      if (profile.id == id) {
+  Profile? getProfileById(
+    String profileId,
+  ) {
+    for (final profile in profiles) {
+      if (profile.id == profileId) {
         return profile;
       }
     }
@@ -106,17 +58,14 @@ class Account {
     return null;
   }
 
-  Profile? getProfileByName(String name) {
-    final String normalizedName =
-        name.trim().toLowerCase();
+  Profile? getProfileByName(
+    String name,
+  ) {
+    final cleanName = name.trim().toLowerCase();
 
-    if (normalizedName.isEmpty) {
-      return null;
-    }
-
-    for (final Profile profile in profiles) {
+    for (final profile in profiles) {
       if (profile.name.trim().toLowerCase() ==
-          normalizedName) {
+          cleanName) {
         return profile;
       }
     }
@@ -124,277 +73,166 @@ class Account {
     return null;
   }
 
-  bool hasProfile(String profileId) {
-    return getProfileById(profileId) != null;
+  bool hasProfile(
+    String name,
+  ) {
+    return getProfileByName(name) != null;
   }
 
-  bool addExistingProfile(Profile profile) {
+  void addExistingProfile(
+    Profile profile,
+  ) {
     if (!canAddProfile) {
-      return false;
+      throw Exception(
+        'Maximum number of profiles reached.',
+      );
     }
 
-    if (profile.id.trim().isEmpty) {
-      return false;
+    if (profiles.any(
+      (existing) => existing.id == profile.id,
+    )) {
+      throw Exception(
+        'A profile with this ID already exists.',
+      );
     }
 
-    if (hasProfile(profile.id)) {
-      return false;
+    if (hasProfile(profile.name)) {
+      throw Exception(
+        'A profile with this name already exists.',
+      );
     }
 
     profiles.add(profile);
-
-    return true;
   }
 
-  bool removeProfile(String profileId) {
-    final String id = profileId.trim();
+  void removeProfile(String profileId) {
+  final index = profiles.indexWhere(
+    (profile) => profile.id == profileId,
+  );
 
-    if (id.isEmpty) {
-      return false;
-    }
-
-    final int originalLength = profiles.length;
-
-    profiles.removeWhere(
-      (profile) => profile.id == id,
+  if (index == -1) {
+    throw Exception(
+      'Profile not found.',
     );
-
-    return profiles.length != originalLength;
   }
 
-  // ------------------------------------------------------------
-  // PROFILE MEDIA HELPERS
-  // ------------------------------------------------------------
+  profiles.removeAt(index);
+}
 
-  bool profileOwnsMedia(
-    String profileId,
+  // ---------------------------------------------------------------------------
+  // WISHLIST
+  // ---------------------------------------------------------------------------
+
+  bool hasWishlistMedia(
     String mediaId,
   ) {
-    final Profile? profile =
-        getProfileById(profileId);
-
-    if (profile == null) {
-      return false;
-    }
-
-    return profile.ownsMedia(mediaId);
+    return wishlistMediaIds.contains(mediaId);
   }
 
-  bool profileHasWatchedMedia(
-    String profileId,
-    String mediaId,
-  ) {
-    final Profile? profile =
-        getProfileById(profileId);
-
-    if (profile == null) {
-      return false;
-    }
-
-    return profile.hasWatched(mediaId);
-  }
-
-  bool profileHasLikedMedia(
-    String profileId,
-    String mediaId,
-  ) {
-    final Profile? profile =
-        getProfileById(profileId);
-
-    if (profile == null) {
-      return false;
-    }
-
-    return profile.hasLiked(mediaId);
-  }
-
-  bool profileHasDislikedMedia(
-    String profileId,
-    String mediaId,
-  ) {
-    final Profile? profile =
-        getProfileById(profileId);
-
-    if (profile == null) {
-      return false;
-    }
-
-    return profile.hasDisliked(mediaId);
-  }
-
-  // ------------------------------------------------------------
-  // GROUP WISHLIST - CATALOG MEDIA
-  // ------------------------------------------------------------
-
-  bool isInWishlist(String mediaId) {
-    final String id = mediaId.trim();
-
-    if (id.isEmpty) {
-      return false;
-    }
-
-    return wishlistMediaIds.contains(id);
-  }
-
-  bool addToWishlist(String mediaId) {
-    final String id = mediaId.trim();
-
-    if (id.isEmpty) {
-      return false;
-    }
-
-    if (isInWishlist(id)) {
-      return false;
-    }
-
-    wishlistMediaIds.add(id);
-
-    return true;
-  }
-
-  bool removeFromWishlist(String mediaId) {
-    final String id = mediaId.trim();
-
-    if (id.isEmpty) {
-      return false;
-    }
-
-    final int originalLength =
-        wishlistMediaIds.length;
-
-    wishlistMediaIds.remove(id);
-
-    return wishlistMediaIds.length !=
-        originalLength;
-  }
-
-  // ------------------------------------------------------------
-  // GROUP WISHLIST - RECOMMENDATIONS
-  // ------------------------------------------------------------
-
-  /// Returns true if an approved group recommendation is already
-  /// in the shared wishlist.
-  bool isRecommendationInWishlist(
+  bool hasWishlistRecommendation(
     String recommendationId,
   ) {
-    final String id = recommendationId.trim();
-
-    if (id.isEmpty) {
-      return false;
-    }
-
-    return wishlistRecommendationIds.contains(id);
+    return wishlistRecommendationIds.contains(
+      recommendationId,
+    );
   }
 
-  /// Adds an approved group recommendation to the shared
-  /// wishlist.
-  ///
-  /// This is used for recommendations that do not have a catalog
-  /// mediaId.
-  bool addRecommendationToWishlist(
+  void addWishlistMedia(
+    String mediaId,
+  ) {
+    if (!wishlistMediaIds.contains(mediaId)) {
+      wishlistMediaIds.add(mediaId);
+    }
+  }
+
+  void removeWishlistMedia(
+    String mediaId,
+  ) {
+    wishlistMediaIds.remove(mediaId);
+  }
+
+  void addWishlistRecommendation(
     String recommendationId,
   ) {
-    final String id = recommendationId.trim();
-
-    if (id.isEmpty) {
-      return false;
+    if (!wishlistRecommendationIds.contains(
+      recommendationId,
+    )) {
+      wishlistRecommendationIds.add(
+        recommendationId,
+      );
     }
-
-    if (isRecommendationInWishlist(id)) {
-      return false;
-    }
-
-    wishlistRecommendationIds.add(id);
-
-    return true;
   }
 
-  /// Removes a recommendation from the shared wishlist.
-  bool removeRecommendationFromWishlist(
+  void removeWishlistRecommendation(
     String recommendationId,
   ) {
-    final String id = recommendationId.trim();
-
-    if (id.isEmpty) {
-      return false;
-    }
-
-    final int originalLength =
-        wishlistRecommendationIds.length;
-
-    wishlistRecommendationIds.remove(id);
-
-    return wishlistRecommendationIds.length !=
-        originalLength;
+    wishlistRecommendationIds.remove(
+      recommendationId,
+    );
   }
 
-  // ------------------------------------------------------------
-  // ACQUIRE GROUP WISHLIST ITEM - CATALOG MEDIA
-  // ------------------------------------------------------------
-  //
-  // Removes the media from the shared account wishlist and,
-  // optionally, adds it to a specific profile's library.
-  //
-  bool markWishlistItemAcquired(
-    String mediaId, {
-    String? profileId,
+  void markWishlistItemAcquired({
+    String? mediaId,
+    String? recommendationId,
+    Profile? profile,
   }) {
-    final String id = mediaId.trim();
+    if (mediaId != null) {
+      removeWishlistMedia(mediaId);
 
-    if (id.isEmpty) {
-      return false;
+      if (profile != null &&
+          !profile.ownsMedia(mediaId)) {
+        profile.addOwnedMedia(mediaId);
+      }
     }
 
-    final bool removed =
-        removeFromWishlist(id);
-
-    if (profileId != null &&
-        profileId.trim().isNotEmpty) {
-      final Profile? profile =
-          getProfileById(profileId);
-
-      profile?.addOwnedMedia(id);
+    if (recommendationId != null) {
+      removeWishlistRecommendation(
+        recommendationId,
+      );
     }
-
-    return removed;
   }
 
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // SUBSCRIPTION
+  // ---------------------------------------------------------------------------
+
+  bool get hasActiveSubscription {
+    subscription?.expireIfNeeded();
+
+    return subscription?.isCurrentlyActive ??
+        false;
+  }
+
+  // ---------------------------------------------------------------------------
   // JSON
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
 
   Map<String, dynamic> toJson({
     bool includeSensitiveData = false,
   }) {
-    final Map<String, dynamic> data =
-        <String, dynamic>{
+    final data = <String, dynamic>{
       'id': id,
       'username': username,
       'email': email,
 
       'profiles': profiles
           .map(
-            (Profile profile) =>
-                profile.toJson(),
+            (profile) => profile.toJson(),
           )
           .toList(),
 
-      'profileCount':
-          profiles.length,
+      'profileCount': profiles.length,
+      'maxProfiles': maxProfiles,
 
-      'maxProfiles':
-          maxProfiles,
-
-      // Shared account-level group wishlist
-      // containing catalog media.
       'wishlistMediaIds':
-          wishlistMediaIds,
+          List<String>.from(
+        wishlistMediaIds,
+      ),
 
-      // Shared account-level group wishlist
-      // containing approved recommendations that
-      // may not exist in the catalog.
       'wishlistRecommendationIds':
-          wishlistRecommendationIds,
+          List<String>.from(
+        wishlistRecommendationIds,
+      ),
 
       'subscription':
           subscription?.toJson(),
@@ -403,8 +241,13 @@ class Account {
           hasActiveSubscription,
     };
 
+    // SECURITY:
+    // The password hash is intentionally excluded from normal API responses.
+    //
+    // This parameter exists only for tightly controlled internal/debug use.
+    // It should not be used by HTTP routes.
     if (includeSensitiveData) {
-      data['password'] = password;
+      data['passwordHash'] = passwordHash;
     }
 
     return data;
