@@ -214,6 +214,33 @@ class BackendApi {
   }
 
   // ==========================================================
+  // CROSS-ACCOUNT GROUP CHAT
+  // ==========================================================
+  Future<Map<String, dynamic>> createGroupChatRoom({required String name, required String profileId, Set<String>? invitedProfiles}) async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/group/chat'), headers: _headers, body: jsonEncode({'name': name.trim(), 'profileId': profileId.trim(), 'invitedProfiles': (invitedProfiles ?? {}).toList()}));
+    return _requireSuccess(response, 'Unable to create group chat room.');
+  }
+
+  Future<Map<String, dynamic>> getGroupChatRooms() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/group/chat'), headers: _headers);
+    return _requireSuccess(response, 'Unable to retrieve group chat rooms.');
+  }
+
+  Future<Map<String, dynamic>> getGroupChatRoom(String roomId) async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/group/chat/${Uri.encodeComponent(roomId)}/messages'), headers: _headers);
+    return _requireSuccess(response, 'Unable to retrieve group chat room.');
+  }
+
+  Future<Map<String, dynamic>> sendGroupChatMessage({required String roomId, required String profileId, required String message}) async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/group/chat/${Uri.encodeComponent(roomId)}/messages'), headers: _headers, body: jsonEncode({'profileId': profileId, 'message': message}));
+    return _requireSuccess(response, 'Unable to send group chat message.');
+  }
+
+  // ==========================================================
   // PAYMENT
   // ==========================================================
 

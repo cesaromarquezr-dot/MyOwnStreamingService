@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'group_watch.dart';
 
 class GroupChatScreen extends StatefulWidget {
   const GroupChatScreen({super.key});
@@ -54,6 +55,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
       await Future.wait<void>([
         controller.loadGroupRecommendations(),
         controller.loadGroupWishlist(),
+        controller.loadGroupChatRoom(),
       ]);
     } catch (_) {
       // The controller exposes its own error state.
@@ -188,26 +190,17 @@ class _GroupChatScreenState extends State<GroupChatScreen>
             : 'Invitations sent for ${media.title}.',
       );
 
-      /*
-       * group_watch.dart will be connected here next.
-       *
-       * Once that file exists, this is the navigation point:
-       *
-       * Navigator.of(context).push(
-       *   MaterialPageRoute(
-       *     builder: (_) => GroupWatchScreen(
-       *       sessionId: session.id,
-       *       media: media,
-       *     ),
-       *   ),
-       * );
-       *
-       * The backend session is already created above, so the lobby
-       * will have a real session ID and participant state.
-       */
-
-      // Keep the variable referenced until GroupWatchScreen is connected.
-      debugPrint('Created Group Watch session: ${session.id}');
+      // Open the real synchronized Group Watch lobby immediately.
+      // The backend session is already created, so every participant
+      // enters the same session ID and receives live state updates.
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GroupWatchScreen(
+            sessionId: session.id,
+            media: media,
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
 
@@ -227,6 +220,37 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     }
   }
 
+  Future<void> _createCrossAccountRoom() async {
+    final nameController = TextEditingController(text: 'Movie Night');
+    final inviteController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create Group Room'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Room name')),
+          const SizedBox(height: 12),
+          TextField(controller: inviteController, decoration: const InputDecoration(labelText: 'Invite usernames/emails', hintText: 'alex@example.com, sam')),
+          const SizedBox(height: 8),
+          const Text('Invites are cross-account. Each invited account contributes its first profile to the room.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('CREATE')),
+        ],
+      ),
+    );
+    if (result != true) { nameController.dispose(); inviteController.dispose(); return; }
+    final profileId = controller.currentProfile?.id;
+    if (profileId == null || profileId.isEmpty) { _showMessage('Select a profile first.', isError: true); return; }
+    try {
+      final invites = inviteController.text.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toSet();
+      await controller.createCrossAccountGroupChat(name: nameController.text.trim(), profileId: profileId, invitedProfiles: invites);
+      if (mounted) _showMessage('Cross-account group room created.');
+    } catch (error) { if (mounted) _showMessage(_cleanError(error), isError: true); }
+    nameController.dispose(); inviteController.dispose();
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
 
@@ -239,7 +263,13 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     });
 
     try {
-      controller.sendGroupMessage(message: text);
+      final room = controller.activeGroupChatRoom;
+      final profileId = controller.currentProfile?.id;
+      if (room != null && profileId != null && profileId.isNotEmpty) {
+        await controller.sendCrossAccountGroupMessage(roomId: room.id, profileId: profileId, message: text);
+      } else {
+        controller.sendGroupMessage(message: text);
+      }
       _messageController.clear();
     } catch (error) {
       if (mounted) {
@@ -546,6 +576,11 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                 ),
               ),
               _CircleButton(
+                icon: Icons.add_comment_rounded,
+                onTap: _createCrossAccountRoom,
+              ),
+              const SizedBox(width: 8),
+              _CircleButton(
                 icon: Icons.refresh_rounded,
                 onTap: _refresh,
               ),
@@ -557,6 +592,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
   }
 
   Widget _buildMembers() {
+    final backendMembers = controller.activeGroupChatRoom?.members ?? <Map<String, dynamic>>[];
     final profiles = _profiles;
 
     return Padding(
@@ -595,9 +631,9 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    profiles.isEmpty
-                        ? 'Private movie room'
-                        : '${profiles.length} ${profiles.length == 1 ? 'member' : 'members'}',
+                    backendMembers.isEmpty
+                        ? (profiles.isEmpty ? 'Private movie room' : '${profiles.length} ${profiles.length == 1 ? 'member' : 'members'}')
+                        : '${backendMembers.length} ${backendMembers.length == 1 ? 'member' : 'members'}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -606,7 +642,9 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'Recommend something everyone will love.',
+                    backendMembers.isEmpty
+                        ? 'Recommend something everyone will love.'
+                        : backendMembers.map((m) => m['profileName']?.toString() ?? 'Profile').join(' • '),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.48),
                       fontSize: 12,
@@ -875,73 +913,33 @@ class _GroupChatScreenState extends State<GroupChatScreen>
   }
 
   Widget _buildMessages() {
-    final messages = List<ChatMessage>.from(
-      controller.groupMessages,
-    );
-
-    if (messages.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Container(
-          margin: const EdgeInsets.only(top: 5),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 28,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.025),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.05),
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 32,
-                color: Colors.white.withValues(alpha: 0.25),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Start the conversation',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                'Recommend a movie or tell everyone what you want to watch.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.42),
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
+    final roomMessages = controller.activeGroupChatRoom?.messages;
+    if (roomMessages != null) {
+      if (roomMessages.isEmpty) {
+        return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(24), child: Center(child: Text('Start the conversation', style: TextStyle(color: Colors.white54)))));
+      }
+      return SliverList.builder(
+        itemCount: roomMessages.length,
+        itemBuilder: (context, index) {
+          final message = roomMessages[index];
+          final isMine = message.profileId == controller.currentProfile?.id;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ChatBubble(message: ChatMessage(id: message.id, sender: message.senderName, message: message.message, timestamp: message.timestamp), isMine: isMine),
+          );
+        },
       );
     }
-
+    final messages = List<ChatMessage>.from(controller.groupMessages);
+    if (messages.isEmpty) {
+      return SliverToBoxAdapter(child: Container(margin: const EdgeInsets.only(top: 5), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28), child: const Center(child: Text('Start the conversation', style: TextStyle(color: Colors.white54)))));
+    }
     return SliverList.builder(
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final message = messages[index];
-
-        final isMine = message.sender == _profileName ||
-            message.sender ==
-                (controller.currentAccount?.username ?? '');
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _ChatBubble(
-            message: message,
-            isMine: isMine,
-          ),
-        );
+        final isMine = message.sender == _profileName || message.sender == (controller.currentAccount?.username ?? '');
+        return Padding(padding: const EdgeInsets.only(bottom: 12), child: _ChatBubble(message: message, isMine: isMine));
       },
     );
   }

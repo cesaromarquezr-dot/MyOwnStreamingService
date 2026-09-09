@@ -9,6 +9,18 @@ import '../models/profile.dart';
 import '../models/subscription.dart';
 import 'subscription_service.dart';
 
+class AuthLoginResult {
+  final String token;
+  final bool suspicious;
+  final List<String> reasons;
+
+  const AuthLoginResult({
+    required this.token,
+    required this.suspicious,
+    required this.reasons,
+  });
+}
+
 class AuthService {
   final Database database;
   final SubscriptionService subscriptionService;
@@ -172,35 +184,26 @@ class AuthService {
   // LOGIN
   // ---------------------------------------------------------------------------
 
-  Future<String> login({
+  Future<AuthLoginResult> login({
     required String login,
     required String password,
+    String ipAddress = 'unknown',
+    String userAgent = 'unknown',
   }) async {
     final cleanLogin = login.trim();
 
     if (cleanLogin.isEmpty || password.isEmpty) {
-      throw Exception(
-        'Invalid username/email or password.',
-      );
+      database.recordFailedLogin(cleanLogin);
+      throw Exception('Invalid username/email or password.');
     }
 
     Account? account;
+    account = database.getAccountByUsername(cleanLogin);
+    account ??= database.getAccountByEmail(cleanLogin);
 
-    // Try username first.
-    account = database.getAccountByUsername(
-      cleanLogin,
-    );
-
-    // Then try email.
-    account ??= database.getAccountByEmail(
-      cleanLogin,
-    );
-
-    // Always use the same public error.
     if (account == null) {
-      throw Exception(
-        'Invalid username/email or password.',
-      );
+      database.recordFailedLogin(cleanLogin);
+      throw Exception('Invalid username/email or password.');
     }
 
     final passwordValid = await _verifyPassword(
@@ -209,22 +212,12 @@ class AuthService {
     );
 
     if (!passwordValid) {
-      throw Exception(
-        'Invalid username/email or password.',
-      );
+      database.recordFailedLogin(cleanLogin);
+      throw Exception('Invalid username/email or password.');
     }
 
-    // PasswordGuard can detect hashes that should be upgraded.
-    //
-    // This gives us a future migration path if our Argon2id parameters
-    // change later.
-    if (PasswordGuard.needsRehash(
-      account.passwordHash,
-    )) {
-      account.passwordHash = await _hashPassword(
-        password,
-      );
-
+    if (PasswordGuard.needsRehash(account.passwordHash)) {
+      account.passwordHash = await _hashPassword(password);
       database.saveAccount(account);
     }
 
@@ -234,15 +227,42 @@ class AuthService {
       );
     }
 
+    final recentFailures = database.recentFailedLoginCount(cleanLogin);
+    final priorSessions = database.getSessionsForAccount(account.id);
+
+    final normalizedIp = ipAddress.trim().isEmpty ? 'unknown' : ipAddress.trim();
+    final normalizedAgent = userAgent.trim().isEmpty ? 'unknown' : userAgent.trim();
+
+    final fingerprint = '$normalizedIp|$normalizedAgent';
+    final knownFingerprints = database.getKnownLoginFingerprints(account.id);
+    final knownDevice = knownFingerprints.contains(fingerprint);
+
+    final reasons = <String>[];
+    if (knownFingerprints.isNotEmpty && !knownDevice) {
+      reasons.add('new browser or device or network');
+    }
+    if (recentFailures >= 2) {
+      reasons.add('$recentFailures recent failed login attempts');
+    }
+
+    final suspicious = reasons.isNotEmpty;
     final token = _generateSessionToken();
 
     database.saveSession(
       token,
       account.id,
       ttl: Database.defaultSessionLifetime,
+      ipAddress: normalizedIp,
+      userAgent: normalizedAgent,
     );
+    database.clearFailedLoginAttempts(cleanLogin);
+    knownFingerprints.add(fingerprint);
 
-    return token;
+    return AuthLoginResult(
+      token: token,
+      suspicious: suspicious,
+      reasons: reasons,
+    );
   }
 
   // ---------------------------------------------------------------------------

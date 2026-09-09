@@ -235,11 +235,20 @@ class AuthRoutes {
       'password',
     );
 
-    final token =
+    final clientIp =
+        request.connectionInfo?.remoteAddress.address ?? 'unknown';
+    final userAgent =
+        request.headers.value(HttpHeaders.userAgentHeader) ?? 'unknown';
+
+    final loginResult =
         await authService.login(
       login: login,
       password: password,
+      ipAddress: clientIp,
+      userAgent: userAgent,
     );
+
+    final token = loginResult.token;
 
     final account =
         authService.accountFromToken(
@@ -263,6 +272,10 @@ class AuthRoutes {
                 .toIso8601String(),
         'account':
             account?.toJson(),
+        'security': {
+          'suspicious': loginResult.suspicious,
+          'reasons': loginResult.reasons,
+        },
       },
     );
   }
@@ -399,6 +412,8 @@ class AuthRoutes {
           'lastUsedAt':
               session.lastUsedAt
                   .toIso8601String(),
+          'ipAddress': session.ipAddress,
+          'userAgent': session.userAgent,
         },
         'accountId': account.id,
       },

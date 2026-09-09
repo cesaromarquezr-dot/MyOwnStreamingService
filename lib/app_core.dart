@@ -170,6 +170,38 @@ class ActivityItem {
   });
 }
 
+class BackendGroupChatMessage {
+  final String id;
+  final String profileId;
+  final String senderName;
+  final String message;
+  final DateTime timestamp;
+
+  BackendGroupChatMessage({required this.id, required this.profileId, required this.senderName, required this.message, required this.timestamp});
+
+  factory BackendGroupChatMessage.fromJson(Map<String, dynamic> json) => BackendGroupChatMessage(
+    id: json['id']?.toString() ?? '', profileId: json['profileId']?.toString() ?? '', senderName: json['senderName']?.toString() ?? 'Profile', message: json['message']?.toString() ?? '', timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ?? DateTime.now(),
+  );
+}
+
+class BackendGroupChatRoom {
+  final String id;
+  final String name;
+  final List<Map<String, dynamic>> members;
+  final List<BackendGroupChatMessage> messages;
+  BackendGroupChatRoom({required this.id, required this.name, required this.members, required this.messages});
+
+  factory BackendGroupChatRoom.fromJson(Map<String, dynamic> json) {
+    final rawMembers = json['members'];
+    final rawMessages = json['messages'];
+    return BackendGroupChatRoom(
+      id: json['id']?.toString() ?? '', name: json['name']?.toString() ?? 'Group Room',
+      members: rawMembers is List ? rawMembers.whereType<Map>().map((m) => Map<String,dynamic>.from(m)).toList() : <Map<String,dynamic>>[],
+      messages: rawMessages is List ? rawMessages.whereType<Map>().map((m) => BackendGroupChatMessage.fromJson(Map<String,dynamic>.from(m))).toList() : <BackendGroupChatMessage>[],
+    );
+  }
+}
+
 class ChatMessage {
   final String id;
   final String sender;
@@ -553,6 +585,8 @@ class GroupWatchSession {
 }
 
 class AppController extends ChangeNotifier {
+  Map<String, dynamic>? lastLoginSecurity;
+
   AppController._();
 
   static final AppController instance =
@@ -586,6 +620,10 @@ class AppController extends ChangeNotifier {
 
   final List<ChatMessage> groupMessages =
       <ChatMessage>[];
+
+  BackendGroupChatRoom? activeGroupChatRoom;
+  bool groupChatLoading = false;
+  String? groupChatError;
 
   final List<WishlistItem> wishlist =
       <WishlistItem>[];
@@ -881,6 +919,10 @@ class AppController extends ChangeNotifier {
           usernameOrEmail.trim(),
       password: password,
     );
+
+    lastLoginSecurity = response['security'] is Map
+        ? Map<String, dynamic>.from(response['security'] as Map)
+        : null;
 
     final accountData =
         response['account'];
@@ -1571,6 +1613,50 @@ class AppController extends ChangeNotifier {
     if (activity.length > 100) {
       activity.removeLast();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // BACKEND CROSS-ACCOUNT GROUP CHAT
+  // ---------------------------------------------------------------------------
+
+  Future<void> loadGroupChatRoom({String? roomId}) async {
+    if (!backendApi.isAuthenticated) return;
+    groupChatLoading = true;
+    groupChatError = null;
+    notifyListeners();
+    try {
+      Map<String, dynamic> response;
+      if (roomId != null && roomId.isNotEmpty) {
+        response = await backendApi.getGroupChatRoom(roomId);
+      } else {
+        final rooms = await backendApi.getGroupChatRooms();
+        final data = rooms['rooms'];
+        if (data is! List || data.isEmpty) {
+          activeGroupChatRoom = null;
+          return;
+        }
+        response = {'room': data.first};
+      }
+      final raw = response['room'];
+      if (raw is Map) activeGroupChatRoom = BackendGroupChatRoom.fromJson(Map<String,dynamic>.from(raw));
+    } catch (error) {
+      groupChatError = error.toString();
+    } finally {
+      groupChatLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createCrossAccountGroupChat({required String name, required String profileId, Set<String>? invitedProfiles}) async {
+    final response = await backendApi.createGroupChatRoom(name: name, profileId: profileId, invitedProfiles: invitedProfiles);
+    final raw = response['room'];
+    if (raw is Map) activeGroupChatRoom = BackendGroupChatRoom.fromJson(Map<String,dynamic>.from(raw));
+    notifyListeners();
+  }
+
+  Future<void> sendCrossAccountGroupMessage({required String roomId, required String profileId, required String message}) async {
+    await backendApi.sendGroupChatMessage(roomId: roomId, profileId: profileId, message: message);
+    await loadGroupChatRoom(roomId: roomId);
   }
 
   // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import '../models/account.dart';
 import '../models/media.dart';
 import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
+import '../models/group_chat_room.dart';
 import '../models/profile.dart';
 
 class SessionRecord {
@@ -11,6 +12,9 @@ class SessionRecord {
   final DateTime createdAt;
   final DateTime expiresAt;
 
+  final String ipAddress;
+  final String userAgent;
+
   DateTime lastUsedAt;
 
   SessionRecord({
@@ -19,6 +23,8 @@ class SessionRecord {
     required this.createdAt,
     required this.expiresAt,
     required this.lastUsedAt,
+    this.ipAddress = 'unknown',
+    this.userAgent = 'unknown',
   });
 
   bool get isExpired {
@@ -30,6 +36,8 @@ class SessionRecord {
       'createdAt': createdAt.toIso8601String(),
       'expiresAt': expiresAt.toIso8601String(),
       'lastUsedAt': lastUsedAt.toIso8601String(),
+      'ipAddress': ipAddress,
+      'userAgent': userAgent,
     };
   }
 }
@@ -74,6 +82,42 @@ class Database {
 
   final Map<String, SessionRecord> sessions = {};
 
+  // Recent failed login timestamps, keyed by normalized username/email.
+  // This is intentionally bounded and in-memory for the current backend.
+  final Map<String, List<DateTime>> failedLoginAttempts = {};
+
+  final Map<String, Set<String>> knownLoginFingerprints = {};
+
+  Set<String> getKnownLoginFingerprints(String accountId) =>
+      knownLoginFingerprints.putIfAbsent(accountId, () => <String>{});
+
+  void recordFailedLogin(String login) {
+    final key = login.trim().toLowerCase();
+    if (key.isEmpty) return;
+
+    final now = DateTime.now();
+    final attempts = failedLoginAttempts.putIfAbsent(key, () => []);
+    attempts.removeWhere((time) => now.difference(time) > const Duration(minutes: 15));
+    attempts.add(now);
+    if (attempts.length > 10) {
+      attempts.removeRange(0, attempts.length - 10);
+    }
+  }
+
+  int recentFailedLoginCount(String login) {
+    final key = login.trim().toLowerCase();
+    final attempts = failedLoginAttempts[key];
+    if (attempts == null) return 0;
+
+    final now = DateTime.now();
+    attempts.removeWhere((time) => now.difference(time) > const Duration(minutes: 15));
+    return attempts.length;
+  }
+
+  void clearFailedLoginAttempts(String login) {
+    failedLoginAttempts.remove(login.trim().toLowerCase());
+  }
+
   // ---------------------------------------------------------------------------
   // MEDIA
   // ---------------------------------------------------------------------------
@@ -95,6 +139,8 @@ class Database {
   final Map<String, GroupWatchSession>
       groupWatchSessionsById =
       <String, GroupWatchSession>{};
+
+  final Map<String, GroupChatRoom> groupChatRoomsById = <String, GroupChatRoom>{};
 
   // ---------------------------------------------------------------------------
   // ACCOUNTS
@@ -260,6 +306,8 @@ class Database {
     String token,
     String accountId, {
     Duration? ttl,
+    String ipAddress = 'unknown',
+    String userAgent = 'unknown',
   }) {
     final now = DateTime.now();
 
@@ -272,6 +320,8 @@ class Database {
       createdAt: now,
       expiresAt: now.add(lifetime),
       lastUsedAt: now,
+      ipAddress: ipAddress,
+      userAgent: userAgent,
     );
   }
 

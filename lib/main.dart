@@ -9,6 +9,7 @@ import 'smart_search.dart';
 import 'hollywood.dart';
 import 'details.dart';
 import 'profiles.dart';
+import 'group_chat.dart';
 void main() {
   runApp(const MyStreamingService());
 }
@@ -165,6 +166,78 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
+
+      final security = controller.lastLoginSecurity;
+      final suspicious = security?['suspicious'] == true;
+      if (suspicious) {
+        final reasons = (security?['reasons'] as List?)
+                ?.map((value) => value.toString())
+                .toList() ??
+            <String>[];
+
+        final proceed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded),
+                SizedBox(width: 10),
+                Expanded(child: Text('Suspicious Login Detected')),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'We noticed something unusual about this sign-in.',
+                ),
+                if (reasons.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  ...reasons.map(
+                    (reason) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• '),
+                          Expanded(child: Text(reason)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                const Text(
+                  'If this was not you, sign out of all sessions and change your password.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('SIGN OUT'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('THIS WAS ME'),
+              ),
+            ],
+          ),
+        );
+
+        if (proceed != true) {
+          try {
+            await controller.backendApi.logout();
+          } catch (_) {}
+          if (mounted) {
+            setState(() => loggingIn = false);
+          }
+          return;
+        }
+      }
 
       Navigator.pushReplacement(
         context,

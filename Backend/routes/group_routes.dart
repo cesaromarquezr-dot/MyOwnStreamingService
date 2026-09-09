@@ -5,6 +5,7 @@ import '../database/database.dart';
 import '../middleware/authentication.dart';
 import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
+import '../models/group_chat_room.dart';
 import '../services/group_recommendation_service.dart';
 import '../services/group_watch_service.dart';
 
@@ -40,6 +41,85 @@ class GroupRoutes {
       final account = authenticatedAccount;
       final accountId = account.id;
       final path = request.uri.path;
+
+      // ==========================================================
+      // CROSS-ACCOUNT GROUP CHAT
+      // ==========================================================
+      if (request.method == 'POST' && path == '/api/v1/group/chat') {
+        final body = await _readJsonBody(request);
+        final name = body['name']?.toString().trim() ?? '';
+        final profileId = body['profileId']?.toString().trim() ?? '';
+        final invites = _readStringSet(body['invitedProfiles']);
+        if (name.isEmpty || profileId.isEmpty) {
+          await _sendJson(request, HttpStatus.badRequest, {'error': 'name and profileId are required.'});
+          return;
+        }
+        if (!_profileBelongsToAccount(profileId, accountId)) {
+          await _sendJson(request, HttpStatus.forbidden, {'error': 'This profile does not belong to the account.'});
+          return;
+        }
+        final members = <GroupChatMember>[];
+        final host = account.getProfileById(profileId)!;
+        members.add(GroupChatMember(profileId: host.id, profileName: host.name, username: account.username, accountId: accountId));
+        for (final identifier in invites) {
+          final target = database.getAccountByUsername(identifier) ?? database.getAccountByEmail(identifier);
+          if (target == null) continue;
+          for (final profile in target.profiles) {
+            if (profile.id == profileId) continue;
+            members.add(GroupChatMember(profileId: profile.id, profileName: profile.name, username: target.username, accountId: target.id));
+            break;
+          }
+        }
+        final room = GroupChatRoom(
+          id: 'chat_${DateTime.now().microsecondsSinceEpoch}',
+          name: name,
+          ownerAccountId: accountId,
+          members: members,
+          messages: <GroupChatMessage>[],
+          createdAt: DateTime.now(),
+        );
+        database.groupChatRoomsById[room.id] = room;
+        await _sendJson(request, HttpStatus.created, {'room': room.toJson()});
+        return;
+      }
+
+      if (request.method == 'GET' && path == '/api/v1/group/chat') {
+        final rooms = database.groupChatRoomsById.values.where((room) => room.members.any((m) => m.accountId == accountId)).map((r) => r.toJson()).toList();
+        await _sendJson(request, HttpStatus.ok, {'rooms': rooms});
+        return;
+      }
+
+      final chatMessageMatch = RegExp(r'^/api/v1/group/chat/([^/]+)/messages$').firstMatch(path);
+      if (chatMessageMatch != null) {
+        final roomId = chatMessageMatch.group(1)!;
+        final room = database.groupChatRoomsById[roomId];
+        if (room == null || !room.members.any((m) => m.accountId == accountId)) {
+          await _sendJson(request, HttpStatus.notFound, {'error': 'Group chat room not found.'});
+          return;
+        }
+        if (request.method == 'GET') {
+          await _sendJson(request, HttpStatus.ok, {'room': room.toJson()});
+          return;
+        }
+        if (request.method == 'POST') {
+          final body = await _readJsonBody(request);
+          final profileId = body['profileId']?.toString().trim() ?? '';
+          final message = body['message']?.toString().trim() ?? '';
+          GroupChatMember? member;
+          for (final candidate in room.members) {
+            if (candidate.profileId == profileId && candidate.accountId == accountId) { member = candidate; break; }
+          }
+          if (member == null || message.isEmpty) {
+            await _sendJson(request, HttpStatus.badRequest, {'error': 'A valid profileId and non-empty message are required.'});
+            return;
+          }
+          final chatMessage = GroupChatMessage(id: 'msg_${DateTime.now().microsecondsSinceEpoch}', profileId: profileId, senderName: member.profileName, message: message, timestamp: DateTime.now());
+          room.messages.add(chatMessage);
+          if (room.messages.length > 500) room.messages.removeRange(0, room.messages.length - 500);
+          await _sendJson(request, HttpStatus.created, {'message': chatMessage.toJson()});
+          return;
+        }
+      }
 
       // ==========================================================
       // GROUP WATCH
