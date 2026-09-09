@@ -11,6 +11,8 @@ class Media {
   final int? year;
   final String? posterUrl;
   final String? description;
+  final double? rating;
+  final String? ratingReason;
 
   // Trailer / preview video.
   //
@@ -61,6 +63,8 @@ class Media {
     this.year,
     this.posterUrl,
     this.description,
+    this.rating,
+    this.ratingReason,
     this.trailerUrl,
     this.genres = const [],
     this.tags = const [],
@@ -97,6 +101,8 @@ class Media {
       'year': year,
       'posterUrl': posterUrl,
       'description': description,
+      'rating': rating,
+      'ratingReason': ratingReason,
       'trailerUrl': trailerUrl,
 
       'genres': List<String>.from(genres),
@@ -139,6 +145,8 @@ class Media {
       year: _parseInt(json['year']),
       posterUrl: json['posterUrl']?.toString(),
       description: json['description']?.toString(),
+      rating: json['rating'] is num ? (json['rating'] as num).toDouble() : double.tryParse(json['rating']?.toString() ?? ''),
+      ratingReason: json['ratingReason']?.toString(),
       trailerUrl: _nullableString(json['trailerUrl']),
 
       genres: _stringList(json['genres']),

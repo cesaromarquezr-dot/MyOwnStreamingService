@@ -9,7 +9,7 @@ import 'smart_search.dart';
 import 'hollywood.dart';
 import 'details.dart';
 import 'profiles.dart';
-import 'group_chat.dart';
+import 'feature_center.dart';
 void main() {
   runApp(const MyStreamingService());
 }
@@ -165,79 +165,57 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
 
-      if (!mounted) return;
-
       final security = controller.lastLoginSecurity;
-      final suspicious = security?['suspicious'] == true;
-      if (suspicious) {
-        final reasons = (security?['reasons'] as List?)
-                ?.map((value) => value.toString())
-                .toList() ??
-            <String>[];
+      if (security?['suspicious'] == true) {
+        final question = security?['question']?.toString().trim();
+        if (question == null || question.isEmpty) {
+          await controller.logoutFromBackend();
+          throw Exception('This sign-in was flagged as suspicious, but no security question is configured.');
+        }
 
-        final proceed = await showDialog<bool>(
+        if (!mounted) return;
+        final answerController = TextEditingController();
+        final verified = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded),
-                SizedBox(width: 10),
-                Expanded(child: Text('Suspicious Login Detected')),
-              ],
-            ),
+            title: const Text('Suspicious Login Detected'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'We noticed something unusual about this sign-in.',
-                ),
-                if (reasons.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  ...reasons.map(
-                    (reason) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('• '),
-                          Expanded(child: Text(reason)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                const Text(
-                  'If this was not you, sign out of all sessions and change your password.',
-                  style: TextStyle(color: Colors.white70),
-                ),
+                const Text('This sign-in looks different from a known device or follows recent failed attempts.'),
+                const SizedBox(height: 16),
+                const Text('Security question', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Text(question, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 14),
+                TextField(controller: answerController, autofocus: true, obscureText: true, decoration: const InputDecoration(labelText: 'Enter your answer')),
               ],
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('SIGN OUT'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('THIS WAS ME'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('SIGN OUT')),
+              FilledButton(onPressed: () async {
+                try {
+                  final ok = await controller.backendApi.verifySecurityAnswer(answerController.text);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, ok);
+                } catch (_) {
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, false);
+                }
+              }, child: const Text('VERIFY')),
             ],
           ),
         );
-
-        if (proceed != true) {
-          try {
-            await controller.backendApi.logout();
-          } catch (_) {}
-          if (mounted) {
-            setState(() => loggingIn = false);
-          }
+        answerController.dispose();
+        if (verified != true) {
+          await controller.logoutFromBackend();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Access denied. The security answer was incorrect.')));
           return;
         }
       }
+
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -395,19 +373,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ============================================================
-// MAIN SCREEN
-// ============================================================
-
-
-// ============================================================
-// HOME CUSTOMIZATION
-// ============================================================
-
-// ============================================================
-// HOME CUSTOMIZATION + MAIN SCREEN NAVIGATION
-// ============================================================
-
 class HomeCustomization {
   bool showHero;
   bool showContinueWatching;
@@ -416,6 +381,7 @@ class HomeCustomization {
   bool showTvShows;
   bool showNewAdditions;
   bool showAllLibrary;
+  bool showRecommendations;
   String heroStyle;
   String cardSize;
   String navbarPosition;
@@ -430,6 +396,7 @@ class HomeCustomization {
     this.showTvShows = true,
     this.showNewAdditions = true,
     this.showAllLibrary = false,
+    this.showRecommendations = true,
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
     this.navbarPosition = 'Bottom',
@@ -442,6 +409,7 @@ class HomeCustomization {
           'TV Shows',
           'New Additions',
           'All Library',
+          'Recommendations',
         ];
 
   HomeCustomization copy() => HomeCustomization(
@@ -452,6 +420,7 @@ class HomeCustomization {
         showTvShows: showTvShows,
         showNewAdditions: showNewAdditions,
         showAllLibrary: showAllLibrary,
+        showRecommendations: showRecommendations,
         heroStyle: heroStyle,
         cardSize: cardSize,
         navbarPosition: navbarPosition,
@@ -474,6 +443,7 @@ class HomeCustomizationStore {
     settings.showTvShows = value.showTvShows;
     settings.showNewAdditions = value.showNewAdditions;
     settings.showAllLibrary = value.showAllLibrary;
+    settings.showRecommendations = value.showRecommendations;
     settings.heroStyle = value.heroStyle;
     settings.cardSize = value.cardSize;
     settings.navbarPosition = value.navbarPosition;
@@ -501,21 +471,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
   late DetailsCustomization detailsDraft;
   _CustomizationPage selectedPage = _CustomizationPage.home;
-static const detailsSectionNames = <String>[
-  'Poster',
-  'Title',
-  'Metadata',
-  'Ownership',
-  'Description',
-  'Seasons',
-  'Play',
-  'Trailer',
-  'Group Watch',
-  'Audio & Subtitles',
-  'Reactions',
-  'Information',
-  'Library',
-];
   @override
   void initState() {
     super.initState();
@@ -861,6 +816,14 @@ static const detailsSectionNames = <String>[
           values: const ['Left', 'Center', 'Right'],
           onChanged: (value) => setState(() => detailsDraft.titleAlignment = value),
         ),
+        const SizedBox(height: 12),
+        _dropdown(label: 'Poster position', value: detailsDraft.posterPosition, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.posterPosition = v)),
+        const SizedBox(height: 12),
+        _dropdown(label: 'Poster size', value: detailsDraft.posterSize, values: const ['Small', 'Medium', 'Large'], onChanged: (v) => setState(() => detailsDraft.posterSize = v)),
+        const SizedBox(height: 12),
+        _dropdown(label: 'Button alignment', value: detailsDraft.buttonAlignment, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.buttonAlignment = v)),
+        const SizedBox(height: 12),
+        _dropdown(label: 'Information alignment', value: detailsDraft.informationAlignment, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.informationAlignment = v)),
         const SizedBox(height: 24),
         const Text(
           'DETAILS SECTIONS',
@@ -974,6 +937,10 @@ static const detailsSectionNames = <String>[
           values: const ['Top to Bottom', 'Bottom to Top'],
           onChanged: (value) => setState(() => detailsDraft.seasonOrder = value),
         ),
+        const SizedBox(height: 12),
+        _dropdown(label: 'Season selector', value: detailsDraft.seasonSelectorStyle, values: const ['Buttons', 'Dropdown'], onChanged: (v) => setState(() => detailsDraft.seasonSelectorStyle = v)),
+        const SizedBox(height: 12),
+        _dropdown(label: 'Episode naming', value: detailsDraft.episodeNaming, values: const ['Actual Title', 'Season X, Episode Y', 'Both'], onChanged: (v) => setState(() => detailsDraft.episodeNaming = v)),
         const SizedBox(height: 24),
         const Text(
           'METADATA',
@@ -1059,11 +1026,8 @@ static const detailsSectionNames = <String>[
             shrinkWrap: true,
             buildDefaultDragHandles: true,
             itemCount: items.length,
-            onReorder: (oldIndex, newIndex) {
+            onReorderItem: (oldIndex, newIndex) {
               final reordered = List<String>.from(items);
-              if (newIndex > oldIndex) {
-                newIndex -= 1;
-              }
               final item = reordered.removeAt(oldIndex);
               reordered.insert(newIndex, item);
 
@@ -1153,9 +1117,14 @@ static const detailsSectionNames = <String>[
   }
 }
 
+
+
+// ============================================================
+// MAIN SCREEN
+// ============================================================
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
@@ -1185,20 +1154,11 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _MoreActionsSheet(
-        onImport: () {
-          Navigator.pop(context);
-          _openImport();
-        },
-        onProfiles: () {
-          Navigator.pop(context);
-          _openProfiles();
-        },
+        onImport: () { Navigator.pop(context); _openImport(); },
+        onProfiles: () { Navigator.pop(context); _openProfiles(); },
         onWishlist: () {
           Navigator.pop(context);
-          showDialog<void>(
-            context: context,
-            builder: (_) => const WishlistDialog(),
-          );
+          showDialog<void>(context: context, builder: (_) => const WishlistDialog());
         },
         onCustomize: () {
           Navigator.pop(context);
@@ -1207,41 +1167,24 @@ class _MainScreenState extends State<MainScreen> {
               fullscreenDialog: true,
               builder: (_) => const CustomizeHomeScreen(),
             ),
-          ).then((_) {
-            if (mounted) setState(() {});
-          });
+          ).then((_) { if (mounted) setState(() {}); });
         },
       ),
     );
   }
 
   void _openImport() {
-    Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const ImportMediaScreen()),
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
+    Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const ImportMediaScreen()))
+        .then((_) { if (mounted) setState(() {}); });
   }
 
   void _openProfiles() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProfileSelectionScreen(
-          onProfileSelected: (context) {
-            Navigator.of(context).pop();
-            if (mounted) setState(() {});
-          },
-        ),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()))
+        .then((_) { if (mounted) setState(() {}); });
   }
 
   void _openGroup() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const GroupHubScreen()),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupHubScreen()));
   }
 
   void _openNotifications() {
@@ -1253,21 +1196,9 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _pageBody(List<Widget> pages) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      child: KeyedSubtree(
-        key: ValueKey(selectedIndex),
-        child: pages[selectedIndex],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final pages = [
+    final pages = <Widget>[
       HomeScreen(onRefresh: () => setState(() {})),
       const MoviesScreen(),
       const SeriesScreen(),
@@ -1275,109 +1206,48 @@ class _MainScreenState extends State<MainScreen> {
       const MusicScreen(),
       const TrailersScreen(),
       const SmartSearchScreen(),
+      const CollectionsPanel(),
     ];
 
     final settings = HomeCustomizationStore.settings;
     final navbar = _StreamingNavigationBar(
       selectedIndex: selectedIndex,
       position: settings.navbarPosition,
-      onSelect: (index) {
-        if (index == selectedIndex) return;
-        setState(() => selectedIndex = index);
-      },
+      onSelect: (index) { if (index != selectedIndex) setState(() => selectedIndex = index); },
       onNotifications: _openNotifications,
       onGroup: _openGroup,
       onProfile: _openProfiles,
       onMore: _openMore,
     );
-    final storageBar = _StorageProgressBar(
-      placement: settings.storageBarPosition,
+    final page = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      child: KeyedSubtree(key: ValueKey(selectedIndex), child: pages[selectedIndex]),
     );
-    final page = _pageBody(pages);
 
     Widget content;
     switch (settings.navbarPosition) {
       case 'Top':
-        content = Column(
-          children: [
-            navbar,
-            if (settings.storageBarPosition == 'Top') storageBar,
-            Expanded(child: page),
-            if (settings.storageBarPosition == 'Bottom') storageBar,
-          ],
-        );
+        content = Column(children: [navbar, Expanded(child: page)]);
         break;
       case 'Left':
-        content = Row(
-          children: [
-            navbar,
-            Expanded(
-              child: Column(
-                children: [
-                  if (settings.storageBarPosition == 'Top') storageBar,
-                  Expanded(child: page),
-                  if (settings.storageBarPosition == 'Bottom') storageBar,
-                ],
-              ),
-            ),
-          ],
-        );
+        content = Row(children: [navbar, Expanded(child: page)]);
         break;
       case 'Right':
-        content = Row(
-          children: [
-            Expanded(
-              child: Column(
-                children: [
-                  if (settings.storageBarPosition == 'Top') storageBar,
-                  Expanded(child: page),
-                  if (settings.storageBarPosition == 'Bottom') storageBar,
-                ],
-              ),
-            ),
-            navbar,
-          ],
-        );
+        content = Row(children: [Expanded(child: page), navbar]);
         break;
       case 'Floating':
-        content = Stack(
-          children: [
-            Positioned.fill(
-              child: Column(
-                children: [
-                  if (settings.storageBarPosition == 'Top') storageBar,
-                  Expanded(child: page),
-                  if (settings.storageBarPosition == 'Bottom') storageBar,
-                ],
-              ),
-            ),
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: SafeArea(top: false, child: navbar),
-            ),
-          ],
-        );
+        content = Stack(children: [
+          Positioned.fill(child: page),
+          Positioned(left: 12, right: 12, bottom: 12, child: SafeArea(top: false, child: Center(child: navbar))),
+        ]);
         break;
       case 'Bottom':
       default:
-        content = Column(
-          children: [
-            if (settings.storageBarPosition == 'Top') storageBar,
-            Expanded(child: page),
-            if (settings.storageBarPosition == 'Above Navbar') storageBar,
-            if (settings.storageBarPosition == 'Bottom') storageBar,
-            navbar,
-          ],
-        );
+        content = Column(children: [Expanded(child: page), navbar]);
         break;
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF070707),
-      body: content,
-    );
+    return Scaffold(backgroundColor: const Color(0xFF070707), body: content);
   }
 }
 
@@ -1410,139 +1280,38 @@ class _StreamingNavigationBar extends StatelessWidget {
       const _NavItemData(Icons.music_note_outlined, Icons.music_note, 'Music'),
       const _NavItemData(Icons.play_arrow_outlined, Icons.play_arrow, 'Trailers'),
       const _NavItemData(Icons.search_outlined, Icons.search, 'Search'),
+      const _NavItemData(Icons.collections_bookmark_outlined, Icons.collections_bookmark, 'Collections'),
     ];
-
     final vertical = position == 'Left' || position == 'Right';
     final floating = position == 'Floating';
-
     final actions = [
       for (var i = 0; i < items.length; i++)
-        _NavButton(
-          data: items[i],
-          selected: selectedIndex == i,
-          vertical: vertical,
-          onTap: () => onSelect(i),
-        ),
-      _NavButton(
-        data: const _NavItemData(Icons.notifications_none_rounded, Icons.notifications_rounded, 'Notifications'),
-        selected: false,
-        vertical: vertical,
-        showBadge: AppController.instance.activity.isNotEmpty,
-        onTap: onNotifications,
-      ),
-      _NavButton(
-        data: const _NavItemData(Icons.groups_outlined, Icons.groups_rounded, 'Group Chat'),
-        selected: false,
-        vertical: vertical,
-        onTap: onGroup,
-      ),
-      _NavButton(
-        data: const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
-        selected: false,
-        vertical: vertical,
-        onTap: onProfile,
-      ),
-      _NavButton(
-        data: const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
-        selected: false,
-        vertical: vertical,
-        onTap: onMore,
-      ),
+        _NavButton(data: items[i], selected: selectedIndex == i, vertical: vertical, onTap: () => onSelect(i)),
+      _NavButton(data: const _NavItemData(Icons.notifications_none_rounded, Icons.notifications_rounded, 'Notifications'), selected: false, vertical: vertical, showBadge: AppController.instance.activity.isNotEmpty, onTap: onNotifications),
+      _NavButton(data: const _NavItemData(Icons.groups_outlined, Icons.groups_rounded, 'Group Chat'), selected: false, vertical: vertical, onTap: onGroup),
+      _NavButton(data: const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'), selected: false, vertical: vertical, onTap: onProfile),
+      _NavButton(data: const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'), selected: false, vertical: vertical, onTap: onMore),
     ];
 
-    final bar = Container(
-      width: vertical ? 92 : null,
-      height: vertical ? null : 76,
-      decoration: BoxDecoration(
-        color: const Color(0xF20E0E0E),
-        border: Border.all(color: Colors.white.withValues(alpha: .07)),
-        borderRadius: floating ? BorderRadius.circular(24) : BorderRadius.zero,
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 28,
-            offset: Offset(0, -8),
-            color: Color(0x66000000),
-          ),
-        ],
-      ),
-      child: vertical
-          ? SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
-              child: Column(mainAxisSize: MainAxisSize.min, children: actions),
-            )
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(mainAxisSize: MainAxisSize.min, children: actions),
-            ),
-    );
-
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      bottom: !floating,
-      minimum: const EdgeInsets.only(top: 2),
-      child: bar,
-    );
-  }
-}
-
-class _StorageProgressBar extends StatelessWidget {
-  final String placement;
-
-  const _StorageProgressBar({required this.placement});
-
-  @override
-  Widget build(BuildContext context) {
-    if (placement == 'Hidden') return const SizedBox.shrink();
-
-    final controller = AppController.instance;
-    const capacity = 100;
-    final used = controller.library.length;
-    final progress = (used / capacity).clamp(0.0, 1.0).toDouble();
-    final remaining = capacity - used;
-
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xE60E0E0E),
-        border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: .05)),
-          bottom: BorderSide(color: Colors.white.withValues(alpha: .05)),
+    final bar = ConstrainedBox(
+      constraints: vertical
+          ? const BoxConstraints(minWidth: 92, maxWidth: 92, maxHeight: 520)
+          : const BoxConstraints(minHeight: 76, maxHeight: 76),
+      child: Container(
+        width: vertical ? 92 : double.infinity,
+        height: vertical ? null : 76,
+        decoration: BoxDecoration(
+          color: const Color(0xF20E0E0E),
+          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+          borderRadius: floating ? BorderRadius.circular(24) : BorderRadius.zero,
+          boxShadow: const [BoxShadow(blurRadius: 28, offset: Offset(0, -8), color: Color(0x66000000))],
         ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.storage_rounded, size: 15, color: Colors.white54),
-          const SizedBox(width: 8),
-          const Text('Library storage', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white70)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
-                minHeight: 5,
-                value: progress,
-                backgroundColor: Colors.white.withValues(alpha: .08),
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.redAccent),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '$used / $capacity titles',
-            style: const TextStyle(fontSize: 10, color: Colors.white54),
-          ),
-          if (remaining > 0) ...[
-            const SizedBox(width: 8),
-            Text('$remaining left', style: const TextStyle(fontSize: 10, color: Colors.white38)),
-          ],
-        ],
+        child: vertical
+            ? SingleChildScrollView(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: actions))
+            : SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7), child: Row(mainAxisSize: MainAxisSize.min, children: actions)),
       ),
     );
+    return SafeArea(top: false, left: false, right: false, bottom: !floating, child: bar);
   }
 }
 
@@ -1550,7 +1319,6 @@ class _NavItemData {
   final IconData icon;
   final IconData selectedIcon;
   final String label;
-
   const _NavItemData(this.icon, this.selectedIcon, this.label);
 }
 
@@ -1560,101 +1328,41 @@ class _NavButton extends StatefulWidget {
   final bool showBadge;
   final bool vertical;
   final VoidCallback onTap;
-
-  const _NavButton({
-    required this.data,
-    required this.selected,
-    required this.onTap,
-    this.showBadge = false,
-    this.vertical = false,
-  });
-
-  @override
-  State<_NavButton> createState() => _NavButtonState();
+  const _NavButton({required this.data, required this.selected, required this.onTap, this.showBadge = false, this.vertical = false});
+  @override State<_NavButton> createState() => _NavButtonState();
 }
-
 class _NavButtonState extends State<_NavButton> {
   bool pressed = false;
-
   @override
   Widget build(BuildContext context) {
     final active = widget.selected;
-    final buttonWidth = widget.vertical ? 78.0 : (active ? 92.0 : 68.0);
-
+    final width = widget.vertical ? 78.0 : (active ? 92.0 : 68.0);
     return Padding(
-      padding: widget.vertical
-          ? const EdgeInsets.symmetric(vertical: 3)
-          : const EdgeInsets.symmetric(horizontal: 3),
-      child: AnimatedScale(
-        scale: pressed ? .94 : 1,
-        duration: const Duration(milliseconds: 100),
-        child: Material(
-          color: active ? Colors.white.withValues(alpha: .10) : Colors.transparent,
+      padding: widget.vertical ? const EdgeInsets.symmetric(vertical: 2) : const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: active ? Colors.white.withValues(alpha: .10) : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTapDown: (_) => setState(() => pressed = true),
-            onTapCancel: () => setState(() => pressed = false),
-            onTap: () {
-              setState(() => pressed = false);
-              widget.onTap();
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              width: buttonWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: Icon(
-                          active ? widget.data.selectedIcon : widget.data.icon,
-                          key: ValueKey(active),
-                          size: 23,
-                          color: active ? Colors.white : Colors.white70,
-                        ),
-                      ),
-                      if (widget.showBadge)
-                        Positioned(
-                          right: -4,
-                          top: -2,
-                          child: Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.data.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: active ? Colors.white : Colors.white54,
-                      fontSize: 10,
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    width: active ? 18 : 0,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ],
-              ),
+          onTapDown: (_) => setState(() => pressed = true),
+          onTapCancel: () => setState(() => pressed = false),
+          onTap: () { setState(() => pressed = false); widget.onTap(); },
+          child: AnimatedScale(
+            scale: pressed ? .94 : 1,
+            duration: const Duration(milliseconds: 100),
+            child: SizedBox(
+              width: width,
+              height: 60,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Stack(clipBehavior: Clip.none, children: [
+                  Icon(active ? widget.data.selectedIcon : widget.data.icon, size: 22, color: active ? Colors.white : Colors.white70),
+                  if (widget.showBadge) Positioned(right: -4, top: -2, child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
+                ]),
+                const SizedBox(height: 3),
+                Text(widget.data.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: active ? Colors.white : Colors.white54, fontSize: 9.5, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
+                const SizedBox(height: 2),
+                Container(width: active ? 18 : 0, height: 2, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10))),
+              ]),
             ),
           ),
         ),
@@ -1705,7 +1413,7 @@ class _MoreActionsSheet extends StatelessWidget {
           _SheetAction(
             icon: Icons.tune_rounded,
             title: 'Customize App',
-            subtitle: 'Customize Home and Details together',
+            subtitle: 'Customize Home and Details',
             onTap: onCustomize,
           ),
         ],
@@ -1943,6 +1651,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final library = controller.library;
+    final settings = HomeCustomizationStore.settings;
 
     // Deliberately keep the empty home completely clean. All management
     // actions live in the navigation bar's More menu.
@@ -1980,60 +1689,14 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final watched = controller.watched;
-    final libraryItems = List<MediaItem>.from(library);
-    final movies = libraryItems
+    final movies = library
         .where((media) => media.type.toLowerCase() == 'movie')
         .toList();
-    final tvShows = libraryItems.where((media) {
+    final tvShows = library.where((media) {
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
     }).toList();
-    final recentlyWatched = List<MediaItem>.from(watched);
-    final newAdditions = List<MediaItem>.from(libraryItems.reversed);
-    final heroMedia = watched.isNotEmpty ? watched.first : libraryItems.first;
-    final customization = HomeCustomizationStore.settings;
-
-    final sections = <String, Widget>{
-      'Continue Watching': _HomeMediaSection(
-        title: 'Continue Watching',
-        subtitle: 'Pick up where you left off',
-        media: watched,
-      ),
-      'Recently Watched': _HomeMediaSection(
-        title: 'Recently Watched',
-        subtitle: 'Your latest activity',
-        media: recentlyWatched,
-      ),
-      'Movies': _HomeMediaSection(
-        title: 'Movies',
-        subtitle: 'From your collection',
-        media: movies,
-      ),
-      'TV Shows': _HomeMediaSection(
-        title: 'TV Shows',
-        subtitle: 'Your series collection',
-        media: tvShows,
-      ),
-      'New Additions': _HomeMediaSection(
-        title: 'New Additions',
-        subtitle: 'Recently added to your library',
-        media: newAdditions,
-      ),
-      'All Library': _HomeMediaSection(
-        title: 'All Library',
-        subtitle: '${libraryItems.length} title${libraryItems.length == 1 ? '' : 's'} in your library',
-        media: libraryItems,
-      ),
-    };
-
-    final enabled = <String>{
-      if (customization.showContinueWatching) 'Continue Watching',
-      if (customization.showRecentlyWatched) 'Recently Watched',
-      if (customization.showMovies) 'Movies',
-      if (customization.showTvShows) 'TV Shows',
-      if (customization.showNewAdditions) 'New Additions',
-      if (customization.showAllLibrary) 'All Library',
-    };
+    final heroMedia = watched.isNotEmpty ? watched.first : library.first;
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
@@ -2074,27 +1737,19 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-            if (customization.showHero)
+            if (settings.showHero)
               SliverToBoxAdapter(
                 child: FadeTransition(
                   opacity: CurvedAnimation(parent: _heroController, curve: Curves.easeOut),
                   child: _HomeHero(
                     media: heroMedia,
                     profileName: profile.name,
-                    onPlay: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MediaDetailsScreen(media: heroMedia),
-                        ),
-                      );
-                    },
+                    onPlay: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: heroMedia))),
                   ),
                 ),
               ),
-            for (final name in customization.sectionOrder)
-              if (enabled.contains(name) && sections[name] != null)
-                SliverToBoxAdapter(child: sections[name]!),
+            for (final section in settings.sectionOrder)
+              ..._buildHomeSectionSlivers(section, settings, watched, movies, tvShows, library, controller.recommendations),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
@@ -2103,28 +1758,35 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-class _HomeMediaSection extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final List<MediaItem> media;
-
-  const _HomeMediaSection({
-    required this.title,
-    required this.subtitle,
-    required this.media,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (media.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _PremiumSectionHeader(title: title, subtitle: subtitle),
-        MediaHorizontalList(media: media),
-      ],
-    );
+List<Widget> _buildHomeSectionSlivers(
+  String section,
+  HomeCustomization settings,
+  List<MediaItem> watched,
+  List<MediaItem> movies,
+  List<MediaItem> tvShows,
+  List<MediaItem> library,
+  List<MediaItem> recommendations,
+) {
+  List<MediaItem> items;
+  String subtitle;
+  bool enabled;
+  switch (section) {
+    case 'Continue Watching': items = watched; subtitle = 'Pick up where you left off'; enabled = settings.showContinueWatching; break;
+    case 'Recently Watched': items = watched; subtitle = 'What you watched recently'; enabled = settings.showRecentlyWatched; break;
+    case 'Movies': items = movies; subtitle = 'From your collection'; enabled = settings.showMovies; break;
+    case 'TV Shows': items = tvShows; subtitle = 'Your series collection'; enabled = settings.showTvShows; break;
+    case 'New Additions':
+      items = List<MediaItem>.from(library)..sort((a,b) => b.addedAt.compareTo(a.addedAt));
+      subtitle = 'Recently added to your library'; enabled = settings.showNewAdditions; break;
+    case 'All Library': items = library; subtitle = 'Everything in your library'; enabled = settings.showAllLibrary; break;
+    case 'Recommendations': items = recommendations; subtitle = 'Picked for your profile'; enabled = settings.showRecommendations; break;
+    default: return const [];
   }
+  if (!enabled || items.isEmpty) return const [];
+  return [
+    SliverToBoxAdapter(child: _PremiumSectionHeader(title: section, subtitle: subtitle)),
+    SliverToBoxAdapter(child: MediaHorizontalList(media: items)),
+  ];
 }
 
 class _HomeHero extends StatelessWidget {
@@ -2416,19 +2078,8 @@ class MediaHorizontalList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardWidth = switch (HomeCustomizationStore.settings.cardSize) {
-      'Small' => 125.0,
-      'Large' => 175.0,
-      _ => 145.0,
-    };
-    final cardHeight = switch (HomeCustomizationStore.settings.cardSize) {
-      'Small' => 215.0,
-      'Large' => 285.0,
-      _ => 245.0,
-    };
-
     return SizedBox(
-      height: cardHeight,
+      height: 245,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: media.length,
@@ -2450,33 +2101,28 @@ class MediaHorizontalList extends StatelessWidget {
 
 class MediaCard extends StatelessWidget {
   final MediaItem media;
-  final double width;
 
   const MediaCard({
     super.key,
     required this.media,
-    this.width = 145,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: width,
-      child: Material(
-        color: Colors.transparent,
+      width: 145,
+      child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => MediaDetailsScreen(
-                  media: media,
-                ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MediaDetailsScreen(
+                media: media,
               ),
-            );
-          },
+            ),
+          );
+        },
         child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
@@ -2529,7 +2175,6 @@ class MediaCard extends StatelessWidget {
                 ),
               ),
           ],
-        ),
         ),
       ),
     );

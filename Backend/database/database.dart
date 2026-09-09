@@ -4,6 +4,7 @@ import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
 import '../models/group_chat_room.dart';
 import '../models/profile.dart';
+import '../models/remote_worker.dart';
 
 class SessionRecord {
   final String token;
@@ -87,6 +88,11 @@ class Database {
   final Map<String, List<DateTime>> failedLoginAttempts = {};
 
   final Map<String, Set<String>> knownLoginFingerprints = {};
+
+  final Map<String, String> oneTimeCodesByAccountId = {};
+  final Map<String, DateTime> oneTimeCodeExpiryByAccountId = {};
+  final Map<String, RemoteWorker> remoteWorkersById = {};
+  final Map<String, RemoteImportJob> remoteImportJobsById = {};
 
   Set<String> getKnownLoginFingerprints(String accountId) =>
       knownLoginFingerprints.putIfAbsent(accountId, () => <String>{});

@@ -8,6 +8,7 @@ import '../models/account.dart';
 import '../models/profile.dart';
 import '../models/subscription.dart';
 import 'subscription_service.dart';
+import 'email_service.dart';
 
 class AuthLoginResult {
   final String token;
@@ -24,12 +25,14 @@ class AuthLoginResult {
 class AuthService {
   final Database database;
   final SubscriptionService subscriptionService;
+  final EmailService emailService;
 
   final Random _random = Random.secure();
 
   AuthService({
     required this.database,
     required this.subscriptionService,
+    required this.emailService,
   });
 
   // ---------------------------------------------------------------------------
@@ -93,10 +96,11 @@ class AuthService {
     required String password,
     required SubscriptionPlan plan,
     required String firstProfileName,
+    required String securityQuestion,
+    required String securityAnswer,
   }) async {
     final cleanUsername = username.trim();
     final cleanEmail = email.trim().toLowerCase();
-    final cleanProfileName = firstProfileName.trim();
 
     if (cleanUsername.isEmpty) {
       throw Exception(
@@ -116,12 +120,6 @@ class AuthService {
       );
     }
 
-    if (cleanProfileName.isEmpty) {
-      throw Exception(
-        'The first profile name is required.',
-      );
-    }
-
     if (database.getAccountByUsername(cleanUsername) != null) {
       throw Exception(
         'That username is already in use.',
@@ -134,22 +132,24 @@ class AuthService {
       );
     }
 
-    // Passwords are never stored in plaintext.
+    if (securityQuestion.trim().isEmpty || securityAnswer.trim().isEmpty) {
+      throw Exception('A security question and answer are required.');
+    }
+
     final passwordHash = await _hashPassword(password);
+    final securityAnswerHash = await _hashPassword(securityAnswer.trim().toLowerCase());
 
     final account = Account(
       id: _generateId('account'),
       username: cleanUsername,
       email: cleanEmail,
       passwordHash: passwordHash,
+      securityQuestion: securityQuestion.trim(),
+      securityAnswerHash: securityAnswerHash,
     );
 
-    final firstProfile = Profile(
-      id: _generateId('profile'),
-      name: cleanProfileName,
-    );
-
-    account.profiles.add(firstProfile);
+    // New accounts intentionally start with ZERO profiles.
+    // The owner creates profiles after entering the account.
 
     // Signup intentionally creates an inactive subscription.
     //
@@ -160,6 +160,11 @@ class AuthService {
     );
 
     database.saveAccount(account);
+
+    await emailService.welcome(
+      account.email,
+      account.username,
+    );
 
     return account;
   }
@@ -194,16 +199,26 @@ class AuthService {
 
     if (cleanLogin.isEmpty || password.isEmpty) {
       database.recordFailedLogin(cleanLogin);
-      throw Exception('Invalid username/email or password.');
+      throw Exception(
+        'Invalid username/email or password.',
+      );
     }
 
     Account? account;
-    account = database.getAccountByUsername(cleanLogin);
-    account ??= database.getAccountByEmail(cleanLogin);
+
+    account = database.getAccountByUsername(
+      cleanLogin,
+    );
+
+    account ??= database.getAccountByEmail(
+      cleanLogin,
+    );
 
     if (account == null) {
       database.recordFailedLogin(cleanLogin);
-      throw Exception('Invalid username/email or password.');
+      throw Exception(
+        'Invalid username/email or password.',
+      );
     }
 
     final passwordValid = await _verifyPassword(
@@ -213,11 +228,18 @@ class AuthService {
 
     if (!passwordValid) {
       database.recordFailedLogin(cleanLogin);
-      throw Exception('Invalid username/email or password.');
+      throw Exception(
+        'Invalid username/email or password.',
+      );
     }
 
-    if (PasswordGuard.needsRehash(account.passwordHash)) {
-      account.passwordHash = await _hashPassword(password);
+    if (PasswordGuard.needsRehash(
+      account.passwordHash,
+    )) {
+      account.passwordHash = await _hashPassword(
+        password,
+      );
+
       database.saveAccount(account);
     }
 
@@ -227,25 +249,57 @@ class AuthService {
       );
     }
 
-    final recentFailures = database.recentFailedLoginCount(cleanLogin);
-    final priorSessions = database.getSessionsForAccount(account.id);
+    final recentFailures =
+        database.recentFailedLoginCount(
+      cleanLogin,
+    );
 
-    final normalizedIp = ipAddress.trim().isEmpty ? 'unknown' : ipAddress.trim();
-    final normalizedAgent = userAgent.trim().isEmpty ? 'unknown' : userAgent.trim();
+    final normalizedIp = ipAddress.trim().isEmpty
+        ? 'unknown'
+        : ipAddress.trim();
 
-    final fingerprint = '$normalizedIp|$normalizedAgent';
-    final knownFingerprints = database.getKnownLoginFingerprints(account.id);
-    final knownDevice = knownFingerprints.contains(fingerprint);
+    final normalizedAgent =
+        userAgent.trim().isEmpty
+            ? 'unknown'
+            : userAgent.trim();
+
+    final fingerprint =
+        '$normalizedIp|$normalizedAgent';
+
+    final knownFingerprints =
+        database.getKnownLoginFingerprints(
+      account.id,
+    );
+
+    final knownDevice =
+        knownFingerprints.contains(
+      fingerprint,
+    );
 
     final reasons = <String>[];
+
     if (knownFingerprints.isNotEmpty && !knownDevice) {
-      reasons.add('new browser or device or network');
+      reasons.add(
+        'new browser or device or network',
+      );
     }
+
     if (recentFailures >= 2) {
-      reasons.add('$recentFailures recent failed login attempts');
+      reasons.add(
+        '$recentFailures recent failed login attempts',
+      );
     }
 
     final suspicious = reasons.isNotEmpty;
+
+    if (suspicious) {
+      await emailService.suspicious(
+        account.email,
+        normalizedIp,
+        DateTime.now().toIso8601String(),
+      );
+    }
+
     final token = _generateSessionToken();
 
     database.saveSession(
@@ -255,13 +309,54 @@ class AuthService {
       ipAddress: normalizedIp,
       userAgent: normalizedAgent,
     );
-    database.clearFailedLoginAttempts(cleanLogin);
-    knownFingerprints.add(fingerprint);
+
+    database.clearFailedLoginAttempts(
+      cleanLogin,
+    );
+
+    knownFingerprints.add(
+      fingerprint,
+    );
 
     return AuthLoginResult(
       token: token,
       suspicious: suspicious,
       reasons: reasons,
+    );
+  }
+
+  Future<bool> verifySecurityAnswer({
+    required String token,
+    required String answer,
+  }) async {
+    final account = accountFromToken(token);
+    if (account == null || answer.trim().isEmpty || account.securityAnswerHash.isEmpty) {
+      return false;
+    }
+    return _verifyPassword(answer.trim().toLowerCase(), account.securityAnswerHash);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ACCOUNT DELETION
+  // ---------------------------------------------------------------------------
+
+  void deleteAccount(
+    Account account,
+  ) {
+    database.sessions.removeWhere(
+      (_, session) => session.accountId == account.id,
+    );
+
+    database.remoteWorkersById.removeWhere(
+      (_, worker) => worker.accountId == account.id,
+    );
+
+    database.remoteImportJobsById.removeWhere(
+      (_, job) => job.accountId == account.id,
+    );
+
+    database.deleteAccount(
+      account.id,
     );
   }
 
@@ -370,7 +465,9 @@ class AuthService {
       profile,
     );
 
-    database.saveAccount(account);
+    database.saveAccount(
+      account,
+    );
 
     return profile;
   }
@@ -407,7 +504,9 @@ class AuthService {
       cleanProfileId,
     );
 
-    database.saveAccount(account);
+    database.saveAccount(
+      account,
+    );
   }
 
   // ---------------------------------------------------------------------------

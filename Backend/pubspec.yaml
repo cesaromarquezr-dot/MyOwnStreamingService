@@ -7,3 +7,4 @@ environment:
 
 dependencies:
   password_guard: ^1.0.5
+  mailer: ^6.1.2

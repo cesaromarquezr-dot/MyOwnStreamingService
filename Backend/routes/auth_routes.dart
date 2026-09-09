@@ -6,16 +6,19 @@ import '../middleware/authentication.dart';
 import '../models/subscription.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
+import '../services/email_service.dart';
 
 class AuthRoutes {
   final AuthService authService;
   final AuthenticationMiddleware authentication;
   final PaymentService paymentService;
+  final EmailService emailService;
 
   AuthRoutes({
     required this.authService,
     required this.authentication,
     required this.paymentService,
+    required this.emailService,
   });
 
   Future<void> handle(
@@ -47,6 +50,12 @@ class AuthRoutes {
       // -----------------------------------------------------------------------
       // LOGOUT
       // -----------------------------------------------------------------------
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/auth/verify-security') {
+        await _verifySecurity(request);
+        return;
+      }
 
       if (request.method == 'POST' &&
           path == '/api/v1/auth/logout') {
@@ -91,6 +100,11 @@ class AuthRoutes {
       if (request.method == 'POST' &&
           path == '/api/v1/profiles') {
         await _addProfile(request);
+        return;
+      }
+
+      if (request.method == 'DELETE' && path == '/api/v1/auth/account') {
+        await _deleteAccount(request);
         return;
       }
 
@@ -159,11 +173,9 @@ class AuthRoutes {
       'password',
     );
 
-    final firstProfileName =
-        _readRequiredString(
-      body,
-      'firstProfileName',
-    );
+    final firstProfileName = body['firstProfileName']?.toString().trim() ?? '';
+    final securityQuestion = _readRequiredString(body, 'securityQuestion');
+    final securityAnswer = _readRequiredString(body, 'securityAnswer');
 
     final planValue =
         body['plan']
@@ -184,6 +196,8 @@ class AuthRoutes {
       plan: plan,
       firstProfileName:
           firstProfileName,
+      securityQuestion: securityQuestion,
+      securityAnswer: securityAnswer,
     );
 
     // Signup does not create a normal login session.
@@ -211,6 +225,22 @@ class AuthRoutes {
         ),
       },
     );
+  }
+
+  Future<void> _verifySecurity(HttpRequest request) async {
+    final token = authentication.extractToken(request);
+    if (token == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final body = await _readJsonBody(request);
+    final answer = _readRequiredString(body, 'answer');
+    final valid = await authService.verifySecurityAnswer(token: token, answer: answer);
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+      'success': valid,
+      'verified': valid,
+      'message': valid ? 'Security answer verified.' : 'Incorrect security answer.',
+    });
   }
 
   // ===========================================================================
@@ -275,6 +305,8 @@ class AuthRoutes {
         'security': {
           'suspicious': loginResult.suspicious,
           'reasons': loginResult.reasons,
+          'question': account?.securityQuestion,
+          'requiresVerification': loginResult.suspicious,
         },
       },
     );
@@ -454,6 +486,13 @@ class AuthRoutes {
     );
   }
 
+  Future<void> _deleteAccount(HttpRequest request) async {
+    final account=authentication.authenticate(request);
+    if(account==null){_sendAuthenticationRequired(request.response);return;}
+    authService.deleteAccount(account);
+    _sendJson(request.response,statusCode:HttpStatus.ok,body:{'success':true,'message':'Account deleted successfully.'});
+  }
+
   // ===========================================================================
   // ADD PROFILE
   // ===========================================================================
@@ -490,6 +529,12 @@ class AuthRoutes {
       account: account,
       name: name,
       avatarUrl: avatarUrl,
+    );
+
+    await emailService.send(
+      to: account.email,
+      subject: 'New profile created: ${profile.name}',
+      body: 'A new profile named ${profile.name} was created on your personal streaming service.',
     );
 
     _sendJson(

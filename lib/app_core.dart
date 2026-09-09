@@ -24,18 +24,18 @@ class Subscription {
   double get price {
     switch (plan) {
       case SubscriptionPlan.monthly:
-        return 9.99;
+        return 10.0;
       case SubscriptionPlan.yearly:
-        return 99.99;
+        return 100.0;
     }
   }
 
   String get displayName {
     switch (plan) {
       case SubscriptionPlan.monthly:
-        return '\$9.99/month';
+        return '\$10/month';
       case SubscriptionPlan.yearly:
-        return '\$99.99/year';
+        return '\$100/year';
     }
   }
 }
@@ -48,10 +48,15 @@ class MediaItem {
   final String? description;
   final int? releaseYear;
   final double? rating;
+  final String? ratingReason;
   final String? trailerUrl;
+  final DateTime addedAt;
+  final List<Map<String, dynamic>> seasons;
 
   MediaItem({
     this.trailerUrl,
+    DateTime? addedAt,
+    List<Map<String, dynamic>>? seasons,
     required this.id,
     required this.title,
     required this.type,
@@ -59,7 +64,9 @@ class MediaItem {
     this.description,
     this.releaseYear,
     this.rating,
-  });
+    this.ratingReason,
+  }) : addedAt = addedAt ?? DateTime.now(),
+       seasons = seasons ?? <Map<String, dynamic>>[];
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
     return MediaItem(
@@ -78,7 +85,15 @@ class MediaItem {
           : double.tryParse(
               json['rating']?.toString() ?? '',
             ),
+      ratingReason: json['ratingReason']?.toString(),
       trailerUrl: json['trailerUrl']?.toString(),
+      addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
+      seasons: (json['seasons'] is List)
+          ? (json['seasons'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[],
     );
   }
 
@@ -91,8 +106,77 @@ class MediaItem {
       'description': description,
       'releaseYear': releaseYear,
       'rating': rating,
+      'ratingReason': ratingReason,
       'trailerUrl': trailerUrl,
+      'addedAt': addedAt.toIso8601String(),
+      'seasons': seasons,
     };
+  }
+}
+
+
+
+/// Builds the conversational, streaming-service-style synopses used when a
+/// description is not supplied manually. Story notes can be entered during
+/// import when a more title-specific synopsis is desired.
+class DescriptionGenerator {
+  static String movie({
+    required String title,
+    int? year,
+    String? storyNotes,
+  }) {
+    final notes = storyNotes?.trim();
+    if (notes != null && notes.isNotEmpty) {
+      return '$title${year == null ? '' : ' ($year)'}: $notes';
+    }
+    return '$title${year == null ? '' : ' ($year)'}: Step into this movie and follow the characters as an unexpected challenge changes everything. With memorable moments, rising stakes, and a story that keeps moving forward, it is ready for another watch in your personal streaming library.';
+  }
+
+  static String show({
+    required String title,
+    int? year,
+    String? storyNotes,
+  }) {
+    final notes = storyNotes?.trim();
+    if (notes != null && notes.isNotEmpty) {
+      return '$title${year == null ? '' : ' ($year)'}: $notes';
+    }
+    return '$title${year == null ? '' : ' ($year)'}: Meet the characters at the center of this series as their lives, friendships, challenges, and adventures unfold across the seasons. Settle in and follow the story episode by episode.';
+  }
+
+  static String season({
+    required String showTitle,
+    required int seasonNumber,
+    String? seasonName,
+    String? storyNotes,
+  }) {
+    final notes = storyNotes?.trim();
+    final label = seasonName?.trim().isNotEmpty == true
+        ? seasonName!.trim()
+        : 'Season $seasonNumber';
+    if (notes != null && notes.isNotEmpty) {
+      return '$showTitle $label: $notes';
+    }
+    return '$showTitle $label: The story continues with new situations, character moments, and episodes that build the season from beginning to end.';
+  }
+
+  static String episode({
+    required String showTitle,
+    required int seasonNumber,
+    required int episodeNumber,
+    required String episodeTitle,
+    String? alternateTitle,
+    String? storyNotes,
+  }) {
+    final notes = storyNotes?.trim();
+    final alt = alternateTitle?.trim();
+    final displayTitle = alt != null && alt.isNotEmpty
+        ? '$episodeTitle — "$alt"'
+        : '"$episodeTitle"';
+    if (notes != null && notes.isNotEmpty) {
+      return '$showTitle Season $seasonNumber Episode $episodeNumber $displayTitle: $notes';
+    }
+    return '$showTitle Season $seasonNumber Episode $episodeNumber $displayTitle: Join the characters for another chapter as their plans, relationships, and problems take an unexpected turn.';
   }
 }
 
@@ -129,12 +213,16 @@ class UserAccount {
   final String email;
   Subscription subscription;
   final List<Profile> profiles;
+  int storageLimitBytes;
+  int storageUsedBytes;
 
   UserAccount({
     required this.username,
     required this.email,
     required this.subscription,
     List<Profile>? profiles,
+    this.storageLimitBytes = 1000000000000,
+    this.storageUsedBytes = 0,
   }) : profiles = profiles ?? [];
 
   bool get hasActiveSubscription =>
@@ -152,8 +240,82 @@ class UserAccount {
         'status': subscription.status.name,
       },
       'profiles': profiles.map((profile) => profile.toJson()).toList(),
+      'storageLimitBytes': storageLimitBytes,
+      'storageUsedBytes': storageUsedBytes,
     };
   }
+}
+
+
+class MediaCollection {
+  final String id;
+  String name;
+  String description;
+  String? createdByProfileId;
+  bool isShared;
+  bool isOfficial;
+  bool isAutomatic;
+  bool isFeatured;
+  String posterMode;
+  String? customPosterUrl;
+  final List<String> mediaIds;
+  final Set<String> likedByProfileIds;
+  DateTime createdAt;
+
+  MediaCollection({
+    required this.id,
+    required this.name,
+    this.description = '',
+    this.createdByProfileId,
+    this.isShared = true,
+    this.isOfficial = false,
+    this.isAutomatic = false,
+    this.isFeatured = false,
+    this.posterMode = 'First 4 Posters',
+    this.customPosterUrl,
+    List<String>? mediaIds,
+    Set<String>? likedByProfileIds,
+    DateTime? createdAt,
+  })  : mediaIds = mediaIds ?? <String>[],
+        likedByProfileIds = likedByProfileIds ?? <String>{},
+        createdAt = createdAt ?? DateTime.now();
+
+  bool get isLikedByCurrentProfile {
+    final id = AppController.instance.currentProfile?.id;
+    return id != null && likedByProfileIds.contains(id);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'createdByProfileId': createdByProfileId,
+    'isShared': isShared,
+    'isOfficial': isOfficial,
+    'isAutomatic': isAutomatic,
+    'isFeatured': isFeatured,
+    'posterMode': posterMode,
+    'customPosterUrl': customPosterUrl,
+    'mediaIds': mediaIds,
+    'likedByProfileIds': likedByProfileIds.toList(),
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory MediaCollection.fromJson(Map<String, dynamic> json) => MediaCollection(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? 'Collection',
+    description: json['description']?.toString() ?? '',
+    createdByProfileId: json['createdByProfileId']?.toString(),
+    isShared: json['isShared'] != false,
+    isOfficial: json['isOfficial'] == true,
+    isAutomatic: json['isAutomatic'] == true,
+    isFeatured: json['isFeatured'] == true,
+    posterMode: json['posterMode']?.toString() ?? 'First 4 Posters',
+    customPosterUrl: json['customPosterUrl']?.toString(),
+    mediaIds: (json['mediaIds'] as List?)?.map((e) => e.toString()).toList(),
+    likedByProfileIds: (json['likedByProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
+    createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+  );
 }
 
 class ActivityItem {
@@ -606,6 +768,14 @@ class AppController extends ChangeNotifier {
   final List<MediaItem> library =
       <MediaItem>[];
 
+  final List<MediaCollection> collections = <MediaCollection>[];
+  final List<String> collectionSectionOrder = <String>[
+    'Featured Collections',
+    'My Collections',
+    'Liked Collections',
+  ];
+  final List<String> featuredCollectionOrder = <String>[];
+
   final List<MediaItem> watched =
       <MediaItem>[];
 
@@ -704,13 +874,6 @@ class AppController extends ChangeNotifier {
     required SubscriptionPlan plan,
     required String firstProfileName,
   }) {
-    final profile = Profile(
-      id: _generateId('profile'),
-      name: firstProfileName.trim().isEmpty
-          ? username
-          : firstProfileName.trim(),
-    );
-
     final account = UserAccount(
       username: username.trim(),
       email: email.trim(),
@@ -718,15 +881,14 @@ class AppController extends ChangeNotifier {
         plan: plan,
         status: SubscriptionStatus.active,
       ),
-      profiles: <Profile>[profile],
+      profiles: <Profile>[],
     );
 
     currentAccount = account;
-    currentProfile = profile;
-
-    activeProfileIds
-      ..clear()
-      ..add(profile.id);
+    currentProfile = null;
+    activeProfileIds.clear();
+    collections.clear();
+    seedCollections();
 
     groupWatchSessions.clear();
     activeGroupWatchSessionId = null;
@@ -749,6 +911,8 @@ class AppController extends ChangeNotifier {
     required String password,
     required SubscriptionPlan plan,
     required String firstProfileName,
+    required String securityQuestion,
+    required String securityAnswer,
   }) async {
     final planValue =
         plan == SubscriptionPlan.yearly
@@ -765,6 +929,8 @@ class AppController extends ChangeNotifier {
               ? username.trim()
               : firstProfileName.trim(),
       plan: planValue,
+      securityQuestion: securityQuestion,
+      securityAnswer: securityAnswer,
     );
 
     final accountData =
@@ -845,20 +1011,7 @@ class AppController extends ChangeNotifier {
       }
     }
 
-    if (profiles.isEmpty) {
-      profiles.add(
-        Profile(
-          id: _generateId('profile'),
-          name:
-              firstProfileName
-                      .trim()
-                      .isEmpty
-                  ? accountUsername
-                  : firstProfileName
-                      .trim(),
-        ),
-      );
-    }
+    // New backend accounts are allowed to have zero profiles.
 
     final account =
         UserAccount(
@@ -867,15 +1020,18 @@ class AppController extends ChangeNotifier {
       subscription:
           localSubscription,
       profiles: profiles,
+      storageLimitBytes: accountData is Map && accountData['storageLimitBytes'] is num ? (accountData['storageLimitBytes'] as num).toInt() : 1000000000000,
+      storageUsedBytes: accountData is Map && accountData['storageUsedBytes'] is num ? (accountData['storageUsedBytes'] as num).toInt() : 0,
     );
 
     currentAccount = account;
-    currentProfile =
-        profiles.first;
+    currentProfile = profiles.isEmpty ? null : profiles.first;
 
     activeProfileIds
-      ..clear()
-      ..add(profiles.first.id);
+      .clear();
+    if (profiles.isNotEmpty) {
+      activeProfileIds.add(profiles.first.id);
+    }
 
     backendApi.clearToken();
 
@@ -1009,14 +1165,8 @@ class AppController extends ChangeNotifier {
       }
     }
 
-    if (profiles.isEmpty) {
-      profiles.add(
-        Profile(
-          id: _generateId('profile'),
-          name: username,
-        ),
-      );
-    }
+    // New accounts intentionally keep ZERO profiles. The owner creates the
+    // first profile from the profile-selection screen after signing in.
 
     currentAccount =
         UserAccount(
@@ -1031,12 +1181,12 @@ class AppController extends ChangeNotifier {
       profiles: profiles,
     );
 
-    currentProfile =
-        profiles.first;
+    currentProfile = profiles.isEmpty ? null : profiles.first;
 
-    activeProfileIds
-      ..clear()
-      ..add(profiles.first.id);
+    activeProfileIds.clear();
+    if (currentProfile != null) {
+      activeProfileIds.add(currentProfile!.id);
+    }
 
     recommendations.clear();
     groupRecommendations.clear();
@@ -1308,33 +1458,18 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    if (currentAccount!
-            .profiles
-            .length <=
-        1) {
-      return;
+    currentAccount!.profiles.removeWhere((profile) => profile.id == profileId);
+    activeProfileIds.remove(profileId);
+
+    if (currentProfile?.id == profileId) {
+      currentProfile = currentAccount!.profiles.isEmpty
+          ? null
+          : currentAccount!.profiles.first;
+      if (currentProfile != null) {
+        activeProfileIds.add(currentProfile!.id);
+      }
     }
-
-    currentAccount!.profiles
-        .removeWhere(
-      (profile) =>
-          profile.id == profileId,
-    );
-
-    activeProfileIds
-        .remove(profileId);
-
-    if (currentProfile?.id ==
-        profileId) {
-      currentProfile =
-          currentAccount!
-              .profiles
-              .first;
-
-      activeProfileIds.add(
-        currentProfile!.id,
-      );
-    }
+    notifyListeners();
 
     notifyListeners();
   }
@@ -3918,6 +4053,102 @@ class AppController extends ChangeNotifier {
     }
   }
 
+
+  // ---------------------------------------------------------------------------
+  // COLLECTIONS
+  // ---------------------------------------------------------------------------
+
+  void seedCollections() {
+    if (collections.isNotEmpty) return;
+    final builtIns = <String>[
+      'The Back to the Future Trilogy',
+      'Twilight Saga',
+      'Harry Potter — 8 Movies',
+    ];
+    for (var i = 0; i < builtIns.length; i++) {
+      final collectionId = _generateId('collection');
+      collections.add(MediaCollection(
+        id: collectionId,
+        name: builtIns[i],
+        isOfficial: true,
+        isFeatured: true,
+      ));
+      featuredCollectionOrder.add(collectionId);
+    }
+  }
+
+  MediaCollection createCollection({
+    required String name,
+    String description = '',
+    bool shared = true,
+    bool featured = false,
+    bool automatic = false,
+    String posterMode = 'First 4 Posters',
+    String? customPosterUrl,
+  }) {
+    final collection = MediaCollection(
+      id: _generateId('collection'),
+      name: name.trim(),
+      description: description.trim(),
+      createdByProfileId: currentProfile?.id,
+      isShared: shared,
+      isFeatured: featured,
+      isAutomatic: automatic,
+      posterMode: posterMode,
+      customPosterUrl: customPosterUrl,
+    );
+    collections.add(collection);
+    if (featured) featuredCollectionOrder.add(collection.id);
+    notifyListeners();
+    return collection;
+  }
+
+  void deleteCollection(String id) {
+    collections.removeWhere((c) => c.id == id && !c.isOfficial);
+    notifyListeners();
+  }
+
+  void addToCollection(String collectionId, String mediaId) {
+    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
+    if (c != null && !c.mediaIds.contains(mediaId)) {
+      c.mediaIds.add(mediaId);
+      notifyListeners();
+    }
+  }
+
+  void removeFromCollection(String collectionId, String mediaId) {
+    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
+    if (c != null) {
+      c.mediaIds.remove(mediaId);
+      notifyListeners();
+    }
+  }
+
+  void toggleCollectionLike(String collectionId) {
+    final profileId = currentProfile?.id;
+    if (profileId == null) return;
+    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
+    if (c == null) return;
+    if (!c.likedByProfileIds.add(profileId)) {
+      c.likedByProfileIds.remove(profileId);
+    }
+    notifyListeners();
+  }
+
+  void reorderCollectionSections(List<String> order) {
+    collectionSectionOrder
+      ..clear()
+      ..addAll(order);
+    notifyListeners();
+  }
+
+  void reorderFeaturedCollections(List<String> order) {
+    featuredCollectionOrder
+      ..clear()
+      ..addAll(order);
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // ID GENERATION
   // ---------------------------------------------------------------------------
@@ -3999,9 +4230,15 @@ class DetailsCustomization {
   bool showRuntime;
 
   String posterStyle;
+  String posterPosition;
+  String posterSize;
   String titleAlignment;
+  String buttonAlignment;
+  String informationAlignment;
   String seasonPlacement;
   String seasonOrder;
+  String seasonSelectorStyle;
+  String episodeNaming;
 
   List<String> sectionOrder;
 
@@ -4024,9 +4261,15 @@ class DetailsCustomization {
     this.showContentRating = true,
     this.showRuntime = true,
     this.posterStyle = 'Standard',
+    this.posterPosition = 'Center',
+    this.posterSize = 'Medium',
     this.titleAlignment = 'Left',
+    this.buttonAlignment = 'Left',
+    this.informationAlignment = 'Left',
     this.seasonPlacement = 'Center',
     this.seasonOrder = 'Top to Bottom',
+    this.seasonSelectorStyle = 'Buttons',
+    this.episodeNaming = 'Actual Title',
     List<String>? sectionOrder,
   }) : sectionOrder = sectionOrder ??
             [
@@ -4065,9 +4308,15 @@ class DetailsCustomization {
       showContentRating: showContentRating,
       showRuntime: showRuntime,
       posterStyle: posterStyle,
+      posterPosition: posterPosition,
+      posterSize: posterSize,
       titleAlignment: titleAlignment,
+      buttonAlignment: buttonAlignment,
+      informationAlignment: informationAlignment,
       seasonPlacement: seasonPlacement,
       seasonOrder: seasonOrder,
+      seasonSelectorStyle: seasonSelectorStyle,
+      episodeNaming: episodeNaming,
       sectionOrder: List<String>.from(sectionOrder),
     );
   }

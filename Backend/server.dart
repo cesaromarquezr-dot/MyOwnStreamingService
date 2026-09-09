@@ -12,6 +12,8 @@ import 'routes/search_routes.dart';
 import 'routes/payment_routes.dart';
 import 'routes/arm_routes.dart';
 import 'routes/group_routes.dart';
+import 'routes/remote_access_routes.dart';
+import 'routes/storage_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -20,6 +22,8 @@ import 'services/subscription_service.dart';
 import 'services/payment_service.dart';
 import 'services/group_recommendation_service.dart';
 import 'services/group_watch_service.dart';
+import 'services/email_service.dart';
+import 'services/remote_access_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -32,10 +36,12 @@ Future<void> main() async {
   // ------------------------------------------------------------
 
   final subscriptionService = SubscriptionService();
+  final emailService = EmailService.fromEnvironment();
 
   final authService = AuthService(
     database: database,
     subscriptionService: subscriptionService,
+    emailService: emailService,
   );
 
   final recommendationsService =
@@ -89,6 +95,7 @@ Future<void> main() async {
     authService: authService,
     authentication: authentication,
     paymentService: paymentService,
+    emailService: emailService,
   );
 
   // ------------------------------------------------------------
@@ -153,6 +160,15 @@ Future<void> main() async {
   final armRoutes = ArmRoutes(
     armService: armService,
     authentication: authentication,
+  );
+
+  final remoteAccessService = RemoteAccessService(database);
+  final storageRoutes = StorageRoutes(authentication: authentication, email: emailService);
+
+  final remoteAccessRoutes = RemoteAccessRoutes(
+    authentication: authentication,
+    service: remoteAccessService,
+    email: emailService,
   );
 
   // ------------------------------------------------------------
@@ -239,6 +255,8 @@ Future<void> main() async {
       paymentRoutes,
       groupRoutes,
       armRoutes,
+      remoteAccessRoutes,
+      storageRoutes,
     );
   }
 }
@@ -255,6 +273,8 @@ Future<void> _handleRequest(
   PaymentRoutes paymentRoutes,
   GroupRoutes groupRoutes,
   ArmRoutes armRoutes,
+  RemoteAccessRoutes remoteAccessRoutes,
+  StorageRoutes storageRoutes,
 ) async {
   try {
     _addCorsHeaders(request.response);
@@ -339,6 +359,16 @@ Future<void> _handleRequest(
     // ----------------------------------------------------------
     // ARM ROUTES
     // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/remote/')) {
+      await remoteAccessRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/storage')) {
+      await storageRoutes.handle(request);
+      return;
+    }
 
     if (path.startsWith('/api/v1/arm/')) {
       await armRoutes.handle(request);

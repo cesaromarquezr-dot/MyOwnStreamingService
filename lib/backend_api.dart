@@ -74,6 +74,8 @@ class BackendApi {
     required String password,
     required String firstProfileName,
     required String plan,
+    required String securityQuestion,
+    required String securityAnswer,
   }) async {
     final cleanPlan = plan.trim().toLowerCase();
 
@@ -94,6 +96,8 @@ class BackendApi {
         'password': password,
         'firstProfileName': firstProfileName,
         'plan': cleanPlan,
+        'securityQuestion': securityQuestion,
+        'securityAnswer': securityAnswer,
       }),
     );
 
@@ -453,6 +457,39 @@ class BackendApi {
       response,
       'Unable to cancel payment.',
     );
+  }
+
+  Future<Map<String, dynamic>> addProfile({required String name, String? avatarUrl}) async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/profiles'), headers: _headers, body: jsonEncode({'name': name.trim(), 'avatarUrl': avatarUrl}));
+    return _requireSuccess(response, 'Unable to create profile.');
+  }
+
+
+  Future<Map<String, dynamic>> removeProfile(String profileId) async {
+    _requireAuthentication();
+    final response = await http.delete(Uri.parse('$baseUrl/profiles/${Uri.encodeComponent(profileId)}'), headers: _headers);
+    return _requireSuccess(response, 'Unable to delete profile.');
+  }
+
+  Future<Map<String, dynamic>> deleteAccount() async {
+    _requireAuthentication();
+    final response = await http.delete(Uri.parse('$baseUrl/auth/account'), headers: _headers);
+    final data = _requireSuccess(response, 'Unable to delete account.');
+    clearToken();
+    return data;
+  }
+
+  Future<Map<String, dynamic>> getStorage() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/storage'), headers: _headers);
+    return _requireSuccess(response, 'Unable to retrieve storage.');
+  }
+
+  Future<Map<String, dynamic>> requestMoreStorage() async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/storage/request'), headers: _headers);
+    return _requireSuccess(response, 'Unable to request more storage.');
   }
 
   // ==========================================================
@@ -1318,6 +1355,28 @@ class BackendApi {
     );
   }
 
+
+  // ==========================================================
+  // EMAIL / REMOTE ACCESS
+  // ==========================================================
+  Future<Map<String, dynamic>> createRemoteAccessCode() async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/remote/access-code'), headers: _headers);
+    return _requireSuccess(response, 'Unable to create remote access code.');
+  }
+
+  Future<Map<String, dynamic>> getRemoteWorkers() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/remote/workers'), headers: _headers);
+    return _requireSuccess(response, 'Unable to retrieve remote computers.');
+  }
+
+  Future<Map<String, dynamic>> queueRemoteImport({required String workerId, String driveName = 'Disc reader'}) async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/remote/jobs'), headers: _headers, body: jsonEncode({'workerId': workerId, 'driveName': driveName}));
+    return _requireSuccess(response, 'Unable to queue remote disc import.');
+  }
+
   // ==========================================================
   // ARM
   // ==========================================================
@@ -1378,6 +1437,20 @@ class BackendApi {
   // ==========================================================
   // RESPONSE DECODING
   // ==========================================================
+
+  Future<bool> verifySecurityAnswer(String answer) async {
+    if (!isAuthenticated) return false;
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/verify-security'),
+      headers: _headers,
+      body: jsonEncode({'answer': answer}),
+    );
+    final data = _decodeResponse(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendApiException(data['error']?.toString() ?? 'Unable to verify security answer.', statusCode: response.statusCode);
+    }
+    return data['verified'] == true;
+  }
 
   Map<String, dynamic> _decodeResponse(
     http.Response response,

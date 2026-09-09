@@ -216,32 +216,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // SEASONS / EPISODES
   // ===========================================================================
 
-  /// Reads the optional seasons information from MediaItem.toJson().
-  ///
-  /// We intentionally do this dynamically for now because your current
-  /// MediaItem model does not yet have a seasons field.
-  ///
-  /// Later, when we update app_core.dart, this can use a proper typed model.
   List<Map<String, dynamic>> get seasons {
-    final json = mediaJson;
-
-    final raw = json['seasons'];
-
-    if (raw is! List) {
-      return <Map<String, dynamic>>[];
-    }
-
-    final result = <Map<String, dynamic>>[];
-
-    for (final item in raw) {
-      if (item is Map) {
-        result.add(
-          Map<String, dynamic>.from(item),
-        );
-      }
-    }
-
-    return result;
+    return media.seasons
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 
   List<Map<String, dynamic>> _orderedSeasons() {
@@ -352,6 +330,37 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Widget _buildSeasonSelector(
     List<Map<String, dynamic>> orderedSeasons,
   ) {
+    if (customization.seasonSelectorStyle == 'Dropdown') {
+      return Align(
+        alignment: _seasonAlignment(),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: DropdownButtonFormField<int>(
+            initialValue: selectedSeasonIndex,
+            decoration: const InputDecoration(
+              labelText: 'Season',
+            ),
+            items: List.generate(
+              orderedSeasons.length,
+              (index) => DropdownMenuItem<int>(
+                value: index,
+                child: Text(
+                  _seasonTitle(orderedSeasons[index]),
+                ),
+              ),
+            ),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  selectedSeasonIndex = value;
+                });
+              }
+            },
+          ),
+        ),
+      );
+    }
+
     return Align(
       alignment: _seasonAlignment(),
       child: Wrap(
@@ -362,7 +371,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           orderedSeasons.length,
           (index) {
             final season = orderedSeasons[index];
-
             final selected = index == selectedSeasonIndex;
 
             return _SeasonButton(
@@ -538,7 +546,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final imageUrl = episode['imageUrl']?.toString() ??
         episode['posterUrl']?.toString();
 
-    final description = episode['description']?.toString();
+    final description =
+        episode['description']?.toString();
 
     final year = _integerValue(
       episode['releaseYear'] ?? episode['year'],
@@ -556,7 +565,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
     }
 
-    final trailerUrl = episode['trailerUrl']?.toString();
+    final trailerUrl =
+        episode['trailerUrl']?.toString();
+
+    final ratingReason =
+        episode['ratingReason']?.toString();
 
     return MediaItem(
       id: id,
@@ -566,6 +579,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       description: description,
       releaseYear: year,
       rating: rating,
+      ratingReason: ratingReason,
       trailerUrl: trailerUrl,
     );
   }
@@ -592,13 +606,31 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   Widget _buildStandardPoster() {
+    final width = customization.posterSize == 'Small'
+        ? 220.0
+        : customization.posterSize == 'Large'
+            ? 390.0
+            : 300.0;
+
+    final alignment = customization.posterPosition == 'Left'
+        ? Alignment.centerLeft
+        : customization.posterPosition == 'Right'
+            ? Alignment.centerRight
+            : Alignment.center;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: _posterImage(),
+      child: Align(
+        alignment: alignment,
+        child: SizedBox(
+          width: width,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: AspectRatio(
+              aspectRatio: 2 / 3,
+              child: _posterImage(),
+            ),
+          ),
         ),
       ),
     );
@@ -1001,21 +1033,39 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // PLAY
   // ===========================================================================
 
+  Alignment _buttonAlignment() {
+    switch (customization.buttonAlignment) {
+      case 'Center':
+        return Alignment.center;
+
+      case 'Right':
+        return Alignment.centerRight;
+
+      case 'Left':
+      default:
+        return Alignment.centerLeft;
+    }
+  }
+
   Widget _buildPlay() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: SizedBox(
-        height: 52,
-        child: ElevatedButton.icon(
-          onPressed: pressedPlay ? null : playMedia,
-          icon: const Icon(
-            Icons.play_arrow_rounded,
-          ),
-          label: const Text(
-            'Play',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
+      child: Align(
+        alignment: _buttonAlignment(),
+        child: SizedBox(
+          width: 420,
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: pressedPlay ? null : playMedia,
+            icon: const Icon(
+              Icons.play_arrow_rounded,
+            ),
+            label: const Text(
+              'Play',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ),
@@ -1132,7 +1182,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final controller = AppController.instance;
 
     final liked = controller.isLiked(media.id);
-
     final disliked = controller.isDisliked(media.id);
 
     return Padding(
@@ -1216,6 +1265,16 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           media.rating!.toStringAsFixed(1),
         ),
       );
+
+      if (media.ratingReason != null &&
+          media.ratingReason!.trim().isNotEmpty) {
+        rows.add(
+          _infoRow(
+            'Why this rating',
+            media.ratingReason!,
+          ),
+        );
+      }
     }
 
     if (customization.showContentRating &&
@@ -1258,7 +1317,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           children: [
             Text(
               'Information',
-              textAlign: _textAlignment(),
+              textAlign: _informationTextAlign(),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 19,
@@ -1315,7 +1374,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   Widget _buildLibrary() {
     final controller = AppController.instance;
-
     final owned = controller.isOwned(media.id);
 
     return Padding(
@@ -1391,35 +1449,93 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   void startGroupWatch() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Watch Together'),
+        content: const Text(
+          'Who do you want to watch with?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchGroupWatch();
+            },
+            child: const Text(
+              'People in this account',
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _shareGroupWatch();
+            },
+            icon: const Icon(
+              Icons.share_outlined,
+            ),
+            label: const Text(
+              'Other people',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _launchGroupWatch() {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) {
-          return GroupWatchScreen(
-            media: media,
-          );
-        },
-        transitionsBuilder: (
-          _,
-          animation,
-          __,
-          child,
-        ) {
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(
-                begin: .96,
-                end: 1.0,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOut,
+      MaterialPageRoute(
+        builder: (_) => GroupWatchScreen(
+          media: media,
+        ),
+      ),
+    );
+  }
+
+  void _shareGroupWatch() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              const SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Invite with…',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
-              child: child,
-            ),
-          );
-        },
+              for (final app in [
+                'Messenger',
+                'WhatsApp',
+                'Telegram',
+                'Instagram',
+                'iMessage',
+              ])
+                ActionChip(
+                  label: Text(app),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Group Watch invite ready for $app.',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1484,6 +1600,20 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       case 'Left':
       default:
         return CrossAxisAlignment.start;
+    }
+  }
+
+  TextAlign _informationTextAlign() {
+    switch (customization.informationAlignment) {
+      case 'Center':
+        return TextAlign.center;
+
+      case 'Right':
+        return TextAlign.right;
+
+      case 'Left':
+      default:
+        return TextAlign.left;
     }
   }
 
@@ -1670,7 +1800,8 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   String? get description {
-    final value = widget.episode['description']?.toString();
+    final value =
+        widget.episode['description']?.toString();
 
     if (value == null || value.trim().isEmpty) {
       return null;
@@ -1733,6 +1864,38 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     }
 
     return '${hours}h ${remaining}m';
+  }
+
+  bool _showEpisodeLabel() {
+    final mode =
+        DetailsCustomizationStore.settingsFor(
+      AppController.instance.currentProfile,
+    ).episodeNaming;
+
+    return mode != 'Actual Title';
+  }
+
+  String _episodeLabel() {
+    final seasonNumber =
+        widget.episode['seasonNumber'] ??
+            widget.episode['season'];
+
+    final n = episodeNumber;
+
+    switch (
+        DetailsCustomizationStore.settingsFor(
+          AppController.instance.currentProfile,
+        ).episodeNaming) {
+      case 'Season X, Episode Y':
+        return 'SEASON ${seasonNumber ?? '?'} • EPISODE ${n ?? '?'}';
+
+      case 'Both':
+        return 'S${seasonNumber ?? '?'}E${n ?? '?'}';
+
+      case 'Actual Title':
+      default:
+        return '';
+    }
   }
 
   @override
@@ -1808,11 +1971,12 @@ class _EpisodeCardState extends State<_EpisodeCard> {
               const SizedBox(width: 13),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
-                    if (episodeNumber != null)
+                    if (_showEpisodeLabel())
                       Text(
-                        'EPISODE $episodeNumber',
+                        _episodeLabel(),
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 10,

@@ -81,6 +81,8 @@ class _ProfileSelectionScreenState
       barrierColor: Colors.black.withValues(alpha: 0.72),
       builder: (_) => ProfileStatisticsSheet(profile: profile),
     );
+
+    if (!mounted) return;
   }
 
   void _selectProfile(Profile profile) {
@@ -107,21 +109,19 @@ class _ProfileSelectionScreenState
 
     if (!mounted) return;
 
-    final profileContext = context;
-
     if (widget.onProfileSelected != null) {
-      widget.onProfileSelected!(profileContext);
+      widget.onProfileSelected!(context);
       return;
     }
 
-    Navigator.of(profileContext).pop(profile);
+    Navigator.of(context).pop(profile);
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final account = controller.currentAccount;
-    final profiles = account?.profiles ?? [];
+    final profiles = account?.profiles ?? <Profile>[];
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
@@ -162,7 +162,6 @@ class _ProfileSelectionScreenState
                     child: Column(
                       children: [
                         const _ProfileLogo(),
-
                         const SizedBox(height: 42),
 
                         const Text(
@@ -473,10 +472,10 @@ class _ProfileCardState extends State<_ProfileCard> {
                   duration: const Duration(
                     milliseconds: 180,
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment:
                         MainAxisAlignment.center,
-                    children: const [
+                    children: [
                       Icon(
                         Icons.edit_outlined,
                         size: 13,
@@ -550,9 +549,9 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarValue = profile.avatarUrl?.trim() ?? '';
+    final avatarValue =
+        profile.avatarUrl?.trim() ?? '';
 
-    // Built-in avatar icon.
     if (avatarValue.startsWith('avatar:')) {
       final icon = _iconFromAvatarKey(avatarValue);
 
@@ -564,8 +563,33 @@ class _ProfileAvatar extends StatelessWidget {
       }
     }
 
-    // Local image.
     if (avatarValue.isNotEmpty) {
+      final isNetwork =
+          avatarValue.startsWith('http://') ||
+              avatarValue.startsWith('https://');
+
+      if (isNetwork) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.network(
+            avatarValue,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (
+              context,
+              error,
+              stackTrace,
+            ) {
+              return _FallbackAvatar(
+                size: size,
+                name: profile.name,
+              );
+            },
+          ),
+        );
+      }
+
       final file = File(avatarValue);
 
       if (file.existsSync()) {
@@ -589,33 +613,8 @@ class _ProfileAvatar extends StatelessWidget {
           ),
         );
       }
-
-      // Network image.
-      if (avatarValue.startsWith('http://') ||
-          avatarValue.startsWith('https://')) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Image.network(
-            avatarValue,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (
-              context,
-              error,
-              stackTrace,
-            ) {
-              return _FallbackAvatar(
-                size: size,
-                name: profile.name,
-              );
-            },
-          ),
-        );
-      }
     }
 
-    // Default avatar.
     return _FallbackAvatar(
       size: size,
       name: profile.name,
@@ -812,6 +811,81 @@ class _EditProfileSheetState
     }
   }
 
+  Future<void> _deleteProfile() async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Delete profile?'),
+            content: Text(
+              'Delete ${widget.profile.name}? '
+              'This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, false),
+                child: const Text('CANCEL'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(context, true),
+                child: const Text('DELETE'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final controller = AppController.instance;
+
+      if (controller.isBackendAuthenticated) {
+        await controller.backendApi.removeProfile(
+          widget.profile.id,
+        );
+
+        if (!mounted) return;
+      }
+
+      controller.removeProfile(widget.profile.id);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile deleted.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
   Future<void> _save() async {
     final name = _nameController.text.trim();
 
@@ -831,13 +905,21 @@ class _EditProfileSheetState
     });
 
     try {
-      // Profile update will be connected to the actual
-      // AppController implementation once its profile
-      // update API is available.
+      /*
+       * The current AppController exposes add/remove/switch
+       * profile operations, but not updateProfile().
+       *
+       * Keep the existing profile object usable locally.
+       * Full backend profile editing can be connected once
+       * an update-profile API is exposed by AppController.
+       */
 
-      await Future<void>.delayed(
-        const Duration(milliseconds: 250),
-      );
+      if (_selectedPhoto != null) {
+        widget.profile.avatarUrl =
+            _selectedPhoto!.path;
+      }
+
+      widget.profile.name = name;
 
       if (!mounted) return;
 
@@ -874,7 +956,8 @@ class _EditProfileSheetState
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final bottom =
+        MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(
       margin: const EdgeInsets.only(top: 50),
@@ -987,7 +1070,8 @@ class _EditProfileSheetState
                 children: [
                   Expanded(
                     child: _PictureButton(
-                      icon: Icons.camera_alt_outlined,
+                      icon:
+                          Icons.camera_alt_outlined,
                       label: 'Take photo',
                       onTap:
                           _saving ? null : _takePhoto,
@@ -1012,13 +1096,47 @@ class _EditProfileSheetState
 
               SizedBox(
                 width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _saving ? null : _deleteProfile,
+                  icon: const Icon(
+                    Icons.delete_outline,
+                  ),
+                  label:
+                      const Text('DELETE PROFILE'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        Colors.redAccent,
+                    side: BorderSide(
+                      color: Colors.redAccent
+                          .withValues(alpha: 0.5),
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 15,
+                    ),
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              SizedBox(
+                width: double.infinity,
                 height: 54,
                 child: FilledButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed:
+                      _saving ? null : _save,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
+                    shape:
+                        RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius.circular(16),
                     ),
@@ -1055,7 +1173,8 @@ class _EditProfileSheetState
 /// EDITABLE PROFILE AVATAR
 /// ============================================================
 
-class _EditableProfileAvatar extends StatelessWidget {
+class _EditableProfileAvatar
+    extends StatelessWidget {
   final Profile profile;
   final XFile? selectedPhoto;
 
@@ -1089,7 +1208,8 @@ class _EditableProfileAvatar extends StatelessWidget {
 /// PROFILE STATISTICS
 /// ============================================================
 
-class ProfileStatisticsSheet extends StatelessWidget {
+class ProfileStatisticsSheet
+    extends StatelessWidget {
   final Profile profile;
 
   const ProfileStatisticsSheet({
@@ -1182,9 +1302,7 @@ class ProfileStatisticsSheet extends StatelessWidget {
                       value: '—',
                     ),
                   ),
-
                   SizedBox(width: 12),
-
                   Expanded(
                     child: _StatisticCard(
                       icon: Icons.tv_outlined,
@@ -1201,14 +1319,13 @@ class ProfileStatisticsSheet extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _StatisticCard(
-                      icon: Icons.schedule_outlined,
+                      icon:
+                          Icons.schedule_outlined,
                       title: 'Watch time',
                       value: '—',
                     ),
                   ),
-
                   SizedBox(width: 12),
-
                   Expanded(
                     child: _StatisticCard(
                       icon:
@@ -1352,7 +1469,8 @@ class _StatisticCard extends StatelessWidget {
 /// PROFILE MENU BUTTON
 /// ============================================================
 
-class _ProfileMenuButton extends StatelessWidget {
+class _ProfileMenuButton
+    extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -1417,7 +1535,7 @@ class _ProfileMenuButton extends StatelessWidget {
                       subtitle,
                       style: const TextStyle(
                         fontSize: 12,
-                        color:Colors.white38,
+                        color: Colors.white38,
                       ),
                     ),
                   ],
@@ -1612,6 +1730,17 @@ class _CreateProfileSheetState
       return;
     }
 
+    if (name.length > 30) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Profile name must be 30 characters or less.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _saving = true;
     });
@@ -1623,10 +1752,39 @@ class _CreateProfileSheetState
           ? _selectedPhoto!.path
           : 'avatar:$_selectedAvatarIndex';
 
-      controller.addProfile(
-        name,
-        avatarUrl: avatarUrl,
-      );
+      if (controller.isBackendAuthenticated) {
+        final result =
+            await controller.backendApi.addProfile(
+          name: name,
+          avatarUrl: avatarUrl,
+        );
+
+        if (!mounted) return;
+
+        final data = result['profile'];
+
+        if (data is Map) {
+          final profile =
+              Profile.fromJson(
+            Map<String, dynamic>.from(data),
+          );
+
+          final account =
+              controller.currentAccount;
+
+          if (account != null &&
+              !account.profiles.any(
+                (item) => item.id == profile.id,
+              )) {
+            account.profiles.add(profile);
+          }
+        }
+      } else {
+        controller.addProfile(
+          name,
+          avatarUrl: avatarUrl,
+        );
+      }
 
       if (!mounted) return;
 
@@ -1663,7 +1821,8 @@ class _CreateProfileSheetState
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final bottom =
+        MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(
       margin: const EdgeInsets.only(top: 50),
@@ -1723,7 +1882,8 @@ class _CreateProfileSheetState
               const SizedBox(height: 28),
 
               Center(
-                child: _CreateProfileAvatarPreview(
+                child:
+                    _CreateProfileAvatarPreview(
                   selectedPhoto: _selectedPhoto,
                   icon: _avatarIcons[
                       _selectedAvatarIndex],
@@ -1796,18 +1956,24 @@ class _CreateProfileSheetState
                               });
                             },
                       child: AnimatedContainer(
-                        duration: const Duration(
+                        duration:
+                            const Duration(
                           milliseconds: 160,
                         ),
                         width: 50,
                         height: 50,
-                        decoration: BoxDecoration(
+                        decoration:
+                            BoxDecoration(
                           borderRadius:
-                              BorderRadius.circular(14),
+                              BorderRadius.circular(
+                            14,
+                          ),
                           gradient:
                               const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                            begin:
+                                Alignment.topLeft,
+                            end:
+                                Alignment.bottomRight,
                             colors: [
                               Color(0xFF343434),
                               Color(0xFF151515),
@@ -1838,7 +2004,8 @@ class _CreateProfileSheetState
                 children: [
                   Expanded(
                     child: _PictureButton(
-                      icon: Icons.camera_alt_outlined,
+                      icon:
+                          Icons.camera_alt_outlined,
                       label: 'Take photo',
                       onTap:
                           _saving ? null : _takePhoto,
@@ -1865,11 +2032,13 @@ class _CreateProfileSheetState
                 width: double.infinity,
                 height: 54,
                 child: FilledButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed:
+                      _saving ? null : _save,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
+                    shape:
+                        RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius.circular(16),
                     ),
@@ -1971,18 +2140,16 @@ class _CreateProfileCardState
         onTap: widget.onTap,
         child: AnimatedScale(
           scale: _hovered ? 1.045 : 1,
-          duration: const Duration(
-            milliseconds: 180,
-          ),
+          duration:
+              const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           child: SizedBox(
             width: 150,
             child: Column(
               children: [
                 AnimatedContainer(
-                  duration: const Duration(
-                    milliseconds: 180,
-                  ),
+                  duration:
+                      const Duration(milliseconds: 180),
                   width: 142,
                   height: 142,
                   decoration: BoxDecoration(
@@ -2013,7 +2180,8 @@ class _CreateProfileCardState
                   'Add Profile',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    fontWeight:
+                        FontWeight.w600,
                     color: _hovered
                         ? Colors.white
                         : Colors.white70,
@@ -2024,9 +2192,8 @@ class _CreateProfileCardState
 
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
-                  duration: const Duration(
-                    milliseconds: 180,
-                  ),
+                  duration:
+                      const Duration(milliseconds: 180),
                   child: const Text(
                     'Create new',
                     style: TextStyle(
@@ -2048,7 +2215,8 @@ class _CreateProfileCardState
 /// CREATE PROFILE BUTTON
 /// ============================================================
 
-class _CreateProfileButton extends StatelessWidget {
+class _CreateProfileButton
+    extends StatelessWidget {
   final VoidCallback onTap;
 
   const _CreateProfileButton({
@@ -2072,11 +2240,14 @@ class _CreateProfileButton extends StatelessWidget {
         style: FilledButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
-          padding: const EdgeInsets.symmetric(
+          padding:
+              const EdgeInsets.symmetric(
             horizontal: 22,
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(16),
           ),
         ),
       ),
@@ -2095,15 +2266,15 @@ class _NoProfiles extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(
-        maxWidth: 500,
-      ),
+      constraints:
+          const BoxConstraints(maxWidth: 500),
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white.withValues(
           alpha: 0.035,
         ),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius:
+            BorderRadius.circular(22),
         border: Border.all(
           color: Colors.white10,
         ),
@@ -2171,8 +2342,10 @@ class _ProfileLogo extends StatelessWidget {
           width: 68,
           height: 68,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
+            borderRadius:
+                BorderRadius.circular(20),
+            gradient:
+                const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
@@ -2211,7 +2384,8 @@ class _ProfileLogo extends StatelessWidget {
 /// PROFILE BACKGROUND
 /// ============================================================
 
-class _ProfileBackground extends StatelessWidget {
+class _ProfileBackground
+    extends StatelessWidget {
   const _ProfileBackground();
 
   @override

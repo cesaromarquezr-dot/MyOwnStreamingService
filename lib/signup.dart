@@ -17,6 +17,17 @@ class _SignupScreenState extends State<SignupScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
+  final securityAnswerController = TextEditingController();
+  final customQuestionController = TextEditingController();
+
+  static const securityQuestions = [
+    'What was the name of your first pet?',
+    'What city were you born in?',
+    'What was the name of your first school?',
+    'What is your favorite movie?',
+    'Create my own question',
+  ];
+  String selectedSecurityQuestion = securityQuestions.first;
 
   SubscriptionPlan selectedPlan = SubscriptionPlan.monthly;
 
@@ -31,6 +42,8 @@ class _SignupScreenState extends State<SignupScreen> {
     emailController.dispose();
     passwordController.dispose();
     confirmController.dispose();
+    securityAnswerController.dispose();
+    customQuestionController.dispose();
     super.dispose();
   }
 
@@ -41,6 +54,10 @@ class _SignupScreenState extends State<SignupScreen> {
   final email = emailController.text.trim();
   final password = passwordController.text;
   final confirm = confirmController.text;
+  final securityQuestion = selectedSecurityQuestion == 'Create my own question'
+      ? customQuestionController.text.trim()
+      : selectedSecurityQuestion;
+  final securityAnswer = securityAnswerController.text.trim();
 
   if (username.isEmpty ||
       email.isEmpty ||
@@ -71,7 +88,9 @@ class _SignupScreenState extends State<SignupScreen> {
       email: email,
       password: password,
       plan: selectedPlan,
-      firstProfileName: username,
+      firstProfileName: '',
+      securityQuestion: securityQuestion,
+      securityAnswer: securityAnswer,
     );
 
     if (!mounted) return;
@@ -191,6 +210,32 @@ if (currency.isEmpty) {
           width: 1.4,
         ),
       ),
+    );
+  }
+
+
+  Widget _buildSecurityQuestionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        const Text('ACCOUNT SECURITY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: selectedSecurityQuestion,
+          decoration: _inputDecoration(label: 'Security question', icon: Icons.security_rounded),
+          items: securityQuestions.map((q) => DropdownMenuItem(value: q, child: Text(q))).toList(),
+          onChanged: (value) { if (value != null) setState(() => selectedSecurityQuestion = value); },
+        ),
+        if (selectedSecurityQuestion == 'Create my own question') ...[
+          const SizedBox(height: 12),
+          TextField(controller: customQuestionController, decoration: _inputDecoration(label: 'Your custom question', icon: Icons.edit_rounded)),
+        ],
+        const SizedBox(height: 12),
+        TextField(controller: securityAnswerController, obscureText: true, decoration: _inputDecoration(label: 'Answer', icon: Icons.key_rounded)),
+        const SizedBox(height: 8),
+        const Text('If a sign-in looks suspicious, this question will be asked before access is granted.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.35)),
+      ],
     );
   }
 
@@ -492,18 +537,20 @@ if (currency.isEmpty) {
                                 _buildPlanCard(
                                   plan: SubscriptionPlan.monthly,
                                   title: 'Monthly',
-                                  price: '\$9.99',
+                                  price: '\$10.00',
                                   subtitle: 'Billed every month',
                                 ),
                                 const SizedBox(width: 12),
                                 _buildPlanCard(
                                   plan: SubscriptionPlan.yearly,
                                   title: 'Yearly',
-                                  price: '\$99.99',
+                                  price: '\$100.00',
                                   subtitle: 'Best annual value',
                                 ),
                               ],
                             ),
+
+                            _buildSecurityQuestionSection(),
 
                             const SizedBox(height: 18),
 

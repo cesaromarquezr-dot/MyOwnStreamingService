@@ -13,6 +13,10 @@ class Account {
   // It must NEVER contain the user's plaintext password.
   String passwordHash;
 
+  // Security question used to verify suspicious sign-ins.
+  String securityQuestion;
+  String securityAnswerHash;
+
   Subscription? subscription;
 
   final List<Profile> profiles;
@@ -23,15 +27,27 @@ class Account {
   final List<String> wishlistMediaIds;
   final List<String> wishlistRecommendationIds;
 
+  // Account-wide server storage. Every profile shares the same library/storage.
+  int storageLimitBytes;
+  int storageUsedBytes;
+  bool storageRequestPending;
+  DateTime? storageRequestAt;
+
   Account({
     required this.id,
     required this.username,
     required this.email,
     required this.passwordHash,
+    this.securityQuestion = '',
+    this.securityAnswerHash = '',
     this.subscription,
     List<Profile>? profiles,
     List<String>? wishlistMediaIds,
     List<String>? wishlistRecommendationIds,
+    this.storageLimitBytes = 1000000000000,
+    this.storageUsedBytes = 0,
+    this.storageRequestPending = false,
+    this.storageRequestAt,
   })  : profiles = profiles ?? [],
         wishlistMediaIds =
             wishlistMediaIds ?? [],
@@ -214,6 +230,7 @@ class Account {
       'id': id,
       'username': username,
       'email': email,
+      'securityQuestion': securityQuestion,
 
       'profiles': profiles
           .map(
@@ -239,6 +256,10 @@ class Account {
 
       'hasActiveSubscription':
           hasActiveSubscription,
+      'storageLimitBytes': storageLimitBytes,
+      'storageUsedBytes': storageUsedBytes,
+      'storageRequestPending': storageRequestPending,
+      'storageRequestAt': storageRequestAt?.toIso8601String(),
     };
 
     // SECURITY:

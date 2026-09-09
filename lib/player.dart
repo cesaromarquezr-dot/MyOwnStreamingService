@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
-
+import 'device_features.dart';
 import 'app_core.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -1873,15 +1873,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
               _PlayerIconButton(
-                icon:
-                    Icons.audiotrack_rounded,
-                onPressed:
-                    openAudioSubtitleOptions,
+                icon: Icons.cast_rounded,
+                onPressed: _openCastMenu,
+              ),
+              _PlayerIconButton(
+                icon: Icons.audiotrack_rounded,
+                onPressed: openAudioSubtitleOptions,
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _openCastMenu() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DeviceCenterScreen()),
     );
   }
 
