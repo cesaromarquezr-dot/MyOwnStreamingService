@@ -53,10 +53,38 @@ class MediaItem {
   final DateTime addedAt;
   final List<Map<String, dynamic>> seasons;
 
+  // Disc/archive metadata populated by the ARM import workflow.
+  final String? discType;
+  final String? discRegion;
+
+  // Catalog entities and technical metadata discovered during import.
+  final List<String> actors;
+  final List<String> directors;
+  final List<String> writers;
+  final List<String> music;
+  final List<String> genres;
+  final List<String> tags;
+  final List<String> chapters;
+  final List<String> audioTracks;
+  final List<String> subtitles;
+  final List<String> extras;
+
   MediaItem({
     this.trailerUrl,
     DateTime? addedAt,
     List<Map<String, dynamic>>? seasons,
+    this.discType,
+    this.discRegion,
+    List<String>? actors,
+    List<String>? directors,
+    List<String>? writers,
+    List<String>? music,
+    List<String>? genres,
+    List<String>? tags,
+    List<String>? chapters,
+    List<String>? audioTracks,
+    List<String>? subtitles,
+    List<String>? extras,
     required this.id,
     required this.title,
     required this.type,
@@ -66,7 +94,17 @@ class MediaItem {
     this.rating,
     this.ratingReason,
   }) : addedAt = addedAt ?? DateTime.now(),
-       seasons = seasons ?? <Map<String, dynamic>>[];
+       seasons = seasons ?? <Map<String, dynamic>>[],
+       actors = actors ?? <String>[],
+       directors = directors ?? <String>[],
+       writers = writers ?? <String>[],
+       music = music ?? <String>[],
+       genres = genres ?? <String>[],
+       tags = tags ?? <String>[],
+       chapters = chapters ?? <String>[],
+       audioTracks = audioTracks ?? <String>[],
+       subtitles = subtitles ?? <String>[],
+       extras = extras ?? <String>[];
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
     return MediaItem(
@@ -88,6 +126,18 @@ class MediaItem {
       ratingReason: json['ratingReason']?.toString(),
       trailerUrl: json['trailerUrl']?.toString(),
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
+      discType: json['discType']?.toString(),
+      discRegion: json['discRegion']?.toString(),
+      actors: _stringList(json['actors']),
+      directors: _stringList(json['directors']),
+      writers: _stringList(json['writers']),
+      music: _stringList(json['music']),
+      genres: _stringList(json['genres']),
+      tags: _stringList(json['tags']),
+      chapters: _stringList(json['chapters']),
+      audioTracks: _stringList(json['audioTracks']),
+      subtitles: _stringList(json['subtitles']),
+      extras: _stringList(json['extras']),
       seasons: (json['seasons'] is List)
           ? (json['seasons'] as List)
               .whereType<Map>()
@@ -97,6 +147,14 @@ class MediaItem {
     );
   }
 
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return <String>[];
+    return value
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -109,6 +167,18 @@ class MediaItem {
       'ratingReason': ratingReason,
       'trailerUrl': trailerUrl,
       'addedAt': addedAt.toIso8601String(),
+      'discType': discType,
+      'discRegion': discRegion,
+      'actors': actors,
+      'directors': directors,
+      'writers': writers,
+      'music': music,
+      'genres': genres,
+      'tags': tags,
+      'chapters': chapters,
+      'audioTracks': audioTracks,
+      'subtitles': subtitles,
+      'extras': extras,
       'seasons': seasons,
     };
   }
@@ -767,6 +837,14 @@ class AppController extends ChangeNotifier {
 
   final List<MediaItem> library =
       <MediaItem>[];
+
+  // Catalog sections populated when a confirmed ARM import is added.
+  final List<String> actorsCatalog = <String>[];
+  final List<String> directorsCatalog = <String>[];
+  final List<String> writersCatalog = <String>[];
+  final List<String> musicCatalog = <String>[];
+  final List<String> genresCatalog = <String>[];
+  final List<String> tagsCatalog = <String>[];
 
   final List<MediaCollection> collections = <MediaCollection>[];
   final List<String> collectionSectionOrder = <String>[
@@ -1543,12 +1621,28 @@ class AppController extends ChangeNotifier {
 
     library.add(media);
 
+    _mergeCatalog(actorsCatalog, media.actors);
+    _mergeCatalog(directorsCatalog, media.directors);
+    _mergeCatalog(writersCatalog, media.writers);
+    _mergeCatalog(musicCatalog, media.music);
+    _mergeCatalog(genresCatalog, media.genres);
+    _mergeCatalog(tagsCatalog, media.tags);
+
     _addActivity(
       title: media.title,
       action: 'Added to library',
     );
 
     notifyListeners();
+  }
+
+  void _mergeCatalog(List<String> target, List<String> values) {
+    for (final value in values) {
+      final clean = value.trim();
+      if (clean.isNotEmpty && !target.any((item) => item.toLowerCase() == clean.toLowerCase())) {
+        target.add(clean);
+      }
+    }
   }
 
   void removeFromLibrary(

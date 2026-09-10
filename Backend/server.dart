@@ -150,7 +150,7 @@ Future<void> main() async {
   // Replace this with the actual address of your ARM server.
   //
   final armClient = ArmClient(
-    armServerUrl: 'http://YOUR-ARM-SERVER',
+    armServerUrl: AppConfig.armServerUrl,
   );
 
   final armService = ArmService(

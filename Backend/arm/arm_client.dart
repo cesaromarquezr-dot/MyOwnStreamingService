@@ -46,6 +46,10 @@ class ArmClient {
     }
   }
 
+  Future<Map<String, dynamic>> getJsonMode(String mode) {
+    return get('/json?mode=${Uri.encodeQueryComponent(mode)}');
+  }
+
   Future<Map<String, dynamic>> get(
     String path,
   ) async {

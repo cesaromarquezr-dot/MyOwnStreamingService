@@ -1297,6 +1297,24 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
     }
 
+    if (media.discType != null && media.discType!.trim().isNotEmpty) {
+      rows.add(
+        _infoRow(
+          'Disc Type',
+          media.discType!,
+        ),
+      );
+    }
+
+    if (media.discRegion != null && media.discRegion!.trim().isNotEmpty) {
+      rows.add(
+        _infoRow(
+          'Region',
+          media.discRegion!,
+        ),
+      );
+    }
+
     if (rows.isEmpty) {
       return const SizedBox.shrink();
     }

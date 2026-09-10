@@ -1,3 +1,5 @@
+import 'dart:io';
+
 class AppConfig {
   // ---------------------------------------------------------------------------
   // SERVER
@@ -18,6 +20,14 @@ class AppConfig {
   static String get apiBaseUrl {
     return '$baseUrl/api/$apiVersion';
   }
+
+  // ARM
+  // Set ARM_SERVER_URL in the backend environment to the ARM web UI,
+  // for example http://192.168.1.50:8080.
+  static String get armServerUrl =>
+      Platform.environment['ARM_SERVER_URL']?.trim().isNotEmpty == true
+          ? Platform.environment['ARM_SERVER_URL']!.trim()
+          : 'http://127.0.0.1:8081';
 
   // ---------------------------------------------------------------------------
   // AUTHENTICATION

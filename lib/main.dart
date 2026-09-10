@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'signup.dart';
 import 'movies.dart';
 import 'series.dart';
@@ -2217,138 +2218,281 @@ class ImportMediaScreen extends StatefulWidget {
   const ImportMediaScreen({super.key});
 
   @override
-  State<ImportMediaScreen> createState() =>
-      _ImportMediaScreenState();
+  State<ImportMediaScreen> createState() => _ImportMediaScreenState();
 }
 
-class _ImportMediaScreenState
-    extends State<ImportMediaScreen> {
+class _ImportMediaScreenState extends State<ImportMediaScreen> {
   final titleController = TextEditingController();
   final yearController = TextEditingController();
   final posterController = TextEditingController();
-
-  // Trailer URL entered during manual import.
   final trailerController = TextEditingController();
+  final descriptionController = TextEditingController();
+
+  static const discTypes = <String>[
+    'DVD',
+    'Blu-ray',
+    '4K Ultra HD',
+  ];
+
+  static const regions = <String>[
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    'A',
+    'B',
+    'C',
+    '0',
+    'Region Free',
+  ];
 
   String selectedType = 'movie';
-  bool connectArm = false;
+  String selectedDiscType = 'DVD';
+  String selectedRegion = 'Region Free';
+
+  bool armConnected = false;
   bool importing = false;
+  bool verificationPassed = false;
   double progress = 0;
+  String statusMessage = 'ARM is always enabled for disc imports.';
+  String? jobId;
+  String? driveId;
+
+  Map<String, dynamic>? reviewJob;
+  Map<String, dynamic>? verification;
+
+  Timer? _pollTimer;
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     titleController.dispose();
     yearController.dispose();
     posterController.dispose();
     trailerController.dispose();
+    descriptionController.dispose();
     super.dispose();
   }
 
-  Future<void> simulateImport() async {
+  Future<void> _startArmImport() async {
     if (importing) return;
 
     setState(() {
       importing = true;
       progress = 0;
+      verificationPassed = false;
+      reviewJob = null;
+      verification = null;
+      statusMessage = 'Connecting to ARM...';
     });
 
-    for (int i = 1; i <= 20; i++) {
-      await Future.delayed(
-        const Duration(milliseconds: 150),
+    try {
+      final api = AppController.instance.backendApi;
+      final status = await api.getArmStatus();
+
+      if (status['connected'] != true) {
+        throw BackendApiException(
+          'ARM is not reachable. Check ARM_SERVER_URL on the backend.',
+        );
+      }
+
+      armConnected = true;
+
+      final drives = await api.getArmDrives();
+      final drive = drives.whereType<Map>().cast<Map<String, dynamic>>().firstWhere(
+            (item) => item['available'] != false,
+            orElse: () => <String, dynamic>{
+              'id': 'arm-auto',
+              'name': 'ARM automatic drive monitor',
+            },
+          );
+
+      driveId = drive['id']?.toString() ?? 'arm-auto';
+
+      final result = await api.startArmImport(driveId: driveId!);
+      final job = result['job'];
+
+      if (job is! Map) {
+        throw BackendApiException('ARM did not return a rip job.');
+      }
+
+      jobId = job['id']?.toString();
+      statusMessage = job['message']?.toString() ??
+          'ARM is monitoring the drive. Insert the disc to begin.';
+      _beginPolling();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        importing = false;
+        statusMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(statusMessage)),
       );
+    }
+  }
+
+  void _beginPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _pollArmJob(),
+    );
+    _pollArmJob();
+  }
+
+  Future<void> _pollArmJob() async {
+    final id = jobId;
+    if (id == null) return;
+
+    try {
+      final data = await AppController.instance.backendApi.getArmJob(jobId: id);
+      final job = data['job'];
+      if (job is! Map) return;
+
+      final map = Map<String, dynamic>.from(job);
+      final rawProgress = map['progress'];
+      final nextProgress = rawProgress is num
+          ? (rawProgress.toDouble().clamp(0.0, 100.0) / 100.0).toDouble()
+          : progress;
 
       if (!mounted) return;
 
       setState(() {
-        progress = i / 20;
+        progress = nextProgress;
+        statusMessage = map['message']?.toString() ??
+            map['status']?.toString() ??
+            statusMessage;
+        reviewJob = map;
       });
-    }
 
-    if (!mounted) return;
+      final status = map['status']?.toString();
+      if (status == 'readyForReview') {
+        _pollTimer?.cancel();
+        _prepareReview(map);
+      } else if (status == 'rejected' || status == 'failed') {
+        _pollTimer?.cancel();
+        setState(() {
+          importing = false;
+          verificationPassed = false;
+          verification = map['verification'] is Map
+              ? Map<String, dynamic>.from(map['verification'])
+              : null;
+          statusMessage = map['message']?.toString() ??
+              'Disc rejected by the integrity checks.';
+        });
+      }
+    } catch (_) {
+      // Keep polling: ARM jobs can temporarily disappear while ARM refreshes
+      // its database/UI state.
+    }
+  }
+
+  void _prepareReview(Map<String, dynamic> job) {
+    final verificationData = job['verification'];
+    final discType = job['discType']?.toString();
+    final region = job['region']?.toString();
 
     setState(() {
       importing = false;
+      verification = verificationData is Map
+          ? Map<String, dynamic>.from(verificationData)
+          : null;
+      verificationPassed = verification?['passed'] == true;
+      titleController.text = job['title']?.toString() ?? '';
+      selectedType = _normalizeMediaType(job['mediaType']?.toString());
+      selectedDiscType =
+          discTypes.contains(discType) ? discType! : selectedDiscType;
+      selectedRegion =
+          regions.contains(region) ? region! : selectedRegion;
+      statusMessage = verificationPassed
+          ? 'Disc verified. Review the metadata, then click ADD TO LIBRARY.'
+          : 'Disc rejected. It cannot be added to your library.';
     });
-
-    addManualMedia();
   }
 
-  void addManualMedia() {
-    final title = titleController.text.trim();
+  String _normalizeMediaType(String? value) {
+    final v = (value ?? '').toLowerCase();
+    if (v.contains('tv') || v.contains('series') || v.contains('show')) {
+      return 'tvShow';
+    }
+    return 'movie';
+  }
 
+  List<String> _strings(dynamic value) {
+    if (value is! List) return <String>[];
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+
+  void _addVerifiedDiscToLibrary() {
+    if (!verificationPassed || reviewJob == null) return;
+
+    final title = titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Enter a movie or show title.',
-          ),
-        ),
+        const SnackBar(content: Text('A title is required before adding the disc.')),
       );
       return;
     }
 
-    final yearText =
-        yearController.text.trim();
-
-    final year = yearText.isEmpty
-        ? null
-        : int.tryParse(yearText);
-
-    final posterText =
-        posterController.text.trim();
-
-    final trailerText =
-        trailerController.text.trim();
+    final job = reviewJob!;
+    final year = int.tryParse(yearController.text.trim());
+    final poster = posterController.text.trim();
+    final trailer = trailerController.text.trim();
 
     final media = MediaItem(
-      id: DateTime.now()
-          .microsecondsSinceEpoch
-          .toString(),
+      id: 'arm_${DateTime.now().microsecondsSinceEpoch}',
       title: title,
       type: selectedType,
-      imageUrl:
-          posterText.isEmpty
-              ? null
-              : posterText,
-      description:
-          'Imported into your personal library.',
-      releaseYear: year,
-      trailerUrl:
-          trailerText.isEmpty
-              ? null
-              : trailerText,
+      imageUrl: poster.isEmpty ? job['posterUrl']?.toString() : poster,
+      description: descriptionController.text.trim().isEmpty
+          ? job['description']?.toString() ??
+              DescriptionGenerator.movie(title: title, year: year)
+          : descriptionController.text.trim(),
+      releaseYear: year ??
+          (job['year'] is num
+              ? (job['year'] as num).toInt()
+              : int.tryParse(job['year']?.toString() ?? '')),
+      trailerUrl: trailer.isEmpty ? job['trailerUrl']?.toString() : trailer,
+      discType: selectedDiscType,
+      discRegion: selectedRegion,
+      actors: _strings(job['actors']),
+      directors: _strings(job['directors']),
+      writers: _strings(job['writers']),
+      music: _strings(job['music']),
+      genres: _strings(job['genres']),
+      tags: _strings(job['tags']),
+      chapters: _strings(job['chapters']),
+      audioTracks: _strings(job['audioTracks']),
+      subtitles: _strings(job['subtitles']),
+      extras: _strings(job['extras']),
     );
 
-    AppController.instance.addToLibrary(
-      media,
-    );
+    AppController.instance.addToLibrary(media);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '$title added to your library.',
+          '$title added to your library. Actors, directors, music, and other metadata were cataloged.',
         ),
       ),
     );
-
-    titleController.clear();
-    yearController.clear();
-    posterController.clear();
-    trailerController.clear();
 
     Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Add Movie or Show',
-        ),
+        title: const Text('Add Movie or Show'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -2357,175 +2501,262 @@ class _ImportMediaScreenState
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Automatic Disc Import',
+                    'ARM AUTOMATIC DISC IMPORT',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   const Text(
-                    'Connect this app to your home server and ARM to detect and import your own discs.',
+                    'ARM stays enabled. Insert a DVD, Blu-ray, or 4K Ultra HD disc and ARM will detect it and perform the extraction automatically.',
                   ),
+                  const SizedBox(height: 12),
                   SwitchListTile(
-                    contentPadding:
-                        EdgeInsets.zero,
-                    title: const Text(
-                      'Connect to ARM',
-                    ),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('ARM'),
                     subtitle: Text(
-                      connectArm
-                          ? 'ARM connection enabled'
-                          : 'Not connected',
+                      armConnected
+                          ? 'Connected — ARM is enabled permanently'
+                          : 'Always ON — connect to ARM to begin',
                     ),
-                    value: connectArm,
-                    onChanged: (value) {
-                      setState(() {
-                        connectArm = value;
-                      });
-                    },
+                    value: true,
+                    onChanged: null,
                   ),
-                  const ListTile(
-                    contentPadding:
-                        EdgeInsets.zero,
-                    leading: Icon(
-                      Icons.disc_full,
-                    ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.disc_full),
                     title: Text(
-                      'Optical Drive',
+                      driveId == null
+                          ? 'Optical Drive'
+                          : 'Optical Drive: $driveId',
                     ),
-                    subtitle: Text(
-                      'Waiting for home-server connection',
-                    ),
+                    subtitle: Text(statusMessage),
                   ),
                   if (importing) ...[
-                    const SizedBox(height: 10),
-                    LinearProgressIndicator(
-                      value: progress,
-                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(value: progress),
                     const SizedBox(height: 8),
                     Text(
-                      'Importing '
-                      '${(progress * 100).round()}%',
+                      '${(progress * 100).round()}% • $statusMessage',
                     ),
                   ],
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: importing
-                          ? null
-                          : simulateImport,
-                      icon: const Icon(
-                        Icons.disc_full,
-                      ),
-                      label: const Text(
-                        'START AUTOMATIC RIP',
-                      ),
+                      onPressed: importing ? null : _startArmImport,
+                      icon: const Icon(Icons.play_circle_fill),
+                      label: const Text('DETECT DISC / START ARM MONITOR'),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 25),
-          const Text(
-            'Manual Import / Metadata',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 15),
-          DropdownButtonFormField<String>(
-            initialValue: selectedType,
-            decoration: const InputDecoration(
-              labelText: 'Type',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem<String>(
-                value: 'movie',
-                child: Text('Movie'),
-              ),
-              DropdownMenuItem<String>(
-                value: 'tvShow',
-                child: Text('TV Show'),
-              ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-
-              setState(() {
-                selectedType = value;
-              });
-            },
-          ),
-          const SizedBox(height: 15),
-          TextField(
-            controller: titleController,
-            decoration: const InputDecoration(
-              labelText: 'Title',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 15),
-          TextField(
-            controller: yearController,
-            keyboardType:
-                TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Year',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 15),
-          TextField(
-            controller: posterController,
-            decoration: const InputDecoration(
-              labelText:
-                  'Poster URL (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-
-          // Trailer URL.
-          const SizedBox(height: 15),
-          TextField(
-            controller: trailerController,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'Trailer URL (optional)',
-              hintText: 'Paste YouTube trailer URL...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-
           const SizedBox(height: 20),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton(
-              onPressed: addManualMedia,
-              child: const Text(
-                'ADD TO MY LIBRARY',
+
+          if (verification != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      verificationPassed
+                          ? 'DISC VERIFICATION PASSED'
+                          : 'DISC REJECTED',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: verificationPassed
+                            ? Colors.greenAccent
+                            : Colors.redAccent,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      verification?['reason']?.toString() ??
+                          'No verification message.',
+                    ),
+                    const SizedBox(height: 10),
+                    if (verification?['durationSeconds'] != null)
+                      Text(
+                        'Ripped runtime: ${_formatSeconds(verification!['durationSeconds'])}',
+                      ),
+                    if (verification?['chapterCount'] != null)
+                      Text(
+                        'Chapters detected: ${verification!['chapterCount']}',
+                      ),
+                    const SizedBox(height: 8),
+                    ..._strings(verification?['failures']).map(
+                      (failure) => Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '• $failure',
+                          style: const TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+
+          if (reviewJob != null && verificationPassed) ...[
+            const SizedBox(height: 20),
+            const Text(
+              'IMPORT REVIEW',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedType,
+              decoration: const InputDecoration(
+                labelText: 'Media Type',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'movie', child: Text('Movie')),
+                DropdownMenuItem(value: 'tvShow', child: Text('TV Show')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => selectedType = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: yearController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Year',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedDiscType,
+              decoration: const InputDecoration(
+                labelText: 'Disc Type',
+                border: OutlineInputBorder(),
+              ),
+              items: discTypes
+                  .map(
+                    (type) => DropdownMenuItem(
+                      value: type,
+                      child: Text(type),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => selectedDiscType = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedRegion,
+              decoration: const InputDecoration(
+                labelText: 'Region',
+                border: OutlineInputBorder(),
+              ),
+              items: regions
+                  .map(
+                    (region) => DropdownMenuItem(
+                      value: region,
+                      child: Text(region),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => selectedRegion = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: posterController,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Poster URL (optional fallback)',
+                hintText: 'Use this if the disc/metadata provider has no poster.',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: trailerController,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Trailer URL (optional fallback)',
+                hintText: 'Use this if the disc/metadata provider has no trailer.',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descriptionController,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .04),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                'When you add this verified disc, its actors, directors, writers, music, genres, tags, chapters, audio tracks, subtitles, and extras will be cataloged with the media.',
+                style: TextStyle(color: Colors.grey.shade300),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 54,
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _addVerifiedDiscToLibrary,
+                icon: const Icon(Icons.library_add),
+                label: const Text('ADD TO LIBRARY'),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 30),
           Text(
-            'Current profile: '
-            '${controller.currentProfile?.name ?? 'None'}',
-            style: TextStyle(
-              color: Colors.grey.shade400,
-            ),
+            'Current profile: ${controller.currentProfile?.name ?? 'None'}',
+            style: TextStyle(color: Colors.grey.shade400),
           ),
         ],
       ),
     );
+  }
+
+  String _formatSeconds(dynamic value) {
+    final seconds = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '') ?? 0;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${secs.toString().padLeft(2, '0')}';
   }
 }
 

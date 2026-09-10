@@ -48,6 +48,14 @@ class Media {
   // Release information.
   final DateTime? releaseDate;
 
+  // Physical-disc/archive metadata.
+  final String? discType;
+  final String? discRegion;
+  final List<String> chapters;
+  final List<String> audioTracks;
+  final List<String> subtitles;
+  final List<String> extras;
+
   // Availability.
   //
   // These describe where the title can be streamed or purchased.
@@ -81,6 +89,12 @@ class Media {
     this.episodeNumber,
     this.totalEpisodesInSeason,
     this.releaseDate,
+    this.discType,
+    this.discRegion,
+    this.chapters = const [],
+    this.audioTracks = const [],
+    this.subtitles = const [],
+    this.extras = const [],
     this.watchOptions = const [],
     this.purchaseOptions = const [],
   });
@@ -125,6 +139,12 @@ class Media {
       'totalEpisodesInSeason': totalEpisodesInSeason,
 
       'releaseDate': releaseDate?.toIso8601String(),
+      'discType': discType,
+      'discRegion': discRegion,
+      'chapters': List<String>.from(chapters),
+      'audioTracks': List<String>.from(audioTracks),
+      'subtitles': List<String>.from(subtitles),
+      'extras': List<String>.from(extras),
 
       'watchOptions': watchOptions
           .map((option) => option.toJson())
@@ -170,6 +190,12 @@ class Media {
           _parseInt(json['totalEpisodesInSeason']),
 
       releaseDate: _parseDate(json['releaseDate']),
+      discType: _nullableString(json['discType']),
+      discRegion: _nullableString(json['discRegion']),
+      chapters: _stringList(json['chapters']),
+      audioTracks: _stringList(json['audioTracks']),
+      subtitles: _stringList(json['subtitles']),
+      extras: _stringList(json['extras']),
 
       watchOptions:
           _watchOptions(json['watchOptions']),

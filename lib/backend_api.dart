@@ -1381,29 +1381,81 @@ class BackendApi {
   // ARM
   // ==========================================================
 
-  Future<List<dynamic>> getArmDrives() async {
+  Future<Map<String, dynamic>> getArmStatus() async {
+    _requireAuthentication();
     final response = await http.get(
-      Uri.parse('$baseUrl/arm/drives'),
+      Uri.parse('$baseUrl/arm/status'),
       headers: _headers,
     );
+    return _requireSuccess(response, 'Unable to connect to ARM.');
+  }
 
-    final data = _decodeResponse(response);
+  Future<List<dynamic>> getArmDrives() async {
+  _requireAuthentication();
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ??
-            'Unable to retrieve ARM drives.',
-        statusCode: response.statusCode,
-      );
-    }
+  final response = await http.get(
+    Uri.parse('$baseUrl/arm/drives'),
+    headers: _headers,
+  );
 
-    final drives = data['drives'];
+  final data = await _requireSuccess(
+    response,
+    'Unable to retrieve ARM drives.',
+  );
 
-    if (drives is List) {
-      return drives;
-    }
+  final drives = data['drives'];
 
-    return [];
+  if (drives is! List) {
+    return <dynamic>[];
+  }
+
+  return drives;
+}
+
+  Future<Map<String, dynamic>> scanArmDisc({
+    required String driveId,
+  }) async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/arm/scan'),
+      headers: _headers,
+      body: jsonEncode({'driveId': driveId}),
+    );
+    return _requireSuccess(response, 'Unable to scan the ARM disc.');
+  }
+
+  Future<Map<String, dynamic>> startArmImport({
+    required String driveId,
+  }) async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/arm/import'),
+      headers: _headers,
+      body: jsonEncode({'driveId': driveId}),
+    );
+    return _requireSuccess(response, 'Unable to start ARM disc monitoring.');
+  }
+
+  Future<Map<String, dynamic>> getArmJob({
+    required String jobId,
+  }) async {
+    _requireAuthentication();
+    final response = await http.get(
+      Uri.parse('$baseUrl/arm/jobs/${Uri.encodeComponent(jobId)}'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to retrieve ARM job status.');
+  }
+
+  Future<Map<String, dynamic>> cancelArmJob({
+    required String jobId,
+  }) async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/arm/jobs/${Uri.encodeComponent(jobId)}/cancel'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to cancel the ARM import.');
   }
 
   // ==========================================================
