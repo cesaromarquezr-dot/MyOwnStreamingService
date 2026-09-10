@@ -99,6 +99,7 @@ class ArmService {
       discType: _normalizeDiscType(_string(job, ['disctype', 'discType'])),
       region: _string(job, ['region']),
       detected: true,
+      titles: _extractDiscTitles(job),
     );
   }
 
@@ -222,6 +223,8 @@ class ArmService {
     local.mediaType = _string(arm, ['videotype', 'mediaType', 'type']);
     local.discType = _normalizeDiscType(_string(arm, ['disctype', 'discType']));
     local.region = _string(arm, ['region']);
+    local.collectionTitle = _string(arm, ['disc_title', 'discTitle', 'collectionTitle', 'collection', 'title']);
+    local.titles = _extractDiscTitles(arm);
     local.outputPath = _string(
       arm,
       ['outputPath', 'output_path', 'path', 'destination', 'destination_path'],
@@ -287,6 +290,60 @@ class ArmService {
       if (parsed != null) return parsed;
     }
     return null;
+  }
+
+  List<ArmDiscTitle> _extractDiscTitles(Map<String, dynamic> arm) {
+    final raw = arm['titles'] ??
+        arm['discTitles'] ??
+        arm['features'] ??
+        arm['playlists'] ??
+        arm['titleList'] ??
+        arm['title_list'];
+
+    final values = <dynamic>[];
+    if (raw is List) {
+      values.addAll(raw);
+    } else if (raw is Map) {
+      values.addAll(raw.values);
+    }
+
+    final titles = <ArmDiscTitle>[];
+    for (var i = 0; i < values.length; i++) {
+      final value = values[i];
+      if (value is! Map) continue;
+      final title = ArmDiscTitle.fromJson(
+        Map<String, dynamic>.from(value),
+        fallbackId: 'title_${i + 1}',
+      );
+      if (title.title.trim().isEmpty ||
+          title.title.toLowerCase() == 'unknown title') {
+        continue;
+      }
+      titles.add(title);
+    }
+
+    // Some ARM integrations expose a single feature directly on the job
+    // rather than returning a titles array. Preserve that as a one-title disc.
+    if (titles.isEmpty) {
+      final title = _string(arm, ['title', 'name']);
+      if (title != null) {
+        titles.add(
+          ArmDiscTitle(
+            id: _string(arm, ['title_id', 'titleId', 'id']) ?? 'title_1',
+            title: title,
+            mediaType: _string(arm, ['videotype', 'mediaType', 'type']) ?? 'movie',
+            classification: _string(arm, ['classification', 'kind', 'contentType']) ?? 'feature',
+            year: _int(arm, ['year', 'releaseYear']),
+            durationSeconds: _double(arm, ['durationSeconds', 'duration', 'runtime', 'length']),
+            confidence: _double(arm, ['confidence', 'matchConfidence']) ?? 0,
+            outputPath: _string(arm, ['outputPath', 'output_path', 'path', 'destination', 'destination_path']),
+            metadata: Map<String, dynamic>.from(arm),
+          ),
+        );
+      }
+    }
+
+    return titles;
   }
 
   String? _normalizeDiscType(String? value) {

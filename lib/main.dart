@@ -2465,6 +2465,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
   Map<String, dynamic>? reviewJob;
   Map<String, dynamic>? verification;
+  List<Map<String, dynamic>> detectedDiscTitles = <Map<String, dynamic>>[];
+  final Set<String> selectedDiscTitleIds = <String>{};
 
   Timer? _pollTimer;
 
@@ -2598,20 +2600,64 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     final discType = job['discType']?.toString();
     final region = job['region']?.toString();
 
+    final rawTitles = job['titles'];
+    final titles = <Map<String, dynamic>>[];
+    if (rawTitles is List) {
+      for (var i = 0; i < rawTitles.length; i++) {
+        final value = rawTitles[i];
+        if (value is Map) {
+          final map = Map<String, dynamic>.from(value);
+          final id = map['id']?.toString().trim();
+          map['id'] = (id == null || id.isEmpty) ? 'title_${i + 1}' : id;
+          titles.add(map);
+        }
+      }
+    }
+
+    if (titles.isEmpty && (job['title']?.toString().trim().isNotEmpty ?? false)) {
+      titles.add({
+        'id': 'title_1',
+        'title': job['title']?.toString(),
+        'mediaType': job['mediaType']?.toString() ?? 'movie',
+        'classification': 'feature',
+        'year': job['year'],
+        'durationSeconds': job['durationSeconds'] ?? job['duration'],
+        'confidence': job['confidence'] ?? 0,
+        'outputPath': job['outputPath'],
+        'metadata': job,
+      });
+    }
+
     setState(() {
       importing = false;
       verification = verificationData is Map
           ? Map<String, dynamic>.from(verificationData)
           : null;
       verificationPassed = verification?['passed'] == true;
-      titleController.text = job['title']?.toString() ?? '';
-      selectedType = _normalizeMediaType(job['mediaType']?.toString());
+      detectedDiscTitles = titles;
+      selectedDiscTitleIds
+        ..clear()
+        ..addAll(
+          titles
+              .where(_isImportableDiscTitle)
+              .map((title) => title['id'].toString()),
+        );
+      titleController.text = titles.isNotEmpty
+          ? titles.first['title']?.toString() ?? ''
+          : job['title']?.toString() ?? '';
+      selectedType = _normalizeMediaType(
+        titles.isNotEmpty
+            ? titles.first['mediaType']?.toString()
+            : job['mediaType']?.toString(),
+      );
       selectedDiscType =
           discTypes.contains(discType) ? discType! : selectedDiscType;
       selectedRegion =
           regions.contains(region) ? region! : selectedRegion;
       statusMessage = verificationPassed
-          ? 'Disc verified. Review the metadata, then click ADD TO LIBRARY.'
+          ? titles.length > 1
+              ? 'Disc verified. ARM detected ${titles.length} separate titles on this disc. Review them before adding them to your library.'
+              : 'Disc verified. Review the metadata, then click ADD TO LIBRARY.'
           : 'Disc rejected. It cannot be added to your library.';
     });
   }
@@ -2622,6 +2668,21 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       return 'tvShow';
     }
     return 'movie';
+  }
+
+  bool _isImportableDiscTitle(Map<String, dynamic> title) {
+    final type = (title['mediaType']?.toString() ?? 'movie').toLowerCase();
+    final classification = (title['classification']?.toString() ?? 'feature').toLowerCase();
+    final movieLike = type.contains('movie') ||
+        type.contains('film') ||
+        type.contains('tv') ||
+        type.contains('show') ||
+        type.contains('series');
+    final featureLike = classification.isEmpty ||
+        classification == 'feature' ||
+        classification == 'feature_film' ||
+        classification == 'main_feature';
+    return movieLike && featureLike;
   }
 
   List<String> _strings(dynamic value) {
@@ -2651,53 +2712,89 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     }
 
     if (!mounted) return;
-    final title = titleController.text.trim();
-    if (title.isEmpty) {
+    final job = reviewJob!;
+    final selectedTitles = detectedDiscTitles
+        .where((title) => selectedDiscTitleIds.contains(title['id']?.toString()))
+        .toList();
+
+    if (selectedTitles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A title is required before adding the disc.')),
+        const SnackBar(content: Text('Select at least one title from the disc before adding it.')),
       );
       return;
     }
 
-    final job = reviewJob!;
-    final year = int.tryParse(yearController.text.trim());
     final poster = posterController.text.trim();
     final trailer = trailerController.text.trim();
+    final collectionId = job['discId']?.toString() ??
+        job['disc_id']?.toString() ??
+        'disc_${DateTime.now().microsecondsSinceEpoch}';
+    final collectionTitle = job['collectionTitle']?.toString() ??
+        job['discTitle']?.toString() ??
+        job['title']?.toString() ??
+        'Imported Disc';
+    final discNumber = job['discNumber'] is num
+        ? (job['discNumber'] as num).toInt()
+        : int.tryParse(job['discNumber']?.toString() ?? '');
 
-    final media = MediaItem(
-      id: 'arm_${DateTime.now().microsecondsSinceEpoch}',
-      title: title,
-      type: selectedType,
-      imageUrl: poster.isEmpty ? job['posterUrl']?.toString() : poster,
-      description: descriptionController.text.trim().isEmpty
-          ? job['description']?.toString() ??
-              DescriptionGenerator.movie(title: title, year: year)
-          : descriptionController.text.trim(),
-      releaseYear: year ??
-          (job['year'] is num
-              ? (job['year'] as num).toInt()
-              : int.tryParse(job['year']?.toString() ?? '')),
-      trailerUrl: trailer.isEmpty ? job['trailerUrl']?.toString() : trailer,
-      discType: selectedDiscType,
-      discRegion: selectedRegion,
-      actors: _strings(job['actors']),
-      directors: _strings(job['directors']),
-      writers: _strings(job['writers']),
-      music: _strings(job['music']),
-      genres: _strings(job['genres']),
-      tags: _strings(job['tags']),
-      chapters: _strings(job['chapters']),
-      audioTracks: _strings(job['audioTracks']),
-      subtitles: _strings(job['subtitles']),
-      extras: _strings(job['extras']),
-    );
+    for (final titleData in selectedTitles) {
+      final title = titleData['title']?.toString().trim() ?? '';
+      if (title.isEmpty) continue;
 
-    AppController.instance.addToLibrary(media);
+      final metadata = titleData['metadata'] is Map
+          ? Map<String, dynamic>.from(titleData['metadata'] as Map)
+          : <String, dynamic>{};
+      final year = titleData['year'] is num
+          ? (titleData['year'] as num).toInt()
+          : int.tryParse(titleData['year']?.toString() ?? '') ??
+              (metadata['year'] is num
+                  ? (metadata['year'] as num).toInt()
+                  : int.tryParse(metadata['year']?.toString() ?? '') ??
+                      (job['year'] is num
+                          ? (job['year'] as num).toInt()
+                          : int.tryParse(job['year']?.toString() ?? '')));
+      final media = MediaItem(
+        id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
+        title: title,
+        type: _normalizeMediaType(titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
+        imageUrl: poster.isEmpty
+            ? (titleData['posterUrl']?.toString() ?? metadata['posterUrl']?.toString() ?? job['posterUrl']?.toString())
+            : poster,
+        description: descriptionController.text.trim().isEmpty
+            ? titleData['description']?.toString() ?? metadata['description']?.toString() ?? job['description']?.toString() ?? DescriptionGenerator.movie(title: title, year: year)
+            : descriptionController.text.trim(),
+        releaseYear: year,
+        trailerUrl: trailer.isEmpty
+            ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
+            : trailer,
+        discType: selectedDiscType,
+        discRegion: selectedRegion,
+        discCollectionId: collectionId,
+        discCollectionTitle: collectionTitle,
+        discNumber: discNumber,
+        discTitleId: titleData['id']?.toString(),
+        actors: _strings(titleData['actors']).isNotEmpty ? _strings(titleData['actors']) : (metadata['actors'] is List ? _strings(metadata['actors']) : _strings(job['actors'])),
+        directors: _strings(titleData['directors']).isNotEmpty ? _strings(titleData['directors']) : (metadata['directors'] is List ? _strings(metadata['directors']) : _strings(job['directors'])),
+        writers: _strings(titleData['writers']).isNotEmpty ? _strings(titleData['writers']) : (metadata['writers'] is List ? _strings(metadata['writers']) : _strings(job['writers'])),
+        music: _strings(titleData['music']).isNotEmpty ? _strings(titleData['music']) : (metadata['music'] is List ? _strings(metadata['music']) : _strings(job['music'])),
+        genres: _strings(titleData['genres']).isNotEmpty ? _strings(titleData['genres']) : (metadata['genres'] is List ? _strings(metadata['genres']) : _strings(job['genres'])),
+        tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
+        chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
+        audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
+        subtitles: _strings(titleData['subtitles']).isNotEmpty ? _strings(titleData['subtitles']) : (metadata['subtitles'] is List ? _strings(metadata['subtitles']) : _strings(job['subtitles'])),
+        extras: _strings(titleData['extras']).isNotEmpty ? _strings(titleData['extras']) : (metadata['extras'] is List ? _strings(metadata['extras']) : _strings(job['extras'])),
+      );
 
+      AppController.instance.addToLibrary(media);
+    }
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '$title added to your library. Actors, directors, music, and other metadata were cataloged.',
+          selectedTitles.length == 1
+              ? '${selectedTitles.first['title']} added to your library.'
+              : '${selectedTitles.length} separate titles from this disc were added to your library.',
         ),
       ),
     );
@@ -2777,6 +2874,56 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             ),
           ),
           const SizedBox(height: 20),
+
+          if (detectedDiscTitles.length > 1) ...[
+            const SizedBox(height: 20),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'MULTI-TITLE DISC DETECTED',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'ARM found ${detectedDiscTitles.length} separate title candidates on this physical disc. Each selected movie will become its own library item while remaining linked to the same disc.',
+                      style: const TextStyle(color: Colors.white70, height: 1.35),
+                    ),
+                    const SizedBox(height: 10),
+                    ...detectedDiscTitles.map((title) {
+                      final id = title['id']?.toString() ?? '';
+                      final selected = selectedDiscTitleIds.contains(id);
+                      final confidence = title['confidence'];
+                      final confidenceText = confidence is num && confidence > 0
+                          ? ' • ${(confidence.toDouble() <= 1 ? confidence.toDouble() * 100 : confidence.toDouble()).round()}% match'
+                          : '';
+                      return CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: selected,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == true) {
+                              selectedDiscTitleIds.add(id);
+                            } else {
+                              selectedDiscTitleIds.remove(id);
+                            }
+                          });
+                        },
+                        title: Text(title['title']?.toString() ?? 'Unknown title'),
+                        subtitle: Text(
+                          '${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           if (verification != null)
             Card(

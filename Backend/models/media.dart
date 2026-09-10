@@ -51,6 +51,10 @@ class Media {
   // Physical-disc/archive metadata.
   final String? discType;
   final String? discRegion;
+  final String? discCollectionId;
+  final String? discCollectionTitle;
+  final int? discNumber;
+  final String? discTitleId;
   final List<String> chapters;
   final List<String> audioTracks;
   final List<String> subtitles;
@@ -91,6 +95,10 @@ class Media {
     this.releaseDate,
     this.discType,
     this.discRegion,
+    this.discCollectionId,
+    this.discCollectionTitle,
+    this.discNumber,
+    this.discTitleId,
     this.chapters = const [],
     this.audioTracks = const [],
     this.subtitles = const [],
@@ -141,6 +149,10 @@ class Media {
       'releaseDate': releaseDate?.toIso8601String(),
       'discType': discType,
       'discRegion': discRegion,
+      'discCollectionId': discCollectionId,
+      'discCollectionTitle': discCollectionTitle,
+      'discNumber': discNumber,
+      'discTitleId': discTitleId,
       'chapters': List<String>.from(chapters),
       'audioTracks': List<String>.from(audioTracks),
       'subtitles': List<String>.from(subtitles),
@@ -192,6 +204,10 @@ class Media {
       releaseDate: _parseDate(json['releaseDate']),
       discType: _nullableString(json['discType']),
       discRegion: _nullableString(json['discRegion']),
+      discCollectionId: _nullableString(json['discCollectionId']),
+      discCollectionTitle: _nullableString(json['discCollectionTitle']),
+      discNumber: _parseInt(json['discNumber']),
+      discTitleId: _nullableString(json['discTitleId']),
       chapters: _stringList(json['chapters']),
       audioTracks: _stringList(json['audioTracks']),
       subtitles: _stringList(json['subtitles']),

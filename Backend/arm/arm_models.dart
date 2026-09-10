@@ -32,6 +32,68 @@ class ArmDrive {
       };
 }
 
+
+class ArmDiscTitle {
+  final String id;
+  final String title;
+  final String mediaType;
+  final String? classification;
+  final int? year;
+  final double? durationSeconds;
+  final double confidence;
+  final String? outputPath;
+  final Map<String, dynamic> metadata;
+
+  ArmDiscTitle({
+    required this.id,
+    required this.title,
+    this.mediaType = 'movie',
+    this.classification = 'feature',
+    this.year,
+    this.durationSeconds,
+    this.confidence = 0,
+    this.outputPath,
+    this.metadata = const {},
+  });
+
+  bool get isFeatureMovie {
+    final type = mediaType.toLowerCase();
+    final kind = (classification ?? '').toLowerCase();
+    return (type.contains('movie') || type.contains('film')) &&
+        (kind.isEmpty || kind == 'feature' || kind == 'feature_film' || kind == 'main_feature');
+  }
+
+  factory ArmDiscTitle.fromJson(Map<String, dynamic> json, {String? fallbackId}) {
+    final rawConfidence = json['confidence'] ?? json['matchConfidence'];
+    return ArmDiscTitle(
+      id: json['id']?.toString() ?? json['titleId']?.toString() ?? fallbackId ?? '',
+      title: json['title']?.toString() ?? json['name']?.toString() ?? 'Unknown title',
+      mediaType: json['mediaType']?.toString() ?? json['type']?.toString() ?? json['videotype']?.toString() ?? 'movie',
+      classification: json['classification']?.toString() ?? json['kind']?.toString() ?? json['contentType']?.toString() ?? 'feature',
+      year: _int(json['year'] ?? json['releaseYear']),
+      durationSeconds: _double(json['durationSeconds'] ?? json['duration'] ?? json['runtime'] ?? json['length']),
+      confidence: rawConfidence is num ? rawConfidence.toDouble() : double.tryParse(rawConfidence?.toString() ?? '') ?? 0,
+      outputPath: json['outputPath']?.toString() ?? json['output_path']?.toString() ?? json['path']?.toString(),
+      metadata: Map<String, dynamic>.from(json),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'mediaType': mediaType,
+        'classification': classification,
+        'year': year,
+        'durationSeconds': durationSeconds,
+        'confidence': confidence,
+        'outputPath': outputPath,
+        'metadata': metadata,
+      };
+
+  static double? _double(dynamic value) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '');
+  static int? _int(dynamic value) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+}
+
 class ArmDisc {
   final String driveId;
   final String? title;
@@ -39,6 +101,7 @@ class ArmDisc {
   final String? discType;
   final String? region;
   final bool detected;
+  final List<ArmDiscTitle> titles;
 
   ArmDisc({
     required this.driveId,
@@ -47,6 +110,7 @@ class ArmDisc {
     this.discType,
     this.region,
     required this.detected,
+    this.titles = const [],
   });
 
   factory ArmDisc.fromJson(Map<String, dynamic> json) => ArmDisc(
@@ -56,6 +120,9 @@ class ArmDisc {
         discType: json['discType']?.toString(),
         region: json['region']?.toString(),
         detected: json['detected'] == true,
+        titles: json['titles'] is List
+            ? (json['titles'] as List).whereType<Map>().map((e) => ArmDiscTitle.fromJson(Map<String, dynamic>.from(e))).toList()
+            : const [],
       );
 
   Map<String, dynamic> toJson() => {
@@ -65,6 +132,7 @@ class ArmDisc {
         'discType': discType,
         'region': region,
         'detected': detected,
+        'titles': titles.map((title) => title.toJson()).toList(),
       };
 }
 
@@ -166,6 +234,8 @@ class ArmRipJob {
   DateTime createdAt;
   DateTime? completedAt;
   ArmVerificationResult? verification;
+  List<ArmDiscTitle> titles;
+  String? collectionTitle;
 
   ArmRipJob({
     required this.id,
@@ -181,6 +251,8 @@ class ArmRipJob {
     this.region,
     this.completedAt,
     this.verification,
+    this.titles = const [],
+    this.collectionTitle,
   });
 
   bool get isFinished =>
@@ -207,6 +279,9 @@ class ArmRipJob {
         'completedAt': completedAt?.toIso8601String(),
         'isFinished': isFinished,
         'verification': verification?.toJson(),
+        'collectionTitle': collectionTitle,
+        'titleCount': titles.length,
+        'titles': titles.map((title) => title.toJson()).toList(),
       };
 }
 

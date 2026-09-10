@@ -1315,6 +1315,24 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
     }
 
+    if (media.discCollectionTitle != null && media.discCollectionTitle!.trim().isNotEmpty) {
+      rows.add(
+        _infoRow(
+          'Disc Collection',
+          media.discCollectionTitle!,
+        ),
+      );
+    }
+
+    if (media.discNumber != null) {
+      rows.add(
+        _infoRow(
+          'Disc Number',
+          media.discNumber!.toString(),
+        ),
+      );
+    }
+
     if (rows.isEmpty) {
       return const SizedBox.shrink();
     }

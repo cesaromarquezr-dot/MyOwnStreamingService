@@ -56,6 +56,10 @@ class MediaItem {
   // Disc/archive metadata populated by the ARM import workflow.
   final String? discType;
   final String? discRegion;
+  final String? discCollectionId;
+  final String? discCollectionTitle;
+  final int? discNumber;
+  final String? discTitleId;
 
   // Catalog entities and technical metadata discovered during import.
   final List<String> actors;
@@ -75,6 +79,10 @@ class MediaItem {
     List<Map<String, dynamic>>? seasons,
     this.discType,
     this.discRegion,
+    this.discCollectionId,
+    this.discCollectionTitle,
+    this.discNumber,
+    this.discTitleId,
     List<String>? actors,
     List<String>? directors,
     List<String>? writers,
@@ -128,6 +136,10 @@ class MediaItem {
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
       discType: json['discType']?.toString(),
       discRegion: json['discRegion']?.toString(),
+      discCollectionId: json['discCollectionId']?.toString(),
+      discCollectionTitle: json['discCollectionTitle']?.toString(),
+      discNumber: json['discNumber'] is num ? (json['discNumber'] as num).toInt() : int.tryParse(json['discNumber']?.toString() ?? ''),
+      discTitleId: json['discTitleId']?.toString(),
       actors: _stringList(json['actors']),
       directors: _stringList(json['directors']),
       writers: _stringList(json['writers']),
@@ -169,6 +181,10 @@ class MediaItem {
       'addedAt': addedAt.toIso8601String(),
       'discType': discType,
       'discRegion': discRegion,
+      'discCollectionId': discCollectionId,
+      'discCollectionTitle': discCollectionTitle,
+      'discNumber': discNumber,
+      'discTitleId': discTitleId,
       'actors': actors,
       'directors': directors,
       'writers': writers,
