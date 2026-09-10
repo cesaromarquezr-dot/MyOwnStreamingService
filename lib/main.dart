@@ -11,6 +11,11 @@ import 'hollywood.dart';
 import 'details.dart';
 import 'profiles.dart';
 import 'feature_center.dart';
+import 'ultimate_features.dart';
+import 'remote_access.dart';
+import 'account_settings.dart';
+import 'device_features.dart';
+import 'roadmap_features.dart';
 void main() {
   runApp(const MyStreamingService());
 }
@@ -388,6 +393,7 @@ class HomeCustomization {
   String navbarPosition;
   String storageBarPosition;
   List<String> sectionOrder;
+  List<String> navigationOrder;
 
   HomeCustomization({
     this.showHero = true,
@@ -403,6 +409,7 @@ class HomeCustomization {
     this.navbarPosition = 'Bottom',
     this.storageBarPosition = 'Above Navbar',
     List<String>? sectionOrder,
+    List<String>? navigationOrder,
   }) : sectionOrder = sectionOrder ?? [
           'Continue Watching',
           'Recently Watched',
@@ -411,6 +418,16 @@ class HomeCustomization {
           'New Additions',
           'All Library',
           'Recommendations',
+        ],
+        navigationOrder = navigationOrder ?? [
+          'Home',
+          'Movies',
+          'TV Shows',
+          'Actors',
+          'Music',
+          'Trailers',
+          'Search',
+          'Collections',
         ];
 
   HomeCustomization copy() => HomeCustomization(
@@ -427,30 +444,53 @@ class HomeCustomization {
         navbarPosition: navbarPosition,
         storageBarPosition: storageBarPosition,
         sectionOrder: List<String>.from(sectionOrder),
+        navigationOrder: List<String>.from(navigationOrder),
       );
 }
 
 class HomeCustomizationStore {
   HomeCustomizationStore._();
 
-  static final HomeCustomization settings = HomeCustomization();
-  static bool hasConfigured = false;
+  static final Map<String, HomeCustomization> _settings =
+      <String, HomeCustomization>{};
 
-  static void apply(HomeCustomization value) {
-    settings.showHero = value.showHero;
-    settings.showContinueWatching = value.showContinueWatching;
-    settings.showRecentlyWatched = value.showRecentlyWatched;
-    settings.showMovies = value.showMovies;
-    settings.showTvShows = value.showTvShows;
-    settings.showNewAdditions = value.showNewAdditions;
-    settings.showAllLibrary = value.showAllLibrary;
-    settings.showRecommendations = value.showRecommendations;
-    settings.heroStyle = value.heroStyle;
-    settings.cardSize = value.cardSize;
-    settings.navbarPosition = value.navbarPosition;
-    settings.storageBarPosition = value.storageBarPosition;
-    settings.sectionOrder = List<String>.from(value.sectionOrder);
-    hasConfigured = true;
+  // A profile is considered configured only after the user explicitly saves
+  // the first-time customization screen. Reading default settings must not
+  // count as configuration.
+  static final Set<String> _configuredProfiles = <String>{};
+
+  static String _key(Profile? profile) => profile?.id ?? 'default';
+
+  static HomeCustomization settingsFor(Profile? profile) {
+    return _settings.putIfAbsent(
+      _key(profile),
+      () => HomeCustomization(),
+    ).copy();
+  }
+
+  // Backwards-compatible accessor for code that only needs the current profile.
+  static HomeCustomization get settings => settingsFor(AppController.instance.currentProfile);
+
+  static bool isConfigured(Profile? profile) =>
+      _configuredProfiles.contains(_key(profile));
+
+  static bool get hasConfigured =>
+      isConfigured(AppController.instance.currentProfile);
+
+  static void apply(HomeCustomization value, [Profile? profile]) {
+    final key = _key(profile ?? AppController.instance.currentProfile);
+    _settings[key] = value.copy();
+    _configuredProfiles.add(key);
+  }
+
+  static void removeProfile(Profile profile) {
+    _settings.remove(profile.id);
+    _configuredProfiles.remove(profile.id);
+  }
+
+  static void clear() {
+    _settings.clear();
+    _configuredProfiles.clear();
   }
 }
 
@@ -475,14 +515,14 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   @override
   void initState() {
     super.initState();
-    draft = HomeCustomizationStore.settings.copy();
+    draft = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     detailsDraft = DetailsCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
   }
 
   void _save() {
-    HomeCustomizationStore.apply(draft);
+    HomeCustomizationStore.apply(draft, AppController.instance.currentProfile);
     DetailsCustomizationStore.apply(
       AppController.instance.currentProfile,
       detailsDraft,
@@ -503,18 +543,24 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white.withValues(alpha: .06)),
       ),
-      child: SwitchListTile.adaptive(
-        value: value,
-        onChanged: onChanged,
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: SwitchListTile.adaptive(
+          tileColor: Colors.transparent,
+          value: value,
+          onChanged: onChanged,
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: const TextStyle(color: Colors.white54),
+          ),
+          activeThumbColor: Colors.redAccent,
         ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(color: Colors.white54),
-        ),
-        activeThumbColor: Colors.redAccent,
       ),
     );
   }
@@ -786,6 +832,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           subtitle: 'Drag Home sections to change their order.',
           items: draft.sectionOrder,
         ),
+        const SizedBox(height: 24),
+        _sectionOrder(
+          title: 'NAVIGATION ORDER',
+          subtitle: 'Drag navigation items to personalize this profile.',
+          items: draft.navigationOrder,
+          onChanged: (value) => setState(() => draft.navigationOrder = value),
+        ),
       ],
     );
   }
@@ -1036,14 +1089,23 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 onChanged(reordered);
               } else {
                 setState(() {
-                  draft.sectionOrder = reordered;
+                  if (identical(items, draft.navigationOrder)) {
+                    draft.navigationOrder = reordered;
+                  } else {
+                    draft.sectionOrder = reordered;
+                  }
                 });
               }
             },
             itemBuilder: (context, index) {
               final name = items[index];
-              return ListTile(
+              return Material(
                 key: ValueKey('${title}_$name'),
+                color: const Color(0xFF151515),
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  tileColor: Colors.transparent,
                 leading: CircleAvatar(
                   radius: 18,
                   backgroundColor: Colors.red.withValues(alpha: .12),
@@ -1059,6 +1121,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 trailing: const Icon(
                   Icons.drag_indicator_rounded,
                   color: Colors.white38,
+                  ),
                 ),
               );
             },
@@ -1137,7 +1200,12 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || HomeCustomizationStore.hasConfigured) return;
+      if (!mounted ||
+          HomeCustomizationStore.isConfigured(
+            AppController.instance.currentProfile,
+          )) {
+        return;
+      }
       Navigator.of(context).push<bool>(
         MaterialPageRoute(
           fullscreenDialog: true,
@@ -1170,6 +1238,12 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ).then((_) { if (mounted) setState(() {}); });
         },
+        onFeatureCenter: () { Navigator.pop(context); _openFeatureCenter(); },
+        onEverything: () { Navigator.pop(context); _openEverything(); },
+        onRemoteAccess: () { Navigator.pop(context); _openRemoteAccess(); },
+        onAccountSettings: () { Navigator.pop(context); _openAccountSettings(); },
+        onDevices: () { Navigator.pop(context); _openDevices(); },
+        onRoadmapFeatures: () { Navigator.pop(context); _openRoadmapFeatures(); },
       ),
     );
   }
@@ -1182,6 +1256,30 @@ class _MainScreenState extends State<MainScreen> {
   void _openProfiles() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()))
         .then((_) { if (mounted) setState(() {}); });
+  }
+
+  void _openFeatureCenter() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const FeatureCenterScreen()));
+  }
+
+  void _openEverything() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const UltimateFeaturesScreen()));
+  }
+
+  void _openRemoteAccess() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const RemoteAccessScreen()));
+  }
+
+  void _openAccountSettings() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsScreen()));
+  }
+
+  void _openDevices() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()));
+  }
+
+  void _openRoadmapFeatures() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const RoadmapFeaturesScreen()));
   }
 
   void _openGroup() {
@@ -1210,10 +1308,11 @@ class _MainScreenState extends State<MainScreen> {
       const CollectionsPanel(),
     ];
 
-    final settings = HomeCustomizationStore.settings;
+    final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final navbar = _StreamingNavigationBar(
       selectedIndex: selectedIndex,
       position: settings.navbarPosition,
+      navigationOrder: settings.navigationOrder,
       onSelect: (index) { if (index != selectedIndex) setState(() => selectedIndex = index); },
       onNotifications: _openNotifications,
       onGroup: _openGroup,
@@ -1255,6 +1354,7 @@ class _MainScreenState extends State<MainScreen> {
 class _StreamingNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final String position;
+  final List<String> navigationOrder;
   final ValueChanged<int> onSelect;
   final VoidCallback onNotifications;
   final VoidCallback onGroup;
@@ -1264,6 +1364,7 @@ class _StreamingNavigationBar extends StatelessWidget {
   const _StreamingNavigationBar({
     required this.selectedIndex,
     required this.position,
+    required this.navigationOrder,
     required this.onSelect,
     required this.onNotifications,
     required this.onGroup,
@@ -1285,8 +1386,18 @@ class _StreamingNavigationBar extends StatelessWidget {
     ];
     final vertical = position == 'Left' || position == 'Right';
     final floating = position == 'Floating';
+    final indexByLabel = <String, int>{
+      for (var i = 0; i < items.length; i++) items[i].label: i,
+    };
+    final orderedItems = navigationOrder
+        .map((label) => indexByLabel[label])
+        .whereType<int>()
+        .toList();
+    for (var i = 0; i < items.length; i++) {
+      if (!orderedItems.contains(i)) orderedItems.add(i);
+    }
     final actions = [
-      for (var i = 0; i < items.length; i++)
+      for (final i in orderedItems)
         _NavButton(data: items[i], selected: selectedIndex == i, vertical: vertical, onTap: () => onSelect(i)),
       _NavButton(data: const _NavItemData(Icons.notifications_none_rounded, Icons.notifications_rounded, 'Notifications'), selected: false, vertical: vertical, showBadge: AppController.instance.activity.isNotEmpty, onTap: onNotifications),
       _NavButton(data: const _NavItemData(Icons.groups_outlined, Icons.groups_rounded, 'Group Chat'), selected: false, vertical: vertical, onTap: onGroup),
@@ -1377,12 +1488,24 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onProfiles;
   final VoidCallback onWishlist;
   final VoidCallback onCustomize;
+  final VoidCallback onFeatureCenter;
+  final VoidCallback onEverything;
+  final VoidCallback onRemoteAccess;
+  final VoidCallback onAccountSettings;
+  final VoidCallback onDevices;
+  final VoidCallback onRoadmapFeatures;
 
   const _MoreActionsSheet({
     required this.onImport,
     required this.onProfiles,
     required this.onWishlist,
     required this.onCustomize,
+    required this.onFeatureCenter,
+    required this.onEverything,
+    required this.onRemoteAccess,
+    required this.onAccountSettings,
+    required this.onDevices,
+    required this.onRoadmapFeatures,
   });
 
   @override
@@ -1416,6 +1539,42 @@ class _MoreActionsSheet extends StatelessWidget {
             title: 'Customize App',
             subtitle: 'Customize Home and Details',
             onTap: onCustomize,
+          ),
+          _SheetAction(
+            icon: Icons.auto_awesome_rounded,
+            title: 'Discover & Recaps',
+            subtitle: 'Recommendations, collections, achievements and recaps',
+            onTap: onFeatureCenter,
+          ),
+          _SheetAction(
+            icon: Icons.apps_rounded,
+            title: 'Everything',
+            subtitle: 'Security, AI, stats, travel, backup and more',
+            onTap: onEverything,
+          ),
+          _SheetAction(
+            icon: Icons.devices_other_rounded,
+            title: 'Remote Access',
+            subtitle: 'Manage trusted remote computers and imports',
+            onTap: onRemoteAccess,
+          ),
+          _SheetAction(
+            icon: Icons.settings_rounded,
+            title: 'Account Settings',
+            subtitle: 'Storage, subscription and account controls',
+            onTap: onAccountSettings,
+          ),
+          _SheetAction(
+            icon: Icons.devices_rounded,
+            title: 'Device Center',
+            subtitle: 'Downloads, casting, HDMI and Bluetooth guidance',
+            onTap: onDevices,
+          ),
+          _SheetAction(
+            icon: Icons.rocket_launch_rounded,
+            title: '34-Feature Roadmap',
+            subtitle: 'Open every implemented roadmap feature',
+            onTap: onRoadmapFeatures,
           ),
         ],
       ),
@@ -1493,36 +1652,49 @@ class _PremiumSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * .82;
+
     return SafeArea(
-      child: Container(
-        margin: const EdgeInsets.all(10),
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-        decoration: BoxDecoration(
-          color: const Color(0xFF141414),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: .08)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Container(
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141414),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: .08)),
             ),
-            const SizedBox(height: 18),
-            Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(color: Colors.white54)),
-            const SizedBox(height: 16),
-            child,
-          ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Colors.white54)),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: child,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1652,7 +1824,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final library = controller.library;
-    final settings = HomeCustomizationStore.settings;
+    final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
 
     // Deliberately keep the empty home completely clean. All management
     // actions live in the navigation bar's More menu.
@@ -3990,21 +4162,6 @@ class _GroupRecommendationCardState
       return;
     }
 
-    final participants =
-        _stringSet(
-      widget.recommendation['activeParticipants'],
-    );
-
-    if (participants.isNotEmpty &&
-        !participants.contains(
-          currentProfile.id,
-        )) {
-      _showMessage(
-        'Your profile is not eligible to vote on this recommendation.',
-      );
-      return;
-    }
-
     final votes =
         _votesMap(
       widget.recommendation['votes'],
@@ -4192,23 +4349,12 @@ class _GroupRecommendationCardState
             ? null
             : votes[currentProfile.id];
 
-    final participants =
-        _stringSet(
-      recommendation['activeParticipants'],
-    );
-
-    final isParticipant =
-        currentProfile != null &&
-        (participants.isEmpty ||
-            participants.contains(
-              currentProfile.id,
-            ));
-
+    // All profiles belonging to the account can vote. The only per-profile
+    // restriction is one vote per recommendation.
     final canVote =
         status == 'voting' &&
         remaining > Duration.zero &&
         currentProfile != null &&
-        isParticipant &&
         currentVote == null &&
         !voting;
 
@@ -4410,15 +4556,6 @@ class _GroupRecommendationCardState
                         ),
                       ),
                     ],
-                  ),
-                )
-              else if (!isParticipant &&
-                  currentProfile != null)
-                Text(
-                  'Your profile is not eligible to vote.',
-                  style: TextStyle(
-                    color:
-                        Colors.grey.shade400,
                   ),
                 )
               else if (currentProfile == null)
@@ -5205,7 +5342,18 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
           const SizedBox(height: 18),
           Container(
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
-            child: SwitchListTile.adaptive(title: const Text('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: const Text('Use subtitles for this session', style: TextStyle(color: Colors.white38, fontSize: 12)), value: subtitlesEnabled, onChanged: (value) => setState(() => subtitlesEnabled = value)),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(17),
+              clipBehavior: Clip.antiAlias,
+              child: SwitchListTile.adaptive(
+                tileColor: Colors.transparent,
+                title: const Text('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Use subtitles for this session', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                value: subtitlesEnabled,
+                onChanged: (value) => setState(() => subtitlesEnabled = value),
+              ),
+            ),
           ),
           const SizedBox(height: 28),
           FilledButton.icon(
@@ -5314,23 +5462,6 @@ Map<String, String> _votesMap(
   );
 
   return result;
-}
-
-Set<String> _stringSet(
-  dynamic value,
-) {
-  if (value is! Iterable) {
-    return <String>{};
-  }
-
-  return value
-      .map(
-        (item) => item.toString(),
-      )
-      .where(
-        (item) => item.isNotEmpty,
-      )
-      .toSet();
 }
 
 double _percentage(

@@ -83,43 +83,15 @@ class GroupRecommendationService {
       );
     }
 
-    if (activeParticipants.isEmpty) {
-      throw ArgumentError(
-        'At least one active participant is required.',
-      );
-    }
-
+    // Every profile on the account can vote on every recommendation.
+    // Keep the legacy activeParticipants field populated for clients that
+    // still render it, but never use it as an eligibility restriction.
     final Set<String> normalizedParticipants =
-        activeParticipants
-            .map(
-              (profileId) => profileId.trim(),
-            )
-            .where(
-              (profileId) => profileId.isNotEmpty,
-            )
-            .toSet();
+        account.profiles.map((profile) => profile.id).toSet();
 
     if (normalizedParticipants.isEmpty) {
       throw ArgumentError(
-        'At least one active participant is required.',
-      );
-    }
-
-    for (final String profileId
-        in normalizedParticipants) {
-      if (account.getProfileById(profileId) ==
-          null) {
-        throw ArgumentError(
-          'Profile "$profileId" does not belong to this account.',
-        );
-      }
-    }
-
-    if (!normalizedParticipants.contains(
-      normalizedProfileId,
-    )) {
-      throw ArgumentError(
-        'The recommending profile must be an active participant.',
+        'At least one profile is required before creating a recommendation.',
       );
     }
 
@@ -282,13 +254,6 @@ class GroupRecommendationService {
         GroupRecommendationStatus.voting) {
       throw StateError(
         'Voting is no longer available for this recommendation.',
-      );
-    }
-
-    if (!recommendation.activeParticipants
-        .contains(normalizedProfileId)) {
-      throw StateError(
-        'This profile was not active when voting started.',
       );
     }
 

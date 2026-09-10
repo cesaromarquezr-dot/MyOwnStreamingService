@@ -2035,20 +2035,17 @@ class AppController extends ChangeNotifier {
       cleanedMediaId = null;
     }
 
-    final Set<String> participants =
-        activeParticipants == null
-            ? <String>{}
-            : Set<String>.from(
-                activeParticipants,
-              );
+    // Recommendation voting is account-wide for normal profiles.  The
+    // creator may still supply a participant list, but every profile on the
+    // current account is always eligible so one profile cannot accidentally
+    // create a recommendation that other profiles cannot vote on.
+    final Set<String> participants = <String>{
+      ...?activeParticipants,
+      ...?currentAccount?.profiles.map((profile) => profile.id),
+    };
 
-    participants.removeWhere(
-      (id) => id.trim().isEmpty,
-    );
-
-    participants.add(
-      cleanedProfileId,
-    );
+    participants.removeWhere((id) => id.trim().isEmpty);
+    participants.add(cleanedProfileId);
 
     final response =
         await backendApi
