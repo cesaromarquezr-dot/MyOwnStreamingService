@@ -177,6 +177,14 @@ class AuthRoutes {
     final securityQuestion = _readRequiredString(body, 'securityQuestion');
     final securityAnswer = _readRequiredString(body, 'securityAnswer');
 
+    final termsVersion = _readRequiredString(body, 'termsVersion');
+    final privacyVersion = _readRequiredString(body, 'privacyVersion');
+    final acceptableUseVersion = _readRequiredString(body, 'acceptableUseVersion');
+    final legalAcceptedAt = DateTime.tryParse(body['legalAcceptedAt']?.toString() ?? '');
+    if (legalAcceptedAt == null) {
+      throw HttpException('A valid legal acceptance timestamp is required.');
+    }
+
     final planValue =
         body['plan']
             ?.toString()
@@ -198,6 +206,10 @@ class AuthRoutes {
           firstProfileName,
       securityQuestion: securityQuestion,
       securityAnswer: securityAnswer,
+      termsVersion: termsVersion,
+      privacyVersion: privacyVersion,
+      acceptableUseVersion: acceptableUseVersion,
+      legalAcceptedAt: legalAcceptedAt.toUtc(),
     );
 
     // Signup does not create a normal login session.

@@ -14,6 +14,9 @@ import 'routes/arm_routes.dart';
 import 'routes/group_routes.dart';
 import 'routes/remote_access_routes.dart';
 import 'routes/storage_routes.dart';
+import 'routes/platform_routes.dart';
+import 'routes/library_routes.dart';
+import 'routes/legal_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -164,6 +167,9 @@ Future<void> main() async {
 
   final remoteAccessService = RemoteAccessService(database);
   final storageRoutes = StorageRoutes(authentication: authentication, email: emailService);
+  final platformRoutes = PlatformRoutes(authentication: authentication);
+  final libraryRoutes = LibraryRoutes(authentication: authentication);
+  final legalRoutes = LegalRoutes(authentication: authentication);
 
   final remoteAccessRoutes = RemoteAccessRoutes(
     authentication: authentication,
@@ -257,6 +263,9 @@ Future<void> main() async {
       armRoutes,
       remoteAccessRoutes,
       storageRoutes,
+      platformRoutes,
+      libraryRoutes,
+      legalRoutes,
     );
   }
 }
@@ -275,6 +284,9 @@ Future<void> _handleRequest(
   ArmRoutes armRoutes,
   RemoteAccessRoutes remoteAccessRoutes,
   StorageRoutes storageRoutes,
+  PlatformRoutes platformRoutes,
+  LibraryRoutes libraryRoutes,
+  LegalRoutes legalRoutes,
 ) async {
   try {
     _addCorsHeaders(request.response);
@@ -367,6 +379,21 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/storage')) {
       await storageRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/platform/')) {
+      await platformRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/library/')) {
+      await libraryRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/legal/')) {
+      await legalRoutes.handle(request);
       return;
     }
 

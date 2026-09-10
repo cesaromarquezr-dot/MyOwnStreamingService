@@ -35,6 +35,9 @@ class _SignupScreenState extends State<SignupScreen> {
   bool obscurePassword = true;
   bool obscureConfirm = true;
   bool creatingAccount = false;
+  bool termsAccepted = false;
+  bool privacyAccepted = false;
+  bool acceptableUseAccepted = false;
 
   @override
   void dispose() {
@@ -74,6 +77,11 @@ class _SignupScreenState extends State<SignupScreen> {
 
   if (password != confirm) {
     _showMessage('Passwords do not match.');
+    return;
+  }
+
+  if (!termsAccepted || !privacyAccepted || !acceptableUseAccepted) {
+    _showMessage('Please review and accept the Terms of Service, Privacy Policy, and Copyright & Acceptable Use Policy.');
     return;
   }
 
@@ -609,6 +617,72 @@ if (currency.isEmpty) {
 
                             const SizedBox(height: 18),
 
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.035),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'LEGAL AGREEMENTS',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Please review and accept all three requirements before continuing to payment.',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.58),
+                                      fontSize: 12,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    value: termsAccepted,
+                                    onChanged: creatingAccount
+                                        ? null
+                                        : (value) => setState(() => termsAccepted = value ?? false),
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    title: const Text('I agree to the Terms of Service.'),
+                                  ),
+                                  CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    value: privacyAccepted,
+                                    onChanged: creatingAccount
+                                        ? null
+                                        : (value) => setState(() => privacyAccepted = value ?? false),
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    title: const Text('I acknowledge the Privacy Policy.'),
+                                  ),
+                                  CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    value: acceptableUseAccepted,
+                                    onChanged: creatingAccount
+                                        ? null
+                                        : (value) => setState(() => acceptableUseAccepted = value ?? false),
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    title: const Text('I agree to the Copyright & Acceptable Use Policy.'),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 18),
+
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -639,8 +713,9 @@ if (currency.isEmpty) {
                             const SizedBox(height: 6),
 
                             Text(
-                              'By continuing, you agree to the Terms of Service '
-                              'and Privacy Policy.',
+                              'By continuing, you confirm that you have reviewed and accepted '
+                              'the Terms of Service, Privacy Policy, and Copyright & '
+                              'Acceptable Use Policy.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.38),

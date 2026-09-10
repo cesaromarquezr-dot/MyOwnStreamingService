@@ -56,6 +56,24 @@ class BackendApi {
     return headers;
   }
 
+  Future<Map<String, dynamic>> getLegalPolicies() async {
+    final response = await http.get(Uri.parse('$baseUrl/legal/policies'), headers: _headers);
+    final data = _decodeResponse(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendApiException(data['error']?.toString() ?? 'Unable to load legal policies.', statusCode: response.statusCode);
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> getLegalAcceptance() async {
+    final response = await http.get(Uri.parse('$baseUrl/legal/account-acceptance'), headers: _headers);
+    final data = _decodeResponse(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendApiException(data['error']?.toString() ?? 'Unable to load legal acceptance.', statusCode: response.statusCode);
+    }
+    return data;
+  }
+
   // ==========================================================
   // AUTH
   // ==========================================================
@@ -76,6 +94,9 @@ class BackendApi {
     required String plan,
     required String securityQuestion,
     required String securityAnswer,
+    required String termsVersion,
+    required String privacyVersion,
+    required String acceptableUseVersion,
   }) async {
     final cleanPlan = plan.trim().toLowerCase();
 
@@ -98,6 +119,10 @@ class BackendApi {
         'plan': cleanPlan,
         'securityQuestion': securityQuestion,
         'securityAnswer': securityAnswer,
+        'termsVersion': termsVersion,
+        'privacyVersion': privacyVersion,
+        'acceptableUseVersion': acceptableUseVersion,
+        'legalAcceptedAt': DateTime.now().toUtc().toIso8601String(),
       }),
     );
 
@@ -478,6 +503,35 @@ class BackendApi {
     final data = _requireSuccess(response, 'Unable to delete account.');
     clearToken();
     return data;
+  }
+
+
+  Future<Map<String, dynamic>> getLibraryPrivacy() async {
+    _requireAuthentication();
+    final response = await http.get(
+      Uri.parse('$baseUrl/library/privacy'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to retrieve library privacy settings.');
+  }
+
+  Future<Map<String, dynamic>> confirmOwnershipDeclaration() async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/library/ownership-declaration'),
+      headers: _headers,
+      body: jsonEncode({'confirmed': true}),
+    );
+    return _requireSuccess(response, 'Unable to record the ownership declaration.');
+  }
+
+  Future<Map<String, dynamic>> requestLibraryDeletion() async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/library/deletion-request'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to request library deletion.');
   }
 
   Future<Map<String, dynamic>> getStorage() async {
@@ -1411,7 +1465,6 @@ class BackendApi {
 
   return drives;
 }
-
 
   Future<Map<String, dynamic>> scanArmDisc({
     required String driveId,

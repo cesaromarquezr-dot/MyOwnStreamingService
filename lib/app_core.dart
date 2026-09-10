@@ -1009,6 +1009,9 @@ class AppController extends ChangeNotifier {
       plan: planValue,
       securityQuestion: securityQuestion,
       securityAnswer: securityAnswer,
+      termsVersion: '2026-09-10',
+      privacyVersion: '2026-09-10',
+      acceptableUseVersion: '2026-09-10',
     );
 
     final accountData =

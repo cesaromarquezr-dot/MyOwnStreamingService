@@ -33,6 +33,12 @@ class Account {
   bool storageRequestPending;
   DateTime? storageRequestAt;
 
+  // Versioned legal acceptance recorded at account creation.
+  String termsVersionAccepted;
+  String privacyVersionAccepted;
+  String acceptableUseVersionAccepted;
+  DateTime? legalAcceptedAt;
+
   Account({
     required this.id,
     required this.username,
@@ -48,6 +54,10 @@ class Account {
     this.storageUsedBytes = 0,
     this.storageRequestPending = false,
     this.storageRequestAt,
+    this.termsVersionAccepted = '',
+    this.privacyVersionAccepted = '',
+    this.acceptableUseVersionAccepted = '',
+    this.legalAcceptedAt,
   })  : profiles = profiles ?? [],
         wishlistMediaIds =
             wishlistMediaIds ?? [],
@@ -260,6 +270,11 @@ class Account {
       'storageUsedBytes': storageUsedBytes,
       'storageRequestPending': storageRequestPending,
       'storageRequestAt': storageRequestAt?.toIso8601String(),
+      'legalAccepted': termsVersionAccepted.isNotEmpty && privacyVersionAccepted.isNotEmpty && acceptableUseVersionAccepted.isNotEmpty,
+      'termsVersionAccepted': termsVersionAccepted,
+      'privacyVersionAccepted': privacyVersionAccepted,
+      'acceptableUseVersionAccepted': acceptableUseVersionAccepted,
+      'legalAcceptedAt': legalAcceptedAt?.toIso8601String(),
     };
 
     // SECURITY:

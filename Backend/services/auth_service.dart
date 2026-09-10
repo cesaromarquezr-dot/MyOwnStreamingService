@@ -98,6 +98,10 @@ class AuthService {
     required String firstProfileName,
     required String securityQuestion,
     required String securityAnswer,
+    required String termsVersion,
+    required String privacyVersion,
+    required String acceptableUseVersion,
+    required DateTime legalAcceptedAt,
   }) async {
     final cleanUsername = username.trim();
     final cleanEmail = email.trim().toLowerCase();
@@ -136,6 +140,10 @@ class AuthService {
       throw Exception('A security question and answer are required.');
     }
 
+    if (termsVersion.trim().isEmpty || privacyVersion.trim().isEmpty || acceptableUseVersion.trim().isEmpty) {
+      throw Exception('Current legal policies must be accepted.');
+    }
+
     final passwordHash = await _hashPassword(password);
     final securityAnswerHash = await _hashPassword(securityAnswer.trim().toLowerCase());
 
@@ -146,6 +154,10 @@ class AuthService {
       passwordHash: passwordHash,
       securityQuestion: securityQuestion.trim(),
       securityAnswerHash: securityAnswerHash,
+      termsVersionAccepted: termsVersion.trim(),
+      privacyVersionAccepted: privacyVersion.trim(),
+      acceptableUseVersionAccepted: acceptableUseVersion.trim(),
+      legalAcceptedAt: legalAcceptedAt.toUtc(),
     );
 
     // New accounts intentionally start with ZERO profiles.

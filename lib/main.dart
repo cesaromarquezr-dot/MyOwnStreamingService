@@ -12,10 +12,14 @@ import 'details.dart';
 import 'profiles.dart';
 import 'feature_center.dart';
 import 'ultimate_features.dart';
+import 'ultimate_platform.dart';
+import 'library_privacy.dart';
 import 'remote_access.dart';
 import 'account_settings.dart';
 import 'device_features.dart';
 import 'roadmap_features.dart';
+import 'next_gen_features.dart';
+import 'how_it_works.dart';
 void main() {
   runApp(const MyStreamingService());
 }
@@ -89,10 +93,11 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
+          builder: (_) => HowItWorksScreen(
+            loginBuilder: (_) => const LoginScreen(),
+          ),
         ),
       );
     });
@@ -1244,6 +1249,7 @@ class _MainScreenState extends State<MainScreen> {
         onAccountSettings: () { Navigator.pop(context); _openAccountSettings(); },
         onDevices: () { Navigator.pop(context); _openDevices(); },
         onRoadmapFeatures: () { Navigator.pop(context); _openRoadmapFeatures(); },
+        onNextGen: () { Navigator.pop(context); _openNextGen(); },
       ),
     );
   }
@@ -1280,6 +1286,10 @@ class _MainScreenState extends State<MainScreen> {
 
   void _openRoadmapFeatures() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const RoadmapFeaturesScreen()));
+  }
+
+  void _openNextGen() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const NextGenFeaturesScreen()));
   }
 
   void _openGroup() {
@@ -1494,6 +1504,7 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onAccountSettings;
   final VoidCallback onDevices;
   final VoidCallback onRoadmapFeatures;
+  final VoidCallback onNextGen;
 
   const _MoreActionsSheet({
     required this.onImport,
@@ -1506,6 +1517,7 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onAccountSettings,
     required this.onDevices,
     required this.onRoadmapFeatures,
+    required this.onNextGen,
   });
 
   @override
@@ -1569,6 +1581,24 @@ class _MoreActionsSheet extends StatelessWidget {
             title: 'Device Center',
             subtitle: 'Downloads, casting, HDMI and Bluetooth guidance',
             onTap: onDevices,
+          ),
+          _SheetAction(
+            icon: Icons.auto_awesome_rounded,
+            title: 'Next-Gen Features',
+            subtitle: 'Smart discovery, My Stuff, stats, downloads, privacy and advanced settings',
+            onTap: onNextGen,
+          ),
+          _SheetAction(
+            icon: Icons.workspace_premium_rounded,
+            title: 'Ultimate Platform',
+            subtitle: 'AI, premium player, family, social, cloud, security, devices and Studio',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UltimatePlatformScreen())),
+          ),
+          _SheetAction(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy & Ownership',
+            subtitle: 'Private library, authorized media, storage and account deletion',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryPrivacyScreen())),
           ),
           _SheetAction(
             icon: Icons.rocket_launch_rounded,
@@ -2427,6 +2457,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   bool armConnected = false;
   bool importing = false;
   bool verificationPassed = false;
+  bool ownershipConfirmed = false;
   double progress = 0;
   String statusMessage = 'ARM is always enabled for disc imports.';
   String? jobId;
@@ -2601,9 +2632,25 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         .toList();
   }
 
-  void _addVerifiedDiscToLibrary() {
+  Future<void> _addVerifiedDiscToLibrary() async {
     if (!verificationPassed || reviewJob == null) return;
+    if (!ownershipConfirmed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please confirm that you own or are legally authorized to use this media.')),
+      );
+      return;
+    }
+    try {
+      await AppController.instance.backendApi.confirmOwnershipDeclaration();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+      return;
+    }
 
+    if (!mounted) return;
     final title = titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2886,6 +2933,17 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            Material(
+              color: Colors.transparent,
+              child: CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: ownershipConfirmed,
+                onChanged: (value) => setState(() => ownershipConfirmed = value ?? false),
+                title: const Text('I own or am legally authorized to use this media.'),
+                subtitle: const Text('My Streaming Service provides storage and streaming infrastructure; applicable local law determines what copying and remote streaming are permitted.'),
+              ),
+            ),
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
