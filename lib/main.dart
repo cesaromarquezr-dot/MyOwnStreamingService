@@ -705,38 +705,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   void _normalizeHomePositions() {
-    const positions = <String>['Top', 'Bottom', 'Left', 'Right'];
-
-    // The navbar owns its side first. Storage and Live Sports are normalized
-    // onto different remaining sides so a saved configuration can never hide
-    // them by placing all three controls in the same location.
-    final blocked = <String>{};
-    if (draft.navbarPosition != 'Floating') blocked.add(draft.navbarPosition);
-
-    if (draft.storageBarPosition != 'Hidden' &&
-        !positions.contains(draft.storageBarPosition)) {
-      draft.storageBarPosition = positions.firstWhere(
-        (position) => !blocked.contains(position),
-        orElse: () => 'Bottom',
-      );
+    // All three edge controls may intentionally share the same side. The Home
+    // layout distributes 2 items as outer slots and 3 items as left/center/right
+    // (or top/middle/bottom) slots, so do not move saved positions here.
+    const positions = <String>{'Top', 'Bottom', 'Left', 'Right'};
+    if (!positions.contains(draft.navbarPosition) && draft.navbarPosition != 'Floating') {
+      draft.navbarPosition = 'Bottom';
     }
-    if (draft.storageBarPosition != 'Hidden' &&
-        blocked.contains(draft.storageBarPosition)) {
-      draft.storageBarPosition = positions.firstWhere(
-        (position) => !blocked.contains(position),
-        orElse: () => 'Hidden',
-      );
+    if (!positions.contains(draft.storageBarPosition) && draft.storageBarPosition != 'Hidden') {
+      draft.storageBarPosition = 'Bottom';
     }
-    if (draft.storageBarPosition != 'Hidden') {
-      blocked.add(draft.storageBarPosition);
-    }
-
-    if (!positions.contains(draft.liveSportsPosition) ||
-        blocked.contains(draft.liveSportsPosition)) {
-      draft.liveSportsPosition = positions.firstWhere(
-        (position) => !blocked.contains(position),
-        orElse: () => 'Top',
-      );
+    if (!positions.contains(draft.liveSportsPosition)) {
+      draft.liveSportsPosition = 'Top';
     }
   }
 
@@ -763,12 +743,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     Navigator.of(context).pop(true);
   }
 
-  List<String> _availableHomePositions(HomeCustomization value, {bool allowHidden = false, bool excludeNavbar = true}) {
+  List<String> _availableHomePositions(HomeCustomization value, {bool allowHidden = false, bool excludeNavbar = false}) {
     final positions = <String>['Top', 'Bottom', 'Left', 'Right'];
-    if (excludeNavbar) positions.removeWhere((p) => p == value.navbarPosition);
-    if (excludeNavbar && value.storageBarPosition != 'Hidden') positions.removeWhere((p) => p == value.storageBarPosition);
+    // Multiple controls are allowed on the same side. HomePositionedLayout
+    // resolves those into separate edge slots.
     if (allowHidden) positions.add('Hidden');
-    return positions.isEmpty ? <String>['Top'] : positions;
+    return positions;
   }
 
   /// Performs `_toggle` for this feature. Update this documentation when its contract changes.
@@ -2541,6 +2521,7 @@ class _HomeScreenState extends State<HomeScreen>
             SliverAppBar(
               pinned: true,
               floating: true,
+              automaticallyImplyLeading: false,
               elevation: 0,
               backgroundColor: const Color(0xE6070707),
               surfaceTintColor: Colors.transparent,

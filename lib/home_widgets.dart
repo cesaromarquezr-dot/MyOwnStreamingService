@@ -7,7 +7,9 @@ import 'app_core.dart';
 import 'music.dart';
 
 class HomeLiveSportsWidget extends StatefulWidget {
-  const HomeLiveSportsWidget({super.key});
+  final bool compact;
+
+  const HomeLiveSportsWidget({super.key, this.compact = false});
 
   @override
   State<HomeLiveSportsWidget> createState() => _HomeLiveSportsWidgetState();
@@ -278,9 +280,16 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
     final upcoming = _sortedUpcoming.take(8).toList();
     final followedLive = live.any(_matchesFollow);
 
+    if (widget.compact) {
+      return _buildCompact(context, live, followedLive);
+    }
+
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showLiveSportsDialog(context),
+        child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,65 +298,139 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
               children: [
                 const Icon(Icons.sports_score_rounded),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'LIVE SPORTS',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Choose leagues shown on Home',
-                  onPressed: _chooseVisibleLeagues,
-                  icon: const Icon(Icons.filter_list_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Refresh scores',
-                  onPressed: loading ? null : _load,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
+                const Expanded(child: Text('LIVE SPORTS', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+                IconButton(tooltip: 'Choose leagues shown on Home', onPressed: _chooseVisibleLeagues, icon: const Icon(Icons.filter_list_rounded)),
+                IconButton(tooltip: 'Refresh scores', onPressed: loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
               ],
             ),
             if (loading) const LinearProgressIndicator(minHeight: 2),
-            if (!loading && live.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Text('No live games are available right now.'),
-              ),
-            if (followedLive && live.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'A followed team is playing — showing only followed-team live games.',
-                  style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-              ),
-            if (live.isNotEmpty)
-              SizedBox(
-                height: 170,
-                child: Scrollbar(
+            if (!loading && live.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('No live games are available right now.')),
+            if (followedLive && live.isNotEmpty) const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('A followed team is playing — showing only followed-team live games.', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+            if (live.isNotEmpty) SizedBox(
+              height: 190,
+              child: Scrollbar(
+                controller: _liveScrollController,
+                thumbVisibility: live.length > 1,
+                child: ListView.separated(
                   controller: _liveScrollController,
-                  thumbVisibility: live.length > 1,
-                  child: ListView.separated(
-                    controller: _liveScrollController,
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.only(bottom: 8),
-                    itemCount: live.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                    itemBuilder: (_, index) => SizedBox(width: 300, child: _liveGame(live[index])),
-                  ),
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 8),
+                  itemCount: live.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (_, index) => SizedBox(width: 360, child: _liveGame(live[index])),
                 ),
               ),
+            ),
             if (upcoming.isNotEmpty) ...[
               const SizedBox(height: 10),
-              const Text(
-                'UPCOMING',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.1),
-              ),
+              const Text('UPCOMING', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
               const SizedBox(height: 6),
               for (final game in upcoming) _upcomingGame(game),
             ],
           ],
         ),
+      ),
+      ),
+    );
+  }
+
+  Widget _buildCompact(BuildContext context, List<Map<String, dynamic>> live, bool followedLive) {
+    final game = live.isEmpty ? null : live.first;
+    return Card(
+      margin: const EdgeInsets.all(4),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showLiveSportsDialog(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: Row(
+            children: [
+              const Icon(Icons.sports_score_rounded, size: 17),
+              const SizedBox(width: 5),
+              if (game == null)
+                const Expanded(child: Text('LIVE SPORTS', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)))
+              else ...[
+                Expanded(child: Text('${game['homeTeam'] ?? 'Home'} ${_score(game, 'home')} - ${_score(game, 'away')} ${game['awayTeam'] ?? 'Away'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900))),
+                if (followedLive) const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLiveSportsDialog(BuildContext context) {
+    final live = _priorityLiveGames;
+    final upcoming = _sortedUpcoming.take(8).toList();
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.sports_score_rounded),
+            SizedBox(width: 8),
+            Text('LIVE SPORTS'),
+          ],
+        ),
+        content: SizedBox(
+          width: 560,
+          height: 500,
+          child: ListView(
+            children: [
+              const Text(
+                'LIVE NOW',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              if (live.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text('No live games are available right now.'),
+                )
+              else
+                ...live.map(
+                  (game) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _liveGame(game),
+                  ),
+                ),
+              if (upcoming.isNotEmpty) ...[
+                const Divider(height: 28),
+                const Text(
+                  'UPCOMING',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...upcoming.map(_upcomingGame),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _chooseVisibleLeagues();
+            },
+            child: const Text('Leagues'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              if (!loading) _load();
+            },
+            child: const Text('Refresh'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
@@ -415,7 +498,8 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
 class HomeStorageProgressBar extends StatelessWidget {
   final double thickness;
   final Axis axis;
-  const HomeStorageProgressBar({super.key, required this.thickness, required this.axis});
+  final bool compact;
+  const HomeStorageProgressBar({super.key, required this.thickness, required this.axis, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -440,6 +524,11 @@ class HomeStorageProgressBar extends StatelessWidget {
       labels.add(Expanded(flex: (fraction * 1000).round().clamp(1, 1000), child: Tooltip(message: '${entry.key}: ${(entry.value / total * 100).toStringAsFixed(1)}%', child: Container(margin: const EdgeInsets.symmetric(horizontal: .5), height: thickness, decoration: BoxDecoration(color: _categoryColor(entry.key))))));
     }
     final bar = ClipRRect(borderRadius: BorderRadius.circular(thickness), child: axis == Axis.horizontal ? Row(children: labels) : Column(children: labels));
+    if (compact) {
+      return Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), child: axis == Axis.horizontal
+          ? bar
+          : SizedBox(width: thickness, height: 70, child: bar));
+    }
     final legend = <Widget>[];
     for (final entry in portions.entries) {
       legend.add(Expanded(child: Text(entry.key, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white60))));
@@ -473,112 +562,81 @@ class HomePositionedLayout extends StatelessWidget {
 
   static const _sides = <String>['Top', 'Bottom', 'Left', 'Right'];
 
-  // Resolves requested sides while preserving the requested side whenever it is
-  // available. If 2 or 3 items request the same side, they are distributed
-  // across that edge instead of being stacked on top of each other.
-  List<String> _resolveSides() {
-    final requests = <String>[
-      if (_sides.contains(navbarPosition)) navbarPosition else 'Floating',
-      if (_sides.contains(storagePosition)) storagePosition else 'Hidden',
-      if (showLiveSports && _sides.contains(liveSportsPosition)) liveSportsPosition else 'Hidden',
-    ];
-
-    final result = List<String>.filled(3, 'Hidden');
-    for (var i = 0; i < requests.length; i++) {
-      final requested = requests[i];
-      if (requested == 'Hidden' || requested == 'Floating') continue;
-      result[i] = requested;
-    }
-    return result;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final sides = _resolveSides();
-    final visible = <int>[for (var i = 0; i < sides.length; i++) if (sides[i] != 'Hidden' && (i != 2 || showLiveSports)) i];
-
     final bySide = <String, List<int>>{for (final side in _sides) side: <int>[]};
-    for (final index in visible) {
-      final side = sides[index];
-      if (side != 'Hidden') bySide[side]!.add(index);
-    }
+    if (_sides.contains(navbarPosition)) bySide[navbarPosition]!.add(0);
+    if (_sides.contains(storagePosition)) bySide[storagePosition]!.add(1);
+    if (showLiveSports && _sides.contains(liveSportsPosition)) bySide[liveSportsPosition]!.add(2);
 
-    Widget itemFor(int index) {
+    final top = _edgeSize(bySide['Top']!, horizontal: true);
+    final bottom = _edgeSize(bySide['Bottom']!, horizontal: true);
+    final left = _edgeSize(bySide['Left']!, horizontal: false);
+    final right = _edgeSize(bySide['Right']!, horizontal: false);
+
+    Widget item(int index, int count) {
+      final side = _itemSide(index, bySide);
+      // Left/right edges use compact controls to prevent vertical overflow.
+      final compact = count > 1 || side == 'Left' || side == 'Right';
       if (index == 0) return navbar;
       if (index == 1) {
         return HomeStorageProgressBar(
           thickness: storageThickness,
-          axis: sides[index] == 'Left' || sides[index] == 'Right' ? Axis.vertical : Axis.horizontal,
+          axis: side == 'Left' || side == 'Right' ? Axis.vertical : Axis.horizontal,
+          compact: compact,
         );
       }
-      // Index 2 is the Live Sports display. The previous implementation
-      // accidentally returned another storage bar here, so Live Sports could
-      // never be rendered even when enabled.
-      return const HomeLiveSportsWidget();
+      return HomeLiveSportsWidget(compact: compact);
     }
-
-    final topInset = _edgeInset(bySide['Top']!, horizontal: true);
-    final bottomInset = _edgeInset(bySide['Bottom']!, horizontal: true);
-    final leftInset = _edgeInset(bySide['Left']!, horizontal: false);
-    final rightInset = _edgeInset(bySide['Right']!, horizontal: false);
 
     Widget edge(String side) {
       final indexes = bySide[side]!;
-      final count = indexes.length;
-      if (count == 0) return const SizedBox.shrink();
+      if (indexes.isEmpty) return const SizedBox.shrink();
       final horizontal = side == 'Top' || side == 'Bottom';
-      // For two items, Expanded/Spacer/Expanded gives left+right or
-      // top+bottom. For three, all three slots are occupied.
-      final row = count == 1
-          ? Center(child: itemFor(indexes.first))
-          : count == 2
-              ? Row(children: [Expanded(child: Center(child: itemFor(indexes[0]))), const Spacer(), Expanded(child: Center(child: itemFor(indexes[1])))])
-              : Row(children: [Expanded(child: Center(child: itemFor(indexes[0]))), Expanded(child: Center(child: itemFor(indexes[1]))), Expanded(child: Center(child: itemFor(indexes[2])))]);
-      final column = count == 1
-          ? Center(child: itemFor(indexes.first))
-          : count == 2
-              ? Column(children: [Expanded(child: Center(child: itemFor(indexes[0]))), const Spacer(), Expanded(child: Center(child: itemFor(indexes[1])))])
-              : Column(children: [Expanded(child: Center(child: itemFor(indexes[0]))), Expanded(child: Center(child: itemFor(indexes[1]))), Expanded(child: Center(child: itemFor(indexes[2])))]);
-      return horizontal ? row : column;
+      final count = indexes.length;
+      if (horizontal) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [for (final index in indexes) Expanded(child: Center(child: item(index, count)))],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (final index in indexes) Expanded(child: Center(child: item(index, count)))],
+      );
     }
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        Padding(
-          padding: EdgeInsets.only(top: topInset, bottom: bottomInset, left: leftInset, right: rightInset),
-          child: child,
-        ),
-        if (bySide['Top']!.isNotEmpty) Positioned(top: 0, left: 0, right: 0, height: topInset, child: edge('Top')),
-        if (bySide['Bottom']!.isNotEmpty) Positioned(bottom: 0, left: 0, right: 0, height: bottomInset, child: edge('Bottom')),
-        if (bySide['Left']!.isNotEmpty) Positioned(top: 0, bottom: 0, left: 0, width: leftInset, child: edge('Left')),
-        if (bySide['Right']!.isNotEmpty) Positioned(top: 0, bottom: 0, right: 0, width: rightInset, child: edge('Right')),
-        // A Floating navbar remains floating over Home. It does not consume an
-        // edge, so Storage/Live Sports can still use any side.
-        if (navbarPosition == 'Floating')
-          Positioned(left: 12, right: 12, bottom: 12, child: SafeArea(top: false, child: Center(child: navbar))),
+        Padding(padding: EdgeInsets.only(top: top, bottom: bottom, left: left, right: right), child: child),
+        if (bySide['Top']!.isNotEmpty) Positioned(top: 0, left: 0, right: 0, height: top, child: SafeArea(bottom: false, child: edge('Top'))),
+        if (bySide['Bottom']!.isNotEmpty) Positioned(bottom: 0, left: 0, right: 0, height: bottom, child: SafeArea(top: false, child: edge('Bottom'))),
+        if (bySide['Left']!.isNotEmpty) Positioned(top: 0, bottom: 0, left: 0, width: left, child: SafeArea(right: false, child: edge('Left'))),
+        if (bySide['Right']!.isNotEmpty) Positioned(top: 0, bottom: 0, right: 0, width: right, child: SafeArea(left: false, child: edge('Right'))),
+        if (navbarPosition == 'Floating') Positioned(left: 12, right: 12, bottom: 12, child: SafeArea(top: false, child: Center(child: navbar))),
       ],
     );
   }
 
-  double _edgeInset(List<int> indexes, {required bool horizontal}) {
-    if (indexes.isEmpty) return 0;
-    final hasNavbar = indexes.contains(0);
-    final hasSports = indexes.contains(2);
-    if (horizontal) {
-      // Navbar ~84px, Storage ~76px, Sports ~235px. Add enough room for all
-      // participants on the edge; the slot distribution is handled separately.
-      var size = 0.0;
-      if (hasNavbar) size = 84;
-      if (indexes.contains(1)) size = size < 76 ? 76 : size;
-      if (hasSports) size = size < 235 ? 235 : size;
-      return size;
+  String _itemSide(int index, Map<String, List<int>> bySide) {
+    for (final entry in bySide.entries) {
+      if (entry.value.contains(index)) return entry.key;
     }
-    var size = 0.0;
-    if (hasNavbar) size = 104;
-    if (indexes.contains(1)) size = size < 230 ? 230 : size;
-    if (hasSports) size = size < 325 ? 325 : size;
-    return size;
+    return 'Bottom';
+  }
+
+  double _edgeSize(List<int> indexes, {required bool horizontal}) {
+    if (indexes.isEmpty) return 0;
+    final count = indexes.length;
+    if (count == 1) {
+      if (indexes.first == 0) return horizontal ? 84 : 104;
+      if (indexes.first == 1) return horizontal ? 76 : 230;
+      return horizontal ? 235 : 325;
+    }
+    // Multiple controls share the same edge. Each receives a slot, so the edge
+    // only needs to be tall/wide enough for compact controls.
+    return horizontal ? 86 : 92;
   }
 }
 
