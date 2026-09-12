@@ -1,6 +1,7 @@
 // FILE: `lib/roadmap_features.dart`.
 // Purpose: Implements the roadmap features portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,7 +16,8 @@ import 'details.dart';
 import 'sports.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
-import 'reviews.dart';
+import 'music_achievements.dart';
+import 'reviews.dart' hide MusicAchievementsScreen;
 import 'home_server.dart';
 import 'storage_dashboard.dart';
 

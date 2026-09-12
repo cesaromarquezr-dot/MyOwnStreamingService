@@ -74,6 +74,19 @@ class SportsRoutes {
       return;
     }
 
+    if (request.uri.path == '/api/v1/sports/teams') {
+      final leagues = await service.availableTeams();
+      await _json(
+        request,
+        HttpStatus.ok,
+        {
+          'success': true,
+          'leagues': leagues,
+        },
+      );
+      return;
+    }
+
     if (request.uri.path == '/api/v1/sports/live') {
       final games = await service.liveGames(
         sport: request.uri.queryParameters['sport'],

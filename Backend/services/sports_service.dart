@@ -7,12 +7,12 @@ import 'dart:io';
 
 import '../models/sports.dart';
 
-/// Live sports feed with a real-time public scoreboard fallback.
-///
-/// The scoreboard feed supplies live event metadata/scores. It does NOT grant
-/// streaming rights. A broadcast is playable only when an authorized
-/// authentic/original stream URL is explicitly supplied by the configured
-/// rights provider.
+// Live sports feed with a real-time public scoreboard fallback.
+//
+// The scoreboard feed supplies live event metadata/scores. It does NOT grant
+// streaming rights. A broadcast is playable only when an authorized
+// authentic/original stream URL is explicitly supplied by the configured
+// rights provider.
 class SportsService {
   const SportsService();
 
@@ -93,14 +93,18 @@ class SportsService {
     final results = <SportsGame>[];
     final now = DateTime.now();
 
-    for (var offset = 1; offset <= days; offset++) {
+    for (var offset = 0; offset <= days; offset++) {
       final date = now.add(Duration(days: offset));
       final dateCode = '${date.year.toString().padLeft(4, '0')}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
       for (final feed in _espnFeeds) {
         if (sport != null && sport.isNotEmpty && sport.toLowerCase() != 'all' && feed['sport']!.toLowerCase() != sport.toLowerCase()) continue;
         if (country != null && country.isNotEmpty && country.toLowerCase() != 'all' && feed['country']!.toLowerCase() != country.toLowerCase()) continue;
         try {
-          results.addAll(await _loadScoreboard(feed, date: dateCode, upcomingOnly: true));
+          final dayGames = await _loadScoreboard(feed, date: dateCode, upcomingOnly: true);
+          results.addAll(dayGames.where((game) {
+            final start = DateTime.tryParse(game.startTime ?? '');
+            return start == null || start.isAfter(now);
+          }));
         } catch (_) {
           // One unavailable league/date must not prevent other events from loading.
         }
@@ -109,6 +113,100 @@ class SportsService {
 
     final seen = <String>{};
     return results.where((g) => seen.add(g.id)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> availableTeams() async {
+    final loaded = await Future.wait(
+      _espnFeeds.map((feed) async {
+        try {
+          final teams = await _loadTeams(feed);
+          return <String, dynamic>{
+            'league': _leagueLabel(feed),
+            'leagueKey': feed['path']!.split('/').last,
+            'sport': feed['sport'],
+            'country': feed['country'],
+            'teams': teams,
+          };
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    return loaded.whereType<Map<String, dynamic>>().toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTeams(Map<String, String> feed) async {
+    final uri = Uri.parse('https://site.api.espn.com/apis/site/v2/sports/${feed['path']}/teams');
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('Teams returned ${response.statusCode}.');
+      }
+      final body = await utf8.decoder.bind(response).join();
+      final data = jsonDecode(body);
+      final output = <Map<String, dynamic>>[];
+      if (data is Map && data['sports'] is List) {
+        for (final sport in data['sports']) {
+          if (sport is! Map || sport['leagues'] is! List) continue;
+          for (final league in sport['leagues']) {
+            if (league is! Map || league['teams'] is! List) continue;
+            for (final wrapper in league['teams']) {
+              final team = wrapper is Map && wrapper['team'] is Map
+                  ? Map<String, dynamic>.from(wrapper['team'] as Map)
+                  : wrapper is Map
+                      ? Map<String, dynamic>.from(wrapper)
+                      : null;
+              if (team == null) continue;
+              final name = team['displayName']?.toString() ?? team['name']?.toString();
+              if (name == null || name.trim().isEmpty) continue;
+              output.add({
+                'id': team['id']?.toString() ?? name,
+                'name': name,
+                'shortName': team['shortDisplayName']?.toString() ?? team['name']?.toString() ?? name,
+                'abbreviation': team['abbreviation']?.toString() ?? '',
+                'logo': _teamLogo(team),
+              });
+            }
+          }
+        }
+      }
+      final seen = <String>{};
+      output.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      return output.where((team) => seen.add((team['name'] as String).toLowerCase())).toList();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  String? _teamLogo(Map<String, dynamic> team) {
+    final logos = team['logos'];
+    if (logos is List) {
+      for (final logo in logos.whereType<Map>()) {
+        final href = logo['href']?.toString();
+        if (href != null && href.isNotEmpty) return href;
+      }
+    }
+    return null;
+  }
+
+  String _leagueLabel(Map<String, String> feed) {
+    switch (feed['path']) {
+      case 'football/nfl': return 'NFL';
+      case 'basketball/nba': return 'NBA';
+      case 'hockey/nhl': return 'NHL';
+      case 'baseball/mlb': return 'MLB';
+      case 'soccer/mex.1': return 'Liga MX';
+      case 'soccer/usa.1': return 'MLS';
+      case 'soccer/uefa.champions': return 'UEFA Champions League';
+      case 'soccer/eng.1': return 'Premier League';
+      case 'soccer/esp.1': return 'LaLiga';
+      case 'soccer/ger.1': return 'Bundesliga';
+      case 'soccer/ita.1': return 'Serie A';
+      case 'soccer/fra.1': return 'Ligue 1';
+      default: return feed['path']!.split('/').last;
+    }
   }
 
   Future<List<SportsGame>> _loadConfiguredRightsFeed(Uri uri) async {
@@ -161,10 +259,16 @@ class SportsService {
       homeTeam: '${raw['homeTeam'] ?? 'Home'}',
       awayTeam: '${raw['awayTeam'] ?? 'Away'}',
       status: '${raw['status'] ?? 'LIVE'}',
+      homeScore: _intOrNull(raw['homeScore']),
+      awayScore: _intOrNull(raw['awayScore']),
+      periodLabel: raw['periodLabel']?.toString(),
+      clock: raw['clock']?.toString(),
       startTime: raw['startTime']?.toString(),
       broadcasts: broadcasts,
     );
   }
+
+  int? _intOrNull(dynamic value) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
 
   Future<List<SportsGame>> _loadScoreboard(Map<String, String> feed, {String? date, bool upcomingOnly = false}) async {
     var uri = Uri.parse('https://site.api.espn.com/apis/site/v2/sports/${feed['path']}/scoreboard');
@@ -218,6 +322,30 @@ class SportsService {
     final status = event['status'] is Map ? event['status'] as Map : const {};
     final type = status['type'] is Map ? status['type'] as Map : const {};
     final competitionName = competition['name']?.toString() ?? feed['path']!.split('/').last;
+    final homeCompetitor = competitors.whereType<Map>().firstWhere(
+      (c) => c['homeAway'] == 'home',
+      orElse: () => <String, dynamic>{},
+    );
+    final awayCompetitor = competitors.whereType<Map>().firstWhere(
+      (c) => c['homeAway'] == 'away',
+      orElse: () => <String, dynamic>{},
+    );
+    final period = status['period'] ?? type['period'];
+    final displayClock = status['displayClock'] ?? type['displayClock'];
+    String? periodLabel;
+    if (period != null) {
+      final n = int.tryParse(period.toString());
+      final sport = feed['sport'];
+      if (n != null && (sport == 'American Football' || sport == 'Basketball')) {
+        final suffix = n == 1 ? 'st' : n == 2 ? 'nd' : n == 3 ? 'rd' : 'th';
+        periodLabel = '$n$suffix Quarter';
+      } else if (n != null && sport == 'Hockey') {
+        final suffix = n == 1 ? 'st' : n == 2 ? 'nd' : n == 3 ? 'rd' : 'th';
+        periodLabel = '$n$suffix Period';
+      } else {
+        periodLabel = 'Period $period';
+      }
+    }
     final links = event['links'] is List ? event['links'] as List : const [];
     String? officialUrl;
     for (final link in links.whereType<Map>()) {
@@ -235,6 +363,10 @@ class SportsService {
       homeTeam: team('home'),
       awayTeam: team('away'),
       status: type['shortDetail']?.toString() ?? 'LIVE',
+      homeScore: _intOrNull(homeCompetitor['score']),
+      awayScore: _intOrNull(awayCompetitor['score']),
+      periodLabel: periodLabel,
+      clock: displayClock?.toString(),
       startTime: event['date']?.toString(),
       broadcasts: [
         SportsBroadcast(
@@ -258,3 +390,4 @@ class SportsService {
         'Swimming/Athletics'
       ];
 }
+

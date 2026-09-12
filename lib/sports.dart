@@ -40,17 +40,8 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
 
   static const leagues = <String>[
     'Liga MX', 'NFL', 'MLB', 'NBA', 'NHL', 'MLS', 'UEFA Champions League',
+    'Premier League', 'LaLiga', 'Bundesliga', 'Serie A', 'Ligue 1',
   ];
-
-  static const teamsByLeague = <String, List<String>>{
-    'Liga MX': ['Pumas UNAM', 'Club América', 'Cruz Azul', 'Guadalajara', 'Monterrey', 'Tigres UANL'],
-    'NFL': ['Dallas Cowboys', 'Los Angeles Rams', 'San Francisco 49ers', 'Kansas City Chiefs', 'Buffalo Bills'],
-    'MLB': ['Los Angeles Dodgers', 'New York Yankees', 'Boston Red Sox', 'Chicago Cubs'],
-    'NBA': ['San Antonio Spurs', 'Los Angeles Lakers', 'Golden State Warriors', 'Boston Celtics'],
-    'NHL': ['Dallas Stars', 'Colorado Avalanche', 'Toronto Maple Leafs', 'New York Rangers'],
-    'MLS': ['Inter Miami CF', 'LA Galaxy', 'LAFC', 'Austin FC'],
-    'UEFA Champions League': [],
-  };
 
   String get _profileKey => AppController.instance.currentProfile?.id ?? 'default';
   String get _teamsKey => 'sports_followed_teams_$_profileKey';
@@ -129,57 +120,131 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
   Future<void> _showFollowing() async {
     final selectedTeams = Set<String>.from(followedTeams);
     final selectedLeagues = Set<String>.from(followedLeagues);
+    final searchController = TextEditingController();
+    var search = '';
+    var loadingTeams = true;
+    List<Map<String, dynamic>> teamLeagues = <Map<String, dynamic>>[];
+
+    try {
+      final data = await AppController.instance.backendApi.getSportsTeams();
+      final raw = data['leagues'];
+      if (raw is List) {
+        teamLeagues = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {
+      // The dialog can still be used for league following if the team catalogue
+      // is temporarily unavailable.
+    } finally {
+      loadingTeams = false;
+    }
+
+    if (!mounted) {
+      searchController.dispose();
+      return;
+    }
+
     final changed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
+          final normalizedSearch = search.trim().toLowerCase();
+          final filteredLeagues = teamLeagues.where((league) {
+            if (normalizedSearch.isEmpty) return true;
+            final leagueName = league['league']?.toString().toLowerCase() ?? '';
+            if (leagueName.contains(normalizedSearch)) return true;
+            final teams = league['teams'] is List ? league['teams'] as List : const [];
+            return teams.any((item) => item is Map && (item['name']?.toString().toLowerCase().contains(normalizedSearch) ?? false));
+          }).toList();
+
           return AlertDialog(
-            title: const Text('Keep up with teams & leagues'),
+            title: const Text('Follow Teams & Leagues'),
             content: SizedBox(
-              width: 520,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Follow a league or individual teams. Followed games are highlighted in Live Sports.'),
-                    const SizedBox(height: 18),
-                    const Text('LEAGUES', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
-                    ...leagues.map((league) => CheckboxListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: selectedLeagues.contains(league),
-                      title: Text(league),
-                      onChanged: (value) => setDialogState(() {
-                        if (value == true) {
-  selectedLeagues.add(league);
-} else {
-  selectedLeagues.remove(league);
-}
-                      }),
-                    )),
-                    const SizedBox(height: 10),
-                    const Text('TEAMS', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
-                    for (final entry in teamsByLeague.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 4),
-                        child: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      ),
-                      ...entry.value.map((team) => CheckboxListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        value: selectedTeams.contains(team),
-                        title: Text(team),
-                        onChanged: (value) => setDialogState(() {
-                          if (value == true) {
-  selectedTeams.add(team);
-} else {
-  selectedTeams.remove(team);
-}
-                        }),
-                      )),
-                    ],
-                  ],
-                ),
+              width: 560,
+              height: 620,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Follow any available team in any supported league. Followed teams get priority on Home when they are playing live.'),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: searchController,
+                    onChanged: (value) => setDialogState(() => search = value),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Search teams...',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('LEAGUES', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: loadingTeams
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView(
+                            children: [
+                              ...leagues.where((league) => normalizedSearch.isEmpty || league.toLowerCase().contains(normalizedSearch)).map(
+                                (league) => CheckboxListTile(
+                                  dense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  value: selectedLeagues.contains(league),
+                                  title: Text(league),
+                                  secondary: const Icon(Icons.emoji_events_outlined),
+                                  onChanged: (value) => setDialogState(() {
+                                    if (value == true) {
+                                      selectedLeagues.add(league);
+                                    } else {
+                                      selectedLeagues.remove(league);
+                                    }
+                                  }),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              for (final entry in filteredLeagues) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      Expanded(child: Text(entry['league']?.toString() ?? 'League', style: const TextStyle(fontWeight: FontWeight.w900))),
+                                      Text('${(entry['teams'] is List ? (entry['teams'] as List).length : 0)} teams', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                ...((entry['teams'] is List ? entry['teams'] as List : const [])
+                                    .whereType<Map>()
+                                    .where((team) {
+                                      if (normalizedSearch.isEmpty) return true;
+                                      return (team['name']?.toString().toLowerCase().contains(normalizedSearch) ?? false) ||
+                                          (entry['league']?.toString().toLowerCase().contains(normalizedSearch) ?? false);
+                                    })
+                                    .map((team) {
+                                      final name = team['name']?.toString() ?? '';
+                                      return CheckboxListTile(
+                                        dense: true,
+                                        contentPadding: const EdgeInsets.only(left: 8),
+                                        value: selectedTeams.contains(name),
+                                        title: Text(name),
+                                        secondary: team['logo']?.toString().isNotEmpty == true
+                                            ? Image.network(team['logo'].toString(), width: 30, height: 30, errorBuilder: (_, __, ___) => const Icon(Icons.shield_outlined))
+                                            : const Icon(Icons.shield_outlined),
+                                        onChanged: (value) => setDialogState(() {
+                                          if (value == true) {
+                                            selectedTeams.add(name);
+                                          } else {
+                                            selectedTeams.remove(name);
+                                          }
+                                        }),
+                                      );
+                                    })),
+                              ],
+                              if (filteredLeagues.isEmpty && normalizedSearch.isNotEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24),
+                                  child: Center(child: Text('No teams or leagues match your search.')),
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
               ),
             ),
             actions: [
@@ -190,7 +255,8 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
         },
       ),
     );
-    if (changed != true) return;
+    searchController.dispose();
+    if (changed != true || !mounted) return;
     setState(() {
       followedTeams = selectedTeams;
       followedLeagues = selectedLeagues;

@@ -1537,6 +1537,12 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to load live sports.');
   }
 
+  Future<Map<String, dynamic>> getSportsTeams() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/sports/teams'), headers: _headers);
+    return _requireSuccess(response, 'Unable to load sports teams.');
+  }
+
   Future<List<dynamic>> getSports() async {
     _requireAuthentication();
     final response = await http.get(Uri.parse('$baseUrl/sports'), headers: _headers);

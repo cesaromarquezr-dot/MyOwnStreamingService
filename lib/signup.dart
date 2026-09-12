@@ -559,8 +559,10 @@ if (currency.isEmpty) {
 
                             const SizedBox(height: 18),
 
-                            CheckboxListTile(
-                              value: rememberLogin,
+                            Material(
+                              type: MaterialType.transparency,
+                              child: CheckboxListTile(
+                                value: rememberLogin,
                               onChanged: (value) {
                                 setState(() {
                                   rememberLogin = value ?? false;
@@ -569,10 +571,11 @@ if (currency.isEmpty) {
                               contentPadding: EdgeInsets.zero,
                               controlAffinity:
                                   ListTileControlAffinity.leading,
-                              title: const Text(
-                                'Remember me',
-                                style: TextStyle(
-                                  fontSize: 14,
+                                title: const Text(
+                                  'Remember me',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                             ),
@@ -663,35 +666,44 @@ if (currency.isEmpty) {
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-                                  CheckboxListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                    value: termsAccepted,
+                                  Material(
+                                    type: MaterialType.transparency,
+                                    child: CheckboxListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      value: termsAccepted,
                                     onChanged: creatingAccount
                                         ? null
                                         : (value) => setState(() => termsAccepted = value ?? false),
                                     controlAffinity: ListTileControlAffinity.leading,
-                                    title: const Text('I agree to the Terms of Service.'),
+                                      title: const Text('I agree to the Terms of Service.'),
+                                    ),
                                   ),
-                                  CheckboxListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                    value: privacyAccepted,
+                                  Material(
+                                    type: MaterialType.transparency,
+                                    child: CheckboxListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      value: privacyAccepted,
                                     onChanged: creatingAccount
                                         ? null
                                         : (value) => setState(() => privacyAccepted = value ?? false),
                                     controlAffinity: ListTileControlAffinity.leading,
-                                    title: const Text('I acknowledge the Privacy Policy.'),
+                                      title: const Text('I acknowledge the Privacy Policy.'),
+                                    ),
                                   ),
-                                  CheckboxListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                    value: acceptableUseAccepted,
+                                  Material(
+                                    type: MaterialType.transparency,
+                                    child: CheckboxListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      value: acceptableUseAccepted,
                                     onChanged: creatingAccount
                                         ? null
                                         : (value) => setState(() => acceptableUseAccepted = value ?? false),
                                     controlAffinity: ListTileControlAffinity.leading,
-                                    title: const Text('I agree to the Copyright & Acceptable Use Policy.'),
+                                      title: const Text('I agree to the Copyright & Acceptable Use Policy.'),
+                                    ),
                                   ),
                                 ],
                               ),

@@ -64,6 +64,10 @@ class SportsGame {
   final String homeTeam;
   final String awayTeam;
   final String status;
+  final int? homeScore;
+  final int? awayScore;
+  final String? periodLabel;
+  final String? clock;
   final String? startTime;
   final List<SportsBroadcast> broadcasts;
 
@@ -76,6 +80,10 @@ class SportsGame {
     required this.homeTeam,
     required this.awayTeam,
     required this.status,
+    this.homeScore,
+    this.awayScore,
+    this.periodLabel,
+    this.clock,
     this.startTime,
     this.broadcasts = const [],
   });
@@ -93,6 +101,10 @@ class SportsGame {
         'homeTeam': homeTeam,
         'awayTeam': awayTeam,
         'status': status,
+        'homeScore': homeScore,
+        'awayScore': awayScore,
+        'periodLabel': periodLabel,
+        'clock': clock,
         'startTime': startTime,
         'broadcasts': broadcasts.map((b) => b.toJson()).toList(),
         'hasAuthenticOriginalBroadcast': authorizedOriginalBroadcasts.isNotEmpty,

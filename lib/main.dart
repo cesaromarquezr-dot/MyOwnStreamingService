@@ -29,6 +29,7 @@ import 'how_it_works.dart';
 import 'sports.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
+import 'music_achievements.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
 import 'library_hubs.dart';
@@ -704,10 +705,38 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   void _normalizeHomePositions() {
-    final positions = <String>['Top', 'Bottom', 'Left', 'Right'];
-    if (draft.storageBarPosition != 'Hidden' && !positions.contains(draft.storageBarPosition)) draft.storageBarPosition = 'Bottom';
-    if (!positions.contains(draft.liveSportsPosition) || draft.liveSportsPosition == draft.navbarPosition || draft.liveSportsPosition == draft.storageBarPosition) {
-      draft.liveSportsPosition = positions.firstWhere((p) => p != draft.navbarPosition && p != draft.storageBarPosition, orElse: () => 'Top');
+    const positions = <String>['Top', 'Bottom', 'Left', 'Right'];
+
+    // The navbar owns its side first. Storage and Live Sports are normalized
+    // onto different remaining sides so a saved configuration can never hide
+    // them by placing all three controls in the same location.
+    final blocked = <String>{};
+    if (draft.navbarPosition != 'Floating') blocked.add(draft.navbarPosition);
+
+    if (draft.storageBarPosition != 'Hidden' &&
+        !positions.contains(draft.storageBarPosition)) {
+      draft.storageBarPosition = positions.firstWhere(
+        (position) => !blocked.contains(position),
+        orElse: () => 'Bottom',
+      );
+    }
+    if (draft.storageBarPosition != 'Hidden' &&
+        blocked.contains(draft.storageBarPosition)) {
+      draft.storageBarPosition = positions.firstWhere(
+        (position) => !blocked.contains(position),
+        orElse: () => 'Hidden',
+      );
+    }
+    if (draft.storageBarPosition != 'Hidden') {
+      blocked.add(draft.storageBarPosition);
+    }
+
+    if (!positions.contains(draft.liveSportsPosition) ||
+        blocked.contains(draft.liveSportsPosition)) {
+      draft.liveSportsPosition = positions.firstWhere(
+        (position) => !blocked.contains(position),
+        orElse: () => 'Top',
+      );
     }
   }
 
@@ -1045,8 +1074,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         _dropdown(
           label: 'Where should the storage bar appear?',
           value: draft.storageBarPosition,
-          values: _availableHomePositions(draft, allowHidden: true, excludeNavbar: false),
-          onChanged: (value) => setState(() => draft.storageBarPosition = value),
+          values: _availableHomePositions(draft, allowHidden: true, excludeNavbar: true),
+          onChanged: (value) => setState(() { draft.storageBarPosition = value; _normalizeHomePositions(); }),
         ),
         const SizedBox(height: 8),
         Text('Storage bar thickness: ${draft.storageBarThickness.round()} px', style: const TextStyle(color: Colors.white70)),
@@ -1055,7 +1084,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: 'Where should Live Sports appear on Home?',
           value: draft.liveSportsPosition,
           values: _availableHomePositions(draft, excludeNavbar: true),
-          onChanged: (value) => setState(() => draft.liveSportsPosition = value),
+          onChanged: (value) => setState(() { draft.liveSportsPosition = value; _normalizeHomePositions(); }),
         ),
         const SizedBox(height: 8),
         const Text('A Home position is removed when it is already occupied by the navbar or storage bar.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
@@ -1711,26 +1740,38 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     Widget content;
-    switch (settings.navbarPosition) {
-      case 'Top':
-        content = Column(children: [navbar, Expanded(child: page)]);
-        break;
-      case 'Left':
-        content = Row(children: [navbar, Expanded(child: page)]);
-        break;
-      case 'Right':
-        content = Row(children: [Expanded(child: page), navbar]);
-        break;
-      case 'Floating':
-        content = Stack(children: [
-          Positioned.fill(child: page),
-          Positioned(left: 12, right: 12, bottom: 12, child: SafeArea(top: false, child: Center(child: navbar))),
-        ]);
-        break;
-      case 'Bottom':
-      default:
-        content = Column(children: [Expanded(child: page), navbar]);
-        break;
+    if (selectedName == 'Home') {
+      content = HomePositionedLayout(
+        navbarPosition: settings.navbarPosition,
+        storagePosition: settings.storageBarPosition,
+        liveSportsPosition: settings.liveSportsPosition,
+        storageThickness: settings.storageBarThickness,
+        showLiveSports: settings.showLiveSports,
+        navbar: navbar,
+        child: page,
+      );
+    } else {
+      switch (settings.navbarPosition) {
+        case 'Top':
+          content = Column(children: [navbar, Expanded(child: page)]);
+          break;
+        case 'Left':
+          content = Row(children: [navbar, Expanded(child: page)]);
+          break;
+        case 'Right':
+          content = Row(children: [Expanded(child: page), navbar]);
+          break;
+        case 'Floating':
+          content = Stack(children: [
+            Positioned.fill(child: page),
+            Positioned(left: 12, right: 12, bottom: 12, child: SafeArea(top: false, child: Center(child: navbar))),
+          ]);
+          break;
+        case 'Bottom':
+        default:
+          content = Column(children: [Expanded(child: page), navbar]);
+          break;
+      }
     }
 
     return Scaffold(backgroundColor: colorFromName(settings.homeBackgroundColor), body: content);
@@ -1881,19 +1922,18 @@ class _NavMenuButtonState extends State<_NavMenuButton> {
           onEnter: (_) => _cancelHide(),
           onExit: (_) => _scheduleHide(),
           child: Material(
-            color: Colors.transparent,
+            color: const Color(0xF51A1A1A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: Colors.white12),
+            ),
+            elevation: 12,
+            shadowColor: const Color(0x55000000),
+            clipBehavior: Clip.antiAlias,
             child: Container(
               width: menuWidth,
               constraints: const BoxConstraints(maxHeight: 520),
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xF51A1A1A),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white12),
-                boxShadow: const [
-                  BoxShadow(blurRadius: 28, color: Color(0x55000000)),
-                ],
-              ),
               child: ListView(
                 shrinkWrap: true,
                 children: [
@@ -2130,8 +2170,7 @@ class _MoreActionsSheet extends StatelessWidget {
           _SheetAction(
             icon: Icons.auto_awesome_rounded,
             title: 'Discover & Recaps',
-            subtitle:
-                'Recommendations, collections, achievements and recaps',
+            subtitle: 'Recommendations, collections, achievements and recaps',
             onTap: onFeatureCenter,
           ),
           _SheetAction(
@@ -2155,22 +2194,19 @@ class _MoreActionsSheet extends StatelessWidget {
           _SheetAction(
             icon: Icons.devices_rounded,
             title: 'Device Center',
-            subtitle:
-                'Downloads, casting, HDMI and Bluetooth guidance',
+            subtitle: 'Downloads, casting, HDMI and Bluetooth guidance',
             onTap: onDevices,
           ),
           _SheetAction(
             icon: Icons.auto_awesome_rounded,
             title: 'Next-Gen Features',
-            subtitle:
-                'Smart discovery, My Stuff, stats, downloads, privacy and advanced settings',
+            subtitle: 'Smart discovery, My Stuff, stats, downloads, privacy and advanced settings',
             onTap: onNextGen,
           ),
           _SheetAction(
             icon: Icons.tune_rounded,
             title: 'Platform Expansion',
-            subtitle:
-                'Security, playback, TV, backup, discovery, sports, privacy and kids controls',
+            subtitle: 'Security, playback, TV, backup, discovery, sports, privacy and kids controls',
             onTap: onPlatformExpansion,
           ),
           _SheetAction(
@@ -2182,68 +2218,39 @@ class _MoreActionsSheet extends StatelessWidget {
           _SheetAction(
             icon: Icons.favorite_rounded,
             title: 'Favorites',
-            subtitle:
-                'Liked movies, shows, songs, albums and playlists',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const FavoritesScreen(),
-              ),
-            ),
+            subtitle: 'Liked movies, shows, songs, albums and playlists',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FavoritesScreen())),
           ),
           _SheetAction(
             icon: Icons.workspace_premium_rounded,
             title: 'Ultimate Platform',
-            subtitle:
-                'AI, premium player, family, social, cloud, security, devices and Studio',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const UltimatePlatformScreen(),
-              ),
-            ),
+            subtitle: 'AI, premium player, family, social, cloud, security, devices and Studio',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UltimatePlatformScreen())),
           ),
           _SheetAction(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy & Ownership',
-            subtitle:
-                'Private library, authorized media, storage and account deletion',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const LibraryPrivacyScreen(),
-              ),
-            ),
+            subtitle: 'Private library, authorized media, storage and account deletion',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryPrivacyScreen())),
           ),
           _SheetAction(
             icon: Icons.storage_rounded,
             title: 'Server Storage',
-            subtitle:
-                'Movies, Series, Music and available capacity',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const StorageDashboardScreen(),
-              ),
-            ),
+            subtitle: 'Movies, Series, Music and available capacity',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StorageDashboardScreen())),
           ),
           _SheetAction(
             icon: Icons.dns_rounded,
             title: 'Home Server & ARM',
-            subtitle:
-                'Server health, ARM connection and media import pipeline',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const HomeServerScreen(),
-              ),
-            ),
+            subtitle: 'Server health, ARM connection and media import pipeline',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HomeServerScreen())),
           ),
           _SheetAction(
-  icon: Icons.emoji_events_outlined,
-  title: 'Music Achievements',
-  subtitle: 'Music badges such as Cultured and Swiftie',
-  onTap: () => Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const FeatureCenterScreen(),
-    ),
-  ),
-),
+            icon: Icons.emoji_events_outlined,
+            title: 'Music Achievements',
+            subtitle: 'Music badges such as Cultured and Swiftie',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MusicAchievementsScreen())),
+          ),
           _SheetAction(
             icon: Icons.rocket_launch_rounded,
             title: '100-Feature Roadmap',
@@ -2509,50 +2516,6 @@ class _HomeScreenState extends State<HomeScreen>
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final homeBackground = colorFromName(settings.homeBackgroundColor);
 
-    // Deliberately keep the empty home completely clean. All management
-    // actions live in the navigation bar's More menu.
-    if (library.isEmpty) {
-      return Scaffold(
-        backgroundColor: homeBackground,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          title: const Text('Home', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.1)),
-          actions: [
-            ActivityButton(onPressed: widget.onNotifications),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Your library is empty',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Please add using the 3 dots in the navbar.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     final watched = controller.watched;
     final movies = library
         .where((media) => media.type.toLowerCase() == 'movie')
@@ -2561,17 +2524,14 @@ class _HomeScreenState extends State<HomeScreen>
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
     }).toList();
-    final heroMedia = watched.isNotEmpty ? watched.first : library.first;
+    // The Home shell must remain renderable when the profile library is empty.
+    // There is no valid hero item in that state, so keep it nullable instead of
+    // calling library.first and throwing Bad state: No element.
+    final heroMedia = watched.isNotEmpty ? watched.first : (library.isNotEmpty ? library.first : null);
 
     return Scaffold(
       backgroundColor: homeBackground,
-      body: HomePositionedLayout(
-        navbarPosition: settings.navbarPosition,
-        storagePosition: settings.storageBarPosition,
-        liveSportsPosition: settings.liveSportsPosition,
-        storageThickness: settings.storageBarThickness,
-        showLiveSports: settings.showLiveSports,
-        child: RefreshIndicator(
+      body: RefreshIndicator(
           color: Colors.white,
           backgroundColor: const Color(0xFF171717),
           onRefresh: _refresh,
@@ -2594,14 +2554,31 @@ class _HomeScreenState extends State<HomeScreen>
                 const SizedBox(width: 8),
               ],
             ),
-            if (settings.showHero)
+            if (settings.showHero && library.isNotEmpty)
               SliverToBoxAdapter(
                 child: FadeTransition(
                   opacity: CurvedAnimation(parent: _heroController, curve: Curves.easeOut),
                   child: _HomeHero(
-                    media: heroMedia,
+                    media: heroMedia!,
                     profileName: profile.name,
                     onPlay: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: heroMedia))),
+                  ),
+                ),
+              ),
+            if (library.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Your library is empty', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 8),
+                        Text('Please add using the 3 dots in the navbar.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 14)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2611,8 +2588,7 @@ class _HomeScreenState extends State<HomeScreen>
           ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
