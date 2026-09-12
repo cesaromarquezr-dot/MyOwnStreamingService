@@ -1,3 +1,7 @@
+// FILE: `Backend/services/group_recommendation_service.dart`.
+// Purpose: Implements the group recommendation service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import '../database/database.dart';
 import '../models/account.dart';
 import '../models/group_recommendation.dart';
@@ -155,6 +159,7 @@ class GroupRecommendationService {
   }
 
   // GET ALL RECOMMENDATIONS FOR AN ACCOUNT
+  /// Performs `getRecommendations` for this feature. Update this documentation when its contract changes.
   List<GroupRecommendation> getRecommendations({
     required String accountId,
   }) {
@@ -424,6 +429,7 @@ class GroupRecommendationService {
   }
 
   // AUTOMATICALLY FINALIZE WHEN THE DEADLINE PASSES
+  /// Performs `_finalizeIfVotingEnded` for this feature. Update this documentation when its contract changes.
   void _finalizeIfVotingEnded(
     GroupRecommendation recommendation,
   ) {
@@ -455,6 +461,7 @@ class GroupRecommendationService {
   //
   // No votes:
   //   -> reject
+  /// Performs `_finalizeRecommendation` for this feature. Update this documentation when its contract changes.
   void _finalizeRecommendation(
     GroupRecommendation recommendation,
   ) {
@@ -485,6 +492,7 @@ class GroupRecommendationService {
   //
   // If it is an arbitrary title that is not in the catalog, save
   // the recommendation ID instead.
+  /// Performs `_addApprovedRecommendationToWishlist` for this feature. Update this documentation when its contract changes.
   void _addApprovedRecommendationToWishlist(
     GroupRecommendation recommendation,
   ) {
@@ -580,6 +588,7 @@ for (final GroupRecommendation recommendation
   }
 
   // CHECK WHETHER A PROFILE HAS VOTED
+  /// Performs `hasVoted` for this feature. Update this documentation when its contract changes.
   bool hasVoted({
     required String accountId,
     required String recommendationId,
@@ -639,6 +648,7 @@ for (final GroupRecommendation recommendation
   //
   // Also removes it from the Group Wishlist if it had previously
   // been approved.
+  /// Performs `deleteRecommendation` for this feature. Update this documentation when its contract changes.
   void deleteRecommendation({
     required String accountId,
     required String recommendationId,
@@ -684,10 +694,12 @@ for (final GroupRecommendation recommendation
   // CLEAR ALL RECOMMENDATIONS
   //
   // Used primarily for testing/resetting the in-memory database.
+  /// Performs `clear` for this feature. Update this documentation when its contract changes.
   void clear() {
     database.clearGroupRecommendations();
   }
 
+  /// Performs `_generateId` for this feature. Update this documentation when its contract changes.
   String _generateId() {
     return 'group_rec_${DateTime.now().microsecondsSinceEpoch}';
   }

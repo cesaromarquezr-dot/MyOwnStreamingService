@@ -1,3 +1,7 @@
+// FILE: `lib/smart_search.dart`.
+// Purpose: Implements the smart search portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -78,6 +82,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   late AnimationController animationController;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -91,6 +96,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     animationController.forward();
   }
 
+  /// Performs `_focusChanged` for this feature. Update this documentation when its contract changes.
   void _focusChanged() {
     if (mounted) {
       setState(() {});
@@ -98,6 +104,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     controller.dispose();
     searchFocusNode
@@ -107,6 +114,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     super.dispose();
   }
 
+  /// Performs `performSearch` for this feature. Update this documentation when its contract changes.
   void performSearch([String? value]) {
     final query = value ?? controller.text;
 
@@ -124,6 +132,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       ..forward();
   }
 
+  /// Performs `clearSearch` for this feature. Update this documentation when its contract changes.
   void clearSearch() {
     controller.clear();
 
@@ -134,6 +143,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     searchFocusNode.requestFocus();
   }
 
+  /// Performs `useSuggestion` for this feature. Update this documentation when its contract changes.
   void useSuggestion(String suggestion) {
     controller.text = suggestion;
 
@@ -146,6 +156,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     performSearch(suggestion);
   }
 
+  /// Performs `_typeLabel` for this feature. Update this documentation when its contract changes.
   String _typeLabel(MediaItem media) {
     final type = media.type.toLowerCase();
     if (type == 'tvshow' ||
@@ -158,6 +169,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -212,6 +224,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
+  /// Performs `_buildHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildHeader(ThemeData theme) {
     return FadeTransition(
       opacity: CurvedAnimation(
@@ -277,6 +290,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
+  /// Performs `_buildSearchBar` for this feature. Update this documentation when its contract changes.
   Widget _buildSearchBar(ThemeData theme) {
     final focused = searchFocusNode.hasFocus;
 
@@ -358,6 +372,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
+  /// Performs `_buildSuggestions` for this feature. Update this documentation when its contract changes.
   Widget _buildSuggestions() {
     if (controller.text.isNotEmpty) {
       return const SizedBox(height: 8);
@@ -397,6 +412,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
+  /// Performs `_buildResultsHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildResultsHeader() {
     if (controller.text.trim().isEmpty) {
       return const SizedBox.shrink();
@@ -438,6 +454,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     );
   }
 
+  /// Performs `_buildResultsList` for this feature. Update this documentation when its contract changes.
   Widget _buildResultsList(bool isDesktop) {
     if (controller.text.trim().isEmpty) {
       return SliverToBoxAdapter(
@@ -577,6 +594,7 @@ class _SearchResultCardState
   bool hovering = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final media = widget.media;
 
@@ -786,6 +804,7 @@ class _Poster extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final imageUrl = media.imageUrl ?? '';
 
@@ -904,6 +923,7 @@ class _MetaPill extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       padding:
@@ -943,6 +963,7 @@ class _SuggestionChip extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
@@ -1004,6 +1025,7 @@ class _GlassIconButton
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
@@ -1048,6 +1070,7 @@ class _EmptySearchState
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -1109,6 +1132,7 @@ class _SearchBackground
   const _SearchBackground();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Stack(
@@ -1159,6 +1183,7 @@ class _SearchBackground
 class _GridPainter
     extends CustomPainter {
   @override
+  /// Performs `paint` for this feature. Update this documentation when its contract changes.
   void paint(
     Canvas canvas,
     Size size,
@@ -1196,6 +1221,7 @@ class _GridPainter
   }
 
   @override
+  /// Performs `shouldRepaint` for this feature. Update this documentation when its contract changes.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,
   ) {

@@ -1,3 +1,7 @@
+// FILE: `Backend/models/group_recommendation.dart`.
+// Purpose: Implements the group recommendation portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 enum GroupRecommendationStatus {
   voting,
   approved,
@@ -203,6 +207,7 @@ class GroupRecommendation {
     status = GroupRecommendationStatus.expired;
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,

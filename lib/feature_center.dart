@@ -1,3 +1,7 @@
+// FILE: `lib/feature_center.dart`.
+// Purpose: Implements the feature center portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -34,6 +38,7 @@ class LanguageController extends ChangeNotifier {
     AppLanguage('zh', '🇨🇳', '中'),
   ];
 
+  /// Performs `set` for this feature. Update this documentation when its contract changes.
   void set(AppLanguage value) {
     current = value;
     notifyListeners();
@@ -44,6 +49,7 @@ class LanguagePicker extends StatelessWidget {
   const LanguagePicker({super.key});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: LanguageController.instance,
@@ -153,6 +159,7 @@ class _FeatureCenterScreenState
   int tab = 0;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final tabs = [
       'Recommendations',
@@ -230,6 +237,7 @@ class RecommendationsPanel extends StatefulWidget {
 class _RecommendationsPanelState
     extends State<RecommendationsPanel> {
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final profiles =
@@ -380,6 +388,7 @@ class _RecommendationsPanelState
     );
   }
 
+  /// Performs `_recommendationsForProfile` for this feature. Update this documentation when its contract changes.
   List<MediaItem> _recommendationsForProfile(
     AppController controller,
     Profile profile,
@@ -424,12 +433,14 @@ class _CreateVoteDialogState
       TextEditingController();
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     titleController.dispose();
     super.dispose();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text(
@@ -490,162 +501,1048 @@ class CollectionsPanel extends StatefulWidget {
 
 class _CollectionsPanelState extends State<CollectionsPanel> {
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     AppController.instance.seedCollections();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
+    final prefs = controller.currentCollectionPreferences;
     final all = controller.collections;
-    final featuredMap = {for (final c in all) c.id: c};
-    final featured = <MediaCollection>[for (final id in controller.featuredCollectionOrder) if (featuredMap[id] != null) featuredMap[id]!, ...all.where((c) => c.isFeatured && !controller.featuredCollectionOrder.contains(c.id))];
-    final mine = all.where((c) => !c.isOfficial && c.createdByProfileId == controller.currentProfile?.id).toList();
-    final liked = all.where((c) => c.isLikedByCurrentProfile && !mine.contains(c)).toList();
+    final mine = all
+        .where((c) => c.createdByProfileId == controller.currentProfile?.id)
+        .toList();
+    final liked = all
+        .where((c) => c.isLikedByCurrentProfile && !mine.contains(c))
+        .toList();
+    final automatic = all.where((c) => c.isAutomatic).toList();
+    final custom = all.where((c) => !c.isAutomatic).toList();
+    final ordered = _orderCollections(all, prefs);
 
     return AnimatedBuilder(
       animation: controller,
       builder: (_, __) => ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          _hero('📚 Collections', 'Featured collections, collections created by profiles, and collections you like — all in one place.'),
+          _hero(
+            '📚 Collections',
+            'Automatic franchise collections and collaborative custom collections, personalized per profile.',
+          ),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.create_new_folder_outlined), label: const Text('Create Collection'))),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(onPressed: _customize, icon: const Icon(Icons.tune_rounded), tooltip: 'Customize collections'),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _create,
+                  icon: const Icon(Icons.create_new_folder_outlined),
+                  label: const Text('Create Collection'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: _customize,
+                icon: const Icon(Icons.tune_rounded),
+                tooltip: 'Customize collections',
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (ordered.isNotEmpty) ...[
+            _hero(
+              'All Collections',
+              '${automatic.length} automatic • ${custom.length} custom',
+            ),
+            const SizedBox(height: 8),
+            _collectionLayout(ordered, prefs),
+          ],
           const SizedBox(height: 18),
           for (final section in controller.collectionSectionOrder)
-            _buildSection(section, featured, mine, liked),
+            _buildSection(section, all, mine, liked, prefs),
         ],
       ),
     );
   }
 
-  Widget _buildSection(String section, List<MediaCollection> featured, List<MediaCollection> mine, List<MediaCollection> liked) {
+  /// Performs `_orderCollections` for this feature. Update this documentation when its contract changes.
+  List<MediaCollection> _orderCollections(
+    List<MediaCollection> source,
+    CollectionPreferences prefs,
+  ) {
+    final list = List<MediaCollection>.from(source);
+
+    if (prefs.collectionOrder == 'Automatic first') {
+      list.sort(
+        (a, b) => (a.isAutomatic ? 0 : 1)
+            .compareTo(b.isAutomatic ? 0 : 1),
+      );
+    } else if (prefs.collectionOrder == 'Custom first') {
+      list.sort(
+        (a, b) => (a.isAutomatic ? 1 : 0)
+            .compareTo(b.isAutomatic ? 1 : 0),
+      );
+    }
+
+    return list;
+  }
+
+  /// Performs `_buildSection` for this feature. Update this documentation when its contract changes.
+  Widget _buildSection(
+    String section,
+    List<MediaCollection> all,
+    List<MediaCollection> mine,
+    List<MediaCollection> liked,
+    CollectionPreferences prefs,
+  ) {
     final items = switch (section) {
-      'Featured Collections' => featured,
+      'Featured Collections' =>
+        all.where((c) => c.isFeatured).toList(),
       'My Collections' => mine,
       'Liked Collections' => liked,
       _ => <MediaCollection>[],
     };
-    if (items.isEmpty) return const SizedBox.shrink();
+
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _hero(section, section == 'Featured Collections' ? 'Official and featured collections curated for your library.' : section == 'My Collections' ? 'Collections created by your profiles.' : 'Collections liked by your current profile.'),
-        const SizedBox(height: 8),
-        for (final collection in items) _collectionCard(collection),
-      ]),
-    );
-  }
-
-  Widget _collectionCard(MediaCollection collection) {
-    final controller = AppController.instance;
-    final media = collection.mediaIds.map((id) { final matches = controller.library.where((m) => m.id == id); return matches.isEmpty ? null : matches.first; }).whereType<MediaItem>().toList();
-    return Card(
-      margin: const EdgeInsets.only(bottom: 9),
-      child: ListTile(
-        leading: _collectionArtwork(collection, media),
-        title: Text(collection.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text('${media.length} titles${collection.isShared ? ' • shared' : ' • private'}${collection.isAutomatic ? ' • automatic' : ''}'),
-        trailing: Wrap(spacing: 2, children: [
-          IconButton(icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite : Icons.favorite_border), onPressed: () { controller.toggleCollectionLike(collection.id); }),
-          PopupMenuButton<String>(
-            onSelected: (value) { if (value == 'add') _addMedia(collection); if (value == 'delete') controller.deleteCollection(collection.id); },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'add', child: Text('Add library title')),
-              if (!collection.isOfficial) const PopupMenuItem(value: 'delete', child: Text('Delete collection')),
-            ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _hero(
+            section,
+            section == 'Featured Collections'
+                ? 'Automatic and featured collections.'
+                : section == 'My Collections'
+                    ? 'Collections created by your profiles.'
+                    : 'Collections liked by your current profile.',
           ),
-        ]),
-        onTap: () => _openCollection(collection),
+          const SizedBox(height: 8),
+          _collectionLayout(_orderCollections(items, prefs), prefs),
+        ],
       ),
     );
   }
 
-  Widget _collectionArtwork(MediaCollection collection, List<MediaItem> media) {
-    if (collection.posterMode == 'Uploaded Image' && collection.customPosterUrl != null) {
-      return ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(collection.customPosterUrl!, width: 52, height: 68, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.collections_bookmark_outlined)));
+  /// Performs `_collectionLayout` for this feature. Update this documentation when its contract changes.
+  Widget _collectionLayout(
+    List<MediaCollection> items,
+    CollectionPreferences prefs,
+  ) {
+    if (prefs.layout == 'List') {
+      return Column(
+        children: [
+          for (final collection in items) _collectionCard(collection),
+        ],
+      );
     }
-    if (media.isEmpty) return const CircleAvatar(child: Icon(Icons.collections_bookmark_outlined));
-    return ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(media.first.imageUrl ?? '', width: 52, height: 68, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.collections_bookmark_outlined)));
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
+        childAspectRatio: .72,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemBuilder: (_, i) => _collectionGridCard(items[i]),
+    );
   }
 
-  void _addMedia(MediaCollection collection) {
+  /// Performs `_mediaFor` for this feature. Update this documentation when its contract changes.
+  List<MediaItem> _mediaFor(MediaCollection c) {
     final controller = AppController.instance;
-    if (controller.library.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Your library is empty.')));
+    final result = <MediaItem>[];
+
+    for (final id in c.mediaIds) {
+      for (final media in controller.library) {
+        if (media.id == id) {
+          result.add(media);
+          break;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// Performs `_canAddToCollection` for this feature. Update this documentation when its contract changes.
+  bool _canAddToCollection(MediaCollection c) {
+    return !c.isAutomatic && c.canCurrentProfileAdd();
+  }
+
+  /// Performs `_collectionGridCard` for this feature. Update this documentation when its contract changes.
+  Widget _collectionGridCard(MediaCollection c) {
+    final media = _mediaFor(c);
+    final canAdd = _canAddToCollection(c);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openCollection(c),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _collectionArtwork(c, media, large: true),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+              child: Text(
+                c.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
+              child: Text(
+                '${media.length} titles${c.isAutomatic ? ' • automatic' : c.isShared ? ' • shared' : ' • private'}',
+                style: const TextStyle(
+                  color: Colors.white60,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: canAdd ? () => _addMedia(c) : null,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add to Collection'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Performs `_collectionCard` for this feature. Update this documentation when its contract changes.
+  Widget _collectionCard(MediaCollection c) {
+    final media = _mediaFor(c);
+    final controller = AppController.instance;
+    final canAdd = _canAddToCollection(c);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 52,
+                  height: 68,
+                  child: _collectionArtwork(c, media),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        c.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${media.length} titles${c.isShared ? ' • shared' : ' • private'}${c.isAutomatic ? ' • automatic' : ''}',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: c.isLikedByCurrentProfile
+                      ? 'Unlike collection'
+                      : 'Like collection',
+                  icon: Icon(
+                    c.isLikedByCurrentProfile
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                  ),
+                  onPressed: () => controller.toggleCollectionLike(c.id),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'More collection actions',
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'play':
+                        _autoPlay(c);
+                      case 'manage':
+                        _manageContributors(c);
+                      case 'delete':
+                        controller.deleteCollection(c.id);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'play',
+                      child: Text('Auto Play Collection'),
+                    ),
+                    if (c.isShared &&
+                        c.canCurrentProfileEdit() &&
+                        !c.isAutomatic)
+                      const PopupMenuItem(
+                        value: 'manage',
+                        child: Text('Manage contributors'),
+                      ),
+                    if (!c.isOfficial && c.canCurrentProfileEdit())
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete collection'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: canAdd ? () => _addMedia(c) : null,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add to Collection'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Performs `_collectionArtwork` for this feature. Update this documentation when its contract changes.
+  Widget _collectionArtwork(
+    MediaCollection c,
+    List<MediaItem> media, {
+    bool large = false,
+  }) {
+    if (c.posterMode == 'Uploaded Image' &&
+        c.customPosterUrl != null &&
+        c.customPosterUrl!.trim().isNotEmpty) {
+      return Image.network(
+        c.customPosterUrl!,
+        width: large ? double.infinity : 52,
+        height: large ? double.infinity : 68,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Center(
+          child: Icon(
+            Icons.collections_bookmark_outlined,
+            size: 42,
+          ),
+        ),
+      );
+    }
+
+    if (media.isEmpty) {
+      return Center(
+        child: Icon(
+          Icons.collections_bookmark_outlined,
+          size: large ? 52 : 28,
+        ),
+      );
+    }
+
+    final posters = media
+        .take(4)
+        .map((m) => m.imageUrl)
+        .whereType<String>()
+        .where((url) => url.isNotEmpty)
+        .toList();
+
+    if (large && posters.length >= 2) {
+      return GridView.count(
+        crossAxisCount: 2,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        children: [
+          for (final url in posters.take(4))
+            Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.movie_outlined,
+              ),
+            ),
+        ],
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.network(
+        media.first.imageUrl ?? '',
+        width: 52,
+        height: 68,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Icon(
+          Icons.collections_bookmark_outlined,
+        ),
+      ),
+    );
+  }
+
+  /// Performs `_addMedia` for this feature. Update this documentation when its contract changes.
+  void _addMedia(MediaCollection c) {
+    final controller = AppController.instance;
+
+    if (!_canAddToCollection(c)) {
       return;
     }
-    showModalBottomSheet<void>(context: context, showDragHandle: true, builder: (_) => ListView(
-      padding: const EdgeInsets.all(16),
-      children: [for (final media in controller.library) ListTile(
-        leading: const Icon(Icons.movie_outlined), title: Text(media.title), trailing: collection.mediaIds.contains(media.id) ? const Icon(Icons.check, color: Colors.green) : null,
-        onTap: () { controller.addToCollection(collection.id, media.id); Navigator.pop(context); setState(() {}); },
-      )],
-    ));
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'Add to ${c.name}',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Choose a library title to add to this collection.',
+              style: TextStyle(color: Colors.white60),
+            ),
+            const SizedBox(height: 12),
+            for (final media in controller.library)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () {
+                    controller.addToCollection(c.id, media.id);
+                    Navigator.pop(context);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.movie_outlined),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            media.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (c.mediaIds.contains(media.id))
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
-  void _openCollection(MediaCollection collection) {
+  /// Performs `_openCollection` for this feature. Update this documentation when its contract changes.
+  void _openCollection(MediaCollection c) {
     final controller = AppController.instance;
-    showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => SafeArea(child: ListView(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
-      children: [Text(collection.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)), if (collection.description.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(collection.description, style: const TextStyle(color: Colors.white60))),
-        const SizedBox(height: 10),
-        if (collection.mediaIds.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('No titles in this collection yet.'))),
-        for (final id in collection.mediaIds) ...controller.library.where((m) => m.id == id).map((m) => ListTile(leading: const Icon(Icons.play_circle_outline), title: Text(m.title), trailing: IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () { controller.removeFromCollection(collection.id, m.id); Navigator.pop(context); setState(() {}); }))),
-      ],
-    )));
+    final prefs = controller.currentCollectionPreferences;
+    var items = _mediaFor(c);
+    items = _sortItems(items, prefs.itemSort);
+    final canAdd = _canAddToCollection(c);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, __) {
+            final currentItems = _sortItems(_mediaFor(c), prefs.itemSort);
+
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+              children: [
+                Text(
+                  c.name,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: canAdd ? () => _addMedia(c) : null,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Add to Collection'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: currentItems.isEmpty
+                            ? null
+                            : () => _autoPlay(c),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: const Text('AUTO PLAY'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!canAdd && !c.isAutomatic)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'You do not have permission to add titles to this collection.',
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                if (c.isAutomatic)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Automatic collections are maintained by the system.',
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                if (c.description.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      c.description,
+                      style: const TextStyle(color: Colors.white60),
+                    ),
+                  ),
+                Text(
+                  '${currentItems.length} titles • ${c.isAutomatic ? 'automatic' : c.isShared ? 'collaborative' : 'private'}',
+                  style: const TextStyle(color: Colors.white54),
+                ),
+                const SizedBox(height: 10),
+                if (prefs.itemLayout == 'List')
+                  for (final media in currentItems) _mediaTile(c, media)
+                else
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: currentItems.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: .68,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemBuilder: (_, i) {
+                      final media = currentItems[i];
+                      return Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Image.network(
+                                media.imageUrl ?? '',
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Icon(Icons.movie_outlined),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                media.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 
+  /// Performs `_mediaTile` for this feature. Update this documentation when its contract changes.
+  Widget _mediaTile(MediaCollection c, MediaItem m) {
+    final canRemove = c.canCurrentProfileEdit() && !c.isAutomatic;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.play_circle_outline),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    m.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${m.releaseYear ?? ''} • ${m.type}',
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+                ],
+              ),
+            ),
+            if (canRemove)
+              IconButton(
+                tooltip: 'Remove from collection',
+                icon: const Icon(Icons.remove_circle_outline),
+                onPressed: () {
+                  AppController.instance.removeFromCollection(c.id, m.id);
+                  setState(() {});
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Performs `_sortItems` for this feature. Update this documentation when its contract changes.
+  List<MediaItem> _sortItems(List<MediaItem> items, String sort) {
+    final list = List<MediaItem>.from(items);
+    /// Performs `cmp` for this feature. Update this documentation when its contract changes.
+    int cmp(MediaItem a, MediaItem b) =>
+        a.title.toLowerCase().compareTo(b.title.toLowerCase());
+
+    switch (sort) {
+      case 'Oldest → Newest':
+        list.sort(
+          (a, b) => (a.releaseYear ?? 9999)
+              .compareTo(b.releaseYear ?? 9999),
+        );
+      case 'Newest → Oldest':
+        list.sort(
+          (a, b) => (b.releaseYear ?? -1)
+              .compareTo(a.releaseYear ?? -1),
+        );
+      case 'Shortest → Longest':
+        list.sort((a, b) => _duration(a).compareTo(_duration(b)));
+      case 'Longest → Shortest':
+        list.sort((a, b) => _duration(b).compareTo(_duration(a)));
+      case 'A → Z':
+        list.sort(cmp);
+      case 'Z → A':
+        list.sort((a, b) => cmp(b, a));
+      case 'Rating':
+        list.sort(
+          (a, b) => (b.rating ?? -1).compareTo(a.rating ?? -1),
+        );
+    }
+
+    return list;
+  }
+
+  /// Performs `_duration` for this feature. Update this documentation when its contract changes.
+  int _duration(MediaItem m) {
+    return m.seasons.fold<int>(
+      0,
+      (sum, season) =>
+          sum + ((season['durationSeconds'] as num?)?.toInt() ?? 0),
+    );
+  }
+
+  /// Performs `_autoPlay` for this feature. Update this documentation when its contract changes.
+  void _autoPlay(MediaCollection c) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Auto Play ${c.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Choose how versions and progression should behave. Each movie remains a separate library item; theatrical and extended cuts are versions of that movie.',
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: c.autoPlayVersionPreference,
+              decoration: const InputDecoration(
+                labelText: 'Version preference',
+              ),
+              items: const [
+                'Preferred version',
+                'Always theatrical',
+                'Always extended',
+                'Highest quality',
+                'Ask me',
+              ]
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => c.autoPlayVersionPreference = value);
+                }
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Auto-play next movie/episode'),
+              value: c.autoPlayNextEnabled,
+              onChanged: (value) {
+                setState(() => c.autoPlayNextEnabled = value);
+              },
+            ),
+            DropdownButtonFormField<String>(
+              initialValue: c.autoPlayNextTiming,
+              decoration: const InputDecoration(
+                labelText: 'Start next item',
+              ),
+              items: const [
+                'End credits',
+                '30 seconds before end',
+                '60 seconds before end',
+                'When video ends',
+              ]
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => c.autoPlayNextTiming = value);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'TV shows do not show a Skip Intro control. Auto-play only advances to the next episode.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () {
+              c.autoPlayEnabled = true;
+              Navigator.pop(context);
+            },
+            child: const Text('Start'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Performs `_manageContributors` for this feature. Update this documentation when its contract changes.
+  void _manageContributors(MediaCollection c) {
+    final controller = AppController.instance;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialog) {
+          return AlertDialog(
+            title: const Text('Collection contributors'),
+            content: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const Text(
+                    'Shared collections can be built together. Select the profiles allowed to add and manage titles.',
+                  ),
+                  for (final profile
+                      in controller.currentAccount?.profiles ?? [])
+                    CheckboxListTile(
+                      value: c.contributorProfileIds.contains(profile.id),
+                      title: Text(profile.name),
+                      onChanged: profile.id == c.createdByProfileId
+                          ? null
+                          : (value) {
+                              setDialog(() {
+                                if (value == true) {
+                                  if (!c.contributorProfileIds
+                                      .contains(profile.id)) {
+                                    c.contributorProfileIds.add(profile.id);
+                                  }
+                                } else {
+                                  c.contributorProfileIds.remove(profile.id);
+                                }
+                              });
+                            },
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  if (mounted) {
+                    setState(() {});
+                  }
+                },
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Performs `_create` for this feature. Update this documentation when its contract changes.
   void _create() {
     final name = TextEditingController();
     final description = TextEditingController();
     bool shared = true;
     bool featured = false;
-    bool automatic = false;
-    String posterMode = 'First 4 Posters';
-    showDialog(context: context, builder: (_) => StatefulBuilder(builder: (context, setDialog) => AlertDialog(
-      title: const Text('Create custom collection'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Collection name')),
-        TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')),
-        SwitchListTile(title: const Text('Shared with the account'), value: shared, onChanged: (v) => setDialog(() => shared = v)),
-        SwitchListTile(title: const Text('Feature on Collections page'), value: featured, onChanged: (v) => setDialog(() => featured = v)),
-        SwitchListTile(title: const Text('Automatic collection'), subtitle: const Text('Keep the collection rule-driven as your library grows.'), value: automatic, onChanged: (v) => setDialog(() => automatic = v)),
-        DropdownButtonFormField<String>(initialValue: posterMode, decoration: const InputDecoration(labelText: 'Artwork'), items: const [
-          DropdownMenuItem(value: 'First 4 Posters', child: Text('First 4 posters')),
-          DropdownMenuItem(value: 'Generated Seasonal', child: Text('Generated seasonal poster')),
-          DropdownMenuItem(value: 'Uploaded Image', child: Text('Uploaded image URL')),
-        ], onChanged: (v) { if (v != null) setDialog(() => posterMode = v); }),
-      ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () { if (name.text.trim().isEmpty) return; AppController.instance.createCollection(name: name.text, description: description.text, shared: shared, featured: featured, automatic: automatic, posterMode: posterMode); Navigator.pop(context); }, child: const Text('Create'))],
-    ))).then((_) { name.dispose(); description.dispose(); setState(() {}); });
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialog) {
+          return AlertDialog(
+            title: const Text('Create custom collection'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Collection name',
+                    ),
+                  ),
+                  TextField(
+                    controller: description,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                    ),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Shared / collaborative'),
+                    subtitle: const Text('Other profiles can add titles.'),
+                    value: shared,
+                    onChanged: (value) {
+                      setDialog(() => shared = value);
+                    },
+                  ),
+                  SwitchListTile(
+                    title: const Text('Feature on Collections page'),
+                    value: featured,
+                    onChanged: (value) {
+                      setDialog(() => featured = value);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final collectionName = name.text.trim();
+                  if (collectionName.isEmpty) {
+                    return;
+                  }
+
+                  AppController.instance.createCollection(
+                    name: collectionName,
+                    description: description.text.trim(),
+                    shared: shared,
+                    featured: featured,
+                  );
+                  Navigator.pop(context);
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
+      ),
+    ).then((_) {
+      name.dispose();
+      description.dispose();
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
+  /// Performs `_customize` for this feature. Update this documentation when its contract changes.
   void _customize() {
     final controller = AppController.instance;
-    var sectionDraft = List<String>.from(controller.collectionSectionOrder);
-    var featuredDraft = List<String>.from(controller.featuredCollectionOrder);
-    final names = {for (final c in controller.collections) c.id: c.name};
-    showDialog(context: context, builder: (_) => StatefulBuilder(builder: (context, setDialog) => AlertDialog(
-      title: const Text('Customize Collections'),
-      content: SizedBox(width: 460, height: 470, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Drag the collection groups and featured collections into the order you want.', style: TextStyle(color: Colors.white60)),
-        const SizedBox(height: 14),
-        const Text('Collection groups', style: TextStyle(fontWeight: FontWeight.w900)),
-        SizedBox(height: 175, child: ReorderableListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: sectionDraft.length, onReorderItem: (oldIndex, newIndex) { setDialog(() { final item = sectionDraft.removeAt(oldIndex); sectionDraft.insert(newIndex, item); }); }, itemBuilder: (_, i) => KeyedSubtree(key: ValueKey('section-$i-${sectionDraft[i]}'), child: Material(color: const Color(0xFF151515), child: ListTile(tileColor: Colors.transparent, leading: const Icon(Icons.drag_handle), title: Text(sectionDraft[i])))))),
-        const Divider(),
-        const Text('Featured collections', style: TextStyle(fontWeight: FontWeight.w900)),
-        SizedBox(height: 175, child: ReorderableListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: featuredDraft.length, onReorderItem: (oldIndex, newIndex) { setDialog(() { final item = featuredDraft.removeAt(oldIndex); featuredDraft.insert(newIndex, item); }); }, itemBuilder: (_, i) => KeyedSubtree(key: ValueKey('featured-$i-${featuredDraft[i]}'), child: Material(color: const Color(0xFF151515), child: ListTile(tileColor: Colors.transparent, leading: const Icon(Icons.drag_handle), title: Text(names[featuredDraft[i]] ?? 'Featured collection')))))),
-      ]))),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () { controller.reorderCollectionSections(sectionDraft); controller.reorderFeaturedCollections(featuredDraft); Navigator.pop(context); setState(() {}); }, child: const Text('Save'))],
-    )));
+    final draft = controller.currentCollectionPreferences.copy();
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Customize Collections'),
+          content: SingleChildScrollView(
+            child: Column(
+              children: [
+                _drop(
+                  'Collection order',
+                  draft.collectionOrder,
+                  const ['Automatic first', 'Custom first', 'Manual'],
+                  (value) => setDialog(
+                    () => draft.collectionOrder = value!,
+                  ),
+                ),
+                _drop(
+                  'Collection presentation',
+                  draft.layout,
+                  const ['Grid', 'List'],
+                  (value) => setDialog(
+                    () => draft.layout = value!,
+                  ),
+                ),
+                _drop(
+                  'Automatic collections',
+                  draft.automaticPosition,
+                  const ['Top', 'Bottom'],
+                  (value) => setDialog(
+                    () => draft.automaticPosition = value!,
+                  ),
+                ),
+                _drop(
+                  'Custom collections',
+                  draft.customPosition,
+                  const ['Top', 'Bottom'],
+                  (value) => setDialog(
+                    () => draft.customPosition = value!,
+                  ),
+                ),
+                const Divider(),
+                _drop(
+                  'Inside collection',
+                  draft.itemLayout,
+                  const ['Grid', 'List'],
+                  (value) => setDialog(
+                    () => draft.itemLayout = value!,
+                  ),
+                ),
+                _drop(
+                  'Movie/show order',
+                  draft.itemSort,
+                  const [
+                    'Collection order',
+                    'Oldest → Newest',
+                    'Newest → Oldest',
+                    'Shortest → Longest',
+                    'Longest → Shortest',
+                    'A → Z',
+                    'Z → A',
+                    'Rating',
+                  ],
+                  (value) => setDialog(
+                    () => draft.itemSort = value!,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                controller.updateCollectionPreferences(draft);
+                Navigator.pop(context);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
+  /// Performs `_drop` for this feature. Update this documentation when its contract changes.
+  Widget _drop(
+    String label,
+    String value,
+    List<String> values,
+    ValueChanged<String?> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        initialValue: value,
+        decoration: InputDecoration(labelText: label),
+        items: values
+            .map(
+              (item) => DropdownMenuItem(
+                value: item,
+                child: Text(item),
+              ),
+            )
+            .toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -661,6 +1558,7 @@ class WrappedPanel extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
@@ -737,10 +1635,7 @@ class WrappedPanel extends StatelessWidget {
                 '${controller.liked.length} liked',
               ),
               trailing: Text(
-                _badgeFor(
-                  controller.watched.length,
-                  controller.liked.length,
-                ),
+                _badgeForProfile(controller, profile.id),
               ),
             ),
           ),
@@ -774,20 +1669,8 @@ class WrappedPanel extends StatelessWidget {
   }
 }
 
-String _badgeFor(
-  int watchedCount,
-  int likedCount,
-) {
-  if (watchedCount >= 10) {
-    return 'The Movie Buff';
-  }
+String _badgeForProfile(AppController controller, String profileId) => controller.badgeForProfile(profileId);
 
-  if (likedCount >= 5) {
-    return 'The Loveless Romantic';
-  }
-
-  return 'The Explorer';
-}
 
 // -----------------------------------------------------------------------------
 // ACHIEVEMENTS
@@ -797,6 +1680,7 @@ class AchievementsPanel extends StatelessWidget {
   const AchievementsPanel({super.key});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
@@ -818,12 +1702,10 @@ class AchievementsPanel extends StatelessWidget {
           (profile) => Card(
             child: ListTile(
               title: Text(
-                '${profile.name} — '
-                '${_badgeFor(controller.watched.length, controller.liked.length)}',
+                '${profile.name} — ${_badgeForProfile(controller, profile.id)}',
               ),
               subtitle: const Text(
-                'Based on variety, genres, watch history '
-                'and group activity.',
+                "Based on this profile's monthly watch activity, variety and genres.",
               ),
               leading: const Icon(
                 Icons.emoji_events_outlined,
@@ -849,6 +1731,7 @@ class SharedActorsPanel extends StatelessWidget {
   const SharedActorsPanel({super.key});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;

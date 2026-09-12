@@ -1,7 +1,12 @@
+// FILE: `lib/details.dart`.
+// Purpose: Implements the details portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
+import 'reviews.dart';
 import 'player.dart';
 import 'group_watch.dart';
 
@@ -41,11 +46,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF090909),
@@ -78,6 +85,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildDetailsPage` for this feature. Update this documentation when its contract changes.
   Widget _buildDetailsPage() {
     if (AppController.instance.currentProfile == null) {
       return const Padding(
@@ -115,6 +123,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // SECTION ROUTER
   // ===========================================================================
 
+  /// Performs `_buildSection` for this feature. Update this documentation when its contract changes.
   Widget _buildSection(String section) {
     switch (section) {
       case 'Poster':
@@ -170,6 +179,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           return const SizedBox.shrink();
         }
         return _buildGroupWatch();
+
+      case 'Reviews':
+        return _buildReviews();
 
       case 'Audio & Subtitles':
         if (!customization.showAudioSubtitles) {
@@ -254,6 +266,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     return result;
   }
 
+  /// Performs `_buildSeasonsSection` for this feature. Update this documentation when its contract changes.
   Widget _buildSeasonsSection() {
     final orderedSeasons = _orderedSeasons();
 
@@ -327,6 +340,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildSeasonSelector` for this feature. Update this documentation when its contract changes.
   Widget _buildSeasonSelector(
     List<Map<String, dynamic>> orderedSeasons,
   ) {
@@ -388,6 +402,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildEpisodes` for this feature. Update this documentation when its contract changes.
   Widget _buildEpisodes(
     List<Map<String, dynamic>> episodes,
   ) {
@@ -419,6 +434,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildNoEpisodes` for this feature. Update this documentation when its contract changes.
   Widget _buildNoEpisodes() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -437,6 +453,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_seasonTitle` for this feature. Update this documentation when its contract changes.
   String _seasonTitle(
     Map<String, dynamic> season,
   ) {
@@ -473,6 +490,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_seasonAlignment` for this feature. Update this documentation when its contract changes.
   Alignment _seasonAlignment() {
     switch (customization.seasonPlacement) {
       case 'Left':
@@ -487,6 +505,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  /// Performs `_seasonWrapAlignment` for this feature. Update this documentation when its contract changes.
   WrapAlignment _seasonWrapAlignment() {
     switch (customization.seasonPlacement) {
       case 'Left':
@@ -501,6 +520,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  /// Performs `_playEpisode` for this feature. Update this documentation when its contract changes.
   void _playEpisode(
     Map<String, dynamic> episode,
   ) {
@@ -588,6 +608,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // POSTER
   // ===========================================================================
 
+  /// Performs `_buildPoster` for this feature. Update this documentation when its contract changes.
   Widget _buildPoster() {
     switch (customization.posterStyle) {
       case 'Full Screen':
@@ -605,6 +626,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  /// Performs `_buildStandardPoster` for this feature. Update this documentation when its contract changes.
   Widget _buildStandardPoster() {
     final width = customization.posterSize == 'Small'
         ? 220.0
@@ -636,6 +658,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildFullScreenPoster` for this feature. Update this documentation when its contract changes.
   Widget _buildFullScreenPoster() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
@@ -681,6 +704,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildCompactPoster` for this feature. Update this documentation when its contract changes.
   Widget _buildCompactPoster() {
     return Center(
       child: Padding(
@@ -699,6 +723,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildSidePoster` for this feature. Update this documentation when its contract changes.
   Widget _buildSidePoster() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
@@ -724,6 +749,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildSidePosterInfo` for this feature. Update this documentation when its contract changes.
   Widget _buildSidePosterInfo() {
     final alignment = _textAlignment();
 
@@ -746,6 +772,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_posterImage` for this feature. Update this documentation when its contract changes.
   Widget _posterImage() {
     final url = media.imageUrl;
 
@@ -781,6 +808,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_posterPlaceholder` for this feature. Update this documentation when its contract changes.
   Widget _posterPlaceholder() {
     return Container(
       color: const Color(0xFF171717),
@@ -798,6 +826,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // TITLE
   // ===========================================================================
 
+  /// Performs `_buildTitle` for this feature. Update this documentation when its contract changes.
   Widget _buildTitle() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
@@ -818,6 +847,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // METADATA
   // ===========================================================================
 
+  /// Performs `_buildMetadata` for this feature. Update this documentation when its contract changes.
   Widget _buildMetadata() {
     final pills = <Widget>[];
 
@@ -876,6 +906,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_buildSmallMetadata` for this feature. Update this documentation when its contract changes.
   Widget _buildSmallMetadata() {
     final items = <String>[];
 
@@ -918,6 +949,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_metadataPill` for this feature. Update this documentation when its contract changes.
   Widget _metadataPill(
     IconData icon,
     String text,
@@ -960,6 +992,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // OWNERSHIP
   // ===========================================================================
 
+  /// Performs `_buildOwnership` for this feature. Update this documentation when its contract changes.
   Widget _buildOwnership() {
     final controller = AppController.instance;
     final owned = controller.isOwned(media.id);
@@ -1007,6 +1040,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // DESCRIPTION
   // ===========================================================================
 
+  /// Performs `_buildDescription` for this feature. Update this documentation when its contract changes.
   Widget _buildDescription() {
     final description = media.description;
 
@@ -1033,6 +1067,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // PLAY
   // ===========================================================================
 
+  /// Performs `_buttonAlignment` for this feature. Update this documentation when its contract changes.
   Alignment _buttonAlignment() {
     switch (customization.buttonAlignment) {
       case 'Center':
@@ -1047,6 +1082,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  /// Performs `_buildPlay` for this feature. Update this documentation when its contract changes.
   Widget _buildPlay() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1077,6 +1113,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // TRAILER
   // ===========================================================================
 
+  /// Performs `_buildTrailer` for this feature. Update this documentation when its contract changes.
   Widget _buildTrailer() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1102,6 +1139,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // GROUP WATCH
   // ===========================================================================
 
+  /// Performs `_buildGroupWatch` for this feature. Update this documentation when its contract changes.
   Widget _buildGroupWatch() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1124,9 +1162,29 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   // ===========================================================================
+  // REVIEWS
+  // ===========================================================================
+
+  /// Opens profile and global reviews for this movie or show.
+  Widget _buildReviews() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        height: 52,
+        child: OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReviewsHubScreen(media: media))),
+          icon: const Icon(Icons.rate_review_outlined),
+          label: const Text('Reviews'),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
   // AUDIO / SUBTITLES
   // ===========================================================================
 
+  /// Performs `_buildAudioSubtitles` for this feature. Update this documentation when its contract changes.
   Widget _buildAudioSubtitles() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
@@ -1148,6 +1206,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_openAudioSubtitleOptions` for this feature. Update this documentation when its contract changes.
   void _openAudioSubtitleOptions() {
     showModalBottomSheet(
       context: context,
@@ -1178,6 +1237,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // REACTIONS
   // ===========================================================================
 
+  /// Performs `_buildReactions` for this feature. Update this documentation when its contract changes.
   Widget _buildReactions() {
     final controller = AppController.instance;
 
@@ -1244,6 +1304,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // INFORMATION
   // ===========================================================================
 
+  /// Performs `_buildInformation` for this feature. Update this documentation when its contract changes.
   Widget _buildInformation() {
     final rows = <Widget>[];
 
@@ -1368,6 +1429,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_infoRow` for this feature. Update this documentation when its contract changes.
   Widget _infoRow(
     String label,
     String value,
@@ -1408,38 +1470,126 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // LIBRARY
   // ===========================================================================
 
+  /// Performs `_buildLibrary` for this feature. Update this documentation when its contract changes.
   Widget _buildLibrary() {
     final controller = AppController.instance;
     final owned = controller.isOwned(media.id);
 
+    final addableCollections = controller.collections
+        .where((c) => !c.isAutomatic && c.canCurrentProfileAdd())
+        .toList();
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: SizedBox(
-        height: 52,
-        child: OutlinedButton.icon(
-          onPressed: () {
-            setState(() {
-              if (owned) {
-                controller.removeFromLibrary(
-                  media.id,
-                );
-              } else {
-                controller.addToLibrary(
-                  media,
-                );
-              }
-            });
-          },
-          icon: Icon(
-            owned
-                ? Icons.remove_circle_outline
-                : Icons.add_circle_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  if (owned) {
+                    controller.removeFromLibrary(
+                      media.id,
+                    );
+                  } else {
+                    controller.addToLibrary(
+                      media,
+                    );
+                  }
+                });
+              },
+              icon: Icon(
+                owned
+                    ? Icons.remove_circle_outline
+                    : Icons.add_circle_outline,
+              ),
+              label: Text(
+                owned
+                    ? 'Remove from Library'
+                    : 'Add to Library',
+              ),
+            ),
           ),
-          label: Text(
-            owned
-                ? 'Remove from Library'
-                : 'Add to Library',
-          ),
+          if (addableCollections.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: _showAddToCollection,
+                icon: const Icon(Icons.collections_bookmark_outlined),
+                label: const Text(
+                  'Add to Collection',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Performs `_showAddToCollection` for this feature. Update this documentation when its contract changes.
+  void _showAddToCollection() {
+    final controller = AppController.instance;
+    final collections = controller.collections
+        .where((c) => !c.isAutomatic && c.canCurrentProfileAdd())
+        .toList();
+
+    if (collections.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No collections are available for this profile.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+          children: [
+            Text(
+              'Add \'${media.title}\' to Collection',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Choose a collaborative or private custom collection.',
+              style: TextStyle(color: Colors.white60),
+            ),
+            const SizedBox(height: 12),
+            for (final collection in collections)
+              ListTile(
+                leading: Icon(
+                  collection.mediaIds.contains(media.id)
+                      ? Icons.check_circle
+                      : Icons.collections_bookmark_outlined,
+                ),
+                title: Text(collection.name),
+                subtitle: Text(
+                  collection.mediaIds.contains(media.id)
+                      ? 'Already in this collection'
+                      : collection.isShared
+                          ? 'Shared collection'
+                          : 'Private collection',
+                ),
+                enabled: !collection.mediaIds.contains(media.id),
+                onTap: () {
+                  controller.addToCollection(collection.id, media.id);
+                  Navigator.pop(context);
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Added to ${collection.name}.')),
+                  );
+                },
+              ),
+          ],
         ),
       ),
     );
@@ -1449,6 +1599,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // NAVIGATION
   // ===========================================================================
 
+  /// Performs `playMedia` for this feature. Update this documentation when its contract changes.
   void playMedia() {
     setState(() {
       pressedPlay = true;
@@ -1484,6 +1635,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     });
   }
 
+  /// Performs `startGroupWatch` for this feature. Update this documentation when its contract changes.
   void startGroupWatch() {
     showDialog<void>(
       context: context,
@@ -1519,6 +1671,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_launchGroupWatch` for this feature. Update this documentation when its contract changes.
   void _launchGroupWatch() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -1529,6 +1682,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `_shareGroupWatch` for this feature. Update this documentation when its contract changes.
   void _shareGroupWatch() {
     showModalBottomSheet<void>(
       context: context,
@@ -1576,6 +1730,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Performs `watchTrailer` for this feature. Update this documentation when its contract changes.
   void watchTrailer() {
     final url = media.trailerUrl;
 
@@ -1625,6 +1780,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  /// Performs `_crossAxisAlignment` for this feature. Update this documentation when its contract changes.
   CrossAxisAlignment _crossAxisAlignment() {
     switch (customization.titleAlignment) {
       case 'Center':
@@ -1653,6 +1809,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
   }
 
+  /// Performs `_wrapAlignment` for this feature. Update this documentation when its contract changes.
   WrapAlignment _wrapAlignment() {
     switch (customization.titleAlignment) {
       case 'Center':
@@ -1767,6 +1924,7 @@ class _SeasonButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -1902,6 +2060,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return '${hours}h ${remaining}m';
   }
 
+  /// Performs `_showEpisodeLabel` for this feature. Update this documentation when its contract changes.
   bool _showEpisodeLabel() {
     final mode =
         DetailsCustomizationStore.settingsFor(
@@ -1911,6 +2070,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
     return mode != 'Actual Title';
   }
 
+  /// Performs `_episodeLabel` for this feature. Update this documentation when its contract changes.
   String _episodeLabel() {
     final seasonNumber =
         widget.episode['seasonNumber'] ??
@@ -1935,6 +2095,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -2106,6 +2267,7 @@ class _TrailerPlayerScreenState
   YoutubePlayerController? _controller;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -2129,12 +2291,14 @@ class _TrailerPlayerScreenState
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _controller?.close();
     super.dispose();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,

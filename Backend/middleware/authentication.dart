@@ -1,3 +1,7 @@
+// FILE: `Backend/middleware/authentication.dart`.
+// Purpose: Implements the authentication portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:io';
 
 import '../models/account.dart';

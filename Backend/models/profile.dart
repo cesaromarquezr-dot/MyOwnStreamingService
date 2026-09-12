@@ -1,3 +1,7 @@
+// FILE: `Backend/models/profile.dart`.
+// Purpose: Implements the profile portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 // backend/models/profile.dart
 
 class Profile {
@@ -65,10 +69,12 @@ class Profile {
   // OWNERSHIP
   // ------------------------------------------------------------
 
+  /// Performs `ownsMedia` for this feature. Update this documentation when its contract changes.
   bool ownsMedia(String mediaId) {
     return ownedMediaIds.contains(mediaId);
   }
 
+  /// Performs `addOwnedMedia` for this feature. Update this documentation when its contract changes.
   void addOwnedMedia(String mediaId) {
     if (mediaId.trim().isEmpty) {
       return;
@@ -79,6 +85,7 @@ class Profile {
     }
   }
 
+  /// Performs `removeOwnedMedia` for this feature. Update this documentation when its contract changes.
   void removeOwnedMedia(String mediaId) {
     ownedMediaIds.remove(mediaId);
   }
@@ -87,10 +94,12 @@ class Profile {
   // WATCH HISTORY
   // ------------------------------------------------------------
 
+  /// Performs `hasWatched` for this feature. Update this documentation when its contract changes.
   bool hasWatched(String mediaId) {
     return watchedMediaIds.contains(mediaId);
   }
 
+  /// Performs `markAsWatched` for this feature. Update this documentation when its contract changes.
   void markAsWatched(
     String mediaId, {
     DateTime? watchedAt,
@@ -116,10 +125,12 @@ class Profile {
   // LIKES
   // ------------------------------------------------------------
 
+  /// Performs `hasLiked` for this feature. Update this documentation when its contract changes.
   bool hasLiked(String mediaId) {
     return likedMediaIds.contains(mediaId);
   }
 
+  /// Performs `likeMedia` for this feature. Update this documentation when its contract changes.
   void likeMedia(String mediaId) {
     if (mediaId.trim().isEmpty) {
       return;
@@ -133,6 +144,7 @@ class Profile {
     }
   }
 
+  /// Performs `unlikeMedia` for this feature. Update this documentation when its contract changes.
   void unlikeMedia(String mediaId) {
     likedMediaIds.remove(mediaId);
   }
@@ -141,10 +153,12 @@ class Profile {
   // DISLIKES
   // ------------------------------------------------------------
 
+  /// Performs `hasDisliked` for this feature. Update this documentation when its contract changes.
   bool hasDisliked(String mediaId) {
     return dislikedMediaIds.contains(mediaId);
   }
 
+  /// Performs `dislikeMedia` for this feature. Update this documentation when its contract changes.
   void dislikeMedia(String mediaId) {
     if (mediaId.trim().isEmpty) {
       return;
@@ -158,6 +172,7 @@ class Profile {
     }
   }
 
+  /// Performs `undislikeMedia` for this feature. Update this documentation when its contract changes.
   void undislikeMedia(String mediaId) {
     dislikedMediaIds.remove(mediaId);
   }
@@ -166,10 +181,12 @@ class Profile {
   // WATCH PROGRESS
   // ------------------------------------------------------------
 
+  /// Performs `getWatchProgress` for this feature. Update this documentation when its contract changes.
   double getWatchProgress(String mediaId) {
     return watchProgress[mediaId] ?? 0.0;
   }
 
+  /// Performs `setWatchProgress` for this feature. Update this documentation when its contract changes.
   void setWatchProgress(
     String mediaId,
     double progress, {
@@ -202,6 +219,7 @@ class Profile {
     }
   }
 
+  /// Performs `removeWatchProgress` for this feature. Update this documentation when its contract changes.
   void removeWatchProgress(String mediaId) {
     watchProgress.remove(mediaId);
   }
@@ -226,6 +244,7 @@ class Profile {
   // RECOMMENDATION HELPERS
   // ------------------------------------------------------------
 
+  /// Performs `shouldRecommend` for this feature. Update this documentation when its contract changes.
   bool shouldRecommend(String mediaId) {
     // Never recommend something the profile disliked.
     if (hasDisliked(mediaId)) {
@@ -249,6 +268,7 @@ class Profile {
   // JSON
   // ------------------------------------------------------------
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

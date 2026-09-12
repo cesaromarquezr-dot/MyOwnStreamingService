@@ -1,3 +1,7 @@
+// FILE: `Backend/services/payment_service.dart`.
+// Purpose: Implements the payment service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math';
 
 import '../database/database.dart';
@@ -75,6 +79,7 @@ class PaymentSession {
     );
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson({
     bool includeCheckoutToken = false,
   }) {
@@ -114,6 +119,7 @@ class PaymentService {
   // PAYMENT ID
   // ------------------------------------------------------------
 
+  /// Performs `_generatePaymentId` for this feature. Update this documentation when its contract changes.
   String _generatePaymentId() {
     final timestamp =
         DateTime.now().microsecondsSinceEpoch;
@@ -125,6 +131,7 @@ class PaymentService {
   // CHECKOUT TOKEN
   // ------------------------------------------------------------
 
+  /// Performs `_generateCheckoutToken` for this feature. Update this documentation when its contract changes.
   String _generateCheckoutToken() {
     final timestamp =
         DateTime.now().microsecondsSinceEpoch;
@@ -158,6 +165,7 @@ class PaymentService {
     }
   }
 
+  /// Performs `getCurrency` for this feature. Update this documentation when its contract changes.
   String getCurrency() {
     return 'USD';
   }
@@ -246,6 +254,7 @@ class PaymentService {
   // PAYMENT OWNERSHIP
   // ------------------------------------------------------------
 
+  /// Performs `paymentBelongsToAccount` for this feature. Update this documentation when its contract changes.
   bool paymentBelongsToAccount(
     PaymentSession payment,
     Account account,
@@ -789,6 +798,7 @@ class PaymentService {
   // EXPIRATION
   // ------------------------------------------------------------
 
+  /// Performs `_isCheckoutExpired` for this feature. Update this documentation when its contract changes.
   bool _isCheckoutExpired(
     PaymentSession payment,
   ) {
@@ -804,6 +814,7 @@ class PaymentService {
     );
   }
 
+  /// Performs `_ensureNotExpired` for this feature. Update this documentation when its contract changes.
   void _ensureNotExpired(
     PaymentSession payment,
   ) {
@@ -820,6 +831,7 @@ class PaymentService {
   // PROCESSOR TRANSACTION VALIDATION
   // ------------------------------------------------------------
 
+  /// Performs `_looksLikeProcessorTransactionId` for this feature. Update this documentation when its contract changes.
   bool _looksLikeProcessorTransactionId(
     String transactionId,
   ) {

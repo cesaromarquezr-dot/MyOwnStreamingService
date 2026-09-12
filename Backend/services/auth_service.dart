@@ -1,3 +1,7 @@
+// FILE: `Backend/services/auth_service.dart`.
+// Purpose: Implements the auth service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:math';
 
@@ -39,6 +43,7 @@ class AuthService {
   // ID / TOKEN GENERATION
   // ---------------------------------------------------------------------------
 
+  /// Performs `_generateId` for this feature. Update this documentation when its contract changes.
   String _generateId(String prefix) {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final randomPart = _random.nextInt(1000000000);
@@ -46,6 +51,7 @@ class AuthService {
     return '${prefix}_${timestamp}_$randomPart';
   }
 
+  /// Performs `_generateSessionToken` for this feature. Update this documentation when its contract changes.
   String _generateSessionToken() {
     final bytes = List<int>.generate(
       48,
@@ -61,6 +67,7 @@ class AuthService {
   // PASSWORDS
   // ---------------------------------------------------------------------------
 
+  /// Performs `_hashPassword` for this feature. Update this documentation when its contract changes.
   Future<String> _hashPassword(
     String password,
   ) async {
@@ -72,6 +79,7 @@ class AuthService {
     return result.hash;
   }
 
+  /// Performs `_verifyPassword` for this feature. Update this documentation when its contract changes.
   Future<bool> _verifyPassword(
     String password,
     String passwordHash,
@@ -90,8 +98,9 @@ class AuthService {
   // ACCOUNT CREATION
   // ---------------------------------------------------------------------------
 
+  /// Performs `createAccount` for this feature. Update this documentation when its contract changes.
   Future<Account> createAccount({
-    required String username,
+    String? username,
     required String email,
     required String password,
     required SubscriptionPlan plan,
@@ -103,20 +112,22 @@ class AuthService {
     required String acceptableUseVersion,
     required DateTime legalAcceptedAt,
   }) async {
-    final cleanUsername = username.trim();
     final cleanEmail = email.trim().toLowerCase();
-
-    if (cleanUsername.isEmpty) {
-      throw Exception(
-        'Username is required.',
-      );
-    }
-
     if (!_isValidEmail(cleanEmail)) {
-      throw Exception(
-        'A valid email address is required.',
-      );
+      throw Exception('A valid email address is required.');
     }
+
+    final localPart = cleanEmail.split('@').first.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    var cleanUsername = (username ?? '').trim();
+    if (cleanUsername.isEmpty) {
+      cleanUsername = '${localPart}_account';
+      var suffix = 2;
+      while (database.getAccountByUsername(cleanUsername) != null) {
+        cleanUsername = '${localPart}_account_$suffix';
+        suffix++;
+      }
+    }
+
 
     if (password.length < 6) {
       throw Exception(
@@ -185,12 +196,14 @@ class AuthService {
   // SUBSCRIPTION / LOGIN ELIGIBILITY
   // ---------------------------------------------------------------------------
 
+  /// Performs `canLogin` for this feature. Update this documentation when its contract changes.
   bool canLogin(
     Account account,
   ) {
     return account.hasActiveSubscription;
   }
 
+  /// Performs `requiresPayment` for this feature. Update this documentation when its contract changes.
   bool requiresPayment(
     Account account,
   ) {
@@ -201,6 +214,7 @@ class AuthService {
   // LOGIN
   // ---------------------------------------------------------------------------
 
+  /// Performs `login` for this feature. Update this documentation when its contract changes.
   Future<AuthLoginResult> login({
     required String login,
     required String password,
@@ -212,24 +226,18 @@ class AuthService {
     if (cleanLogin.isEmpty || password.isEmpty) {
       database.recordFailedLogin(cleanLogin);
       throw Exception(
-        'Invalid username/email or password.',
+        'Invalid email or password.',
       );
     }
 
-    Account? account;
-
-    account = database.getAccountByUsername(
-      cleanLogin,
-    );
-
-    account ??= database.getAccountByEmail(
+    Account? account = database.getAccountByEmail(
       cleanLogin,
     );
 
     if (account == null) {
       database.recordFailedLogin(cleanLogin);
       throw Exception(
-        'Invalid username/email or password.',
+        'Invalid email or password.',
       );
     }
 
@@ -241,7 +249,7 @@ class AuthService {
     if (!passwordValid) {
       database.recordFailedLogin(cleanLogin);
       throw Exception(
-        'Invalid username/email or password.',
+        'Invalid email or password.',
       );
     }
 
@@ -337,6 +345,7 @@ class AuthService {
     );
   }
 
+  /// Performs `verifySecurityAnswer` for this feature. Update this documentation when its contract changes.
   Future<bool> verifySecurityAnswer({
     required String token,
     required String answer,
@@ -352,6 +361,7 @@ class AuthService {
   // ACCOUNT DELETION
   // ---------------------------------------------------------------------------
 
+  /// Performs `deleteAccount` for this feature. Update this documentation when its contract changes.
   void deleteAccount(
     Account account,
   ) {
@@ -408,6 +418,7 @@ class AuthService {
   // LOGOUT
   // ---------------------------------------------------------------------------
 
+  /// Performs `logout` for this feature. Update this documentation when its contract changes.
   void logout(
     String token,
   ) {
@@ -422,6 +433,7 @@ class AuthService {
     );
   }
 
+  /// Performs `logoutAllSessions` for this feature. Update this documentation when its contract changes.
   void logoutAllSessions(
     String accountId,
   ) {
@@ -484,6 +496,7 @@ class AuthService {
     return profile;
   }
 
+  /// Performs `removeProfile` for this feature. Update this documentation when its contract changes.
   void removeProfile({
     required Account account,
     required String profileId,
@@ -525,6 +538,7 @@ class AuthService {
   // VALIDATION
   // ---------------------------------------------------------------------------
 
+  /// Performs `_isValidEmail` for this feature. Update this documentation when its contract changes.
   bool _isValidEmail(
     String email,
   ) {

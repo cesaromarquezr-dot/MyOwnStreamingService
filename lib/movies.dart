@@ -1,3 +1,7 @@
+// FILE: `lib/movies.dart`.
+// Purpose: Implements the movies portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -16,6 +20,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   String _searchQuery = '';
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -32,11 +37,13 @@ class _MoviesScreenState extends State<MoviesScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
 
+  /// Performs `_openDetails` for this feature. Update this documentation when its contract changes.
   void _openDetails(BuildContext context, MediaItem movie) {
     Navigator.push(
       context,
@@ -79,6 +86,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final library = AppController.instance.library;
 
@@ -197,6 +205,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   // TOP BAR
   // ============================================================
 
+  /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
   Widget _buildTopBar(
     BuildContext context,
     int movieCount,
@@ -302,6 +311,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   // SEARCH
   // ============================================================
 
+  /// Performs `_showSearch` for this feature. Update this documentation when its contract changes.
   void _showSearch(BuildContext context) {
     final controller = TextEditingController(
       text: _searchQuery,
@@ -445,6 +455,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   // SEARCH SUMMARY
   // ============================================================
 
+  /// Performs `_buildSearchSummary` for this feature. Update this documentation when its contract changes.
   Widget _buildSearchSummary(int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -481,6 +492,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   // FEATURED MOVIE
   // ============================================================
 
+  /// Performs `_buildFeaturedMovie` for this feature. Update this documentation when its contract changes.
   Widget _buildFeaturedMovie(
     BuildContext context,
     MediaItem movie,
@@ -692,6 +704,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   // SECTION HEADER
   // ============================================================
 
+  /// Performs `_buildSectionHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildSectionHeader({
     required String title,
     required String subtitle,
@@ -750,6 +763,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   // EMPTY STATE
   // ============================================================
 
+  /// Performs `_buildEmptyState` for this feature. Update this documentation when its contract changes.
   Widget _buildEmptyState({
     required bool isSearching,
   }) {
@@ -847,6 +861,7 @@ class _MovieCardState extends State<_MovieCard> {
   bool pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final movie = widget.movie;
     final imageUrl = (movie.imageUrl ?? '').trim();
@@ -1255,6 +1270,7 @@ class _ArtworkFallback extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -1334,6 +1350,7 @@ class _FeaturedFallback extends StatelessWidget {
   const _FeaturedFallback();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -1367,6 +1384,7 @@ class _MoviesBackground extends StatelessWidget {
   const _MoviesBackground();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Stack(
@@ -1443,6 +1461,7 @@ class _GlassIconButtonState
   bool pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,

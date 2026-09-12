@@ -1,3 +1,7 @@
+// FILE: `Backend/services/group_watch_service.dart`.
+// Purpose: Implements the group watch service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math';
 
 import '../database/database.dart';
@@ -202,6 +206,7 @@ class GroupWatchService {
     return session;
   }
 
+  /// Performs `getSessionsForAccount` for this feature. Update this documentation when its contract changes.
   List<GroupWatchSession> getSessionsForAccount(
     String accountId,
   ) {
@@ -235,6 +240,7 @@ class GroupWatchService {
     return sessions;
   }
 
+  /// Performs `getSessionsForProfile` for this feature. Update this documentation when its contract changes.
   List<GroupWatchSession> getSessionsForProfile(
     String profileId,
   ) {
@@ -935,6 +941,7 @@ if (hostProfile == null) {
   // DELETE SESSION
   // ---------------------------------------------------------------------------
 
+  /// Performs `deleteSession` for this feature. Update this documentation when its contract changes.
   bool deleteSession({
     required String sessionId,
     required String profileId,
@@ -969,6 +976,7 @@ if (hostProfile == null) {
   // INVITATION EXPIRATION
   // ---------------------------------------------------------------------------
 
+  /// Performs `expireInvitations` for this feature. Update this documentation when its contract changes.
   void expireInvitations({
     required String sessionId,
   }) {
@@ -983,6 +991,7 @@ if (hostProfile == null) {
     }
   }
 
+  /// Performs `_expireInvitationsIfNecessary` for this feature. Update this documentation when its contract changes.
   bool _expireInvitationsIfNecessary(
     GroupWatchSession session,
   ) {
@@ -1028,6 +1037,7 @@ if (hostProfile == null) {
     return true;
   }
 
+  /// Performs `_expireAndSaveIfNecessary` for this feature. Update this documentation when its contract changes.
   void _expireAndSaveIfNecessary(
     GroupWatchSession session,
   ) {
@@ -1045,6 +1055,7 @@ if (hostProfile == null) {
   // MEDIA OWNERSHIP
   // ---------------------------------------------------------------------------
 
+  /// Performs `_accountOwnsMedia` for this feature. Update this documentation when its contract changes.
   bool _accountOwnsMedia(
     Account account,
     String mediaId,
@@ -1097,6 +1108,7 @@ if (hostProfile == null) {
     return session;
   }
 
+  /// Performs `_generateSessionId` for this feature. Update this documentation when its contract changes.
   String _generateSessionId() {
     final Random random =
         Random();

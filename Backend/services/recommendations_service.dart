@@ -1,3 +1,7 @@
+// FILE: `Backend/services/recommendations_service.dart`.
+// Purpose: Implements the recommendations service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 // backend/services/recommendations_service.dart
 
 // Recommendation engine.
@@ -41,6 +45,7 @@ class WatchOption {
     this.url,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
@@ -68,6 +73,7 @@ class PurchaseOption {
     required this.format,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'retailer': retailer,
@@ -101,6 +107,7 @@ class RecommendationReason {
     this.purchaseOptions = const [],
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'type': type.name,
@@ -170,6 +177,7 @@ class RecommendationMedia {
     this.purchaseOptions = const [],
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -301,6 +309,7 @@ class RecommendationResult {
     required this.reasons,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'media': media.toJson(),
@@ -1174,6 +1183,7 @@ class RecommendationsService {
     return value;
   }
 
+  /// Performs `_compareRecommendationResults` for this feature. Update this documentation when its contract changes.
   int _compareRecommendationResults(
     RecommendationResult a,
     RecommendationResult b,
@@ -1211,6 +1221,7 @@ class RecommendationsService {
         );
   }
 
+  /// Performs `_intersection` for this feature. Update this documentation when its contract changes.
   List<String> _intersection(
     List<String> first,
     List<String> second,
@@ -1228,10 +1239,12 @@ class RecommendationsService {
     return a.intersection(b).toList();
   }
 
+  /// Performs `_normalize` for this feature. Update this documentation when its contract changes.
   String _normalize(String value) {
     return value.trim().toLowerCase();
   }
 
+  /// Performs `_deduplicateReasons` for this feature. Update this documentation when its contract changes.
   List<RecommendationReason> _deduplicateReasons(
     List<RecommendationReason> reasons,
   ) {

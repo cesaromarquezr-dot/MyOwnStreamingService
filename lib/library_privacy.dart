@@ -1,3 +1,7 @@
+// FILE: `lib/library_privacy.dart`.
+// Purpose: Implements the library privacy portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -15,6 +19,7 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
   bool ownershipConfirmed = false;
   bool deleteMediaOnAccountDeletion = true;
 
+  /// Performs `_deleteAccount` for this feature. Update this documentation when its contract changes.
   Future<void> _deleteAccount() async {
     if (!deleteMediaOnAccountDeletion) return;
     final confirmed = await showDialog<bool>(
@@ -47,6 +52,7 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final account = AppController.instance.currentAccount;
     final used = account?.storageUsedBytes ?? 0;
@@ -143,6 +149,7 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
     );
   }
 
+  /// Performs `_showPolicy` for this feature. Update this documentation when its contract changes.
   void _showPolicy(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -170,6 +177,7 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
     );
   }
 
+  /// Performs `_formatBytes` for this feature. Update this documentation when its contract changes.
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -186,6 +194,7 @@ class _PolicyCard extends StatelessWidget {
   const _PolicyCard({required this.icon, required this.title, required this.body});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Card(
       child: Padding(

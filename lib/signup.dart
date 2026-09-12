@@ -1,9 +1,14 @@
+// FILE: `lib/signup.dart`.
+// Purpose: Implements the signup portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'payment.dart';
+import 'how_it_works.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -13,7 +18,6 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final usernameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
@@ -40,8 +44,8 @@ class _SignupScreenState extends State<SignupScreen> {
   bool acceptableUseAccepted = false;
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
-    usernameController.dispose();
     emailController.dispose();
     passwordController.dispose();
     confirmController.dispose();
@@ -50,10 +54,10 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  /// Performs `createAccount` for this feature. Update this documentation when its contract changes.
   Future<void> createAccount() async {
   if (creatingAccount) return;
 
-  final username = usernameController.text.trim();
   final email = emailController.text.trim();
   final password = passwordController.text;
   final confirm = confirmController.text;
@@ -62,8 +66,7 @@ class _SignupScreenState extends State<SignupScreen> {
       : selectedSecurityQuestion;
   final securityAnswer = securityAnswerController.text.trim();
 
-  if (username.isEmpty ||
-      email.isEmpty ||
+  if (email.isEmpty ||
       password.isEmpty ||
       confirm.isEmpty) {
     _showMessage('Please complete all fields.');
@@ -92,7 +95,6 @@ class _SignupScreenState extends State<SignupScreen> {
   try {
     final signupData =
         await AppController.instance.createAccountWithBackend(
-      username: username,
       email: email,
       password: password,
       plan: selectedPlan,
@@ -157,7 +159,7 @@ if (currency.isEmpty) {
       plan: selectedPlan,
       amount: (amount as num).toDouble(),
       currency: currency,
-      username: username,
+      email: email,
       rememberLogin: rememberLogin,
     ),
   ),
@@ -177,6 +179,7 @@ if (currency.isEmpty) {
   }
 }
 
+  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -188,6 +191,7 @@ if (currency.isEmpty) {
       );
   }
 
+  /// Performs `_inputDecoration` for this feature. Update this documentation when its contract changes.
   InputDecoration _inputDecoration({
     required String label,
     required IconData icon,
@@ -222,6 +226,7 @@ if (currency.isEmpty) {
   }
 
 
+  /// Performs `_buildSecurityQuestionSection` for this feature. Update this documentation when its contract changes.
   Widget _buildSecurityQuestionSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,6 +252,7 @@ if (currency.isEmpty) {
     );
   }
 
+  /// Performs `_buildLogo` for this feature. Update this documentation when its contract changes.
   Widget _buildLogo() {
     return Center(
       child: Hero(
@@ -278,6 +284,7 @@ if (currency.isEmpty) {
     );
   }
 
+  /// Performs `_buildPlanCard` for this feature. Update this documentation when its contract changes.
   Widget _buildPlanCard({
     required SubscriptionPlan plan,
     required String title,
@@ -355,6 +362,7 @@ if (currency.isEmpty) {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -455,17 +463,6 @@ if (currency.isEmpty) {
                             ),
 
                             const SizedBox(height: 30),
-
-                            TextField(
-                              controller: usernameController,
-                              textInputAction: TextInputAction.next,
-                              decoration: _inputDecoration(
-                                label: 'Username',
-                                icon: Icons.person_outline,
-                              ),
-                            ),
-
-                            const SizedBox(height: 14),
 
                             TextField(
                               controller: emailController,
@@ -616,6 +613,25 @@ if (currency.isEmpty) {
                             ),
 
                             const SizedBox(height: 18),
+
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: creatingAccount
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => LegalCenterScreen(
+                                              onContinue: () => Navigator.of(context).pop(),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                icon: const Icon(Icons.policy_outlined, size: 17),
+                                label: const Text('Review legal & privacy'),
+                              ),
+                            ),
 
                             Container(
                               padding: const EdgeInsets.all(14),

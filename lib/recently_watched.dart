@@ -1,3 +1,7 @@
+// FILE: `lib/recently_watched.dart`.
+// Purpose: Implements the recently watched portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -31,6 +35,7 @@ class _RecentlyWatchedCardState extends State<RecentlyWatchedCard> {
   bool _pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final imageUrl = widget.imgurl?.trim() ?? '';
     final title = widget.name?.trim() ?? '';
@@ -239,6 +244,7 @@ class _RecentlyWatchedCardState extends State<RecentlyWatchedCard> {
     );
   }
 
+  /// Performs `_buildPoster` for this feature. Update this documentation when its contract changes.
   Widget _buildPoster(String imageUrl) {
     if (imageUrl.isEmpty) {
       return const _PosterPlaceholder();
@@ -265,6 +271,7 @@ class _PosterLoading extends StatelessWidget {
   const _PosterLoading();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -295,6 +302,7 @@ class _PosterPlaceholder extends StatelessWidget {
   const _PosterPlaceholder();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(

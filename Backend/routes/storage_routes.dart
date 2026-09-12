@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/storage_routes.dart`.
+// Purpose: Implements the storage routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,6 +17,7 @@ class StorageRoutes {
     required this.email,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     try {
       final path = request.uri.path;
@@ -54,6 +59,7 @@ class StorageRoutes {
     }
   }
 
+  /// Performs `_get` for this feature. Update this documentation when its contract changes.
   Future<void> _get(HttpRequest r) async {
     final a = authentication.authenticate(r);
 
@@ -75,6 +81,7 @@ class StorageRoutes {
     );
   }
 
+  /// Performs `_request` for this feature. Update this documentation when its contract changes.
   Future<void> _request(HttpRequest r) async {
     final a = authentication.authenticate(r);
 
@@ -108,6 +115,7 @@ class StorageRoutes {
     );
   }
 
+  /// Performs `_grant` for this feature. Update this documentation when its contract changes.
   Future<void> _grant(HttpRequest r) async {
     final key =
         Platform.environment['STREAM_PLATFORM_ADMIN_KEY'] ??
@@ -193,6 +201,7 @@ class StorageRoutes {
     return Map<String, dynamic>.from(d);
   }
 
+  /// Performs `_unauth` for this feature. Update this documentation when its contract changes.
   Future<void> _unauth(HttpRequest r) {
     return _json(
       r.response,
@@ -204,6 +213,7 @@ class StorageRoutes {
     );
   }
 
+  /// Performs `_json` for this feature. Update this documentation when its contract changes.
   Future<void> _json(
     HttpResponse r,
     int code,

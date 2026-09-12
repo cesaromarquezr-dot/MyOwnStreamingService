@@ -1,3 +1,7 @@
+// FILE: `lib/hollywood.dart`.
+// Purpose: Implements the hollywood portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 /// Actor/Actress discovered from media imported into the user's library.
@@ -82,6 +86,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
   final List<Actor> actors = [];
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final filteredActors = actors.where((actor) {
       if (searchQuery.trim().isEmpty) {
@@ -300,6 +305,7 @@ class _ActorCardState extends State<_ActorCard> {
   bool pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final actor = widget.actor;
 
@@ -512,6 +518,7 @@ class _ActorImage extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (actor.photoUrl.isEmpty) {
       return Container(
@@ -572,6 +579,7 @@ class _EmptyActorsState extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
@@ -634,6 +642,7 @@ class ActorDetailsScreen extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
@@ -877,6 +886,7 @@ class _InfoSection extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -931,6 +941,7 @@ class _ActorInfoRow extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -972,6 +983,7 @@ class _NoActorDetails extends StatelessWidget {
   const _NoActorDetails();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,

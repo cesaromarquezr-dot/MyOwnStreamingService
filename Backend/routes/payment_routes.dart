@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/payment_routes.dart`.
+// Purpose: Implements the payment routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -19,6 +23,7 @@ class PaymentRoutes {
     required this.database,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     try {
       final path = request.uri.path;
@@ -154,6 +159,7 @@ class PaymentRoutes {
    * ============================================================
    */
 
+  /// Performs `_getCheckoutPaymentStatus` for this feature. Update this documentation when its contract changes.
   Future<void> _getCheckoutPaymentStatus(
     HttpRequest request,
   ) async {
@@ -214,6 +220,7 @@ class PaymentRoutes {
     );
   }
 
+  /// Performs `_verifyCheckoutPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _verifyCheckoutPayment(
     HttpRequest request,
   ) async {
@@ -370,6 +377,7 @@ class PaymentRoutes {
    * ============================================================
    */
 
+  /// Performs `_createPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _createPayment(
     HttpRequest request,
     Account account,
@@ -435,6 +443,7 @@ class PaymentRoutes {
    * ============================================================
    */
 
+  /// Performs `_getPaymentStatus` for this feature. Update this documentation when its contract changes.
   Future<void> _getPaymentStatus(
     HttpRequest request,
     Account account,
@@ -507,6 +516,7 @@ class PaymentRoutes {
    * ============================================================
    */
 
+  /// Performs `_verifyPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _verifyPayment(
     HttpRequest request,
     Account account,
@@ -591,6 +601,7 @@ class PaymentRoutes {
    * ============================================================
    */
 
+  /// Performs `_failPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _failPayment(
     HttpRequest request,
     Account account,
@@ -649,6 +660,7 @@ class PaymentRoutes {
    * ============================================================
    */
 
+  /// Performs `_cancelPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _cancelPayment(
     HttpRequest request,
     Account account,
@@ -758,6 +770,7 @@ class PaymentRoutes {
     }
   }
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   Future<void> _sendJson(
     HttpResponse response,
     int statusCode,
@@ -775,6 +788,7 @@ class PaymentRoutes {
     await response.close();
   }
 
+  /// Performs `_cleanError` for this feature. Update this documentation when its contract changes.
   String _cleanError(
     Object error,
   ) {

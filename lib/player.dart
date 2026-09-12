@@ -1,23 +1,28 @@
+// FILE: `lib/player.dart`.
+// Purpose: Implements the player portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'device_features.dart';
 import 'app_core.dart';
+import 'music.dart';
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
 
-  /// Optional Group Watch session.
-  ///
-  /// Normal playback can continue using:
-  /// PlayerScreen(media: media)
-  ///
-  /// Group Watch playback can use:
-  /// PlayerScreen(
-  ///   media: media,
-  ///   groupWatchSessionId: session.id,
-  /// )
+  // Optional Group Watch session.
+  //
+  // Normal playback can continue using:
+  // PlayerScreen(media: media)
+  //
+  // Group Watch playback can use:
+  // PlayerScreen(
+  //   media: media,
+  //   groupWatchSessionId: session.id,
+  // )
   final String? groupWatchSessionId;
 
   const PlayerScreen({
@@ -62,13 +67,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   YoutubePlayerController? youtubeController;
   bool youtubePlayerReady = false;
   bool youtubeUrlInvalid = false;
+  bool musicWasPlayingBeforeVideo = false;
 
   StreamSubscription<YoutubeVideoState>?
       youtubeVideoStateSubscription;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    musicWasPlayingBeforeVideo = MusicPlaybackController.instance.pauseForVideo();
 
     position = AppController.instance
         .getPlaybackProgress(widget.media.id)
@@ -82,6 +90,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _startControlsTimer();
   }
 
+  /// Performs `_initializeYoutubePlayer` for this feature. Update this documentation when its contract changes.
   void _initializeYoutubePlayer() {
     final trailerUrl = widget.media.trailerUrl?.trim();
 
@@ -182,6 +191,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return id;
   }
 
+  // Performs `_onYoutubePlayerChanged` for this feature. Update this documentation when its contract changes.
   void _onYoutubePlayerChanged(
     YoutubePlayerValue value,
   ) {
@@ -212,6 +222,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_onYoutubeVideoStateChanged` for this feature. Update this documentation when its contract changes.
   Future<void> _onYoutubeVideoStateChanged(
     YoutubeVideoState state,
   ) async {
@@ -253,6 +264,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     autoplayTimer?.cancel();
     groupWatchTimer?.cancel();
@@ -261,10 +273,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     youtubeVideoStateSubscription?.cancel();
     youtubeController?.close();
+    if (musicWasPlayingBeforeVideo) {
+      MusicPlaybackController.instance.resumeAfterVideo();
+    }
 
     super.dispose();
   }
 
+  /// Performs `_startControlsTimer` for this feature. Update this documentation when its contract changes.
   void _startControlsTimer() {
     controlsTimer?.cancel();
 
@@ -296,6 +312,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_toggleControls` for this feature. Update this documentation when its contract changes.
   void _toggleControls() {
     if (!mounted) {
       return;
@@ -313,6 +330,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     controlsTimer?.cancel();
   }
 
+  /// Performs `_playYoutubeVideo` for this feature. Update this documentation when its contract changes.
   void _playYoutubeVideo() {
     final controller = youtubeController;
 
@@ -327,6 +345,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _startControlsTimer();
   }
 
+  /// Performs `_pauseYoutubeVideo` for this feature. Update this documentation when its contract changes.
   void _pauseYoutubeVideo() {
     _lastLocalPlaybackAction = DateTime.now();
 
@@ -341,6 +360,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     controlsTimer?.cancel();
   }
 
+  /// Performs `_seekYoutubeByNormalizedPosition` for this feature. Update this documentation when its contract changes.
   Future<void> _seekYoutubeByNormalizedPosition(
     double normalizedPosition,
   ) async {
@@ -367,6 +387,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_seekYoutubeBySeconds` for this feature. Update this documentation when its contract changes.
   Future<void> _seekYoutubeBySeconds(
     int seconds,
   ) async {
@@ -406,6 +427,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_handleMainPlayPause` for this feature. Update this documentation when its contract changes.
   void _handleMainPlayPause() {
     final controller = youtubeController;
 
@@ -427,6 +449,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH INITIALIZATION
   // ============================================================
 
+  /// Performs `_initializeGroupWatch` for this feature. Update this documentation when its contract changes.
   void _initializeGroupWatch() {
     final controller = AppController.instance;
 
@@ -464,6 +487,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _startGroupWatchPolling();
   }
 
+  /// Performs `_loadInitialGroupWatchState` for this feature. Update this documentation when its contract changes.
   void _loadInitialGroupWatchState(
     GroupWatchSession session,
   ) {
@@ -504,6 +528,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_startGroupWatchPolling` for this feature. Update this documentation when its contract changes.
   void _startGroupWatchPolling() {
     groupWatchTimer?.cancel();
     groupWatchPositionTimer?.cancel();
@@ -526,6 +551,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _refreshGroupWatchState();
   }
 
+  /// Performs `_refreshGroupWatchState` for this feature. Update this documentation when its contract changes.
   Future<void> _refreshGroupWatchState() async {
     if (!mounted ||
         groupWatchSessionId == null ||
@@ -562,6 +588,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_applyRemoteGroupWatchState` for this feature. Update this documentation when its contract changes.
   Future<void> _applyRemoteGroupWatchState(
     GroupWatchSession session,
   ) async {
@@ -629,6 +656,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_seekYoutubeByAbsoluteSeconds` for this feature. Update this documentation when its contract changes.
   Future<void> _seekYoutubeByAbsoluteSeconds(
     double seconds,
   ) async {
@@ -655,6 +683,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_applyGroupWatchPosition` for this feature. Update this documentation when its contract changes.
   void _applyGroupWatchPosition(
     double seconds, {
     bool seekPlayer = true,
@@ -692,6 +721,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_getNormalizedPositionFromSeconds` for this feature. Update this documentation when its contract changes.
   Future<double> _getNormalizedPositionFromSeconds(
     double seconds,
   ) async {
@@ -717,6 +747,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH POSITION SYNCHRONIZATION
   // ============================================================
 
+  /// Performs `_queueGroupWatchPositionSync` for this feature. Update this documentation when its contract changes.
   void _queueGroupWatchPositionSync(
     double seconds,
   ) {
@@ -739,6 +770,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_syncCurrentPositionToGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _syncCurrentPositionToGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
@@ -770,6 +802,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_sendGroupWatchActualPosition` for this feature. Update this documentation when its contract changes.
   Future<void> _sendGroupWatchActualPosition(
     double seconds,
   ) async {
@@ -814,6 +847,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // NORMAL PLAYBACK POSITION
   // ============================================================
 
+  /// Performs `updatePosition` for this feature. Update this documentation when its contract changes.
   void updatePosition(double value) {
     final newPosition =
         value.clamp(0.0, 1.0).toDouble();
@@ -845,6 +879,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_sendNormalizedGroupWatchPosition` for this feature. Update this documentation when its contract changes.
   Future<void> _sendNormalizedGroupWatchPosition(
     double normalizedPosition,
   ) async {
@@ -885,6 +920,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // VIDEO FINISH / AUTOPLAY
   // ============================================================
 
+  /// Performs `finishVideo` for this feature. Update this documentation when its contract changes.
   void finishVideo() {
     if (videoFinished) {
       return;
@@ -935,6 +971,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_sendGroupWatchFinishedPosition` for this feature. Update this documentation when its contract changes.
   Future<void> _sendGroupWatchFinishedPosition() async {
     final sessionId =
         groupWatchSessionId;
@@ -975,6 +1012,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `startAutoplayCountdown` for this feature. Update this documentation when its contract changes.
   void startAutoplayCountdown(
     String nextEpisodeTitle,
   ) {
@@ -1015,6 +1053,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `cancelAutoplay` for this feature. Update this documentation when its contract changes.
   void cancelAutoplay() {
     autoplayTimer?.cancel();
 
@@ -1023,6 +1062,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
+  /// Performs `playNextEpisode` for this feature. Update this documentation when its contract changes.
   void playNextEpisode(
     String nextEpisodeTitle,
   ) {
@@ -1098,6 +1138,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // AUDIO / SUBTITLES
   // ============================================================
 
+  /// Performs `openAudioSubtitleOptions` for this feature. Update this documentation when its contract changes.
   void openAudioSubtitleOptions() {
     showModalBottomSheet(
       context: context,
@@ -1119,6 +1160,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_changeAudioTrack` for this feature. Update this documentation when its contract changes.
   Future<void> _changeAudioTrack(
     String value,
   ) async {
@@ -1155,6 +1197,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_changeSubtitleTrack` for this feature. Update this documentation when its contract changes.
   Future<void> _changeSubtitleTrack(
     String? value,
   ) async {
@@ -1193,6 +1236,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Performs `_showSnackBar` for this feature. Update this documentation when its contract changes.
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -1216,6 +1260,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH CREATION FROM PLAYER
   // ============================================================
 
+  /// Performs `showGroupShare` for this feature. Update this documentation when its contract changes.
   Future<void> showGroupShare() async {
     final controller =
         AppController.instance;
@@ -1319,6 +1364,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH PLAY
   // ============================================================
 
+  /// Performs `_playGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _playGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
@@ -1420,6 +1466,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH PAUSE
   // ============================================================
 
+  /// Performs `_pauseGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _pauseGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
@@ -1507,6 +1554,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH RESUME
   // ============================================================
 
+  /// Performs `_resumeGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _resumeGroupWatch() async {
     final sessionId =
         groupWatchSessionId;
@@ -1571,6 +1619,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // EXTRAS
   // ============================================================
 
+  /// Performs `showExtras` for this feature. Update this documentation when its contract changes.
   void showExtras() {
     showModalBottomSheet(
       context: context,
@@ -1609,6 +1658,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // VIDEO AREA
   // ============================================================
 
+  /// Performs `_buildVideoArea` for this feature. Update this documentation when its contract changes.
   Widget _buildVideoArea(
     GroupWatchSession? groupSession,
   ) {
@@ -1659,6 +1709,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
@@ -1775,6 +1826,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // TOP BAR
   // ============================================================
 
+  /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
   Widget _buildTopBar(
     GroupWatchSession? groupSession,
   ) {
@@ -1887,6 +1939,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_openCastMenu` for this feature. Update this documentation when its contract changes.
   void _openCastMenu() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const DeviceCenterScreen()),
@@ -1897,6 +1950,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // CENTER CONTROLS
   // ============================================================
 
+  /// Performs `_buildCenterPlayerControl` for this feature. Update this documentation when its contract changes.
   Widget _buildCenterPlayerControl() {
     final playing =
         youtubeController?.value
@@ -1997,6 +2051,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_buildCreditsOverlay` for this feature. Update this documentation when its contract changes.
   Widget _buildCreditsOverlay() {
     return Positioned.fill(
       child: IgnorePointer(
@@ -2045,6 +2100,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH BANNER
   // ============================================================
 
+  /// Performs `_buildGroupWatchBanner` for this feature. Update this documentation when its contract changes.
   Widget _buildGroupWatchBanner(
     GroupWatchSession session,
   ) {
@@ -2181,6 +2237,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH PAUSED OVERLAY
   // ============================================================
 
+  /// Performs `_buildGroupWatchPausedOverlay` for this feature. Update this documentation when its contract changes.
   Widget _buildGroupWatchPausedOverlay(
     GroupWatchSession session,
   ) {
@@ -2375,6 +2432,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // BOTTOM CONTROLS
   // ============================================================
 
+  /// Performs `_buildControls` for this feature. Update this documentation when its contract changes.
   Widget _buildControls(
     GroupWatchSession? groupSession,
   ) {
@@ -2553,6 +2611,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // GROUP WATCH INFO
   // ============================================================
 
+  /// Performs `_showGroupWatchSessionInfo` for this feature. Update this documentation when its contract changes.
   void _showGroupWatchSessionInfo() {
     final sessionId =
         groupWatchSessionId;
@@ -2664,6 +2723,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Performs `_groupWatchStatusLabel` for this feature. Update this documentation when its contract changes.
   String _groupWatchStatusLabel(
     GroupWatchSession session,
   ) {
@@ -2706,6 +2766,7 @@ class _PlayerIconButton
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
@@ -2757,6 +2818,7 @@ class _SeekButton
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.black
@@ -2796,6 +2858,7 @@ class _BottomControlButton
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IconButton(
       onPressed: onPressed,
@@ -2822,6 +2885,7 @@ class _PlayerMessage
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Center(
       child: Column(
@@ -2866,6 +2930,7 @@ class _PremiumDialog
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor:
@@ -2964,6 +3029,7 @@ class _PremiumBottomSheet
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration:
@@ -3063,6 +3129,7 @@ class _InfoRow
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       padding:
@@ -3142,6 +3209,7 @@ class _GroupWatchInviteDialogState
       <String>{};
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor:
@@ -3412,6 +3480,7 @@ class GroupWatchPauseReasonDialog
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor:
@@ -3555,6 +3624,7 @@ class _PauseReasonTile
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding:
@@ -3642,12 +3712,14 @@ class _GroupWatchCustomPauseReasonDialogState
       TextEditingController();
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     controller.dispose();
     super.dispose();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor:
@@ -3800,6 +3872,7 @@ class NextEpisodeCountdown
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (nextEpisodeTitle == null ||
         nextEpisodeTitle!
@@ -4039,6 +4112,7 @@ class _AudioSubtitleOptionsState
   late String? selectedSubtitle;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -4053,6 +4127,7 @@ class _AudioSubtitleOptionsState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration:
@@ -4245,6 +4320,7 @@ class _OptionInfoCard
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       padding:

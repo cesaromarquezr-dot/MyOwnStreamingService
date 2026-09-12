@@ -1,3 +1,7 @@
+// FILE: `lib/how_it_works.dart`.
+// Purpose: Implements the how it works portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 class HowItWorksScreen extends StatelessWidget {
@@ -9,6 +13,7 @@ class HowItWorksScreen extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -49,12 +54,6 @@ class HowItWorksScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalCenterScreen())),
-              icon: const Icon(Icons.policy_outlined),
-              label: const Text('VIEW TERMS, PRIVACY & COPYRIGHT POLICIES'),
-            ),
-            const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
@@ -80,6 +79,7 @@ class _Step extends StatelessWidget {
   const _Step({required this.icon, required this.title, required this.text});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -97,18 +97,28 @@ class _Step extends StatelessWidget {
 }
 
 class LegalCenterScreen extends StatelessWidget {
-  const LegalCenterScreen({super.key});
+  /// Optional callback used by signup so the user can return to the account form.
+  final VoidCallback? onContinue;
+
+  const LegalCenterScreen({super.key, this.onContinue});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Legal & Privacy Center')),
-      body: ListView(padding: const EdgeInsets.all(20), children: const [
+      body: ListView(padding: const EdgeInsets.all(20), children: [
         _PolicyCard(title: 'Terms of Service', icon: Icons.description_outlined, text: 'Use of the service requires lawful use of your account and media. Do not upload, import, redistribute or share media without the rights or authorization required by applicable law. We may suspend accounts for abuse or repeated infringement.'),
         _PolicyCard(title: 'Privacy', icon: Icons.lock_outline, text: 'Libraries are private by default and separated by account authorization. We process the information needed to operate, secure, bill and support the service. Account deletion is designed to trigger removal of associated media and storage according to the service retention policy.'),
         _PolicyCard(title: 'Copyright', icon: Icons.copyright_outlined, text: 'The service does not provide a commercial movie or television catalog and does not grant copyright permissions. Customers are responsible for determining whether copying, importing, converting, storing or remotely accessing particular media is lawful where they live.'),
         _PolicyCard(title: 'Import & DRM', icon: Icons.disc_full_outlined, text: 'Import tools are intended for authorized personal media. The service does not authorize circumvention of technological protection measures or unauthorized distribution.'),
         _PolicyCard(title: 'Copyright notices', icon: Icons.report_outlined, text: 'The production service will maintain a documented copyright notice and response process, including abuse handling and repeat-infringer procedures where legally applicable.'),
         _PolicyCard(title: 'Important', icon: Icons.warning_amber_rounded, text: 'These in-app policies are product safeguards and plain-language disclosures, not legal advice or a substitute for jurisdiction-specific legal review before launch.'),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: onContinue ?? () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+          label: const Text('Continue to sign up'),
+        ),
       ]),
     );
   }
@@ -120,6 +130,7 @@ class _PolicyCard extends StatelessWidget {
   final String text;
   const _PolicyCard({required this.title, required this.icon, required this.text});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(17), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     Row(children: [Icon(icon, color: Colors.redAccent), const SizedBox(width: 10), Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)))]),
     const SizedBox(height: 10),

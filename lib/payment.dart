@@ -1,3 +1,7 @@
+// FILE: `lib/payment.dart`.
+// Purpose: Implements the payment portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -12,7 +16,7 @@ class PaymentScreen extends StatefulWidget {
   final SubscriptionPlan plan;
   final double amount;
   final String currency;
-  final String username;
+  final String email;
   final bool rememberLogin;
 
   const PaymentScreen({
@@ -22,7 +26,7 @@ class PaymentScreen extends StatefulWidget {
     required this.plan,
     required this.amount,
     required this.currency,
-    required this.username,
+    required this.email,
     required this.rememberLogin,
   });
 
@@ -47,6 +51,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   late final AnimationController _animationController;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -57,6 +62,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     transactionController.dispose();
     _animationController.dispose();
@@ -67,6 +73,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // PAYMENT
   // ==========================================================
 
+  /// Performs `completePayment` for this feature. Update this documentation when its contract changes.
   Future<void> completePayment() async {
     if (processing) {
       return;
@@ -142,6 +149,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // ERROR MESSAGE
   // ==========================================================
 
+  /// Performs `_cleanErrorMessage` for this feature. Update this documentation when its contract changes.
   String _cleanErrorMessage(Object error) {
     final message = error.toString();
 
@@ -188,6 +196,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // ==========================================================
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isWide = size.width >= 800;
@@ -225,6 +234,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // BACKGROUND
   // ==========================================================
 
+  /// Performs `_buildBackground` for this feature. Update this documentation when its contract changes.
   Widget _buildBackground() {
     return AnimatedBuilder(
       animation: _animationController,
@@ -273,6 +283,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // TOP BAR
   // ==========================================================
 
+  /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
   Widget _buildTopBar(bool isWide) {
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -323,6 +334,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     );
   }
 
+  /// Performs `_buildGlassIconButton` for this feature. Update this documentation when its contract changes.
   Widget _buildGlassIconButton({
     required IconData icon,
     required VoidCallback onPressed,
@@ -356,6 +368,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // PAYMENT CONTENT
   // ==========================================================
 
+  /// Performs `_buildPaymentContent` for this feature. Update this documentation when its contract changes.
   Widget _buildPaymentContent(bool isWide) {
     return Center(
       child: SingleChildScrollView(
@@ -403,6 +416,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // HEADER
   // ==========================================================
 
+  /// Performs `_buildHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildHeader() {
     return Column(
       children: [
@@ -474,6 +488,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // PAYMENT CARD
   // ==========================================================
 
+  /// Performs `_buildPaymentCard` for this feature. Update this documentation when its contract changes.
   Widget _buildPaymentCard() {
     return Container(
       decoration: BoxDecoration(
@@ -519,6 +534,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // PLAN SECTION
   // ==========================================================
 
+  /// Performs `_buildPlanSection` for this feature. Update this documentation when its contract changes.
   Widget _buildPlanSection() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -667,6 +683,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // TRANSACTION FIELD
   // ==========================================================
 
+  /// Performs `_buildTransactionField` for this feature. Update this documentation when its contract changes.
   Widget _buildTransactionField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,6 +766,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // SECURITY NOTICE
   // ==========================================================
 
+  /// Performs `_buildSecurityNotice` for this feature. Update this documentation when its contract changes.
   Widget _buildSecurityNotice() {
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -790,6 +808,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // ERROR
   // ==========================================================
 
+  /// Performs `_buildError` for this feature. Update this documentation when its contract changes.
   Widget _buildError() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -829,6 +848,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // PAY BUTTON
   // ==========================================================
 
+  /// Performs `_buildPayButton` for this feature. Update this documentation when its contract changes.
   Widget _buildPayButton() {
     return SizedBox(
       height: 56,
@@ -915,6 +935,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // SUCCESS
   // ==========================================================
 
+  /// Performs `_buildSuccessState` for this feature. Update this documentation when its contract changes.
   Widget _buildSuccessState(bool isWide) {
     return Center(
       child: SingleChildScrollView(
@@ -996,6 +1017,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     );
   }
 
+  /// Performs `_buildSuccessIcon` for this feature. Update this documentation when its contract changes.
   Widget _buildSuccessIcon() {
     return AnimatedBuilder(
       animation: _animationController,
@@ -1035,6 +1057,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     );
   }
 
+  /// Performs `_buildSuccessSummary` for this feature. Update this documentation when its contract changes.
   Widget _buildSuccessSummary() {
     return Container(
       padding: const EdgeInsets.all(18),

@@ -1,3 +1,7 @@
+// FILE: `lib/group_watch.dart`.
+// Purpose: Implements the group watch portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -88,6 +92,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   ];
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -100,12 +105,14 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _pollTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
 
+  /// Performs `_initialize` for this feature. Update this documentation when its contract changes.
   Future<void> _initialize() async {
     try {
       final requestedId =
@@ -137,6 +144,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     }
   }
 
+  /// Performs `_startPolling` for this feature. Update this documentation when its contract changes.
   void _startPolling() {
     _pollTimer?.cancel();
 
@@ -235,6 +243,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
         .toList();
   }
 
+  /// Performs `_hasAudio` for this feature. Update this documentation when its contract changes.
   bool _hasAudio(GroupWatchParticipant participant) {
     final id = participant.audioTrackId;
 
@@ -304,6 +313,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_loadLocalPreferences` for this feature. Update this documentation when its contract changes.
   void _loadLocalPreferences() {
     final session = _session;
     final profile = _currentProfile;
@@ -322,6 +332,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     _localSubtitleTrackId = participant.subtitleTrackId;
   }
 
+  /// Performs `_cleanError` for this feature. Update this documentation when its contract changes.
   String _cleanError(Object error) {
     var message = error.toString();
 
@@ -333,6 +344,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return message.isEmpty ? 'Something went wrong.' : message;
   }
 
+  /// Performs `_acceptInvitation` for this feature. Update this documentation when its contract changes.
   Future<void> _acceptInvitation() async {
     final session = _session;
     final profile = _currentProfile;
@@ -355,6 +367,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_declineInvitation` for this feature. Update this documentation when its contract changes.
   Future<void> _declineInvitation() async {
     final session = _session;
     final profile = _currentProfile;
@@ -371,6 +384,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_chooseAudio` for this feature. Update this documentation when its contract changes.
   Future<void> _chooseAudio() async {
     final selected = await _showTrackPicker(
       title: 'Audio',
@@ -402,6 +416,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_chooseSubtitles` for this feature. Update this documentation when its contract changes.
   Future<void> _chooseSubtitles() async {
     final selected = await _showTrackPicker(
       title: 'Subtitles',
@@ -435,6 +450,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_showTrackPicker` for this feature. Update this documentation when its contract changes.
   Future<String?> _showTrackPicker({
     required String title,
     required List<_Track> tracks,
@@ -530,6 +546,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_startSession` for this feature. Update this documentation when its contract changes.
   Future<void> _startSession() async {
     final session = _session;
 
@@ -561,6 +578,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_pauseSession` for this feature. Update this documentation when its contract changes.
   Future<void> _pauseSession() async {
     final session = _session;
 
@@ -586,6 +604,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_showPauseReasonDialog` for this feature. Update this documentation when its contract changes.
   Future<String?> _showPauseReasonDialog() async {
     final textController = TextEditingController();
 
@@ -699,6 +718,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     }
   }
 
+  /// Performs `_resumeSession` for this feature. Update this documentation when its contract changes.
   Future<void> _resumeSession() async {
     final session = _session;
     final profile = _currentProfile;
@@ -733,6 +753,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_endSession` for this feature. Update this documentation when its contract changes.
   Future<void> _endSession() async {
     final session = _session;
 
@@ -778,7 +799,9 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     });
   }
 
+  /// Performs `_runAction` for this feature. Update this documentation when its contract changes.
   Future<void> _runAction(
+    /// Performs `Function` for this feature. Update this documentation when its contract changes.
     Future<void> Function() action,
   ) async {
     if (_working) {
@@ -815,6 +838,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     }
   }
 
+  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -830,6 +854,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
       );
   }
 
+  /// Performs `_statusTitle` for this feature. Update this documentation when its contract changes.
   String _statusTitle(GroupWatchSession session) {
     if (session.isEnded) {
       return 'Session ended';
@@ -854,6 +879,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return 'Waiting for everyone';
   }
 
+  /// Performs `_statusSubtitle` for this feature. Update this documentation when its contract changes.
   String _statusSubtitle(GroupWatchSession session) {
     if (session.isEnded) {
       return 'This Group Watch session is no longer active.';
@@ -886,6 +912,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return 'Everyone can choose their own audio and subtitle preferences.';
   }
 
+  /// Performs `_audioLabel` for this feature. Update this documentation when its contract changes.
   String _audioLabel(String? id) {
     if (id == null || id.trim().isEmpty) {
       return 'Not selected';
@@ -900,6 +927,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return id;
   }
 
+  /// Performs `_subtitleLabel` for this feature. Update this documentation when its contract changes.
   String _subtitleLabel(String? id) {
     if (id == null || id.trim().isEmpty) {
       return 'No subtitles';
@@ -914,6 +942,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return id;
   }
 
+  /// Performs `_formatPosition` for this feature. Update this documentation when its contract changes.
   String _formatPosition(Duration position) {
     final totalSeconds =
         position.inSeconds.clamp(0, 864000).toInt();
@@ -932,6 +961,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
         '${seconds.toString().padLeft(2, '0')}';
   }
 
+  /// Performs `_buildBody` for this feature. Update this documentation when its contract changes.
   Widget _buildBody() {
     if (_loading) {
       return const Center(
@@ -979,6 +1009,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return _buildSessionState(session);
   }
 
+  /// Performs `_buildErrorState` for this feature. Update this documentation when its contract changes.
   Widget _buildErrorState() {
     return _buildSimpleState(
       icon: Icons.cloud_off_outlined,
@@ -989,6 +1020,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_buildMissingSessionState` for this feature. Update this documentation when its contract changes.
   Widget _buildMissingSessionState() {
     return _buildSimpleState(
       icon: Icons.groups_2_outlined,
@@ -998,6 +1030,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_buildExpiredState` for this feature. Update this documentation when its contract changes.
   Widget _buildExpiredState() {
     return _buildSimpleState(
       icon: Icons.link_off_rounded,
@@ -1008,6 +1041,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_buildSimpleState` for this feature. Update this documentation when its contract changes.
   Widget _buildSimpleState({
     required IconData icon,
     required String title,
@@ -1057,6 +1091,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_buildInvitationState` for this feature. Update this documentation when its contract changes.
   Widget _buildInvitationState(
     GroupWatchSession session,
     GroupWatchParticipant participant,
@@ -1170,6 +1205,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_buildPosterHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildPosterHeader() {
     final imageUrl = (widget.media.imageUrl ?? '').trim();
 
@@ -1223,6 +1259,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_poster` for this feature. Update this documentation when its contract changes.
   Widget _poster(
     String imageUrl, {
     required double width,
@@ -1248,6 +1285,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_infoBox` for this feature. Update this documentation when its contract changes.
   Widget _infoBox(GroupWatchSession session) {
     final accepted = _acceptedParticipants.length;
 
@@ -1288,6 +1326,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_expirationLabel` for this feature. Update this documentation when its contract changes.
   String _expirationLabel(DateTime expiresAt) {
     final remaining =
         expiresAt.difference(DateTime.now());
@@ -1311,6 +1350,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return 'Expires in ${minutes}m';
   }
 
+  /// Performs `_buildSessionState` for this feature. Update this documentation when its contract changes.
   Widget _buildSessionState(GroupWatchSession session) {
     final watching =
         session.isPlayingStatus || session.isPaused;
@@ -1400,6 +1440,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
   Widget _buildTopBar(GroupWatchSession session) {
     return SafeArea(
       bottom: false,
@@ -1454,6 +1495,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_statusBadge` for this feature. Update this documentation when its contract changes.
   Widget _statusBadge(GroupWatchSession session) {
     final active = session.isPlayingStatus;
     final paused = session.isPaused;
@@ -1508,6 +1550,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_playerSurface` for this feature. Update this documentation when its contract changes.
   Widget _playerSurface(
     GroupWatchSession session, {
     required bool watching,
@@ -1618,6 +1661,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_progress` for this feature. Update this documentation when its contract changes.
   double _progress(Duration position) {
     if (position == Duration.zero) {
       return 0;
@@ -1628,6 +1672,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return seconds / 300;
   }
 
+  /// Performs `_playerFallback` for this feature. Update this documentation when its contract changes.
   Widget _playerFallback() {
     return Container(
       decoration: const BoxDecoration(
@@ -1652,6 +1697,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_statusCard` for this feature. Update this documentation when its contract changes.
   Widget _statusCard(GroupWatchSession session) {
     final accepted = _acceptedParticipants;
 
@@ -1746,6 +1792,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_pauseBanner` for this feature. Update this documentation when its contract changes.
   Widget _pauseBanner(GroupWatchSession session) {
     final pausedBy = session.pausedByProfileId;
 
@@ -1803,6 +1850,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_preferencesCard` for this feature. Update this documentation when its contract changes.
   Widget _preferencesCard() {
     final participant = _currentParticipant;
 
@@ -1887,6 +1935,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_participantsCard` for this feature. Update this documentation when its contract changes.
   Widget _participantsCard(GroupWatchSession session) {
     final participants = _participants;
 
@@ -1935,6 +1984,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_participantRow` for this feature. Update this documentation when its contract changes.
   Widget _participantRow(
     GroupWatchParticipant participant,
     GroupWatchSession session,
@@ -2007,6 +2057,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_participantStatus` for this feature. Update this documentation when its contract changes.
   String _participantStatus(
     GroupWatchParticipant participant,
   ) {
@@ -2045,6 +2096,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     return null;
   }
 
+  /// Performs `_participantStatusIcon` for this feature. Update this documentation when its contract changes.
   Widget _participantStatusIcon(
     GroupWatchParticipant participant,
   ) {
@@ -2085,6 +2137,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_controlsCard` for this feature. Update this documentation when its contract changes.
   Widget _controlsCard(GroupWatchSession session) {
     return _glassCard(
       child: Padding(
@@ -2104,6 +2157,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_lobbyControls` for this feature. Update this documentation when its contract changes.
   Widget _lobbyControls() {
     return Column(
       children: [
@@ -2141,6 +2195,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_playingControls` for this feature. Update this documentation when its contract changes.
   Widget _playingControls(GroupWatchSession session) {
     return Row(
       children: [
@@ -2191,6 +2246,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_pausedControls` for this feature. Update this documentation when its contract changes.
   Widget _pausedControls() {
     return Column(
       children: [
@@ -2227,6 +2283,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_glassCard` for this feature. Update this documentation when its contract changes.
   Widget _glassCard({
     required Widget child,
   }) {
@@ -2250,6 +2307,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_infoRow` for this feature. Update this documentation when its contract changes.
   Widget _infoRow(
     IconData icon,
     String label,
@@ -2287,6 +2345,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_avatar` for this feature. Update this documentation when its contract changes.
   Widget _avatar(
     String name,
     String? avatarUrl, {
@@ -2320,6 +2379,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_initialAvatar` for this feature. Update this documentation when its contract changes.
   Widget _initialAvatar(String name) {
     final first =
         name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
@@ -2336,6 +2396,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_showParticipantsSheet` for this feature. Update this documentation when its contract changes.
   void _showParticipantsSheet(
     GroupWatchSession session,
   ) {
@@ -2387,6 +2448,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     );
   }
 
+  /// Performs `_participantSheetRow` for this feature. Update this documentation when its contract changes.
   Widget _participantSheetRow(
     GroupWatchParticipant participant,
     GroupWatchSession session,
@@ -2452,6 +2514,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF080808),
@@ -2486,6 +2549,7 @@ class _Heading extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Row(
       children: [
@@ -2544,6 +2608,7 @@ class _PreferenceTile extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white.withValues(alpha: .035),
@@ -2612,6 +2677,7 @@ class _MiniTag extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(

@@ -1,3 +1,7 @@
+// FILE: `Backend/models/group_watch_session.dart`.
+// Purpose: Implements the group watch session portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 enum GroupWatchSessionStatus {
   waiting,
   ready,
@@ -45,6 +49,7 @@ class GroupWatchParticipant {
   bool get canJoin =>
       invitationStatus == GroupWatchInvitationStatus.accepted;
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'accountId': accountId,
@@ -168,12 +173,14 @@ class GroupWatchSession {
     return participants[profileId];
   }
 
+  /// Performs `hasParticipant` for this feature. Update this documentation when its contract changes.
   bool hasParticipant(
     String profileId,
   ) {
     return participants.containsKey(profileId);
   }
 
+  /// Performs `hasAccepted` for this feature. Update this documentation when its contract changes.
   bool hasAccepted(
     String profileId,
   ) {
@@ -248,6 +255,7 @@ class GroupWatchSession {
     return !areInvitationsOpen;
   }
 
+  /// Performs `canAcceptInvitation` for this feature. Update this documentation when its contract changes.
   bool canAcceptInvitation(
     String profileId,
   ) {
@@ -279,6 +287,7 @@ class GroupWatchSession {
         GroupWatchInvitationStatus.pending;
   }
 
+  /// Performs `acceptInvitation` for this feature. Update this documentation when its contract changes.
   bool acceptInvitation(
     String profileId,
   ) {
@@ -297,6 +306,7 @@ class GroupWatchSession {
     return true;
   }
 
+  /// Performs `declineInvitation` for this feature. Update this documentation when its contract changes.
   bool declineInvitation(
     String profileId,
   ) {
@@ -322,6 +332,7 @@ class GroupWatchSession {
     return true;
   }
 
+  /// Performs `expirePendingInvitations` for this feature. Update this documentation when its contract changes.
   void expirePendingInvitations() {
     for (final GroupWatchParticipant participant
         in participants.values) {
@@ -337,6 +348,7 @@ class GroupWatchSession {
   // AUDIO / SUBTITLES
   // ---------------------------------------------------------------------------
 
+  /// Performs `setAudioTrack` for this feature. Update this documentation when its contract changes.
   bool setAudioTrack(
     String profileId,
     String? audioTrackId,
@@ -361,6 +373,7 @@ class GroupWatchSession {
     return true;
   }
 
+  /// Performs `setSubtitleTrack` for this feature. Update this documentation when its contract changes.
   bool setSubtitleTrack(
     String profileId,
     String? subtitleTrackId,
@@ -402,6 +415,7 @@ class GroupWatchSession {
     return acceptedParticipantCount > 0;
   }
 
+  /// Performs `start` for this feature. Update this documentation when its contract changes.
   bool start() {
     if (!canStart) {
       return false;
@@ -425,6 +439,7 @@ class GroupWatchSession {
   // PLAYBACK
   // ---------------------------------------------------------------------------
 
+  /// Performs `play` for this feature. Update this documentation when its contract changes.
   bool play() {
     if (status == GroupWatchSessionStatus.ended) {
       return false;
@@ -541,6 +556,7 @@ class GroupWatchSession {
   // END
   // ---------------------------------------------------------------------------
 
+  /// Performs `end` for this feature. Update this documentation when its contract changes.
   void end() {
     status = GroupWatchSessionStatus.ended;
     isPlaying = false;
@@ -554,6 +570,7 @@ class GroupWatchSession {
   // JSON
   // ---------------------------------------------------------------------------
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,

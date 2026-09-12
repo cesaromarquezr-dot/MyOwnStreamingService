@@ -1,3 +1,7 @@
+// FILE: `lib/group_chat.dart`.
+// Purpose: Implements the group chat portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -25,6 +29,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
   bool _startingGroupWatch = false;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -37,12 +42,14 @@ class _GroupChatScreenState extends State<GroupChatScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _headerAnimationController.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
+  /// Performs `_loadData` for this feature. Update this documentation when its contract changes.
   Future<void> _loadData() async {
     if (mounted) {
       setState(() {
@@ -69,6 +76,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     });
   }
 
+  /// Performs `_refresh` for this feature. Update this documentation when its contract changes.
   Future<void> _refresh() async {
     await _loadData();
   }
@@ -87,6 +95,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
   // GROUP WATCH
   // ============================================================
 
+  /// Performs `_openGroupWatchPicker` for this feature. Update this documentation when its contract changes.
   Future<void> _openGroupWatchPicker() async {
     if (_startingGroupWatch) {
       return;
@@ -119,6 +128,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     await _openGroupWatchInvites(media);
   }
 
+  /// Performs `_openGroupWatchInvites` for this feature. Update this documentation when its contract changes.
   Future<void> _openGroupWatchInvites(MediaItem media) async {
     final profiles = List<Profile>.from(_profiles);
 
@@ -152,6 +162,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_createGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _createGroupWatch(
     MediaItem media,
     List<String> invitedProfileIds, {
@@ -220,6 +231,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     }
   }
 
+  /// Performs `_createCrossAccountRoom` for this feature. Update this documentation when its contract changes.
   Future<void> _createCrossAccountRoom() async {
     final nameController = TextEditingController(text: 'Movie Night');
     final inviteController = TextEditingController();
@@ -251,6 +263,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     nameController.dispose(); inviteController.dispose();
   }
 
+  /// Performs `_sendMessage` for this feature. Update this documentation when its contract changes.
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
 
@@ -287,6 +300,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     });
   }
 
+  /// Performs `_vote` for this feature. Update this documentation when its contract changes.
   Future<void> _vote(
     Map<String, dynamic> recommendation,
     bool yes,
@@ -336,6 +350,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     });
   }
 
+  /// Performs `_createRecommendation` for this feature. Update this documentation when its contract changes.
   Future<void> _createRecommendation() async {
     final result = await showModalBottomSheet<_RecommendationDraft>(
       context: context,
@@ -382,6 +397,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     }
   }
 
+  /// Performs `_removeWishlistItem` for this feature. Update this documentation when its contract changes.
   Future<void> _removeWishlistItem(WishlistItem item) async {
     try {
       await controller.removeFromGroupWishlist(item.id);
@@ -399,6 +415,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     }
   }
 
+  /// Performs `_acquireWishlistItem` for this feature. Update this documentation when its contract changes.
   Future<void> _acquireWishlistItem(WishlistItem item) async {
     final profileId = controller.currentProfile?.id;
 
@@ -426,6 +443,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     }
   }
 
+  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
   void _showMessage(
     String message, {
     bool isError = false,
@@ -453,6 +471,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
       );
   }
 
+  /// Performs `_cleanError` for this feature. Update this documentation when its contract changes.
   String _cleanError(Object error) {
     final text = error.toString();
 
@@ -464,6 +483,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
@@ -524,6 +544,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildHeader() {
     return FadeTransition(
       opacity: CurvedAnimation(
@@ -591,6 +612,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildMembers` for this feature. Update this documentation when its contract changes.
   Widget _buildMembers() {
     final backendMembers = controller.activeGroupChatRoom?.members ?? <Map<String, dynamic>>[];
     final profiles = _profiles;
@@ -667,6 +689,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildQuickActions` for this feature. Update this documentation when its contract changes.
   Widget _buildQuickActions() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
@@ -706,10 +729,12 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_scrollToRecommendations` for this feature. Update this documentation when its contract changes.
   void _scrollToRecommendations() {
     // Recommendations are intentionally near the top of the feed.
   }
 
+  /// Performs `_buildRecommendations` for this feature. Update this documentation when its contract changes.
   Widget _buildRecommendations() {
     final recommendations = controller.groupRecommendations;
 
@@ -785,6 +810,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildWishlist` for this feature. Update this documentation when its contract changes.
   Widget _buildWishlist() {
     final wishlist = controller.wishlist;
 
@@ -864,6 +890,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildChatHeader` for this feature. Update this documentation when its contract changes.
   Widget _buildChatHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
@@ -912,6 +939,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildMessages` for this feature. Update this documentation when its contract changes.
   Widget _buildMessages() {
     final roomMessages = controller.activeGroupChatRoom?.messages;
     if (roomMessages != null) {
@@ -925,7 +953,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
           final isMine = message.profileId == controller.currentProfile?.id;
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _ChatBubble(message: ChatMessage(id: message.id, sender: message.senderName, message: message.message, timestamp: message.timestamp), isMine: isMine),
+            child: _ChatBubble(message: ChatMessage(id: message.id, sender: message.senderName, message: message.message, timestamp: message.timestamp), isMine: isMine, badgeName: message.badgeName),
           );
         },
       );
@@ -944,6 +972,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     );
   }
 
+  /// Performs `_buildComposer` for this feature. Update this documentation when its contract changes.
   Widget _buildComposer() {
     return Positioned(
       left: 0,
@@ -1054,6 +1083,7 @@ class _GroupWatchActionState extends State<_GroupWatchAction> {
   bool _pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: widget.loading
@@ -1221,6 +1251,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
   String _search = '';
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -1240,6 +1271,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final media = _filteredMedia;
 
@@ -1452,6 +1484,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
   int _invitationDurationHours = 24;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -1463,6 +1496,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
     };
   }
 
+  /// Performs `_toggleProfile` for this feature. Update this documentation when its contract changes.
   void _toggleProfile(String profileId) {
     setState(() {
       if (_selectedProfileIds.contains(profileId)) {
@@ -1473,6 +1507,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
     });
   }
 
+  /// Performs `_selectEveryone` for this feature. Update this documentation when its contract changes.
   void _selectEveryone() {
     final currentProfileId = AppController.instance.currentProfile?.id;
 
@@ -1487,12 +1522,14 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
     });
   }
 
+  /// Performs `_clearEveryone` for this feature. Update this documentation when its contract changes.
   void _clearEveryone() {
     setState(() {
       _selectedProfileIds.clear();
     });
   }
 
+  /// Performs `_continue` for this feature. Update this documentation when its contract changes.
   void _continue() {
     Navigator.of(context).pop(
       _GroupWatchInviteDraft(
@@ -1503,6 +1540,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final currentProfileId = AppController.instance.currentProfile?.id;
 
@@ -1808,6 +1846,7 @@ class _GroupWatchProfileTileState extends State<_GroupWatchProfileTile> {
   bool _pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) {
@@ -1919,6 +1958,7 @@ class _InvitationDurationButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
@@ -1977,6 +2017,7 @@ class _GroupWatchMediaTileState extends State<_GroupWatchMediaTile> {
   bool _pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final media = widget.media;
 
@@ -2101,6 +2142,7 @@ class _MediaPoster extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final imageUrl = (media.imageUrl ?? '').trim();
 
@@ -2165,6 +2207,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
   final Set<String> _selectedParticipants = <String>{};
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -2177,11 +2220,13 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _titleController.dispose();
     super.dispose();
   }
 
+  /// Performs `_submit` for this feature. Update this documentation when its contract changes.
   void _submit() {
     final title = _titleController.text.trim();
 
@@ -2204,6 +2249,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final profiles =
         AppController.instance.currentAccount?.profiles ?? <Profile>[];
@@ -2507,6 +2553,7 @@ class _RecommendationCard extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final title = _stringValue(recommendation['title']);
     final type = _stringValue(recommendation['type']);
@@ -2729,6 +2776,7 @@ class _WishlistCard extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(13),
@@ -2810,16 +2858,38 @@ class _WishlistCard extends StatelessWidget {
 // CHAT
 // ============================================================
 
+class _BadgeTag extends StatelessWidget {
+  final String label;
+  const _BadgeTag({required this.label});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.amber.withValues(alpha: .14),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: Colors.amber.withValues(alpha: .28)),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.emoji_events_rounded, size: 11, color: Colors.amber),
+      const SizedBox(width: 3),
+      Text(label, style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.w800)),
+    ]),
+  );
+}
+
 class _ChatBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMine;
+  final String? badgeName;
 
   const _ChatBubble({
     required this.message,
     required this.isMine,
+    this.badgeName,
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Align(
       alignment: isMine
@@ -2858,15 +2928,19 @@ class _ChatBubble extends StatelessWidget {
               if (!isMine)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    message.sender,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: Text(message.sender, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis)),
+                      if (badgeName != null && badgeName!.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        _BadgeTag(label: badgeName!),
+                      ],
+                    ],
                   ),
                 ),
+              if (isMine && badgeName != null && badgeName!.isNotEmpty)
+                Padding(padding: const EdgeInsets.only(bottom: 4), child: _BadgeTag(label: badgeName!)),
               Text(
                 message.message,
                 style: TextStyle(
@@ -2907,6 +2981,7 @@ class _SectionHeading extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -2969,6 +3044,7 @@ class _QuickActionState extends State<_QuickAction> {
   bool _pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) {
@@ -3068,6 +3144,7 @@ class _VoteButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
@@ -3138,6 +3215,7 @@ class _TypeButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
@@ -3195,6 +3273,7 @@ class _StatusBadge extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final normalized = status.toLowerCase();
 
@@ -3269,6 +3348,7 @@ class _Avatar extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final avatarUrl = profile.avatarUrl?.trim() ?? '';
 
@@ -3306,6 +3386,7 @@ class _Avatar extends StatelessWidget {
     );
   }
 
+  /// Performs `_initials` for this feature. Update this documentation when its contract changes.
   Widget _initials() {
     final name = profile.name.trim();
 
@@ -3349,6 +3430,7 @@ class _CircleButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white.withValues(alpha: 0.06),
@@ -3378,6 +3460,7 @@ class _EmptyRecommendations extends StatelessWidget {
   const _EmptyRecommendations();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       height: 220,
@@ -3430,6 +3513,7 @@ class _BackgroundGlow extends StatelessWidget {
   const _BackgroundGlow();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Stack(

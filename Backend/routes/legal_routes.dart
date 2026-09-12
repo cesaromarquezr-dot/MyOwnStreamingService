@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/legal_routes.dart`.
+// Purpose: Implements the legal routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 import '../middleware/authentication.dart';
@@ -10,6 +14,7 @@ class LegalRoutes {
   final AuthenticationMiddleware authentication;
   LegalRoutes({required this.authentication});
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     final path = request.uri.path;
     if (request.method == 'POST' && path == '/api/v1/legal/copyright-report') {
@@ -89,6 +94,7 @@ class LegalRoutes {
     return Map<String, dynamic>.from(decoded);
   }
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   void _sendJson(HttpResponse response, int statusCode, Map<String, dynamic> body) {
     response.statusCode = statusCode;
     response.headers.contentType = ContentType.json;

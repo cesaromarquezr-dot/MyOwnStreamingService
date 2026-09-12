@@ -1,8 +1,13 @@
+// FILE: `Backend/arm/arm_service.dart`.
+// Purpose: Implements the arm service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math';
 
 import 'arm_client.dart';
 import 'arm_models.dart';
 import 'arm_verifier.dart';
+import 'arm_title_resolver.dart';
 
 class ArmService {
   final ArmClient client;
@@ -11,15 +16,18 @@ class ArmService {
   final Random _random = Random();
   final Map<String, ArmRipJob> _jobs = {};
   final Map<String, String> _armJobIds = {};
+  final ArmTitleResolver titleResolver = const ArmTitleResolver();
 
   ArmService({
     required this.client,
     this.verifier = const ArmVerifier(),
   });
 
+  /// Performs `_generateId` for this feature. Update this documentation when its contract changes.
   String _generateId(String prefix) =>
       '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${_random.nextInt(100000)}';
 
+  /// Performs `isConnected` for this feature. Update this documentation when its contract changes.
   Future<bool> isConnected() => client.checkConnection();
 
   Future<List<ArmDrive>> findDrives() async {
@@ -77,6 +85,7 @@ class ArmService {
     return drives;
   }
 
+  /// Performs `scanDisc` for this feature. Update this documentation when its contract changes.
   Future<ArmDisc> scanDisc({required String driveId}) async {
     final jobs = await _getArmJobs();
     final matching = jobs.where((job) {
@@ -103,6 +112,7 @@ class ArmService {
     );
   }
 
+  /// Performs `startImport` for this feature. Update this documentation when its contract changes.
   Future<ArmRipJob> startImport({required String driveId}) async {
     final local = ArmRipJob(
       id: _generateId('rip'),
@@ -129,6 +139,7 @@ class ArmService {
     return local;
   }
 
+  /// Performs `refreshJob` for this feature. Update this documentation when its contract changes.
   Future<ArmRipJob> refreshJob(String jobId) async {
     final local = _jobs[jobId];
     if (local == null) throw Exception('Rip job not found.');
@@ -176,6 +187,7 @@ class ArmService {
     return local;
   }
 
+  /// Performs `cancelJob` for this feature. Update this documentation when its contract changes.
   Future<ArmRipJob> cancelJob(String jobId) async {
     final job = _jobs[jobId];
     if (job == null) throw Exception('Rip job not found.');
@@ -218,6 +230,7 @@ class ArmService {
     return jobs.last;
   }
 
+  /// Performs `_applyArmJob` for this feature. Update this documentation when its contract changes.
   void _applyArmJob(ArmRipJob local, Map<String, dynamic> arm) {
     local.title = _string(arm, ['title', 'name']);
     local.mediaType = _string(arm, ['videotype', 'mediaType', 'type']);
@@ -242,6 +255,7 @@ class ArmService {
     }
   }
 
+  /// Performs `_mapStatus` for this feature. Update this documentation when its contract changes.
   String _mapStatus(String raw) {
     if (raw.contains('fail') || raw.contains('error')) return ArmJobStatus.failed.name;
     if (raw.contains('success') || raw.contains('complete') || raw == 'finished') {
@@ -253,10 +267,12 @@ class ArmService {
     return ArmJobStatus.processing.name;
   }
 
+  /// Performs `_isCompleted` for this feature. Update this documentation when its contract changes.
   bool _isCompleted(String status) =>
       status == ArmJobStatus.completed.name ||
       status == ArmJobStatus.failed.name;
 
+  /// Performs `_isFinishedArmStatus` for this feature. Update this documentation when its contract changes.
   bool _isFinishedArmStatus(String? status) {
     final value = (status ?? '').toLowerCase();
     return value.contains('success') ||
@@ -292,6 +308,7 @@ class ArmService {
     return null;
   }
 
+  /// Performs `_extractDiscTitles` for this feature. Update this documentation when its contract changes.
   List<ArmDiscTitle> _extractDiscTitles(Map<String, dynamic> arm) {
     final raw = arm['titles'] ??
         arm['discTitles'] ??
@@ -311,10 +328,10 @@ class ArmService {
     for (var i = 0; i < values.length; i++) {
       final value = values[i];
       if (value is! Map) continue;
-      final title = ArmDiscTitle.fromJson(
+      final title = titleResolver.resolve(ArmDiscTitle.fromJson(
         Map<String, dynamic>.from(value),
         fallbackId: 'title_${i + 1}',
-      );
+      ));
       if (title.title.trim().isEmpty ||
           title.title.toLowerCase() == 'unknown title') {
         continue;
@@ -328,7 +345,7 @@ class ArmService {
       final title = _string(arm, ['title', 'name']);
       if (title != null) {
         titles.add(
-          ArmDiscTitle(
+          titleResolver.resolve(ArmDiscTitle(
             id: _string(arm, ['title_id', 'titleId', 'id']) ?? 'title_1',
             title: title,
             mediaType: _string(arm, ['videotype', 'mediaType', 'type']) ?? 'movie',
@@ -338,7 +355,9 @@ class ArmService {
             confidence: _double(arm, ['confidence', 'matchConfidence']) ?? 0,
             outputPath: _string(arm, ['outputPath', 'output_path', 'path', 'destination', 'destination_path']),
             metadata: Map<String, dynamic>.from(arm),
-          ),
+            discTitle: title,
+            detectedRegion: _string(arm, ['region']),
+          )),
         );
       }
     }

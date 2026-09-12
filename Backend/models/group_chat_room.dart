@@ -1,9 +1,14 @@
+// FILE: `Backend/models/group_chat_room.dart`.
+// Purpose: Implements the group chat room portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 class GroupChatMessage {
   final String id;
   final String profileId;
   final String senderName;
   final String message;
   final DateTime timestamp;
+  final String? badgeName;
 
   GroupChatMessage({
     required this.id,
@@ -11,6 +16,7 @@ class GroupChatMessage {
     required this.senderName,
     required this.message,
     required this.timestamp,
+    this.badgeName,
   });
 
   factory GroupChatMessage.fromJson(Map<String, dynamic> json) => GroupChatMessage(
@@ -19,14 +25,17 @@ class GroupChatMessage {
         senderName: json['senderName']?.toString() ?? 'Profile',
         message: json['message']?.toString() ?? '',
         timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ?? DateTime.now(),
+        badgeName: json['badgeName']?.toString(),
       );
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'id': id,
         'profileId': profileId,
         'senderName': senderName,
         'message': message,
         'timestamp': timestamp.toIso8601String(),
+        'badgeName': badgeName,
       };
 }
 
@@ -45,6 +54,7 @@ class GroupChatMember {
     this.status = 'active',
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'profileId': profileId,
         'profileName': profileName,
@@ -71,6 +81,7 @@ class GroupChatRoom {
     required this.createdAt,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,

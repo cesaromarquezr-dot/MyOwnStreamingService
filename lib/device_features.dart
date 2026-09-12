@@ -1,3 +1,7 @@
+// FILE: `lib/device_features.dart`.
+// Purpose: Implements the device features portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:async';
 import 'dart:math';
 
@@ -39,6 +43,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
   bool audioOnly = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final profile = AppController.instance.currentProfile;
 
@@ -219,6 +224,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_heroCard` for this feature. Update this documentation when its contract changes.
   Widget _heroCard(BuildContext context) {
     return Card(
       child: Padding(
@@ -268,6 +274,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_sectionTitle` for this feature. Update this documentation when its contract changes.
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(
@@ -284,6 +291,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_deviceCard` for this feature. Update this documentation when its contract changes.
   Widget _deviceCard(
     BuildContext context,
     String title,
@@ -317,6 +325,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_pairDevice` for this feature. Update this documentation when its contract changes.
   void _pairDevice() async {
     if (!mounted) return;
 
@@ -397,6 +406,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_enterTvCode` for this feature. Update this documentation when its contract changes.
   Future<void> _enterTvCode() async {
     final controller = TextEditingController();
 
@@ -435,6 +445,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     controller.dispose();
   }
 
+  /// Performs `_scanQr` for this feature. Update this documentation when its contract changes.
   Future<void> _scanQr() async {
     setState(() {
       scanning = true;
@@ -455,6 +466,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     }
   }
 
+  /// Performs `_showPaired` for this feature. Update this documentation when its contract changes.
   void _showPaired() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -465,6 +477,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_castTo` for this feature. Update this documentation when its contract changes.
   void _castTo(
     BuildContext context,
     CastDevice device,
@@ -527,6 +540,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_showDownloads` for this feature. Update this documentation when its contract changes.
   void _showDownloads(BuildContext context) {
     // FIXED:
     // Library belongs to AppController, not Profile.
@@ -609,6 +623,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     );
   }
 
+  /// Performs `_mediaTypeLabel` for this feature. Update this documentation when its contract changes.
   String _mediaTypeLabel(MediaItem item) {
     final type = item.type.toString().toLowerCase();
 
@@ -642,6 +657,7 @@ class TvPairingScreen extends StatelessWidget {
   const TvPairingScreen({super.key});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final code = (100000 + Random().nextInt(900000)).toString();
     final payload = 'my-streaming-service://pair?code=$code';
@@ -716,6 +732,7 @@ class _QrScannerScreen extends StatelessWidget {
   const _QrScannerScreen();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(

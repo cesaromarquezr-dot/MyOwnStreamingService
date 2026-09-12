@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/group_routes.dart`.
+// Purpose: Implements the group routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,6 +26,7 @@ class GroupRoutes {
     required this.watchService,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     try {
       final authenticatedAccount =
@@ -105,6 +110,7 @@ class GroupRoutes {
           final body = await _readJsonBody(request);
           final profileId = body['profileId']?.toString().trim() ?? '';
           final message = body['message']?.toString().trim() ?? '';
+          final badgeName = body['badgeName']?.toString().trim();
           GroupChatMember? member;
           for (final candidate in room.members) {
             if (candidate.profileId == profileId && candidate.accountId == accountId) { member = candidate; break; }
@@ -113,7 +119,7 @@ class GroupRoutes {
             await _sendJson(request, HttpStatus.badRequest, {'error': 'A valid profileId and non-empty message are required.'});
             return;
           }
-          final chatMessage = GroupChatMessage(id: 'msg_${DateTime.now().microsecondsSinceEpoch}', profileId: profileId, senderName: member.profileName, message: message, timestamp: DateTime.now());
+          final chatMessage = GroupChatMessage(id: 'msg_${DateTime.now().microsecondsSinceEpoch}', profileId: profileId, senderName: member.profileName, message: message, timestamp: DateTime.now(), badgeName: badgeName == null || badgeName.isEmpty ? null : badgeName);
           room.messages.add(chatMessage);
           if (room.messages.length > 500) room.messages.removeRange(0, room.messages.length - 500);
           await _sendJson(request, HttpStatus.created, {'message': chatMessage.toJson()});
@@ -2766,6 +2772,7 @@ return accountForProfile?.id == accountId;
   // STRING SET
   // ============================================================
 
+  /// Performs `_readStringSet` for this feature. Update this documentation when its contract changes.
   Set<String> _readStringSet(
     dynamic value,
   ) {
@@ -2832,6 +2839,7 @@ return accountForProfile?.id == accountId;
   // JSON RESPONSE
   // ============================================================
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   Future<void> _sendJson(
     HttpRequest request,
     int statusCode,

@@ -1,3 +1,7 @@
+// FILE: `lib/remote_access.dart`.
+// Purpose: Implements the remote access portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 import 'backend_api.dart';
 
@@ -12,6 +16,7 @@ class _RemoteAccessScreenState extends State<RemoteAccessScreen> {
   String? code;
   List<dynamic> workers = [];
 
+  /// Performs `loadWorkers` for this feature. Update this documentation when its contract changes.
   Future<void> loadWorkers() async {
     setState(() => loading = true);
     try { final data = await api.getRemoteWorkers(); if (mounted) setState(() => workers = data['workers'] as List? ?? []); }
@@ -19,6 +24,7 @@ class _RemoteAccessScreenState extends State<RemoteAccessScreen> {
     if (mounted) setState(() => loading = false);
   }
 
+  /// Performs `generateCode` for this feature. Update this documentation when its contract changes.
   Future<void> generateCode() async {
     try { final data = await api.createRemoteAccessCode(); if (mounted) setState(() => code = data['code']?.toString()); }
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }

@@ -1,3 +1,7 @@
+// FILE: `Backend/arm/arm_client.dart`.
+// Purpose: Implements the arm client portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,6 +26,7 @@ class ArmClient {
     return Uri.parse('$base$path');
   }
 
+  /// Performs `checkConnection` for this feature. Update this documentation when its contract changes.
   Future<bool> checkConnection() async {
     try {
       final client = HttpClient();
@@ -167,6 +172,7 @@ class ArmClientException implements Exception {
   ArmClientException(this.message);
 
   @override
+  /// Performs `toString` for this feature. Update this documentation when its contract changes.
   String toString() {
     return message;
   }

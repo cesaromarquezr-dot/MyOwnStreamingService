@@ -1,3 +1,7 @@
+// FILE: `Backend/models/subscription.dart`.
+// Purpose: Implements the subscription portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 enum SubscriptionPlan {
   monthly,
   yearly,
@@ -51,12 +55,14 @@ class Subscription {
     return true;
   }
 
+  /// Performs `expireIfNeeded` for this feature. Update this documentation when its contract changes.
   void expireIfNeeded() {
     if (DateTime.now().isAfter(expiresAt)) {
       active = false;
     }
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

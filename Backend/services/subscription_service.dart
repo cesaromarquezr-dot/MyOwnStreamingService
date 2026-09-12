@@ -1,3 +1,7 @@
+// FILE: `Backend/services/subscription_service.dart`.
+// Purpose: Implements the subscription service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math';
 
 import '../models/account.dart';
@@ -6,6 +10,7 @@ import '../models/subscription.dart';
 class SubscriptionService {
   final Random _random = Random();
 
+  /// Performs `_generateId` for this feature. Update this documentation when its contract changes.
   String _generateId() {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
 
@@ -192,6 +197,7 @@ class SubscriptionService {
     existing.active = true;
   }
 
+  /// Performs `cancel` for this feature. Update this documentation when its contract changes.
   void cancel(Account account) {
     final subscription = account.subscription;
 
@@ -202,6 +208,7 @@ class SubscriptionService {
     subscription.active = false;
   }
 
+  /// Performs `canAccessContent` for this feature. Update this documentation when its contract changes.
   bool canAccessContent(Account account) {
     return account.hasActiveSubscription;
   }

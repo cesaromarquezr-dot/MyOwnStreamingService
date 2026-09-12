@@ -1,9 +1,14 @@
+// FILE: `lib/profiles.dart`.
+// Purpose: Implements the profiles portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_core.dart';
+import 'main.dart';
 
 /// ============================================================
 /// PROFILE SELECTION SCREEN
@@ -28,6 +33,7 @@ class _ProfileSelectionScreenState
   late final AnimationController _animationController;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -40,11 +46,13 @@ class _ProfileSelectionScreenState
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _animationController.dispose();
     super.dispose();
   }
 
+  /// Performs `_createProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _createProfile() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -57,8 +65,28 @@ class _ProfileSelectionScreenState
     if (!mounted) return;
 
     setState(() {});
+
+    final profiles = AppController.instance.currentAccount?.profiles ?? <Profile>[];
+    if (profiles.isEmpty) return;
+
+    final profile = profiles.last;
+    if (HomeCustomizationStore.isConfigured(profile)) return;
+
+    AppController.instance.switchProfile(profile.id);
+    final completed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const CustomizeHomeScreen(firstSetup: true),
+      ),
+    );
+
+    if (!mounted) return;
+    if (completed == true) {
+      _finishProfileSelection(context);
+    }
   }
 
+  /// Performs `_editProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _editProfile(Profile profile) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -73,6 +101,7 @@ class _ProfileSelectionScreenState
     setState(() {});
   }
 
+  /// Performs `_showStatistics` for this feature. Update this documentation when its contract changes.
   Future<void> _showStatistics(Profile profile) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -85,7 +114,8 @@ class _ProfileSelectionScreenState
     if (!mounted) return;
   }
 
-  void _selectProfile(Profile profile) {
+  /// Performs `_selectProfile` for this feature. Update this documentation when its contract changes.
+  Future<void> _selectProfile(Profile profile) async {
     final controller = AppController.instance;
 
     try {
@@ -109,15 +139,32 @@ class _ProfileSelectionScreenState
 
     if (!mounted) return;
 
+    if (!HomeCustomizationStore.isConfigured(profile)) {
+      final completed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => const CustomizeHomeScreen(firstSetup: true),
+        ),
+      );
+
+      if (!mounted || completed != true) return;
+    }
+
+    _finishProfileSelection(context);
+  }
+
+  /// Performs `_finishProfileSelection` for this feature. Update this documentation when its contract changes.
+  void _finishProfileSelection(BuildContext context) {
     if (widget.onProfileSelected != null) {
       widget.onProfileSelected!(context);
       return;
     }
 
-    Navigator.of(context).pop(profile);
+    Navigator.of(context).pop(AppController.instance.currentProfile);
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final account = controller.currentAccount;
@@ -280,6 +327,7 @@ class _ProfileCardState extends State<_ProfileCard> {
   bool _hovered = false;
   bool _pressed = false;
 
+  /// Performs `_showProfileMenu` for this feature. Update this documentation when its contract changes.
   void _showProfileMenu() {
     showModalBottomSheet<void>(
       context: context,
@@ -359,6 +407,7 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -548,6 +597,7 @@ class _ProfileAvatar extends StatelessWidget {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final avatarValue =
         profile.avatarUrl?.trim() ?? '';
@@ -636,6 +686,7 @@ class _IconAvatar extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       width: size,
@@ -678,6 +729,7 @@ class _FallbackAvatar extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final trimmedName = name.trim();
 
@@ -743,6 +795,7 @@ class _EditProfileSheetState
   bool _saving = false;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -752,11 +805,13 @@ class _EditProfileSheetState
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _nameController.dispose();
     super.dispose();
   }
 
+  /// Performs `_takePhoto` for this feature. Update this documentation when its contract changes.
   Future<void> _takePhoto() async {
     try {
       final photo = await _imagePicker.pickImage(
@@ -784,6 +839,7 @@ class _EditProfileSheetState
     }
   }
 
+  /// Performs `_pickPhoto` for this feature. Update this documentation when its contract changes.
   Future<void> _pickPhoto() async {
     try {
       final photo = await _imagePicker.pickImage(
@@ -811,6 +867,7 @@ class _EditProfileSheetState
     }
   }
 
+  /// Performs `_deleteProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _deleteProfile() async {
     final confirmed = await showDialog<bool>(
           context: context,
@@ -886,6 +943,7 @@ class _EditProfileSheetState
     }
   }
 
+  /// Performs `_save` for this feature. Update this documentation when its contract changes.
   Future<void> _save() async {
     final name = _nameController.text.trim();
 
@@ -955,6 +1013,7 @@ class _EditProfileSheetState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final bottom =
         MediaQuery.viewInsetsOf(context).bottom;
@@ -1184,6 +1243,7 @@ class _EditableProfileAvatar
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (selectedPhoto != null) {
       return ClipRRect(
@@ -1218,6 +1278,7 @@ class ProfileStatisticsSheet
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(top: 80),
@@ -1417,6 +1478,7 @@ class _StatisticCard extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1484,6 +1546,7 @@ class _ProfileMenuButton
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white.withValues(
@@ -1570,6 +1633,7 @@ class _PictureButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white.withValues(
@@ -1650,6 +1714,7 @@ class _CreateProfileSheetState
   int _selectedAvatarIndex = 0;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -1657,11 +1722,13 @@ class _CreateProfileSheetState
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _nameController.dispose();
     super.dispose();
   }
 
+  /// Performs `_takePhoto` for this feature. Update this documentation when its contract changes.
   Future<void> _takePhoto() async {
     try {
       final photo = await _imagePicker.pickImage(
@@ -1689,6 +1756,7 @@ class _CreateProfileSheetState
     }
   }
 
+  /// Performs `_pickPhoto` for this feature. Update this documentation when its contract changes.
   Future<void> _pickPhoto() async {
     try {
       final photo = await _imagePicker.pickImage(
@@ -1716,6 +1784,7 @@ class _CreateProfileSheetState
     }
   }
 
+  /// Performs `_save` for this feature. Update this documentation when its contract changes.
   Future<void> _save() async {
     final name = _nameController.text.trim();
 
@@ -1820,6 +1889,7 @@ class _CreateProfileSheetState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final bottom =
         MediaQuery.viewInsetsOf(context).bottom;
@@ -2086,6 +2156,7 @@ class _CreateProfileAvatarPreview
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (selectedPhoto != null) {
       return ClipRRect(
@@ -2127,6 +2198,7 @@ class _CreateProfileCardState
   bool _hovered = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -2224,6 +2296,7 @@ class _CreateProfileButton
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return SizedBox(
       height: 52,
@@ -2263,6 +2336,7 @@ class _NoProfiles extends StatelessWidget {
   const _NoProfiles();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -2335,6 +2409,7 @@ class _ProfileLogo extends StatelessWidget {
   const _ProfileLogo();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -2389,6 +2464,7 @@ class _ProfileBackground
   const _ProfileBackground();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Stack(

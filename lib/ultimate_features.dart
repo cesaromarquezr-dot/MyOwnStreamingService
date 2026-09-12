@@ -1,8 +1,13 @@
+// FILE: `lib/ultimate_features.dart`.
+// Purpose: Implements the ultimate features portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'music.dart';
 
 class UltimateFeaturesScreen extends StatefulWidget {
   const UltimateFeaturesScreen({super.key});
@@ -41,6 +46,7 @@ class _UltimateFeaturesScreenState
           )
           .length;
 
+  /// Performs `_push` for this feature. Update this documentation when its contract changes.
   void _push(Widget page) {
     Navigator.push(
       context,
@@ -50,6 +56,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_snack` for this feature. Update this documentation when its contract changes.
   void _snack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -58,6 +65,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_aiConcierge` for this feature. Update this documentation when its contract changes.
   Future<void> _aiConcierge() async {
     final textController = TextEditingController();
 
@@ -117,6 +125,7 @@ class _UltimateFeaturesScreenState
     textController.dispose();
   }
 
+  /// Performs `_roulette` for this feature. Update this documentation when its contract changes.
   void _roulette() {
     if (controller.library.isEmpty) {
       _snack(
@@ -135,6 +144,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_battle` for this feature. Update this documentation when its contract changes.
   void _battle() {
     if (controller.library.length < 2) {
       _snack(
@@ -201,18 +211,21 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_security` for this feature. Update this documentation when its contract changes.
   void _security() {
     _push(
       const SecurityCenterScreen(),
     );
   }
 
+  /// Performs `_owner` for this feature. Update this documentation when its contract changes.
   void _owner() {
     _push(
       const OwnerDashboardScreen(),
     );
   }
 
+  /// Performs `_channelScreen` for this feature. Update this documentation when its contract changes.
   void _channelScreen() {
     _push(
       ChannelScreen(
@@ -222,6 +235,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_stats` for this feature. Update this documentation when its contract changes.
   void _stats() {
     _push(
       const StatisticsScreen(),
@@ -229,6 +243,7 @@ class _UltimateFeaturesScreenState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -660,6 +675,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_hero` for this feature. Update this documentation when its contract changes.
   Widget _hero() {
     return Card(
       child: Padding(
@@ -710,6 +726,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_section` for this feature. Update this documentation when its contract changes.
   Widget _section(
     String title,
     List<Widget> children,
@@ -747,6 +764,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_tile` for this feature. Update this documentation when its contract changes.
   Widget _tile(
     IconData icon,
     String title,
@@ -764,6 +782,7 @@ class _UltimateFeaturesScreenState
     );
   }
 
+  /// Performs `_switchTile` for this feature. Update this documentation when its contract changes.
   Widget _switchTile(
     IconData icon,
     String title,
@@ -789,6 +808,7 @@ class OwnerDashboardScreen extends StatelessWidget {
   const OwnerDashboardScreen({super.key});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final account = controller.currentAccount;
@@ -893,6 +913,7 @@ class OwnerDashboardScreen extends StatelessWidget {
     );
   }
 
+  /// Performs `_card` for this feature. Update this documentation when its contract changes.
   Widget _card(
     BuildContext context,
     IconData icon,
@@ -934,6 +955,7 @@ class SecurityCenterScreen
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -1008,6 +1030,7 @@ class StatisticsScreen
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
@@ -1074,6 +1097,16 @@ class StatisticsScreen
           ),
 
           _stat(
+            'Music songs',
+            '${MusicLibraryStore.instance.tracks.length}',
+          ),
+
+          _stat(
+            'Music playlists',
+            '${MusicLibraryStore.instance.playlists.length}',
+          ),
+
+          _stat(
             'Watched',
             '${controller.watched.length}',
           ),
@@ -1117,6 +1150,7 @@ class StatisticsScreen
     );
   }
 
+  /// Performs `_stat` for this feature. Update this documentation when its contract changes.
   Widget _stat(
     String title,
     String value,
@@ -1146,6 +1180,7 @@ class MovieMapScreen
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -1226,6 +1261,7 @@ class ChannelScreen
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final list = [...library];
 
@@ -1283,6 +1319,7 @@ class NotificationCenterScreen
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -1361,6 +1398,7 @@ class _BackupScreenState
   bool collections = true;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(

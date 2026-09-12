@@ -1,13 +1,19 @@
+// FILE: `lib/main.dart`.
+// Purpose: Implements the main portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
 import 'signup.dart';
 import 'movies.dart';
 import 'series.dart';
 import 'smart_search.dart';
-import 'hollywood.dart';
 import 'details.dart';
 import 'profiles.dart';
 import 'feature_center.dart';
@@ -20,12 +26,25 @@ import 'device_features.dart';
 import 'roadmap_features.dart';
 import 'next_gen_features.dart';
 import 'how_it_works.dart';
-void main() {
+import 'sports.dart';
+import 'platform_expansion.dart';
+import 'music.dart';
+import 'home_server.dart';
+import 'storage_dashboard.dart';
+import 'library_hubs.dart';
+import 'home_widgets.dart';
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await HomeCustomizationStore.initialize();
+  await DetailsCustomizationStore.initialize();
+  await AppController.instance.initializeBadges();
+  await PlatformPreferenceStore.initialize();
   runApp(const MyStreamingService());
 }
 class MyStreamingService extends StatelessWidget {
   const MyStreamingService({super.key});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'My Streaming Service',
@@ -89,6 +108,7 @@ class SplashScreen extends StatefulWidget {
 }
 class _SplashScreenState extends State<SplashScreen> {
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     Future.delayed(const Duration(seconds: 2), () {
@@ -103,6 +123,7 @@ class _SplashScreenState extends State<SplashScreen> {
     });
   }
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -139,25 +160,27 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 class _LoginScreenState extends State<LoginScreen> {
-  final usernameController = TextEditingController();
+  final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool obscurePassword = true;
   bool loggingIn = false;
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
-    usernameController.dispose();
+    emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
+  /// Performs `login` for this feature. Update this documentation when its contract changes.
   Future<void> login() async {
     if (loggingIn) return;
-    final username = usernameController.text.trim();
+    final email = emailController.text.trim();
     final password = passwordController.text;
-    if (username.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Enter your username/email and password.',
+            'Enter your email and password.',
           ),
         ),
       );
@@ -172,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await controller.loginWithBackend(
-        usernameOrEmail: username,
+        email: email,
         password: password,
       );
 
@@ -271,6 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
@@ -297,10 +321,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 40),
                 TextField(
-                  controller: usernameController,
+                  controller: emailController,
                   enabled: !loggingIn,
                   decoration: const InputDecoration(
-                    labelText: 'Username or Email',
+                    labelText: 'Email address',
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
@@ -384,6 +408,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+const Map<String, Color> namedColors = {
+  'Red': Colors.red,
+  'Blue': Colors.blue,
+  'Black': Colors.black,
+  'White': Colors.white,
+  'Yellow': Colors.yellow,
+  'Green': Colors.green,
+  'Purple': Colors.purple,
+  'Violet': Color.fromARGB(255, 238, 130, 238),
+  'Indigo': Colors.indigo,
+  'Pink': Colors.pink,
+  'Maroon': Color.fromARGB(255, 128, 0, 0),
+  'Fuchsia': Color.fromARGB(255, 255, 0, 255),
+  'Aqua': Color.fromARGB(255, 0, 255, 255),
+  'Cyan': Colors.cyan,
+  'Orange': Colors.orange,
+  'Brown': Colors.brown,
+  'Lime': Colors.lime,
+  'Teal': Colors.teal,
+  'Amber': Colors.amber,
+  'Grey': Colors.grey,
+};
+
+Color colorFromName(String name) => namedColors[name] ?? Colors.black;
+
 class HomeCustomization {
   bool showHero;
   bool showContinueWatching;
@@ -393,10 +442,23 @@ class HomeCustomization {
   bool showNewAdditions;
   bool showAllLibrary;
   bool showRecommendations;
+  bool showLiveSports;
+  bool showMusic;
+  bool showFilm;
+  String homeMediaLayout;
   String heroStyle;
   String cardSize;
   String navbarPosition;
   String storageBarPosition;
+  String liveSportsPosition;
+  double storageBarThickness;
+  String homeBackgroundColor;
+  String navbarColor;
+  String navbarGlowColor;
+  String navbarItemColor;
+  String navbarStyle;
+  double navbarOpacity;
+  double navbarRadius;
   List<String> sectionOrder;
   List<String> navigationOrder;
 
@@ -409,10 +471,23 @@ class HomeCustomization {
     this.showNewAdditions = true,
     this.showAllLibrary = false,
     this.showRecommendations = true,
+    this.showLiveSports = true,
+    this.showMusic = true,
+    this.showFilm = true,
+    this.homeMediaLayout = 'Left & Right',
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
     this.navbarPosition = 'Bottom',
-    this.storageBarPosition = 'Above Navbar',
+    this.storageBarPosition = 'Bottom',
+    this.liveSportsPosition = 'Top',
+    this.storageBarThickness = 12,
+    this.homeBackgroundColor = 'Black',
+    this.navbarColor = 'Black',
+    this.navbarGlowColor = 'Red',
+    this.navbarItemColor = 'Purple',
+    this.navbarStyle = 'Solid',
+    this.navbarOpacity = 0.95,
+    this.navbarRadius = 24,
     List<String>? sectionOrder,
     List<String>? navigationOrder,
   }) : sectionOrder = sectionOrder ?? [
@@ -423,16 +498,16 @@ class HomeCustomization {
           'New Additions',
           'All Library',
           'Recommendations',
+          'Music & Film',
+          'Live Sports',
         ],
         navigationOrder = navigationOrder ?? [
+          'Profile',
           'Home',
-          'Movies',
-          'TV Shows',
-          'Actors',
+          'Live Sports',
+          'More',
           'Music',
-          'Trailers',
-          'Search',
-          'Collections',
+          'Film',
         ];
 
   HomeCustomization copy() => HomeCustomization(
@@ -444,10 +519,23 @@ class HomeCustomization {
         showNewAdditions: showNewAdditions,
         showAllLibrary: showAllLibrary,
         showRecommendations: showRecommendations,
+        showLiveSports: showLiveSports,
+        showMusic: showMusic,
+        showFilm: showFilm,
+        homeMediaLayout: homeMediaLayout,
         heroStyle: heroStyle,
         cardSize: cardSize,
         navbarPosition: navbarPosition,
         storageBarPosition: storageBarPosition,
+        liveSportsPosition: liveSportsPosition,
+        storageBarThickness: storageBarThickness,
+        homeBackgroundColor: homeBackgroundColor,
+        navbarColor: navbarColor,
+        navbarGlowColor: navbarGlowColor,
+        navbarItemColor: navbarItemColor,
+        navbarStyle: navbarStyle,
+        navbarOpacity: navbarOpacity,
+        navbarRadius: navbarRadius,
         sectionOrder: List<String>.from(sectionOrder),
         navigationOrder: List<String>.from(navigationOrder),
       );
@@ -456,47 +544,134 @@ class HomeCustomization {
 class HomeCustomizationStore {
   HomeCustomizationStore._();
 
-  static final Map<String, HomeCustomization> _settings =
-      <String, HomeCustomization>{};
-
-  // A profile is considered configured only after the user explicitly saves
-  // the first-time customization screen. Reading default settings must not
-  // count as configuration.
+  static final Map<String, HomeCustomization> _settings = <String, HomeCustomization>{};
   static final Set<String> _configuredProfiles = <String>{};
+  static SharedPreferences? _prefs;
+
+  static Future<void> initialize() async {
+    _prefs = await SharedPreferences.getInstance();
+    const settingsPrefix = 'home_customization_';
+    const setupPrefix = 'profile_setup_completed_';
+    for (final key in _prefs!.getKeys()) {
+      if (key.startsWith(settingsPrefix)) {
+        final raw = _prefs!.getString(key);
+        if (raw == null) continue;
+        try {
+          final settings = _fromJson(
+            Map<String, dynamic>.from(jsonDecode(raw) as Map),
+          );
+          if (!settings.sectionOrder.contains('Music & Film')) {
+            settings.sectionOrder.add('Music & Film');
+          }
+          _settings[key.substring(settingsPrefix.length)] = settings;
+        } catch (_) {}
+      } else if (key.startsWith(setupPrefix) && _prefs!.getBool(key) == true) {
+        _configuredProfiles.add(key.substring(setupPrefix.length));
+      }
+    }
+  }
 
   static String _key(Profile? profile) => profile?.id ?? 'default';
 
-  static HomeCustomization settingsFor(Profile? profile) {
-    return _settings.putIfAbsent(
-      _key(profile),
-      () => HomeCustomization(),
-    ).copy();
-  }
+  static HomeCustomization settingsFor(Profile? profile) =>
+      _settings.putIfAbsent(_key(profile), () => HomeCustomization()).copy();
 
-  // Backwards-compatible accessor for code that only needs the current profile.
   static HomeCustomization get settings => settingsFor(AppController.instance.currentProfile);
 
-  static bool isConfigured(Profile? profile) =>
-      _configuredProfiles.contains(_key(profile));
-
-  static bool get hasConfigured =>
-      isConfigured(AppController.instance.currentProfile);
+  static bool isConfigured(Profile? profile) => _configuredProfiles.contains(_key(profile));
+  static bool get hasConfigured => isConfigured(AppController.instance.currentProfile);
 
   static void apply(HomeCustomization value, [Profile? profile]) {
     final key = _key(profile ?? AppController.instance.currentProfile);
-    _settings[key] = value.copy();
+    final copy = value.copy();
+    _settings[key] = copy;
+    _prefs?.setString('home_customization_$key', jsonEncode(_toJson(copy)));
+  }
+
+  static Future<void> markSetupCompleted([Profile? profile]) async {
+    final key = _key(profile ?? AppController.instance.currentProfile);
     _configuredProfiles.add(key);
+    await _prefs?.setBool('profile_setup_completed_$key', true);
+  }
+
+  static Future<void> clearSetupCompleted([Profile? profile]) async {
+    final key = _key(profile ?? AppController.instance.currentProfile);
+    _configuredProfiles.remove(key);
+    await _prefs?.remove('profile_setup_completed_$key');
   }
 
   static void removeProfile(Profile profile) {
     _settings.remove(profile.id);
     _configuredProfiles.remove(profile.id);
+    _prefs?.remove('home_customization_${profile.id}');
+    _prefs?.remove('profile_setup_completed_${profile.id}');
   }
 
   static void clear() {
+    for (final key in _settings.keys) {
+      _prefs?.remove('home_customization_$key');
+    }
+    for (final key in _configuredProfiles) {
+      _prefs?.remove('profile_setup_completed_$key');
+    }
     _settings.clear();
     _configuredProfiles.clear();
   }
+
+  static Map<String, dynamic> _toJson(HomeCustomization v) => {
+    'showHero': v.showHero, 'showContinueWatching': v.showContinueWatching, 'showRecentlyWatched': v.showRecentlyWatched,
+    'showMovies': v.showMovies, 'showTvShows': v.showTvShows, 'showNewAdditions': v.showNewAdditions,
+    'showAllLibrary': v.showAllLibrary, 'showRecommendations': v.showRecommendations, 'showLiveSports': v.showLiveSports, 'showMusic': v.showMusic, 'showFilm': v.showFilm, 'homeMediaLayout': v.homeMediaLayout, 'heroStyle': v.heroStyle,
+    'cardSize': v.cardSize, 'navbarPosition': v.navbarPosition, 'storageBarPosition': v.storageBarPosition, 'liveSportsPosition': v.liveSportsPosition, 'storageBarThickness': v.storageBarThickness,
+    'homeBackgroundColor': v.homeBackgroundColor, 'navbarColor': v.navbarColor, 'navbarGlowColor': v.navbarGlowColor, 'navbarItemColor': v.navbarItemColor,
+    'navbarStyle': v.navbarStyle, 'navbarOpacity': v.navbarOpacity, 'navbarRadius': v.navbarRadius,
+    'sectionOrder': v.sectionOrder, 'navigationOrder': v.navigationOrder,
+  };
+
+  static String _colorNameFromStored(dynamic value, String fallback) {
+    final stored = value?.toString();
+    if (stored != null && namedColors.containsKey(stored)) return stored;
+
+    // Convert older saved hex values to the new friendly color names.
+    const legacy = <String, String>{
+      '0xFF090909': 'Black',
+      '0xFF0E0E0E': 'Black',
+      '0xFFFF0000': 'Red',
+      '0xFF8B5CF6': 'Purple',
+      '0xFF0B2B17': 'Green',
+      '0xFF071A33': 'Blue',
+      '0xFF2B0B2B': 'Maroon',
+      '0xFF1E3A8A': 'Blue',
+      '0xFF14532D': 'Green',
+      '0xFF4C1D95': 'Purple',
+      '0xFF00FF66': 'Green',
+      '0xFF00B7FF': 'Cyan',
+      '0xFFFF00FF': 'Fuchsia',
+      '0xFFFFFFFF': 'White',
+      '0xFFFFC107': 'Amber',
+      '0xFF22D3EE': 'Cyan',
+    };
+    return legacy[stored] ?? fallback;
+  }
+
+  static HomeCustomization _fromJson(Map<String, dynamic> m) => HomeCustomization(
+    showHero: m['showHero'] == false ? false : true, showContinueWatching: m['showContinueWatching'] == false ? false : true,
+    showRecentlyWatched: m['showRecentlyWatched'] == false ? false : true, showMovies: m['showMovies'] == false ? false : true,
+    showTvShows: m['showTvShows'] == false ? false : true, showNewAdditions: m['showNewAdditions'] == false ? false : true,
+    showAllLibrary: m['showAllLibrary'] == true, showRecommendations: m['showRecommendations'] == false ? false : true, showLiveSports: m['showLiveSports'] == false ? false : true,
+    showMusic: m['showMusic'] == false ? false : true, showFilm: m['showFilm'] == false ? false : true, homeMediaLayout: m['homeMediaLayout']?.toString() ?? 'Left & Right',
+    heroStyle: m['heroStyle']?.toString() ?? 'Cinematic', cardSize: m['cardSize']?.toString() ?? 'Medium',
+    navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom', storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom', liveSportsPosition: m['liveSportsPosition']?.toString() ?? 'Top', storageBarThickness: (m['storageBarThickness'] is num ? (m['storageBarThickness'] as num).toDouble() : 12),
+    homeBackgroundColor: _colorNameFromStored(m['homeBackgroundColor'], 'Black'),
+    navbarColor: _colorNameFromStored(m['navbarColor'], 'Black'),
+    navbarGlowColor: _colorNameFromStored(m['navbarGlowColor'], 'Red'),
+    navbarItemColor: _colorNameFromStored(m['navbarItemColor'], 'Purple'),
+    navbarStyle: m['navbarStyle']?.toString() ?? 'Solid',
+    navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
+    navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
+    sectionOrder: m['sectionOrder'] is List ? List<String>.from(m['sectionOrder'] as List) : null,
+    navigationOrder: m['navigationOrder'] is List ? List<String>.from(m['navigationOrder'] as List) : null,
+  );
 }
 
 enum _CustomizationPage {
@@ -518,23 +693,56 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late DetailsCustomization detailsDraft;
   _CustomizationPage selectedPage = _CustomizationPage.home;
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     draft = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     detailsDraft = DetailsCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
+    _normalizeHomePositions();
   }
 
-  void _save() {
-    HomeCustomizationStore.apply(draft, AppController.instance.currentProfile);
-    DetailsCustomizationStore.apply(
-      AppController.instance.currentProfile,
-      detailsDraft,
-    );
+  void _normalizeHomePositions() {
+    final positions = <String>['Top', 'Bottom', 'Left', 'Right'];
+    if (draft.storageBarPosition != 'Hidden' && !positions.contains(draft.storageBarPosition)) draft.storageBarPosition = 'Bottom';
+    if (!positions.contains(draft.liveSportsPosition) || draft.liveSportsPosition == draft.navbarPosition || draft.liveSportsPosition == draft.storageBarPosition) {
+      draft.liveSportsPosition = positions.firstWhere((p) => p != draft.navbarPosition && p != draft.storageBarPosition, orElse: () => 'Top');
+    }
+  }
+
+  /// Performs `_save` for this feature. Update this documentation when its contract changes.
+  Future<void> _save() async {
+    final profile = AppController.instance.currentProfile;
+
+    if (widget.firstSetup && selectedPage == _CustomizationPage.home) {
+      HomeCustomizationStore.apply(draft, profile);
+      setState(() {
+        selectedPage = _CustomizationPage.details;
+      });
+      return;
+    }
+
+    HomeCustomizationStore.apply(draft, profile);
+    DetailsCustomizationStore.apply(profile, detailsDraft);
+
+    if (widget.firstSetup) {
+      await HomeCustomizationStore.markSetupCompleted(profile);
+    }
+
+    if (!mounted) return;
     Navigator.of(context).pop(true);
   }
 
+  List<String> _availableHomePositions(HomeCustomization value, {bool allowHidden = false, bool excludeNavbar = true}) {
+    final positions = <String>['Top', 'Bottom', 'Left', 'Right'];
+    if (excludeNavbar) positions.removeWhere((p) => p == value.navbarPosition);
+    if (excludeNavbar && value.storageBarPosition != 'Hidden') positions.removeWhere((p) => p == value.storageBarPosition);
+    if (allowHidden) positions.add('Hidden');
+    return positions.isEmpty ? <String>['Top'] : positions;
+  }
+
+  /// Performs `_toggle` for this feature. Update this documentation when its contract changes.
   Widget _toggle(
     String title,
     String subtitle,
@@ -570,6 +778,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  /// Performs `_dropdown` for this feature. Update this documentation when its contract changes.
   Widget _dropdown({
     required String label,
     required String value,
@@ -594,6 +803,58 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  Widget _colorDropdown({
+    required String label,
+    required String value,
+    required ValueChanged<String> onChanged,
+  }) {
+    final safeValue = namedColors.containsKey(value) ? value : 'Black';
+
+    return DropdownButtonFormField<String>(
+      initialValue: safeValue,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: namedColors[safeValue],
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white24),
+            ),
+          ),
+        ),
+      ),
+      items: [
+        for (final entry in namedColors.entries)
+          DropdownMenuItem<String>(
+            value: entry.key,
+            child: Row(
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: entry.value,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(entry.key),
+              ],
+            ),
+          ),
+      ],
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+    );
+  }
+
+  /// Performs `_pageSelector` for this feature. Update this documentation when its contract changes.
   Widget _pageSelector() {
     return Row(
       children: [
@@ -602,7 +863,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             label: 'HOME PAGE',
             icon: Icons.home_rounded,
             selected: selectedPage == _CustomizationPage.home,
-            onPressed: () {
+            onPressed: widget.firstSetup 
+            ? () {}
+            :(){
               setState(() {
                 selectedPage = _CustomizationPage.home;
               });
@@ -615,7 +878,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             label: 'DETAILS PAGE',
             icon: Icons.movie_outlined,
             selected: selectedPage == _CustomizationPage.details,
-            onPressed: () {
+            onPressed: widget.firstSetup 
+            ? () {}
+        : () {
               setState(() {
                 selectedPage = _CustomizationPage.details;
               });
@@ -626,6 +891,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  /// Performs `_customizationButton` for this feature. Update this documentation when its contract changes.
   Widget _customizationButton({
     required String label,
     required IconData icon,
@@ -654,6 +920,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  /// Performs `_headerCard` for this feature. Update this documentation when its contract changes.
   Widget _headerCard() {
     final isHome = selectedPage == _CustomizationPage.home;
 
@@ -722,6 +989,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  /// Performs `_buildHomePage` for this feature. Update this documentation when its contract changes.
   Widget _buildHomePage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,20 +1032,96 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: 'Where do you want your navbar?',
           value: draft.navbarPosition,
           values: const ['Bottom', 'Top', 'Left', 'Right', 'Floating'],
-          onChanged: (value) => setState(() => draft.navbarPosition = value),
+          onChanged: (value) => setState(() { draft.navbarPosition = value; _normalizeHomePositions(); }),
+        ),
+        const SizedBox(height: 12),
+        _sectionOrder(
+          title: 'NAVIGATION ORDER',
+          subtitle: 'Drag navbar items to change their order. More stays as the expandable menu.',
+          items: draft.navigationOrder,
+          onChanged: (newOrder) => setState(() => draft.navigationOrder = newOrder),
         ),
         const SizedBox(height: 12),
         _dropdown(
           label: 'Where should the storage bar appear?',
           value: draft.storageBarPosition,
-          values: const ['Top', 'Bottom', 'Above Navbar', 'Hidden'],
+          values: _availableHomePositions(draft, allowHidden: true, excludeNavbar: false),
           onChanged: (value) => setState(() => draft.storageBarPosition = value),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Storage capacity is not exposed by app_core.dart yet, so the current bar shows library occupancy. It is ready to use real server/device storage once those metrics are added.',
-          style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
+        Text('Storage bar thickness: ${draft.storageBarThickness.round()} px', style: const TextStyle(color: Colors.white70)),
+        Slider(value: draft.storageBarThickness.clamp(4, 32), min: 4, max: 32, divisions: 14, onChanged: (value) => setState(() => draft.storageBarThickness = value)),
+        _dropdown(
+          label: 'Where should Live Sports appear on Home?',
+          value: draft.liveSportsPosition,
+          values: _availableHomePositions(draft, excludeNavbar: true),
+          onChanged: (value) => setState(() => draft.liveSportsPosition = value),
         ),
+        const SizedBox(height: 8),
+        const Text('A Home position is removed when it is already occupied by the navbar or storage bar.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
+        const SizedBox(height: 24),
+        const Text('COLORS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const SizedBox(height: 10),
+        _colorDropdown(
+          label: 'Home background',
+          value: draft.homeBackgroundColor,
+          onChanged: (value) => setState(() => draft.homeBackgroundColor = value),
+        ),
+        const SizedBox(height: 10),
+        _colorDropdown(
+          label: 'Navbar color',
+          value: draft.navbarColor,
+          onChanged: (value) => setState(() => draft.navbarColor = value),
+        ),
+        const SizedBox(height: 10),
+        _colorDropdown(
+          label: 'Navbar glow outline',
+          value: draft.navbarGlowColor,
+          onChanged: (value) => setState(() => draft.navbarGlowColor = value),
+        ),
+        const SizedBox(height: 10),
+        _colorDropdown(
+          label: 'Navbar item color',
+          value: draft.navbarItemColor,
+          onChanged: (value) => setState(() => draft.navbarItemColor = value),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Navbar shape',
+          value: draft.navbarStyle,
+          values: const ['Solid', 'Transparent', 'Curved', 'Angled'],
+          onChanged: (value) => setState(() => draft.navbarStyle = value),
+        ),
+        const SizedBox(height: 10),
+        Text('Navbar opacity: ${(draft.navbarOpacity * 100).round()}%', style: const TextStyle(color: Colors.white70)),
+        Slider(
+          value: draft.navbarOpacity.clamp(.10, 1.0),
+          min: .10,
+          max: 1.0,
+          divisions: 18,
+          label: '${(draft.navbarOpacity * 100).round()}%',
+          onChanged: (value) => setState(() => draft.navbarOpacity = value),
+        ),
+        Text('Navbar corner radius: ${draft.navbarRadius.round()} px', style: const TextStyle(color: Colors.white70)),
+        Slider(
+          value: draft.navbarRadius.clamp(0, 42),
+          min: 0,
+          max: 42,
+          divisions: 21,
+          label: '${draft.navbarRadius.round()} px',
+          onChanged: (value) => setState(() => draft.navbarRadius = value),
+        ),
+        const SizedBox(height: 24),
+        const Text('HOME MEDIA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Music + Film arrangement',
+          value: draft.homeMediaLayout,
+          values: const ['Left & Right', 'Top & Bottom'],
+          onChanged: (value) => setState(() => draft.homeMediaLayout = value),
+        ),
+        _toggle('Music', 'Show a Music destination on Home.', draft.showMusic, (v) => setState(() => draft.showMusic = v)),
+        _toggle('Film', 'Show Movies and Shows together on Home.', draft.showFilm, (v) => setState(() => draft.showFilm = v)),
         const SizedBox(height: 24),
         const Text(
           'SECTIONS',
@@ -831,23 +1175,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           draft.showAllLibrary,
           (v) => setState(() => draft.showAllLibrary = v),
         ),
+        _toggle('Live Sports', 'Show Live Sports when authentic/original authorized broadcasts are available.', draft.showLiveSports, (v) => setState(() => draft.showLiveSports = v)),
         const SizedBox(height: 24),
         _sectionOrder(
           title: 'SECTION ORDER',
           subtitle: 'Drag Home sections to change their order.',
           items: draft.sectionOrder,
         ),
-        const SizedBox(height: 24),
-        _sectionOrder(
-          title: 'NAVIGATION ORDER',
-          subtitle: 'Drag navigation items to personalize this profile.',
-          items: draft.navigationOrder,
-          onChanged: (value) => setState(() => draft.navigationOrder = value),
-        ),
       ],
     );
   }
 
+  /// Performs `_buildDetailsPage` for this feature. Update this documentation when its contract changes.
   Widget _buildDetailsPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1050,6 +1389,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  /// Performs `_sectionOrder` for this feature. Update this documentation when its contract changes.
   Widget _sectionOrder({
     required String title,
     required String subtitle,
@@ -1137,6 +1477,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final isHome = selectedPage == _CustomizationPage.home;
 
@@ -1146,18 +1487,22 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         backgroundColor: const Color(0xFF070707),
         surfaceTintColor: Colors.transparent,
         title: Text(
-          widget.firstSetup ? 'Make Home Yours' : 'Customize App',
+          widget.firstSetup
+              ? (selectedPage == _CustomizationPage.home ? 'Customize Home' : 'Customize Details')
+              : 'Customize App',
         ),
         automaticallyImplyLeading: !widget.firstSetup,
-        actions: [
-          TextButton(
-            onPressed: _save,
-            child: const Text(
-              'SAVE',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
+        actions: widget.firstSetup
+            ? const []
+            : [
+                TextButton(
+                  onPressed: _save,
+                  child: const Text(
+                    'SAVE',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
       ),
       body: SafeArea(
         child: ListView(
@@ -1175,7 +1520,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 onPressed: _save,
                 icon: const Icon(Icons.check_rounded),
                 label: Text(
-                  widget.firstSetup ? 'ENTER MY HOME' : 'SAVE CHANGES',
+                  widget.firstSetup
+                      ? (selectedPage == _CustomizationPage.home ? 'CONTINUE TO DETAILS' : 'ENTER MY HOME')
+                      : 'SAVE CHANGES',
                 ),
               ),
             ),
@@ -1199,29 +1546,15 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int selectedIndex = 0;
+  String selectedDestination = 'Home';
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          HomeCustomizationStore.isConfigured(
-            AppController.instance.currentProfile,
-          )) {
-        return;
-      }
-      Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => const CustomizeHomeScreen(firstSetup: true),
-        ),
-      ).then((_) {
-        if (mounted) setState(() {});
-      });
-    });
   }
 
+  /// Performs `_openMore` for this feature. Update this documentation when its contract changes.
   void _openMore() {
     showModalBottomSheet<void>(
       context: context,
@@ -1250,52 +1583,68 @@ class _MainScreenState extends State<MainScreen> {
         onDevices: () { Navigator.pop(context); _openDevices(); },
         onRoadmapFeatures: () { Navigator.pop(context); _openRoadmapFeatures(); },
         onNextGen: () { Navigator.pop(context); _openNextGen(); },
+        onPlatformExpansion: () { Navigator.pop(context); _openPlatformExpansion(); },
+        onNotifications: () { Navigator.pop(context); _openNotifications(); },
       ),
     );
   }
 
+  /// Performs `_openImport` for this feature. Update this documentation when its contract changes.
   void _openImport() {
     Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const ImportMediaScreen()))
         .then((_) { if (mounted) setState(() {}); });
   }
 
+  /// Performs `_openProfiles` for this feature. Update this documentation when its contract changes.
   void _openProfiles() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()))
         .then((_) { if (mounted) setState(() {}); });
   }
 
+  /// Performs `_openFeatureCenter` for this feature. Update this documentation when its contract changes.
   void _openFeatureCenter() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const FeatureCenterScreen()));
   }
 
+  /// Performs `_openEverything` for this feature. Update this documentation when its contract changes.
   void _openEverything() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const UltimateFeaturesScreen()));
   }
 
+  /// Performs `_openRemoteAccess` for this feature. Update this documentation when its contract changes.
   void _openRemoteAccess() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const RemoteAccessScreen()));
   }
 
+  /// Performs `_openAccountSettings` for this feature. Update this documentation when its contract changes.
   void _openAccountSettings() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsScreen()));
   }
 
+  /// Performs `_openDevices` for this feature. Update this documentation when its contract changes.
   void _openDevices() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()));
   }
 
+  /// Performs `_openRoadmapFeatures` for this feature. Update this documentation when its contract changes.
   void _openRoadmapFeatures() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const RoadmapFeaturesScreen()));
   }
 
+  /// Performs `_openNextGen` for this feature. Update this documentation when its contract changes.
   void _openNextGen() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const NextGenFeaturesScreen()));
   }
 
-  void _openGroup() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupHubScreen()));
+  /// Performs `_openPlatformExpansion` for this feature. Update this documentation when its contract changes.
+  void _openPlatformExpansion() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PlatformExpansionScreen()),
+    );
   }
 
+  /// Performs `_openNotifications` for this feature. Update this documentation when its contract changes.
   void _openNotifications() {
     showModalBottomSheet<void>(
       context: context,
@@ -1305,33 +1654,60 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final pages = <Widget>[
-      HomeScreen(onRefresh: () => setState(() {})),
-      const MoviesScreen(),
-      const SeriesScreen(),
-      const ActorsScreen(),
-      const MusicScreen(),
-      const TrailersScreen(),
-      const SmartSearchScreen(),
-      const CollectionsPanel(),
-    ];
+  List<String> _normalizedNavigationOrder(List<String> value) {
+    const defaults = <String>['Profile', 'Home', 'Live Sports', 'More', 'Music', 'Film'];
+    final result = <String>[];
+    for (final name in value) {
+      if (defaults.contains(name) && !result.contains(name)) result.add(name);
+    }
+    for (final name in defaults) {
+      if (!result.contains(name)) result.add(name);
+    }
+    return result;
+  }
 
+  @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  Widget build(BuildContext context) {
+    // Primary navigation is fixed to six destinations: Profile, Home, Live Sports,
+    // More, Music and Film. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
+    final pageByName = <String, Widget>{
+      'Profile': const ProfileScreen(),
+      'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
+      'Live Sports': const LiveSportsScreen(),
+      'More': const _MoreNavigationPlaceholder(),
+      'Music': const MusicScreen(),
+      'Film': const MoviesScreen(),
+    };
+    final pages = navigationOrder.map((name) => pageByName[name]!).toList();
+    final safeSelectedIndex = navigationOrder.indexOf(selectedDestination).clamp(0, pages.length - 1).toInt();
+    final selectedName = navigationOrder[safeSelectedIndex];
     final navbar = _StreamingNavigationBar(
-      selectedIndex: selectedIndex,
       position: settings.navbarPosition,
-      navigationOrder: settings.navigationOrder,
-      onSelect: (index) { if (index != selectedIndex) setState(() => selectedIndex = index); },
-      onNotifications: _openNotifications,
-      onGroup: _openGroup,
-      onProfile: _openProfiles,
+      onSelect: (index) {
+        final name = navigationOrder[index];
+        if (name == 'Profile') { _openProfiles(); return; }
+        if (name == 'More') { _openMore(); return; }
+        final destination = navigationOrder[index];
+        if (destination != selectedDestination) {
+          setState(() => selectedDestination = destination);
+        }
+      },
       onMore: _openMore,
+      navigationOrder: navigationOrder,
+      selectedName: selectedName,
+      backgroundColor: colorFromName(settings.navbarColor),
+      glowColor: colorFromName(settings.navbarGlowColor),
+      itemColor: colorFromName(settings.navbarItemColor),
+      style: settings.navbarStyle,
+      opacity: settings.navbarOpacity,
+      radius: settings.navbarRadius,
     );
     final page = AnimatedSwitcher(
       duration: const Duration(milliseconds: 280),
-      child: KeyedSubtree(key: ValueKey(selectedIndex), child: pages[selectedIndex]),
+      child: KeyedSubtree(key: ValueKey(selectedName), child: pages[safeSelectedIndex]),
     );
 
     Widget content;
@@ -1357,83 +1733,277 @@ class _MainScreenState extends State<MainScreen> {
         break;
     }
 
-    return Scaffold(backgroundColor: const Color(0xFF070707), body: content);
+    return Scaffold(backgroundColor: colorFromName(settings.homeBackgroundColor), body: content);
   }
 }
 
 class _StreamingNavigationBar extends StatelessWidget {
-  final int selectedIndex;
   final String position;
-  final List<String> navigationOrder;
   final ValueChanged<int> onSelect;
-  final VoidCallback onNotifications;
-  final VoidCallback onGroup;
-  final VoidCallback onProfile;
   final VoidCallback onMore;
+  final Color backgroundColor;
+  final Color glowColor;
+  final Color itemColor;
+  final String style;
+  final double opacity;
+  final double radius;
+  final List<String> navigationOrder;
+  final String selectedName;
 
   const _StreamingNavigationBar({
-    required this.selectedIndex,
     required this.position,
-    required this.navigationOrder,
     required this.onSelect,
-    required this.onNotifications,
-    required this.onGroup,
-    required this.onProfile,
     required this.onMore,
+    required this.backgroundColor,
+    required this.glowColor,
+    required this.itemColor,
+    required this.style,
+    required this.opacity,
+    required this.radius,
+    required this.navigationOrder,
+    required this.selectedName,
   });
+
+  void _open(BuildContext context, Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final items = <_NavItemData>[
-      const _NavItemData(Icons.home_outlined, Icons.home, 'Home'),
-      const _NavItemData(Icons.movie_outlined, Icons.movie, 'Movies'),
-      const _NavItemData(Icons.tv_outlined, Icons.tv, 'TV Shows'),
-      const _NavItemData(Icons.people_outline, Icons.people, 'Actors'),
-      const _NavItemData(Icons.music_note_outlined, Icons.music_note, 'Music'),
-      const _NavItemData(Icons.play_arrow_outlined, Icons.play_arrow, 'Trailers'),
-      const _NavItemData(Icons.search_outlined, Icons.search, 'Search'),
-      const _NavItemData(Icons.collections_bookmark_outlined, Icons.collections_bookmark, 'Collections'),
-    ];
     final vertical = position == 'Left' || position == 'Right';
-    final floating = position == 'Floating';
-    final indexByLabel = <String, int>{
-      for (var i = 0; i < items.length; i++) items[i].label: i,
-    };
-    final orderedItems = navigationOrder
-        .map((label) => indexByLabel[label])
-        .whereType<int>()
-        .toList();
-    for (var i = 0; i < items.length; i++) {
-      if (!orderedItems.contains(i)) orderedItems.add(i);
-    }
-    final actions = [
-      for (final i in orderedItems)
-        _NavButton(data: items[i], selected: selectedIndex == i, vertical: vertical, onTap: () => onSelect(i)),
-      _NavButton(data: const _NavItemData(Icons.notifications_none_rounded, Icons.notifications_rounded, 'Notifications'), selected: false, vertical: vertical, showBadge: AppController.instance.activity.isNotEmpty, onTap: onNotifications),
-      _NavButton(data: const _NavItemData(Icons.groups_outlined, Icons.groups_rounded, 'Group Chat'), selected: false, vertical: vertical, onTap: onGroup),
-      _NavButton(data: const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'), selected: false, vertical: vertical, onTap: onProfile),
-      _NavButton(data: const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'), selected: false, vertical: vertical, onTap: onMore),
+    final filmEntries = <_NavMenuEntry>[
+      _NavMenuEntry('Movies', Icons.movie_outlined, () => _open(context, const MoviesScreen())),
+      _NavMenuEntry('Series', Icons.tv_outlined, () => _open(context, const SeriesScreen())),
+      _NavMenuEntry('Trailers', Icons.play_circle_outline, () => _open(context, const TrailersScreen())),
+      _NavMenuEntry('Actors', Icons.people_outline, () => _open(context, const LibraryActorsScreen())),
+      _NavMenuEntry('Collections', Icons.collections_bookmark_outlined, () => _open(context, const LibraryCollectionsScreen())),
+      _NavMenuEntry('Directors', Icons.videocam_outlined, () => _open(context, const LibraryDirectorsScreen())),
+      _NavMenuEntry('Franchises', Icons.account_tree_outlined, () => _open(context, const _NavigationDirectoryScreen(title: 'Franchises', icon: Icons.account_tree_outlined))),
+      _NavMenuEntry('Genres', Icons.category_outlined, () => _open(context, const _NavigationDirectoryScreen(title: 'Genres', icon: Icons.category_outlined))),
+      _NavMenuEntry('Wishlist', Icons.favorite_border_rounded, () => _open(context, const FavoritesScreen())),
+      _NavMenuEntry('Search', Icons.search_rounded, () => _open(context, const SmartSearchScreen())),
+    ];
+    final musicEntries = <_NavMenuEntry>[
+      _NavMenuEntry('Singers / Bands', Icons.person_outline_rounded, () => _open(context, const _NavigationDirectoryScreen(title: 'Singers / Bands', icon: Icons.person_outline_rounded))),
+      _NavMenuEntry('Albums', Icons.album_outlined, () => _open(context, const _NavigationDirectoryScreen(title: 'Albums', icon: Icons.album_outlined))),
+      _NavMenuEntry('Playlists', Icons.queue_music_rounded, () => _open(context, const MusicScreen())),
+      _NavMenuEntry('Soundtrack Universe', Icons.library_music_outlined, () => _open(context, const SoundtrackUniverseScreen())),
     ];
 
-    final bar = ConstrainedBox(
-      constraints: vertical
-          ? const BoxConstraints(minWidth: 92, maxWidth: 92, maxHeight: 520)
-          : const BoxConstraints(minHeight: 76, maxHeight: 76),
-      child: Container(
-        width: vertical ? 92 : double.infinity,
-        height: vertical ? null : 76,
-        decoration: BoxDecoration(
-          color: const Color(0xF20E0E0E),
-          border: Border.all(color: Colors.white.withValues(alpha: .07)),
-          borderRadius: floating ? BorderRadius.circular(24) : BorderRadius.zero,
-          boxShadow: const [BoxShadow(blurRadius: 28, offset: Offset(0, -8), color: Color(0x66000000))],
-        ),
-        child: vertical
-            ? SingleChildScrollView(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: actions))
-            : SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7), child: Row(mainAxisSize: MainAxisSize.min, children: actions)),
+    final dataByName = <String, _NavItemData>{
+      'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
+      'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
+      'Live Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Live Sports'),
+      'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
+      'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
+      'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
+    };
+    final actions = <Widget>[
+      for (final name in navigationOrder)
+        if (name == 'More')
+          _NavButton(data: dataByName[name]!, selected: false, vertical: vertical, onTap: onMore, color: itemColor)
+        else if (name == 'Music')
+          _NavMenuButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, color: itemColor, entries: musicEntries, onTap: () => onSelect(navigationOrder.indexOf(name)), menuSide: position == 'Right' ? AxisDirection.left : AxisDirection.right, menuVerticalDirection: (position == 'Bottom' || position == 'Floating') ? AxisDirection.up : AxisDirection.down)
+        else if (name == 'Film')
+          _NavMenuButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, color: itemColor, entries: filmEntries, onTap: () => onSelect(navigationOrder.indexOf(name)), menuSide: position == 'Right' ? AxisDirection.left : AxisDirection.right, menuVerticalDirection: (position == 'Bottom' || position == 'Floating') ? AxisDirection.up : AxisDirection.down)
+        else
+          _NavButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, onTap: () => onSelect(navigationOrder.indexOf(name)), color: itemColor),
+    ];
+
+    final alpha = style == 'Transparent' ? .08 : style == 'Curved' ? opacity : style == 'Angled' ? opacity : opacity;
+    final effectiveColor = backgroundColor.withValues(alpha: alpha.clamp(.05, 1.0));
+    final decoration = BoxDecoration(
+      color: effectiveColor,
+      border: Border.all(color: glowColor.withValues(alpha: .35), width: 1.2),
+      borderRadius: BorderRadius.circular(style == 'Curved' ? radius.clamp(20, 44) : radius.clamp(0, 32)),
+      boxShadow: [BoxShadow(blurRadius: style == 'Transparent' ? 12 : 28, offset: const Offset(0, -8), color: glowColor.withValues(alpha: .16))],
+    );
+    final inner = vertical
+        ? SingleChildScrollView(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: actions))
+        : SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Row(mainAxisSize: MainAxisSize.min, children: actions));
+    final child = style == 'Angled'
+        ? ClipPath(clipper: _AngledNavbarClipper(), child: DecoratedBox(decoration: decoration, child: inner))
+        : DecoratedBox(decoration: decoration, child: inner);
+    return SafeArea(top: false, child: ConstrainedBox(
+      constraints: vertical ? const BoxConstraints(minWidth: 104, maxWidth: 104, maxHeight: 620) : const BoxConstraints(minHeight: 76, maxHeight: 84),
+      child: child,
+    ));
+  }
+}
+
+class _NavMenuEntry {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _NavMenuEntry(this.label, this.icon, this.onTap);
+}
+
+class _NavMenuButton extends StatefulWidget {
+  final _NavItemData data;
+  final bool selected;
+  final bool vertical;
+  final Color color;
+  final List<_NavMenuEntry> entries;
+  final VoidCallback onTap;
+  final AxisDirection menuSide;
+  final AxisDirection menuVerticalDirection;
+  const _NavMenuButton({required this.data, required this.selected, required this.vertical, required this.color, required this.entries, required this.onTap, required this.menuSide, required this.menuVerticalDirection});
+  @override State<_NavMenuButton> createState() => _NavMenuButtonState();
+}
+
+class _NavMenuButtonState extends State<_NavMenuButton> {
+  OverlayEntry? _overlay;
+  Timer? _hideTimer;
+
+  void _cancelHide() => _hideTimer?.cancel();
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(milliseconds: 260), _hideMenu);
+  }
+  void _hideMenu() { _overlay?.remove(); _overlay = null; }
+
+  void _showMenu() {
+    _cancelHide();
+    if (_overlay != null) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final size = box.size;
+    const menuWidth = 220.0;
+    final left = widget.vertical
+        ? (widget.menuSide == AxisDirection.left
+            ? origin.dx - menuWidth - 8
+            : origin.dx + size.width + 8)
+        : origin.dx;
+
+    Widget menu() => MouseRegion(
+          onEnter: (_) => _cancelHide(),
+          onExit: (_) => _scheduleHide(),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: menuWidth,
+              constraints: const BoxConstraints(maxHeight: 520),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xF51A1A1A),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white12),
+                boxShadow: const [
+                  BoxShadow(blurRadius: 28, color: Color(0x55000000)),
+                ],
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final entry in widget.entries)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(entry.icon, size: 20),
+                      title: Text(entry.label),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      onTap: () {
+                        _hideMenu();
+                        entry.onTap();
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+    _overlay = OverlayEntry(
+      builder: (_) {
+        if (widget.vertical) {
+          return Positioned(left: left, top: origin.dy, child: menu());
+        }
+        if (widget.menuVerticalDirection == AxisDirection.up) {
+          return Positioned(
+            left: left,
+            bottom: overlay.size.height - origin.dy + 8,
+            child: menu(),
+          );
+        }
+        return Positioned(
+          left: left,
+          top: origin.dy + size.height + 8,
+          child: menu(),
+        );
+      },
+    );
+    Overlay.of(context).insert(_overlay!);
+  }
+
+  @override
+  void dispose() { _hideTimer?.cancel(); _hideMenu(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.selected;
+    final width = widget.vertical ? 94.0 : (active ? 92.0 : 76.0);
+    return Padding(
+      padding: widget.vertical ? const EdgeInsets.symmetric(vertical: 2) : const EdgeInsets.symmetric(horizontal: 2),
+      child: MouseRegion(
+        onEnter: (_) => _showMenu(), onExit: (_) => _scheduleHide(),
+        child: Material(color: active ? Colors.white.withValues(alpha: .10) : Colors.transparent, borderRadius: BorderRadius.circular(18), child: InkWell(
+          borderRadius: BorderRadius.circular(18), onTap: widget.onTap,
+          child: SizedBox(width: width, height: 60, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(active ? widget.data.selectedIcon : widget.data.icon, size: 22, color: active ? widget.color : widget.color.withValues(alpha: .72)),
+            const SizedBox(height: 3), Text(widget.data.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: active ? Colors.white : Colors.white54, fontSize: 9.5, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
+            const SizedBox(height: 2), Container(width: active ? 18 : 0, height: 2, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10))),
+          ])),
+        )),
       ),
     );
-    return SafeArea(top: false, left: false, right: false, bottom: !floating, child: bar);
+  }
+}
+
+class _AngledNavbarClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) => Path()..moveTo(18, 0)..lineTo(size.width - 18, 0)..lineTo(size.width, 14)..lineTo(size.width, size.height - 14)..lineTo(size.width - 18, size.height)..lineTo(18, size.height)..lineTo(0, size.height - 14)..lineTo(0, 14)..close();
+  @override bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _MoreNavigationPlaceholder extends StatelessWidget {
+  const _MoreNavigationPlaceholder();
+  @override Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+class _NavigationDirectoryScreen extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  const _NavigationDirectoryScreen({required this.title, required this.icon});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF070707),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        title: Text(title),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 58, color: Colors.white54),
+              const SizedBox(height: 14),
+              Text(
+                '$title will appear here as your library metadata grows.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white60),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1447,15 +2017,16 @@ class _NavItemData {
 class _NavButton extends StatefulWidget {
   final _NavItemData data;
   final bool selected;
-  final bool showBadge;
   final bool vertical;
   final VoidCallback onTap;
-  const _NavButton({required this.data, required this.selected, required this.onTap, this.showBadge = false, this.vertical = false});
+  final Color color;
+  const _NavButton({required this.data, required this.selected, required this.onTap, this.vertical = false, this.color = Colors.white});
   @override State<_NavButton> createState() => _NavButtonState();
 }
 class _NavButtonState extends State<_NavButton> {
   bool pressed = false;
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final active = widget.selected;
     final width = widget.vertical ? 78.0 : (active ? 92.0 : 68.0);
@@ -1477,8 +2048,7 @@ class _NavButtonState extends State<_NavButton> {
               height: 60,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Stack(clipBehavior: Clip.none, children: [
-                  Icon(active ? widget.data.selectedIcon : widget.data.icon, size: 22, color: active ? Colors.white : Colors.white70),
-                  if (widget.showBadge) Positioned(right: -4, top: -2, child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
+                  Icon(active ? widget.data.selectedIcon : widget.data.icon, size: 22, color: active ? widget.color : widget.color.withValues(alpha: .72)),
                 ]),
                 const SizedBox(height: 3),
                 Text(widget.data.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: active ? Colors.white : Colors.white54, fontSize: 9.5, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
@@ -1505,6 +2075,8 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onDevices;
   final VoidCallback onRoadmapFeatures;
   final VoidCallback onNextGen;
+  final VoidCallback onPlatformExpansion;
+  final VoidCallback onNotifications;
 
   const _MoreActionsSheet({
     required this.onImport,
@@ -1518,9 +2090,12 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onDevices,
     required this.onRoadmapFeatures,
     required this.onNextGen,
+    required this.onPlatformExpansion,
+    required this.onNotifications,
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return _PremiumSheet(
       title: 'More',
@@ -1530,8 +2105,8 @@ class _MoreActionsSheet extends StatelessWidget {
         children: [
           _SheetAction(
             icon: Icons.library_add_outlined,
-            title: 'Add Movie or Show',
-            subtitle: 'Import media into your library',
+            title: 'Rip / Import Disc',
+            subtitle: 'DVD, Blu-ray, UHD and approved media import',
             onTap: onImport,
           ),
           _SheetAction(
@@ -1555,7 +2130,8 @@ class _MoreActionsSheet extends StatelessWidget {
           _SheetAction(
             icon: Icons.auto_awesome_rounded,
             title: 'Discover & Recaps',
-            subtitle: 'Recommendations, collections, achievements and recaps',
+            subtitle:
+                'Recommendations, collections, achievements and recaps',
             onTap: onFeatureCenter,
           ),
           _SheetAction(
@@ -1579,30 +2155,98 @@ class _MoreActionsSheet extends StatelessWidget {
           _SheetAction(
             icon: Icons.devices_rounded,
             title: 'Device Center',
-            subtitle: 'Downloads, casting, HDMI and Bluetooth guidance',
+            subtitle:
+                'Downloads, casting, HDMI and Bluetooth guidance',
             onTap: onDevices,
           ),
           _SheetAction(
             icon: Icons.auto_awesome_rounded,
             title: 'Next-Gen Features',
-            subtitle: 'Smart discovery, My Stuff, stats, downloads, privacy and advanced settings',
+            subtitle:
+                'Smart discovery, My Stuff, stats, downloads, privacy and advanced settings',
             onTap: onNextGen,
+          ),
+          _SheetAction(
+            icon: Icons.tune_rounded,
+            title: 'Platform Expansion',
+            subtitle:
+                'Security, playback, TV, backup, discovery, sports, privacy and kids controls',
+            onTap: onPlatformExpansion,
+          ),
+          _SheetAction(
+            icon: Icons.notifications_active_outlined,
+            title: 'Notifications',
+            subtitle: 'Recent profile activity and messages',
+            onTap: onNotifications,
+          ),
+          _SheetAction(
+            icon: Icons.favorite_rounded,
+            title: 'Favorites',
+            subtitle:
+                'Liked movies, shows, songs, albums and playlists',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const FavoritesScreen(),
+              ),
+            ),
           ),
           _SheetAction(
             icon: Icons.workspace_premium_rounded,
             title: 'Ultimate Platform',
-            subtitle: 'AI, premium player, family, social, cloud, security, devices and Studio',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UltimatePlatformScreen())),
+            subtitle:
+                'AI, premium player, family, social, cloud, security, devices and Studio',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const UltimatePlatformScreen(),
+              ),
+            ),
           ),
           _SheetAction(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy & Ownership',
-            subtitle: 'Private library, authorized media, storage and account deletion',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryPrivacyScreen())),
+            subtitle:
+                'Private library, authorized media, storage and account deletion',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const LibraryPrivacyScreen(),
+              ),
+            ),
           ),
           _SheetAction(
+            icon: Icons.storage_rounded,
+            title: 'Server Storage',
+            subtitle:
+                'Movies, Series, Music and available capacity',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const StorageDashboardScreen(),
+              ),
+            ),
+          ),
+          _SheetAction(
+            icon: Icons.dns_rounded,
+            title: 'Home Server & ARM',
+            subtitle:
+                'Server health, ARM connection and media import pipeline',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const HomeServerScreen(),
+              ),
+            ),
+          ),
+          _SheetAction(
+  icon: Icons.emoji_events_outlined,
+  title: 'Music Achievements',
+  subtitle: 'Music badges such as Cultured and Swiftie',
+  onTap: () => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const FeatureCenterScreen(),
+    ),
+  ),
+),
+          _SheetAction(
             icon: Icons.rocket_launch_rounded,
-            title: '34-Feature Roadmap',
+            title: '100-Feature Roadmap',
             subtitle: 'Open every implemented roadmap feature',
             onTap: onRoadmapFeatures,
           ),
@@ -1626,6 +2270,7 @@ class _SheetAction extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1681,6 +2326,7 @@ class _PremiumSheet extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.sizeOf(context).height * .82;
 
@@ -1735,6 +2381,7 @@ class _ActivitySheet extends StatelessWidget {
   const _ActivitySheet();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final activity = AppController.instance.activity;
     return _PremiumSheet(
@@ -1804,8 +2451,9 @@ class _ActivitySheet extends StatelessWidget {
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onRefresh;
+  final VoidCallback? onNotifications;
 
-  const HomeScreen({super.key, this.onRefresh});
+  const HomeScreen({super.key, this.onRefresh, this.onNotifications});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -1816,6 +2464,7 @@ class _HomeScreenState extends State<HomeScreen>
   late final AnimationController _heroController;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     _heroController = AnimationController(
@@ -1825,11 +2474,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _heroController.dispose();
     super.dispose();
   }
 
+  /// Performs `_refresh` for this feature. Update this documentation when its contract changes.
   Future<void> _refresh() async {
     final controller = AppController.instance;
     if (controller.backendApi.isAuthenticated) {
@@ -1842,6 +2493,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
@@ -1855,12 +2507,22 @@ class _HomeScreenState extends State<HomeScreen>
 
     final library = controller.library;
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final homeBackground = colorFromName(settings.homeBackgroundColor);
 
     // Deliberately keep the empty home completely clean. All management
     // actions live in the navigation bar's More menu.
     if (library.isEmpty) {
       return Scaffold(
-        backgroundColor: const Color(0xFF070707),
+        backgroundColor: homeBackground,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          title: const Text('Home', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+          actions: [
+            ActivityButton(onPressed: widget.onNotifications),
+            const SizedBox(width: 8),
+          ],
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -1902,12 +2564,18 @@ class _HomeScreenState extends State<HomeScreen>
     final heroMedia = watched.isNotEmpty ? watched.first : library.first;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF070707),
-      body: RefreshIndicator(
-        color: Colors.white,
-        backgroundColor: const Color(0xFF171717),
-        onRefresh: _refresh,
-        child: CustomScrollView(
+      backgroundColor: homeBackground,
+      body: HomePositionedLayout(
+        navbarPosition: settings.navbarPosition,
+        storagePosition: settings.storageBarPosition,
+        liveSportsPosition: settings.liveSportsPosition,
+        storageThickness: settings.storageBarThickness,
+        showLiveSports: settings.showLiveSports,
+        child: RefreshIndicator(
+          color: Colors.white,
+          backgroundColor: const Color(0xFF171717),
+          onRefresh: _refresh,
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
@@ -1917,28 +2585,14 @@ class _HomeScreenState extends State<HomeScreen>
               backgroundColor: const Color(0xE6070707),
               surfaceTintColor: Colors.transparent,
               titleSpacing: 20,
-              title: Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      gradient: const LinearGradient(
-                        colors: [Colors.red, Color(0xFF8B0000)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 23),
-                  ),
-                  const SizedBox(width: 11),
-                  const Text(
-                    'STREAM',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 1.6),
-                  ),
-                ],
+              title: const Text(
+                'Home',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 1.1),
               ),
+              actions: [
+                ActivityButton(onPressed: widget.onNotifications),
+                const SizedBox(width: 8),
+              ],
             ),
             if (settings.showHero)
               SliverToBoxAdapter(
@@ -1955,6 +2609,7 @@ class _HomeScreenState extends State<HomeScreen>
               ..._buildHomeSectionSlivers(section, settings, watched, movies, tvShows, library, controller.recommendations),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
+          ),
         ),
       ),
     );
@@ -1983,6 +2638,9 @@ List<Widget> _buildHomeSectionSlivers(
       subtitle = 'Recently added to your library'; enabled = settings.showNewAdditions; break;
     case 'All Library': items = library; subtitle = 'Everything in your library'; enabled = settings.showAllLibrary; break;
     case 'Recommendations': items = recommendations; subtitle = 'Picked for your profile'; enabled = settings.showRecommendations; break;
+    case 'Music & Film':
+      return [if (settings.showMusic || settings.showFilm) SliverToBoxAdapter(child: _HomeMusicFilmChooser(settings: settings))];
+    case 'Live Sports': return const [];
     default: return const [];
   }
   if (!enabled || items.isEmpty) return const [];
@@ -1990,6 +2648,51 @@ List<Widget> _buildHomeSectionSlivers(
     SliverToBoxAdapter(child: _PremiumSectionHeader(title: section, subtitle: subtitle)),
     SliverToBoxAdapter(child: MediaHorizontalList(media: items)),
   ];
+}
+
+class _HomeMusicFilmChooser extends StatelessWidget {
+  final HomeCustomization settings;
+  const _HomeMusicFilmChooser({required this.settings});
+
+  Widget _panel(BuildContext context, {required String title, required String subtitle, required IconData icon, required List<Widget> actions}) {
+    return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(icon, size: 22), const SizedBox(width: 8), Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)))]),
+          const SizedBox(height: 5),
+          Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(height: 12),
+          ...actions,
+        ]),
+    );
+  }
+
+  Widget _action(BuildContext context, String label, IconData icon, Widget page) => SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)), icon: Icon(icon, size: 17), label: Text(label)));
+
+  @override
+  Widget build(BuildContext context) {
+    final panels = <Widget>[];
+    if (settings.showMusic) {
+      panels.add(_panel(context, title: 'Music', subtitle: 'Songs, albums and playlists', icon: Icons.music_note_rounded, actions: [
+        _action(context, 'Open Music', Icons.play_circle_outline_rounded, const MusicScreen()),
+      ]));
+    }
+    if (settings.showFilm) {
+      panels.add(_panel(context, title: 'Film', subtitle: 'Movies or shows', icon: Icons.movie_creation_outlined, actions: [
+        Row(children: [Expanded(child: _action(context, 'Movies', Icons.movie_outlined, const MoviesScreen())), const SizedBox(width: 8), Expanded(child: _action(context, 'Shows', Icons.tv_rounded, const SeriesScreen()))]),
+      ]));
+    }
+    if (panels.isEmpty) return const SizedBox.shrink();
+    final body = settings.homeMediaLayout == 'Top & Bottom'
+        ? Column(children: [for (var i = 0; i < panels.length; i++) ...[panels[i], if (i != panels.length - 1) const SizedBox(height: 12)]])
+        : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [for (var i = 0; i < panels.length; i++) ...[Expanded(child: panels[i]), if (i != panels.length - 1) const SizedBox(width: 12)]]);
+    return Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0), child: body);
+  }
 }
 
 class _HomeHero extends StatelessWidget {
@@ -2004,6 +2707,7 @@ class _HomeHero extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       height: 430,
@@ -2084,6 +2788,7 @@ class _PremiumSectionHeader extends StatelessWidget {
   const _PremiumSectionHeader({required this.title, required this.subtitle});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 13),
@@ -2104,139 +2809,46 @@ class _PremiumSectionHeader extends StatelessWidget {
 // ============================================================
 
 class ActivityButton extends StatelessWidget {
-  ActivityButton({super.key});
+  final VoidCallback? onPressed;
 
-  final controller = AppController.instance;
+  const ActivityButton({super.key, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: 'Activity',
-      icon: Stack(
-        children: [
-          const Icon(
-            Icons.notifications_outlined,
-          ),
-          if (controller.activity.isNotEmpty)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                width: 9,
-                height: 9,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
-      ),
-      onPressed: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.grey.shade900,
-          builder: (context) {
-            final activity =
-                AppController.instance.activity;
-
-            return SafeArea(
-              child: SizedBox(
-                height:
-                    MediaQuery.of(context).size.height * .7,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Activity',
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Expanded(
-                        child: activity.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No activity yet.',
-                                ),
-                              )
-                            : ListView.builder(
-                                itemCount:
-                                    activity.length,
-                                itemBuilder: (_, index) {
-                                  final event =
-                                      activity[index];
-
-                                  return ListTile(
-                                    leading:
-                                        const CircleAvatar(
-                                      child: Icon(
-                                        Icons.notifications,
-                                      ),
-                                    ),
-                                    title: Text(
-                                      event.title,
-                                    ),
-                                    subtitle: Text(
-                                      event.action,
-                                    ),
-                                    trailing: Text(
-                                      _formatActivityTime(
-                                        event.timestamp,
-                                      ),
-                                      style: TextStyle(
-                                        color: Colors
-                                            .grey
-                                            .shade500,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
+    final controller = AppController.instance;
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => IconButton(
+        tooltip: 'Notifications',
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.notifications_outlined),
+            if (controller.activity.isNotEmpty)
+              Positioned(
+                right: -1,
+                top: -1,
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
                   ),
                 ),
               ),
-            );
-          },
-        );
-      },
+          ],
+        ),
+        onPressed: onPressed ?? () {
+          showModalBottomSheet<void>(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (_) => const _ActivitySheet(),
+          );
+        },
+      ),
     );
-  }
-
-  String _formatActivityTime(
-    DateTime timestamp,
-  ) {
-    final difference =
-        DateTime.now().difference(timestamp);
-
-    if (difference.inSeconds < 60) {
-      return 'Just now';
-    }
-
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    }
-
-    if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    }
-
-    if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    }
-
-    return '${timestamp.month}/'
-        '${timestamp.day}/'
-        '${timestamp.year}';
   }
 }
 
@@ -2253,6 +2865,7 @@ class SectionTitle extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -2280,6 +2893,7 @@ class MediaHorizontalList extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return SizedBox(
       height: 245,
@@ -2311,6 +2925,7 @@ class MediaCard extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return SizedBox(
       width: 145,
@@ -2394,6 +3009,7 @@ class ActorsFallbackScreen extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -2471,6 +3087,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   Timer? _pollTimer;
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _pollTimer?.cancel();
     titleController.dispose();
@@ -2481,6 +3098,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     super.dispose();
   }
 
+  /// Performs `_startArmImport` for this feature. Update this documentation when its contract changes.
   Future<void> _startArmImport() async {
     if (importing) return;
 
@@ -2539,6 +3157,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     }
   }
 
+  /// Performs `_beginPolling` for this feature. Update this documentation when its contract changes.
   void _beginPolling() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(
@@ -2548,6 +3167,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     _pollArmJob();
   }
 
+  /// Performs `_pollArmJob` for this feature. Update this documentation when its contract changes.
   Future<void> _pollArmJob() async {
     final id = jobId;
     if (id == null) return;
@@ -2595,6 +3215,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     }
   }
 
+  /// Performs `_prepareReview` for this feature. Update this documentation when its contract changes.
   void _prepareReview(Map<String, dynamic> job) {
     final verificationData = job['verification'];
     final discType = job['discType']?.toString();
@@ -2662,6 +3283,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     });
   }
 
+  /// Performs `_normalizeMediaType` for this feature. Update this documentation when its contract changes.
   String _normalizeMediaType(String? value) {
     final v = (value ?? '').toLowerCase();
     if (v.contains('tv') || v.contains('series') || v.contains('show')) {
@@ -2670,6 +3292,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     return 'movie';
   }
 
+  /// Performs `_isImportableDiscTitle` for this feature. Update this documentation when its contract changes.
   bool _isImportableDiscTitle(Map<String, dynamic> title) {
     final type = (title['mediaType']?.toString() ?? 'movie').toLowerCase();
     final classification = (title['classification']?.toString() ?? 'feature').toLowerCase();
@@ -2685,6 +3308,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     return movieLike && featureLike;
   }
 
+  /// Performs `_strings` for this feature. Update this documentation when its contract changes.
   List<String> _strings(dynamic value) {
     if (value is! List) return <String>[];
     return value
@@ -2693,6 +3317,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         .toList();
   }
 
+  /// Performs `_addVerifiedDiscToLibrary` for this feature. Update this documentation when its contract changes.
   Future<void> _addVerifiedDiscToLibrary() async {
     if (!verificationPassed || reviewJob == null) return;
     if (!ownershipConfirmed) {
@@ -2738,7 +3363,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         : int.tryParse(job['discNumber']?.toString() ?? '');
 
     for (final titleData in selectedTitles) {
-      final title = titleData['title']?.toString().trim() ?? '';
+      final title = (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true ? titleData['canonicalTitle']?.toString().trim() : titleData['title']?.toString().trim()) ?? '';
+      final discTitle = titleData['discTitle']?.toString() ?? titleData['title']?.toString();
       if (title.isEmpty) continue;
 
       final metadata = titleData['metadata'] is Map
@@ -2768,7 +3394,14 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
             : trailer,
         discType: selectedDiscType,
-        discRegion: selectedRegion,
+        discRegion: titleData['detectedRegion']?.toString() ?? job['region']?.toString() ?? selectedRegion,
+        discTitle: discTitle,
+        discMarketCountry: titleData['discMarketCountry']?.toString() ?? job['discMarketCountry']?.toString(),
+        originalTitle: titleData['originalTitle']?.toString() ?? titleData['canonicalTitle']?.toString(),
+        originalLanguage: titleData['originalLanguage']?.toString(),
+        countryOfOrigin: titleData['countryOfOrigin']?.toString(),
+        canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
+
         discCollectionId: collectionId,
         discCollectionTitle: collectionTitle,
         discNumber: discNumber,
@@ -2803,6 +3436,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
 
@@ -2912,9 +3546,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                             }
                           });
                         },
-                        title: Text(title['title']?.toString() ?? 'Unknown title'),
+                        title: Text(title['canonicalTitle']?.toString() ?? title['title']?.toString() ?? 'Unknown title'),
                         subtitle: Text(
-                          '${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
+                          '${title['discTitle'] == null ? '' : 'Disc: ${title['discTitle']} • '}${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
                         ),
                         controlAffinity: ListTileControlAffinity.leading,
                       );
@@ -3124,6 +3758,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     );
   }
 
+  /// Performs `_formatSeconds` for this feature. Update this documentation when its contract changes.
   String _formatSeconds(dynamic value) {
     final seconds = value is num
         ? value.toInt()
@@ -3146,38 +3781,19 @@ class TrailersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final trailers = AppController.instance.library.where((m) => m.trailerUrl?.trim().isNotEmpty == true).toList();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Trailers'),
-      ),
-      body: const Center(
-        child: Text(
-          'Trailers will appear here when trailer metadata is added to MediaItem.',
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// MUSIC
-// ============================================================
-
-class MusicScreen extends StatelessWidget {
-  const MusicScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Music'),
-      ),
-      body: const Center(
-        child: Text(
-          'Music will appear here when music metadata is added to MediaItem.',
-        ),
-      ),
+      appBar: AppBar(title: const Text('Trailers')),
+      body: trailers.isEmpty
+          ? const Center(child: Text('No trailers have been added to your library yet. ARM review can add a YouTube link when a disc does not contain a trailer.'))
+          : ListView.builder(
+              padding: const EdgeInsets.all(18),
+              itemCount: trailers.length,
+              itemBuilder: (_, index) {
+                final media = trailers[index];
+                return Card(child: ListTile(leading: const Icon(Icons.play_circle_fill_rounded), title: Text(media.title, style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text(media.type), trailing: const Icon(Icons.open_in_new_rounded), onTap: () async { final uri = Uri.tryParse(media.trailerUrl!); if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication); }));
+              },
+            ),
     );
   }
 }
@@ -3197,6 +3813,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final controller = AppController.instance;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final account = controller.currentAccount;
 
@@ -3324,6 +3941,7 @@ class _ProfileManagementCard extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: current ? Colors.white.withValues(alpha: .09) : Colors.white.withValues(alpha: .045),
@@ -3372,6 +3990,7 @@ class _MainProfileAvatar extends StatelessWidget {
   const _MainProfileAvatar({required this.profile, required this.size});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final avatar = profile.avatarUrl;
     if (avatar != null && avatar.startsWith('avatar:')) {
@@ -3415,12 +4034,14 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
   final nameController = TextEditingController();
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     nameController.dispose();
     super.dispose();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Create Profile'),
@@ -3457,6 +4078,7 @@ class SubscribeDialog extends StatelessWidget {
   const SubscribeDialog({super.key});
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
@@ -3522,17 +4144,20 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   bool loading = false;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     loadGroupData();
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     messageController.dispose();
     super.dispose();
   }
 
+  /// Performs `loadGroupData` for this feature. Update this documentation when its contract changes.
   Future<void> loadGroupData() async {
     final controller = AppController.instance;
     if (!controller.backendApi.isAuthenticated) return;
@@ -3549,11 +4174,13 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
     }
   }
 
+  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Performs `sendMessage` for this feature. Update this documentation when its contract changes.
   void sendMessage() {
     final text = messageController.text.trim();
     if (text.isEmpty) return;
@@ -3562,11 +4189,13 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
     setState(() {});
   }
 
+  /// Performs `openRecommendationDialog` for this feature. Update this documentation when its contract changes.
   Future<void> openRecommendationDialog() async {
     await showDialog(context: context, builder: (_) => const AddGroupRecommendationDialog());
     if (mounted) setState(() {});
   }
 
+  /// Performs `refreshRecommendations` for this feature. Update this documentation when its contract changes.
   Future<void> refreshRecommendations() async {
     try {
       await AppController.instance.loadGroupRecommendations();
@@ -3576,6 +4205,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
     }
   }
 
+  /// Performs `refreshWishlist` for this feature. Update this documentation when its contract changes.
   Future<void> refreshWishlist() async {
     try {
       await AppController.instance.loadGroupWishlist();
@@ -3586,6 +4216,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     return Scaffold(
@@ -3628,7 +4259,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
                   if (controller.groupMessages.isEmpty)
                     const _GroupEmptyCard(icon: Icons.forum_outlined, title: 'No messages yet', subtitle: 'Start the conversation below.')
                   else
-                    ...controller.groupMessages.map((message) => _GroupMessageBubble(sender: message.sender, message: message.message, time: _formatTime(message.timestamp))),
+                    ...controller.groupMessages.map((message) => _GroupMessageBubble(sender: message.sender, message: message.message, time: _formatTime(message.timestamp), badgeName: controller.currentProfileBadge())),
                   if (controller.groupRecommendations.isNotEmpty) ...[
                     const SizedBox(height: 22),
                     _GroupSectionHeader(title: 'Recommendations', icon: Icons.auto_awesome_outlined, action: IconButton(onPressed: refreshRecommendations, icon: const Icon(Icons.refresh_rounded))),
@@ -3664,6 +4295,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
     );
   }
 
+  /// Performs `_formatTime` for this feature. Update this documentation when its contract changes.
   String _formatTime(DateTime timestamp) => '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
 }
 
@@ -3673,6 +4305,7 @@ class _GroupSectionHeader extends StatelessWidget {
   final Widget? action;
   const _GroupSectionHeader({required this.title, required this.icon, this.action});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Row(children: [Icon(icon, size: 20, color: Colors.white70), const SizedBox(width: 9), Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900))), if (action != null) action!]);
 }
 
@@ -3682,6 +4315,7 @@ class _SmallHeaderButton extends StatelessWidget {
   final VoidCallback onTap;
   const _SmallHeaderButton({required this.icon, required this.label, required this.onTap});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => TextButton.icon(onPressed: onTap, icon: Icon(icon, size: 17), label: Text(label), style: TextButton.styleFrom(foregroundColor: Colors.white));
 }
 
@@ -3691,6 +4325,7 @@ class _GroupEmptyCard extends StatelessWidget {
   final String subtitle;
   const _GroupEmptyCard({required this.icon, required this.title, required this.subtitle});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: .06))), child: Column(children: [Icon(icon, size: 42, color: Colors.white38), const SizedBox(height: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 12))]));
 }
 
@@ -3698,9 +4333,18 @@ class _GroupMessageBubble extends StatelessWidget {
   final String sender;
   final String message;
   final String time;
-  const _GroupMessageBubble({required this.sender, required this.message, required this.time});
+  final String? badgeName;
+  const _GroupMessageBubble({required this.sender, required this.message, required this.time, this.badgeName});
   @override
-  Widget build(BuildContext context) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(13), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const CircleAvatar(radius: 20, child: Icon(Icons.person_rounded, size: 20)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(sender, style: const TextStyle(fontWeight: FontWeight.w800))), Text(time, style: const TextStyle(color: Colors.white38, fontSize: 11))]), const SizedBox(height: 4), Text(message, style: const TextStyle(color: Colors.white70, height: 1.35))]))]));
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  Widget build(BuildContext context) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(13), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const CircleAvatar(radius: 20, child: Icon(Icons.person_rounded, size: 20)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Row(children: [Flexible(child: Text(sender, style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis)), if (badgeName != null && badgeName!.isNotEmpty) ...[const SizedBox(width: 6), _InlineBadgeTag(label: badgeName!)] ])), Text(time, style: const TextStyle(color: Colors.white38, fontSize: 11))]), const SizedBox(height: 4), Text(message, style: const TextStyle(color: Colors.white70, height: 1.35))]))]));
+}
+
+class _InlineBadgeTag extends StatelessWidget {
+  final String label;
+  const _InlineBadgeTag({required this.label});
+  @override
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.amber.withValues(alpha: .13), borderRadius: BorderRadius.circular(999)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.emoji_events_rounded, size: 10, color: Colors.amber), const SizedBox(width: 3), Text(label, style: const TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.w800))]));
 }
 
 // ============================================================
@@ -3736,6 +4380,7 @@ class _AddGroupRecommendationDialogState
   bool submitting = false;
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     titleController.dispose();
     customDurationController.dispose();
@@ -3772,6 +4417,7 @@ class _AddGroupRecommendationDialogState
     return 24;
   }
 
+  /// Performs `submitRecommendation` for this feature. Update this documentation when its contract changes.
   Future<void> submitRecommendation() async {
     if (submitting) {
       return;
@@ -3881,6 +4527,7 @@ class _AddGroupRecommendationDialogState
     }
   }
 
+  /// Performs `_formatDuration` for this feature. Update this documentation when its contract changes.
   String _formatDuration(int hours) {
     if (hours % 168 == 0) {
       final weeks = hours ~/ 168;
@@ -3904,6 +4551,7 @@ class _AddGroupRecommendationDialogState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text(
@@ -4227,6 +4875,7 @@ class _GroupRecommendationCardState
   bool refreshingAfterDeadline = false;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     _updateRemaining();
@@ -4234,6 +4883,7 @@ class _GroupRecommendationCardState
   }
 
   @override
+  /// Performs `didUpdateWidget` for this feature. Update this documentation when its contract changes.
   void didUpdateWidget(
     covariant GroupRecommendationCard oldWidget,
   ) {
@@ -4248,11 +4898,13 @@ class _GroupRecommendationCardState
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     countdownTimer?.cancel();
     super.dispose();
   }
 
+  /// Performs `_startCountdown` for this feature. Update this documentation when its contract changes.
   void _startCountdown() {
     countdownTimer?.cancel();
 
@@ -4272,6 +4924,7 @@ class _GroupRecommendationCardState
     );
   }
 
+  /// Performs `_updateRemaining` for this feature. Update this documentation when its contract changes.
   void _updateRemaining() {
     final endsAt =
         _dateTimeValue(
@@ -4309,6 +4962,7 @@ class _GroupRecommendationCardState
     }
   }
 
+  /// Performs `_refreshAfterDeadline` for this feature. Update this documentation when its contract changes.
   Future<void> _refreshAfterDeadline() async {
     if (refreshingAfterDeadline) {
       return;
@@ -4340,6 +4994,7 @@ class _GroupRecommendationCardState
     }
   }
 
+  /// Performs `_vote` for this feature. Update this documentation when its contract changes.
   Future<void> _vote(String vote) async {
     if (voting) {
       return;
@@ -4440,6 +5095,7 @@ class _GroupRecommendationCardState
     }
   }
 
+  /// Performs `_findUpdatedRecommendationStatus` for this feature. Update this documentation when its contract changes.
   String _findUpdatedRecommendationStatus() {
     final id =
         _stringValue(
@@ -4466,6 +5122,7 @@ class _GroupRecommendationCardState
     );
   }
 
+  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
   void _showMessage(String message) {
     if (!mounted) return;
 
@@ -4477,6 +5134,7 @@ class _GroupRecommendationCardState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final recommendation =
         widget.recommendation;
@@ -4935,6 +5593,7 @@ class _VotePercentage extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final color =
         label == 'YES'
@@ -5024,6 +5683,7 @@ class GroupWishlistCard
     required this.onChanged,
   });
 
+  /// Performs `remove` for this feature. Update this documentation when its contract changes.
   Future<void> remove(
     BuildContext context,
   ) async {
@@ -5061,6 +5721,7 @@ class GroupWishlistCard
     }
   }
 
+  /// Performs `acquire` for this feature. Update this documentation when its contract changes.
   Future<void> acquire(
     BuildContext context,
   ) async {
@@ -5130,6 +5791,7 @@ class GroupWishlistCard
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Card(
       margin:
@@ -5199,6 +5861,7 @@ class SelectAcquisitionProfileDialog
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text(
@@ -5294,11 +5957,13 @@ class _WishlistDialogState
   bool loading = false;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     loadWishlist();
   }
 
+  /// Performs `loadWishlist` for this feature. Update this documentation when its contract changes.
   Future<void> loadWishlist() async {
     final controller =
         AppController.instance;
@@ -5335,6 +6000,7 @@ class _WishlistDialogState
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller =
         AppController.instance;
@@ -5440,6 +6106,7 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
   final Set<String> selectedProfiles = <String>{};
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final account = controller.currentAccount;
@@ -5520,6 +6187,7 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
   String audio = 'Original audio';
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070707),

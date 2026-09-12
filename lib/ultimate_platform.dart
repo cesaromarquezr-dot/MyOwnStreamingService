@@ -1,3 +1,7 @@
+// FILE: `lib/ultimate_platform.dart`.
+// Purpose: Implements the ultimate platform portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
@@ -47,6 +51,7 @@ class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
   ];
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -98,6 +103,7 @@ class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
     );
   }
 
+  /// Performs `_surprise` for this feature. Update this documentation when its contract changes.
   void _surprise(BuildContext context) {
     final items = List<MediaItem>.from(AppController.instance.library);
     if (items.isEmpty) {
@@ -125,12 +131,14 @@ class _AiPanelState extends State<_AiPanel> {
   final q = TextEditingController();
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     q.dispose();
     super.dispose();
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final items = AppController.instance.library;
     final text = q.text.toLowerCase();
@@ -181,6 +189,7 @@ class _PlayerPanel extends StatelessWidget {
   const _PlayerPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -208,6 +217,7 @@ class _FamilyPanel extends StatelessWidget {
   const _FamilyPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -231,6 +241,7 @@ class _SocialPanel extends StatelessWidget {
   const _SocialPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -253,6 +264,7 @@ class _LibraryPanel extends StatelessWidget {
   const _LibraryPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final a = AppController.instance;
     return ListView(
@@ -278,6 +290,7 @@ class _CloudPanel extends StatelessWidget {
   const _CloudPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final a = AppController.instance;
     return ListView(
@@ -298,6 +311,7 @@ class _SecurityPanel extends StatelessWidget {
   const _SecurityPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -332,6 +346,7 @@ class _DevicesPanel extends StatelessWidget {
   const _DevicesPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     const devices = [
       'Android', 'iOS', 'Windows', 'macOS', 'Linux', 'Web',
@@ -357,6 +372,7 @@ class _StudioPanel extends StatelessWidget {
   const _StudioPanel();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final a = AppController.instance;
     const tools = [

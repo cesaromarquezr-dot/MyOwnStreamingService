@@ -1,3 +1,7 @@
+// FILE: `Backend/models/media.dart`.
+// Purpose: Implements the media portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 enum MediaType {
   movie,
   tvShow,
@@ -115,6 +119,7 @@ class Media {
     return type == MediaType.tvShow;
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -341,6 +346,7 @@ class WatchOption {
     this.url,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
@@ -391,6 +397,7 @@ class PurchaseOption {
     required this.format,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'retailer': retailer,

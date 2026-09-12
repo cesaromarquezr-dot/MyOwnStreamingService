@@ -1,3 +1,7 @@
+// FILE: `lib/backend_api.dart`.
+// Purpose: Implements the backend api portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -12,6 +16,7 @@ class BackendApiException implements Exception {
   });
 
   @override
+  /// Performs `toString` for this feature. Update this documentation when its contract changes.
   String toString() {
     if (statusCode != null) {
       return 'BackendApiException ($statusCode): $message';
@@ -35,10 +40,12 @@ class BackendApi {
   bool get isAuthenticated =>
       _token != null && _token!.isNotEmpty;
 
+  /// Performs `setToken` for this feature. Update this documentation when its contract changes.
   void setToken(String token) {
     _token = token;
   }
 
+  /// Performs `clearToken` for this feature. Update this documentation when its contract changes.
   void clearToken() {
     _token = null;
   }
@@ -87,7 +94,6 @@ class BackendApi {
   /// The backend creates the account with an inactive
   /// subscription and returns a payment session.
   Future<Map<String, dynamic>> signup({
-    required String username,
     required String email,
     required String password,
     required String firstProfileName,
@@ -112,7 +118,6 @@ class BackendApi {
       Uri.parse('$baseUrl/auth/signup'),
       headers: _headers,
       body: jsonEncode({
-        'username': username,
         'email': email,
         'password': password,
         'firstProfileName': firstProfileName,
@@ -168,14 +173,14 @@ class BackendApi {
 
   /// Logs into an account.
   Future<Map<String, dynamic>> login({
-    required String usernameOrEmail,
+    required String email,
     required String password,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: _headers,
       body: jsonEncode({
-        'login': usernameOrEmail,
+        'email': email.trim().toLowerCase(),
         'password': password,
       }),
     );
@@ -227,6 +232,7 @@ class BackendApi {
     return data;
   }
 
+  /// Performs `logout` for this feature. Update this documentation when its contract changes.
   Future<void> logout() async {
     if (!isAuthenticated) {
       return;
@@ -263,9 +269,9 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to retrieve group chat room.');
   }
 
-  Future<Map<String, dynamic>> sendGroupChatMessage({required String roomId, required String profileId, required String message}) async {
+  Future<Map<String, dynamic>> sendGroupChatMessage({required String roomId, required String profileId, required String message, String? badgeName}) async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/group/chat/${Uri.encodeComponent(roomId)}/messages'), headers: _headers, body: jsonEncode({'profileId': profileId, 'message': message}));
+    final response = await http.post(Uri.parse('$baseUrl/group/chat/${Uri.encodeComponent(roomId)}/messages'), headers: _headers, body: jsonEncode({'profileId': profileId, 'message': message, 'badgeName': badgeName}));
     return _requireSuccess(response, 'Unable to send group chat message.');
   }
 
@@ -505,6 +511,13 @@ class BackendApi {
     return data;
   }
 
+
+  /// Scans the home server's completed media directories.
+  Future<Map<String, dynamic>> scanServerLibrary() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/library/server-scan'), headers: _headers);
+    return _requireSuccess(response, 'Unable to scan the home server library.');
+  }
 
   Future<Map<String, dynamic>> getLibraryPrivacy() async {
     _requireAuthentication();
@@ -1444,7 +1457,7 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to connect to ARM.');
   }
 
-  Future<List<dynamic>> getArmDrives() async {
+   Future<List<dynamic>> getArmDrives() async {
   _requireAuthentication();
 
   final response = await http.get(
@@ -1465,6 +1478,7 @@ class BackendApi {
 
   return drives;
 }
+
 
   Future<Map<String, dynamic>> scanArmDisc({
     required String driveId,
@@ -1512,10 +1526,78 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to cancel the ARM import.');
   }
 
+
+  Future<Map<String, dynamic>> getLiveSports({String? sport, String? country}) async {
+    _requireAuthentication();
+    final params = <String, String>{};
+    if (sport != null && sport.isNotEmpty) params['sport'] = sport;
+    if (country != null && country.isNotEmpty) params['country'] = country;
+    final uri = Uri.parse('$baseUrl/sports/live').replace(queryParameters: params);
+    final response = await http.get(uri, headers: _headers);
+    return _requireSuccess(response, 'Unable to load live sports.');
+  }
+
+  Future<List<dynamic>> getSports() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/sports'), headers: _headers);
+    final data = await _requireSuccess(response, 'Unable to load sports.');
+    return data['sports'] is List ? data['sports'] as List : <dynamic>[];
+  }
+
+  Future<Map<String, dynamic>> getUpcomingSports({String? sport, String? country, int days = 7}) async {
+    _requireAuthentication();
+    final params = <String, String>{'days': days.toString()};
+    if (sport != null && sport.isNotEmpty) params['sport'] = sport;
+    if (country != null && country.isNotEmpty) params['country'] = country;
+    final uri = Uri.parse('$baseUrl/sports/upcoming').replace(queryParameters: params);
+    final response = await http.get(uri, headers: _headers);
+    return _requireSuccess(response, 'Unable to load upcoming sports.');
+  }
+
+  // ==========================================================
+  // HOME SERVER, MUSIC AND REVIEWS
+  // ==========================================================
+
+  /// Reads the home server storage dashboard.
+  Future<Map<String, dynamic>> getHomeServerStorage() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/server/storage'), headers: _headers);
+    return _requireSuccess(response, 'Unable to load home server storage.');
+  }
+
+  /// Reads the ARM connection and media-root configuration.
+  Future<Map<String, dynamic>> getHomeServerArm() async {
+    _requireAuthentication();
+    final response = await http.get(Uri.parse('$baseUrl/server/arm'), headers: _headers);
+    return _requireSuccess(response, 'Unable to load ARM server status.');
+  }
+
+  /// Loads reviews visible inside the current account.
+  Future<Map<String, dynamic>> getReviews(String mediaId) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/reviews').replace(queryParameters: {'mediaId': mediaId});
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load reviews.');
+  }
+
+  /// Loads public reviews without exposing email or account identifiers.
+  Future<Map<String, dynamic>> getGlobalReviews(String mediaId) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/reviews/global').replace(queryParameters: {'mediaId': mediaId});
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load global reviews.');
+  }
+
+  /// Publishes a profile review using a user-selected global pseudonym.
+  Future<Map<String, dynamic>> submitReview({required String mediaId, required String profileId, required double score, required String label, required String text, required String globalUsername}) async {
+    _requireAuthentication();
+    final response = await http.post(Uri.parse('$baseUrl/reviews'), headers: _headers, body: jsonEncode({'mediaId': mediaId, 'profileId': profileId, 'score': score, 'label': label, 'text': text, 'globalUsername': globalUsername}));
+    return _requireSuccess(response, 'Unable to submit review.');
+  }
+
   // ==========================================================
   // INTERNAL HELPERS
   // ==========================================================
 
+  /// Performs `_requireAuthentication` for this feature. Update this documentation when its contract changes.
   void _requireAuthentication() {
     if (!isAuthenticated) {
       throw BackendApiException(
@@ -1544,6 +1626,7 @@ class BackendApi {
   // RESPONSE DECODING
   // ==========================================================
 
+  /// Performs `verifySecurityAnswer` for this feature. Update this documentation when its contract changes.
   Future<bool> verifySecurityAnswer(String answer) async {
     if (!isAuthenticated) return false;
     final response = await http.post(
@@ -1558,6 +1641,7 @@ class BackendApi {
     return data['verified'] == true;
   }
 
+  /// Performs `_decodeResponse` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> _decodeResponse(
     http.Response response,
   ) {

@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/recommendations_routes.dart`.
+// Purpose: Implements the recommendations routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -21,6 +25,7 @@ class RecommendationsRoutes {
     required this.database,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     try {
       _addCorsHeaders(request.response);
@@ -313,6 +318,7 @@ class RecommendationsRoutes {
     );
   }
 
+  /// Performs `_addCorsHeaders` for this feature. Update this documentation when its contract changes.
   void _addCorsHeaders(
     HttpResponse response,
   ) {
@@ -332,6 +338,7 @@ class RecommendationsRoutes {
     );
   }
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   Future<void> _sendJson(
     HttpResponse response,
     int statusCode,

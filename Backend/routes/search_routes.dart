@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/search_routes.dart`.
+// Purpose: Implements the search routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -26,6 +30,7 @@ class SearchRoutes {
   // REQUEST HANDLER
   // ==========================================================
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(
     HttpRequest request,
   ) async {
@@ -161,6 +166,7 @@ class SearchRoutes {
   // JSON RESPONSE
   // ==========================================================
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   Future<void> _sendJson(
     HttpResponse response,
     int statusCode,

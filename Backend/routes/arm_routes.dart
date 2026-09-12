@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/arm_routes.dart`.
+// Purpose: Implements the arm routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +18,7 @@ class ArmRoutes {
     required this.authentication,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(
     HttpRequest request,
   ) async {
@@ -88,6 +93,7 @@ class ArmRoutes {
     }
   }
 
+  /// Performs `_status` for this feature. Update this documentation when its contract changes.
   Future<void> _status(
     HttpRequest request,
   ) async {
@@ -113,6 +119,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_drives` for this feature. Update this documentation when its contract changes.
   Future<void> _drives(
     HttpRequest request,
   ) async {
@@ -139,6 +146,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_scan` for this feature. Update this documentation when its contract changes.
   Future<void> _scan(
     HttpRequest request,
   ) async {
@@ -182,6 +190,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_import` for this feature. Update this documentation when its contract changes.
   Future<void> _import(
     HttpRequest request,
   ) async {
@@ -226,6 +235,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_job` for this feature. Update this documentation when its contract changes.
   Future<void> _job(
     HttpRequest request,
   ) async {
@@ -270,6 +280,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_cancel` for this feature. Update this documentation when its contract changes.
   Future<void> _cancel(
     HttpRequest request,
   ) async {
@@ -346,6 +357,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_sendUnauthorized` for this feature. Update this documentation when its contract changes.
   Future<void> _sendUnauthorized(
     HttpResponse response,
   ) async {
@@ -359,6 +371,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   Future<void> _sendJson(
     HttpResponse response,
     int statusCode,
@@ -374,6 +387,7 @@ class ArmRoutes {
     await response.close();
   }
 
+  /// Performs `_addCorsHeaders` for this feature. Update this documentation when its contract changes.
   void _addCorsHeaders(
     HttpResponse response,
   ) {
@@ -393,6 +407,7 @@ class ArmRoutes {
     );
   }
 
+  /// Performs `_cleanError` for this feature. Update this documentation when its contract changes.
   String _cleanError(Object error) {
     final message = error.toString();
 

@@ -1,12 +1,16 @@
+// FILE: `lib/next_gen_features.dart`.
+// Purpose: Implements the next gen features portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'player.dart';
 
-/// Phase 2 features are intentionally kept in one module so the existing
-/// 34-feature implementation remains stable while the app gains a richer
-/// personal streaming layer.
+// Phase 2 features are intentionally kept in one module so the existing
+// 34-feature implementation remains stable while the app gains a richer
+// personal streaming layer.
 class Phase2Store {
   Phase2Store._();
   static final Set<String> downloads = <String>{};
@@ -41,6 +45,7 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
   final tabs = const ['Discover', 'My Stuff', 'Stats', 'Settings'];
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -90,6 +95,7 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
     );
   }
 
+  /// Performs `_showWhatIsNew` for this feature. Update this documentation when its contract changes.
   void _showWhatIsNew(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -125,6 +131,7 @@ class _Bullet extends StatelessWidget {
   final String text;
   const _Bullet(this.text);
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -147,6 +154,7 @@ class _SmartDiscoverPanelState extends State<SmartDiscoverPanel> {
   final search = TextEditingController();
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() { search.dispose(); super.dispose(); }
 
   List<MediaItem> get all => AppController.instance.library;
@@ -165,6 +173,7 @@ class _SmartDiscoverPanelState extends State<SmartDiscoverPanel> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     return AnimatedBuilder(
@@ -234,6 +243,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
   String filter = 'All';
   final playlistController = TextEditingController();
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() { playlistController.dispose(); super.dispose(); }
 
   List<MediaItem> get items {
@@ -248,6 +258,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
     return AnimatedBuilder(
@@ -286,6 +297,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
     );
   }
 
+  /// Performs `_createPlaylist` for this feature. Update this documentation when its contract changes.
   void _createPlaylist() {
     final name = playlistController.text.trim();
     if (name.isEmpty) return;
@@ -294,6 +306,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
     setState(() {});
   }
 
+  /// Performs `_showPlaylist` for this feature. Update this documentation when its contract changes.
   void _showPlaylist(BuildContext context, String name) {
     final ids = Phase2Store.playlists[name] ?? <String>[];
     final media = AppController.instance.library.where((m) => ids.contains(m.id)).toList();
@@ -304,6 +317,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
 class WatchStatsPanel extends StatelessWidget {
   const WatchStatsPanel({super.key});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
     final watched = c.watched;
@@ -352,6 +366,7 @@ class Phase2SettingsPanel extends StatefulWidget {
 
 class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
@@ -383,6 +398,7 @@ class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
     );
   }
 
+  /// Performs `_settings` for this feature. Update this documentation when its contract changes.
   Widget _settings(String key, IconData icon, String title, String subtitle) {
     return SwitchListTile.adaptive(
       value: Phase2Store.getBool(key),
@@ -391,6 +407,7 @@ class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
     );
   }
 
+  /// Performs `_settingsGroup` for this feature. Update this documentation when its contract changes.
   Widget _settingsGroup(String title, List<Widget> children) => Card(margin: const EdgeInsets.only(bottom: 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Padding(padding: const EdgeInsets.fromLTRB(16, 15, 16, 3), child: Text(title.toUpperCase(), style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1))), ...children]));
 }
 
@@ -401,6 +418,7 @@ class DownloadManagerScreen extends StatefulWidget {
 }
 class _DownloadManagerScreenState extends State<DownloadManagerScreen> {
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
     return Scaffold(appBar: AppBar(title: const Text('Download Manager')), body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -426,6 +444,7 @@ class PrivacyCenterScreen extends StatefulWidget {
 }
 class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
     return Scaffold(appBar: AppBar(title: const Text('Privacy & Security')), body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -445,6 +464,7 @@ class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
       OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A data export request has been prepared. Connect a persistent backend export endpoint to make it downloadable.'))), icon: const Icon(Icons.file_download_outlined), label: const Text('EXPORT MY DATA')),
     ]));
   }
+  /// Performs `_confirmClearHistory` for this feature. Update this documentation when its contract changes.
   void _confirmClearHistory(BuildContext context) {
     showDialog<void>(context: context, builder: (_) => AlertDialog(title: const Text('Clear watch history?'), content: const Text('This removes local watched and playback-progress data from this app session.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')), FilledButton(onPressed: () { final c = AppController.instance; c.watched.clear(); c.playbackProgress.clear(); Navigator.pop(context); setState(() {}); }, child: const Text('CLEAR'))]));
   }
@@ -455,6 +475,7 @@ class _MediaRow extends StatelessWidget {
   final bool showDownload;
   const _MediaRow({required this.media, this.showDownload = false});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
     final progress = c.getPlaybackProgress(media.id);
@@ -472,6 +493,7 @@ class _MediaRow extends StatelessWidget {
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
     ));
   }
+  /// Performs `_action` for this feature. Update this documentation when its contract changes.
   void _action(BuildContext context, String action) {
     if (action == 'play') { Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: media))); return; }
     if (action == 'download') { Phase2Store.downloads.add(media.id); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${media.title} added to downloads.'))); return; }
@@ -486,7 +508,9 @@ class _Poster extends StatelessWidget {
   final MediaItem media; final double width; final double height;
   const _Poster({required this.media, required this.width, required this.height});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => ClipRRect(borderRadius: BorderRadius.circular(10), child: media.imageUrl != null && media.imageUrl!.isNotEmpty ? Image.network(media.imageUrl!, width: width, height: height, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fallback()) : _fallback());
+  /// Performs `_fallback` for this feature. Update this documentation when its contract changes.
   Widget _fallback() => Container(width: width, height: height, color: const Color(0xFF222222), child: const Icon(Icons.movie_outlined, color: Colors.white38));
 }
 
@@ -494,6 +518,7 @@ class _HeroCard extends StatelessWidget {
   final IconData icon; final String title; final String subtitle;
   const _HeroCard({required this.icon, required this.title, required this.subtitle});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(18), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 48, height: 48, decoration: BoxDecoration(color: Colors.red.withValues(alpha: .14), borderRadius: BorderRadius.circular(15)), child: Icon(icon, color: Colors.redAccent)), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(subtitle, style: const TextStyle(color: Colors.white60, height: 1.35))]))])));
 }
 
@@ -501,6 +526,7 @@ class _EmptyCard extends StatelessWidget {
   final String title; final String subtitle;
   const _EmptyCard({required this.title, required this.subtitle});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Icon(Icons.inbox_outlined, size: 36, color: Colors.white30), const SizedBox(height: 8), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54))])));
 }
 
@@ -508,6 +534,7 @@ class _MetricCard extends StatelessWidget {
   final String label; final String value; final IconData icon;
   const _MetricCard({required this.label, required this.value, required this.icon});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, color: Colors.redAccent), const Spacer(), Text(value, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)), Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12))])));
 }
 
@@ -515,7 +542,9 @@ class _StatStrip extends StatelessWidget {
   final int items, watched, liked, downloads;
   const _StatStrip({required this.items, required this.watched, required this.liked, required this.downloads});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_mini('Library', items), _mini('Watched', watched), _mini('Liked', liked), _mini('Offline', downloads)])));
+  /// Performs `_mini` for this feature. Update this documentation when its contract changes.
   Widget _mini(String label, int value) => Column(children: [Text('$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)), const SizedBox(height: 2), Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11))]);
 }
 
@@ -523,6 +552,7 @@ class _ProgressRow extends StatelessWidget {
   final String label; final double value; final int count;
   const _ProgressRow({required this.label, required this.value, required this.count});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))), Text('$count', style: const TextStyle(color: Colors.white54))]), const SizedBox(height: 5), ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: value.clamp(0, 1).toDouble(), minHeight: 7))]);
 }
 
@@ -530,6 +560,7 @@ class _Achievement extends StatelessWidget {
   final String title; final bool unlocked; final IconData icon;
   const _Achievement({required this.title, required this.unlocked, required this.icon});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(child: ListTile(leading: Icon(icon, color: unlocked ? Colors.amber : Colors.white24), title: Text(title), trailing: Icon(unlocked ? Icons.check_circle : Icons.lock_outline, color: unlocked ? Colors.greenAccent : Colors.white24)));
 }
 
@@ -537,6 +568,7 @@ class _QuickAction extends StatelessWidget {
   final IconData icon; final String title; final VoidCallback onTap;
   const _QuickAction({required this.icon, required this.title, required this.onTap});
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => FilledButton.tonalIcon(onPressed: onTap, icon: Icon(icon), label: Text(title));
 }
 
@@ -544,5 +576,6 @@ class _SectionTitle extends StatelessWidget {
   final String title; final IconData icon;
   const _SectionTitle(this.title, this.icon);
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Row(children: [Icon(icon, size: 19, color: Colors.redAccent), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))]);
 }

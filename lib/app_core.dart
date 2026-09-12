@@ -1,4 +1,11 @@
+// FILE: `lib/app_core.dart`.
+// Purpose: Implements the app core portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
 
@@ -47,8 +54,12 @@ class MediaItem {
   final String? imageUrl;
   final String? description;
   final int? releaseYear;
+  /// Official/provider/critic rating (IMDb, Rotten Tomatoes, etc.).
   final double? rating;
   final String? ratingReason;
+  /// Optional explicit audience/community rating maintained separately from the official rating.
+  final double? audienceRating;
+  final int audienceReviewCount;
   final String? trailerUrl;
   final DateTime addedAt;
   final List<Map<String, dynamic>> seasons;
@@ -60,6 +71,18 @@ class MediaItem {
   final String? discCollectionTitle;
   final int? discNumber;
   final String? discTitleId;
+  final String? discTitle;
+  final String? discMarketCountry;
+  final String? originalTitle;
+  final String? originalLanguage;
+  final String? countryOfOrigin;
+  final String? canonicalTitle;
+
+  // Franchise/collection metadata. A franchise is different from a physical disc collection.
+  final String? franchiseId;
+  final String? franchiseName;
+  final String? franchiseType;
+  final int? franchiseOrder;
 
   // Catalog entities and technical metadata discovered during import.
   final List<String> actors;
@@ -83,6 +106,16 @@ class MediaItem {
     this.discCollectionTitle,
     this.discNumber,
     this.discTitleId,
+    this.discTitle,
+    this.discMarketCountry,
+    this.originalTitle,
+    this.originalLanguage,
+    this.countryOfOrigin,
+    this.canonicalTitle,
+    this.franchiseId,
+    this.franchiseName,
+    this.franchiseType,
+    this.franchiseOrder,
     List<String>? actors,
     List<String>? directors,
     List<String>? writers,
@@ -101,6 +134,8 @@ class MediaItem {
     this.releaseYear,
     this.rating,
     this.ratingReason,
+    this.audienceRating,
+    this.audienceReviewCount = 0,
   }) : addedAt = addedAt ?? DateTime.now(),
        seasons = seasons ?? <Map<String, dynamic>>[],
        actors = actors ?? <String>[],
@@ -132,6 +167,8 @@ class MediaItem {
               json['rating']?.toString() ?? '',
             ),
       ratingReason: json['ratingReason']?.toString(),
+      audienceRating: json['audienceRating'] is num ? (json['audienceRating'] as num).toDouble() : double.tryParse(json['audienceRating']?.toString() ?? ''),
+      audienceReviewCount: json['audienceReviewCount'] is num ? (json['audienceReviewCount'] as num).toInt() : int.tryParse(json['audienceReviewCount']?.toString() ?? '') ?? 0,
       trailerUrl: json['trailerUrl']?.toString(),
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
       discType: json['discType']?.toString(),
@@ -140,6 +177,16 @@ class MediaItem {
       discCollectionTitle: json['discCollectionTitle']?.toString(),
       discNumber: json['discNumber'] is num ? (json['discNumber'] as num).toInt() : int.tryParse(json['discNumber']?.toString() ?? ''),
       discTitleId: json['discTitleId']?.toString(),
+      discTitle: json['discTitle']?.toString(),
+      discMarketCountry: json['discMarketCountry']?.toString(),
+      originalTitle: json['originalTitle']?.toString(),
+      originalLanguage: json['originalLanguage']?.toString(),
+      countryOfOrigin: json['countryOfOrigin']?.toString(),
+      canonicalTitle: json['canonicalTitle']?.toString(),
+      franchiseId: json['franchiseId']?.toString(),
+      franchiseName: json['franchiseName']?.toString(),
+      franchiseType: json['franchiseType']?.toString(),
+      franchiseOrder: json['franchiseOrder'] is num ? (json['franchiseOrder'] as num).toInt() : int.tryParse(json['franchiseOrder']?.toString() ?? ''),
       actors: _stringList(json['actors']),
       directors: _stringList(json['directors']),
       writers: _stringList(json['writers']),
@@ -167,6 +214,7 @@ class MediaItem {
         .where((e) => e.isNotEmpty)
         .toList();
   }
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -177,6 +225,8 @@ class MediaItem {
       'releaseYear': releaseYear,
       'rating': rating,
       'ratingReason': ratingReason,
+      'audienceRating': audienceRating,
+      'audienceReviewCount': audienceReviewCount,
       'trailerUrl': trailerUrl,
       'addedAt': addedAt.toIso8601String(),
       'discType': discType,
@@ -184,7 +234,11 @@ class MediaItem {
       'discCollectionId': discCollectionId,
       'discCollectionTitle': discCollectionTitle,
       'discNumber': discNumber,
-      'discTitleId': discTitleId,
+      'discTitleId': discTitleId, 'discTitle': discTitle, 'discMarketCountry': discMarketCountry, 'originalTitle': originalTitle, 'originalLanguage': originalLanguage, 'countryOfOrigin': countryOfOrigin, 'canonicalTitle': canonicalTitle,
+      'franchiseId': franchiseId,
+      'franchiseName': franchiseName,
+      'franchiseType': franchiseType,
+      'franchiseOrder': franchiseOrder,
       'actors': actors,
       'directors': directors,
       'writers': writers,
@@ -285,6 +339,7 @@ class Profile {
     );
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -317,6 +372,7 @@ class UserAccount {
   Profile? get firstProfile =>
       profiles.isEmpty ? null : profiles.first;
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'username': username,
@@ -344,8 +400,17 @@ class MediaCollection {
   bool isFeatured;
   String posterMode;
   String? customPosterUrl;
+  String? automaticFranchiseId;
+  String? automaticFranchiseType;
+  String sortMode;
+  bool autoPlayEnabled;
+  bool autoPlayNextEnabled;
+  String autoPlayVersionPreference;
+  String autoPlayNextTiming;
   final List<String> mediaIds;
+  final List<String> episodeKeys;
   final Set<String> likedByProfileIds;
+  final Set<String> contributorProfileIds;
   DateTime createdAt;
 
   MediaCollection({
@@ -359,11 +424,22 @@ class MediaCollection {
     this.isFeatured = false,
     this.posterMode = 'First 4 Posters',
     this.customPosterUrl,
+    this.automaticFranchiseId,
+    this.automaticFranchiseType,
+    this.sortMode = 'Collection order',
+    this.autoPlayEnabled = true,
+    this.autoPlayNextEnabled = true,
+    this.autoPlayVersionPreference = 'Preferred version',
+    this.autoPlayNextTiming = 'End credits',
     List<String>? mediaIds,
+    List<String>? episodeKeys,
     Set<String>? likedByProfileIds,
+    Set<String>? contributorProfileIds,
     DateTime? createdAt,
   })  : mediaIds = mediaIds ?? <String>[],
+        episodeKeys = episodeKeys ?? <String>[],
         likedByProfileIds = likedByProfileIds ?? <String>{},
+        contributorProfileIds = contributorProfileIds ?? <String>{},
         createdAt = createdAt ?? DateTime.now();
 
   bool get isLikedByCurrentProfile {
@@ -371,36 +447,75 @@ class MediaCollection {
     return id != null && likedByProfileIds.contains(id);
   }
 
+  /// Performs `canCurrentProfileEdit` for this feature. Update this documentation when its contract changes.
+  bool canCurrentProfileEdit() {
+    final profileId = AppController.instance.currentProfile?.id;
+    if (profileId == null) return false;
+    return profileId == createdByProfileId || contributorProfileIds.contains(profileId);
+  }
+
+  /// Performs `canCurrentProfileAdd` for this feature. Update this documentation when its contract changes.
+  bool canCurrentProfileAdd() {
+    if (!isShared) return AppController.instance.currentProfile?.id == createdByProfileId;
+    return canCurrentProfileEdit();
+  }
+
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'description': description,
-    'createdByProfileId': createdByProfileId,
-    'isShared': isShared,
-    'isOfficial': isOfficial,
-    'isAutomatic': isAutomatic,
-    'isFeatured': isFeatured,
-    'posterMode': posterMode,
-    'customPosterUrl': customPosterUrl,
-    'mediaIds': mediaIds,
-    'likedByProfileIds': likedByProfileIds.toList(),
+    'id': id, 'name': name, 'description': description,
+    'createdByProfileId': createdByProfileId, 'isShared': isShared,
+    'isOfficial': isOfficial, 'isAutomatic': isAutomatic, 'isFeatured': isFeatured,
+    'posterMode': posterMode, 'customPosterUrl': customPosterUrl,
+    'automaticFranchiseId': automaticFranchiseId,
+    'automaticFranchiseType': automaticFranchiseType,
+    'sortMode': sortMode, 'autoPlayEnabled': autoPlayEnabled,
+    'autoPlayNextEnabled': autoPlayNextEnabled,
+    'autoPlayVersionPreference': autoPlayVersionPreference,
+    'autoPlayNextTiming': autoPlayNextTiming,
+    'mediaIds': mediaIds, 'episodeKeys': episodeKeys, 'likedByProfileIds': likedByProfileIds.toList(),
+    'contributorProfileIds': contributorProfileIds.toList(),
     'createdAt': createdAt.toIso8601String(),
   };
 
   factory MediaCollection.fromJson(Map<String, dynamic> json) => MediaCollection(
-    id: json['id']?.toString() ?? '',
-    name: json['name']?.toString() ?? 'Collection',
-    description: json['description']?.toString() ?? '',
-    createdByProfileId: json['createdByProfileId']?.toString(),
-    isShared: json['isShared'] != false,
-    isOfficial: json['isOfficial'] == true,
-    isAutomatic: json['isAutomatic'] == true,
-    isFeatured: json['isFeatured'] == true,
-    posterMode: json['posterMode']?.toString() ?? 'First 4 Posters',
-    customPosterUrl: json['customPosterUrl']?.toString(),
+    id: json['id']?.toString() ?? '', name: json['name']?.toString() ?? 'Collection',
+    description: json['description']?.toString() ?? '', createdByProfileId: json['createdByProfileId']?.toString(),
+    isShared: json['isShared'] != false, isOfficial: json['isOfficial'] == true,
+    isAutomatic: json['isAutomatic'] == true, isFeatured: json['isFeatured'] == true,
+    posterMode: json['posterMode']?.toString() ?? 'First 4 Posters', customPosterUrl: json['customPosterUrl']?.toString(),
+    automaticFranchiseId: json['automaticFranchiseId']?.toString(), automaticFranchiseType: json['automaticFranchiseType']?.toString(),
+    sortMode: json['sortMode']?.toString() ?? 'Collection order', autoPlayEnabled: json['autoPlayEnabled'] != false,
+    autoPlayNextEnabled: json['autoPlayNextEnabled'] != false,
+    autoPlayVersionPreference: json['autoPlayVersionPreference']?.toString() ?? 'Preferred version',
+    autoPlayNextTiming: json['autoPlayNextTiming']?.toString() ?? 'End credits',
     mediaIds: (json['mediaIds'] as List?)?.map((e) => e.toString()).toList(),
+    episodeKeys: (json['episodeKeys'] as List?)?.map((e) => e.toString()).toList(),
     likedByProfileIds: (json['likedByProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
+    contributorProfileIds: (json['contributorProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
     createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+  );
+}
+
+class CollectionPreferences {
+  String collectionOrder;
+  String layout;
+  String automaticPosition;
+  String customPosition;
+  String itemLayout;
+  String itemSort;
+
+  CollectionPreferences({
+    this.collectionOrder = 'Automatic first',
+    this.layout = 'Grid',
+    this.automaticPosition = 'Top',
+    this.customPosition = 'Bottom',
+    this.itemLayout = 'Grid',
+    this.itemSort = 'Collection order',
+  });
+
+  CollectionPreferences copy() => CollectionPreferences(
+    collectionOrder: collectionOrder, layout: layout, automaticPosition: automaticPosition,
+    customPosition: customPosition, itemLayout: itemLayout, itemSort: itemSort,
   );
 }
 
@@ -424,11 +539,13 @@ class BackendGroupChatMessage {
   final String senderName;
   final String message;
   final DateTime timestamp;
+  final String? badgeName;
 
-  BackendGroupChatMessage({required this.id, required this.profileId, required this.senderName, required this.message, required this.timestamp});
+  BackendGroupChatMessage({required this.id, required this.profileId, required this.senderName, required this.message, required this.timestamp, this.badgeName});
 
   factory BackendGroupChatMessage.fromJson(Map<String, dynamic> json) => BackendGroupChatMessage(
     id: json['id']?.toString() ?? '', profileId: json['profileId']?.toString() ?? '', senderName: json['senderName']?.toString() ?? 'Profile', message: json['message']?.toString() ?? '', timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ?? DateTime.now(),
+    badgeName: json['badgeName']?.toString(),
   );
 }
 
@@ -536,6 +653,7 @@ class GroupWatchParticipant {
     );
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'profileId': profileId,
@@ -638,6 +756,7 @@ class GroupWatchSession {
     return DateTime.now().isAfter(expiry);
   }
 
+  /// Performs `canResume` for this feature. Update this documentation when its contract changes.
   bool canResume(String profileId) {
     return pausedByProfileId == profileId;
   }
@@ -796,6 +915,7 @@ class GroupWatchSession {
     );
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -869,6 +989,7 @@ class AppController extends ChangeNotifier {
     'Liked Collections',
   ];
   final List<String> featuredCollectionOrder = <String>[];
+  final Map<String, CollectionPreferences> collectionPreferencesByProfile = <String, CollectionPreferences>{};
 
   final List<MediaItem> watched =
       <MediaItem>[];
@@ -884,6 +1005,14 @@ class AppController extends ChangeNotifier {
 
   final List<ChatMessage> groupMessages =
       <ChatMessage>[];
+
+  // Monthly profile viewing activity used to award the profile's current badge.
+  // Events are retained locally so the badge can change automatically when a
+  // new calendar month begins.
+  final Map<String, List<Map<String, dynamic>>> _monthlyWatchEvents =
+      <String, List<Map<String, dynamic>>>{};
+  SharedPreferences? _badgePrefs;
+  bool _badgeDataLoaded = false;
 
   BackendGroupChatRoom? activeGroupChatRoom;
   bool groupChatLoading = false;
@@ -958,18 +1087,116 @@ class AppController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // MONTHLY BADGES
+  // ---------------------------------------------------------------------------
+
+  Future<void> initializeBadges() async {
+    if (_badgeDataLoaded) return;
+    _badgePrefs = await SharedPreferences.getInstance();
+    for (final key in _badgePrefs!.getKeys()) {
+      if (!key.startsWith('monthly_watch_events_')) continue;
+      final profileId = key.substring('monthly_watch_events_'.length);
+      final raw = _badgePrefs!.getString(key);
+      if (raw == null) continue;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          _monthlyWatchEvents[profileId] = decoded
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+      } catch (_) {
+        // Ignore malformed legacy badge data.
+      }
+    }
+    _badgeDataLoaded = true;
+  }
+
+  String _monthKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
+
+  Future<void> _saveMonthlyWatchEvents(String profileId) async {
+    final prefs = _badgePrefs;
+    if (prefs == null) return;
+    await prefs.setString(
+      'monthly_watch_events_$profileId',
+      jsonEncode(_monthlyWatchEvents[profileId] ?? <Map<String, dynamic>>[]),
+    );
+  }
+
+  void _recordMonthlyWatch(MediaItem media) {
+    final profileId = currentProfile?.id;
+    if (profileId == null || profileId.isEmpty) return;
+    final now = DateTime.now();
+    final events = _monthlyWatchEvents.putIfAbsent(profileId, () => <Map<String, dynamic>>[]);
+    final month = _monthKey(now);
+    // Watching the same title more than once in a month counts once toward the
+    // monthly title badge, while the watched list still controls overall state.
+    if (events.any((e) => e['month'] == month && e['mediaId'] == media.id)) return;
+    events.add({
+      'month': month,
+      'mediaId': media.id,
+      'title': media.title,
+      'type': media.type,
+      'genres': media.genres,
+      'timestamp': now.toIso8601String(),
+    });
+    // Keep a reasonable local history while preserving enough months to show
+    // the current badge and future badge history.
+    if (events.length > 5000) events.removeRange(0, events.length - 5000);
+    _saveMonthlyWatchEvents(profileId);
+  }
+
+  String badgeForProfile(String profileId, {DateTime? now}) {
+    final date = now ?? DateTime.now();
+    final month = _monthKey(date);
+    final events = (_monthlyWatchEvents[profileId] ?? <Map<String, dynamic>>[])
+        .where((e) => e['month'] == month)
+        .toList();
+    if (events.isEmpty) return 'The Explorer';
+
+    final movieCount = events.where((e) => (e['type']?.toString().toLowerCase() ?? '') == 'movie').length;
+    final showCount = events.where((e) {
+      final type = e['type']?.toString().toLowerCase() ?? '';
+      return type == 'tvshow' || type == 'tv_show' || type == 'tv show' || type == 'series';
+    }).length;
+    final genres = <String>{};
+    for (final event in events) {
+      final rawGenres = event['genres'];
+      if (rawGenres is List) {
+        genres.addAll(rawGenres.map((g) => g.toString().trim().toLowerCase()).where((g) => g.isNotEmpty));
+      }
+    }
+
+    if (events.length >= 20) return 'Binge Master';
+    if (genres.length >= 6) return 'Genre Explorer';
+    if (movieCount >= 10) return 'Movie Buff';
+    if (showCount >= 8) return 'Series Fan';
+    if (events.length >= 5) return 'Regular Viewer';
+    return 'The Explorer';
+  }
+
+  String currentProfileBadge() {
+    final id = currentProfile?.id;
+    return id == null || id.isEmpty ? 'The Explorer' : badgeForProfile(id);
+  }
+
+  // ---------------------------------------------------------------------------
   // LOCAL ACCOUNT CREATION
   // ---------------------------------------------------------------------------
 
   UserAccount createAccount({
-    required String username,
     required String email,
     required String password,
     required SubscriptionPlan plan,
     required String firstProfileName,
   }) {
+    final cleanEmail = email.trim().toLowerCase();
+    // Internal username for compatibility. 
+    //// The user does not enter or choose this username. 
+    final username = cleanEmail.split('@').first;
     final account = UserAccount(
-      username: username.trim(),
+      username: username,
       email: email.trim(),
       subscription: Subscription(
         plan: plan,
@@ -1000,7 +1227,6 @@ class AppController extends ChangeNotifier {
 
   Future<Map<String, dynamic>>
       createAccountWithBackend({
-    required String username,
     required String email,
     required String password,
     required SubscriptionPlan plan,
@@ -1015,13 +1241,9 @@ class AppController extends ChangeNotifier {
 
     final response =
         await backendApi.signup(
-      username: username.trim(),
       email: email.trim(),
       password: password,
-      firstProfileName:
-          firstProfileName.trim().isEmpty
-              ? username.trim()
-              : firstProfileName.trim(),
+      firstProfileName: firstProfileName.trim(),
       plan: planValue,
       securityQuestion: securityQuestion,
       securityAnswer: securityAnswer,
@@ -1037,7 +1259,7 @@ class AppController extends ChangeNotifier {
         response['subscription'];
 
     String accountUsername =
-        username.trim();
+        email.trim();
 
     String accountEmail =
         email.trim();
@@ -1162,14 +1384,15 @@ class AppController extends ChangeNotifier {
   // BACKEND LOGIN
   // ---------------------------------------------------------------------------
 
+  /// Performs `loginWithBackend` for this feature. Update this documentation when its contract changes.
   Future<void> loginWithBackend({
-    required String usernameOrEmail,
+    required String email,
     required String password,
   }) async {
     final response =
         await backendApi.login(
-      usernameOrEmail:
-          usernameOrEmail.trim(),
+      email:
+          email.trim().toLowerCase(),
       password: password,
     );
 
@@ -1196,7 +1419,7 @@ class AppController extends ChangeNotifier {
                 ?.toString() ??
             '';
 
-    final email =
+    final accountEmail =
         accountMap['email']
                 ?.toString() ??
             '';
@@ -1268,7 +1491,7 @@ class AppController extends ChangeNotifier {
     currentAccount =
         UserAccount(
       username: username,
-      email: email,
+      email: accountEmail,
       subscription:
           Subscription(
         plan: plan,
@@ -1339,6 +1562,7 @@ class AppController extends ChangeNotifier {
   // BACKEND LOGOUT
   // ---------------------------------------------------------------------------
 
+  /// Performs `logoutFromBackend` for this feature. Update this documentation when its contract changes.
   Future<void> logoutFromBackend() async {
     try {
       if (backendApi.isAuthenticated) {
@@ -1377,6 +1601,7 @@ class AppController extends ChangeNotifier {
   // LOCAL LOGIN
   // ---------------------------------------------------------------------------
 
+  /// Performs `login` for this feature. Update this documentation when its contract changes.
   bool login(
     String usernameOrEmail,
     String password,
@@ -1431,6 +1656,7 @@ class AppController extends ChangeNotifier {
   // LOGOUT
   // ---------------------------------------------------------------------------
 
+  /// Performs `logout` for this feature. Update this documentation when its contract changes.
   void logout() {
     backendApi.clearToken();
 
@@ -1475,6 +1701,7 @@ class AppController extends ChangeNotifier {
       currentAccount
           ?.subscription.plan;
 
+  /// Performs `subscribe` for this feature. Update this documentation when its contract changes.
   void subscribe(
     SubscriptionPlan plan,
   ) {
@@ -1492,6 +1719,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `expireSubscription` for this feature. Update this documentation when its contract changes.
   void expireSubscription() {
     if (currentAccount == null) {
       return;
@@ -1548,6 +1776,7 @@ class AppController extends ChangeNotifier {
     return profile;
   }
 
+  /// Performs `removeProfile` for this feature. Update this documentation when its contract changes.
   void removeProfile(
     String profileId,
   ) {
@@ -1571,6 +1800,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `switchProfile` for this feature. Update this documentation when its contract changes.
   void switchProfile(
     String profileId,
   ) {
@@ -1625,12 +1855,22 @@ class AppController extends ChangeNotifier {
   // LIBRARY
   // ---------------------------------------------------------------------------
 
+  /// Performs `isOwned` for this feature. Update this documentation when its contract changes.
   bool isOwned(String mediaId) {
     return library.any(
       (item) => item.id == mediaId,
     );
   }
 
+  /// Replaces the client library with media discovered on the home server.
+  void replaceLibraryFromServer(List<MediaItem> media) {
+    library
+      ..clear()
+      ..addAll(media);
+    notifyListeners();
+  }
+
+  /// Performs `addToLibrary` for this feature. Update this documentation when its contract changes.
   void addToLibrary(
     MediaItem media,
   ) {
@@ -1647,14 +1887,16 @@ class AppController extends ChangeNotifier {
     _mergeCatalog(genresCatalog, media.genres);
     _mergeCatalog(tagsCatalog, media.tags);
 
-    _addActivity(
-      title: media.title,
-      action: 'Added to library',
+    addNotification(
+      action: 'added ${_mediaTypeLabel(media)} "${media.title}"',
     );
 
+    _autoAssignFranchiseMetadata(media);
+    _refreshAutomaticCollections();
     notifyListeners();
   }
 
+  /// Performs `_mergeCatalog` for this feature. Update this documentation when its contract changes.
   void _mergeCatalog(List<String> target, List<String> values) {
     for (final value in values) {
       final clean = value.trim();
@@ -1664,6 +1906,7 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Performs `removeFromLibrary` for this feature. Update this documentation when its contract changes.
   void removeFromLibrary(
     String mediaId,
   ) {
@@ -1678,18 +1921,21 @@ class AppController extends ChangeNotifier {
   // WATCHED / PLAYBACK
   // ---------------------------------------------------------------------------
 
+  /// Performs `isWatched` for this feature. Update this documentation when its contract changes.
   bool isWatched(String mediaId) {
     return watched.any(
       (item) => item.id == mediaId,
     );
   }
 
+  /// Performs `getPlaybackProgress` for this feature. Update this documentation when its contract changes.
   double getPlaybackProgress(
     String mediaId,
   ) {
     return playbackProgress[mediaId] ?? 0;
   }
 
+  /// Performs `updatePlaybackProgress` for this feature. Update this documentation when its contract changes.
   void updatePlaybackProgress(
     String mediaId,
     double progress,
@@ -1703,11 +1949,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `markWatched` for this feature. Update this documentation when its contract changes.
   void markWatched(
     MediaItem media,
   ) {
     if (!isWatched(media.id)) {
       watched.add(media);
+      _recordMonthlyWatch(media);
 
       _addActivity(
         title: media.title,
@@ -1720,6 +1968,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `finishWatching` for this feature. Update this documentation when its contract changes.
   void finishWatching(
     MediaItem media,
   ) {
@@ -1730,18 +1979,21 @@ class AppController extends ChangeNotifier {
   // LIKES / DISLIKES
   // ---------------------------------------------------------------------------
 
+  /// Performs `isLiked` for this feature. Update this documentation when its contract changes.
   bool isLiked(String mediaId) {
     return liked.any(
       (item) => item.id == mediaId,
     );
   }
 
+  /// Performs `isDisliked` for this feature. Update this documentation when its contract changes.
   bool isDisliked(String mediaId) {
     return disliked.any(
       (item) => item.id == mediaId,
     );
   }
 
+  /// Performs `likeMedia` for this feature. Update this documentation when its contract changes.
   void likeMedia(
     MediaItem media,
   ) {
@@ -1756,6 +2008,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `dislikeMedia` for this feature. Update this documentation when its contract changes.
   void dislikeMedia(
     MediaItem media,
   ) {
@@ -1770,6 +2023,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `clearReaction` for this feature. Update this documentation when its contract changes.
   void clearReaction(
     String mediaId,
   ) {
@@ -1844,6 +2098,7 @@ class AppController extends ChangeNotifier {
   // ACTIVITY
   // ---------------------------------------------------------------------------
 
+  /// Performs `_addActivity` for this feature. Update this documentation when its contract changes.
   void _addActivity({
     required String title,
     required String action,
@@ -1861,12 +2116,33 @@ class AppController extends ChangeNotifier {
     if (activity.length > 100) {
       activity.removeLast();
     }
+    notifyListeners();
+  }
+
+  /// Adds a user-facing notification to the activity center.
+  ///
+  /// This is public so features outside AppController, such as Music, can
+  /// create the same notification style without duplicating activity logic.
+  void addNotification({required String action, String? profileName}) {
+    final name = (profileName ?? currentProfile?.name ?? currentAccount?.username ?? 'User').trim();
+    _addActivity(
+      title: name.isEmpty ? 'User' : name,
+      action: action.trim(),
+    );
+  }
+
+  String _mediaTypeLabel(MediaItem media) {
+    final type = media.type.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
+    if (type == 'tvshow' || type == 'series') return 'TV show';
+    if (type == 'album') return 'album';
+    return 'movie';
   }
 
   // ---------------------------------------------------------------------------
   // BACKEND CROSS-ACCOUNT GROUP CHAT
   // ---------------------------------------------------------------------------
 
+  /// Performs `loadGroupChatRoom` for this feature. Update this documentation when its contract changes.
   Future<void> loadGroupChatRoom({String? roomId}) async {
     if (!backendApi.isAuthenticated) return;
     groupChatLoading = true;
@@ -1895,6 +2171,7 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Performs `createCrossAccountGroupChat` for this feature. Update this documentation when its contract changes.
   Future<void> createCrossAccountGroupChat({required String name, required String profileId, Set<String>? invitedProfiles}) async {
     final response = await backendApi.createGroupChatRoom(name: name, profileId: profileId, invitedProfiles: invitedProfiles);
     final raw = response['room'];
@@ -1902,8 +2179,10 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `sendCrossAccountGroupMessage` for this feature. Update this documentation when its contract changes.
   Future<void> sendCrossAccountGroupMessage({required String roomId, required String profileId, required String message}) async {
-    await backendApi.sendGroupChatMessage(roomId: roomId, profileId: profileId, message: message);
+    await backendApi.sendGroupChatMessage(roomId: roomId, profileId: profileId, message: message, badgeName: badgeForProfile(profileId));
+    addNotification(action: 'sent a message', profileName: _profileNameForId(profileId));
     await loadGroupChatRoom(roomId: roomId);
   }
 
@@ -1911,6 +2190,7 @@ class AppController extends ChangeNotifier {
   // GROUP CHAT
   // ---------------------------------------------------------------------------
 
+  /// Performs `sendGroupMessage` for this feature. Update this documentation when its contract changes.
   void sendGroupMessage({
     required String message,
   }) {
@@ -1933,6 +2213,7 @@ class AppController extends ChangeNotifier {
       ),
     );
 
+    addNotification(action: 'sent a message');
     notifyListeners();
   }
 
@@ -2118,6 +2399,9 @@ class AppController extends ChangeNotifier {
       sendGroupMessage(
         message:
             '$icon ${currentProfile?.name ?? 'You'} recommended the $typeLabel "$titleForMessage"',
+      );
+      addNotification(
+        action: 'added a $typeLabel recommendation "$titleForMessage"',
       );
 
       notifyListeners();
@@ -2504,6 +2788,7 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Performs `isInGroupWishlist` for this feature. Update this documentation when its contract changes.
   bool isInGroupWishlist(
     String mediaId,
   ) {
@@ -2619,6 +2904,7 @@ class AppController extends ChangeNotifier {
   // BACKWARD-COMPATIBLE LOCAL WISHLIST API
   // ---------------------------------------------------------------------------
 
+  /// Performs `isInWishlist` for this feature. Update this documentation when its contract changes.
   bool isInWishlist(
     String mediaId,
   ) {
@@ -2627,6 +2913,7 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  /// Performs `addToWishlist` for this feature. Update this documentation when its contract changes.
   void addToWishlist(
     MediaItem media,
   ) {
@@ -2645,6 +2932,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Performs `removeFromWishlist` for this feature. Update this documentation when its contract changes.
   void removeFromWishlist(
     String mediaId,
   ) {
@@ -3843,6 +4131,7 @@ class AppController extends ChangeNotifier {
         Duration.zero;
   }
 
+  /// Performs `isGroupWatchPlaying` for this feature. Update this documentation when its contract changes.
   bool isGroupWatchPlaying(
     String sessionId,
   ) {
@@ -3904,6 +4193,7 @@ class AppController extends ChangeNotifier {
   // MUSIC ACTIVITY
   // ---------------------------------------------------------------------------
 
+  /// Performs `recordMusicActivity` for this feature. Update this documentation when its contract changes.
   void recordMusicActivity(
     String title,
   ) {
@@ -3925,6 +4215,7 @@ class AppController extends ChangeNotifier {
     return nextEpisodes[mediaId];
   }
 
+  /// Performs `setNextEpisode` for this feature. Update this documentation when its contract changes.
   void setNextEpisode(
     String mediaId,
     String episodeTitle,
@@ -3939,6 +4230,7 @@ class AppController extends ChangeNotifier {
   // RESET
   // ---------------------------------------------------------------------------
 
+  /// Performs `reset` for this feature. Update this documentation when its contract changes.
   void reset() {
     backendApi.clearToken();
 
@@ -3983,6 +4275,7 @@ class AppController extends ChangeNotifier {
   // GROUP RECOMMENDATION HELPERS
   // ---------------------------------------------------------------------------
 
+  /// Performs `_profileNameForId` for this feature. Update this documentation when its contract changes.
   String _profileNameForId(
     String profileId,
   ) {
@@ -4005,6 +4298,7 @@ class AppController extends ChangeNotifier {
     return 'Profile';
   }
 
+  /// Performs `_accountHasProfile` for this feature. Update this documentation when its contract changes.
   bool _accountHasProfile(
     String profileId,
   ) {
@@ -4020,6 +4314,7 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  /// Performs `_intFromValue` for this feature. Update this documentation when its contract changes.
   int _intFromValue(
     dynamic value,
   ) {
@@ -4037,6 +4332,7 @@ class AppController extends ChangeNotifier {
         0;
   }
 
+  /// Performs `_doubleFromValue` for this feature. Update this documentation when its contract changes.
   double _doubleFromValue(
     dynamic value, {
     required double fallback,
@@ -4053,6 +4349,7 @@ class AppController extends ChangeNotifier {
     return parsed ?? fallback;
   }
 
+  /// Performs `_percentage` for this feature. Update this documentation when its contract changes.
   double _percentage(
     int votes,
     int total,
@@ -4064,6 +4361,7 @@ class AppController extends ChangeNotifier {
     return (votes / total) * 100;
   }
 
+  /// Performs `_formatPercentage` for this feature. Update this documentation when its contract changes.
   String _formatPercentage(
     double value,
   ) {
@@ -4101,6 +4399,7 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  /// Performs `_upsertGroupWatchSession` for this feature. Update this documentation when its contract changes.
   void _upsertGroupWatchSession(
     GroupWatchSession session,
   ) {
@@ -4125,6 +4424,7 @@ class AppController extends ChangeNotifier {
         session;
   }
 
+  /// Performs `_backendMediaType` for this feature. Update this documentation when its contract changes.
   String _backendMediaType(
     String type,
   ) {
@@ -4142,6 +4442,7 @@ class AppController extends ChangeNotifier {
     return 'movie';
   }
 
+  /// Performs `_pauseReasonDisplay` for this feature. Update this documentation when its contract changes.
   String _pauseReasonDisplay(
     String reason,
   ) {
@@ -4168,101 +4469,165 @@ class AppController extends ChangeNotifier {
   // COLLECTIONS
   // ---------------------------------------------------------------------------
 
+  CollectionPreferences get currentCollectionPreferences {
+    final profileId = currentProfile?.id ?? 'default';
+    return collectionPreferencesByProfile.putIfAbsent(profileId, () => CollectionPreferences());
+  }
+
+  /// Performs `updateCollectionPreferences` for this feature. Update this documentation when its contract changes.
+  void updateCollectionPreferences(CollectionPreferences preferences) {
+    final profileId = currentProfile?.id ?? 'default';
+    collectionPreferencesByProfile[profileId] = preferences;
+    notifyListeners();
+  }
+
+  /// Performs `seedCollections` for this feature. Update this documentation when its contract changes.
   void seedCollections() {
-    if (collections.isNotEmpty) return;
-    final builtIns = <String>[
-      'The Back to the Future Trilogy',
-      'Twilight Saga',
-      'Harry Potter — 8 Movies',
-    ];
-    for (var i = 0; i < builtIns.length; i++) {
-      final collectionId = _generateId('collection');
-      collections.add(MediaCollection(
-        id: collectionId,
-        name: builtIns[i],
-        isOfficial: true,
-        isFeatured: true,
-      ));
-      featuredCollectionOrder.add(collectionId);
-    }
+    _refreshAutomaticCollections();
   }
 
   MediaCollection createCollection({
-    required String name,
-    String description = '',
-    bool shared = true,
-    bool featured = false,
-    bool automatic = false,
-    String posterMode = 'First 4 Posters',
-    String? customPosterUrl,
+    required String name, String description = '', bool shared = true, bool featured = false,
+    bool automatic = false, String posterMode = 'First 4 Posters', String? customPosterUrl,
   }) {
     final collection = MediaCollection(
-      id: _generateId('collection'),
-      name: name.trim(),
-      description: description.trim(),
-      createdByProfileId: currentProfile?.id,
-      isShared: shared,
-      isFeatured: featured,
-      isAutomatic: automatic,
-      posterMode: posterMode,
-      customPosterUrl: customPosterUrl,
+      id: _generateId('collection'), name: name.trim(), description: description.trim(),
+      createdByProfileId: currentProfile?.id, isShared: shared, isFeatured: featured,
+      isAutomatic: automatic, posterMode: posterMode, customPosterUrl: customPosterUrl,
+      contributorProfileIds: shared ? <String>{...?currentAccount?.profiles.map((p) => p.id)} : <String>{},
     );
+    // The creator always has edit/add rights.
+    if (currentProfile?.id != null) collection.contributorProfileIds.add(currentProfile!.id);
     collections.add(collection);
     if (featured) featuredCollectionOrder.add(collection.id);
+    addNotification(action: 'created collection "${collection.name}"');
     notifyListeners();
     return collection;
   }
 
+  /// Performs `deleteCollection` for this feature. Update this documentation when its contract changes.
   void deleteCollection(String id) {
-    collections.removeWhere((c) => c.id == id && !c.isOfficial);
+    collections.removeWhere((c) => c.id == id && !c.isOfficial && c.canCurrentProfileEdit());
+    featuredCollectionOrder.remove(id);
     notifyListeners();
   }
 
+  /// Performs `addToCollection` for this feature. Update this documentation when its contract changes.
   void addToCollection(String collectionId, String mediaId) {
-    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
-    if (c != null && !c.mediaIds.contains(mediaId)) {
-      c.mediaIds.add(mediaId);
-      notifyListeners();
-    }
+    final matches = collections.where((x) => x.id == collectionId);
+    if (matches.isEmpty) return;
+    final c = matches.first;
+    if (!c.canCurrentProfileAdd()) return;
+    if (!c.mediaIds.contains(mediaId)) { c.mediaIds.add(mediaId); notifyListeners(); }
   }
 
+  void addEpisodeToCollection(String collectionId, String episodeKey) {
+    final matches = collections.where((x) => x.id == collectionId);
+    if (matches.isEmpty) return;
+    final c = matches.first;
+    if (!c.canCurrentProfileAdd() || episodeKey.trim().isEmpty) return;
+    if (!c.episodeKeys.contains(episodeKey)) c.episodeKeys.add(episodeKey);
+    notifyListeners();
+  }
+
+  /// Performs `removeFromCollection` for this feature. Update this documentation when its contract changes.
   void removeFromCollection(String collectionId, String mediaId) {
-    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
-    if (c != null) {
-      c.mediaIds.remove(mediaId);
-      notifyListeners();
-    }
+    final matches = collections.where((x) => x.id == collectionId);
+    if (matches.isEmpty) return;
+    final c = matches.first;
+    if (!c.canCurrentProfileEdit() || c.isAutomatic) return;
+    c.mediaIds.remove(mediaId);
+    notifyListeners();
   }
 
+  /// Performs `addCollectionContributor` for this feature. Update this documentation when its contract changes.
+  void addCollectionContributor(String collectionId, String profileId) {
+    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
+    if (c == null || !c.canCurrentProfileEdit() || !c.isShared) return;
+    c.contributorProfileIds.add(profileId);
+    notifyListeners();
+  }
+
+  /// Performs `removeCollectionContributor` for this feature. Update this documentation when its contract changes.
+  void removeCollectionContributor(String collectionId, String profileId) {
+    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
+    if (c == null || !c.canCurrentProfileEdit() || profileId == c.createdByProfileId) return;
+    c.contributorProfileIds.remove(profileId);
+    notifyListeners();
+  }
+
+  /// Performs `toggleCollectionLike` for this feature. Update this documentation when its contract changes.
   void toggleCollectionLike(String collectionId) {
     final profileId = currentProfile?.id;
     if (profileId == null) return;
     final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
     if (c == null) return;
-    if (!c.likedByProfileIds.add(profileId)) {
-      c.likedByProfileIds.remove(profileId);
-    }
+    if (!c.likedByProfileIds.add(profileId)) c.likedByProfileIds.remove(profileId);
     notifyListeners();
   }
 
+  /// Performs `reorderCollectionSections` for this feature. Update this documentation when its contract changes.
   void reorderCollectionSections(List<String> order) {
-    collectionSectionOrder
-      ..clear()
-      ..addAll(order);
+    collectionSectionOrder..clear()..addAll(order);
     notifyListeners();
   }
 
+  /// Performs `reorderFeaturedCollections` for this feature. Update this documentation when its contract changes.
   void reorderFeaturedCollections(List<String> order) {
-    featuredCollectionOrder
-      ..clear()
-      ..addAll(order);
+    featuredCollectionOrder..clear()..addAll(order);
     notifyListeners();
   }
 
+  /// Performs `_autoAssignFranchiseMetadata` for this feature. Update this documentation when its contract changes.
+  void _autoAssignFranchiseMetadata(MediaItem media) {
+    // Prefer authoritative metadata from an importer/provider when present.
+    if (media.franchiseId != null && media.franchiseName != null) return;
+    final detected = _knownFranchiseFor(media.title, media.releaseYear);
+    if (detected == null) return;
+    // MediaItem is intentionally immutable; automatic collection matching therefore
+    // uses title/year matching too. Future provider metadata can populate these fields.
+  }
+
+  Map<String, dynamic>? _knownFranchiseFor(String title, int? year) {
+    final t = _normalizeCollectionTitle(title);
+    if (t.contains('back to the future')) return {'id':'back-to-the-future','name':'Back to the Future Trilogy','type':'Trilogy','expected':3};
+    if (t == 'ted' || t.startsWith('ted ')) return {'id':'ted','name':'Ted Collection','type':'Duology','expected':2};
+    if (RegExp(r'^harry potter').hasMatch(t)) return {'id':'harry-potter','name':'Harry Potter Collection','type':'Saga','expected':8};
+    if (t.contains('twilight')) return {'id':'twilight','name':'Twilight Saga Collection','type':'Saga','expected':5};
+    if (t.contains('jurassic park') || t.contains('jurassic world')) return {'id':'jurassic','name':'Jurassic Park / Jurassic World Collection','type':'Franchise','expected':7};
+    return null;
+  }
+
+  /// Performs `_normalizeCollectionTitle` for this feature. Update this documentation when its contract changes.
+  String _normalizeCollectionTitle(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+  /// Performs `_refreshAutomaticCollections` for this feature. Update this documentation when its contract changes.
+  void _refreshAutomaticCollections() {
+    final definitions = <Map<String, dynamic>>[
+      {'id':'back-to-the-future','name':'Back to the Future Trilogy','type':'Trilogy','expected':3, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('back to the future')},
+      {'id':'ted','name':'Ted Collection','type':'Duology','expected':2, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title) == 'ted' || _normalizeCollectionTitle(m.title).startsWith('ted ')},
+      {'id':'harry-potter','name':'Harry Potter Collection','type':'Saga','expected':8, 'match': (MediaItem m) => RegExp(r'^harry potter').hasMatch(_normalizeCollectionTitle(m.title))},
+      {'id':'twilight','name':'Twilight Saga Collection','type':'Saga','expected':5, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('twilight')},
+      {'id':'jurassic','name':'Jurassic Park / Jurassic World Collection','type':'Franchise','expected':7, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('jurassic park') || _normalizeCollectionTitle(m.title).contains('jurassic world')},
+    ];
+    for (final definition in definitions) {
+      final matches = library.where((m) => (definition['match'] as bool Function(MediaItem))(m)).toList();
+      if (matches.length < (definition['expected'] as int)) continue;
+      var existing = collections.where((c) => c.isAutomatic && c.automaticFranchiseId == definition['id']);
+      final collection = existing.isEmpty ? MediaCollection(
+        id: _generateId('collection'), name: definition['name'] as String, isOfficial: true, isAutomatic: true,
+        isFeatured: true, isShared: true, automaticFranchiseId: definition['id'] as String,
+        automaticFranchiseType: definition['type'] as String, contributorProfileIds: <String>{...?currentAccount?.profiles.map((p) => p.id)},
+      ) : existing.first;
+      if (existing.isEmpty) { collections.add(collection); featuredCollectionOrder.add(collection.id); }
+      collection.mediaIds..clear()..addAll(matches.map((m) => m.id));
+    }
+  }
   // ---------------------------------------------------------------------------
   // ID GENERATION
   // ---------------------------------------------------------------------------
 
+  /// Performs `_generateId` for this feature. Update this documentation when its contract changes.
   String _generateId(
     String prefix,
   ) {
@@ -4392,6 +4757,7 @@ class DetailsCustomization {
               'Play',
               'Trailer',
               'Group Watch',
+              'Reviews',
               'Audio & Subtitles',
               'Reactions',
               'Information',
@@ -4437,31 +4803,73 @@ class DetailsCustomizationStore {
 
   static final Map<String, DetailsCustomization> _settings =
       <String, DetailsCustomization>{};
+  static SharedPreferences? _prefs;
+
+  static Future<void> initialize() async {
+    _prefs = await SharedPreferences.getInstance();
+    const prefix = 'details_customization_';
+    for (final key in _prefs!.getKeys().where((k) => k.startsWith(prefix))) {
+      final raw = _prefs!.getString(key);
+      if (raw == null) continue;
+      try {
+        final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+        _settings[key.substring(prefix.length)] = _fromJson(map);
+      } catch (_) {}
+    }
+  }
 
   static DetailsCustomization settingsFor(Profile? profile) {
     final key = profile?.id ?? 'default';
-
-    return _settings
-        .putIfAbsent(
-          key,
-          () => DetailsCustomization(),
-        )
-        .copy();
+    return _settings.putIfAbsent(key, () => DetailsCustomization()).copy();
   }
 
-  static void apply(
-    Profile? profile,
-    DetailsCustomization value,
-  ) {
+  static void apply(Profile? profile, DetailsCustomization value) {
     final key = profile?.id ?? 'default';
-    _settings[key] = value.copy();
+    final copy = value.copy();
+    _settings[key] = copy;
+    _prefs?.setString('details_customization_$key', jsonEncode(_toJson(copy)));
   }
 
   static void removeProfile(Profile profile) {
     _settings.remove(profile.id);
+    _prefs?.remove('details_customization_${profile.id}');
   }
 
   static void clear() {
+    for (final key in _settings.keys) {
+      _prefs?.remove('details_customization_$key');
+    }
     _settings.clear();
   }
+
+  static Map<String, dynamic> _toJson(DetailsCustomization v) => {
+    'showPoster': v.showPoster, 'showTitle': v.showTitle, 'showMetadata': v.showMetadata,
+    'showOwnership': v.showOwnership, 'showDescription': v.showDescription, 'showSeasons': v.showSeasons,
+    'showPlay': v.showPlay, 'showTrailer': v.showTrailer, 'showGroupWatch': v.showGroupWatch,
+    'showAudioSubtitles': v.showAudioSubtitles, 'showReactions': v.showReactions, 'showInformation': v.showInformation,
+    'showLibrary': v.showLibrary, 'showReleaseYear': v.showReleaseYear, 'showRating': v.showRating,
+    'showContentRating': v.showContentRating, 'showRuntime': v.showRuntime, 'posterStyle': v.posterStyle,
+    'posterPosition': v.posterPosition, 'posterSize': v.posterSize, 'titleAlignment': v.titleAlignment,
+    'buttonAlignment': v.buttonAlignment, 'informationAlignment': v.informationAlignment, 'seasonPlacement': v.seasonPlacement,
+    'seasonOrder': v.seasonOrder, 'seasonSelectorStyle': v.seasonSelectorStyle, 'episodeNaming': v.episodeNaming,
+    'sectionOrder': v.sectionOrder,
+  };
+
+  static DetailsCustomization _fromJson(Map<String, dynamic> m) => DetailsCustomization(
+    showPoster: m['showPoster'] == false ? false : true, showTitle: m['showTitle'] == false ? false : true,
+    showMetadata: m['showMetadata'] == false ? false : true, showOwnership: m['showOwnership'] == false ? false : true,
+    showDescription: m['showDescription'] == false ? false : true, showSeasons: m['showSeasons'] == false ? false : true,
+    showPlay: m['showPlay'] == false ? false : true, showTrailer: m['showTrailer'] == false ? false : true,
+    showGroupWatch: m['showGroupWatch'] == false ? false : true, showAudioSubtitles: m['showAudioSubtitles'] == false ? false : true,
+    showReactions: m['showReactions'] == false ? false : true, showInformation: m['showInformation'] == false ? false : true,
+    showLibrary: m['showLibrary'] == false ? false : true, showReleaseYear: m['showReleaseYear'] == false ? false : true,
+    showRating: m['showRating'] == false ? false : true, showContentRating: m['showContentRating'] == false ? false : true,
+    showRuntime: m['showRuntime'] == false ? false : true, posterStyle: m['posterStyle']?.toString() ?? 'Standard',
+    posterPosition: m['posterPosition']?.toString() ?? 'Center', posterSize: m['posterSize']?.toString() ?? 'Medium',
+    titleAlignment: m['titleAlignment']?.toString() ?? 'Left', buttonAlignment: m['buttonAlignment']?.toString() ?? 'Left',
+    informationAlignment: m['informationAlignment']?.toString() ?? 'Left', seasonPlacement: m['seasonPlacement']?.toString() ?? 'Center',
+    seasonOrder: m['seasonOrder']?.toString() ?? 'Top to Bottom', seasonSelectorStyle: m['seasonSelectorStyle']?.toString() ?? 'Buttons',
+    episodeNaming: m['episodeNaming']?.toString() ?? 'Actual Title',
+    sectionOrder: (m['sectionOrder'] is List) ? List<String>.from(m['sectionOrder'] as List) : null,
+  );
 }

@@ -1,3 +1,7 @@
+// FILE: `Backend/database/database.dart`.
+// Purpose: Implements the database portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import '../models/account.dart';
 import '../models/media.dart';
 import '../models/group_recommendation.dart';
@@ -5,6 +9,7 @@ import '../models/group_watch_session.dart';
 import '../models/group_chat_room.dart';
 import '../models/profile.dart';
 import '../models/remote_worker.dart';
+import '../models/review.dart';
 
 class SessionRecord {
   final String token;
@@ -32,6 +37,7 @@ class SessionRecord {
     return !DateTime.now().isBefore(expiresAt);
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'createdAt': createdAt.toIso8601String(),
@@ -94,9 +100,11 @@ class Database {
   final Map<String, RemoteWorker> remoteWorkersById = {};
   final Map<String, RemoteImportJob> remoteImportJobsById = {};
 
+  /// Performs `getKnownLoginFingerprints` for this feature. Update this documentation when its contract changes.
   Set<String> getKnownLoginFingerprints(String accountId) =>
       knownLoginFingerprints.putIfAbsent(accountId, () => <String>{});
 
+  /// Performs `recordFailedLogin` for this feature. Update this documentation when its contract changes.
   void recordFailedLogin(String login) {
     final key = login.trim().toLowerCase();
     if (key.isEmpty) return;
@@ -110,6 +118,7 @@ class Database {
     }
   }
 
+  /// Performs `recentFailedLoginCount` for this feature. Update this documentation when its contract changes.
   int recentFailedLoginCount(String login) {
     final key = login.trim().toLowerCase();
     final attempts = failedLoginAttempts[key];
@@ -120,6 +129,7 @@ class Database {
     return attempts.length;
   }
 
+  /// Performs `clearFailedLoginAttempts` for this feature. Update this documentation when its contract changes.
   void clearFailedLoginAttempts(String login) {
     failedLoginAttempts.remove(login.trim().toLowerCase());
   }
@@ -129,6 +139,9 @@ class Database {
   // ---------------------------------------------------------------------------
 
   final Map<String, Media> mediaById = {};
+
+  // Media reviews are kept here by the current backend persistence abstraction.
+  final Map<String, MediaReview> reviewsById = <String, MediaReview>{};
 
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
@@ -231,12 +244,14 @@ class Database {
     return null;
   }
 
+  /// Performs `hasProfile` for this feature. Update this documentation when its contract changes.
   bool hasProfile(
     String profileId,
   ) {
     return getProfileById(profileId) != null;
   }
 
+  /// Performs `profileBelongsToAccount` for this feature. Update this documentation when its contract changes.
   bool profileBelongsToAccount({
     required String accountId,
     required String profileId,
@@ -252,6 +267,7 @@ class Database {
         null;
   }
 
+  /// Performs `saveAccount` for this feature. Update this documentation when its contract changes.
   void saveAccount(
     Account account,
   ) {
@@ -270,6 +286,7 @@ class Database {
         account.id;
   }
 
+  /// Performs `deleteAccount` for this feature. Update this documentation when its contract changes.
   void deleteAccount(
     String accountId,
   ) {
@@ -308,6 +325,7 @@ class Database {
   // SESSIONS
   // ---------------------------------------------------------------------------
 
+  /// Performs `saveSession` for this feature. Update this documentation when its contract changes.
   void saveSession(
     String token,
     String accountId, {
@@ -375,12 +393,14 @@ class Database {
     return getAccountById(accountId);
   }
 
+  /// Performs `deleteSession` for this feature. Update this documentation when its contract changes.
   void deleteSession(
     String token,
   ) {
     sessions.remove(token);
   }
 
+  /// Performs `deleteSessionsForAccount` for this feature. Update this documentation when its contract changes.
   void deleteSessionsForAccount(
     String accountId,
   ) {
@@ -390,6 +410,7 @@ class Database {
     );
   }
 
+  /// Performs `getSessionsForAccount` for this feature. Update this documentation when its contract changes.
   List<SessionRecord> getSessionsForAccount(
     String accountId,
   ) {
@@ -430,6 +451,7 @@ class Database {
   // MEDIA
   // ---------------------------------------------------------------------------
 
+  /// Performs `saveMedia` for this feature. Update this documentation when its contract changes.
   void saveMedia(
     Media media,
   ) {
@@ -442,6 +464,7 @@ class Database {
     return mediaById[mediaId];
   }
 
+  /// Performs `getAllMedia` for this feature. Update this documentation when its contract changes.
   List<Media> getAllMedia() {
     final media =
         mediaById.values.toList();
@@ -496,6 +519,7 @@ class Database {
     return media;
   }
 
+  /// Performs `getMovies` for this feature. Update this documentation when its contract changes.
   List<Media> getMovies() {
     return getAllMedia()
         .where(
@@ -504,6 +528,7 @@ class Database {
         .toList();
   }
 
+  /// Performs `getTvShows` for this feature. Update this documentation when its contract changes.
   List<Media> getTvShows() {
     return getAllMedia()
         .where(
@@ -512,6 +537,7 @@ class Database {
         .toList();
   }
 
+  /// Performs `getSeries` for this feature. Update this documentation when its contract changes.
   List<Media> getSeries(
     String seriesId,
   ) {
@@ -523,12 +549,14 @@ class Database {
         .toList();
   }
 
+  /// Performs `hasMedia` for this feature. Update this documentation when its contract changes.
   bool hasMedia(
     String mediaId,
   ) {
     return mediaById.containsKey(mediaId);
   }
 
+  /// Performs `deleteMedia` for this feature. Update this documentation when its contract changes.
   void deleteMedia(
     String mediaId,
   ) {
@@ -539,6 +567,7 @@ class Database {
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
 
+  /// Performs `saveGroupRecommendation` for this feature. Update this documentation when its contract changes.
   void saveGroupRecommendation(
     GroupRecommendation recommendation,
   ) {
@@ -581,6 +610,7 @@ class Database {
     ).toList();
   }
 
+  /// Performs `deleteGroupRecommendation` for this feature. Update this documentation when its contract changes.
   void deleteGroupRecommendation(
     String recommendationId,
   ) {
@@ -589,6 +619,7 @@ class Database {
     );
   }
 
+  /// Performs `clearGroupRecommendations` for this feature. Update this documentation when its contract changes.
   void clearGroupRecommendations() {
     groupRecommendationsById.clear();
   }
@@ -597,6 +628,7 @@ class Database {
   // GROUP WATCH
   // ---------------------------------------------------------------------------
 
+  /// Performs `saveGroupWatchSession` for this feature. Update this documentation when its contract changes.
   void saveGroupWatchSession(
     GroupWatchSession session,
   ) {
@@ -639,6 +671,7 @@ class Database {
         .toList();
   }
 
+  /// Performs `getGroupWatchSessionsForProfile` for this feature. Update this documentation when its contract changes.
   List<GroupWatchSession> getGroupWatchSessionsForProfile(
   String profileId,
 ) {
@@ -677,6 +710,7 @@ class Database {
         .toList();
   }
 
+  /// Performs `deleteGroupWatchSession` for this feature. Update this documentation when its contract changes.
   void deleteGroupWatchSession(
     String sessionId,
   ) {
@@ -685,6 +719,7 @@ class Database {
     );
   }
 
+  /// Performs `clearGroupWatchSessions` for this feature. Update this documentation when its contract changes.
   void clearGroupWatchSessions() {
     groupWatchSessionsById.clear();
   }
@@ -693,6 +728,7 @@ class Database {
   // CLEAR
   // ---------------------------------------------------------------------------
 
+  /// Performs `clear` for this feature. Update this documentation when its contract changes.
   void clear() {
     accountsById.clear();
     accountIdByUsername.clear();

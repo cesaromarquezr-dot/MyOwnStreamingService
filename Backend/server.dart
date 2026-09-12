@@ -1,3 +1,7 @@
+// FILE: `Backend/server.dart`.
+// Purpose: Implements the server portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -17,6 +21,9 @@ import 'routes/storage_routes.dart';
 import 'routes/platform_routes.dart';
 import 'routes/library_routes.dart';
 import 'routes/legal_routes.dart';
+import 'routes/sports_routes.dart';
+import 'routes/review_routes.dart';
+import 'routes/home_server_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -27,6 +34,9 @@ import 'services/group_recommendation_service.dart';
 import 'services/group_watch_service.dart';
 import 'services/email_service.dart';
 import 'services/remote_access_service.dart';
+import 'services/sports_service.dart';
+import 'services/review_service.dart';
+import 'services/home_server_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -170,6 +180,9 @@ Future<void> main() async {
   final platformRoutes = PlatformRoutes(authentication: authentication);
   final libraryRoutes = LibraryRoutes(authentication: authentication);
   final legalRoutes = LegalRoutes(authentication: authentication);
+  final sportsRoutes = SportsRoutes(authentication: authentication, service: const SportsService());
+  final reviewRoutes = ReviewRoutes(authentication: authentication, service: ReviewService(database));
+  final homeServerRoutes = HomeServerRoutes(authentication: authentication, service: HomeServerService());
 
   final remoteAccessRoutes = RemoteAccessRoutes(
     authentication: authentication,
@@ -261,11 +274,14 @@ Future<void> main() async {
       paymentRoutes,
       groupRoutes,
       armRoutes,
+      sportsRoutes,
       remoteAccessRoutes,
       storageRoutes,
       platformRoutes,
       libraryRoutes,
       legalRoutes,
+      reviewRoutes,
+      homeServerRoutes,
     );
   }
 }
@@ -282,11 +298,14 @@ Future<void> _handleRequest(
   PaymentRoutes paymentRoutes,
   GroupRoutes groupRoutes,
   ArmRoutes armRoutes,
+  SportsRoutes sportsRoutes,
   RemoteAccessRoutes remoteAccessRoutes,
   StorageRoutes storageRoutes,
   PlatformRoutes platformRoutes,
   LibraryRoutes libraryRoutes,
   LegalRoutes legalRoutes,
+  ReviewRoutes reviewRoutes,
+  HomeServerRoutes homeServerRoutes,
 ) async {
   try {
     _addCorsHeaders(request.response);
@@ -394,6 +413,21 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/legal/')) {
       await legalRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/reviews')) {
+      await reviewRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/server/')) {
+      await homeServerRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/sports')) {
+      await sportsRoutes.handle(request);
       return;
     }
 

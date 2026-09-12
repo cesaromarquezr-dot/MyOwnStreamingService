@@ -1,3 +1,7 @@
+// FILE: `Backend/models/account.dart`.
+// Purpose: Implements the account portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'profile.dart';
 import 'subscription.dart';
 
@@ -99,12 +103,14 @@ class Account {
     return null;
   }
 
+  /// Performs `hasProfile` for this feature. Update this documentation when its contract changes.
   bool hasProfile(
     String name,
   ) {
     return getProfileByName(name) != null;
   }
 
+  /// Performs `addExistingProfile` for this feature. Update this documentation when its contract changes.
   void addExistingProfile(
     Profile profile,
   ) {
@@ -131,6 +137,7 @@ class Account {
     profiles.add(profile);
   }
 
+  /// Performs `removeProfile` for this feature. Update this documentation when its contract changes.
   void removeProfile(String profileId) {
   final index = profiles.indexWhere(
     (profile) => profile.id == profileId,
@@ -149,12 +156,14 @@ class Account {
   // WISHLIST
   // ---------------------------------------------------------------------------
 
+  /// Performs `hasWishlistMedia` for this feature. Update this documentation when its contract changes.
   bool hasWishlistMedia(
     String mediaId,
   ) {
     return wishlistMediaIds.contains(mediaId);
   }
 
+  /// Performs `hasWishlistRecommendation` for this feature. Update this documentation when its contract changes.
   bool hasWishlistRecommendation(
     String recommendationId,
   ) {
@@ -163,6 +172,7 @@ class Account {
     );
   }
 
+  /// Performs `addWishlistMedia` for this feature. Update this documentation when its contract changes.
   void addWishlistMedia(
     String mediaId,
   ) {
@@ -171,12 +181,14 @@ class Account {
     }
   }
 
+  /// Performs `removeWishlistMedia` for this feature. Update this documentation when its contract changes.
   void removeWishlistMedia(
     String mediaId,
   ) {
     wishlistMediaIds.remove(mediaId);
   }
 
+  /// Performs `addWishlistRecommendation` for this feature. Update this documentation when its contract changes.
   void addWishlistRecommendation(
     String recommendationId,
   ) {
@@ -189,6 +201,7 @@ class Account {
     }
   }
 
+  /// Performs `removeWishlistRecommendation` for this feature. Update this documentation when its contract changes.
   void removeWishlistRecommendation(
     String recommendationId,
   ) {
@@ -197,6 +210,7 @@ class Account {
     );
   }
 
+  /// Performs `markWishlistItemAcquired` for this feature. Update this documentation when its contract changes.
   void markWishlistItemAcquired({
     String? mediaId,
     String? recommendationId,
@@ -233,6 +247,7 @@ class Account {
   // JSON
   // ---------------------------------------------------------------------------
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson({
     bool includeSensitiveData = false,
   }) {

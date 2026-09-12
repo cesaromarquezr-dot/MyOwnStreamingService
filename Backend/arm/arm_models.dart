@@ -1,3 +1,7 @@
+// FILE: `Backend/arm/arm_models.dart`.
+// Purpose: Implements the arm models portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 class ArmDrive {
   final String id;
   final String path;
@@ -23,6 +27,7 @@ class ArmDrive {
     );
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'id': id,
         'path': path,
@@ -43,6 +48,13 @@ class ArmDiscTitle {
   final double confidence;
   final String? outputPath;
   final Map<String, dynamic> metadata;
+  final String? canonicalTitle;
+  final String? originalTitle;
+  final String? originalLanguage;
+  final String? countryOfOrigin;
+  final String? discTitle;
+  final String? discMarketCountry;
+  final String? detectedRegion;
 
   ArmDiscTitle({
     required this.id,
@@ -54,6 +66,13 @@ class ArmDiscTitle {
     this.confidence = 0,
     this.outputPath,
     this.metadata = const {},
+    this.canonicalTitle,
+    this.originalTitle,
+    this.originalLanguage,
+    this.countryOfOrigin,
+    this.discTitle,
+    this.discMarketCountry,
+    this.detectedRegion,
   });
 
   bool get isFeatureMovie {
@@ -75,9 +94,17 @@ class ArmDiscTitle {
       confidence: rawConfidence is num ? rawConfidence.toDouble() : double.tryParse(rawConfidence?.toString() ?? '') ?? 0,
       outputPath: json['outputPath']?.toString() ?? json['output_path']?.toString() ?? json['path']?.toString(),
       metadata: Map<String, dynamic>.from(json),
+      canonicalTitle: json['canonicalTitle']?.toString() ?? json['originalTitle']?.toString(),
+      originalTitle: json['originalTitle']?.toString(),
+      originalLanguage: json['originalLanguage']?.toString(),
+      countryOfOrigin: json['countryOfOrigin']?.toString(),
+      discTitle: json['discTitle']?.toString() ?? json['title']?.toString(),
+      discMarketCountry: json['discMarketCountry']?.toString() ?? json['discCountry']?.toString(),
+      detectedRegion: json['detectedRegion']?.toString() ?? json['region']?.toString(),
     );
   }
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
@@ -88,6 +115,13 @@ class ArmDiscTitle {
         'confidence': confidence,
         'outputPath': outputPath,
         'metadata': metadata,
+        'canonicalTitle': canonicalTitle,
+        'originalTitle': originalTitle,
+        'originalLanguage': originalLanguage,
+        'countryOfOrigin': countryOfOrigin,
+        'discTitle': discTitle,
+        'discMarketCountry': discMarketCountry,
+        'detectedRegion': detectedRegion,
       };
 
   static double? _double(dynamic value) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '');
@@ -125,6 +159,7 @@ class ArmDisc {
             : const [],
       );
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'driveId': driveId,
         'title': title,
@@ -195,6 +230,7 @@ class ArmVerificationResult {
         contentFingerprintAvailable: json['contentFingerprintAvailable'] == true,
       );
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'passed': passed,
         'score': score,
@@ -264,6 +300,7 @@ class ArmRipJob {
         ArmJobStatus.readyForReview.name,
       }.contains(status);
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'id': id,
         'driveId': driveId,
@@ -298,6 +335,7 @@ class ArmImportResult {
     this.job,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
         'success': success,
         'jobId': jobId,

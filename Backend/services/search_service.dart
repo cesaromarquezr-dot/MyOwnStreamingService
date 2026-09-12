@@ -1,3 +1,7 @@
+// FILE: `Backend/services/search_service.dart`.
+// Purpose: Implements the search service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import '../database/database.dart';
 import '../models/media.dart';
 
@@ -21,6 +25,7 @@ class SearchResult {
     required this.matchedBy,
   });
 
+  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'type': media.type == MediaType.movie
@@ -496,6 +501,7 @@ class SearchService {
   // HELPERS
   // ==========================================================
 
+  /// Performs `_normalize` for this feature. Update this documentation when its contract changes.
   String _normalize(String value) {
     return value
         .trim()
@@ -503,6 +509,7 @@ class SearchService {
         .replaceAll(RegExp(r'\s+'), ' ');
   }
 
+  /// Performs `_contains` for this feature. Update this documentation when its contract changes.
   bool _contains(
     String? value,
     String normalizedQuery,
@@ -516,6 +523,7 @@ class SearchService {
         .contains(normalizedQuery);
   }
 
+  /// Performs `_matchList` for this feature. Update this documentation when its contract changes.
   bool _matchList(
     List<String> values,
     String normalizedQuery,
@@ -534,6 +542,7 @@ class SearchService {
     return false;
   }
 
+  /// Performs `_sortByMostRecent` for this feature. Update this documentation when its contract changes.
   void _sortByMostRecent(
     List<SearchResult> results,
   ) {

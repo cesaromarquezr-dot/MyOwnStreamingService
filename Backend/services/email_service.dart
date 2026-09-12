@@ -1,3 +1,7 @@
+// FILE: `Backend/services/email_service.dart`.
+// Purpose: Implements the email service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:io';
 
 import 'package:mailer/mailer.dart' as mailer;
@@ -40,6 +44,7 @@ class EmailService {
       password.isNotEmpty &&
       from.isNotEmpty;
 
+  /// Performs `send` for this feature. Update this documentation when its contract changes.
   Future<bool> send({
     required String to,
     required String subject,
@@ -75,6 +80,7 @@ class EmailService {
     }
   }
 
+  /// Performs `welcome` for this feature. Update this documentation when its contract changes.
   Future<void> welcome(String email, String username) => send(
         to: email,
         subject: 'Welcome to your own personal streaming service',
@@ -84,6 +90,7 @@ class EmailService {
             'watch together, and access your media remotely.',
       );
 
+  /// Performs `newDevice` for this feature. Update this documentation when its contract changes.
   Future<void> newDevice(String email, String deviceName) => send(
         to: email,
         subject: 'New paired device',
@@ -93,6 +100,7 @@ class EmailService {
             'If you did not do this, review your active sessions and change your password.',
       );
 
+  /// Performs `suspicious` for this feature. Update this documentation when its contract changes.
   Future<void> suspicious(
     String email,
     String location,
@@ -106,6 +114,7 @@ class EmailService {
             'If this was not you, sign out all sessions and secure your account.',
       );
 
+  /// Performs `mediaAdded` for this feature. Update this documentation when its contract changes.
   Future<void> mediaAdded(
     String email,
     String profileName,
@@ -120,6 +129,7 @@ class EmailService {
             '${details == null || details.isEmpty ? '' : '\n\n$details'}',
       );
 
+  /// Performs `storageRequest` for this feature. Update this documentation when its contract changes.
   Future<void> storageRequest(String email, String username) => send(
         to: email,
         subject: 'Storage expansion request received',
@@ -128,6 +138,7 @@ class EmailService {
             'The platform owner can review and approve the request.',
       );
 
+  /// Performs `storageApproved` for this feature. Update this documentation when its contract changes.
   Future<void> storageApproved(
     String email,
     int additionalTerabytes,
@@ -140,6 +151,7 @@ class EmailService {
             'You have $additionalTerabytes TB of more storage.',
       );
 
+  /// Performs `oneTimeCode` for this feature. Update this documentation when its contract changes.
   Future<void> oneTimeCode(String email, String code) => send(
         to: email,
         subject: 'Your one-time access code is: $code',

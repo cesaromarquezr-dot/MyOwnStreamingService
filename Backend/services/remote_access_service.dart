@@ -1,3 +1,7 @@
+// FILE: `Backend/services/remote_access_service.dart`.
+// Purpose: Implements the remote access service portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math';
 import '../database/database.dart';
 import '../models/account.dart';
@@ -8,10 +12,14 @@ class RemoteAccessService {
   final Random _random = Random.secure();
   RemoteAccessService(this.database);
 
+  /// Performs `_id` for this feature. Update this documentation when its contract changes.
   String _id(String prefix) => '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${_random.nextInt(1000000)}';
+  /// Performs `_code` for this feature. Update this documentation when its contract changes.
   String _code() => (100000 + _random.nextInt(900000)).toString();
+  /// Performs `_token` for this feature. Update this documentation when its contract changes.
   String _token() => 'worker_${_id('token')}_${_random.nextInt(1 << 30)}';
 
+  /// Performs `createOneTimeCode` for this feature. Update this documentation when its contract changes.
   String createOneTimeCode(Account account) {
     final code = _code();
     database.oneTimeCodesByAccountId[account.id] = code;
@@ -29,6 +37,7 @@ class RemoteAccessService {
     return worker;
   }
 
+  /// Performs `workersFor` for this feature. Update this documentation when its contract changes.
   List<RemoteWorker> workersFor(Account account) => database.remoteWorkersById.values.where((w) => w.accountId == account.id).toList();
 
   RemoteWorker workerForToken(String token) => database.remoteWorkersById.values.firstWhere((w) => w.token == token, orElse: () => throw Exception('Remote worker not found.'));
@@ -40,5 +49,6 @@ class RemoteAccessService {
     database.remoteImportJobsById[job.id] = job; return job;
   }
 
+  /// Performs `pendingForWorker` for this feature. Update this documentation when its contract changes.
   List<RemoteImportJob> pendingForWorker(RemoteWorker worker) => database.remoteImportJobsById.values.where((j) => j.workerId == worker.id && j.status == 'queued').toList();
 }

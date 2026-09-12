@@ -1,3 +1,7 @@
+// FILE: `lib/series.dart`.
+// Purpose: Implements the series portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -17,6 +21,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   String _searchQuery = '';
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
@@ -29,11 +34,13 @@ class _SeriesScreenState extends State<SeriesScreen>
   }
 
   @override
+  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _animationController.dispose();
     super.dispose();
   }
 
+  /// Performs `_getShows` for this feature. Update this documentation when its contract changes.
   List<MediaItem> _getShows() {
     final library = AppController.instance.library;
 
@@ -56,6 +63,7 @@ class _SeriesScreenState extends State<SeriesScreen>
     }).toList();
   }
 
+  /// Performs `_openSearch` for this feature. Update this documentation when its contract changes.
   void _openSearch() {
     final controller = TextEditingController(text: _searchQuery);
 
@@ -180,6 +188,7 @@ class _SeriesScreenState extends State<SeriesScreen>
     ).whenComplete(controller.dispose);
   }
 
+  /// Performs `_openShow` for this feature. Update this documentation when its contract changes.
   void _openShow(MediaItem show) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -221,6 +230,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final shows = _getShows();
 
@@ -432,6 +442,7 @@ class _FeaturedShowState extends State<_FeaturedShow> {
   bool _pressed = false;
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final show = widget.show;
 
@@ -662,6 +673,7 @@ class _ShowCardState extends State<_ShowCard> {
   bool _hovering = false;
   bool _pressed = false;
 
+  /// Performs `_setHovering` for this feature. Update this documentation when its contract changes.
   void _setHovering(bool value) {
     if (!mounted) return;
 
@@ -671,6 +683,7 @@ class _ShowCardState extends State<_ShowCard> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final show = widget.show;
 
@@ -880,6 +893,7 @@ class _ShowImage extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (imageUrl.trim().isEmpty) {
       return const _PosterPlaceholder();
@@ -928,6 +942,7 @@ class _PosterPlaceholder extends StatelessWidget {
   const _PosterPlaceholder();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -969,6 +984,7 @@ class _GlassIconButton extends StatelessWidget {
   });
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
@@ -1000,6 +1016,7 @@ class _CinematicBackground extends StatelessWidget {
   const _CinematicBackground();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: IgnorePointer(
@@ -1063,6 +1080,7 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
@@ -1118,6 +1136,7 @@ class _NoSearchResults extends StatelessWidget {
   const _NoSearchResults();
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Column(
       children: [

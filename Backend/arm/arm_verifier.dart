@@ -1,3 +1,7 @@
+// FILE: `Backend/arm/arm_verifier.dart`.
+// Purpose: Implements the arm verifier portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,6 +21,7 @@ class ArmVerifier {
     this.durationTolerance = 0.08,
   });
 
+  /// Performs `verify` for this feature. Update this documentation when its contract changes.
   Future<ArmVerificationResult> verify({
     required String outputPath,
     double? expectedDurationSeconds,
@@ -129,6 +134,7 @@ class ArmVerifier {
     );
   }
 
+  /// Performs `_findVideoFile` for this feature. Update this documentation when its contract changes.
   Future<File?> _findVideoFile(String outputPath) async {
     final entity = FileSystemEntity.typeSync(outputPath);
     if (entity == FileSystemEntityType.file) {

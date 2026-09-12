@@ -1,12 +1,16 @@
+// FILE: `lib/trailer.dart`.
+// Purpose: Implements the trailer portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Simple trailer model used by TrailerScreen.
-///
-/// This is kept here because the current app_core.dart does not
-/// contain a Trailer model.
+// Simple trailer model used by TrailerScreen.
+//
+// This is kept here because the current app_core.dart does not
+// contain a Trailer model.
 class Trailer {
   final String youtubeVideoId;
   final String title;
@@ -149,6 +153,7 @@ class TrailerScreen extends StatefulWidget {
 class _TrailerScreenState extends State<TrailerScreen> {
   bool openingTrailer = false;
 
+  /// Performs `launchTrailer` for this feature. Update this documentation when its contract changes.
   Future<void> launchTrailer() async {
     if (openingTrailer) return;
 
@@ -169,6 +174,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final compactLayout = size.width < 700;
@@ -263,6 +269,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildGlow` for this feature. Update this documentation when its contract changes.
   Widget _buildGlow({
     required double size,
   }) {
@@ -284,6 +291,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
   Widget _buildTopBar(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -328,6 +336,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildGlassButton` for this feature. Update this documentation when its contract changes.
   Widget _buildGlassButton({
     required IconData icon,
     required String tooltip,
@@ -365,6 +374,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildContent` for this feature. Update this documentation when its contract changes.
   Widget _buildContent(
     BuildContext context,
     bool compactLayout,
@@ -440,6 +450,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildTrailerPreview` for this feature. Update this documentation when its contract changes.
   Widget _buildTrailerPreview(
     bool compactLayout,
   ) {
@@ -547,6 +558,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildPlayButton` for this feature. Update this documentation when its contract changes.
   Widget _buildPlayButton() {
     return Material(
       color: Colors.transparent,
@@ -591,6 +603,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildTrailerInfo` for this feature. Update this documentation when its contract changes.
   Widget _buildTrailerInfo() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(17),
@@ -666,6 +679,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
+  /// Performs `_buildWatchButton` for this feature. Update this documentation when its contract changes.
   Widget _buildWatchButton() {
     return SizedBox(
       height: 56,
@@ -734,6 +748,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
 
 class _TrailerBackgroundPainter extends CustomPainter {
   @override
+  /// Performs `paint` for this feature. Update this documentation when its contract changes.
   void paint(
     Canvas canvas,
     Size size,
@@ -762,6 +777,7 @@ class _TrailerBackgroundPainter extends CustomPainter {
   }
 
   @override
+  /// Performs `shouldRepaint` for this feature. Update this documentation when its contract changes.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,
   ) {
@@ -771,6 +787,7 @@ class _TrailerBackgroundPainter extends CustomPainter {
 
 class _FilmPatternPainter extends CustomPainter {
   @override
+  /// Performs `paint` for this feature. Update this documentation when its contract changes.
   void paint(
     Canvas canvas,
     Size size,
@@ -838,6 +855,7 @@ class _FilmPatternPainter extends CustomPainter {
   }
 
   @override
+  /// Performs `shouldRepaint` for this feature. Update this documentation when its contract changes.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,
   ) {

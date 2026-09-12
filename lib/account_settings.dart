@@ -1,3 +1,7 @@
+// FILE: `lib/account_settings.dart`.
+// Purpose: Implements the account settings portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'app_core.dart';
@@ -15,11 +19,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool pending = false;
 
   @override
+  /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     _load();
   }
 
+  /// Performs `_load` for this feature. Update this documentation when its contract changes.
   Future<void> _load() async {
     try {
       final d = await AppController.instance.backendApi.getStorage();
@@ -38,6 +44,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  /// Performs `_size` for this feature. Update this documentation when its contract changes.
   String _size(int b) {
     final tb = b / 1000000000000;
 
@@ -49,6 +56,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return '${gb.toStringAsFixed(0)} GB';
   }
 
+  /// Performs `_currency` for this feature. Update this documentation when its contract changes.
   String _currency() {
     final c =
         Localizations.localeOf(context).countryCode?.toUpperCase() ?? 'US';
@@ -77,6 +85,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return 'USD';
   }
 
+  /// Performs `_rate` for this feature. Update this documentation when its contract changes.
   double _rate(String c) {
     switch (c) {
       case 'MXN':
@@ -94,6 +103,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  /// Performs `_price` for this feature. Update this documentation when its contract changes.
   String _price(double usd) {
     final c = _currency();
     final v = usd * _rate(c);
@@ -111,6 +121,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return '$symbol${v.toStringAsFixed(2)}';
   }
 
+  /// Performs `_request` for this feature. Update this documentation when its contract changes.
   Future<void> _request() {
     return showDialog(
       context: context,
@@ -165,6 +176,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
+  /// Performs `_deleteAccount` for this feature. Update this documentation when its contract changes.
   Future<void> _deleteAccount() async {
     final ok = await showDialog<bool>(
           context: context,
@@ -209,6 +221,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   @override
+  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     // FIXED:
     // Explicitly make pct a double so LinearProgressIndicator

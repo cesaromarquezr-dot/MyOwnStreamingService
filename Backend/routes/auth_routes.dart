@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/auth_routes.dart`.
+// Purpose: Implements the auth routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -21,6 +25,7 @@ class AuthRoutes {
     required this.emailService,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(
     HttpRequest request,
   ) async {
@@ -38,7 +43,7 @@ class AuthRoutes {
       }
 
       // -----------------------------------------------------------------------
-      // LOGIN
+      // LOGIN (EMAIL + PASSWORD)
       // -----------------------------------------------------------------------
 
       if (request.method == 'POST' &&
@@ -149,17 +154,12 @@ class AuthRoutes {
   // SIGNUP
   // ===========================================================================
 
+  /// Performs `_signup` for this feature. Update this documentation when its contract changes.
   Future<void> _signup(
     HttpRequest request,
   ) async {
     final body =
         await _readJsonBody(request);
-
-    final username =
-        _readRequiredString(
-      body,
-      'username',
-    );
 
     final email =
         _readRequiredString(
@@ -198,7 +198,6 @@ class AuthRoutes {
 
     final account =
         await authService.createAccount(
-      username: username,
       email: email,
       password: password,
       plan: plan,
@@ -239,6 +238,7 @@ class AuthRoutes {
     );
   }
 
+  /// Performs `_verifySecurity` for this feature. Update this documentation when its contract changes.
   Future<void> _verifySecurity(HttpRequest request) async {
     final token = authentication.extractToken(request);
     if (token == null) {
@@ -259,16 +259,17 @@ class AuthRoutes {
   // LOGIN
   // ===========================================================================
 
+  /// Performs `_login` for this feature. Update this documentation when its contract changes.
   Future<void> _login(
     HttpRequest request,
   ) async {
     final body =
         await _readJsonBody(request);
 
-    final login =
+    final email =
         _readRequiredString(
       body,
-      'login',
+      'email',
     );
 
     final password =
@@ -284,7 +285,7 @@ class AuthRoutes {
 
     final loginResult =
         await authService.login(
-      login: login,
+      login: email,
       password: password,
       ipAddress: clientIp,
       userAgent: userAgent,
@@ -328,6 +329,7 @@ class AuthRoutes {
   // LOGOUT
   // ===========================================================================
 
+  /// Performs `_logout` for this feature. Update this documentation when its contract changes.
   Future<void> _logout(
     HttpRequest request,
   ) async {
@@ -373,6 +375,7 @@ class AuthRoutes {
   // CURRENT ACCOUNT
   // ===========================================================================
 
+  /// Performs `_me` for this feature. Update this documentation when its contract changes.
   Future<void> _me(
     HttpRequest request,
   ) async {
@@ -402,6 +405,7 @@ class AuthRoutes {
   // CURRENT SESSION
   // ===========================================================================
 
+  /// Performs `_session` for this feature. Update this documentation when its contract changes.
   Future<void> _session(
     HttpRequest request,
   ) async {
@@ -468,6 +472,7 @@ class AuthRoutes {
   // LOGOUT ALL
   // ===========================================================================
 
+  /// Performs `_logoutAll` for this feature. Update this documentation when its contract changes.
   Future<void> _logoutAll(
     HttpRequest request,
   ) async {
@@ -498,6 +503,7 @@ class AuthRoutes {
     );
   }
 
+  /// Performs `_deleteAccount` for this feature. Update this documentation when its contract changes.
   Future<void> _deleteAccount(HttpRequest request) async {
     final account=authentication.authenticate(request);
     if(account==null){_sendAuthenticationRequired(request.response);return;}
@@ -509,6 +515,7 @@ class AuthRoutes {
   // ADD PROFILE
   // ===========================================================================
 
+  /// Performs `_addProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _addProfile(
     HttpRequest request,
   ) async {
@@ -572,6 +579,7 @@ class AuthRoutes {
   // REMOVE PROFILE
   // ===========================================================================
 
+  /// Performs `_removeProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _removeProfile(
     HttpRequest request,
   ) async {
@@ -660,6 +668,7 @@ class AuthRoutes {
     );
   }
 
+  /// Performs `_readRequiredString` for this feature. Update this documentation when its contract changes.
   String _readRequiredString(
     Map<String, dynamic> body,
     String key,
@@ -697,6 +706,7 @@ class AuthRoutes {
     }
   }
 
+  /// Performs `_errorMessage` for this feature. Update this documentation when its contract changes.
   String _errorMessage(
     Object error,
   ) {
@@ -714,6 +724,7 @@ class AuthRoutes {
     return text;
   }
 
+  /// Performs `_sendAuthenticationRequired` for this feature. Update this documentation when its contract changes.
   void _sendAuthenticationRequired(
     HttpResponse response,
   ) {
@@ -729,6 +740,7 @@ class AuthRoutes {
     );
   }
 
+  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   void _sendJson(
     HttpResponse response, {
     required int statusCode,

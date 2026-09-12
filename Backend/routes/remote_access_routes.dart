@@ -1,3 +1,7 @@
+// FILE: `Backend/routes/remote_access_routes.dart`.
+// Purpose: Implements the remote access routes portion of the streaming service.
+// This file is part of the documented Flutter/home-server architecture.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,6 +20,7 @@ class RemoteAccessRoutes {
     required this.email,
   });
 
+  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     _cors(request.response);
 
@@ -72,6 +77,7 @@ class RemoteAccessRoutes {
     }
   }
 
+  /// Performs `_code` for this feature. Update this documentation when its contract changes.
   Future<void> _code(HttpRequest r) async {
     final a = authentication.authenticate(r);
 
@@ -94,6 +100,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_register` for this feature. Update this documentation when its contract changes.
   Future<void> _register(HttpRequest r) async {
     final b = await _body(r);
 
@@ -145,6 +152,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_workers` for this feature. Update this documentation when its contract changes.
   Future<void> _workers(HttpRequest r) async {
     final a = authentication.authenticate(r);
 
@@ -165,6 +173,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_queue` for this feature. Update this documentation when its contract changes.
   Future<void> _queue(HttpRequest r) async {
     final a = authentication.authenticate(r);
 
@@ -190,6 +199,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_workerJobs` for this feature. Update this documentation when its contract changes.
   Future<void> _workerJobs(HttpRequest r) async {
     final token =
         r.headers.value('x-remote-worker-token') ?? '';
@@ -211,6 +221,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_workerUpdate` for this feature. Update this documentation when its contract changes.
   Future<void> _workerUpdate(HttpRequest r) async {
     final token =
         r.headers.value('x-remote-worker-token') ?? '';
@@ -285,6 +296,7 @@ class RemoteAccessRoutes {
     return Map<String, dynamic>.from(d);
   }
 
+  /// Performs `_unauth` for this feature. Update this documentation when its contract changes.
   Future<void> _unauth(HttpRequest r) {
     return _json(
       r.response,
@@ -296,6 +308,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_json` for this feature. Update this documentation when its contract changes.
   Future<void> _json(
     HttpResponse r,
     int code,
@@ -307,6 +320,7 @@ class RemoteAccessRoutes {
     await r.close();
   }
 
+  /// Performs `_cors` for this feature. Update this documentation when its contract changes.
   void _cors(HttpResponse r) {
     r.headers.set(
       'Access-Control-Allow-Origin',
@@ -324,6 +338,7 @@ class RemoteAccessRoutes {
     );
   }
 
+  /// Performs `_clean` for this feature. Update this documentation when its contract changes.
   String _clean(Object e) {
     return e.toString().replaceFirst(
       'Exception: ',
