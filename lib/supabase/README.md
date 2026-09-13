@@ -26,3 +26,26 @@ Never put a Supabase service-role key in Flutter.
 Run `supabase/migrations/202609120001_streaming_service.sql` in the Supabase SQL editor or through the Supabase CLI.
 
 The migration creates the account/profile/server hierarchy, server media indexes, exact-version Group Watch procedures, reviews, recommendations/votes, UI settings, security, remote jobs, backups, sports, legal tables, triggers, RLS and scheduled jobs.
+
+
+## Flutter -> Supabase synchronization
+
+The Flutter application initializes the public Supabase client for read/client features, but the current account authentication system is the application's own authenticated backend session. Therefore, protected account writes are sent through the Dart backend rather than exposing a Supabase service-role key to Flutter.
+
+Configure Flutter with:
+
+```text
+--dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+--dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+```
+
+Configure the backend/home server with:
+
+```text
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+```
+
+The Flutter `AppController.syncCurrentAccountToSupabase()` function sends a sanitized account snapshot to `POST /api/v1/supabase/sync/account`. The backend authenticates the user, strips sensitive authentication material, and writes the snapshot using `SupabaseStore`.
+
+Physical movie, TV, music, disc, and other media files are never uploaded to Supabase. Only application metadata, account/profile state, storage information, wishlist/media identifiers, notifications, and other non-file state are synchronized.

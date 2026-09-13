@@ -6,8 +6,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../middleware/authentication.dart';
+import '../config.dart';
 import '../services/email_service.dart';
 
+/// Implements the `StorageRoutes` class for this feature or UI component.
 class StorageRoutes {
   final AuthenticationMiddleware authentication;
   final EmailService email;
@@ -31,9 +33,16 @@ class StorageRoutes {
         return await _request(request);
       }
 
-      if (request.method == 'POST' &&
-          path == '/api/v1/storage/grant') {
-        return await _grant(request);
+      if (request.method == 'GET' && path == '/api/v1/storage/notifications') {
+        return await _notifications(request);
+      }
+
+      if (request.method == 'POST' && path == '/api/v1/storage/admin/list') {
+        return await _adminList(request);
+      }
+
+      if (request.method == 'POST' && path == '/api/v1/storage/admin/update') {
+        return await _adminUpdate(request);
       }
 
       return await _json(
@@ -77,6 +86,9 @@ class StorageRoutes {
         'freeBytes':
             a.storageLimitBytes - a.storageUsedBytes,
         'requestPending': a.storageRequestPending,
+        'requestedTerabytes': a.storageRequestedTerabytes,
+        'requestFeeUsd': a.storageRequestFeeUsd,
+        'requestStatus': a.storageRequestStatus,
       },
     );
   }
@@ -90,18 +102,30 @@ class StorageRoutes {
     }
 
     if (a.storageRequestPending) {
-      throw Exception(
-        'A storage request is already pending.',
-      );
+      throw Exception('A storage request is already pending.');
     }
 
+    final body = await _body(r);
+    final tb = body['additionalTerabytes'] is num
+        ? (body['additionalTerabytes'] as num).toInt()
+        : int.tryParse(body['additionalTerabytes']?.toString() ?? '') ?? 0;
+    if (tb <= 0 || tb > 100) {
+      throw Exception('Choose between 1 and 100 TB of additional storage.');
+    }
+
+    final fee = tb * AppConfig.additionalStoragePricePerTbUsd;
     a.storageRequestPending = true;
     a.storageRequestAt = DateTime.now();
+    a.storageRequestedTerabytes = tb;
+    a.storageRequestFeeUsd = fee;
+    a.storageRequestStatus = 'requested';
 
-    await email.storageRequest(
-      a.email,
-      a.username,
+    a.addNotification(
+      'Storage request sent',
+      'Your request for $tb TB of additional storage was sent to the platform owner. Fee: \$${fee.toStringAsFixed(2)} USD.',
     );
+
+    await email.storageRequest(a.email, a.username, a.id, 'Server ${a.id}', tb, fee);
 
     return await _json(
       r.response,
@@ -115,74 +139,68 @@ class StorageRoutes {
     );
   }
 
-  /// Performs `_grant` for this feature. Update this documentation when its contract changes.
-  Future<void> _grant(HttpRequest r) async {
-    final key =
-        Platform.environment['STREAM_PLATFORM_ADMIN_KEY'] ??
-            '';
+  /// Returns the account's in-app notifications.
+  Future<void> _notifications(HttpRequest r) async {
+    final a = authentication.authenticate(r);
+    if (a == null) return await _unauth(r);
+    return await _json(r.response, 200, {'success': true, 'notifications': a.notifications});
+  }
 
-    if (key.isEmpty ||
-        r.headers.value('x-platform-admin-key') != key) {
-      return await _json(
-        r.response,
-        403,
-        {
-          'success': false,
-          'error':
-              'Platform admin authorization required.',
-        },
-      );
-    }
+  /// Lists all storage requests for the platform administrator.
+  Future<void> _adminList(HttpRequest r) async {
+    if (!_adminAuthorized(r)) return await _adminDenied(r);
+    final accounts = authentication.authService.database.accountsById.values;
+    return await _json(r.response, 200, {
+      'success': true,
+      'requests': accounts.where((a) => a.storageRequestPending).map((a) => {
+        'accountId': a.id,
+        'username': a.username,
+        'email': a.email,
+        'serverName': 'Server ${a.id}',
+        'additionalTerabytes': a.storageRequestedTerabytes,
+        'feeUsd': a.storageRequestFeeUsd,
+        'status': a.storageRequestStatus,
+        'requestedAt': a.storageRequestAt?.toIso8601String(),
+      }).toList(),
+    });
+  }
 
+  /// Updates a storage request as the physical purchase/install process advances.
+  Future<void> _adminUpdate(HttpRequest r) async {
+    if (!_adminAuthorized(r)) return await _adminDenied(r);
     final b = await _body(r);
-
     final id = b['accountId']?.toString() ?? '';
-
-    final tb = b['additionalTerabytes'] is num
-        ? (b['additionalTerabytes'] as num).toInt()
-        : int.tryParse(
-              b['additionalTerabytes']?.toString() ?? '',
-            ) ??
-            0;
-
-    final a =
-        authentication.authService.database.accountsById[id];
-
-    if (a == null) {
-      return await _json(
-        r.response,
-        404,
-        {
-          'success': false,
-          'error': 'Account not found.',
-        },
-      );
+    final a = authentication.authService.database.accountsById[id];
+    if (a == null) return await _json(r.response, 404, {'success': false, 'error': 'Account not found.'});
+    final status = b['status']?.toString() ?? '';
+    if (!{'accepted','payment_received','storage_acquired','installation_pending','completed','rejected'}.contains(status)) {
+      return await _json(r.response, 400, {'success': false, 'error': 'Invalid storage request status.'});
     }
-
-    if (tb <= 0) {
-      throw Exception(
-        'Additional storage must be greater than zero.',
-      );
+    if (status == 'completed') {
+      final tb = b['additionalTerabytes'] is num ? (b['additionalTerabytes'] as num).toInt() : a.storageRequestedTerabytes;
+      if (tb <= 0) return await _json(r.response, 400, {'success': false, 'error': 'Additional storage must be greater than zero.'});
+      a.storageLimitBytes += tb * 1000000000000;
+      a.storageRequestPending = false;
+      a.storageRequestStatus = 'completed';
+      a.storageRequestedTerabytes = tb;
+      a.addNotification('Storage updated', 'You have $tb TB more storage available on your server.');
+      await email.storageInstalled(a.email, tb);
+    } else if (status == 'rejected') {
+      a.storageRequestPending = false;
+      a.storageRequestStatus = 'rejected';
+      a.addNotification('Storage request declined', 'Your additional storage request was not approved.');
+    } else {
+      a.storageRequestStatus = status;
+      final message = switch (status) {
+        'accepted' => 'We accepted your additional storage request. Please be patient while we obtain and install the storage on your server.',
+        'payment_received' => 'Your storage payment was received. We are preparing the physical storage for your server.',
+        'storage_acquired' => 'Your additional storage has been acquired and is being prepared for installation.',
+        _ => 'Your additional storage is ready for installation on your server.',
+      };
+      a.addNotification('Storage request update', message);
+      if (status == 'accepted') await email.storageAccepted(a.email, a.storageRequestedTerabytes);
     }
-
-    a.storageLimitBytes += tb * 1000000000000;
-    a.storageRequestPending = false;
-
-    await email.storageApproved(
-      a.email,
-      tb,
-    );
-
-    return await _json(
-      r.response,
-      200,
-      {
-        'success': true,
-        'limitBytes': a.storageLimitBytes,
-        'additionalTerabytes': tb,
-        'requestPending': false,
-      },
-    );
+    return await _json(r.response, 200, {'success': true, 'status': a.storageRequestStatus, 'limitBytes': a.storageLimitBytes});
   }
 
   Future<Map<String, dynamic>> _body(HttpRequest r) async {
@@ -201,7 +219,6 @@ class StorageRoutes {
     return Map<String, dynamic>.from(d);
   }
 
-  /// Performs `_unauth` for this feature. Update this documentation when its contract changes.
   Future<void> _unauth(HttpRequest r) {
     return _json(
       r.response,
@@ -213,7 +230,6 @@ class StorageRoutes {
     );
   }
 
-  /// Performs `_json` for this feature. Update this documentation when its contract changes.
   Future<void> _json(
     HttpResponse r,
     int code,
@@ -224,4 +240,12 @@ class StorageRoutes {
     r.write(jsonEncode(body));
     await r.close();
   }
+
+  bool _adminAuthorized(HttpRequest r) {
+    final key = Platform.environment['STREAM_PLATFORM_ADMIN_KEY'] ?? '';
+    return key.isNotEmpty && r.headers.value('x-platform-admin-key') == key;
+  }
+
+  Future<void> _adminDenied(HttpRequest r) => _json(r.response, 403, {'success': false, 'error': 'Platform admin authorization required.'});
+
 }

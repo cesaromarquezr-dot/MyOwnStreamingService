@@ -1,51 +1,97 @@
-// FILE: `lib/feature_center.dart`.
+// FILE: lib/feature_center.dart
 // Purpose: Implements the feature center portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
+import 'collection_details.dart';
 import 'details.dart';
 
+/// Represents one supported application language.
 class AppLanguage {
   final String code;
   final String flag;
-  final String label;
+
+  /// Name shown in the language's own language/script.
+  final String nativeName;
+
+  final String englishName;
 
   const AppLanguage(
     this.code,
     this.flag,
-    this.label,
+    this.nativeName,
+    this.englishName,
   );
 }
 
+/// Global profile-aware language state used by every screen.
 class LanguageController extends ChangeNotifier {
   LanguageController._();
 
   static final instance = LanguageController._();
 
-  AppLanguage current =
-      const AppLanguage('en', '🇬🇧', 'Eng');
+  AppLanguage current = languages.first;
 
   static const languages = <AppLanguage>[
-    AppLanguage('en', '🇬🇧', 'Eng'),
-    AppLanguage('es', '🇪🇸', 'Esp'),
-    AppLanguage('fr', '🇫🇷', 'Fra'),
-    AppLanguage('pt', '🇵🇹', 'Por'),
-    AppLanguage('de', '🇩🇪', 'Deu'),
-    AppLanguage('it', '🇮🇹', 'Ita'),
-    AppLanguage('ja', '🇯🇵', 'Jpn'),
-    AppLanguage('ko', '🇰🇷', 'Kor'),
-    AppLanguage('zh', '🇨🇳', '中'),
+    AppLanguage('en', '🇬🇧', 'English', 'English'),
+    AppLanguage('es', '🇪🇸', 'Español', 'Spanish'),
+    AppLanguage('fr', '🇫🇷', 'Français', 'French'),
+    AppLanguage('de', '🇩🇪', 'Deutsch', 'German'),
+    AppLanguage('pt', '🇵🇹', 'Português', 'Portuguese'),
+    AppLanguage('it', '🇮🇹', 'Italiano', 'Italian'),
+    AppLanguage('nl', '🇳🇱', 'Nederlands', 'Dutch'),
+    AppLanguage('pl', '🇵🇱', 'Polski', 'Polish'),
+    AppLanguage('tr', '🇹🇷', 'Türkçe', 'Turkish'),
+    AppLanguage('ru', '🇷🇺', 'Русский', 'Russian'),
+    AppLanguage('uk', '🇺🇦', 'Українська', 'Ukrainian'),
+    AppLanguage('ar', '🇸🇦', 'العربية', 'Arabic'),
+    AppLanguage('hi', '🇮🇳', 'हिन्दी', 'Hindi'),
+    AppLanguage('zh', '🇨🇳', '中文', 'Chinese'),
+    AppLanguage('ja', '🇯🇵', '日本語', 'Japanese'),
+    AppLanguage('ko', '🇰🇷', '한국어', 'Korean'),
   ];
 
-  /// Performs `set` for this feature. Update this documentation when its contract changes.
-  void set(AppLanguage value) {
+  /// Changes the active language and persists it for the current profile.
+  Future<void> set(AppLanguage value) async {
     current = value;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    final profileId = AppController.instance.currentProfile?.id;
+
+    await prefs.setString(
+      profileId == null
+          ? 'app_language'
+          : 'profile_language_$profileId',
+      value.code,
+    );
+  }
+
+  Future<void> loadForCurrentProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final profileId = AppController.instance.currentProfile?.id;
+
+    final code = prefs.getString(
+      profileId == null
+          ? 'app_language'
+          : 'profile_language_$profileId',
+    );
+
+    if (code == null) return;
+
+    final match = languages.where((item) => item.code == code);
+
+    if (match.isEmpty) return;
+
+    current = match.first;
     notifyListeners();
   }
 }
 
+/// Reusable language picker intended to be placed in any app bar or menu.
 class LanguagePicker extends StatelessWidget {
   const LanguagePicker({super.key});
 
@@ -54,44 +100,40 @@ class LanguagePicker extends StatelessWidget {
     return AnimatedBuilder(
       animation: LanguageController.instance,
       builder: (_, __) {
-        final language =
-            LanguageController.instance.current;
+        final language = LanguageController.instance.current;
 
         return PopupMenuButton<AppLanguage>(
           tooltip: 'Language',
-          initialValue: language,
-          onSelected:
-              LanguageController.instance.set,
+          onSelected: LanguageController.instance.set,
           itemBuilder: (_) {
             return [
-              for (final language
-                  in LanguageController.languages)
+              for (final item in LanguageController.languages)
                 PopupMenuItem<AppLanguage>(
-                  value: language,
-                  child: Text(
-                    '${language.flag}  ${language.label}',
+                  value: item,
+                  child: Row(
+                    children: [
+                      Text(item.flag),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(item.nativeName),
+                      ),
+                    ],
                   ),
                 ),
             ];
           },
           child: Container(
-            margin: const EdgeInsets.only(
-              right: 10,
-            ),
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 9,
-              vertical: 7,
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(
-                alpha: .07,
-              ),
-              borderRadius:
-                  BorderRadius.circular(14),
+              color: Colors.white.withValues(alpha: .07),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
-              '${language.flag} ${language.label}',
+              '${language.flag} ${language.nativeName}',
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 12,
@@ -104,60 +146,240 @@ class LanguagePicker extends StatelessWidget {
   }
 }
 
+/// Translation lookup for user-facing strings.
 class AppText {
   static String get(String key) {
-    final language =
-        LanguageController.instance.current.code;
+    final language = LanguageController.instance.current.code;
 
-    const data = {
+    const data = <String, Map<String, String>>{
+      'language': {
+        'en': 'Language',
+        'es': 'Idioma',
+        'fr': 'Langue',
+        'de': 'Sprache',
+        'pt': 'Idioma',
+        'it': 'Lingua',
+        'ru': 'Язык',
+        'ar': 'اللغة',
+        'zh': '语言',
+        'ja': '言語',
+        'ko': '언어',
+        'hi': 'भाषा',
+      },
+      'home': {
+        'en': 'Home',
+        'es': 'Inicio',
+        'fr': 'Accueil',
+        'de': 'Startseite',
+        'pt': 'Início',
+        'it': 'Home',
+        'ru': 'Главная',
+        'ar': 'الرئيسية',
+        'zh': '首页',
+        'ja': 'ホーム',
+        'ko': '홈',
+        'hi': 'होम',
+      },
+      'movies': {
+        'en': 'Movies',
+        'es': 'Películas',
+        'fr': 'Films',
+        'de': 'Filme',
+        'pt': 'Filmes',
+        'it': 'Film',
+        'ru': 'Фильмы',
+        'ar': 'الأفلام',
+        'zh': '电影',
+        'ja': '映画',
+        'ko': '영화',
+        'hi': 'फ़िल्में',
+      },
+      'tvShows': {
+        'en': 'TV Shows',
+        'es': 'Series',
+        'fr': 'Séries',
+        'de': 'Serien',
+        'pt': 'Séries',
+        'it': 'Serie TV',
+        'ru': 'Сериалы',
+        'ar': 'المسلسلات',
+        'zh': '电视剧',
+        'ja': 'テレビ番組',
+        'ko': 'TV 프로그램',
+        'hi': 'टीवी शो',
+      },
+      'music': {
+        'en': 'Music',
+        'es': 'Música',
+        'fr': 'Musique',
+        'de': 'Musik',
+        'pt': 'Música',
+        'it': 'Musica',
+        'ru': 'Музыка',
+        'ar': 'الموسيقى',
+        'zh': '音乐',
+        'ja': '音楽',
+        'ko': '음악',
+        'hi': 'संगीत',
+      },
+      'search': {
+        'en': 'Search',
+        'es': 'Buscar',
+        'fr': 'Rechercher',
+        'de': 'Suchen',
+        'pt': 'Pesquisar',
+        'it': 'Cerca',
+        'ru': 'Поиск',
+        'ar': 'بحث',
+        'zh': '搜索',
+        'ja': '検索',
+        'ko': '검색',
+        'hi': 'खोज',
+      },
+      'settings': {
+        'en': 'Settings',
+        'es': 'Configuración',
+        'fr': 'Paramètres',
+        'de': 'Einstellungen',
+        'pt': 'Configurações',
+        'it': 'Impostazioni',
+        'ru': 'Настройки',
+        'ar': 'الإعدادات',
+        'zh': '设置',
+        'ja': '設定',
+        'ko': '설정',
+        'hi': 'सेटिनги',
+      },
       'recommendations': {
         'en': 'Recommendations',
         'es': 'Recomendaciones',
         'fr': 'Recommandations',
+        'de': 'Empfehlungen',
         'pt': 'Recomendações',
+        'it': 'Consigliati',
+        'ru': 'Рекомендации',
+        'ar': 'التوصيات',
+        'zh': '推荐',
+        'ja': 'おすすめ',
+        'ko': '추천',
+        'hi': 'अनुशंसाएँ',
       },
       'collections': {
         'en': 'Collections',
         'es': 'Colecciones',
         'fr': 'Collections',
+        'de': 'Sammlungen',
         'pt': 'Coleções',
+        'it': 'Raccolte',
+        'ru': 'Коллекции',
+        'ar': 'المجموعات',
+        'zh': '收藏集',
+        'ja': 'コレクション',
+        'ko': '컬렉션',
+        'hi': 'संग्रह',
       },
       'monthly': {
         'en': 'Monthly Wrapped',
         'es': 'Resumen mensual',
         'fr': 'Bilan mensuel',
+        'de': 'Monatsrückblick',
         'pt': 'Resumo mensal',
+        'it': 'Riepilogo mensile',
+        'ru': 'Месячный обзор',
+        'ar': 'الملخص الشهري',
+        'zh': '月度回顾',
+        'ja': '月間まとめ',
+        'ko': '월간 요약',
+        'hi': 'मासिक सारांश',
       },
       'yearly': {
         'en': 'Year-End Wrapped',
         'es': 'Resumen anual',
         'fr': 'Bilan annuel',
+        'de': 'Jahresrückblick',
         'pt': 'Resumo anual',
+        'it': 'Riepilogo annuale',
+        'ru': 'Итоги года',
+        'ar': 'ملخص العام',
+        'zh': '年度回顾',
+        'ja': '年間まとめ',
+        'ko': '연말 요약',
+        'hi': 'वार्षिक सारांश',
       },
       'achievements': {
         'en': 'Achievements',
         'es': 'Logros',
         'fr': 'Succès',
+        'de': 'Erfolge',
         'pt': 'Conquistas',
+        'it': 'Obiettivi',
+        'ru': 'Достижения',
+        'ar': 'الإنجازات',
+        'zh': '成就',
+        'ja': '実績',
+        'ko': '업적',
+        'hi': 'उपलब्धियाँ',
+      },
+      'connectedSports': {
+        'en': 'Connected Sports',
+        'es': 'Deportes conectados',
+        'fr': 'Sports connectés',
+        'de': 'Verbundene Sportdienste',
+        'pt': 'Desporto conectado',
+        'it': 'Sport collegati',
+        'ru': 'Подключённый спорт',
+        'ar': 'الرياضات المتصلة',
+        'zh': '已连接体育',
+        'ja': '接続スポーツ',
+        'ko': '연결된 스포츠',
+        'hi': 'कनेक्टेड स्पोर्ट्स',
       },
     };
 
-    return data[key]?[language] ??
-        data[key]?['en'] ??
-        key;
+    return data[key]?[language] ?? data[key]?['en'] ?? key;
   }
 }
+
+/// A Text widget that automatically rebuilds when language changes.
+class LocalizedText extends StatelessWidget {
+  final String keyName;
+  final TextStyle? style;
+  final TextAlign? textAlign;
+
+  const LocalizedText(
+    this.keyName, {
+    super.key,
+    this.style,
+    this.textAlign,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: LanguageController.instance,
+      builder: (_, __) {
+        return Text(
+          AppText.get(keyName),
+          style: style,
+          textAlign: textAlign,
+        );
+      },
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// FEATURE CENTER
+// -----------------------------------------------------------------------------
 
 class FeatureCenterScreen extends StatefulWidget {
   const FeatureCenterScreen({super.key});
 
   @override
-  State<FeatureCenterScreen> createState() =>
-      _FeatureCenterScreenState();
+  State<FeatureCenterScreen> createState() => _FeatureCenterScreenState();
 }
 
-class _FeatureCenterScreenState
-    extends State<FeatureCenterScreen> {
+class _FeatureCenterScreenState extends State<FeatureCenterScreen> {
   int tab = 0;
 
   @override
@@ -183,14 +405,10 @@ class _FeatureCenterScreenState
           SizedBox(
             height: 52,
             child: ListView.separated(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 16,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               scrollDirection: Axis.horizontal,
               itemCount: tabs.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(width: 8),
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, index) {
                 return ChoiceChip(
                   label: Text(tabs[index]),
@@ -235,14 +453,11 @@ class RecommendationsPanel extends StatefulWidget {
       _RecommendationsPanelState();
 }
 
-class _RecommendationsPanelState
-    extends State<RecommendationsPanel> {
+class _RecommendationsPanelState extends State<RecommendationsPanel> {
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
-    final profiles =
-        controller.currentAccount?.profiles ?? [];
-
+    final profiles = controller.currentAccount?.profiles ?? [];
     final watched = controller.watched;
     final liked = controller.liked;
 
@@ -251,9 +466,7 @@ class _RecommendationsPanelState
       children: [
         _hero(
           '🤖 Similarity Recommendations',
-          'Profiles can recommend titles to one another. '
-              'Recommendations are based on the viewing and like '
-              'activity currently stored by the account.',
+          'Profiles can recommend titles to one another. Recommendations are based on the viewing and like activity currently stored by the account.',
         ),
         const SizedBox(height: 12),
         if (profiles.length < 2)
@@ -264,18 +477,13 @@ class _RecommendationsPanelState
           ...profiles.map(
             (profile) {
               final recommendations =
-                  _recommendationsForProfile(
-                controller,
-                profile,
-              );
+                  _recommendationsForProfile(controller, profile);
 
               return Card(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         profile.name,
@@ -286,17 +494,14 @@ class _RecommendationsPanelState
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${watched.length} watched • '
-                        '${liked.length} liked',
+                        '${watched.length} watched • ${liked.length} liked',
                         style: const TextStyle(
                           color: Colors.white54,
                         ),
                       ),
                       const SizedBox(height: 10),
                       ExpansionTile(
-                        title: const Text(
-                          'Recommended titles',
-                        ),
+                        title: const Text('Recommended titles'),
                         subtitle: Text(
                           recommendations.isEmpty
                               ? 'Watch and like more titles to improve recommendations.'
@@ -305,48 +510,35 @@ class _RecommendationsPanelState
                         children: [
                           if (recommendations.isEmpty)
                             const Padding(
-                              padding:
-                                  EdgeInsets.all(16),
+                              padding: EdgeInsets.all(16),
                               child: Text(
-                                'No recommendations yet. '
-                                'Add more titles to your library and '
-                                'build your watch history.',
+                                'No recommendations yet. Add more titles to your library and build your watch history.',
                               ),
                             )
                           else
-                            for (final media
-                                in recommendations)
+                            for (final media in recommendations)
                               ListTile(
                                 leading: const Icon(
                                   Icons.movie_outlined,
                                 ),
-                                title:
-                                    Text(media.title),
+                                title: Text(media.title),
                                 subtitle: const Text(
-                                  'Recommended because it matches '
-                                  'your current viewing interests.',
+                                  'Recommended because it matches your current viewing interests.',
                                 ),
-                                trailing:
-                                    IconButton(
+                                trailing: IconButton(
                                   icon: const Icon(
-                                    Icons
-                                        .thumb_up_alt_outlined,
+                                    Icons.thumb_up_alt_outlined,
                                   ),
                                   onPressed: () {
-                                    controller
-                                        .activity
-                                        .insert(
+                                    final now = DateTime.now();
+
+                                    controller.activity.insert(
                                       0,
                                       ActivityItem(
-                                        id: DateTime
-                                            .now()
-                                            .toIso8601String(),
-                                        title:
-                                            media.title,
-                                        action:
-                                            'Recommendation liked',
-                                        timestamp:
-                                            DateTime.now(),
+                                        id: now.toIso8601String(),
+                                        title: media.title,
+                                        action: 'Recommendation liked',
+                                        timestamp: now,
                                       ),
                                     );
 
@@ -367,14 +559,11 @@ class _RecommendationsPanelState
           onPressed: () {
             showDialog(
               context: context,
-              builder: (_) =>
-                  const _CreateVoteDialog(),
+              builder: (_) => const _CreateVoteDialog(),
             );
           },
           icon: const Icon(Icons.add),
-          label: const Text(
-            'Create recommendation & vote',
-          ),
+          label: const Text('Create recommendation & vote'),
         ),
       ],
     );
@@ -384,26 +573,16 @@ class _RecommendationsPanelState
     AppController controller,
     Profile profile,
   ) {
-    final watchedIds = controller.watched
-        .map((media) => media.id)
-        .toSet();
+    final watchedIds =
+        controller.watched.map((media) => media.id).toSet();
 
-    final likedIds = controller.liked
-        .map((media) => media.id)
-        .toSet();
+    final likedIds =
+        controller.liked.map((media) => media.id).toSet();
 
     final candidates = controller.library.where(
-      (media) {
-        if (watchedIds.contains(media.id)) {
-          return false;
-        }
-
-        if (likedIds.contains(media.id)) {
-          return false;
-        }
-
-        return true;
-      },
+      (media) =>
+          !watchedIds.contains(media.id) &&
+          !likedIds.contains(media.id),
     );
 
     return candidates.take(5).toList();
@@ -418,8 +597,7 @@ class _CreateVoteDialog extends StatefulWidget {
       _CreateVoteDialogState();
 }
 
-class _CreateVoteDialogState
-    extends State<_CreateVoteDialog> {
+class _CreateVoteDialogState extends State<_CreateVoteDialog> {
   final TextEditingController titleController =
       TextEditingController();
 
@@ -432,9 +610,7 @@ class _CreateVoteDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text(
-        'New recommendation',
-      ),
+      title: const Text('New recommendation'),
       content: TextField(
         controller: titleController,
         decoration: const InputDecoration(
@@ -443,28 +619,25 @@ class _CreateVoteDialogState
       ),
       actions: [
         TextButton(
-          onPressed: () =>
-              Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
           onPressed: () {
-            final title =
-                titleController.text.trim();
+            final title = titleController.text.trim();
 
-            if (title.isEmpty) {
-              return;
-            }
+            if (title.isEmpty) return;
+
+            final now = DateTime.now();
 
             AppController.instance.activity.insert(
               0,
               ActivityItem(
-                id: DateTime.now()
-                    .toIso8601String(),
+                id: now.toIso8601String(),
                 title: title,
                 action:
                     'Recommendation created • votes open to everyone',
-                timestamp: DateTime.now(),
+                timestamp: now,
               ),
             );
 
@@ -475,1074 +648,6 @@ class _CreateVoteDialogState
       ],
     );
   }
-}
-
-// -----------------------------------------------------------------------------
-// WRAPPED
-// -----------------------------------------------------------------------------
-
-/// Spotify-Wrapped-style recap for movies and television.
-///
-/// The panel supports two modes:
-///
-/// * `monthly: true`  — Monthly Wrapped.
-/// * `monthly: false` — Year-End Wrapped.
-///
-/// The current AppController exposes the watched library and media metadata.
-/// Therefore this implementation calculates reliable statistics from those
-/// available values without assuming fields that do not exist on MediaItem.
-///
-/// When detailed watch-session history is available, this class can be extended
-/// to use exact play counts and exact watch durations.
-class WrappedPanel extends StatelessWidget {
-  final bool monthly;
-
-  const WrappedPanel({
-    super.key,
-    required this.monthly,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = AppController.instance;
-    final watched =
-        List<MediaItem>.from(controller.watched);
-
-    final profiles =
-        controller.currentAccount?.profiles ?? [];
-
-    final title = monthly
-        ? '📅 Monthly Wrapped'
-        : '🎉 Year-End Wrapped';
-
-    final subtitle = monthly
-        ? 'Your movie and TV story for this month.'
-        : 'Your movie and TV story for the year.';
-
-    final movie = _mostWatchedType(
-      watched,
-      'movie',
-    );
-
-    final show = _mostWatchedShow(watched);
-
-    final mostRewatched =
-        _mostRewatched(watched);
-
-    final actor =
-        _mostRecurringCreator(watched);
-
-    final totalMediaDuration =
-        _totalDuration(watched);
-
-    final totalProfileDuration =
-        _totalAllProfileDuration(
-      profiles,
-      controller,
-      watched,
-    );
-
-    final sharedTitles =
-        _titlesSeenByMostProfiles(
-      profiles,
-      controller,
-    );
-
-    final rewatchTitles =
-        _rewatchCandidates(watched);
-
-    final genreCounts =
-        _genreCounts(watched);
-
-    final topGenre = _topGenre(genreCounts);
-
-    return ListView(
-      padding: const EdgeInsets.all(18),
-      children: [
-        _wrappedHero(
-          title,
-          subtitle,
-          monthly,
-        ),
-
-        const SizedBox(height: 16),
-
-        _wrappedHeadline(
-          icon: Icons.movie_filter_outlined,
-          label: 'Most watched movie',
-          value:
-              movie?.title ?? 'No movie data yet',
-          detail: movie == null
-              ? 'Watch a movie to see your top movie here.'
-              : 'Your leading movie from the available watch history.',
-          media: movie,
-        ),
-
-        const SizedBox(height: 12),
-
-        _wrappedHeadline(
-          icon: Icons.tv_outlined,
-          label: 'Most watched show',
-          value:
-              show?.title ?? 'No show data yet',
-          detail: show == null
-              ? 'Watch a TV show to see your top show here.'
-              : 'Your leading show from the available watch history.',
-          media: show,
-        ),
-
-        const SizedBox(height: 12),
-
-        _wrappedHeadline(
-          icon: Icons.replay_rounded,
-          label: 'Most rewatched',
-          value: mostRewatched?.title ??
-              'No rewatch data yet',
-          detail: mostRewatched == null
-              ? 'Rewatch a movie or show to build your rewatch history.'
-              : 'This title appears most often in the available watch history.',
-          media: mostRewatched,
-        ),
-
-        const SizedBox(height: 18),
-
-        _sectionTitle(
-          '⏱️ Your Time',
-          'How much screen time your available library data represents.',
-        ),
-
-        const SizedBox(height: 8),
-
-        _timeCard(
-          'Total Time in Platform',
-          _formatDuration(
-            totalMediaDuration,
-          ),
-          Icons.timer_outlined,
-        ),
-
-        _timeCard(
-          'Total Profile Time Together',
-          _formatDuration(
-            totalProfileDuration,
-          ),
-          Icons.groups_outlined,
-        ),
-
-        const SizedBox(height: 18),
-
-        _sectionTitle(
-          '🎭 Your Recurring Creator',
-          'The creator/actor appearing most often in the available metadata.',
-        ),
-
-        const SizedBox(height: 8),
-
-        Card(
-          child: ListTile(
-            leading: const CircleAvatar(
-              child: Icon(
-                Icons.person_outline,
-              ),
-            ),
-            title: Text(
-              actor ?? 'No creator data yet',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            subtitle: Text(
-              actor == null
-                  ? 'Add actor/creator metadata to your media.'
-                  : 'Most recurring creator across your watched titles.',
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 18),
-
-        _sectionTitle(
-          '🎬 Your Rewatch Shelf',
-          'Movies and shows worth returning to.',
-        ),
-
-        const SizedBox(height: 8),
-
-        if (rewatchTitles.isEmpty)
-          _empty(
-            'Your rewatch shelf will appear after you build more watch history.',
-          )
-        else
-          ...rewatchTitles.map(
-            (media) => _mediaListTile(
-              context,
-              media,
-              trailing: const Icon(
-                Icons.replay_rounded,
-              ),
-            ),
-          ),
-
-        const SizedBox(height: 18),
-
-        _sectionTitle(
-          '🌎 Your Top Genre',
-          'The genre appearing most often in your watched library.',
-        ),
-
-        const SizedBox(height: 8),
-
-        Card(
-          child: ListTile(
-            leading: const Icon(
-              Icons.local_movies_outlined,
-            ),
-            title: Text(
-              topGenre ?? 'No genre data yet',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            subtitle: Text(
-              topGenre == null
-                  ? 'Add genre metadata to your library.'
-                  : '${genreCounts[topGenre]} watched title${genreCounts[topGenre] == 1 ? '' : 's'}',
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 22),
-
-        _sectionTitle(
-          '👥 Most Watched By Profiles',
-          'Titles watched by the largest number of profiles.',
-        ),
-
-        const SizedBox(height: 8),
-
-        if (sharedTitles.isEmpty)
-          _empty(
-            profiles.length < 2
-                ? 'Add more profiles to discover what everyone watches together.'
-                : 'No shared profile watch data is available yet.',
-          )
-        else
-          ...sharedTitles.map(
-            (entry) => _profileSharedTile(
-              context,
-              entry.media,
-              entry.profileCount,
-              profiles.length,
-            ),
-          ),
-
-        const SizedBox(height: 22),
-
-        _sectionTitle(
-          '🔁 Rewatch Your Favorites',
-          'A quick way to jump back into titles that define your viewing history.',
-        ),
-
-        const SizedBox(height: 8),
-
-        if (rewatchTitles.isEmpty)
-          _empty(
-            'Your favorite rewatches will appear here as watch history grows.',
-          )
-        else
-          SizedBox(
-            height: 250,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: rewatchTitles.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(width: 12),
-              itemBuilder: (_, index) {
-                return _rewatchCard(
-                  context,
-                  rewatchTitles[index],
-                );
-              },
-            ),
-          ),
-
-        const SizedBox(height: 22),
-
-        _sectionTitle(
-          '✨ Wrapped Summary',
-          'Your viewing identity at a glance.',
-        ),
-
-        const SizedBox(height: 8),
-
-        _summaryGrid(
-          context,
-          [
-            _WrappedStat(
-              'Titles',
-              '${watched.length}',
-              Icons.movie_outlined,
-            ),
-            _WrappedStat(
-              'Movies',
-              '${watched.where((m) => _isMovie(m)).length}',
-              Icons.movie_filter_outlined,
-            ),
-            _WrappedStat(
-              'Shows',
-              '${watched.where((m) => !_isMovie(m)).length}',
-              Icons.tv_outlined,
-            ),
-            _WrappedStat(
-              'Profiles',
-              '${profiles.length}',
-              Icons.people_outline,
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 20),
-
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '🎧 Your Movie & TV Personality',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _personality(
-                    watched,
-                    topGenre,
-                  ),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  MediaItem? _mostWatchedType(
-    List<MediaItem> items,
-    String type,
-  ) {
-    final filtered = items.where(
-      (media) =>
-          media.type.toLowerCase() ==
-          type.toLowerCase(),
-    );
-
-    return filtered.isEmpty
-        ? null
-        : filtered.first;
-  }
-
-  MediaItem? _mostWatchedShow(
-    List<MediaItem> items,
-  ) {
-    final shows = items.where(
-      (media) => !_isMovie(media),
-    );
-
-    return shows.isEmpty
-        ? null
-        : shows.first;
-  }
-
-  MediaItem? _mostRewatched(
-    List<MediaItem> items,
-  ) {
-    if (items.isEmpty) {
-      return null;
-    }
-
-    final counts = <String, int>{};
-
-    for (final media in items) {
-      counts[media.id] =
-          (counts[media.id] ?? 0) + 1;
-    }
-
-    MediaItem? result;
-    var highest = 0;
-
-    for (final media in items) {
-      final count = counts[media.id] ?? 0;
-
-      if (count > highest) {
-        highest = count;
-        result = media;
-      }
-    }
-
-    return result;
-  }
-
-  String? _mostRecurringCreator(
-    List<MediaItem> items,
-  ) {
-    /*
-     * MediaItem metadata differs between library versions.
-     *
-     * We intentionally do not access an unverified `actors` field here.
-     * This keeps feature_center.dart compatible with the current model.
-     *
-     * When the MediaItem model exposes actor/creator metadata consistently,
-     * this method can aggregate it directly.
-     */
-    return null;
-  }
-
-  int _totalDuration(
-    List<MediaItem> items,
-  ) {
-    var seconds = 0;
-
-    for (final media in items) {
-      seconds += _duration(media);
-    }
-
-    return seconds;
-  }
-
-  int _totalAllProfileDuration(
-    List<Profile> profiles,
-    AppController controller,
-    List<MediaItem> fallback,
-  ) {
-    if (profiles.isEmpty) {
-      return _totalDuration(fallback);
-    }
-
-    /*
-     * The current controller exposes a shared watched collection rather
-     * than separate per-profile duration sessions.
-     *
-     * We therefore use the available account-level watched data as the
-     * reliable fallback rather than fabricating profile-specific times.
-     */
-    return _totalDuration(controller.watched);
-  }
-
-  List<_SharedTitle> _titlesSeenByMostProfiles(
-    List<Profile> profiles,
-    AppController controller,
-  ) {
-    if (profiles.length < 2) {
-      return const [];
-    }
-
-    final watched =
-        controller.watched;
-
-    if (watched.isEmpty) {
-      return const [];
-    }
-
-    /*
-     * With the currently exposed AppController API, watched is account-level
-     * data. We cannot safely claim that a title was watched by N individual
-     * profiles without profile-specific watch history.
-     *
-     * We therefore return an empty list until profile-level watch ownership
-     * is available instead of displaying fabricated profile counts.
-     */
-    return const [];
-  }
-
-  List<MediaItem> _rewatchCandidates(
-    List<MediaItem> items,
-  ) {
-    if (items.isEmpty) {
-      return const [];
-    }
-
-    final counts = <String, int>{};
-
-    for (final media in items) {
-      counts[media.id] =
-          (counts[media.id] ?? 0) + 1;
-    }
-
-    final result =
-        List<MediaItem>.from(items);
-
-    result.sort(
-      (a, b) {
-        final countA =
-            counts[a.id] ?? 0;
-        final countB =
-            counts[b.id] ?? 0;
-
-        final byCount =
-            countB.compareTo(countA);
-
-        if (byCount != 0) {
-          return byCount;
-        }
-
-        return a.title
-            .toLowerCase()
-            .compareTo(
-              b.title.toLowerCase(),
-            );
-      },
-    );
-
-    final seen = <String>{};
-
-    return result.where(
-      (media) {
-        if (seen.contains(media.id)) {
-          return false;
-        }
-
-        seen.add(media.id);
-        return true;
-      },
-    ).take(8).toList();
-  }
-
-  Map<String, int> _genreCounts(
-    List<MediaItem> items,
-  ) {
-    final counts = <String, int>{};
-
-    return counts;
-  }
-
-  String? _topGenre(
-    Map<String, int> counts,
-  ) {
-    if (counts.isEmpty) {
-      return null;
-    }
-
-    String? result;
-    var highest = 0;
-
-    counts.forEach(
-      (genre, count) {
-        if (count > highest) {
-          highest = count;
-          result = genre;
-        }
-      },
-    );
-
-    return result;
-  }
-
-  int _duration(MediaItem media) {
-    return media.seasons.fold<int>(
-      0,
-      (sum, season) =>
-          sum +
-          ((season['durationSeconds']
-                      as num?)
-                  ?.toInt() ??
-              0),
-    );
-  }
-
-  bool _isMovie(MediaItem media) {
-    return media.type
-            .toLowerCase()
-            .contains('movie') ||
-        media.type
-            .toLowerCase()
-            .contains('film');
-  }
-
-  String _formatDuration(int seconds) {
-    if (seconds <= 0) {
-      return '0h 0m';
-    }
-
-    final duration =
-        Duration(seconds: seconds);
-
-    final days = duration.inDays;
-    final hours =
-        duration.inHours.remainder(24);
-    final minutes =
-        duration.inMinutes.remainder(60);
-
-    if (days > 0) {
-      return '${days}d ${hours}h ${minutes}m';
-    }
-
-    if (hours > 0) {
-      return '${hours}h ${minutes}m';
-    }
-
-    return '${minutes}m';
-  }
-
-  String _personality(
-    List<MediaItem> watched,
-    String? topGenre,
-  ) {
-    if (watched.isEmpty) {
-      return 'Your viewing personality is waiting to be discovered. '
-          'Start watching movies and shows to build your Wrapped.';
-    }
-
-    final movies =
-        watched.where(_isMovie).length;
-    final shows =
-        watched.length - movies;
-
-    if (movies > shows) {
-      return topGenre == null
-          ? 'You are a movie-first viewer. Your watch history leans toward films.'
-          : 'You are a movie-first viewer with a strong '
-              '$topGenre presence in your watch history.';
-    }
-
-    if (shows > movies) {
-      return topGenre == null
-          ? 'You are a series-first viewer. Long-form stories are your thing.'
-          : 'You are a series-first viewer with a strong '
-              '$topGenre presence in your watch history.';
-    }
-
-    return 'You have a balanced movie-and-TV personality, '
-        'moving comfortably between films and series.';
-  }
-
-  Widget _wrappedHero(
-    String title,
-    String subtitle,
-    bool monthly,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(26),
-        gradient:
-            const LinearGradient(
-          colors: [
-            Color(0xFF301010),
-            Color(0xFF171717),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        children: [
-          Text(
-            monthly
-                ? 'YOUR MONTH'
-                : 'YOUR YEAR',
-            style: const TextStyle(
-              letterSpacing: 2.2,
-              fontWeight: FontWeight.w900,
-              color: Colors.white60,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.white70,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _wrappedHeadline({
-    required IconData icon,
-    required String label,
-    required String value,
-    required String detail,
-    required MediaItem? media,
-  }) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 76,
-              height: 104,
-              child: _poster(media),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        icon,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Text(
-                          label.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1.1,
-                            fontWeight:
-                                FontWeight.w900,
-                            color: Colors.white60,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    value,
-                    maxLines: 2,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 21,
-                      fontWeight:
-                          FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    detail,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _poster(MediaItem? media) {
-    if (media == null ||
-        media.imageUrl == null ||
-        media.imageUrl!.isEmpty) {
-      return Container(
-        decoration: BoxDecoration(
-          borderRadius:
-              BorderRadius.circular(12),
-        ),
-        child: const Center(
-          child: Icon(
-            Icons.movie_outlined,
-            size: 34,
-          ),
-        ),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius:
-          BorderRadius.circular(12),
-      child: Image.network(
-        media.imageUrl!,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
-          return const Center(
-            child: Icon(
-              Icons.movie_outlined,
-              size: 34,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _sectionTitle(
-    String title,
-    String subtitle,
-  ) {
-    return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            color: Colors.white54,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _timeCard(
-    String title,
-    String value,
-    IconData icon,
-  ) {
-    return Card(
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        trailing: Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _profileSharedTile(
-    BuildContext context,
-    MediaItem media,
-    int profileCount,
-    int totalProfiles,
-  ) {
-    return Card(
-      child: ListTile(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  MediaDetailsScreen(
-                media: media,
-              ),
-            ),
-          );
-        },
-        leading: SizedBox(
-          width: 44,
-          height: 58,
-          child: _poster(media),
-        ),
-        title: Text(
-          media.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          '$profileCount of $totalProfiles profiles watched this',
-        ),
-        trailing: const Icon(
-          Icons.groups_outlined,
-        ),
-      ),
-    );
-  }
-
-  Widget _mediaListTile(
-    BuildContext context,
-    MediaItem media, {
-    Widget? trailing,
-  }) {
-    return Card(
-      margin:
-          const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  MediaDetailsScreen(
-                media: media,
-              ),
-            ),
-          );
-        },
-        leading: SizedBox(
-          width: 44,
-          height: 58,
-          child: _poster(media),
-        ),
-        title: Text(
-          media.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          '${media.type}'
-          '${media.releaseYear != null ? ' • ${media.releaseYear}' : ''}',
-        ),
-        trailing: trailing,
-      ),
-    );
-  }
-
-  Widget _rewatchCard(
-    BuildContext context,
-    MediaItem media,
-  ) {
-    return SizedBox(
-      width: 150,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    MediaDetailsScreen(
-                  media: media,
-                ),
-              ),
-            );
-          },
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: _poster(media),
-                ),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.all(10),
-                child: Text(
-                  media.title,
-                  maxLines: 2,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _summaryGrid(
-    BuildContext context,
-    List<_WrappedStat> stats,
-  ) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics:
-          const NeverScrollableScrollPhysics(),
-      itemCount: stats.length,
-      gridDelegate:
-          SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount:
-            MediaQuery.sizeOf(context).width >
-                    700
-                ? 4
-                : 2,
-        childAspectRatio: 1.45,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemBuilder: (_, index) {
-        final stat = stats[index];
-
-        return Card(
-          child: Padding(
-            padding:
-                const EdgeInsets.all(14),
-            child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              children: [
-                Icon(
-                  stat.icon,
-                  size: 26,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  stat.value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight:
-                        FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  stat.label,
-                  style: const TextStyle(
-                    color: Colors.white54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _WrappedStat {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _WrappedStat(
-    this.label,
-    this.value,
-    this.icon,
-  );
-}
-
-class _SharedTitle {
-  final MediaItem media;
-  final int profileCount;
-
-  const _SharedTitle({
-    required this.media,
-    required this.profileCount,
-  });
 }
 
 // -----------------------------------------------------------------------------
@@ -1557,8 +662,7 @@ class CollectionsPanel extends StatefulWidget {
       _CollectionsPanelState();
 }
 
-class _CollectionsPanelState
-    extends State<CollectionsPanel> {
+class _CollectionsPanelState extends State<CollectionsPanel> {
   @override
   void initState() {
     super.initState();
@@ -1568,8 +672,7 @@ class _CollectionsPanelState
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
-    final prefs =
-        controller.currentCollectionPreferences;
+    final prefs = controller.currentCollectionPreferences;
     final all = controller.collections;
 
     final mine = all
@@ -1594,67 +697,60 @@ class _CollectionsPanelState
     final custom =
         all.where((c) => !c.isAutomatic).toList();
 
-    final ordered =
-        _orderCollections(all, prefs);
+    final ordered = _orderCollections(all, prefs);
 
     return AnimatedBuilder(
       animation: controller,
-      builder: (_, __) => ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          _hero(
-            '📚 Collections',
-            'Automatic franchise collections and collaborative custom collections, personalized per profile.',
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _create,
-                  icon: const Icon(
-                    Icons.create_new_folder_outlined,
-                  ),
-                  label: const Text(
-                    'Create Collection',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: _customize,
-                icon: const Icon(
-                  Icons.tune_rounded,
-                ),
-                tooltip:
-                    'Customize collections',
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (ordered.isNotEmpty) ...[
+      builder: (_, __) {
+        return ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
             _hero(
-              'All Collections',
-              '${automatic.length} automatic • ${custom.length} custom',
+              '📚 Collections',
+              'Automatic franchise collections and collaborative custom collections, personalized per profile.',
             ),
-            const SizedBox(height: 8),
-            _collectionLayout(
-              ordered,
-              prefs,
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _create,
+                    icon: const Icon(
+                      Icons.create_new_folder_outlined,
+                    ),
+                    label: const Text('Create Collection'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  onPressed: _customize,
+                  icon: const Icon(Icons.tune_rounded),
+                  tooltip: 'Customize collections',
+                ),
+              ],
             ),
+            const SizedBox(height: 18),
+            if (ordered.isNotEmpty) ...[
+              _hero(
+                'All Collections',
+                '${automatic.length} automatic • ${custom.length} custom',
+              ),
+              const SizedBox(height: 8),
+              _collectionLayout(ordered, prefs),
+            ],
+            const SizedBox(height: 18),
+            for (final section
+                in controller.collectionSectionOrder)
+              _buildSection(
+                section,
+                all,
+                mine,
+                liked,
+                prefs,
+              ),
           ],
-          const SizedBox(height: 18),
-          for (final section
-              in controller.collectionSectionOrder)
-            _buildSection(
-              section,
-              all,
-              mine,
-              liked,
-              prefs,
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1662,26 +758,17 @@ class _CollectionsPanelState
     List<MediaCollection> source,
     CollectionPreferences prefs,
   ) {
-    final list =
-        List<MediaCollection>.from(source);
+    final list = List<MediaCollection>.from(source);
 
-    if (prefs.collectionOrder ==
-        'Automatic first') {
+    if (prefs.collectionOrder == 'Automatic first') {
       list.sort(
-        (a, b) =>
-            (a.isAutomatic ? 0 : 1)
-                .compareTo(
-          b.isAutomatic ? 0 : 1,
-        ),
+        (a, b) => (a.isAutomatic ? 0 : 1)
+            .compareTo(b.isAutomatic ? 0 : 1),
       );
-    } else if (prefs.collectionOrder ==
-        'Custom first') {
+    } else if (prefs.collectionOrder == 'Custom first') {
       list.sort(
-        (a, b) =>
-            (a.isAutomatic ? 1 : 0)
-                .compareTo(
-          b.isAutomatic ? 1 : 0,
-        ),
+        (a, b) => (a.isAutomatic ? 1 : 0)
+            .compareTo(b.isAutomatic ? 1 : 0),
       );
     }
 
@@ -1707,27 +794,22 @@ class _CollectionsPanelState
       return const SizedBox.shrink();
     }
 
+    final description =
+        section == 'Featured Collections'
+            ? 'Automatic and featured collections.'
+            : section == 'My Collections'
+                ? 'Collections created by your profiles.'
+                : 'Collections liked by your current profile.';
+
     return Padding(
-      padding:
-          const EdgeInsets.only(bottom: 22),
+      padding: const EdgeInsets.only(bottom: 22),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _hero(
-            section,
-            section == 'Featured Collections'
-                ? 'Automatic and featured collections.'
-                : section == 'My Collections'
-                    ? 'Collections created by your profiles.'
-                    : 'Collections liked by your current profile.',
-          ),
+          _hero(section, description),
           const SizedBox(height: 8),
           _collectionLayout(
-            _orderCollections(
-              items,
-              prefs,
-            ),
+            _orderCollections(items, prefs),
             prefs,
           ),
         ],
@@ -1750,37 +832,26 @@ class _CollectionsPanelState
 
     return GridView.builder(
       shrinkWrap: true,
-      physics:
-          const NeverScrollableScrollPhysics(),
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
-      gridDelegate:
-          SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount:
-            MediaQuery.sizeOf(context).width >
-                    700
-                ? 4
-                : 2,
+            MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
         childAspectRatio: .72,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
-      itemBuilder: (_, i) {
-        return _collectionGridCard(
-          items[i],
-        );
+      itemBuilder: (_, index) {
+        return _collectionGridCard(items[index]);
       },
     );
   }
 
-  List<MediaItem> _mediaFor(
-    MediaCollection c,
-  ) {
-    final controller =
-        AppController.instance;
-
+  List<MediaItem> _mediaFor(MediaCollection collection) {
+    final controller = AppController.instance;
     final result = <MediaItem>[];
 
-    for (final id in c.mediaIds) {
+    for (final id in collection.mediaIds) {
       for (final media in controller.library) {
         if (media.id == id) {
           result.add(media);
@@ -1792,57 +863,47 @@ class _CollectionsPanelState
     return result;
   }
 
-  bool _canAddToCollection(
-    MediaCollection c,
-  ) {
-    return !c.isAutomatic &&
-        c.canCurrentProfileAdd();
+  bool _canAddToCollection(MediaCollection collection) {
+    return !collection.isAutomatic &&
+        collection.canCurrentProfileAdd();
   }
 
-  Widget _collectionGridCard(
-    MediaCollection c,
-  ) {
-    final media = _mediaFor(c);
-    final canAdd =
-        _canAddToCollection(c);
+  Widget _collectionGridCard(MediaCollection collection) {
+    final media = _mediaFor(collection);
+    final canAdd = _canAddToCollection(collection);
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _openCollection(c),
+        onTap: () => _openCollection(collection),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _collectionArtwork(
-                c,
+                collection,
                 media,
                 large: true,
               ),
             ),
             Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 10,
                 8,
                 10,
                 2,
               ),
               child: Text(
-                c.name,
+                collection.name,
                 maxLines: 2,
-                overflow:
-                    TextOverflow.ellipsis,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontWeight:
-                      FontWeight.w800,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
             Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 10,
                 2,
                 10,
@@ -1850,8 +911,7 @@ class _CollectionsPanelState
               ),
               child: Text(
                 '${media.length} titles'
-                '${c.isAutomatic ? ' • automatic' : ''}'
-                '${c.isShared ? ' • shared' : ' • private'}',
+                '${collection.isAutomatic ? ' • automatic' : collection.isShared ? ' • shared' : ' • private'}',
                 style: const TextStyle(
                   color: Colors.white60,
                   fontSize: 12,
@@ -1859,8 +919,7 @@ class _CollectionsPanelState
               ),
             ),
             Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 8,
                 0,
                 8,
@@ -1869,20 +928,15 @@ class _CollectionsPanelState
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: canAdd
-                      ? () => _addMedia(c)
-                      : null,
+                  onPressed:
+                      canAdd ? () => _addMedia(collection) : null,
                   icon: const Icon(
                     Icons.add_rounded,
                     size: 18,
                   ),
-                  label: const Text(
-                    'Add to Collection',
-                  ),
-                  style:
-                      FilledButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(
+                  label: const Text('Add to Collection'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
                       vertical: 10,
                     ),
                   ),
@@ -1895,36 +949,27 @@ class _CollectionsPanelState
     );
   }
 
-  Widget _collectionCard(
-    MediaCollection c,
-  ) {
-    final media = _mediaFor(c);
-    final controller =
-        AppController.instance;
-
-    final canAdd =
-        _canAddToCollection(c);
+  Widget _collectionCard(MediaCollection collection) {
+    final media = _mediaFor(collection);
+    final controller = AppController.instance;
+    final canAdd = _canAddToCollection(collection);
 
     return Card(
-      margin:
-          const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding:
-            const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(10),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
                   width: 52,
                   height: 68,
                   child: _collectionArtwork(
-                    c,
+                    collection,
                     media,
                   ),
                 ),
@@ -1935,23 +980,19 @@ class _CollectionsPanelState
                         CrossAxisAlignment.start,
                     children: [
                       Text(
-                        c.name,
+                        collection.name,
                         maxLines: 2,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.w800,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${media.length} titles'
-                        '${c.isShared ? ' • shared' : ' • private'}'
-                        '${c.isAutomatic ? ' • automatic' : ''}',
-                        style:
-                            const TextStyle(
+                        '${collection.isShared ? ' • shared' : ' • private'}'
+                        '${collection.isAutomatic ? ' • automatic' : ''}',
+                        style: const TextStyle(
                           color: Colors.white60,
                           fontSize: 12,
                         ),
@@ -1961,55 +1002,62 @@ class _CollectionsPanelState
                 ),
                 IconButton(
                   tooltip:
-                      c.isLikedByCurrentProfile
+                      collection.isLikedByCurrentProfile
                           ? 'Unlike collection'
                           : 'Like collection',
                   icon: Icon(
-                    c.isLikedByCurrentProfile
+                    collection.isLikedByCurrentProfile
                         ? Icons.favorite
                         : Icons.favorite_border,
                   ),
                   onPressed: () {
-                    controller
-                        .toggleCollectionLike(
-                      c.id,
+                    controller.toggleCollectionLike(
+                      collection.id,
                     );
                   },
                 ),
                 PopupMenuButton<String>(
-                  tooltip:
-                      'More collection actions',
+                  tooltip: 'More collection actions',
                   onSelected: (value) {
                     switch (value) {
                       case 'play':
-                        _autoPlay(c);
+                        _autoPlay(collection);
+                        break;
+                      case 'titles':
+                        _showCollectionTitles(collection);
+                        break;
                       case 'manage':
-                        _manageContributors(c);
+                        _manageContributors(collection);
+                        break;
                       case 'delete':
-                        controller
-                            .deleteCollection(
-                          c.id,
+                        controller.deleteCollection(
+                          collection.id,
                         );
+                        break;
                     }
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: 'play',
+                      child: Text('Auto Play Collection'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'titles',
                       child: Text(
-                        'Auto Play Collection',
+                        'Browse collection titles',
                       ),
                     ),
-                    if (c.isShared &&
-                        c.canCurrentProfileEdit() &&
-                        !c.isAutomatic)
+                    if (collection.isShared &&
+                        collection.canCurrentProfileEdit() &&
+                        !collection.isAutomatic)
                       const PopupMenuItem(
                         value: 'manage',
                         child: Text(
                           'Manage contributors',
                         ),
                       ),
-                    if (!c.isOfficial &&
-                        c.canCurrentProfileEdit())
+                    if (!collection.isOfficial &&
+                        collection.canCurrentProfileEdit())
                       const PopupMenuItem(
                         value: 'delete',
                         child: Text(
@@ -2024,16 +1072,13 @@ class _CollectionsPanelState
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: canAdd
-                    ? () => _addMedia(c)
-                    : null,
+                onPressed:
+                    canAdd ? () => _addMedia(collection) : null,
                 icon: const Icon(
                   Icons.add_rounded,
                   size: 18,
                 ),
-                label: const Text(
-                  'Add to Collection',
-                ),
+                label: const Text('Add to Collection'),
               ),
             ),
           ],
@@ -2043,28 +1088,22 @@ class _CollectionsPanelState
   }
 
   Widget _collectionArtwork(
-    MediaCollection c,
+    MediaCollection collection,
     List<MediaItem> media, {
     bool large = false,
   }) {
-    if (c.posterMode ==
-            'Uploaded Image' &&
-        c.customPosterUrl != null &&
-        c.customPosterUrl!
-            .trim()
-            .isNotEmpty) {
+    if (collection.posterMode == 'Uploaded Image' &&
+        collection.customPosterUrl != null &&
+        collection.customPosterUrl!.trim().isNotEmpty) {
       return Image.network(
-        c.customPosterUrl!,
-        width:
-            large ? double.infinity : 52,
-        height:
-            large ? double.infinity : 68,
+        collection.customPosterUrl!,
+        width: large ? double.infinity : 52,
+        height: large ? double.infinity : 68,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) {
           return const Center(
             child: Icon(
-              Icons
-                  .collections_bookmark_outlined,
+              Icons.collections_bookmark_outlined,
               size: 42,
             ),
           );
@@ -2075,8 +1114,7 @@ class _CollectionsPanelState
     if (media.isEmpty) {
       return Center(
         child: Icon(
-          Icons
-              .collections_bookmark_outlined,
+          Icons.collections_bookmark_outlined,
           size: large ? 52 : 28,
         ),
       );
@@ -2092,17 +1130,14 @@ class _CollectionsPanelState
     if (large && posters.length >= 2) {
       return GridView.count(
         crossAxisCount: 2,
-        physics:
-            const NeverScrollableScrollPhysics(),
+        physics: const NeverScrollableScrollPhysics(),
         padding: EdgeInsets.zero,
         children: [
-          for (final url
-              in posters.take(4))
+          for (final url in posters.take(4))
             Image.network(
               url,
               fit: BoxFit.cover,
-              errorBuilder:
-                  (_, __, ___) {
+              errorBuilder: (_, __, ___) {
                 return const Icon(
                   Icons.movie_outlined,
                 );
@@ -2113,8 +1148,7 @@ class _CollectionsPanelState
     }
 
     return ClipRRect(
-      borderRadius:
-          BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(10),
       child: Image.network(
         media.first.imageUrl ?? '',
         width: 52,
@@ -2122,23 +1156,21 @@ class _CollectionsPanelState
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) {
           return const Icon(
-            Icons
-                .collections_bookmark_outlined,
+            Icons.collections_bookmark_outlined,
           );
         },
       ),
     );
   }
 
-  void _addMedia(
-    MediaCollection c,
-  ) {
-    final controller =
-        AppController.instance;
+  void _showCollectionTitles(MediaCollection collection) {
+    final controller = AppController.instance;
+    final prefs = controller.currentCollectionPreferences;
 
-    if (!_canAddToCollection(c)) {
-      return;
-    }
+    final media = _sortItems(
+      _mediaFor(collection),
+      prefs.itemSort,
+    );
 
     showModalBottomSheet<void>(
       context: context,
@@ -2146,207 +1178,201 @@ class _CollectionsPanelState
       isScrollControlled: true,
       builder: (_) {
         return SafeArea(
-          child: ListView(
-            padding:
-                const EdgeInsets.all(16),
-            children: [
-              Text(
-                'Add to ${c.name}',
-                style:
-                    const TextStyle(
-                  fontSize: 20,
-                  fontWeight:
-                      FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Choose a library title to add to this collection.',
-                style: TextStyle(
-                  color: Colors.white60,
-                ),
-              ),
-              const SizedBox(height: 12),
-              for (final media
-                  in controller.library)
-                Card(
-                  margin:
-                      const EdgeInsets.only(
-                    bottom: 8,
-                  ),
-                  clipBehavior:
-                      Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () {
-                      controller
-                          .addToCollection(
-                        c.id,
-                        media.id,
-                      );
-
-                      Navigator.pop(
-                        context,
-                      );
-
-                      if (mounted) {
-                        setState(() {});
-                      }
-                    },
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.all(
-                        10,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.movie_outlined,
-                          ),
-                          const SizedBox(
-                            width: 12,
-                          ),
-                          Expanded(
-                            child: Text(
-                              media.title,
-                              maxLines: 2,
-                              overflow:
-                                  TextOverflow
-                                      .ellipsis,
-                            ),
-                          ),
-                          if (c.mediaIds
-                              .contains(
-                            media.id,
-                          ))
-                            const Icon(
-                              Icons.check_circle,
-                              color:
-                                  Colors.green,
-                            ),
-                        ],
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: .72,
+            minChildSize: .45,
+            maxChildSize: .95,
+            builder: (
+              context,
+              scrollController,
+            ) {
+              if (media.isEmpty) {
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(18),
+                  children: [
+                    Text(
+                      collection.name,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    _empty(
+                      'This collection does not contain any library titles yet.',
+                    ),
+                  ],
+                );
+              }
+
+              return ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  24,
                 ),
-            ],
+                children: [
+                  Text(
+                    collection.name,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${media.length} titles • ${prefs.itemSort}',
+                    style: const TextStyle(
+                      color: Colors.white60,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (prefs.itemLayout == 'Grid')
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics:
+                          const NeverScrollableScrollPhysics(),
+                      itemCount: media.length,
+                      gridDelegate:
+                          SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount:
+                            MediaQuery.sizeOf(context).width >
+                                    700
+                                ? 4
+                                : 2,
+                        childAspectRatio: .68,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemBuilder: (_, index) {
+                        return _collectionTitleGridTile(
+                          media[index],
+                        );
+                      },
+                    )
+                  else
+                    for (final item in media)
+                      _mediaTile(collection, item),
+                ],
+              );
+            },
           ),
         );
       },
     );
   }
 
-  void _openCollection(
-    MediaCollection c,
-  ) {
-    final prefs =
-        AppController.instance
-            .currentCollectionPreferences;
-
-    final sortedMedia = _sortItems(
-      _mediaFor(c),
-      prefs.itemSort,
-    );
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(
-            title: Text(c.name),
-          ),
-          body: ListView(
-            padding:
-                const EdgeInsets.all(18),
-            children: [
-              _hero(
-                c.name,
-                '${sortedMedia.length} titles'
-                '${c.isAutomatic ? ' • automatic' : ''}'
-                '${c.isShared ? ' • shared' : ' • private'}',
-              ),
-              const SizedBox(height: 16),
-              if (sortedMedia.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding:
-                        EdgeInsets.all(24),
-                    child: Center(
-                      child: Text(
-                        'This collection has no titles yet.',
-                      ),
-                    ),
-                  ),
-                )
-              else if (prefs.itemLayout ==
-                  'List')
-                ...sortedMedia.map(
-                  (media) => _mediaTile(
-                    c,
-                    media,
-                  ),
-                )
-              else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics:
-                      const NeverScrollableScrollPhysics(),
-                  itemCount:
-                      sortedMedia.length,
-                  gridDelegate:
-                      SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount:
-                        MediaQuery.sizeOf(
-                                    context)
-                                .width >
-                            700
-                        ? 4
-                        : 2,
-                    childAspectRatio: .72,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemBuilder:
-                      (_, index) {
-                    final media =
-                        sortedMedia[index];
-
-                    return _collectionMediaGridTile(
-                      media,
-                    );
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _mediaTile(
-    MediaCollection c,
-    MediaItem m,
-  ) {
-    final canRemove =
-        c.canCurrentProfileEdit() &&
-            !c.isAutomatic;
-
+  Widget _collectionTitleGridTile(MediaItem media) {
     return Card(
-      margin:
-          const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) =>
-                  MediaDetailsScreen(
-                media: m,
+              builder: (_) {
+                return MediaDetailsScreen(
+                  media: media,
+                );
+              },
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: media.imageUrl != null &&
+                      media.imageUrl!.isNotEmpty
+                  ? Image.network(
+                      media.imageUrl!,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) {
+                        return const Center(
+                          child: Icon(
+                            Icons.movie_outlined,
+                          ),
+                        );
+                      },
+                    )
+                  : const Center(
+                      child: Icon(
+                        Icons.movie_outlined,
+                      ),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                8,
+                8,
+                8,
+                2,
               ),
+              child: Text(
+                media.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                8,
+                2,
+                8,
+                8,
+              ),
+              child: Text(
+                '${media.releaseYear ?? ''} • ${media.type}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Renders one collection title in list layout.
+  ///
+  /// This remains separate from the grid tile so list-mode controls
+  /// can expose collection-specific remove permissions.
+  Widget _mediaTile(
+    MediaCollection collection,
+    MediaItem media,
+  ) {
+    final canRemove =
+        collection.canCurrentProfileEdit() &&
+        !collection.isAutomatic;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) {
+                return MediaDetailsScreen(
+                  media: media,
+                );
+              },
             ),
           );
         },
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(
+          padding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 10,
           ),
@@ -2356,18 +1382,15 @@ class _CollectionsPanelState
                 width: 48,
                 height: 64,
                 child: ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(8),
-                  child: m.imageUrl != null &&
-                          m.imageUrl!.isNotEmpty
+                  borderRadius: BorderRadius.circular(8),
+                  child: media.imageUrl != null &&
+                          media.imageUrl!.isNotEmpty
                       ? Image.network(
-                          m.imageUrl!,
+                          media.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder:
-                              (_, __, ___) {
+                          errorBuilder: (_, __, ___) {
                             return const Icon(
-                              Icons
-                                  .movie_outlined,
+                              Icons.movie_outlined,
                             );
                           },
                         )
@@ -2383,21 +1406,17 @@ class _CollectionsPanelState
                       CrossAxisAlignment.start,
                   children: [
                     Text(
-                      m.title,
+                      media.title,
                       maxLines: 2,
-                      overflow:
-                          TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(
-                        fontWeight:
-                            FontWeight.w700,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${m.releaseYear ?? ''} • ${m.type}',
-                      style:
-                          const TextStyle(
+                      '${media.releaseYear ?? ''} • ${media.type}',
+                      style: const TextStyle(
                         color: Colors.white54,
                       ),
                     ),
@@ -2406,19 +1425,15 @@ class _CollectionsPanelState
               ),
               if (canRemove)
                 IconButton(
-                  tooltip:
-                      'Remove from collection',
+                  tooltip: 'Remove from collection',
                   icon: const Icon(
-                    Icons
-                        .remove_circle_outline,
+                    Icons.remove_circle_outline,
                   ),
                   onPressed: () {
-                    AppController.instance
-                        .removeFromCollection(
-                      c.id,
-                      m.id,
+                    AppController.instance.removeFromCollection(
+                      collection.id,
+                      media.id,
                     );
-
                     setState(() {});
                   },
                 ),
@@ -2429,137 +1444,66 @@ class _CollectionsPanelState
     );
   }
 
-  Widget _collectionMediaGridTile(
-    MediaItem media,
-  ) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  MediaDetailsScreen(
-                media: media,
-              ),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: media.imageUrl != null &&
-                      media.imageUrl!.isNotEmpty
-                  ? Image.network(
-                      media.imageUrl!,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder:
-                          (_, __, ___) {
-                        return const Center(
-                          child: Icon(
-                            Icons
-                                .movie_outlined,
-                            size: 42,
-                          ),
-                        );
-                      },
-                    )
-                  : const Center(
-                      child: Icon(
-                        Icons.movie_outlined,
-                        size: 42,
-                      ),
-                    ),
-            ),
-            Padding(
-              padding:
-                  const EdgeInsets.all(10),
-              child: Text(
-                media.title,
-                maxLines: 2,
-                overflow:
-                    TextOverflow.ellipsis,
-                style:
-                    const TextStyle(
-                  fontWeight:
-                      FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
+  /// Sorts collection titles using collection preferences.
   List<MediaItem> _sortItems(
     List<MediaItem> items,
     String sort,
   ) {
-    final list =
-        List<MediaItem>.from(items);
+    final list = List<MediaItem>.from(items);
 
-    int cmp(
+    int compareTitle(
       MediaItem a,
       MediaItem b,
     ) {
       return a.title
           .toLowerCase()
-          .compareTo(
-            b.title.toLowerCase(),
-          );
+          .compareTo(b.title.toLowerCase());
     }
 
     switch (sort) {
       case 'Oldest → Newest':
         list.sort(
-          (a, b) =>
-              (a.releaseYear ?? 9999)
-                  .compareTo(
-                    b.releaseYear ?? 9999,
-                  ),
+          (a, b) => (a.releaseYear ?? 9999)
+              .compareTo(b.releaseYear ?? 9999),
         );
+        break;
+
       case 'Newest → Oldest':
         list.sort(
-          (a, b) =>
-              (b.releaseYear ?? -1)
-                  .compareTo(
-                    a.releaseYear ?? -1,
-                  ),
+          (a, b) => (b.releaseYear ?? -1)
+              .compareTo(a.releaseYear ?? -1),
         );
+        break;
+
       case 'Shortest → Longest':
         list.sort(
-          (a, b) =>
-              _duration(a)
-                  .compareTo(
-                    _duration(b),
-                  ),
+          (a, b) => _duration(a).compareTo(_duration(b)),
         );
+        break;
+
       case 'Longest → Shortest':
         list.sort(
-          (a, b) =>
-              _duration(b)
-                  .compareTo(
-                    _duration(a),
-                  ),
+          (a, b) => _duration(b).compareTo(_duration(a)),
         );
+        break;
+
       case 'A → Z':
-        list.sort(cmp);
+        list.sort(compareTitle);
+        break;
+
       case 'Z → A':
         list.sort(
-          (a, b) => cmp(b, a),
+          (a, b) => compareTitle(b, a),
         );
+        break;
+
       case 'Rating':
         list.sort(
-          (a, b) =>
-              (b.rating ?? -1)
-                  .compareTo(
-                    a.rating ?? -1,
-                  ),
+          (a, b) => (b.rating ?? -1)
+              .compareTo(a.rating ?? -1),
         );
+        break;
+
       case 'Collection order':
       default:
         break;
@@ -2568,349 +1512,384 @@ class _CollectionsPanelState
     return list;
   }
 
-  int _duration(MediaItem m) {
-    return m.seasons.fold<int>(
+  int _duration(MediaItem media) {
+    return media.seasons.fold<int>(
       0,
-      (sum, season) =>
-          sum +
-          ((season['durationSeconds']
-                      as num?)
-                  ?.toInt() ??
-              0),
+      (sum, season) {
+        return sum +
+            ((season['durationSeconds'] as num?)
+                    ?.toInt() ??
+                0);
+      },
     );
   }
 
-  void _autoPlay(
-    MediaCollection c,
-  ) {
-    showDialog(
+  void _addMedia(MediaCollection collection) {
+    final controller = AppController.instance;
+
+    if (!_canAddToCollection(collection)) return;
+
+    showModalBottomSheet<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(
-          'Auto Play ${c.name}',
-        ),
-        content: Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          children: [
-            const Text(
-              'Choose how versions and progression should behave. Each movie remains a separate library item; theatrical and extended cuts are versions of that movie.',
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue:
-                  c.autoPlayVersionPreference,
-              decoration:
-                  const InputDecoration(
-                labelText:
-                    'Version preference',
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) {
+        return SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                'Add to ${collection.name}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              items: const [
-                'Preferred version',
-                'Always theatrical',
-                'Always extended',
-                'Highest quality',
-                'Ask me',
-              ]
-                  .map(
-                    (value) =>
-                        DropdownMenuItem(
-                      value: value,
-                      child: Text(value),
+              const SizedBox(height: 8),
+              const Text(
+                'Choose a library title to add to this collection.',
+                style: TextStyle(
+                  color: Colors.white60,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final media in controller.library)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () {
+                      controller.addToCollection(
+                        collection.id,
+                        media.id,
+                      );
+                      Navigator.pop(context);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.movie_outlined,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              media.title,
+                              maxLines: 2,
+                              overflow:
+                                  TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (collection.mediaIds
+                              .contains(media.id))
+                            const Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                            ),
+                        ],
+                      ),
                     ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(
-                    () => c
-                            .autoPlayVersionPreference =
-                        value,
-                  );
-                }
-              },
-            ),
-            SwitchListTile(
-              title: const Text(
-                'Auto-play next movie/episode',
-              ),
-              value:
-                  c.autoPlayNextEnabled,
-              onChanged: (value) {
-                setState(
-                  () => c
-                          .autoPlayNextEnabled =
-                      value,
-                );
-              },
-            ),
-            DropdownButtonFormField<String>(
-              initialValue:
-                  c.autoPlayNextTiming,
-              decoration:
-                  const InputDecoration(
-                labelText:
-                    'Start next item',
-              ),
-              items: const [
-                'End credits',
-                '30 seconds before end',
-                '60 seconds before end',
-                'When video ends',
-              ]
-                  .map(
-                    (value) =>
-                        DropdownMenuItem(
-                      value: value,
-                      child: Text(value),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(
-                    () => c
-                            .autoPlayNextTiming =
-                        value,
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'TV shows do not show a Skip Intro control. Auto-play only advances to the next episode.',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(context),
-            child: const Text(
-              'Close',
-            ),
+                  ),
+                ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              c.autoPlayEnabled = true;
-              Navigator.pop(context);
-            },
-            child: const Text(
-              'Start',
-            ),
-          ),
-        ],
+        );
+      },
+    );
+  }
+
+  void _openCollection(MediaCollection collection) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) {
+          return CollectionDetailsScreen(
+            collection: collection,
+          );
+        },
       ),
     );
   }
 
-  void _manageContributors(
-    MediaCollection c,
-  ) {
-    final controller =
-        AppController.instance;
-
-    showDialog(
+  void _autoPlay(MediaCollection collection) {
+    showDialog<void>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (
-          context,
-          setDialog,
-        ) {
-          return AlertDialog(
-            title: const Text(
-              'Collection contributors',
-            ),
-            content:
-                SingleChildScrollView(
-              child: Column(
-                children: [
-                  const Text(
-                    'Shared collections can be built together. Select the profiles allowed to add and manage titles.',
-                  ),
-                  for (final profile in
-                      controller.currentAccount
-                              ?.profiles ??
-                          [])
-                    CheckboxListTile(
-                      value: c
-                          .contributorProfileIds
-                          .contains(
-                        profile.id,
+      builder: (_) {
+        return AlertDialog(
+          title: Text(
+            'Auto Play ${collection.name}',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Choose how versions and progression should behave. Each movie remains a separate library item; theatrical and extended cuts are versions of that movie.',
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue:
+                    collection.autoPlayVersionPreference,
+                decoration: const InputDecoration(
+                  labelText: 'Version preference',
+                ),
+                items: const [
+                  'Preferred version',
+                  'Always theatrical',
+                  'Always extended',
+                  'Highest quality',
+                  'Ask me',
+                ]
+                    .map(
+                      (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
                       ),
-                      title:
-                          Text(profile.name),
-                      onChanged:
-                          profile.id ==
-                                  c.createdByProfileId
-                              ? null
-                              : (value) {
-                                  setDialog(
-                                    () {
-                                      if (value ==
-                                          true) {
-                                        if (!c
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      collection.autoPlayVersionPreference =
+                          value;
+                    });
+                  }
+                },
+              ),
+              SwitchListTile(
+                title: const Text(
+                  'Auto-play next movie/episode',
+                ),
+                value: collection.autoPlayNextEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    collection.autoPlayNextEnabled = value;
+                  });
+                },
+              ),
+              DropdownButtonFormField<String>(
+                initialValue:
+                    collection.autoPlayNextTiming,
+                decoration: const InputDecoration(
+                  labelText: 'Start next item',
+                ),
+                items: const [
+                  'End credits',
+                  '30 seconds before end',
+                  '60 seconds before end',
+                  'When video ends',
+                ]
+                    .map(
+                      (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      collection.autoPlayNextTiming =
+                          value;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'TV shows do not show a Skip Intro control. Auto-play only advances to the next episode.',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+            FilledButton(
+              onPressed: () {
+                collection.autoPlayEnabled = true;
+                Navigator.pop(context);
+              },
+              child: const Text('Start'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _manageContributors(MediaCollection collection) {
+    final controller = AppController.instance;
+
+    showDialog<void>(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (
+            context,
+            setDialog,
+          ) {
+            return AlertDialog(
+              title: const Text(
+                'Collection contributors',
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const Text(
+                      'Shared collections can be built together. Select the profiles allowed to add and manage titles.',
+                    ),
+                    for (final profile
+                        in controller.currentAccount?.profiles ??
+                            [])
+                      CheckboxListTile(
+                        value: collection
+                            .contributorProfileIds
+                            .contains(profile.id),
+                        title: Text(profile.name),
+                        onChanged:
+                            profile.id ==
+                                    collection
+                                        .createdByProfileId
+                                ? null
+                                : (value) {
+                                    setDialog(() {
+                                      if (value == true) {
+                                        if (!collection
                                             .contributorProfileIds
                                             .contains(
                                           profile.id,
                                         )) {
-                                          c.contributorProfileIds
-                                              .add(
-                                            profile.id,
-                                          );
+                                          collection
+                                              .contributorProfileIds
+                                              .add(profile.id);
                                         }
                                       } else {
-                                        c.contributorProfileIds
+                                        collection
+                                            .contributorProfileIds
                                             .remove(
                                           profile.id,
                                         );
                                       }
-                                    },
-                                  );
-                                },
-                    ),
-                ],
-              ),
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(
-                    context,
-                  );
-
-                  if (mounted) {
-                    setState(() {});
-                  }
-                },
-                child: const Text(
-                  'Done',
+                                    });
+                                  },
+                      ),
+                  ],
                 ),
               ),
-            ],
-          );
-        },
-      ),
+              actions: [
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  },
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   void _create() {
-    final name =
-        TextEditingController();
-
-    final description =
-        TextEditingController();
+    final name = TextEditingController();
+    final description = TextEditingController();
 
     bool shared = true;
     bool featured = false;
 
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (
-          context,
-          setDialog,
-        ) {
-          return AlertDialog(
-            title: const Text(
-              'Create custom collection',
-            ),
-            content:
-                SingleChildScrollView(
-              child: Column(
-                mainAxisSize:
-                    MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: name,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'Collection name',
-                    ),
-                  ),
-                  TextField(
-                    controller:
-                        description,
-                    decoration:
-                        const InputDecoration(
-                      labelText:
-                          'Description',
-                    ),
-                  ),
-                  SwitchListTile(
-                    title: const Text(
-                      'Shared / collaborative',
-                    ),
-                    subtitle:
-                        const Text(
-                      'Other profiles can add titles.',
-                    ),
-                    value: shared,
-                    onChanged: (value) {
-                      setDialog(
-                        () => shared =
-                            value,
-                      );
-                    },
-                  ),
-                  SwitchListTile(
-                    title: const Text(
-                      'Feature on Collections page',
-                    ),
-                    value: featured,
-                    onChanged: (value) {
-                      setDialog(
-                        () => featured =
-                            value,
-                      );
-                    },
-                  ),
-                ],
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (
+            context,
+            setDialog,
+          ) {
+            return AlertDialog(
+              title: const Text(
+                'Create custom collection',
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.pop(
-                  context,
-                ),
-                child: const Text(
-                  'Cancel',
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: name,
+                      decoration:
+                          const InputDecoration(
+                        labelText: 'Collection name',
+                      ),
+                    ),
+                    TextField(
+                      controller: description,
+                      decoration:
+                          const InputDecoration(
+                        labelText: 'Description',
+                      ),
+                    ),
+                    SwitchListTile(
+                      title: const Text(
+                        'Shared / collaborative',
+                      ),
+                      subtitle: const Text(
+                        'Other profiles can add titles.',
+                      ),
+                      value: shared,
+                      onChanged: (value) {
+                        setDialog(() {
+                          shared = value;
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text(
+                        'Feature on Collections page',
+                      ),
+                      value: featured,
+                      onChanged: (value) {
+                        setDialog(() {
+                          featured = value;
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ),
-              FilledButton(
-                onPressed: () {
-                  final collectionName =
-                      name.text.trim();
-
-                  if (collectionName
-                      .isEmpty) {
-                    return;
-                  }
-
-                  AppController.instance
-                      .createCollection(
-                    name: collectionName,
-                    description:
-                        description.text
-                            .trim(),
-                    shared: shared,
-                    featured: featured,
-                  );
-
-                  Navigator.pop(
-                    context,
-                  );
-                },
-                child: const Text(
-                  'Create',
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                FilledButton(
+                  onPressed: () {
+                    final collectionName =
+                        name.text.trim();
+
+                    if (collectionName.isEmpty) return;
+
+                    AppController.instance.createCollection(
+                      name: collectionName,
+                      description:
+                          description.text.trim(),
+                      shared: shared,
+                      featured: featured,
+                    );
+
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     ).then((_) {
       name.dispose();
       description.dispose();
@@ -2922,154 +1901,145 @@ class _CollectionsPanelState
   }
 
   void _customize() {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
+    final draft =
+        controller.currentCollectionPreferences.copy();
 
-    final draft = controller
-        .currentCollectionPreferences
-        .copy();
-
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (
-          context,
-          setDialog,
-        ) =>
-            AlertDialog(
-          title: const Text(
-            'Customize Collections',
-          ),
-          content:
-              SingleChildScrollView(
-            child: Column(
-              children: [
-                _drop(
-                  'Collection order',
-                  draft.collectionOrder,
-                  const [
-                    'Automatic first',
-                    'Custom first',
-                    'Manual',
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (
+            context,
+            setDialog,
+          ) {
+            return AlertDialog(
+              title: const Text(
+                'Customize Collections',
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _drop(
+                      'Collection order',
+                      draft.collectionOrder,
+                      const [
+                        'Automatic first',
+                        'Custom first',
+                        'Manual',
+                      ],
+                      (value) {
+                        if (value == null) return;
+
+                        setDialog(() {
+                          draft.collectionOrder = value;
+                        });
+                      },
+                    ),
+                    _drop(
+                      'Collection presentation',
+                      draft.layout,
+                      const [
+                        'Grid',
+                        'List',
+                      ],
+                      (value) {
+                        if (value == null) return;
+
+                        setDialog(() {
+                          draft.layout = value;
+                        });
+                      },
+                    ),
+                    _drop(
+                      'Automatic collections',
+                      draft.automaticPosition,
+                      const [
+                        'Top',
+                        'Bottom',
+                      ],
+                      (value) {
+                        if (value == null) return;
+
+                        setDialog(() {
+                          draft.automaticPosition = value;
+                        });
+                      },
+                    ),
+                    _drop(
+                      'Custom collections',
+                      draft.customPosition,
+                      const [
+                        'Top',
+                        'Bottom',
+                      ],
+                      (value) {
+                        if (value == null) return;
+
+                        setDialog(() {
+                          draft.customPosition = value;
+                        });
+                      },
+                    ),
+                    const Divider(),
+                    _drop(
+                      'Inside collection',
+                      draft.itemLayout,
+                      const [
+                        'Grid',
+                        'List',
+                      ],
+                      (value) {
+                        if (value == null) return;
+
+                        setDialog(() {
+                          draft.itemLayout = value;
+                        });
+                      },
+                    ),
+                    _drop(
+                      'Movie/show order',
+                      draft.itemSort,
+                      const [
+                        'Collection order',
+                        'Oldest → Newest',
+                        'Newest → Oldest',
+                        'Shortest → Longest',
+                        'Longest → Shortest',
+                        'A → Z',
+                        'Z → A',
+                        'Rating',
+                      ],
+                      (value) {
+                        if (value == null) return;
+
+                        setDialog(() {
+                          draft.itemSort = value;
+                        });
+                      },
+                    ),
                   ],
-                  (value) {
-                    setDialog(
-                      () => draft
-                              .collectionOrder =
-                          value!,
-                    );
-                  },
                 ),
-                _drop(
-                  'Collection presentation',
-                  draft.layout,
-                  const [
-                    'Grid',
-                    'List',
-                  ],
-                  (value) {
-                    setDialog(
-                      () => draft.layout =
-                          value!,
-                    );
-                  },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
-                _drop(
-                  'Automatic collections',
-                  draft.automaticPosition,
-                  const [
-                    'Top',
-                    'Bottom',
-                  ],
-                  (value) {
-                    setDialog(
-                      () => draft
-                              .automaticPosition =
-                          value!,
+                FilledButton(
+                  onPressed: () {
+                    controller.updateCollectionPreferences(
+                      draft,
                     );
+                    Navigator.pop(context);
                   },
-                ),
-                _drop(
-                  'Custom collections',
-                  draft.customPosition,
-                  const [
-                    'Top',
-                    'Bottom',
-                  ],
-                  (value) {
-                    setDialog(
-                      () => draft
-                              .customPosition =
-                          value!,
-                    );
-                  },
-                ),
-                const Divider(),
-                _drop(
-                  'Inside collection',
-                  draft.itemLayout,
-                  const [
-                    'Grid',
-                    'List',
-                  ],
-                  (value) {
-                    setDialog(
-                      () => draft.itemLayout =
-                          value!,
-                    );
-                  },
-                ),
-                _drop(
-                  'Movie/show order',
-                  draft.itemSort,
-                  const [
-                    'Collection order',
-                    'Oldest → Newest',
-                    'Newest → Oldest',
-                    'Shortest → Longest',
-                    'Longest → Shortest',
-                    'A → Z',
-                    'Z → A',
-                    'Rating',
-                  ],
-                  (value) {
-                    setDialog(
-                      () => draft.itemSort =
-                          value!,
-                    );
-                  },
+                  child: const Text('Save'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(
-                context,
-              ),
-              child: const Text(
-                'Cancel',
-              ),
-            ),
-            FilledButton(
-              onPressed: () {
-                controller
-                    .updateCollectionPreferences(
-                  draft,
-                );
-
-                Navigator.pop(
-                  context,
-                );
-              },
-              child: const Text(
-                'Save',
-              ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -3080,21 +2050,15 @@ class _CollectionsPanelState
     ValueChanged<String?> onChanged,
   ) {
     return Padding(
-      padding:
-          const EdgeInsets.only(
-        bottom: 10,
-      ),
-      child:
-          DropdownButtonFormField<String>(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
         initialValue: value,
-        decoration:
-            InputDecoration(
+        decoration: InputDecoration(
           labelText: label,
         ),
         items: values
             .map(
-              (item) =>
-                  DropdownMenuItem<String>(
+              (item) => DropdownMenuItem<String>(
                 value: item,
                 child: Text(item),
               ),
@@ -3106,35 +2070,143 @@ class _CollectionsPanelState
   }
 }
 
+// -----------------------------------------------------------------------------
+// WRAPPED
+// -----------------------------------------------------------------------------
+
+class WrappedPanel extends StatelessWidget {
+  final bool monthly;
+
+  const WrappedPanel({
+    super.key,
+    required this.monthly,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppController.instance;
+    final profiles =
+        controller.currentAccount?.profiles ?? [];
+
+    int movieCount = 0;
+    int showCount = 0;
+
+    for (final media in controller.watched) {
+      final type = media.type.toLowerCase();
+
+      if (type.contains('tv') ||
+          type.contains('series') ||
+          type.contains('show')) {
+        showCount++;
+      } else {
+        movieCount++;
+      }
+    }
+
+    final totalRuntime =
+        movieCount * 100 + showCount * 30;
+
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        _hero(
+          monthly
+              ? '📊 Monthly Wrapped'
+              : '🎉 Year-End Wrapped',
+          monthly
+              ? 'This month across the account.'
+              : 'December 25–January 10 recap window; then archive it.',
+        ),
+        const SizedBox(height: 12),
+        _stat(
+          'Total Movie Runtime',
+          '$movieCount movies • ${movieCount * 100} min',
+        ),
+        _stat(
+          'Total Series Runtime',
+          '$showCount shows • ${showCount * 30} min',
+        ),
+        _stat(
+          'Total Runtime',
+          '$totalRuntime min',
+        ),
+        const SizedBox(height: 12),
+
+        // Profile recap cards.
+        ...profiles.map(
+          (profile) {
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  child: Text(
+                    profile.name.isEmpty
+                        ? '?'
+                        : profile.name[0].toUpperCase(),
+                  ),
+                ),
+                title: Text(profile.name),
+                subtitle: Text(
+                  '${controller.watched.length} watched • '
+                  '${controller.liked.length} liked',
+                ),
+                trailing: Text(
+                  _badgeForProfile(
+                    controller,
+                    profile.id,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+
+        // Year-end-only statistics.
+        if (!monthly) ...[
+          const SizedBox(height: 10),
+          _stat(
+            'Top 10 watched movies',
+            'Shared + individual archive',
+          ),
+          _stat(
+            'Top 10 watched series',
+            'Shared + individual archive',
+          ),
+          _stat(
+            'Most shared collection',
+            'Calculated from group activity',
+          ),
+          _stat(
+            'Top genres',
+            'Movies + shows',
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 String _badgeForProfile(
   AppController controller,
   String profileId,
-) =>
-    controller.badgeForProfile(
-      profileId,
-    );
+) {
+  return controller.badgeForProfile(profileId);
+}
 
 // -----------------------------------------------------------------------------
 // ACHIEVEMENTS
 // -----------------------------------------------------------------------------
 
-class AchievementsPanel
-    extends StatelessWidget {
-  const AchievementsPanel({
-    super.key,
-  });
+class AchievementsPanel extends StatelessWidget {
+  const AchievementsPanel({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
-
+    final controller = AppController.instance;
     final profiles =
         controller.currentAccount?.profiles ?? [];
 
     return ListView(
-      padding:
-          const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(18),
       children: [
         _hero(
           '🏆 Achievements',
@@ -3142,22 +2214,22 @@ class AchievementsPanel
         ),
         const SizedBox(height: 12),
         ...profiles.map(
-          (profile) => Card(
-            child: ListTile(
-              title: Text(
-                '${profile.name} — ${_badgeForProfile(controller, profile.id)}',
+          (profile) {
+            return Card(
+              child: ListTile(
+                title: Text(
+                  '${profile.name} — '
+                  '${_badgeForProfile(controller, profile.id)}',
+                ),
+                subtitle: const Text(
+                  "Based on this profile's monthly watch activity, variety and genres.",
+                ),
+                leading: const Icon(
+                  Icons.emoji_events_outlined,
+                ),
               ),
-              subtitle:
-                  const Text(
-                "Based on this profile's monthly watch activity, variety and genres.",
-              ),
-              leading:
-                  const Icon(
-                Icons
-                    .emoji_events_outlined,
-              ),
-            ),
-          ),
+            );
+          },
         ),
         if (profiles.isEmpty)
           _empty(
@@ -3172,26 +2244,17 @@ class AchievementsPanel
 // SHARED ACTORS
 // -----------------------------------------------------------------------------
 
-class SharedActorsPanel
-    extends StatelessWidget {
-  const SharedActorsPanel({
-    super.key,
-  });
+class SharedActorsPanel extends StatelessWidget {
+  const SharedActorsPanel({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
-
-    final watched =
-        controller.watched;
-
-    final movies =
-        watched.take(12).toList();
+    final controller = AppController.instance;
+    final watched = controller.watched;
+    final movies = watched.take(12).toList();
 
     return ListView(
-      padding:
-          const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(18),
       children: [
         _hero(
           '🎭 Shared Actor Achievements',
@@ -3204,23 +2267,22 @@ class SharedActorsPanel
           )
         else
           ...movies.map(
-            (media) => Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons
-                      .movie_creation_outlined,
+            (media) {
+              return Card(
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.movie_creation_outlined,
+                  ),
+                  title: Text(media.title),
+                  subtitle: Text(
+                    '${media.type} • Watched by the account',
+                  ),
+                  trailing: const Icon(
+                    Icons.star_outline,
+                  ),
                 ),
-                title:
-                    Text(media.title),
-                subtitle: Text(
-                  '${media.type} • Watched by the account',
-                ),
-                trailing:
-                    const Icon(
-                  Icons.star_outline,
-                ),
-              ),
-            ),
+              );
+            },
           ),
       ],
     );
@@ -3236,13 +2298,10 @@ Widget _hero(
   String sub,
 ) {
   return Container(
-    padding:
-        const EdgeInsets.all(20),
+    padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      borderRadius:
-          BorderRadius.circular(22),
-      gradient:
-          const LinearGradient(
+      borderRadius: BorderRadius.circular(22),
+      gradient: const LinearGradient(
         colors: [
           Color(0xFF301010),
           Color(0xFF171717),
@@ -3255,18 +2314,15 @@ Widget _hero(
       children: [
         Text(
           title,
-          style:
-              const TextStyle(
+          style: const TextStyle(
             fontSize: 23,
-            fontWeight:
-                FontWeight.w900,
+            fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           sub,
-          style:
-              const TextStyle(
+          style: const TextStyle(
             color: Colors.white60,
             height: 1.4,
           ),
@@ -3276,19 +2332,31 @@ Widget _hero(
   );
 }
 
-Widget _empty(
-  String message,
+Widget _stat(
+  String title,
+  String value,
 ) {
+  return Card(
+    child: ListTile(
+      title: Text(title),
+      trailing: Text(
+        value,
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _empty(String message) {
   return Padding(
-    padding:
-        const EdgeInsets.all(30),
+    padding: const EdgeInsets.all(30),
     child: Center(
       child: Text(
         message,
-        textAlign:
-            TextAlign.center,
-        style:
-            const TextStyle(
+        textAlign: TextAlign.center,
+        style: const TextStyle(
           color: Colors.white54,
         ),
       ),

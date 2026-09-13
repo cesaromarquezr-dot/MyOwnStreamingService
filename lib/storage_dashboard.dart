@@ -1,3 +1,7 @@
+// FILE: `lib/storage_dashboard.dart`.
+// Purpose: Part of the documented streaming-service client/backend architecture.
+// Media files remain on the appropriate account server; this source contains application logic, UI, or API coordination.
+
 // Customizable server storage dashboard used by the More menu and home server.
 
 import 'package:flutter/material.dart';
@@ -25,6 +29,7 @@ const Map<String, Color> namedColors = {
   'Grey': Colors.grey,
 };
 
+/// Implements the `StorageDashboardScreen` class for this feature or UI component.
 class StorageDashboardScreen extends StatefulWidget {
   const StorageDashboardScreen({super.key});
 
@@ -51,6 +56,7 @@ class StorageDashboardScreen extends StatefulWidget {
       _StorageDashboardScreenState();
 }
 
+/// Implements the `_StorageDashboardScreenState` class for this feature or UI component.
 class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
   // No media has been imported yet, so all storage values start at zero.
   final Map<String, double> used = {

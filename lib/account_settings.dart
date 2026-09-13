@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 
+/// Implements the `AccountSettingsScreen` class for this feature or UI component.
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
 
@@ -13,10 +14,14 @@ class AccountSettingsScreen extends StatefulWidget {
   State<AccountSettingsScreen> createState() => _AccountSettingsScreenState();
 }
 
+/// Implements the `_AccountSettingsScreenState` class for this feature or UI component.
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool loading = true;
   int limit = 1000000000000, used = 0;
   bool pending = false;
+  int requestedTb = 0;
+  double requestFeeUsd = 0;
+  String requestStatus = 'none';
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -35,6 +40,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           limit = (d['limitBytes'] as num?)?.toInt() ?? limit;
           used = (d['usedBytes'] as num?)?.toInt() ?? 0;
           pending = d['requestPending'] == true;
+          requestedTb = (d['requestedTerabytes'] as num?)?.toInt() ?? 0;
+          requestFeeUsd = (d['requestFeeUsd'] as num?)?.toDouble() ?? 0;
+          requestStatus = d['requestStatus']?.toString() ?? 'none';
         });
       }
     } catch (_) {}
@@ -121,57 +129,70 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return '$symbol${v.toStringAsFixed(2)}';
   }
 
-  /// Performs `_request` for this feature. Update this documentation when its contract changes.
-  Future<void> _request() {
-    return showDialog(
+  /// Lets the user choose additional physical storage and submits the paid request.
+  Future<void> _request() async {
+    var selectedTb = requestedTb > 0 ? requestedTb : 1;
+    const options = [1, 2, 4, 8, 12];
+    const pricePerTbUsd = 75.0;
+
+    await showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Request more storage'),
-        content: Text(
-          pending
-              ? 'A request is already pending.'
-              : 'Your account currently has ${_size(limit)}. '
-                  'Request additional server storage from the platform owner. '
-                  'There is no automatic charge for a storage request; '
-                  'the platform owner decides whether to grant it.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CLOSE'),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Request more storage'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Additional storage is physical storage that will be purchased and installed on your account server after payment is received.'),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                initialValue: selectedTb,
+                decoration: const InputDecoration(labelText: 'Additional storage'),
+                items: [for (final tb in options) DropdownMenuItem(value: tb, child: Text('+ $tb TB'))],
+                onChanged: (value) => setDialogState(() => selectedTb = value ?? 1),
+              ),
+              const SizedBox(height: 12),
+              Text('Additional fee: ${_price(selectedTb * pricePerTbUsd)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              const Text('This is a request for physical hardware. The platform owner will review the request, receive payment, obtain the storage, install it, and then update your server capacity.'),
+            ],
           ),
-          if (!pending)
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
             FilledButton(
               onPressed: () async {
                 Navigator.pop(context);
-
                 try {
-                  await AppController.instance.backendApi.requestMoreStorage();
-
-                  if (mounted) {
-                    setState(() => pending = true);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Storage request sent to the platform owner.',
-                        ),
-                      ),
-                    );
+                  final controller = AppController.instance;
+                  final d = await controller.backendApi.requestMoreStorage(additionalTerabytes: selectedTb);
+                  if (controller.currentAccount != null) {
+                    controller.currentAccount!.storageRequestPending = true;
+                    controller.currentAccount!.storageRequestedTerabytes = selectedTb;
+                    controller.currentAccount!.storageRequestFeeUsd = (d['feeUsd'] as num?)?.toDouble() ?? selectedTb * pricePerTbUsd;
+                    controller.currentAccount!.storageRequestStatus = 'requested';
+                    if (controller.backendApi.isAuthenticated && controller.isBackendAuthenticated) {
+                      try { await controller.syncStorageStateToSupabase(); } catch (_) {}
+                    }
                   }
+                  if (!mounted) return;
+                  setState(() {
+                    pending = true;
+                    requestedTb = selectedTb;
+                    requestFeeUsd = (d['feeUsd'] as num?)?.toDouble() ?? selectedTb * pricePerTbUsd;
+                    requestStatus = 'requested';
+                  });
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage request sent. Please wait for the platform owner to contact you.')));
                 } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e.toString()),
-                      ),
-                    );
-                  }
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                 }
               },
-              child: const Text('REQUEST'),
+              child: const Text('SEND REQUEST'),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -306,6 +327,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   Text(
                     '${_size(used)} used of ${_size(limit)}',
                   ),
+
+                  const SizedBox(height: 8),
+                  if (pending)
+                    Text(
+                      'Request: +$requestedTb TB • ${requestStatus.replaceAll('_', ' ')} • Fee: ${_price(requestFeeUsd)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
 
                   const SizedBox(height: 12),
 

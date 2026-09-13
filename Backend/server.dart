@@ -1,12 +1,31 @@
 // FILE: `Backend/server.dart`.
-// Purpose: Implements the server portion of the streaming service.
+// Purpose: Implements the HTTPS server portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// HTTPS:
+// - The backend listens using TLS instead of plain HTTP.
+// - Certificate and private-key paths are supplied through environment
+//   variables so secrets and private keys are not stored in source code.
+// - Required environment variables:
+//     TLS_CERTIFICATE_PATH
+//     TLS_PRIVATE_KEY_PATH
+// - Optional:
+//     TLS_PRIVATE_KEY_PASSWORD
+//
+// Example PowerShell configuration:
+//   $env:TLS_CERTIFICATE_PATH="C:\path\to\localhost.crt"
+//   $env:TLS_PRIVATE_KEY_PATH="C:\path\to\localhost.key"
+//   dart run server.dart
+//
+// The Flutter client should connect to:
+//   https://127.0.0.1:8080
 
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'config.dart';
+import 'supabase_store.dart';
 import 'database/database.dart';
 import 'middleware/authentication.dart';
 
@@ -24,6 +43,7 @@ import 'routes/legal_routes.dart';
 import 'routes/sports_routes.dart';
 import 'routes/review_routes.dart';
 import 'routes/home_server_routes.dart';
+import 'routes/supabase_sync_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -42,6 +62,8 @@ import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
 
 Future<void> main() async {
+  SupabaseStore.instance.initialize();
+
   final database = Database.instance;
 
   // ------------------------------------------------------------
@@ -57,8 +79,7 @@ Future<void> main() async {
     emailService: emailService,
   );
 
-  final recommendationsService =
-      const RecommendationsService();
+  final recommendationsService = const RecommendationsService();
 
   final searchService = SearchService(
     database: database,
@@ -77,8 +98,7 @@ Future<void> main() async {
   // GROUP RECOMMENDATION SERVICE
   // ------------------------------------------------------------
 
-  final groupRecommendationService =
-      GroupRecommendationService(
+  final groupRecommendationService = GroupRecommendationService(
     database,
   );
 
@@ -86,17 +106,15 @@ Future<void> main() async {
   // GROUP WATCH SERVICE
   // ------------------------------------------------------------
 
-  final groupWatchService =
-    GroupWatchService(
-  database: database,
-);
+  final groupWatchService = GroupWatchService(
+    database: database,
+  );
 
   // ------------------------------------------------------------
   // AUTHENTICATION
   // ------------------------------------------------------------
 
-  final authentication =
-      AuthenticationMiddleware(
+  final authentication = AuthenticationMiddleware(
     authService: authService,
   );
 
@@ -115,11 +133,9 @@ Future<void> main() async {
   // RECOMMENDATION ROUTES
   // ------------------------------------------------------------
 
-  final recommendationsRoutes =
-      RecommendationsRoutes(
+  final recommendationsRoutes = RecommendationsRoutes(
     authenticationMiddleware: authentication,
-    recommendationsService:
-        recommendationsService,
+    recommendationsService: recommendationsService,
     database: database,
   );
 
@@ -149,8 +165,7 @@ Future<void> main() async {
   final groupRoutes = GroupRoutes(
     database: database,
     authenticationMiddleware: authentication,
-    recommendationService:
-        groupRecommendationService,
+    recommendationService: groupRecommendationService,
     watchService: groupWatchService,
   );
 
@@ -175,14 +190,48 @@ Future<void> main() async {
     authentication: authentication,
   );
 
+  // ------------------------------------------------------------
+  // ADDITIONAL ROUTES
+  // ------------------------------------------------------------
+
   final remoteAccessService = RemoteAccessService(database);
-  final storageRoutes = StorageRoutes(authentication: authentication, email: emailService);
-  final platformRoutes = PlatformRoutes(authentication: authentication);
-  final libraryRoutes = LibraryRoutes(authentication: authentication);
-  final legalRoutes = LegalRoutes(authentication: authentication);
-  final sportsRoutes = SportsRoutes(authentication: authentication, service: const SportsService());
-  final reviewRoutes = ReviewRoutes(authentication: authentication, service: ReviewService(database));
-  final homeServerRoutes = HomeServerRoutes(authentication: authentication, service: HomeServerService());
+
+  final storageRoutes = StorageRoutes(
+    authentication: authentication,
+    email: emailService,
+  );
+
+  final platformRoutes = PlatformRoutes(
+    authentication: authentication,
+    paymentService: paymentService,
+  );
+
+  final libraryRoutes = LibraryRoutes(
+    authentication: authentication,
+  );
+
+  final legalRoutes = LegalRoutes(
+    authentication: authentication,
+  );
+
+  final sportsRoutes = SportsRoutes(
+    authentication: authentication,
+    service: const SportsService(),
+  );
+
+  final reviewRoutes = ReviewRoutes(
+    authentication: authentication,
+    service: ReviewService(database),
+  );
+
+  final homeServerRoutes = HomeServerRoutes(
+    authentication: authentication,
+    service: HomeServerService(),
+  );
+
+  final supabaseSyncRoutes = SupabaseSyncRoutes(
+    authentication: authentication,
+  );
 
   final remoteAccessRoutes = RemoteAccessRoutes(
     authentication: authentication,
@@ -191,12 +240,64 @@ Future<void> main() async {
   );
 
   // ------------------------------------------------------------
-  // START SERVER
+  // START HTTPS SERVER
   // ------------------------------------------------------------
 
-  final server = await HttpServer.bind(
+  final certificatePath =
+      Platform.environment['TLS_CERTIFICATE_PATH'];
+
+  final privateKeyPath =
+      Platform.environment['TLS_PRIVATE_KEY_PATH'];
+
+  final privateKeyPassword =
+      Platform.environment['TLS_PRIVATE_KEY_PASSWORD'];
+
+  if (certificatePath == null || certificatePath.trim().isEmpty) {
+    throw StateError(
+      'TLS_CERTIFICATE_PATH is not configured. '
+      'Set it to the TLS certificate file before starting the HTTPS backend.',
+    );
+  }
+
+  if (privateKeyPath == null || privateKeyPath.trim().isEmpty) {
+    throw StateError(
+      'TLS_PRIVATE_KEY_PATH is not configured. '
+      'Set it to the TLS private-key file before starting the HTTPS backend.',
+    );
+  }
+
+  final securityContext = SecurityContext();
+
+  try {
+    securityContext.useCertificateChain(
+      certificatePath,
+    );
+
+    if (privateKeyPassword != null &&
+        privateKeyPassword.isNotEmpty) {
+      securityContext.usePrivateKey(
+        privateKeyPath,
+        password: privateKeyPassword,
+      );
+    } else {
+      securityContext.usePrivateKey(
+        privateKeyPath,
+      );
+    }
+  } on TlsException catch (error) {
+    throw StateError(
+      'Unable to load the HTTPS certificate/private key: $error',
+    );
+  } on FileSystemException catch (error) {
+    throw StateError(
+      'Unable to access the HTTPS certificate/private key: $error',
+    );
+  }
+
+  final server = await HttpServer.bindSecure(
     AppConfig.host,
     AppConfig.port,
+    securityContext,
   );
 
   developer.log('');
@@ -216,7 +317,7 @@ Future<void> main() async {
   developer.log('');
 
   developer.log(
-    'Backend started successfully.',
+    'Backend started successfully with HTTPS.',
   );
 
   developer.log(
@@ -225,6 +326,16 @@ Future<void> main() async {
 
   developer.log(
     'API:     ${AppConfig.apiBaseUrl}',
+  );
+
+  developer.log('');
+
+  developer.log(
+    'TLS certificate: configured',
+  );
+
+  developer.log(
+    'TLS private key: configured',
   );
 
   developer.log('');
@@ -260,7 +371,7 @@ Future<void> main() async {
   developer.log('');
 
   developer.log(
-    'Waiting for requests...',
+    'Waiting for HTTPS requests...',
   );
 
   developer.log('');
@@ -282,6 +393,7 @@ Future<void> main() async {
       legalRoutes,
       reviewRoutes,
       homeServerRoutes,
+      supabaseSyncRoutes,
     );
   }
 }
@@ -306,6 +418,7 @@ Future<void> _handleRequest(
   LegalRoutes legalRoutes,
   ReviewRoutes reviewRoutes,
   HomeServerRoutes homeServerRoutes,
+  SupabaseSyncRoutes supabaseSyncRoutes,
 ) async {
   try {
     _addCorsHeaders(request.response);
@@ -315,8 +428,7 @@ Future<void> _handleRequest(
     // ----------------------------------------------------------
 
     if (request.method == 'OPTIONS') {
-      request.response.statusCode =
-          HttpStatus.noContent;
+      request.response.statusCode = HttpStatus.noContent;
 
       await request.response.close();
       return;
@@ -349,11 +461,8 @@ Future<void> _handleRequest(
     // RECOMMENDATION ROUTES
     // ----------------------------------------------------------
 
-    if (path ==
-        '/api/v1/recommendations') {
-      await recommendationsRoutes.handle(
-        request,
-      );
+    if (path == '/api/v1/recommendations') {
+      await recommendationsRoutes.handle(request);
       return;
     }
 
@@ -361,11 +470,8 @@ Future<void> _handleRequest(
     // SMART SEARCH ROUTES
     // ----------------------------------------------------------
 
-    if (path ==
-        '/api/v1/search') {
-      await searchRoutes.handle(
-        request,
-      );
+    if (path == '/api/v1/search') {
+      await searchRoutes.handle(request);
       return;
     }
 
@@ -388,7 +494,7 @@ Future<void> _handleRequest(
     }
 
     // ----------------------------------------------------------
-    // ARM ROUTES
+    // REMOTE ACCESS ROUTES
     // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/remote/')) {
@@ -396,40 +502,81 @@ Future<void> _handleRequest(
       return;
     }
 
+    // ----------------------------------------------------------
+    // SUPABASE SYNC
+    // ----------------------------------------------------------
+
+    if (path == '/api/v1/supabase/sync/account') {
+      await supabaseSyncRoutes.handle(request);
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // STORAGE ROUTES
+    // ----------------------------------------------------------
+
     if (path.startsWith('/api/v1/storage')) {
       await storageRoutes.handle(request);
       return;
     }
+
+    // ----------------------------------------------------------
+    // PLATFORM ROUTES
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/platform/')) {
       await platformRoutes.handle(request);
       return;
     }
 
+    // ----------------------------------------------------------
+    // LIBRARY ROUTES
+    // ----------------------------------------------------------
+
     if (path.startsWith('/api/v1/library/')) {
       await libraryRoutes.handle(request);
       return;
     }
+
+    // ----------------------------------------------------------
+    // LEGAL ROUTES
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/legal/')) {
       await legalRoutes.handle(request);
       return;
     }
 
+    // ----------------------------------------------------------
+    // REVIEW ROUTES
+    // ----------------------------------------------------------
+
     if (path.startsWith('/api/v1/reviews')) {
       await reviewRoutes.handle(request);
       return;
     }
+
+    // ----------------------------------------------------------
+    // HOME SERVER ROUTES
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/server/')) {
       await homeServerRoutes.handle(request);
       return;
     }
 
+    // ----------------------------------------------------------
+    // SPORTS ROUTES
+    // ----------------------------------------------------------
+
     if (path.startsWith('/api/v1/sports')) {
       await sportsRoutes.handle(request);
       return;
     }
+
+    // ----------------------------------------------------------
+    // ARM ROUTES
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/arm/')) {
       await armRoutes.handle(request);
@@ -483,8 +630,7 @@ Future<void> _health(
     {
       'success': true,
       'status': 'online',
-      'service':
-          'Personal Streaming Service',
+      'service': 'Personal Streaming Service',
       'apiVersion': 'v1',
     },
   );
@@ -501,8 +647,7 @@ Future<void> _sendJson(
 ) async {
   response.statusCode = statusCode;
 
-  response.headers.contentType =
-      ContentType.json;
+  response.headers.contentType = ContentType.json;
 
   response.write(
     jsonEncode(data),

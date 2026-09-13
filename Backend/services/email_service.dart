@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:mailer/mailer.dart' as mailer;
 import 'package:mailer/smtp_server.dart';
 
+/// Implements the `EmailService` class for this feature or UI component.
 class EmailService {
   final String host;
   final int port;
@@ -129,26 +130,33 @@ class EmailService {
             '${details == null || details.isEmpty ? '' : '\n\n$details'}',
       );
 
-  /// Performs `storageRequest` for this feature. Update this documentation when its contract changes.
-  Future<void> storageRequest(String email, String username) => send(
+  /// Sends the platform-owner notification for a paid physical storage request.
+  Future<void> storageRequest(String email, String username, String accountId, String serverName, int terabytes, double feeUsd) => send(
         to: email,
-        subject: 'Storage expansion request received',
+        subject: 'Additional storage request received',
         body:
-            '$username requested more server storage for the personal streaming service.\n\n'
-            'The platform owner can review and approve the request.',
+            '$username from $accountId using $serverName is requesting $terabytes TB of additional storage.\n\n'
+            'Requested fee: \$${feeUsd.toStringAsFixed(2)} USD.\n'
+            'Please review the request, receive payment, acquire the physical storage, install it, and mark the request complete.',
       );
 
-  /// Performs `storageApproved` for this feature. Update this documentation when its contract changes.
-  Future<void> storageApproved(
-    String email,
-    int additionalTerabytes,
-  ) =>
-      send(
+  /// Sends the user the acceptance message while storage is being acquired.
+  Future<void> storageAccepted(String email, int terabytes) => send(
         to: email,
-        subject: 'Your request for more storage was successfully approved',
+        subject: 'Additional storage request accepted',
         body:
-            'Your request for more storage is successfully approved. '
-            'You have $additionalTerabytes TB of more storage.',
+            'We accepted your request for $terabytes TB of additional storage.\n\n'
+            'Please be patient while we obtain and install the additional storage on your server.',
+      );
+
+  /// Sends the user confirmation after physical storage has been installed.
+  Future<void> storageInstalled(String email, int terabytes) => send(
+        to: email,
+        subject: 'Additional storage added to your server',
+        body:
+            'Dear user,\n\n'
+            'We added $terabytes TB of additional storage to your server.\n'
+            'Your storage capacity has been updated.',
       );
 
   /// Performs `oneTimeCode` for this feature. Update this documentation when its contract changes.

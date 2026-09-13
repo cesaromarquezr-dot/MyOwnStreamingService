@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
+import './supabase/supabase_service.dart';
 
 enum SubscriptionPlan {
   monthly,
@@ -19,6 +20,7 @@ enum SubscriptionStatus {
   expired,
 }
 
+/// Implements the `Subscription` class for this feature or UI component.
 class Subscription {
   final SubscriptionPlan plan;
   SubscriptionStatus status;
@@ -31,22 +33,23 @@ class Subscription {
   double get price {
     switch (plan) {
       case SubscriptionPlan.monthly:
-        return 10.0;
+        return 54.99;
       case SubscriptionPlan.yearly:
-        return 100.0;
+        return 599.99;
     }
   }
 
   String get displayName {
     switch (plan) {
       case SubscriptionPlan.monthly:
-        return '\$10/month';
+        return '\$54.99/month';
       case SubscriptionPlan.yearly:
-        return '\$100/year';
+        return '\$599.99/year';
     }
   }
 }
 
+/// Implements the `MediaItem` class for this feature or UI component.
 class MediaItem {
   final String id;
   final String title;
@@ -320,6 +323,7 @@ class DescriptionGenerator {
   }
 }
 
+/// Implements the `Profile` class for this feature or UI component.
 class Profile {
   final String id;
   String name;
@@ -349,21 +353,35 @@ class Profile {
   }
 }
 
+/// Implements the `UserAccount` class for this feature or UI component.
 class UserAccount {
+  /// Backend account identifier used to correlate this client with Supabase.
+  final String id;
   final String username;
   final String email;
   Subscription subscription;
   final List<Profile> profiles;
   int storageLimitBytes;
   int storageUsedBytes;
+  bool storageRequestPending;
+  DateTime? storageRequestAt;
+  int storageRequestedTerabytes;
+  double storageRequestFeeUsd;
+  String storageRequestStatus;
 
   UserAccount({
+    this.id = '',
     required this.username,
     required this.email,
     required this.subscription,
     List<Profile>? profiles,
     this.storageLimitBytes = 1000000000000,
     this.storageUsedBytes = 0,
+    this.storageRequestPending = false,
+    this.storageRequestAt,
+    this.storageRequestedTerabytes = 0,
+    this.storageRequestFeeUsd = 0,
+    this.storageRequestStatus = 'none',
   }) : profiles = profiles ?? [];
 
   bool get hasActiveSubscription =>
@@ -375,6 +393,7 @@ class UserAccount {
   /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'username': username,
       'email': email,
       'subscription': {
@@ -384,11 +403,17 @@ class UserAccount {
       'profiles': profiles.map((profile) => profile.toJson()).toList(),
       'storageLimitBytes': storageLimitBytes,
       'storageUsedBytes': storageUsedBytes,
+      'storageRequestPending': storageRequestPending,
+      'storageRequestAt': storageRequestAt?.toIso8601String(),
+      'storageRequestedTerabytes': storageRequestedTerabytes,
+      'storageRequestFeeUsd': storageRequestFeeUsd,
+      'storageRequestStatus': storageRequestStatus,
     };
   }
 }
 
 
+/// Implements the `MediaCollection` class for this feature or UI component.
 class MediaCollection {
   final String id;
   String name;
@@ -496,6 +521,7 @@ class MediaCollection {
   );
 }
 
+/// Implements the `CollectionPreferences` class for this feature or UI component.
 class CollectionPreferences {
   String collectionOrder;
   String layout;
@@ -519,6 +545,7 @@ class CollectionPreferences {
   );
 }
 
+/// Implements the `ActivityItem` class for this feature or UI component.
 class ActivityItem {
   final String id;
   final String title;
@@ -533,6 +560,7 @@ class ActivityItem {
   });
 }
 
+/// Implements the `BackendGroupChatMessage` class for this feature or UI component.
 class BackendGroupChatMessage {
   final String id;
   final String profileId;
@@ -549,6 +577,7 @@ class BackendGroupChatMessage {
   );
 }
 
+/// Implements the `BackendGroupChatRoom` class for this feature or UI component.
 class BackendGroupChatRoom {
   final String id;
   final String name;
@@ -567,6 +596,7 @@ class BackendGroupChatRoom {
   }
 }
 
+/// Implements the `ChatMessage` class for this feature or UI component.
 class ChatMessage {
   final String id;
   final String sender;
@@ -581,6 +611,7 @@ class ChatMessage {
   });
 }
 
+/// Implements the `WishlistItem` class for this feature or UI component.
 class WishlistItem {
   final String id;
   final String title;
@@ -952,6 +983,7 @@ class GroupWatchSession {
   }
 }
 
+/// Implements the `AppController` class for this feature or UI component.
 class AppController extends ChangeNotifier {
   Map<String, dynamic>? lastLoginSecurity;
 
@@ -1196,6 +1228,7 @@ class AppController extends ChangeNotifier {
     //// The user does not enter or choose this username. 
     final username = cleanEmail.split('@').first;
     final account = UserAccount(
+      id: 'local_${DateTime.now().microsecondsSinceEpoch}',
       username: username,
       email: email.trim(),
       subscription: Subscription(
@@ -1341,6 +1374,11 @@ class AppController extends ChangeNotifier {
       profiles: profiles,
       storageLimitBytes: accountData is Map && accountData['storageLimitBytes'] is num ? (accountData['storageLimitBytes'] as num).toInt() : 1000000000000,
       storageUsedBytes: accountData is Map && accountData['storageUsedBytes'] is num ? (accountData['storageUsedBytes'] as num).toInt() : 0,
+      storageRequestPending: accountData is Map && accountData['storageRequestPending'] == true,
+      storageRequestAt: accountData is Map && accountData['storageRequestAt'] != null ? DateTime.tryParse(accountData['storageRequestAt'].toString()) : null,
+      storageRequestedTerabytes: accountData is Map && accountData['storageRequestedTerabytes'] is num ? (accountData['storageRequestedTerabytes'] as num).toInt() : 0,
+      storageRequestFeeUsd: accountData is Map && accountData['storageRequestFeeUsd'] is num ? (accountData['storageRequestFeeUsd'] as num).toDouble() : 0,
+      storageRequestStatus: accountData is Map ? accountData['storageRequestStatus']?.toString() ?? 'none' : 'none',
     );
 
     currentAccount = account;
@@ -1378,6 +1416,45 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     return response;
+  }
+
+  // ---------------------------------------------------------------------------
+  // SUPABASE SYNCHRONIZATION
+  // ---------------------------------------------------------------------------
+
+  /// Uploads the current account's sanitized application metadata to Supabase
+  /// through the authenticated backend service.
+  ///
+  /// Passwords, security hashes, session tokens, and physical media files are
+  /// never included in this synchronization payload.
+  Future<Map<String, dynamic>> syncCurrentAccountToSupabase() async {
+    final account = currentAccount;
+    if (account == null) {
+      throw BackendApiException('No account is currently loaded.');
+    }
+    if (!backendApi.isAuthenticated) {
+      throw BackendApiException('You must be logged in before synchronizing account data.');
+    }
+
+    final snapshot = <String, dynamic>{
+      'account': account.toJson(),
+      'currentProfileId': currentProfile?.id,
+      'activeProfileIds': List<String>.from(activeProfileIds),
+      'libraryMediaIds': library.map((m) => m.id).toList(),
+      'watchedMediaIds': watched.map((m) => m.id).toList(),
+      'likedMediaIds': liked.map((m) => m.id).toList(),
+      'collections': collections.map((c) => c.toJson()).toList(),
+      'groupWatchSessions': groupWatchSessions.map((s) => s.toJson()).toList(),
+    };
+
+    return backendApi.syncAccountToSupabase(snapshot: snapshot);
+  }
+
+  /// Synchronizes after a storage change without making UI code know about
+  /// the persistence transport. A sync failure is deliberately rethrown so
+  /// callers can show a retry message when appropriate.
+  Future<void> syncStorageStateToSupabase() async {
+    await syncCurrentAccountToSupabase();
   }
 
   // ---------------------------------------------------------------------------
@@ -1490,6 +1567,7 @@ class AppController extends ChangeNotifier {
 
     currentAccount =
         UserAccount(
+      id: accountMap['id']?.toString() ?? '',
       username: username,
       email: accountEmail,
       subscription:
@@ -1499,6 +1577,13 @@ class AppController extends ChangeNotifier {
             subscriptionStatus,
       ),
       profiles: profiles,
+      storageLimitBytes: accountMap['storageLimitBytes'] is num ? (accountMap['storageLimitBytes'] as num).toInt() : 1000000000000,
+      storageUsedBytes: accountMap['storageUsedBytes'] is num ? (accountMap['storageUsedBytes'] as num).toInt() : 0,
+      storageRequestPending: accountMap['storageRequestPending'] == true,
+      storageRequestAt: accountMap['storageRequestAt'] != null ? DateTime.tryParse(accountMap['storageRequestAt'].toString()) : null,
+      storageRequestedTerabytes: accountMap['storageRequestedTerabytes'] is num ? (accountMap['storageRequestedTerabytes'] as num).toInt() : 0,
+      storageRequestFeeUsd: accountMap['storageRequestFeeUsd'] is num ? (accountMap['storageRequestFeeUsd'] as num).toDouble() : 0,
+      storageRequestStatus: accountMap['storageRequestStatus']?.toString() ?? 'none',
     );
 
     currentProfile = profiles.isEmpty ? null : profiles.first;
@@ -1530,6 +1615,14 @@ class AppController extends ChangeNotifier {
     groupWatchLoading = false;
 
     notifyListeners();
+
+    if (SupabaseService.instance.isConfigured) {
+      try {
+        await syncCurrentAccountToSupabase();
+      } catch (_) {
+        // Supabase is persistence-enhancing; a temporary outage must not block login.
+      }
+    }
 
     await loadRecommendations();
     await loadGroupWishlist();
@@ -1569,7 +1662,7 @@ class AppController extends ChangeNotifier {
         await backendApi.logout();
       }
     } finally {
-      backendApi.clearToken();
+    backendApi.clearToken();
 
       currentAccount = null;
       currentProfile = null;
@@ -3250,8 +3343,9 @@ class AppController extends ChangeNotifier {
 
   /// Creates a real backend Group Watch session.
   ///
-  /// The selected profile becomes the host. Invited profiles are individual
-  /// profiles from the same account.
+  /// The selected profile becomes the host. Invited identifiers may belong to
+  /// other accounts; the backend resolves and authorizes them against the
+  /// participant's own account and server.
   Future<GroupWatchSession>
       createBackendGroupWatchSession(
     MediaItem media, {
@@ -3323,16 +3417,9 @@ class AppController extends ChangeNotifier {
 
     invited.remove(selectedProfileId);
 
-    for (final invitedId
-        in invited) {
-      if (!_accountHasProfile(
-        invitedId.trim(),
-      )) {
-        throw ArgumentError(
-          'One or more invited profiles do not belong to the current account.',
-        );
-      }
-    }
+    // Invited identifiers may refer to profiles in other accounts. The backend
+    // resolves usernames/emails/profile IDs and then verifies each participant
+    // against that account's server and media ownership.
 
     groupWatchLoading = true;
     groupWatchError = null;
@@ -4799,6 +4886,7 @@ class DetailsCustomization {
   }
 }
 
+/// Implements the `DetailsCustomizationStore` class for this feature or UI component.
 class DetailsCustomizationStore {
   DetailsCustomizationStore._();
 

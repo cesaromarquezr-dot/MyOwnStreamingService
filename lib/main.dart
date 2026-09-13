@@ -26,7 +26,7 @@ import 'device_features.dart';
 import 'roadmap_features.dart';
 import 'next_gen_features.dart';
 import 'how_it_works.dart';
-import 'sports.dart';
+import 'connected_sports.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
 import 'music_achievements.dart';
@@ -34,30 +34,57 @@ import 'home_server.dart';
 import 'storage_dashboard.dart';
 import 'library_hubs.dart';
 import 'home_widgets.dart';
+import 'supabase/supabase_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
   await AppController.instance.initializeBadges();
   await PlatformPreferenceStore.initialize();
+
   runApp(const MyStreamingService());
 }
+
+/// Implements the `MyStreamingService` class for this feature or UI component.
 class MyStreamingService extends StatelessWidget {
   const MyStreamingService({super.key});
+
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'My Streaming Service',
+
+      builder: (context, child) {
+        return AnimatedBuilder(
+          animation: LanguageController.instance,
+          builder: (_, __) {
+            final rtl = LanguageController.instance.current.code == 'ar';
+
+            return Directionality(
+              textDirection:
+                  rtl ? TextDirection.rtl : TextDirection.ltr,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+        );
+      },
+
       debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF090909),
+
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.red,
           brightness: Brightness.dark,
         ),
+
         useMaterial3: true,
+
         cardTheme: CardThemeData(
           color: const Color(0xFF141414),
           surfaceTintColor: Colors.transparent,
@@ -66,6 +93,7 @@ class MyStreamingService extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
         ),
+
         dialogTheme: DialogThemeData(
           backgroundColor: const Color(0xFF151515),
           surfaceTintColor: Colors.transparent,
@@ -73,32 +101,41 @@ class MyStreamingService extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
           ),
         ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xFF151515),
+
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
+
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
+
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.redAccent),
+            borderSide: const BorderSide(
+              color: Colors.redAccent,
+            ),
           ),
         ),
+
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: const Color(0xFF0E0E0E),
           surfaceTintColor: Colors.transparent,
           elevation: 0,
         ),
       ),
+
       home: const SplashScreen(),
     );
   }
 }
+
 // ============================================================
 // SPLASH SCREEN
 // ============================================================
@@ -107,6 +144,7 @@ class SplashScreen extends StatefulWidget {
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
+/// Implements the `_SplashScreenState` class for this feature or UI component.
 class _SplashScreenState extends State<SplashScreen> {
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -160,6 +198,7 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+/// Implements the `_LoginScreenState` class for this feature or UI component.
 class _LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
@@ -434,6 +473,7 @@ const Map<String, Color> namedColors = {
 
 Color colorFromName(String name) => namedColors[name] ?? Colors.black;
 
+/// Implements the `HomeCustomization` class for this feature or UI component.
 class HomeCustomization {
   bool showHero;
   bool showContinueWatching;
@@ -500,12 +540,12 @@ class HomeCustomization {
           'All Library',
           'Recommendations',
           'Music & Film',
-          'Live Sports',
+          'Connected Sports',
         ],
         navigationOrder = navigationOrder ?? [
           'Profile',
           'Home',
-          'Live Sports',
+          'Connected Sports',
           'More',
           'Music',
           'Film',
@@ -542,6 +582,7 @@ class HomeCustomization {
       );
 }
 
+/// Implements the `HomeCustomizationStore` class for this feature or UI component.
 class HomeCustomizationStore {
   HomeCustomizationStore._();
 
@@ -670,8 +711,14 @@ class HomeCustomizationStore {
     navbarStyle: m['navbarStyle']?.toString() ?? 'Solid',
     navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
     navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
-    sectionOrder: m['sectionOrder'] is List ? List<String>.from(m['sectionOrder'] as List) : null,
-    navigationOrder: m['navigationOrder'] is List ? List<String>.from(m['navigationOrder'] as List) : null,
+    sectionOrder: m['sectionOrder'] is List
+        ? (List<String>.from(m['sectionOrder'] as List)
+            ..replaceRange(0, (m['sectionOrder'] as List).length, (m['sectionOrder'] as List).map((e) => e.toString() == 'Live Sports' ? 'Connected Sports' : e.toString())))
+        : null,
+    navigationOrder: m['navigationOrder'] is List
+        ? (List<String>.from(m['navigationOrder'] as List)
+            ..replaceRange(0, (m['navigationOrder'] as List).length, (m['navigationOrder'] as List).map((e) => e.toString() == 'Live Sports' ? 'Connected Sports' : e.toString())))
+        : null,
   );
 }
 
@@ -680,6 +727,7 @@ enum _CustomizationPage {
   details,
 }
 
+/// Implements the `CustomizeHomeScreen` class for this feature or UI component.
 class CustomizeHomeScreen extends StatefulWidget {
   final bool firstSetup;
 
@@ -689,6 +737,7 @@ class CustomizeHomeScreen extends StatefulWidget {
   State<CustomizeHomeScreen> createState() => _CustomizeHomeScreenState();
 }
 
+/// Implements the `_CustomizeHomeScreenState` class for this feature or UI component.
 class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
   late DetailsCustomization detailsDraft;
@@ -1061,7 +1110,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         Text('Storage bar thickness: ${draft.storageBarThickness.round()} px', style: const TextStyle(color: Colors.white70)),
         Slider(value: draft.storageBarThickness.clamp(4, 32), min: 4, max: 32, divisions: 14, onChanged: (value) => setState(() => draft.storageBarThickness = value)),
         _dropdown(
-          label: 'Where should Live Sports appear on Home?',
+          label: 'Where should Connected Sports appear on Home?',
           value: draft.liveSportsPosition,
           values: _availableHomePositions(draft, excludeNavbar: true),
           onChanged: (value) => setState(() { draft.liveSportsPosition = value; _normalizeHomePositions(); }),
@@ -1184,7 +1233,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           draft.showAllLibrary,
           (v) => setState(() => draft.showAllLibrary = v),
         ),
-        _toggle('Live Sports', 'Show Live Sports when authentic/original authorized broadcasts are available.', draft.showLiveSports, (v) => setState(() => draft.showLiveSports = v)),
+        _toggle('Connected Sports', 'Show Connected Sports when connected provider data is available.', draft.showLiveSports, (v) => setState(() => draft.showLiveSports = v)),
         const SizedBox(height: 24),
         _sectionOrder(
           title: 'SECTION ORDER',
@@ -1398,6 +1447,99 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  /// Live preview of the profile's Home/Details configuration. The preview is
+  /// intentionally local and never changes the real library or playback state.
+  Widget _customizationPreview() {
+    final isHome = selectedPage == _CustomizationPage.home;
+    final bg = colorFromName(draft.homeBackgroundColor);
+    final accent = colorFromName(draft.navbarGlowColor);
+    final items = isHome
+        ? draft.sectionOrder.where((name) => name != 'All Library').take(5).toList()
+        : detailsDraft.sectionOrder.take(6).toList();
+
+    return SizedBox(
+      height: 520,
+      child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111111),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+        boxShadow: [BoxShadow(color: accent.withValues(alpha: .12), blurRadius: 24)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(isHome ? Icons.home_rounded : Icons.movie_outlined, color: accent),
+            const SizedBox(width: 8),
+            Text(isHome ? 'HOME PREVIEW' : 'DETAILS PREVIEW', style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+            const Spacer(),
+            const Icon(Icons.visibility_outlined, size: 17, color: Colors.white54),
+          ]),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(color: bg.withValues(alpha: .72), borderRadius: BorderRadius.circular(18)),
+              clipBehavior: Clip.antiAlias,
+              child: isHome
+                  ? Column(children: [
+                      Container(
+                        height: 92,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [accent.withValues(alpha: .42), Colors.black]),
+                        ),
+                        padding: const EdgeInsets.all(14),
+                        child: const Row(children: [
+                          Icon(Icons.play_circle_fill_rounded, size: 28),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Featured title', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+                        ]),
+                      ),
+                      Expanded(child: ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: items.length,
+                        itemBuilder: (_, index) => Padding(
+                          padding: const EdgeInsets.only(bottom: 9),
+                          child: Container(
+                            height: 56,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .055), borderRadius: BorderRadius.circular(14)),
+                            child: Row(children: [
+                              Container(width: 42, height: 42, decoration: BoxDecoration(color: accent.withValues(alpha: .16), borderRadius: BorderRadius.circular(9)), child: const Icon(Icons.movie_outlined, size: 19)),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(items[index], style: const TextStyle(fontWeight: FontWeight.w700))),
+                              const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                            ]),
+                          ),
+                        ),
+                      )),
+                    ])
+                  : ListView(
+                      padding: const EdgeInsets.all(14),
+                      children: [
+                        Container(height: 120, decoration: BoxDecoration(color: accent.withValues(alpha: .14), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.image_outlined, size: 44)),
+                        const SizedBox(height: 12),
+                        const Text('Example Movie', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        const Text('2026  •  Movie  •  2h 15m', style: TextStyle(color: Colors.white54)),
+                        const SizedBox(height: 14),
+                        for (final item in items) Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(12)), child: Text(item, style: const TextStyle(fontWeight: FontWeight.w700))),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text('Live preview — changes update as you edit this profile.', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+        ],
+      ),
+      ),
+    );
+  }
+
   /// Performs `_sectionOrder` for this feature. Update this documentation when its contract changes.
   Widget _sectionOrder({
     required String title,
@@ -1520,8 +1662,23 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             _pageSelector(),
             const SizedBox(height: 18),
             _headerCard(),
-            const SizedBox(height: 24),
-            if (isHome) _buildHomePage() else _buildDetailsPage(),
+            const SizedBox(height: 18),
+            LayoutBuilder(builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 980;
+              final editor = isHome ? _buildHomePage() : _buildDetailsPage();
+              if (!wide) {
+                return Column(children: [
+                  _customizationPreview(),
+                  const SizedBox(height: 20),
+                  editor,
+                ]);
+              }
+              return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: editor),
+                const SizedBox(width: 18),
+                SizedBox(width: 390, height: 560, child: _customizationPreview()),
+              ]);
+            }),
             const SizedBox(height: 26),
             SizedBox(
               height: 54,
@@ -1554,6 +1711,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
+/// Implements the `_MainScreenState` class for this feature or UI component.
 class _MainScreenState extends State<MainScreen> {
   String selectedDestination = 'Home';
 
@@ -1561,6 +1719,8 @@ class _MainScreenState extends State<MainScreen> {
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    // Restore the selected language after the profile has been selected.
+    LanguageController.instance.loadForCurrentProfile();
   }
 
   /// Performs `_openMore` for this feature. Update this documentation when its contract changes.
@@ -1664,7 +1824,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   List<String> _normalizedNavigationOrder(List<String> value) {
-    const defaults = <String>['Profile', 'Home', 'Live Sports', 'More', 'Music', 'Film'];
+    const defaults = <String>['Profile', 'Home', 'Connected Sports', 'More', 'Music', 'Film'];
     final result = <String>[];
     for (final name in value) {
       if (defaults.contains(name) && !result.contains(name)) result.add(name);
@@ -1678,14 +1838,14 @@ class _MainScreenState extends State<MainScreen> {
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    // Primary navigation is fixed to six destinations: Profile, Home, Live Sports,
+    // Primary navigation is fixed to six destinations: Profile, Home, Connected Sports,
     // More, Music and Film. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
     final pageByName = <String, Widget>{
       'Profile': const ProfileScreen(),
       'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
-      'Live Sports': const LiveSportsScreen(),
+      'Connected Sports': const ConnectedSportsHubScreen(),
       'More': const _MoreNavigationPlaceholder(),
       'Music': const MusicScreen(),
       'Film': const MoviesScreen(),
@@ -1758,6 +1918,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
+/// Implements the `_StreamingNavigationBar` class for this feature or UI component.
 class _StreamingNavigationBar extends StatelessWidget {
   final String position;
   final ValueChanged<int> onSelect;
@@ -1814,7 +1975,7 @@ class _StreamingNavigationBar extends StatelessWidget {
     final dataByName = <String, _NavItemData>{
       'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
       'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
-      'Live Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Live Sports'),
+      'Connected Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Connected Sports'),
       'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
       'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
       'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
@@ -1852,6 +2013,7 @@ class _StreamingNavigationBar extends StatelessWidget {
   }
 }
 
+/// Implements the `_NavMenuEntry` class for this feature or UI component.
 class _NavMenuEntry {
   final String label;
   final IconData icon;
@@ -1859,6 +2021,7 @@ class _NavMenuEntry {
   const _NavMenuEntry(this.label, this.icon, this.onTap);
 }
 
+/// Implements the `_NavMenuButton` class for this feature or UI component.
 class _NavMenuButton extends StatefulWidget {
   final _NavItemData data;
   final bool selected;
@@ -1872,6 +2035,7 @@ class _NavMenuButton extends StatefulWidget {
   @override State<_NavMenuButton> createState() => _NavMenuButtonState();
 }
 
+/// Implements the `_NavMenuButtonState` class for this feature or UI component.
 class _NavMenuButtonState extends State<_NavMenuButton> {
   OverlayEntry? _overlay;
   Timer? _hideTimer;
@@ -1982,17 +2146,20 @@ class _NavMenuButtonState extends State<_NavMenuButton> {
   }
 }
 
+/// Implements the `_AngledNavbarClipper` class for this feature or UI component.
 class _AngledNavbarClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) => Path()..moveTo(18, 0)..lineTo(size.width - 18, 0)..lineTo(size.width, 14)..lineTo(size.width, size.height - 14)..lineTo(size.width - 18, size.height)..lineTo(18, size.height)..lineTo(0, size.height - 14)..lineTo(0, 14)..close();
   @override bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
+/// Implements the `_MoreNavigationPlaceholder` class for this feature or UI component.
 class _MoreNavigationPlaceholder extends StatelessWidget {
   const _MoreNavigationPlaceholder();
   @override Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
+/// Implements the `_NavigationDirectoryScreen` class for this feature or UI component.
 class _NavigationDirectoryScreen extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -2027,6 +2194,7 @@ class _NavigationDirectoryScreen extends StatelessWidget {
   }
 }
 
+/// Implements the `_NavItemData` class for this feature or UI component.
 class _NavItemData {
   final IconData icon;
   final IconData selectedIcon;
@@ -2034,6 +2202,7 @@ class _NavItemData {
   const _NavItemData(this.icon, this.selectedIcon, this.label);
 }
 
+/// Implements the `_NavButton` class for this feature or UI component.
 class _NavButton extends StatefulWidget {
   final _NavItemData data;
   final bool selected;
@@ -2043,6 +2212,7 @@ class _NavButton extends StatefulWidget {
   const _NavButton({required this.data, required this.selected, required this.onTap, this.vertical = false, this.color = Colors.white});
   @override State<_NavButton> createState() => _NavButtonState();
 }
+/// Implements the `_NavButtonState` class for this feature or UI component.
 class _NavButtonState extends State<_NavButton> {
   bool pressed = false;
   @override
@@ -2083,6 +2253,7 @@ class _NavButtonState extends State<_NavButton> {
   }
 }
 
+/// Implements the `_MoreActionsSheet` class for this feature or UI component.
 class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onImport;
   final VoidCallback onProfiles;
@@ -2243,6 +2414,7 @@ class _MoreActionsSheet extends StatelessWidget {
   }
 }
 
+/// Implements the `_SheetAction` class for this feature or UI component.
 class _SheetAction extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -2301,6 +2473,7 @@ class _SheetAction extends StatelessWidget {
   }
 }
 
+/// Implements the `_PremiumSheet` class for this feature or UI component.
 class _PremiumSheet extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -2364,6 +2537,7 @@ class _PremiumSheet extends StatelessWidget {
   }
 }
 
+/// Implements the `_ActivitySheet` class for this feature or UI component.
 class _ActivitySheet extends StatelessWidget {
   const _ActivitySheet();
 
@@ -2446,6 +2620,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+/// Implements the `_HomeScreenState` class for this feature or UI component.
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _heroController;
@@ -2597,7 +2772,10 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Recommendations': items = recommendations; subtitle = 'Picked for your profile'; enabled = settings.showRecommendations; break;
     case 'Music & Film':
       return [if (settings.showMusic || settings.showFilm) SliverToBoxAdapter(child: _HomeMusicFilmChooser(settings: settings))];
-    case 'Live Sports': return const [];
+    case 'Connected Sports':
+      return settings.showLiveSports
+          ? [const SliverToBoxAdapter(child: ConnectedSportsHomeWidget())]
+          : const [];
     default: return const [];
   }
   if (!enabled || items.isEmpty) return const [];
@@ -2607,6 +2785,7 @@ List<Widget> _buildHomeSectionSlivers(
   ];
 }
 
+/// Implements the `_HomeMusicFilmChooser` class for this feature or UI component.
 class _HomeMusicFilmChooser extends StatelessWidget {
   final HomeCustomization settings;
   const _HomeMusicFilmChooser({required this.settings});
@@ -2652,6 +2831,7 @@ class _HomeMusicFilmChooser extends StatelessWidget {
   }
 }
 
+/// Implements the `_HomeHero` class for this feature or UI component.
 class _HomeHero extends StatelessWidget {
   final MediaItem media;
   final String profileName;
@@ -2738,6 +2918,7 @@ class _HomeHero extends StatelessWidget {
   }
 }
 
+/// Implements the `_PremiumSectionHeader` class for this feature or UI component.
 class _PremiumSectionHeader extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -2996,6 +3177,7 @@ class ImportMediaScreen extends StatefulWidget {
   State<ImportMediaScreen> createState() => _ImportMediaScreenState();
 }
 
+/// Implements the `_ImportMediaScreenState` class for this feature or UI component.
 class _ImportMediaScreenState extends State<ImportMediaScreen> {
   final titleController = TextEditingController();
   final yearController = TextEditingController();
@@ -3766,6 +3948,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
+/// Implements the `_ProfileScreenState` class for this feature or UI component.
 class _ProfileScreenState extends State<ProfileScreen> {
   final controller = AppController.instance;
 
@@ -3884,6 +4067,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+/// Implements the `_ProfileManagementCard` class for this feature or UI component.
 class _ProfileManagementCard extends StatelessWidget {
   final Profile profile;
   final bool current;
@@ -3940,6 +4124,7 @@ class _ProfileManagementCard extends StatelessWidget {
   }
 }
 
+/// Implements the `_MainProfileAvatar` class for this feature or UI component.
 class _MainProfileAvatar extends StatelessWidget {
   final Profile profile;
   final double size;
@@ -3980,6 +4165,7 @@ class _MainProfileAvatar extends StatelessWidget {
   }
 }
 
+/// Implements the `AddProfileDialog` class for this feature or UI component.
 class AddProfileDialog extends StatefulWidget {
   const AddProfileDialog({super.key});
 
@@ -3987,6 +4173,7 @@ class AddProfileDialog extends StatefulWidget {
   State<AddProfileDialog> createState() => _AddProfileDialogState();
 }
 
+/// Implements the `_AddProfileDialogState` class for this feature or UI component.
 class _AddProfileDialogState extends State<AddProfileDialog> {
   final nameController = TextEditingController();
 
@@ -4053,7 +4240,7 @@ class SubscribeDialog extends StatelessWidget {
           const SizedBox(height: 20),
           ListTile(
             title: const Text(
-              '\$9.99 USD / month',
+              '\$54.99 USD / month',
             ),
             subtitle: const Text(
               'No free trial',
@@ -4067,10 +4254,10 @@ class SubscribeDialog extends StatelessWidget {
           ),
           ListTile(
             title: const Text(
-              '\$99.99 USD / year',
+              '\$599.99 USD / year',
             ),
             subtitle: const Text(
-              'Save \$19.89 compared with 12 monthly payments',
+              'Save \$59.89 compared with 12 monthly payments',
             ),
             onTap: () {
               controller.subscribe(
@@ -4096,6 +4283,7 @@ class GroupHubScreen extends StatefulWidget {
   State<GroupHubScreen> createState() => _GroupHubScreenState();
 }
 
+/// Implements the `_GroupHubScreenState` class for this feature or UI component.
 class _GroupHubScreenState extends State<GroupHubScreen> {
   final messageController = TextEditingController();
   bool loading = false;
@@ -4320,6 +4508,7 @@ class AddGroupRecommendationDialog
           _AddGroupRecommendationDialogState();
 }
 
+/// Implements the `_AddGroupRecommendationDialogState` class for this feature or UI component.
 class _AddGroupRecommendationDialogState
     extends State<
         AddGroupRecommendationDialog> {
@@ -4824,6 +5013,7 @@ class GroupRecommendationCard
           _GroupRecommendationCardState();
 }
 
+/// Implements the `_GroupRecommendationCardState` class for this feature or UI component.
 class _GroupRecommendationCardState
     extends State<GroupRecommendationCard> {
   Timer? countdownTimer;
@@ -5909,6 +6099,7 @@ class WishlistDialog
       _WishlistDialogState();
 }
 
+/// Implements the `_WishlistDialogState` class for this feature or UI component.
 class _WishlistDialogState
     extends State<WishlistDialog> {
   bool loading = false;
@@ -6059,6 +6250,7 @@ class GroupWatchDialog extends StatefulWidget {
   State<GroupWatchDialog> createState() => _GroupWatchDialogState();
 }
 
+/// Implements the `_GroupWatchDialogState` class for this feature or UI component.
 class _GroupWatchDialogState extends State<GroupWatchDialog> {
   final Set<String> selectedProfiles = <String>{};
 
@@ -6132,6 +6324,7 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
   }
 }
 
+/// Implements the `GroupWatchPreferencesScreen` class for this feature or UI component.
 class GroupWatchPreferencesScreen extends StatefulWidget {
   final MediaItem media;
   const GroupWatchPreferencesScreen({super.key, required this.media});
@@ -6139,6 +6332,7 @@ class GroupWatchPreferencesScreen extends StatefulWidget {
   State<GroupWatchPreferencesScreen> createState() => _GroupWatchPreferencesScreenState();
 }
 
+/// Implements the `_GroupWatchPreferencesScreenState` class for this feature or UI component.
 class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScreen> {
   bool subtitlesEnabled = false;
   String audio = 'Original audio';

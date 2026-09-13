@@ -14,6 +14,7 @@ import 'remote_access.dart';
 import 'main.dart' show CustomizeHomeScreen;
 import 'details.dart';
 import 'sports.dart';
+import 'connected_sports.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
 import 'music_achievements.dart';
@@ -21,6 +22,7 @@ import 'reviews.dart' hide MusicAchievementsScreen;
 import 'home_server.dart';
 import 'storage_dashboard.dart';
 
+/// Implements the `RoadmapFeaturesScreen` class for this feature or UI component.
 class RoadmapFeaturesScreen extends StatelessWidget {
   const RoadmapFeaturesScreen({super.key});
 
@@ -154,6 +156,8 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(124, 'Parent Approval Queue', Icons.approval_rounded, 'Hold flagged child-profile titles for explicit parent approval.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(125, 'Per-Title Kids Overrides', Icons.rule_rounded, 'Allow a parent to approve or block individual titles regardless of general rules.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(126, 'Multi-Signal Kids Safety', Icons.shield_rounded, 'Combine age rating, content descriptors, legacy status, metadata confidence and parent rules instead of relying on a single rating.', (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(130, 'Connected Sports Services', Icons.hub_rounded, 'Connect supported sports services and surface scores, games, teams, players and schedules without copying provider video.', (_) => const ConnectedSportsHubScreen()),
+      _RoadmapFeature(131, 'Global Language & Localization', Icons.translate_rounded, 'Global language selector with native language names, profile persistence, RTL support and localized metadata preferences.', (_) => const FeatureCenterScreen()),
       _RoadmapFeature(127, 'Music Home', Icons.music_note_rounded, 'Dedicated Music home with artists, bands, albums and songs.', (_) => const MusicScreen()),
       _RoadmapFeature(128, 'Custom Music Playlists', Icons.queue_music_rounded, 'Create, delete and curate profile playlists.', (_) => const MusicScreen()),
       _RoadmapFeature(129, 'Background Music Player', Icons.headphones_rounded, 'Keep music playing while browsing and resume it after movie/TV playback.', (_) => const MusicScreen()),
@@ -211,6 +215,7 @@ class RoadmapFeaturesScreen extends StatelessWidget {
   }
 }
 
+/// Implements the `_RoadmapFeature` class for this feature or UI component.
 class _RoadmapFeature {
   final int number;
   final String title;
@@ -222,10 +227,12 @@ class _RoadmapFeature {
 
 List<MediaItem> _library() => AppController.instance.library;
 
+/// Implements the `AskMyLibraryScreen` class for this feature or UI component.
 class AskMyLibraryScreen extends StatefulWidget {
   const AskMyLibraryScreen({super.key});
   @override State<AskMyLibraryScreen> createState() => _AskMyLibraryScreenState();
 }
+/// Implements the `_AskMyLibraryScreenState` class for this feature or UI component.
 class _AskMyLibraryScreenState extends State<AskMyLibraryScreen> {
   final query = TextEditingController();
   List<MediaItem> results = <MediaItem>[];
@@ -268,6 +275,7 @@ class _AskMyLibraryScreenState extends State<AskMyLibraryScreen> {
   );
 }
 
+/// Implements the `SmartCollectionsScreen` class for this feature or UI component.
 class SmartCollectionsScreen extends StatefulWidget { const SmartCollectionsScreen({super.key}); @override State<SmartCollectionsScreen> createState() => _SmartCollectionsScreenState(); }
 class _SmartCollectionsScreenState extends State<SmartCollectionsScreen> {
   String rule = 'Unwatched';
@@ -275,6 +283,7 @@ class _SmartCollectionsScreenState extends State<SmartCollectionsScreen> {
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Smart Collections')), body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [DropdownButtonFormField<String>(initialValue: rule, items: const ['Unwatched','Watched','Movies','TV Shows','Liked'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(), onChanged: (v) => setState(() => rule = v!)), const SizedBox(height: 12), Align(alignment: Alignment.centerLeft, child: Text('${items.length} titles match this live rule')), const SizedBox(height: 12), Expanded(child: ListView(children: items.map((m) => ListTile(leading: const Icon(Icons.movie_outlined), title: Text(m.title), subtitle: Text('${m.releaseYear ?? ''} • ${m.type}'))).toList()))])));
 }
 
+/// Implements the `RecommendationCompetitionScreen` class for this feature or UI component.
 class RecommendationCompetitionScreen extends StatelessWidget {
   const RecommendationCompetitionScreen({super.key});
   @override Widget build(BuildContext context) {
@@ -288,34 +297,41 @@ class RecommendationCompetitionScreen extends StatelessWidget {
   static int _yes(Map<String, dynamic> r) => int.tryParse(r['yesVotes']?.toString() ?? '0') ?? 0;
 }
 
+/// Implements the `WatchHistoryTimelineScreen` class for this feature or UI component.
 class WatchHistoryTimelineScreen extends StatelessWidget {
   const WatchHistoryTimelineScreen({super.key});
   @override Widget build(BuildContext context) { final watched = AppController.instance.watched; return Scaffold(appBar: AppBar(title: const Text('Watch History')), body: watched.isEmpty ? const Center(child: Text('Nothing watched yet.')) : ListView.separated(padding: const EdgeInsets.all(16), itemCount: watched.length, separatorBuilder: (_, __) => const Divider(), itemBuilder: (_, i) { final m = watched[watched.length - 1 - i]; return ListTile(leading: CircleAvatar(child: Text('${i + 1}')), title: Text(m.title), subtitle: Text('${m.releaseYear ?? ''} • Watched by ${AppController.instance.currentProfile?.name ?? 'profile'}')); })); }
 }
 
+/// Implements the `MusicModeScreen` class for this feature or UI component.
 class MusicModeScreen extends StatelessWidget {
   const MusicModeScreen({super.key});
   @override Widget build(BuildContext context) { final grouped = <String, List<String>>{}; for (final m in _library()) { for (final item in m.music) { grouped.putIfAbsent(m.title, () => <String>[]).add(item); } } return Scaffold(appBar: AppBar(title: const Text('Music Mode')), body: grouped.isEmpty ? const Center(child: Text('No music metadata has been imported yet.')) : ListView(padding: const EdgeInsets.all(16), children: grouped.entries.expand((e) => [Padding(padding: const EdgeInsets.only(top: 10, bottom: 4), child: Text(e.key, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))), ...e.value.map((x) => ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(x)))]).toList())); }
 }
 
+/// Implements the `TrailerTheaterScreen` class for this feature or UI component.
 class TrailerTheaterScreen extends StatelessWidget {
   const TrailerTheaterScreen({super.key});
   @override Widget build(BuildContext context) { final media = _library().where((m) => (m.trailerUrl ?? '').trim().isNotEmpty).toList(); return Scaffold(appBar: AppBar(title: const Text('Trailer Theater')), body: media.isEmpty ? const Center(child: Text('No trailers are available.')) : GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .75), itemCount: media.length, itemBuilder: (_, i) { final m = media[i]; return Card(child: InkWell(onTap: () async { final uri = Uri.tryParse(m.trailerUrl!); if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication); }, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: m.imageUrl == null ? const Center(child: Icon(Icons.movie_rounded, size: 48)) : Image.network(m.imageUrl!, fit: BoxFit.cover, width: double.infinity, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.movie_rounded, size: 48)))), Padding(padding: const EdgeInsets.all(10), child: Text(m.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))),]))); })); }
 }
 
+/// Implements the `HomeWidgetsScreen` class for this feature or UI component.
 class HomeWidgetsScreen extends StatefulWidget { const HomeWidgetsScreen({super.key}); @override State<HomeWidgetsScreen> createState() => _HomeWidgetsScreenState(); }
 class _HomeWidgetsScreenState extends State<HomeWidgetsScreen> { final widgets = <String>['Continue Watching','Wishlist','Watch Streak','Recommendations','Recently Added','Storage']; @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Home Widgets')), body: ReorderableListView.builder(padding: const EdgeInsets.all(16), itemCount: widgets.length, onReorderItem: (a, b) => setState(() { final item = widgets.removeAt(a); widgets.insert(b, item); }), itemBuilder: (_, i) => Card(key: ValueKey(widgets[i]), child: ListTile(leading: const Icon(Icons.drag_handle_rounded), title: Text(widgets[i]), trailing: const Icon(Icons.widgets_rounded))))); }
 
 class ProfileRelationshipsScreen extends StatefulWidget { const ProfileRelationshipsScreen({super.key}); @override State<ProfileRelationshipsScreen> createState() => _ProfileRelationshipsScreenState(); }
+/// Implements the `_ProfileRelationshipsScreenState` class for this feature or UI component.
 class _ProfileRelationshipsScreenState extends State<ProfileRelationshipsScreen> { final permissions = <String, bool>{'Watch': true, 'Recommend': true, 'Vote': true, 'Wishlist': true, 'Customize UI': true}; @override Widget build(BuildContext context) { final profiles = AppController.instance.currentAccount?.profiles ?? <Profile>[]; return Scaffold(appBar: AppBar(title: const Text('Profile Relationships')), body: ListView(padding: const EdgeInsets.all(16), children: profiles.map((p) => Card(child: ExpansionTile(title: Text(p.name), subtitle: const Text('Optional permissions'), children: permissions.keys.map((k) => SwitchListTile(title: Text(k), value: permissions[k]!, onChanged: (v) => setState(() => permissions[k] = v))).toList()))).toList())); } }
 
 class ReactionGuideScreen extends StatelessWidget { const ReactionGuideScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Reactions')), body: ListView(padding: const EdgeInsets.all(16), children: const [ListTile(leading: Text('❤️', style: TextStyle(fontSize: 26)), title: Text('Love it')), ListTile(leading: Text('🔥', style: TextStyle(fontSize: 26)), title: Text('Amazing')), ListTile(leading: Text('😂', style: TextStyle(fontSize: 26)), title: Text('Funny')), ListTile(leading: Text('😱', style: TextStyle(fontSize: 26)), title: Text('Scary')), ListTile(leading: Text('😭', style: TextStyle(fontSize: 26)), title: Text('Emotional')), ListTile(leading: Text('🤯', style: TextStyle(fontSize: 26)), title: Text('Mind-blowing'))])); }
 
+/// Implements the `AdvancedLibrarySearchScreen` class for this feature or UI component.
 class AdvancedLibrarySearchScreen extends StatefulWidget { const AdvancedLibrarySearchScreen({super.key}); @override State<AdvancedLibrarySearchScreen> createState() => _AdvancedLibrarySearchScreenState(); }
 class _AdvancedLibrarySearchScreenState extends State<AdvancedLibrarySearchScreen> { final q = TextEditingController(); String type = 'All'; bool unwatched = false; List<MediaItem> results = <MediaItem>[]; void search() { final term = q.text.toLowerCase(); final all = _library(); setState(() => results = all.where((m) => (term.isEmpty || m.title.toLowerCase().contains(term) || m.genres.any((x) => x.toLowerCase().contains(term)) || m.tags.any((x) => x.toLowerCase().contains(term)) || m.actors.any((x) => x.toLowerCase().contains(term)) || m.directors.any((x) => x.toLowerCase().contains(term))) && (type == 'All' || (type == 'Movies' ? m.type == 'movie' : m.type != 'movie')) && (!unwatched || !AppController.instance.isWatched(m.id))).toList()); } @override void dispose() { q.dispose(); super.dispose(); } @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Advanced Search')), body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [TextField(controller: q, onSubmitted: (_) => search(), decoration: const InputDecoration(labelText: 'Title, actor, director, genre or tag')), Row(children: [Expanded(child: DropdownButton<String>(value: type, isExpanded: true, items: const ['All','Movies','TV Shows'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(), onChanged: (v) => setState(() => type = v!))), Switch(value: unwatched, onChanged: (v) => setState(() => unwatched = v)), const Text('Unwatched'), IconButton(onPressed: search, icon: const Icon(Icons.search))]), Expanded(child: ListView(children: results.map((m) => ListTile(title: Text(m.title), subtitle: Text('${m.releaseYear ?? ''} • ${m.type}'))).toList()))]))); }
 
 class ActorFranchiseRoadmapScreen extends StatelessWidget { const ActorFranchiseRoadmapScreen({super.key}); @override Widget build(BuildContext context) { final actors = _library().expand((m) => m.actors).toSet().toList(); return Scaffold(appBar: AppBar(title: const Text('Actors & Franchises')), body: ListView(padding: const EdgeInsets.all(16), children: [const Text('Actors in your library', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 8), ...actors.map((a) => ListTile(leading: const Icon(Icons.person_outline_rounded), title: Text(a)))])); } }
 
+/// Implements the `GroupWatchRoadmapScreen` class for this feature or UI component.
 class GroupWatchRoadmapScreen extends StatelessWidget { const GroupWatchRoadmapScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Watch Together 2.0')), body: const Center(child: Text('Use Group Watch from the Home screen to start a synchronized party.'))); }
 
 class RoadmapListLayoutScreen extends StatelessWidget {
@@ -338,4 +354,5 @@ class RoadmapListLayoutScreen extends StatelessWidget {
   );
 }
 
+/// Implements the `ArchitectureScreen` class for this feature or UI component.
 class ArchitectureScreen extends StatelessWidget { const ArchitectureScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Architecture')), body: ListView(padding: const EdgeInsets.all(20), children: const [Text('Account-scoped data', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text('Library, subscription and shared media belong to the account.', style: TextStyle(color: Colors.white70)), SizedBox(height: 20), Text('Profile-scoped experience', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text('Navigation, Home layout, Details layout, recommendations, history, wishlist and preferences belong to the selected profile.', style: TextStyle(color: Colors.white70)), SizedBox(height: 20), Text('Persistence boundary', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), Text('The local stores are isolated behind profile IDs so a Supabase repository can replace them without redesigning the UI.', style: TextStyle(color: Colors.white70))])); }

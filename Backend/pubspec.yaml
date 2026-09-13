@@ -1,5 +1,7 @@
 name: personal_streaming_backend
+
 description: Backend for the personal streaming service.
+
 publish_to: none
 
 environment:
@@ -8,3 +10,4 @@ environment:
 dependencies:
   password_guard: ^1.0.5
   mailer: ^6.1.2
+  supabase: ^2.9.0

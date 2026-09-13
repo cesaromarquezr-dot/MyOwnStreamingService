@@ -5,6 +5,7 @@
 import 'profile.dart';
 import 'subscription.dart';
 
+/// Implements the `Account` class for this feature or UI component.
 class Account {
   final String id;
 
@@ -27,6 +28,10 @@ class Account {
 
   static const int maxProfiles = 7;
 
+  // Account-wide server library. These IDs identify media physically stored
+  // on the account's server; every active profile may stream them.
+  final List<String> sharedMediaIds;
+
   // Account-level shared wishlist.
   final List<String> wishlistMediaIds;
   final List<String> wishlistRecommendationIds;
@@ -36,6 +41,10 @@ class Account {
   int storageUsedBytes;
   bool storageRequestPending;
   DateTime? storageRequestAt;
+  int storageRequestedTerabytes;
+  double storageRequestFeeUsd;
+  String storageRequestStatus;
+  final List<Map<String, dynamic>> notifications;
 
   // Versioned legal acceptance recorded at account creation.
   String termsVersionAccepted;
@@ -52,21 +61,39 @@ class Account {
     this.securityAnswerHash = '',
     this.subscription,
     List<Profile>? profiles,
+    List<String>? sharedMediaIds,
     List<String>? wishlistMediaIds,
     List<String>? wishlistRecommendationIds,
     this.storageLimitBytes = 1000000000000,
     this.storageUsedBytes = 0,
     this.storageRequestPending = false,
     this.storageRequestAt,
+    this.storageRequestedTerabytes = 0,
+    this.storageRequestFeeUsd = 0,
+    this.storageRequestStatus = 'none',
+    List<Map<String, dynamic>>? notifications,
     this.termsVersionAccepted = '',
     this.privacyVersionAccepted = '',
     this.acceptableUseVersionAccepted = '',
     this.legalAcceptedAt,
   })  : profiles = profiles ?? [],
-        wishlistMediaIds =
-            wishlistMediaIds ?? [],
+        sharedMediaIds = sharedMediaIds ?? [],
+        wishlistMediaIds = wishlistMediaIds ?? [],
         wishlistRecommendationIds =
-            wishlistRecommendationIds ?? [];
+            wishlistRecommendationIds ?? [],
+        notifications = notifications ?? [];
+
+  /// Adds an in-app notification that can be shown on phone, TV, web, and desktop clients.
+  void addNotification(String title, String message) {
+    notifications.insert(0, {
+      'id': '${DateTime.now().microsecondsSinceEpoch}',
+      'title': title,
+      'message': message,
+      'createdAt': DateTime.now().toIso8601String(),
+      'read': false,
+    });
+    if (notifications.length > 100) notifications.removeLast();
+  }
 
   // ---------------------------------------------------------------------------
   // PROFILE MANAGEMENT
@@ -151,6 +178,24 @@ class Account {
 
   profiles.removeAt(index);
 }
+
+  // ---------------------------------------------------------------------------
+  // SHARED SERVER LIBRARY
+  // ---------------------------------------------------------------------------
+
+  /// Returns whether media is present in this account's shared server library.
+  bool hasSharedMedia(String mediaId) => sharedMediaIds.contains(mediaId);
+
+  /// Adds media to the account-wide server library so every profile can stream it.
+  void addSharedMedia(String mediaId) {
+    final clean = mediaId.trim();
+    if (clean.isNotEmpty && !sharedMediaIds.contains(clean)) {
+      sharedMediaIds.add(clean);
+    }
+  }
+
+  /// Removes media from the account-wide server library index.
+  void removeSharedMedia(String mediaId) => sharedMediaIds.remove(mediaId);
 
   // ---------------------------------------------------------------------------
   // WISHLIST
@@ -266,6 +311,8 @@ class Account {
       'profileCount': profiles.length,
       'maxProfiles': maxProfiles,
 
+      'sharedMediaIds': List<String>.from(sharedMediaIds),
+
       'wishlistMediaIds':
           List<String>.from(
         wishlistMediaIds,
@@ -285,6 +332,10 @@ class Account {
       'storageUsedBytes': storageUsedBytes,
       'storageRequestPending': storageRequestPending,
       'storageRequestAt': storageRequestAt?.toIso8601String(),
+      'storageRequestedTerabytes': storageRequestedTerabytes,
+      'storageRequestFeeUsd': storageRequestFeeUsd,
+      'storageRequestStatus': storageRequestStatus,
+      'notifications': notifications,
       'legalAccepted': termsVersionAccepted.isNotEmpty && privacyVersionAccepted.isNotEmpty && acceptableUseVersionAccepted.isNotEmpty,
       'termsVersionAccepted': termsVersionAccepted,
       'privacyVersionAccepted': privacyVersionAccepted,
