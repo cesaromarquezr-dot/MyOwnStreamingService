@@ -4754,6 +4754,7 @@ class DetailsCustomization {
               'Ownership',
               'Description',
               'Seasons',
+              'Collection Items',
               'Play',
               'Trailer',
               'Group Watch',
@@ -4820,7 +4821,11 @@ class DetailsCustomizationStore {
 
   static DetailsCustomization settingsFor(Profile? profile) {
     final key = profile?.id ?? 'default';
-    return _settings.putIfAbsent(key, () => DetailsCustomization()).copy();
+    final value = _settings.putIfAbsent(key, () => DetailsCustomization());
+    if (!value.sectionOrder.contains('Collection Items')) {
+      value.sectionOrder.add('Collection Items');
+    }
+    return value.copy();
   }
 
   static void apply(Profile? profile, DetailsCustomization value) {
