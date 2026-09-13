@@ -94,6 +94,7 @@ class _ConnectedSportsHubScreenState extends State<ConnectedSportsHubScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Connected Sports'),
         actions: [
           IconButton(onPressed: _load, tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded)),

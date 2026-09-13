@@ -10,6 +10,7 @@ import 'reviews.dart';
 import 'player.dart';
 import 'group_watch.dart';
 
+/// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
   final MediaItem media;
 
@@ -23,6 +24,7 @@ class MediaDetailsScreen extends StatefulWidget {
       _MediaDetailsScreenState();
 }
 
+/// Implements the `_MediaDetailsScreenState` class for this feature or UI component.
 class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   bool pressedPlay = false;
   bool pressedTrailer = false;
@@ -1318,6 +1320,24 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
     }
 
+    if (media.directors.isNotEmpty) {
+      rows.add(
+        _infoRow(
+          'Directors',
+          media.directors.join(' • '),
+        ),
+      );
+    }
+
+    if (media.actors.isNotEmpty) {
+      rows.add(
+        _infoRow(
+          'Actors',
+          media.actors.join(' • '),
+        ),
+      );
+    }
+
     if (customization.showRating &&
         media.rating != null) {
       rows.add(
@@ -1984,6 +2004,7 @@ class _EpisodeCard extends StatefulWidget {
       _EpisodeCardState();
 }
 
+/// Implements the `_EpisodeCardState` class for this feature or UI component.
 class _EpisodeCardState extends State<_EpisodeCard> {
   bool hovering = false;
 
@@ -2262,6 +2283,7 @@ class TrailerPlayerScreen extends StatefulWidget {
       _TrailerPlayerScreenState();
 }
 
+/// Implements the `_TrailerPlayerScreenState` class for this feature or UI component.
 class _TrailerPlayerScreenState
     extends State<TrailerPlayerScreen> {
   YoutubePlayerController? _controller;

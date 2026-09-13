@@ -4,15 +4,22 @@
 //
 // HTTPS:
 // - The backend listens using TLS instead of plain HTTP.
-// - Certificate and private-key paths are supplied through environment
-//   variables so secrets and private keys are not stored in source code.
-// - Required environment variables:
-//     TLS_CERTIFICATE_PATH
-//     TLS_PRIVATE_KEY_PATH
+// - Certificate and private-key paths may be supplied through environment
+//   variables for custom/production deployments.
+// - For local development, the backend automatically falls back to the
+//   certificate files stored in Backend/certs/.
 // - Optional:
 //     TLS_PRIVATE_KEY_PASSWORD
 //
-// Example PowerShell configuration:
+// Supported environment variables:
+//     TLS_CERTIFICATE_PATH
+//     TLS_PRIVATE_KEY_PATH
+//
+// Local development fallback:
+//     Backend/certs/127.0.0.1+2.pem
+//     Backend/certs/127.0.0.1+2-key.pem
+//
+// Example PowerShell configuration for custom certificates:
 //   $env:TLS_CERTIFICATE_PATH="C:\path\to\localhost.crt"
 //   $env:TLS_PRIVATE_KEY_PATH="C:\path\to\localhost.key"
 //   dart run server.dart
@@ -243,26 +250,53 @@ Future<void> main() async {
   // START HTTPS SERVER
   // ------------------------------------------------------------
 
+  // Environment variables remain supported for production/custom
+  // certificate locations. For local development, automatically use
+  // the certificate files stored in Backend/certs/.
+  final defaultCertificatePath = Platform.script
+      .resolve('certs/127.0.0.1+2.pem')
+      .toFilePath();
+
+  final defaultPrivateKeyPath = Platform.script
+      .resolve('certs/127.0.0.1+2-key.pem')
+      .toFilePath();
+
   final certificatePath =
-      Platform.environment['TLS_CERTIFICATE_PATH'];
+      Platform.environment['TLS_CERTIFICATE_PATH']?.trim();
 
   final privateKeyPath =
-      Platform.environment['TLS_PRIVATE_KEY_PATH'];
+      Platform.environment['TLS_PRIVATE_KEY_PATH']?.trim();
 
   final privateKeyPassword =
       Platform.environment['TLS_PRIVATE_KEY_PASSWORD'];
 
-  if (certificatePath == null || certificatePath.trim().isEmpty) {
+  final resolvedCertificatePath =
+      certificatePath == null || certificatePath.isEmpty
+          ? defaultCertificatePath
+          : certificatePath;
+
+  final resolvedPrivateKeyPath =
+      privateKeyPath == null || privateKeyPath.isEmpty
+          ? defaultPrivateKeyPath
+          : privateKeyPath;
+
+  final certificateFile =
+      File(resolvedCertificatePath);
+
+  final privateKeyFile =
+      File(resolvedPrivateKeyPath);
+
+  if (!certificateFile.existsSync()) {
     throw StateError(
-      'TLS_CERTIFICATE_PATH is not configured. '
-      'Set it to the TLS certificate file before starting the HTTPS backend.',
+      'Unable to find the HTTPS certificate.\n'
+      'Expected: $resolvedCertificatePath',
     );
   }
 
-  if (privateKeyPath == null || privateKeyPath.trim().isEmpty) {
+  if (!privateKeyFile.existsSync()) {
     throw StateError(
-      'TLS_PRIVATE_KEY_PATH is not configured. '
-      'Set it to the TLS private-key file before starting the HTTPS backend.',
+      'Unable to find the HTTPS private key.\n'
+      'Expected: $resolvedPrivateKeyPath',
     );
   }
 
@@ -270,18 +304,18 @@ Future<void> main() async {
 
   try {
     securityContext.useCertificateChain(
-      certificatePath,
+      resolvedCertificatePath,
     );
 
     if (privateKeyPassword != null &&
         privateKeyPassword.isNotEmpty) {
       securityContext.usePrivateKey(
-        privateKeyPath,
+        resolvedPrivateKeyPath,
         password: privateKeyPassword,
       );
     } else {
       securityContext.usePrivateKey(
-        privateKeyPath,
+        resolvedPrivateKeyPath,
       );
     }
   } on TlsException catch (error) {

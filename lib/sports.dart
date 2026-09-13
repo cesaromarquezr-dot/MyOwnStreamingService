@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
 
+/// Implements the `LiveSportsScreen` class for this feature or UI component.
 class LiveSportsScreen extends StatefulWidget {
   final VoidCallback? onBackToHome;
 
@@ -17,6 +18,7 @@ class LiveSportsScreen extends StatefulWidget {
   State<LiveSportsScreen> createState() => _LiveSportsScreenState();
 }
 
+/// Implements the `_LiveSportsScreenState` class for this feature or UI component.
 class _LiveSportsScreenState extends State<LiveSportsScreen> {
   String sport = 'All';
   String country = 'All';
@@ -482,6 +484,7 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
   }
 }
 
+/// Implements the `SportsPlayerScreen` class for this feature or UI component.
 class SportsPlayerScreen extends StatefulWidget {
   final String streamUrl;
   final String title;
@@ -504,6 +507,7 @@ class SportsPlayerScreen extends StatefulWidget {
   State<SportsPlayerScreen> createState() => _SportsPlayerScreenState();
 }
 
+/// Implements the `_SportsPlayerScreenState` class for this feature or UI component.
 class _SportsPlayerScreenState extends State<SportsPlayerScreen> {
   late final VideoPlayerController _controller;
   Future<void>? _initializeFuture;

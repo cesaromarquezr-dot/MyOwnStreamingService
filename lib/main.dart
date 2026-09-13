@@ -37,54 +37,42 @@ import 'home_widgets.dart';
 import 'supabase/supabase_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
   await AppController.instance.initializeBadges();
   await PlatformPreferenceStore.initialize();
-
   runApp(const MyStreamingService());
 }
-
 /// Implements the `MyStreamingService` class for this feature or UI component.
 class MyStreamingService extends StatelessWidget {
   const MyStreamingService({super.key});
-
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'My Streaming Service',
-
       builder: (context, child) {
         return AnimatedBuilder(
           animation: LanguageController.instance,
           builder: (_, __) {
             final rtl = LanguageController.instance.current.code == 'ar';
-
             return Directionality(
-              textDirection:
-                  rtl ? TextDirection.rtl : TextDirection.ltr,
+              textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
               child: child ?? const SizedBox.shrink(),
             );
           },
         );
       },
-
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF090909),
-
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.red,
           brightness: Brightness.dark,
         ),
-
         useMaterial3: true,
-
         cardTheme: CardThemeData(
           color: const Color(0xFF141414),
           surfaceTintColor: Colors.transparent,
@@ -93,7 +81,6 @@ class MyStreamingService extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
         ),
-
         dialogTheme: DialogThemeData(
           backgroundColor: const Color(0xFF151515),
           surfaceTintColor: Colors.transparent,
@@ -101,41 +88,32 @@ class MyStreamingService extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
           ),
         ),
-
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xFF151515),
-
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
-
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
-
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: Colors.redAccent,
-            ),
+            borderSide: const BorderSide(color: Colors.redAccent),
           ),
         ),
-
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: const Color(0xFF0E0E0E),
           surfaceTintColor: Colors.transparent,
           elevation: 0,
         ),
       ),
-
       home: const SplashScreen(),
     );
   }
 }
-
 // ============================================================
 // SPLASH SCREEN
 // ============================================================
@@ -742,6 +720,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
   late DetailsCustomization detailsDraft;
   _CustomizationPage selectedPage = _CustomizationPage.home;
+  bool detailsPreviewTvShow = true;
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
@@ -1447,97 +1426,627 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
-  /// Live preview of the profile's Home/Details configuration. The preview is
-  /// intentionally local and never changes the real library or playback state.
+  /// Live preview of the actual Home/Details presentation. The Details
+  /// preview is a data-free wireframe so the user can see every configurable
+  /// section before a title has been ripped/imported. Real ripped media is
+  /// rendered by `MediaDetailsScreen` after it exists in the library.
   Widget _customizationPreview() {
     final isHome = selectedPage == _CustomizationPage.home;
-    final bg = colorFromName(draft.homeBackgroundColor);
-    final accent = colorFromName(draft.navbarGlowColor);
-    final items = isHome
-        ? draft.sectionOrder.where((name) => name != 'All Library').take(5).toList()
-        : detailsDraft.sectionOrder.take(6).toList();
 
-    return SizedBox(
-      height: 520,
-      child: Container(
+    final Widget actualPage = isHome
+        ? _buildHomeCustomizationPreview()
+        : _buildDetailsCustomizationPreview();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: .08)),
-        boxShadow: [BoxShadow(color: accent.withValues(alpha: .12), blurRadius: 24)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(isHome ? Icons.home_rounded : Icons.movie_outlined, color: accent),
-            const SizedBox(width: 8),
-            Text(isHome ? 'HOME PREVIEW' : 'DETAILS PREVIEW', style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-            const Spacer(),
-            const Icon(Icons.visibility_outlined, size: 17, color: Colors.white54),
-          ]),
+          Row(
+            children: [
+              Icon(
+                isHome ? Icons.home_rounded : Icons.movie_outlined,
+                color: colorFromName(draft.navbarGlowColor),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isHome ? 'LIVE HOME PREVIEW' : 'LIVE DETAILS PREVIEW',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              const Icon(
+                Icons.visibility_outlined,
+                size: 17,
+                color: Colors.white54,
+              ),
+            ],
+          ),
+          if (!isHome) ...[
+            const SizedBox(height: 10),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  icon: Icon(Icons.movie_outlined),
+                  label: Text('Movie'),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  icon: Icon(Icons.tv_outlined),
+                  label: Text('TV Show'),
+                ),
+              ],
+              selected: <bool>{detailsPreviewTvShow},
+              onSelectionChanged: (value) {
+                if (value.isNotEmpty) {
+                  setState(() => detailsPreviewTvShow = value.first);
+                }
+              },
+            ),
+          ],
           const SizedBox(height: 12),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(color: bg.withValues(alpha: .72), borderRadius: BorderRadius.circular(18)),
-              clipBehavior: Clip.antiAlias,
-              child: isHome
-                  ? Column(children: [
-                      Container(
-                        height: 92,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [accent.withValues(alpha: .42), Colors.black]),
-                        ),
-                        padding: const EdgeInsets.all(14),
-                        child: const Row(children: [
-                          Icon(Icons.play_circle_fill_rounded, size: 28),
-                          SizedBox(width: 10),
-                          Expanded(child: Text('Featured title', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
-                        ]),
-                      ),
-                      Expanded(child: ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: items.length,
-                        itemBuilder: (_, index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 9),
-                          child: Container(
-                            height: 56,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .055), borderRadius: BorderRadius.circular(14)),
-                            child: Row(children: [
-                              Container(width: 42, height: 42, decoration: BoxDecoration(color: accent.withValues(alpha: .16), borderRadius: BorderRadius.circular(9)), child: const Icon(Icons.movie_outlined, size: 19)),
-                              const SizedBox(width: 10),
-                              Expanded(child: Text(items[index], style: const TextStyle(fontWeight: FontWeight.w700))),
-                              const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-                            ]),
-                          ),
-                        ),
-                      )),
-                    ])
-                  : ListView(
-                      padding: const EdgeInsets.all(14),
-                      children: [
-                        Container(height: 120, decoration: BoxDecoration(color: accent.withValues(alpha: .14), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.image_outlined, size: 44)),
-                        const SizedBox(height: 12),
-                        const Text('Example Movie', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 6),
-                        const Text('2026  •  Movie  •  2h 15m', style: TextStyle(color: Colors.white54)),
-                        const SizedBox(height: 14),
-                        for (final item in items) Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(12)), child: Text(item, style: const TextStyle(fontWeight: FontWeight.w700))),
-                        ),
-                      ],
+          SizedBox(
+            height: 760,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: ColoredBox(
+                    color: const Color(0xFF090909),
+                    child: AbsorbPointer(
+                      absorbing: true,
+                      child: actualPage,
                     ),
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 10),
-          Text('Live preview — changes update as you edit this profile.', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          Text(
+            isHome
+                ? 'This preview uses the actual Home layout, navigation bar, storage progression, and Live Sports placement.'
+                : 'This wireframe mirrors the configurable Details sections. Ripped movie/show metadata replaces these outlines on the real Details page.',
+            style: const TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHomeCustomizationPreview() {
+    final navigationOrder = <String>[];
+    const defaults = <String>[
+      'Profile',
+      'Home',
+      'Connected Sports',
+      'More',
+      'Music',
+      'Film',
+    ];
+
+    for (final name in draft.navigationOrder) {
+      if (defaults.contains(name) && !navigationOrder.contains(name)) {
+        navigationOrder.add(name);
+      }
+    }
+    for (final name in defaults) {
+      if (!navigationOrder.contains(name)) navigationOrder.add(name);
+    }
+
+    final page = HomeScreen(
+      onRefresh: () {},
+      onNotifications: () {},
+      previewSettings: draft,
+    );
+
+    final previewNavbar = _StreamingNavigationBar(
+      position: draft.navbarPosition,
+      onSelect: (_) {},
+      onMore: () {},
+      navigationOrder: navigationOrder,
+      selectedName: 'Home',
+      backgroundColor: colorFromName(draft.navbarColor),
+      glowColor: colorFromName(draft.navbarGlowColor),
+      itemColor: colorFromName(draft.navbarItemColor),
+      style: draft.navbarStyle,
+      opacity: draft.navbarOpacity,
+      radius: draft.navbarRadius,
+    );
+
+    return HomePositionedLayout(
+      navbarPosition: draft.navbarPosition,
+      storagePosition: draft.storageBarPosition,
+      liveSportsPosition: draft.liveSportsPosition,
+      storageThickness: draft.storageBarThickness,
+      showLiveSports: draft.showLiveSports,
+      navbar: previewNavbar,
+      child: page,
+    );
+  }
+
+  Widget _buildDetailsCustomizationPreview() {
+    final sections = <Widget>[];
+
+    for (final section in detailsDraft.sectionOrder) {
+      final widget = _detailsPreviewSection(section);
+      if (widget != null) sections.add(widget);
+    }
+
+    return Material(
+      color: const Color(0xFF090909),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 34),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: sections.isEmpty
+              ? const [
+                  Padding(
+                    padding: EdgeInsets.all(30),
+                    child: Text(
+                      'No Details sections are currently enabled.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                ]
+              : sections,
+        ),
       ),
     );
+  }
+
+  Widget? _detailsPreviewSection(String section) {
+    final enabled = switch (section) {
+      'Poster' => detailsDraft.showPoster,
+      'Title' => detailsDraft.showTitle,
+      'Metadata' => detailsDraft.showMetadata,
+      'Ownership' => detailsDraft.showOwnership,
+      'Description' => detailsDraft.showDescription,
+      'Seasons' => detailsPreviewTvShow && detailsDraft.showSeasons,
+      'Collection Items' => true,
+      'Play' => detailsDraft.showPlay,
+      'Trailer' => detailsDraft.showTrailer,
+      'Group Watch' => detailsDraft.showGroupWatch,
+      'Reviews' => true,
+      'Audio & Subtitles' => detailsDraft.showAudioSubtitles,
+      'Reactions' => detailsDraft.showReactions,
+      'Information' => detailsDraft.showInformation,
+      'Library' => detailsDraft.showLibrary,
+      _ => false,
+    };
+
+    if (!enabled) return null;
+
+    return switch (section) {
+      'Poster' => _detailsOutlinePoster(),
+      'Title' => _detailsOutlineTitle(),
+      'Metadata' => _detailsOutlineMetadata(),
+      'Ownership' => _detailsOutlineBar('LIBRARY OWNERSHIP'),
+      'Description' => _detailsOutlineText('Description / synopsis placeholder text'),
+      'Seasons' => _detailsOutlineSeasons(),
+      'Collection Items' => _detailsOutlineCard('COLLECTION ITEMS'),
+      'Play' => _detailsOutlineButton(Icons.play_arrow_rounded, 'PLAY'),
+      'Trailer' => _detailsOutlineButton(Icons.play_circle_outline_rounded, 'WATCH TRAILER'),
+      'Group Watch' => _detailsOutlineButton(Icons.groups_outlined, 'GROUP WATCH / WATCH TOGETHER'),
+      'Reviews' => _detailsOutlineButton(Icons.rate_review_outlined, 'REVIEWS'),
+      'Audio & Subtitles' => _detailsOutlineButton(Icons.closed_caption_outlined, 'AUDIO & SUBTITLES'),
+      'Reactions' => _detailsOutlineReactions(),
+      'Information' => _detailsOutlineInformation(),
+      'Library' => _detailsOutlineLibrary(),
+      _ => null,
+    };
+  }
+
+  Widget _detailsOutlinePoster() {
+    final width = detailsDraft.posterSize == 'Small'
+        ? 175.0
+        : detailsDraft.posterSize == 'Large'
+            ? 285.0
+            : 225.0;
+
+    Alignment alignment;
+    switch (detailsDraft.posterPosition) {
+      case 'Left':
+        alignment = Alignment.centerLeft;
+      case 'Right':
+        alignment = Alignment.centerRight;
+      default:
+        alignment = Alignment.center;
+    }
+
+    if (detailsDraft.posterStyle == 'Side') {
+      return _detailsOutlineCard(
+        'POSTER',
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailsPosterBox(width: 120),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _detailsOutlineStack([
+                'TITLE',
+                'YEAR • RATING • RUNTIME',
+                'DIRECTORS / ACTORS',
+              ]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (detailsDraft.posterStyle == 'Full Screen') {
+      return _detailsOutlineCard(
+        'POSTER / HERO',
+        child: SizedBox(
+          height: 300,
+          child: _detailsPosterBox(fill: true),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Align(
+        alignment: alignment,
+        child: _detailsPosterBox(width: width),
+      ),
+    );
+  }
+
+  Widget _detailsPosterBox({double? width, bool fill = false}) {
+    final box = Container(
+      width: width,
+      height: fill ? null : (width ?? 180) * 1.5,
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: .18)),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.movie_outlined, size: 48, color: Colors.white38),
+            SizedBox(height: 8),
+            Text('POSTER', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+    return box;
+  }
+
+  Widget _detailsOutlineTitle() {
+    return _detailsOutlineCard(
+      'TITLE',
+      child: _detailsTextLine(
+        'Movie or Show Title',
+        size: 27,
+        alignment: _detailsTextAlignment(detailsDraft.titleAlignment),
+      ),
+    );
+  }
+
+  Widget _detailsOutlineMetadata() {
+    final pills = <String>[];
+    if (detailsDraft.showReleaseYear) pills.add('2026');
+    if (detailsDraft.showRating) pills.add('★ 8.7');
+    if (detailsDraft.showContentRating) pills.add('PG-13');
+    if (detailsDraft.showRuntime) pills.add('2h 10m');
+
+    return _detailsOutlineCard(
+      'METADATA',
+      child: Wrap(
+        alignment: _detailsWrapAlignment(detailsDraft.informationAlignment),
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final pill in pills)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white.withValues(alpha: .16)),
+                color: Colors.white.withValues(alpha: .035),
+              ),
+              child: Text(pill, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineSeasons() {
+    final episodes = List.generate(
+      3,
+      (index) => _detailsOutlineEpisode(index + 1),
+    );
+
+    return _detailsOutlineCard(
+      'SEASONS & EPISODES',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _detailsOutlineStack(['SEASON 1', 'SEASON 2', 'SEASON 3']),
+          const SizedBox(height: 14),
+          _detailsTextLine(
+            'Season 1',
+            size: 18,
+            alignment: _detailsTextAlignment(detailsDraft.seasonPlacement),
+          ),
+          const SizedBox(height: 10),
+          ...episodes,
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineEpisode(int number) {
+    final label = switch (detailsDraft.episodeNaming) {
+      'Season X, Episode Y' => 'SEASON 1 • EPISODE $number',
+      'Both' => 'S1E$number',
+      _ => 'Episode $number title',
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withValues(alpha: .025),
+        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 92,
+            height: 62,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: .14)),
+            ),
+            child: const Center(child: Icon(Icons.image_outlined, color: Colors.white30)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _detailsOutlineStack([
+              label,
+              'Episode description / runtime',
+            ]),
+          ),
+          const Icon(Icons.play_circle_outline_rounded, color: Colors.white38),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineInformation() {
+    return _detailsOutlineCard(
+      'INFORMATION',
+      child: Column(
+        children: [
+          _detailsOutlineInfoRow('Directors', 'Director name • Director name'),
+          _detailsOutlineInfoRow('Actors', 'Actor name • Actor name • Actor name'),
+          _detailsOutlineInfoRow('Release Year', '2026'),
+          _detailsOutlineInfoRow('Rating', '★ 8.7 / 10'),
+          _detailsOutlineInfoRow('Runtime', '2h 10m'),
+          _detailsOutlineInfoRow('Content Rating', 'PG-13'),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 105,
+            child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 13)),
+          ),
+          Expanded(
+            child: _detailsTextLine(
+              value,
+              size: 13,
+              alignment: _detailsTextAlignment(detailsDraft.informationAlignment),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineReactions() {
+    return _detailsOutlineCard(
+      'REACTIONS',
+      child: Row(
+        children: [
+          Expanded(child: _detailsMiniButton(Icons.thumb_up_outlined, 'LIKE')),
+          const SizedBox(width: 8),
+          Expanded(child: _detailsMiniButton(Icons.thumb_down_outlined, 'DISLIKE')),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineLibrary() {
+    return _detailsOutlineCard(
+      'LIBRARY',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _detailsOutlineButton(Icons.add_to_queue_rounded, 'ADD TO LIBRARY'),
+          const SizedBox(height: 8),
+          _detailsOutlineButton(Icons.collections_bookmark_outlined, 'ADD TO COLLECTION'),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineButton(IconData icon, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Align(
+        alignment: _detailsButtonAlignment(),
+        child: OutlinedButton.icon(
+          onPressed: null,
+          icon: Icon(icon),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: Colors.white.withValues(alpha: .16)),
+            foregroundColor: Colors.white54,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailsMiniButton(IconData icon, String label) {
+    return OutlinedButton.icon(
+      onPressed: null,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: Colors.white.withValues(alpha: .14)),
+        foregroundColor: Colors.white54,
+      ),
+    );
+  }
+
+  Widget _detailsOutlineCard(String label, {Widget? child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111111),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .11)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child ?? _detailsOutlineBar('OUTLINE'),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsOutlineBar(String text) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: .14)),
+      ),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Text(text, style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.w700)),
+    );
+  }
+
+  Widget _detailsOutlineText(String text) {
+    return _detailsOutlineCard(
+      'DESCRIPTION',
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white38, height: 1.5),
+        textAlign: _detailsTextAlignment(detailsDraft.informationAlignment),
+      ),
+    );
+  }
+
+  Widget _detailsOutlineStack(List<String> labels) {
+    return Column(
+      crossAxisAlignment: _detailsCrossAxisAlignment(detailsDraft.informationAlignment),
+      children: [
+        for (var i = 0; i < labels.length; i++) ...[
+          if (i != 0) const SizedBox(height: 6),
+          _detailsTextLine(labels[i], size: i == 0 ? 15 : 12, alignment: _detailsTextAlignment(detailsDraft.informationAlignment)),
+        ],
+      ],
+    );
+  }
+
+  Widget _detailsTextLine(String text, {double size = 14, TextAlign alignment = TextAlign.left}) {
+    return Text(
+      text,
+      textAlign: alignment,
+      style: TextStyle(
+        color: Colors.white54,
+        fontSize: size,
+        fontWeight: size >= 18 ? FontWeight.w900 : FontWeight.w700,
+      ),
+    );
+  }
+
+  TextAlign _detailsTextAlignment(String value) {
+    switch (value) {
+      case 'Center':
+        return TextAlign.center;
+      case 'Right':
+        return TextAlign.right;
+      default:
+        return TextAlign.left;
+    }
+  }
+
+  CrossAxisAlignment _detailsCrossAxisAlignment(String value) {
+    switch (value) {
+      case 'Center':
+        return CrossAxisAlignment.center;
+      case 'Right':
+        return CrossAxisAlignment.end;
+      default:
+        return CrossAxisAlignment.start;
+    }
+  }
+
+  WrapAlignment _detailsWrapAlignment(String value) {
+    switch (value) {
+      case 'Center':
+        return WrapAlignment.center;
+      case 'Right':
+        return WrapAlignment.end;
+      default:
+        return WrapAlignment.start;
+    }
+  }
+
+  Alignment _detailsButtonAlignment() {
+    switch (detailsDraft.buttonAlignment) {
+      case 'Center':
+        return Alignment.center;
+      case 'Right':
+        return Alignment.centerRight;
+      default:
+        return Alignment.centerLeft;
+    }
   }
 
   /// Performs `_sectionOrder` for this feature. Update this documentation when its contract changes.
@@ -1663,22 +2172,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             const SizedBox(height: 18),
             _headerCard(),
             const SizedBox(height: 18),
-            LayoutBuilder(builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 980;
-              final editor = isHome ? _buildHomePage() : _buildDetailsPage();
-              if (!wide) {
-                return Column(children: [
-                  _customizationPreview(),
-                  const SizedBox(height: 20),
-                  editor,
-                ]);
-              }
-              return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: editor),
-                const SizedBox(width: 18),
-                SizedBox(width: 390, height: 560, child: _customizationPreview()),
-              ]);
-            }),
+            if (isHome) _buildHomePage() else _buildDetailsPage(),
+            _customizationPreview(),
             const SizedBox(height: 26),
             SizedBox(
               height: 54,
@@ -2613,8 +3108,14 @@ class _ActivitySheet extends StatelessWidget {
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onRefresh;
   final VoidCallback? onNotifications;
+  final HomeCustomization? previewSettings;
 
-  const HomeScreen({super.key, this.onRefresh, this.onNotifications});
+  const HomeScreen({
+    super.key,
+    this.onRefresh,
+    this.onNotifications,
+    this.previewSettings,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -2668,7 +3169,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final library = controller.library;
-    final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final settings = widget.previewSettings ??
+        HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final homeBackground = colorFromName(settings.homeBackgroundColor);
 
     final watched = controller.watched;
