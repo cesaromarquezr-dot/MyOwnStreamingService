@@ -4923,6 +4923,11 @@ class DetailsCustomizationStore {
     _prefs?.setString('details_customization_$key', jsonEncode(_toJson(copy)));
   }
 
+  static Map<String, dynamic> snapshotFor(Profile? profile) {
+    final value = settingsFor(profile);
+    return _toJson(value);
+  }
+
   static void removeProfile(Profile profile) {
     _settings.remove(profile.id);
     _prefs?.remove('details_customization_${profile.id}');

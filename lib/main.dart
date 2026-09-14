@@ -598,6 +598,10 @@ class HomeCustomizationStore {
 
   static HomeCustomization get settings => settingsFor(AppController.instance.currentProfile);
 
+  static Map<String, dynamic> snapshotFor(Profile? profile) {
+    return _toJson(settingsFor(profile));
+  }
+
   static bool isConfigured(Profile? profile) => _configuredProfiles.contains(_key(profile));
   static bool get hasConfigured => isConfigured(AppController.instance.currentProfile);
 
@@ -754,6 +758,16 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     if (widget.firstSetup && selectedPage == _CustomizationPage.home) {
       HomeCustomizationStore.apply(draft, profile);
+      if (profile != null && AppController.instance.backendApi.isAuthenticated) {
+        try {
+          await AppController.instance.backendApi.syncProfileCustomizationToSupabase(
+            profileId: profile.id,
+            home: HomeCustomizationStore.snapshotFor(profile),
+            details: DetailsCustomizationStore.snapshotFor(profile),
+            platform: PlatformPreferenceStore.snapshot(),
+          );
+        } catch (_) {}
+      }
       setState(() {
         selectedPage = _CustomizationPage.details;
       });
@@ -762,6 +776,19 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     HomeCustomizationStore.apply(draft, profile);
     DetailsCustomizationStore.apply(profile, detailsDraft);
+
+    if (profile != null && AppController.instance.backendApi.isAuthenticated) {
+      try {
+        await AppController.instance.backendApi.syncProfileCustomizationToSupabase(
+          profileId: profile.id,
+          home: HomeCustomizationStore.snapshotFor(profile),
+          details: DetailsCustomizationStore.snapshotFor(profile),
+          platform: PlatformPreferenceStore.snapshot(),
+        );
+      } catch (_) {
+        // Local settings remain usable if Supabase is temporarily unavailable.
+      }
+    }
 
     if (widget.firstSetup) {
       await HomeCustomizationStore.markSetupCompleted(profile);

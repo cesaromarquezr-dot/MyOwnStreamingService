@@ -963,20 +963,21 @@ class _EditProfileSheetState
     });
 
     try {
-      /*
-       * The current AppController exposes add/remove/switch
-       * profile operations, but not updateProfile().
-       *
-       * Keep the existing profile object usable locally.
-       * Full backend profile editing can be connected once
-       * an update-profile API is exposed by AppController.
-       */
-
+      String? avatarUrl = widget.profile.avatarUrl;
       if (_selectedPhoto != null) {
-        widget.profile.avatarUrl =
-            _selectedPhoto!.path;
+        avatarUrl = _selectedPhoto!.path;
       }
 
+      final api = AppController.instance.backendApi;
+      if (api.isAuthenticated) {
+        await api.updateProfile(
+          profileId: widget.profile.id,
+          name: name,
+          avatarUrl: avatarUrl,
+        );
+      }
+
+      widget.profile.avatarUrl = avatarUrl;
       widget.profile.name = name;
 
       if (!mounted) return;

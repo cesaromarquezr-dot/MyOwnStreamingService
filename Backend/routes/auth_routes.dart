@@ -78,6 +78,12 @@ class AuthRoutes {
         return;
       }
 
+      if (request.method == 'PUT' &&
+          path == '/api/v1/auth/me') {
+        await _updateAccount(request);
+        return;
+      }
+
       // -----------------------------------------------------------------------
       // CURRENT SESSION
       // -----------------------------------------------------------------------
@@ -105,6 +111,12 @@ class AuthRoutes {
       if (request.method == 'POST' &&
           path == '/api/v1/profiles') {
         await _addProfile(request);
+        return;
+      }
+
+      if (request.method == 'PUT' &&
+          path.startsWith('/api/v1/profiles/')) {
+        await _updateProfile(request);
         return;
       }
 
@@ -401,6 +413,31 @@ class AuthRoutes {
     );
   }
 
+  Future<void> _updateAccount(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+
+    final body = await _readJsonBody(request);
+    final currentPassword = _readRequiredString(body, 'currentPassword');
+    final username = body.containsKey('username') ? body['username']?.toString() : null;
+    final email = body.containsKey('email') ? body['email']?.toString() : null;
+
+    final updated = await authService.updateAccount(
+      account: account,
+      username: username,
+      email: email,
+      currentPassword: currentPassword,
+    );
+
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+      'success': true,
+      'account': updated.toJson(),
+    });
+  }
+
   // ===========================================================================
   // CURRENT SESSION
   // ===========================================================================
@@ -509,6 +546,37 @@ class AuthRoutes {
     if(account==null){_sendAuthenticationRequired(request.response);return;}
     authService.deleteAccount(account);
     _sendJson(request.response,statusCode:HttpStatus.ok,body:{'success':true,'message':'Account deleted successfully.'});
+  }
+
+  Future<void> _updateProfile(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+
+    final prefix = '/api/v1/profiles/';
+    final encodedId = request.uri.path.substring(prefix.length);
+    final profileId = Uri.decodeComponent(encodedId).trim();
+    final body = await _readJsonBody(request);
+    final name = _readRequiredString(body, 'name');
+    final avatarUrl = body['avatarUrl']?.toString();
+
+    final profile = await authService.updateProfile(
+      account: account,
+      profileId: profileId,
+      name: name,
+      avatarUrl: avatarUrl,
+    );
+
+    _sendJson(
+      request.response,
+      statusCode: HttpStatus.ok,
+      body: {
+        'success': true,
+        'profile': profile.toJson(),
+      },
+    );
   }
 
   // ===========================================================================

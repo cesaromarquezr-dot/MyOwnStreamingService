@@ -21,7 +21,10 @@ class SupabaseSyncRoutes {
   /// Handles the account snapshot upload endpoint.
   Future<void> handle(HttpRequest request) async {
     try {
-      if (request.method != 'POST' || request.uri.path != '/api/v1/supabase/sync/account') {
+      final path = request.uri.path;
+      if (request.method != 'POST' ||
+          (path != '/api/v1/supabase/sync/account' &&
+              !path.startsWith('/api/v1/supabase/sync/profile/'))) {
         return await _json(request.response, 404, {'success': false, 'error': 'Supabase sync route not found.'});
       }
 
@@ -38,11 +41,40 @@ class SupabaseSyncRoutes {
       }
 
       final body = await _body(request);
-      await store.syncAccountSnapshot(account, clientSnapshot: body);
+
+      if (path == '/api/v1/supabase/sync/account') {
+        await store.syncAccountSnapshot(account, clientSnapshot: body);
+        return await _json(request.response, 200, {
+          'success': true,
+          'accountId': account.id,
+          'synced': true,
+        });
+      }
+
+      final prefix = '/api/v1/supabase/sync/profile/';
+      final profileId = Uri.decodeComponent(path.substring(prefix.length)).trim();
+      if (profileId.isEmpty) {
+        return await _json(request.response, 400, {'success': false, 'error': 'Profile ID is required.'});
+      }
+
+      await store.saveProfileCustomization(
+        accountExternalId: account.id,
+        profileExternalId: profileId,
+        home: body['home'] is Map
+            ? Map<String, dynamic>.from(body['home'] as Map)
+            : null,
+        details: body['details'] is Map
+            ? Map<String, dynamic>.from(body['details'] as Map)
+            : null,
+        platform: body['platform'] is Map
+            ? Map<String, dynamic>.from(body['platform'] as Map)
+            : null,
+      );
 
       return await _json(request.response, 200, {
         'success': true,
         'accountId': account.id,
+        'profileId': profileId,
         'synced': true,
       });
     } catch (e) {

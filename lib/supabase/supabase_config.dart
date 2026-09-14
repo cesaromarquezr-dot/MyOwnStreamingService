@@ -1,26 +1,35 @@
-// FILE: `lib/supabase_config.dart`.
-// Purpose: Part of the documented streaming-service client/backend architecture.
-// Media files remain on the appropriate account server; this source contains application logic, UI, or API coordination.
-
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 /// Optional Supabase configuration.
+///
 /// Pass values with:
 /// --dart-define=SUPABASE_URL=https://...
 /// --dart-define=SUPABASE_PUBLISHABLE_KEY=...
+///
 /// Legacy SUPABASE_ANON_KEY is accepted as a fallback during migration.
 class SupabaseConfig {
-  static const url = String.fromEnvironment('SUPABASE_URL');
-  static const publishableKey = String.fromEnvironment(
-    'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
+  static const url = String.fromEnvironment(
+    'https://kpznsbxxgziynqpxydki.supabase.co/rest/v1/',
+    defaultValue: '',
   );
 
-  static bool get isConfigured => url.isNotEmpty && publishableKey.isNotEmpty;
+  static const publishableKey = String.fromEnvironment(
+    'sb_publishable_0-VjCDmWz7XDUCWQFipTdA_FE_3qGn5',
+    defaultValue: String.fromEnvironment(
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtwem5zYnh4Z3ppeW5xcHh5ZGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjg2NTksImV4cCI6MjEwNDg0NDY1OX0.dmxigYpcf_O0D_ajw3uSVigZ-LwVUhgkBnHRAfRzmvM',
+      defaultValue: '',
+    ),
+  );
+
+  static bool get isConfigured =>
+      url.isNotEmpty && publishableKey.isNotEmpty;
 
   static Future<void> initialize() async {
     if (!isConfigured) return;
-    await Supabase.initialize(url: url, publishableKey: publishableKey);
+
+    await Supabase.initialize(
+      url: url,
+      publishableKey: publishableKey,
+    );
   }
 
   static SupabaseClient? get client =>

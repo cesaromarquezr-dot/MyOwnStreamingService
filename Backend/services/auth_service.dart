@@ -182,7 +182,8 @@ class AuthService {
       plan,
     );
 
-    database.saveAccount(account);
+    // Signup must wait for the durable Supabase account row to be written.
+    await database.persistAccount(account);
 
     await emailService.welcome(
       account.email,
@@ -532,6 +533,84 @@ class AuthService {
     database.saveAccount(
       account,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // ACCOUNT UPDATE
+  // ---------------------------------------------------------------------------
+
+  Future<Account> updateAccount({
+    required Account account,
+    String? username,
+    String? email,
+    required String currentPassword,
+  }) async {
+    if (currentPassword.isEmpty ||
+        !await _verifyPassword(currentPassword, account.passwordHash)) {
+      throw Exception('Current password is incorrect.');
+    }
+
+    final nextUsername = username?.trim();
+    final nextEmail = email?.trim().toLowerCase();
+
+    if (nextUsername != null && nextUsername.isEmpty) {
+      throw Exception('Username cannot be empty.');
+    }
+    if (nextEmail != null && !_isValidEmail(nextEmail)) {
+      throw Exception('A valid email address is required.');
+    }
+
+    if (nextUsername != null &&
+        nextUsername.toLowerCase() != account.username.trim().toLowerCase() &&
+        database.getAccountByUsername(nextUsername) != null) {
+      throw Exception('That username is already in use.');
+    }
+
+    if (nextEmail != null &&
+        nextEmail != account.email.trim().toLowerCase() &&
+        database.getAccountByEmail(nextEmail) != null) {
+      throw Exception('That email address is already in use.');
+    }
+
+    if (nextUsername != null) account.username = nextUsername;
+    if (nextEmail != null) account.email = nextEmail;
+
+    database.saveAccount(account);
+    return account;
+  }
+
+  // ---------------------------------------------------------------------------
+  // PROFILE UPDATE
+  // ---------------------------------------------------------------------------
+
+  Future<Profile> updateProfile({
+    required Account account,
+    required String profileId,
+    required String name,
+    String? avatarUrl,
+  }) async {
+    final cleanId = profileId.trim();
+    final cleanName = name.trim();
+    if (cleanId.isEmpty) throw Exception('Profile ID is required.');
+    if (cleanName.isEmpty) throw Exception('Profile name is required.');
+
+    final profile = account.getProfileById(cleanId);
+    if (profile == null) throw Exception('Profile not found.');
+
+    final existing = account.profiles.any((item) =>
+        item.id != cleanId &&
+        item.name.trim().toLowerCase() == cleanName.toLowerCase());
+    if (existing) throw Exception('A profile with that name already exists.');
+
+    profile.name = cleanName;
+    final cleanAvatar = avatarUrl?.trim();
+    profile.avatarUrl = cleanAvatar == null || cleanAvatar.isEmpty
+        ? null
+        : cleanAvatar;
+
+    database.saveAccount(account);
+
+    return profile;
   }
 
   // ---------------------------------------------------------------------------

@@ -70,8 +70,10 @@ import 'arm/arm_service.dart';
 
 Future<void> main() async {
   SupabaseStore.instance.initialize();
+  print('Backend Supabase persistence initialized.');
 
   final database = Database.instance;
+  await database.initializePersistent();
 
   // ------------------------------------------------------------
   // SERVICES

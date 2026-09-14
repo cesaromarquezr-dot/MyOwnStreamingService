@@ -532,12 +532,81 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to delete profile.');
   }
 
+  Future<Map<String, dynamic>> updateAccount({
+    String? username,
+    String? email,
+    required String currentPassword,
+  }) async {
+    _requireAuthentication();
+    final response = await http.put(
+      Uri.parse('$baseUrl/auth/me'),
+      headers: _headers,
+      body: jsonEncode({
+        'username': username,
+        'email': email,
+        'currentPassword': currentPassword,
+      }),
+    );
+    return _requireSuccess(response, 'Unable to update account.');
+  }
+
+  Future<Map<String, dynamic>> updateProfile({
+    required String profileId,
+    required String name,
+    String? avatarUrl,
+  }) async {
+    _requireAuthentication();
+    final response = await http.put(
+      Uri.parse('$baseUrl/profiles/${Uri.encodeComponent(profileId)}'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name.trim(),
+        'avatarUrl': avatarUrl,
+      }),
+    );
+    return _requireSuccess(response, 'Unable to update profile.');
+  }
+
   Future<Map<String, dynamic>> deleteAccount() async {
     _requireAuthentication();
     final response = await http.delete(Uri.parse('$baseUrl/auth/account'), headers: _headers);
     final data = _requireSuccess(response, 'Unable to delete account.');
     clearToken();
     return data;
+  }
+
+  Future<Map<String, dynamic>> deleteServerMedia(String relativeMediaId) async {
+    _requireAuthentication();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/library/media/${Uri.encodeComponent(relativeMediaId)}'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to remove media from the database index.');
+  }
+
+  Future<Map<String, dynamic>> updateServerMediaMetadata({
+    required String relativeMediaId,
+    String? title,
+    int? year,
+    String? description,
+    String? posterUrl,
+    String? trailerUrl,
+    Map<String, dynamic>? metadata,
+  }) async {
+    _requireAuthentication();
+    final response = await http.put(
+      Uri.parse('$baseUrl/library/media/${Uri.encodeComponent(relativeMediaId)}'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': title,
+        'year': year,
+        'description': description,
+        'posterUrl': posterUrl,
+        'trailerUrl': trailerUrl,
+        'metadata': metadata,
+      }),
+    );
+    return _requireSuccess(response, 'Unable to update media metadata.');
   }
 
 
@@ -609,6 +678,25 @@ class BackendApi {
 
   /// Uploads sanitized Flutter account metadata through the authenticated
   /// backend into Supabase. Physical media files are never included.
+  Future<Map<String, dynamic>> syncProfileCustomizationToSupabase({
+    required String profileId,
+    Map<String, dynamic>? home,
+    Map<String, dynamic>? details,
+    Map<String, dynamic>? platform,
+  }) async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/supabase/sync/profile/${Uri.encodeComponent(profileId)}'),
+      headers: _headers,
+      body: jsonEncode({
+        'home': home ?? <String, dynamic>{},
+        'details': details ?? <String, dynamic>{},
+        'platform': platform ?? <String, dynamic>{},
+      }),
+    );
+    return _requireSuccess(response, 'Unable to synchronize profile customization.');
+  }
+
   Future<Map<String, dynamic>> syncAccountToSupabase({
     required Map<String, dynamic> snapshot,
   }) async {

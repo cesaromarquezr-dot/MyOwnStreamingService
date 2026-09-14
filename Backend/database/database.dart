@@ -10,6 +10,9 @@ import '../models/group_chat_room.dart';
 import '../models/profile.dart';
 import '../models/remote_worker.dart';
 import '../models/review.dart';
+import '../supabase_store.dart';
+import 'dart:async';
+import 'dart:developer' as developer;
 
 class SessionRecord {
   final String token;
@@ -70,6 +73,103 @@ class Database {
   // - session rotation
   static const Duration defaultSessionLifetime =
       Duration(days: 30);
+
+  // ---------------------------------------------------------------------------
+  // PERSISTENCE
+  // ---------------------------------------------------------------------------
+
+  /// Loads persistent account data from Supabase into the in-memory cache.
+  /// The backend remains the authoritative API; Supabase is the durable store.
+  Future<void> initializePersistent() async {
+  try {
+    final store = SupabaseStore.instance;
+
+    print('Persistent initialization: Supabase enabled = ${store.enabled}');
+
+    if (!store.enabled) {
+      print('Persistent initialization: Supabase is disabled.');
+      return;
+    }
+
+    print('Persistent initialization: loading accounts from Supabase...');
+
+    final stopwatch = Stopwatch()..start();
+    final accounts = await store.loadAccounts();
+    stopwatch.stop();
+
+    print(
+      'Persistent initialization: loaded ${accounts.length} accounts '
+      'in ${stopwatch.elapsedMilliseconds} ms.',
+    );
+
+    for (final account in accounts) {
+      _cacheAccount(account);
+    }
+
+    print('Persistent initialization: complete.');
+  } catch (error, stackTrace) {
+    print('Persistent initialization FAILED: $error');
+
+    developer.log(
+      'Unable to load persistent database state. Starting with in-memory cache.',
+      name: 'Database',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+}
+
+  void _cacheAccount(Account account) {
+    final username = account.username.trim().toLowerCase();
+    final email = account.email.trim().toLowerCase();
+
+    accountsById[account.id] = account;
+    if (username.isNotEmpty) accountIdByUsername[username] = account.id;
+    if (email.isNotEmpty) accountIdByEmail[email] = account.id;
+  }
+
+  /// Updates the in-memory account cache and waits for Supabase persistence.
+  /// This is used by operations, such as signup, that must not return success
+  /// until the durable account row has been written.
+  Future<void> persistAccount(Account account) async {
+    final username = account.username.trim().toLowerCase();
+    final email = account.email.trim().toLowerCase();
+
+    final previous = accountsById[account.id];
+    if (previous != null) {
+      final previousUsername = previous.username.trim().toLowerCase();
+      final previousEmail = previous.email.trim().toLowerCase();
+
+      if (previousUsername != username &&
+          accountIdByUsername[previousUsername] == account.id) {
+        accountIdByUsername.remove(previousUsername);
+      }
+
+      if (previousEmail != email &&
+          accountIdByEmail[previousEmail] == account.id) {
+        accountIdByEmail.remove(previousEmail);
+      }
+    }
+
+    accountsById[account.id] = account;
+    accountIdByUsername[username] = account.id;
+    accountIdByEmail[email] = account.id;
+
+    await SupabaseStore.instance.upsertAccount(account);
+  }
+
+  void _persistAccount(Account account) {
+    unawaited(
+      SupabaseStore.instance.upsertAccount(account).catchError((error, stackTrace) {
+        developer.log(
+          'Account persistence failed.',
+          name: 'Database',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }),
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // ACCOUNTS
@@ -277,6 +377,20 @@ class Database {
     final email =
         account.email.trim().toLowerCase();
 
+    final previous = accountsById[account.id];
+    if (previous != null) {
+      final previousUsername = previous.username.trim().toLowerCase();
+      final previousEmail = previous.email.trim().toLowerCase();
+      if (previousUsername != username &&
+          accountIdByUsername[previousUsername] == account.id) {
+        accountIdByUsername.remove(previousUsername);
+      }
+      if (previousEmail != email &&
+          accountIdByEmail[previousEmail] == account.id) {
+        accountIdByEmail.remove(previousEmail);
+      }
+    }
+
     accountsById[account.id] = account;
 
     accountIdByUsername[username] =
@@ -284,6 +398,8 @@ class Database {
 
     accountIdByEmail[email] =
         account.id;
+
+    _persistAccount(account);
   }
 
   /// Performs `deleteAccount` for this feature. Update this documentation when its contract changes.
@@ -318,6 +434,17 @@ class Database {
         .removeWhere(
       (_, session) =>
           session.accountId == accountId,
+    );
+
+    unawaited(
+      SupabaseStore.instance.deleteAccount(accountId).catchError((error, stackTrace) {
+        developer.log(
+          'Account deletion persistence failed.',
+          name: 'Database',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }),
     );
   }
 
