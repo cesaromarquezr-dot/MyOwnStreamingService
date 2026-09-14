@@ -35,6 +35,7 @@ import 'storage_dashboard.dart';
 import 'library_hubs.dart';
 import 'home_widgets.dart';
 import 'supabase/supabase_service.dart';
+import 'responsive.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.instance.initialize();
@@ -59,7 +60,11 @@ class MyStreamingService extends StatelessWidget {
             final rtl = LanguageController.instance.current.code == 'ar';
             return Directionality(
               textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
-              child: child ?? const SizedBox.shrink(),
+              child: ResponsiveScope(
+                child: ResponsiveAppSurface(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
             );
           },
         );
@@ -709,6 +714,47 @@ enum _CustomizationPage {
   details,
 }
 
+enum _PreviewDeviceCategory {
+  phone,
+  tablet,
+  desktop,
+  tv,
+}
+
+class _PreviewDevicePreset {
+  final String name;
+  final _PreviewDeviceCategory category;
+  final double width;
+  final double height;
+  final IconData icon;
+  final bool landscape;
+
+  const _PreviewDevicePreset({
+    required this.name,
+    required this.category,
+    required this.width,
+    required this.height,
+    required this.icon,
+    this.landscape = false,
+  });
+}
+
+const _previewDevices = <_PreviewDevicePreset>[
+  _PreviewDevicePreset(name: 'iPhone', category: _PreviewDeviceCategory.phone, width: 390, height: 844, icon: Icons.phone_iphone_rounded),
+  _PreviewDevicePreset(name: 'Samsung Galaxy', category: _PreviewDeviceCategory.phone, width: 412, height: 915, icon: Icons.phone_android_rounded),
+  _PreviewDevicePreset(name: 'Android Phone', category: _PreviewDeviceCategory.phone, width: 412, height: 892, icon: Icons.android_rounded),
+  _PreviewDevicePreset(name: 'LG Phone', category: _PreviewDeviceCategory.phone, width: 393, height: 873, icon: Icons.phone_android_rounded),
+  _PreviewDevicePreset(name: 'iPad', category: _PreviewDeviceCategory.tablet, width: 820, height: 1180, icon: Icons.tablet_mac_rounded),
+  _PreviewDevicePreset(name: 'iPad Pro', category: _PreviewDeviceCategory.tablet, width: 1024, height: 1366, icon: Icons.tablet_mac_rounded),
+  _PreviewDevicePreset(name: 'Android Tablet', category: _PreviewDeviceCategory.tablet, width: 800, height: 1280, icon: Icons.tablet_android_rounded),
+  _PreviewDevicePreset(name: 'Windows PC', category: _PreviewDeviceCategory.desktop, width: 1440, height: 900, icon: Icons.desktop_windows_rounded),
+  _PreviewDevicePreset(name: 'Mac', category: _PreviewDeviceCategory.desktop, width: 1440, height: 900, icon: Icons.desktop_mac_rounded),
+  _PreviewDevicePreset(name: 'Laptop', category: _PreviewDeviceCategory.desktop, width: 1366, height: 768, icon: Icons.laptop_mac_rounded),
+  _PreviewDevicePreset(name: 'Smart TV', category: _PreviewDeviceCategory.tv, width: 1920, height: 1080, icon: Icons.tv_rounded, landscape: true),
+  _PreviewDevicePreset(name: '4K TV', category: _PreviewDeviceCategory.tv, width: 3840, height: 2160, icon: Icons.tv_rounded, landscape: true),
+  _PreviewDevicePreset(name: 'TV / Large Display', category: _PreviewDeviceCategory.tv, width: 1280, height: 720, icon: Icons.connected_tv_rounded, landscape: true),
+];
+
 /// Implements the `CustomizeHomeScreen` class for this feature or UI component.
 class CustomizeHomeScreen extends StatefulWidget {
   final bool firstSetup;
@@ -725,6 +771,17 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late DetailsCustomization detailsDraft;
   _CustomizationPage selectedPage = _CustomizationPage.home;
   bool detailsPreviewTvShow = true;
+  _PreviewDeviceCategory _previewCategory = _PreviewDeviceCategory.phone;
+  String _previewDeviceName = 'iPhone';
+
+  // Prevent repeated taps while an async save/navigation operation is in
+  // progress. This avoids Flutter Navigator's !_debugLocked assertion.
+  bool _isSaving = false;
+
+  // Home and Details share one scrollable customization page. Resetting this
+  // controller when the page changes guarantees the next customization
+  // section always opens at its top.
+  final ScrollController _customizationScrollController = ScrollController();
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
@@ -754,6 +811,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
   /// Performs `_save` for this feature. Update this documentation when its contract changes.
   Future<void> _save() async {
+    if (_isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
     final profile = AppController.instance.currentProfile;
 
     if (widget.firstSetup && selectedPage == _CustomizationPage.home) {
@@ -768,9 +831,24 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           );
         } catch (_) {}
       }
+      if (!mounted) return;
+
       setState(() {
         selectedPage = _CustomizationPage.details;
       });
+
+      // Home and Details reuse the same ListView. Reset after the Details
+      // content has been laid out so the new customization starts at the top.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_customizationScrollController.hasClients) return;
+        _customizationScrollController.jumpTo(0);
+      });
+
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
       return;
     }
 
@@ -796,6 +874,25 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     if (!mounted) return;
     Navigator.of(context).pop(true);
+  }
+
+  void _selectCustomizationPage(_CustomizationPage page) {
+    if (_isSaving || selectedPage == page) return;
+
+    setState(() {
+      selectedPage = page;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_customizationScrollController.hasClients) return;
+      _customizationScrollController.jumpTo(0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _customizationScrollController.dispose();
+    super.dispose();
   }
 
   List<String> _availableHomePositions(HomeCustomization value, {bool allowHidden = false, bool excludeNavbar = false}) {
@@ -927,13 +1024,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             label: 'HOME PAGE',
             icon: Icons.home_rounded,
             selected: selectedPage == _CustomizationPage.home,
-            onPressed: widget.firstSetup 
-            ? () {}
-            :(){
-              setState(() {
-                selectedPage = _CustomizationPage.home;
-              });
-            },
+            onPressed: widget.firstSetup
+                ? null
+                : () => _selectCustomizationPage(_CustomizationPage.home),
           ),
         ),
         const SizedBox(width: 10),
@@ -942,13 +1035,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             label: 'DETAILS PAGE',
             icon: Icons.movie_outlined,
             selected: selectedPage == _CustomizationPage.details,
-            onPressed: widget.firstSetup 
-            ? () {}
-        : () {
-              setState(() {
-                selectedPage = _CustomizationPage.details;
-              });
-            },
+            onPressed: widget.firstSetup
+                ? null
+                : () => _selectCustomizationPage(_CustomizationPage.details),
           ),
         ),
       ],
@@ -960,7 +1049,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     required String label,
     required IconData icon,
     required bool selected,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
   }) {
     return SizedBox(
       height: 52,
@@ -1459,10 +1548,26 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   /// rendered by `MediaDetailsScreen` after it exists in the library.
   Widget _customizationPreview() {
     final isHome = selectedPage == _CustomizationPage.home;
-
     final Widget actualPage = isHome
         ? _buildHomeCustomizationPreview()
         : _buildDetailsCustomizationPreview();
+    final devices = _previewDevices
+        .where((device) => device.category == _previewCategory)
+        .toList();
+    final selectedDevice = devices.firstWhere(
+      (device) => device.name == _previewDeviceName,
+      orElse: () => devices.first,
+    );
+    if (_previewDeviceName != selectedDevice.name) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _previewDeviceName != selectedDevice.name) {
+          setState(() => _previewDeviceName = selectedDevice.name);
+        }
+      });
+    }
+
+    final isTv = selectedDevice.category == _PreviewDeviceCategory.tv;
+    final isPhone = selectedDevice.category == _PreviewDeviceCategory.phone;
 
     return Container(
       margin: const EdgeInsets.only(top: 20),
@@ -1482,74 +1587,151 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 color: colorFromName(draft.navbarGlowColor),
               ),
               const SizedBox(width: 8),
-              Text(
-                isHome ? 'LIVE HOME PREVIEW' : 'LIVE DETAILS PREVIEW',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
+              const Expanded(
+                child: Text(
+                  'LIVE DEVICE PREVIEW',
+                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2),
                 ),
               ),
-              const Spacer(),
-              const Icon(
-                Icons.visibility_outlined,
+              Icon(
+                isTv ? Icons.settings_remote_rounded : Icons.touch_app_rounded,
                 size: 17,
                 color: Colors.white54,
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _previewCategorySelector(),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: selectedDevice.name,
+            decoration: const InputDecoration(
+              labelText: 'Device / Screen',
+              prefixIcon: Icon(Icons.devices_other_rounded),
+              border: OutlineInputBorder(),
+            ),
+            items: devices
+                .map((device) => DropdownMenuItem<String>(
+                      value: device.name,
+                      child: Row(
+                        children: [
+                          Icon(device.icon, size: 20),
+                          const SizedBox(width: 8),
+                          Text(device.name),
+                        ],
+                      ),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) setState(() => _previewDeviceName = value);
+            },
+          ),
           if (!isHome) ...[
             const SizedBox(height: 10),
             SegmentedButton<bool>(
               segments: const [
-                ButtonSegment<bool>(
-                  value: false,
-                  icon: Icon(Icons.movie_outlined),
-                  label: Text('Movie'),
-                ),
-                ButtonSegment<bool>(
-                  value: true,
-                  icon: Icon(Icons.tv_outlined),
-                  label: Text('TV Show'),
-                ),
+                ButtonSegment<bool>(value: false, icon: Icon(Icons.movie_outlined), label: Text('Movie')),
+                ButtonSegment<bool>(value: true, icon: Icon(Icons.tv_outlined), label: Text('TV Show')),
               ],
               selected: <bool>{detailsPreviewTvShow},
               onSelectionChanged: (value) {
-                if (value.isNotEmpty) {
-                  setState(() => detailsPreviewTvShow = value.first);
-                }
+                if (value.isNotEmpty) setState(() => detailsPreviewTvShow = value.first);
               },
             ),
           ],
           const SizedBox(height: 12),
-          SizedBox(
-            height: 760,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: ColoredBox(
-                    color: const Color(0xFF090909),
-                    child: AbsorbPointer(
-                      absorbing: true,
-                      child: actualPage,
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(isPhone ? 8 : 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF050505),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: .1)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final maxWidth = constraints.maxWidth - (isPhone ? 16 : 28);
+                final maxHeight = isPhone ? 620.0 : 680.0;
+                final scale = (maxWidth / selectedDevice.width)
+                    .clamp(0.05, maxHeight / selectedDevice.height)
+                    .toDouble();
+                return Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(isPhone ? 28 : isTv ? 10 : 18),
+                    child: SizedBox(
+                      width: selectedDevice.width * scale,
+                      height: selectedDevice.height * scale,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(color: Color(0xFF090909)),
+                        child: Transform.scale(
+                          scale: scale,
+                          alignment: Alignment.topLeft,
+                          child: SizedBox(
+                            width: selectedDevice.width,
+                            height: selectedDevice.height,
+                            child: AbsorbPointer(
+                              absorbing: true,
+                              child: actualPage,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 10),
           Text(
+            '${selectedDevice.name} • ${selectedDevice.width.toInt()} × ${selectedDevice.height.toInt()} • ${isTv ? 'TV remote / focus layout' : 'touch / pointer layout'}',
+            style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
             isHome
-                ? 'This preview uses the actual Home layout, navigation bar, storage progression, and Live Sports placement.'
-                : 'This wireframe mirrors the configurable Details sections. Ripped movie/show metadata replaces these outlines on the real Details page.',
-            style: const TextStyle(
-              color: Colors.white38,
-              fontSize: 11,
-            ),
+                ? 'Changes to Home customization are reflected live in the selected device preview.'
+                : 'Changes to Details customization are reflected live in the selected device preview.',
+            style: const TextStyle(color: Colors.white38, fontSize: 11),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _previewCategorySelector() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _previewCategoryButton(_PreviewDeviceCategory.phone, Icons.phone_iphone_rounded, '📱 Phone'),
+          _previewCategoryButton(_PreviewDeviceCategory.tablet, Icons.tablet_mac_rounded, '📱 Tablet'),
+          _previewCategoryButton(_PreviewDeviceCategory.desktop, Icons.desktop_windows_rounded, '🖥️ Desktop'),
+          _previewCategoryButton(_PreviewDeviceCategory.tv, Icons.tv_rounded, '📺 TV / Large'),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewCategoryButton(
+    _PreviewDeviceCategory category,
+    IconData icon,
+    String label,
+  ) {
+    final selected = _previewCategory == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        avatar: Icon(icon, size: 17),
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) {
+          final first = _previewDevices.firstWhere((device) => device.category == category);
+          setState(() {
+            _previewCategory = category;
+            _previewDeviceName = first.name;
+          });
+        },
       ),
     );
   }
@@ -1574,12 +1756,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       if (!navigationOrder.contains(name)) navigationOrder.add(name);
     }
 
-    final page = HomeScreen(
-      onRefresh: () {},
-      onNotifications: () {},
-      previewSettings: draft,
-    );
-
     final previewNavbar = _StreamingNavigationBar(
       position: draft.navbarPosition,
       onSelect: (_) {},
@@ -1594,6 +1770,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       radius: draft.navbarRadius,
     );
 
+    // The Home preview intentionally uses representative movie/show outlines
+    // instead of the user's real library. This makes the customization screen
+    // useful even before media has been imported and avoids changing library
+    // data just to preview a layout.
+    final page = _homeCustomizationOutline();
+
     return HomePositionedLayout(
       navbarPosition: draft.navbarPosition,
       storagePosition: draft.storageBarPosition,
@@ -1602,6 +1784,247 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       showLiveSports: draft.showLiveSports,
       navbar: previewNavbar,
       child: page,
+    );
+  }
+
+  Widget _homeCustomizationOutline() {
+    final background = colorFromName(draft.homeBackgroundColor);
+    final sections = <Widget>[];
+
+    if (draft.showHero) {
+      sections.add(_homePreviewHero());
+    }
+
+    for (final section in draft.sectionOrder) {
+      final enabled = switch (section) {
+        'Continue Watching' => draft.showContinueWatching,
+        'Recently Watched' => draft.showRecentlyWatched,
+        'Movies' => draft.showMovies,
+        'TV Shows' => draft.showTvShows,
+        'New Additions' => draft.showNewAdditions,
+        'All Library' => draft.showAllLibrary,
+        'Recommendations' => draft.showRecommendations,
+        'Music & Film' => draft.showMusic || draft.showFilm,
+        'Connected Sports' => draft.showLiveSports,
+        _ => false,
+      };
+      if (!enabled) continue;
+
+      switch (section) {
+        case 'Movies':
+          sections.add(_homePreviewMediaSection(
+            'MOVIES',
+            'Sample movies',
+            Icons.movie_outlined,
+            isTvShow: false,
+          ));
+        case 'TV Shows':
+          sections.add(_homePreviewMediaSection(
+            'TV SHOWS',
+            'Sample shows',
+            Icons.tv_outlined,
+            isTvShow: true,
+          ));
+        case 'Continue Watching':
+          sections.add(_homePreviewMediaSection(
+            'CONTINUE WATCHING',
+            'Movies & shows in progress',
+            Icons.play_circle_outline_rounded,
+            isTvShow: false,
+            progress: true,
+          ));
+        case 'Recently Watched':
+          sections.add(_homePreviewMediaSection(
+            'RECENTLY WATCHED',
+            'Movies & shows you watched',
+            Icons.history_rounded,
+            isTvShow: true,
+          ));
+        case 'New Additions':
+          sections.add(_homePreviewMediaSection(
+            'NEW ADDITIONS',
+            'Recently imported movies & shows',
+            Icons.fiber_new_rounded,
+            isTvShow: false,
+          ));
+        case 'All Library':
+          sections.add(_homePreviewMediaSection(
+            'ALL LIBRARY',
+            'Movies and TV shows',
+            Icons.video_library_outlined,
+            isTvShow: true,
+          ));
+        case 'Recommendations':
+          sections.add(_homePreviewMediaSection(
+            'RECOMMENDATIONS',
+            'Recommended for this profile',
+            Icons.auto_awesome_outlined,
+            isTvShow: false,
+          ));
+        case 'Music & Film':
+          sections.add(_homePreviewMediaSection(
+            'MUSIC & FILM',
+            'Music, films and soundtracks',
+            Icons.library_music_outlined,
+            isTvShow: false,
+          ));
+        case 'Connected Sports':
+          sections.add(_homePreviewBar('CONNECTED SPORTS', Icons.sports_soccer_rounded));
+      }
+    }
+
+    return Material(
+      color: background,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 80),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: sections.isEmpty
+              ? const [
+                  Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text(
+                      'No Home sections are currently enabled.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                ]
+              : sections,
+        ),
+      ),
+    );
+  }
+
+  Widget _homePreviewHero() {
+    return Container(
+      height: draft.heroStyle == 'Minimal' ? 150 : 210,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFF181818),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            const Icon(Icons.movie_filter_outlined, size: 34, color: Colors.white38),
+            const SizedBox(height: 8),
+            Text(
+              draft.heroStyle.toUpperCase(),
+              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, letterSpacing: 1.1),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'FEATURED MOVIE / TV SHOW',
+              style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _homePreviewMediaSection(
+    String title,
+    String subtitle,
+    IconData icon, {
+    required bool isTvShow,
+    bool progress = false,
+  }) {
+    final cardWidth = switch (draft.cardSize) {
+      'Small' => 78.0,
+      'Large' => 125.0,
+      _ => 100.0,
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: colorFromName(draft.navbarGlowColor)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .8)),
+              ),
+              Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+            ],
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: cardWidth * 1.48 + (progress ? 20 : 0),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 5,
+              separatorBuilder: (_, __) => const SizedBox(width: 9),
+              itemBuilder: (context, index) {
+                final label = isTvShow
+                    ? 'SHOW ${index + 1}'
+                    : 'MOVIE ${index + 1}';
+                return SizedBox(
+                  width: cardWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF151515),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withValues(alpha: .18)),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(isTvShow ? Icons.tv_outlined : Icons.movie_outlined, size: 25, color: Colors.white38),
+                              const SizedBox(height: 5),
+                              Text(label, style: const TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (progress) ...[
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(value: .62, minHeight: 4),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _homePreviewBar(String label, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151515),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .14)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: colorFromName(draft.navbarGlowColor)),
+          const SizedBox(width: 9),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .8)),
+          const Spacer(),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+        ],
+      ),
     );
   }
 
@@ -2193,6 +2616,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       ),
       body: SafeArea(
         child: ListView(
+          controller: _customizationScrollController,
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
             _pageSelector(),
@@ -2205,12 +2629,16 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             SizedBox(
               height: 54,
               child: ElevatedButton.icon(
-                onPressed: _save,
+                onPressed: _isSaving ? null : _save,
                 icon: const Icon(Icons.check_rounded),
                 label: Text(
-                  widget.firstSetup
-                      ? (selectedPage == _CustomizationPage.home ? 'CONTINUE TO DETAILS' : 'ENTER MY HOME')
-                      : 'SAVE CHANGES',
+                  _isSaving
+                      ? 'SAVING...'
+                      : widget.firstSetup
+                          ? (selectedPage == _CustomizationPage.home
+                              ? 'CONTINUE TO DETAILS'
+                              : 'ENTER MY HOME')
+                          : 'SAVE CHANGES',
                 ),
               ),
             ),
