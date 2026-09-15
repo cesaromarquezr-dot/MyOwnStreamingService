@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'player.dart';
+import 'localization.dart';
 
 // Phase 2 features are intentionally kept in one module so the existing
 // 34-feature implementation remains stable while the app gains a richer
@@ -49,10 +50,10 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Next-Gen Streaming'),
+        title: const UniversalText('Next-Gen Streaming'),
         actions: [
           IconButton(
-            tooltip: 'What is new',
+            tooltip: tr('What is new'),
             icon: const Icon(Icons.auto_awesome_rounded),
             onPressed: () => _showWhatIsNew(context),
           ),
@@ -107,9 +108,9 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
           child: ListView(
             shrinkWrap: true,
             children: const [
-              Text('Phase 2', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+              UniversalText('Phase 2', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
               SizedBox(height: 8),
-              Text('The new layer adds smarter discovery, personal collections, playlists, downloads, viewing analytics, playback controls, privacy, kids mode, data saving, sync controls and an AI-style watch assistant.', style: TextStyle(color: Colors.white70, height: 1.45)),
+              UniversalText('The new layer adds smarter discovery, personal collections, playlists, downloads, viewing analytics, playback controls, privacy, kids mode, data saving, sync controls and an AI-style watch assistant.', style: TextStyle(color: Colors.white70, height: 1.45)),
               SizedBox(height: 18),
               _Bullet('Smart “what should I watch?” discovery'),
               _Bullet('Watchlist, likes, unfinished and downloads in one place'),
@@ -184,16 +185,16 @@ class _SmartDiscoverPanelState extends State<SmartDiscoverPanel> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
           children: [
-            const _HeroCard(
+            _HeroCard(
               icon: Icons.auto_awesome,
-              title: 'Your personal watch assistant',
-              subtitle: 'Tell the app what you feel like watching, or search by title, actor, director, genre or tag.',
+              title: tr('Your personal watch assistant'),
+              subtitle: tr('Tell the app what you feel like watching, or search by title, actor, director, genre or tag.'),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: search,
               onChanged: (v) => setState(() => query = v),
-              decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'Search your library…', suffixIcon: query.isEmpty ? null : IconButton(onPressed: () { search.clear(); setState(() => query = ''); }, icon: const Icon(Icons.close))),
+              decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: tr('Search your library…'), suffixIcon: query.isEmpty ? null : IconButton(onPressed: () { search.clear(); setState(() => query = ''); }, icon: const Icon(Icons.close))),
             ),
             const SizedBox(height: 12),
             SingleChildScrollView(
@@ -207,22 +208,22 @@ class _SmartDiscoverPanelState extends State<SmartDiscoverPanel> {
             _SectionTitle('Best matches for you', Icons.recommend_rounded),
             const SizedBox(height: 10),
             if (filtered.isEmpty)
-              const _EmptyCard(title: 'Nothing matches yet', subtitle: 'Add more movies or shows to build smarter recommendations.')
+              _EmptyCard(title: tr('Nothing matches yet'), subtitle: tr('Add more movies or shows to build smarter recommendations.'))
             else
               ...filtered.take(12).map((media) => _MediaRow(media: media)),
             const SizedBox(height: 18),
             _SectionTitle('Quick picks', Icons.bolt_rounded),
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: _QuickAction(icon: Icons.shuffle, title: 'Surprise me', onTap: () {
+              Expanded(child: _QuickAction(icon: Icons.shuffle, title: tr('Surprise me'), onTap: () {
                 if (all.isEmpty) return;
                 final pick = all[math.Random().nextInt(all.length)];
                 Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: pick)));
               })),
               const SizedBox(width: 10),
-              Expanded(child: _QuickAction(icon: Icons.history, title: 'Continue', onTap: () {
+              Expanded(child: _QuickAction(icon: Icons.history, title: tr('Continue'), onTap: () {
                 final items = all.where((m) => controller.getPlaybackProgress(m.id) > 0 && controller.getPlaybackProgress(m.id) < 1).toList();
-                if (items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nothing is waiting to be continued.'))); return; }
+                if (items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Nothing is waiting to be continued.'))); return; }
                 Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: items.first)));
               })),
             ]),
@@ -278,19 +279,19 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
           _SectionTitle('Playlists', Icons.queue_music_rounded),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: TextField(controller: playlistController, decoration: const InputDecoration(hintText: 'New playlist name'))),
+            Expanded(child: TextField(controller: playlistController, decoration: InputDecoration(hintText: tr('New playlist name')))),
             const SizedBox(width: 8),
             IconButton.filled(onPressed: _createPlaylist, icon: const Icon(Icons.add)),
           ]),
           if (Phase2Store.playlists.isNotEmpty) ...[
             const SizedBox(height: 10),
             for (final entry in Phase2Store.playlists.entries)
-              Card(child: ListTile(leading: const Icon(Icons.playlist_play), title: Text(entry.key), subtitle: Text('${entry.value.length} item(s)'), trailing: const Icon(Icons.chevron_right), onTap: () => _showPlaylist(context, entry.key))),
+              Card(child: ListTile(leading: const Icon(Icons.playlist_play), title: Text(entry.key), subtitle: UniversalText('${entry.value.length} item(s)'), trailing: const Icon(Icons.chevron_right), onTap: () => _showPlaylist(context, entry.key))),
           ],
           const SizedBox(height: 18),
           _SectionTitle('$filter (${items.length})', Icons.filter_list_rounded),
           const SizedBox(height: 8),
-          if (items.isEmpty) const _EmptyCard(title: 'Nothing here yet', subtitle: 'Your activity will appear in this section as you use the app.')
+          if (items.isEmpty) _EmptyCard(title: tr('Nothing here yet'), subtitle: tr('Your activity will appear in this section as you use the app.'))
           else ...items.map((m) => _MediaRow(media: m, showDownload: true)),
         ],
       ),
@@ -310,7 +311,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
   void _showPlaylist(BuildContext context, String name) {
     final ids = Phase2Store.playlists[name] ?? <String>[];
     final media = AppController.instance.library.where((m) => ids.contains(m.id)).toList();
-    showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), isScrollControlled: true, builder: (_) => SafeArea(child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(16), children: [Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 12), if (media.isEmpty) const _EmptyCard(title: 'Playlist is empty', subtitle: 'Use the playlist button on a title to add it.') else ...media.map((m) => _MediaRow(media: m))])));
+    showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), isScrollControlled: true, builder: (_) => SafeArea(child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(16), children: [Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 12), if (media.isEmpty) _EmptyCard(title: tr('Playlist is empty'), subtitle: tr('Use the playlist button on a title to add it.')) else ...media.map((m) => _MediaRow(media: m))])));
   }
 }
 
@@ -333,7 +334,7 @@ class WatchStatsPanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
       children: [
-        const _HeroCard(icon: Icons.insights_rounded, title: 'Your viewing intelligence', subtitle: 'A private snapshot of how you use your personal streaming service.'),
+        _HeroCard(icon: Icons.insights_rounded, title: tr('Your viewing intelligence'), subtitle: tr('A private snapshot of how you use your personal streaming service.')),
         const SizedBox(height: 14),
         GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, childAspectRatio: 1.35, crossAxisSpacing: 10, mainAxisSpacing: 10, children: [
           _MetricCard(label: 'Titles watched', value: '${watched.length}', icon: Icons.visibility_rounded),
@@ -344,15 +345,15 @@ class WatchStatsPanel extends StatelessWidget {
         const SizedBox(height: 20),
         _SectionTitle('Top genres', Icons.local_fire_department_rounded),
         const SizedBox(height: 10),
-        if (sorted.isEmpty) const _EmptyCard(title: 'Not enough data', subtitle: 'Watch a few titles to unlock genre insights.')
+        if (sorted.isEmpty) _EmptyCard(title: tr('Not enough data'), subtitle: tr('Watch a few titles to unlock genre insights.'))
         else ...sorted.take(8).map((e) => Padding(padding: const EdgeInsets.only(bottom: 9), child: _ProgressRow(label: e.key, value: e.value / math.max(1, sorted.first.value), count: e.value))),
         const SizedBox(height: 20),
         _SectionTitle('Milestones', Icons.emoji_events_rounded),
         const SizedBox(height: 10),
-        _Achievement(title: 'First watch', unlocked: watched.isNotEmpty, icon: Icons.play_arrow_rounded),
-        _Achievement(title: 'Five titles watched', unlocked: watched.length >= 5, icon: Icons.looks_5_rounded),
-        _Achievement(title: 'Library builder', unlocked: c.library.length >= 10, icon: Icons.library_add_rounded),
-        _Achievement(title: 'Completionist', unlocked: completed >= 10, icon: Icons.workspace_premium_rounded),
+        _Achievement(title: tr('First watch'), unlocked: watched.isNotEmpty, icon: Icons.play_arrow_rounded),
+        _Achievement(title: tr('Five titles watched'), unlocked: watched.length >= 5, icon: Icons.looks_5_rounded),
+        _Achievement(title: tr('Library builder'), unlocked: c.library.length >= 10, icon: Icons.library_add_rounded),
+        _Achievement(title: tr('Completionist'), unlocked: completed >= 10, icon: Icons.workspace_premium_rounded),
       ],
     );
   }
@@ -392,8 +393,8 @@ class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
           _settings('haptic', Icons.vibration_rounded, 'Haptic feedback', 'Use subtle feedback for controls.'),
         ]),
         const SizedBox(height: 10),
-        Card(child: ListTile(leading: const Icon(Icons.download_rounded), title: const Text('Download manager'), subtitle: Text('${Phase2Store.downloads.length} title(s) queued or saved'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DownloadManagerScreen())))),
-        Card(child: ListTile(leading: const Icon(Icons.security_rounded), title: const Text('Privacy & security center'), subtitle: const Text('Sessions, data export, sign-in protection'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyCenterScreen())))),
+        Card(child: ListTile(leading: const Icon(Icons.download_rounded), title: const UniversalText('Download manager'), subtitle: UniversalText('${Phase2Store.downloads.length} title(s) queued or saved'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DownloadManagerScreen())))),
+        Card(child: ListTile(leading: const Icon(Icons.security_rounded), title: const UniversalText('Privacy & security center'), subtitle: const UniversalText('Sessions, data export, sign-in protection'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyCenterScreen())))),
       ],
     );
   }
@@ -421,10 +422,10 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen> {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
-    return Scaffold(appBar: AppBar(title: const Text('Download Manager')), body: ListView(padding: const EdgeInsets.all(16), children: [
-      const _HeroCard(icon: Icons.download_done_rounded, title: 'Offline library', subtitle: 'Choose titles to keep available for offline viewing. The current build tracks the download state locally.'),
+    return Scaffold(appBar: AppBar(title: const UniversalText('Download Manager')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      _HeroCard(icon: Icons.download_done_rounded, title: tr('Offline library'), subtitle: tr('Choose titles to keep available for offline viewing. The current build tracks the download state locally.')),
       const SizedBox(height: 14),
-      if (c.library.isEmpty) const _EmptyCard(title: 'No titles available', subtitle: 'Import a movie or show first.')
+      if (c.library.isEmpty) _EmptyCard(title: tr('No titles available'), subtitle: tr('Import a movie or show first.'))
       else ...c.library.map((m) {
         final saved = Phase2Store.downloads.contains(m.id);
         return Card(child: ListTile(leading: _Poster(media: m, width: 48, height: 64), title: Text(m.title, maxLines: 1, overflow: TextOverflow.ellipsis), subtitle: Text(saved ? 'Available offline' : 'Not downloaded'), trailing: IconButton(icon: Icon(saved ? Icons.delete_outline : Icons.download_outlined), onPressed: () { setState(() { if (saved) {
@@ -447,26 +448,26 @@ class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final c = AppController.instance;
-    return Scaffold(appBar: AppBar(title: const Text('Privacy & Security')), body: ListView(padding: const EdgeInsets.all(16), children: [
-      const _HeroCard(icon: Icons.shield_rounded, title: 'Your account, your data', subtitle: 'These controls give you a single place to review privacy-sensitive behavior.'),
+    return Scaffold(appBar: AppBar(title: const UniversalText('Privacy & Security')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      _HeroCard(icon: Icons.shield_rounded, title: tr('Your account, your data'), subtitle: tr('These controls give you a single place to review privacy-sensitive behavior.')),
       const SizedBox(height: 14),
       Card(child: Column(children: [
-        ListTile(leading: const Icon(Icons.person_outline), title: const Text('Active profile'), subtitle: Text(c.currentProfile?.name ?? 'None selected')),
+        ListTile(leading: const Icon(Icons.person_outline), title: const UniversalText('Active profile'), subtitle: Text(c.currentProfile?.name ?? 'None selected')),
         const Divider(height: 1),
-        ListTile(leading: const Icon(Icons.devices_rounded), title: const Text('Backend session'), subtitle: Text(c.isBackendAuthenticated ? 'Authenticated' : 'Local/offline session')),
+        ListTile(leading: const Icon(Icons.devices_rounded), title: const UniversalText('Backend session'), subtitle: Text(c.isBackendAuthenticated ? 'Authenticated' : 'Local/offline session')),
         const Divider(height: 1),
-        SwitchListTile.adaptive(value: Phase2Store.getBool('sync'), onChanged: (v) => setState(() => Phase2Store.setBool('sync', v)), title: const Text('Cloud synchronization'), subtitle: const Text('Sync progress and preferences when backend access is available.')),
-        SwitchListTile.adaptive(value: Phase2Store.getBool('pinProtection'), onChanged: (v) => setState(() => Phase2Store.setBool('pinProtection', v)), title: const Text('Protected areas'), subtitle: const Text('Use your account/profile security flow before protected features.')),
+        SwitchListTile.adaptive(value: Phase2Store.getBool('sync'), onChanged: (v) => setState(() => Phase2Store.setBool('sync', v)), title: const UniversalText('Cloud synchronization'), subtitle: const UniversalText('Sync progress and preferences when backend access is available.')),
+        SwitchListTile.adaptive(value: Phase2Store.getBool('pinProtection'), onChanged: (v) => setState(() => Phase2Store.setBool('pinProtection', v)), title: const UniversalText('Protected areas'), subtitle: const UniversalText('Use your account/profile security flow before protected features.')),
       ])),
       const SizedBox(height: 14),
-      FilledButton.icon(onPressed: () => _confirmClearHistory(context), icon: const Icon(Icons.delete_sweep_rounded), label: const Text('CLEAR LOCAL WATCH HISTORY')),
+      FilledButton.icon(onPressed: () => _confirmClearHistory(context), icon: const Icon(Icons.delete_sweep_rounded), label: const UniversalText('CLEAR LOCAL WATCH HISTORY')),
       const SizedBox(height: 8),
-      OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A data export request has been prepared. Connect a persistent backend export endpoint to make it downloadable.'))), icon: const Icon(Icons.file_download_outlined), label: const Text('EXPORT MY DATA')),
+      OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('A data export request has been prepared. Connect a persistent backend export endpoint to make it downloadable.'))), icon: const Icon(Icons.file_download_outlined), label: const UniversalText('EXPORT MY DATA')),
     ]));
   }
   /// Performs `_confirmClearHistory` for this feature. Update this documentation when its contract changes.
   void _confirmClearHistory(BuildContext context) {
-    showDialog<void>(context: context, builder: (_) => AlertDialog(title: const Text('Clear watch history?'), content: const Text('This removes local watched and playback-progress data from this app session.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')), FilledButton(onPressed: () { final c = AppController.instance; c.watched.clear(); c.playbackProgress.clear(); Navigator.pop(context); setState(() {}); }, child: const Text('CLEAR'))]));
+    showDialog<void>(context: context, builder: (_) => AlertDialog(title: const UniversalText('Clear watch history?'), content: const UniversalText('This removes local watched and playback-progress data from this app session.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('CANCEL')), FilledButton(onPressed: () { final c = AppController.instance; c.watched.clear(); c.playbackProgress.clear(); Navigator.pop(context); setState(() {}); }, child: const UniversalText('CLEAR'))]));
   }
 }
 
@@ -489,17 +490,17 @@ class _MediaRow extends StatelessWidget {
         if (media.genres.isNotEmpty) Text(media.genres.take(3).join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 12)),
         if (progress > 0) ...[const SizedBox(height: 7), LinearProgressIndicator(value: progress)],
       ]),
-      trailing: PopupMenuButton<String>(onSelected: (v) => _action(context, v), itemBuilder: (_) => [const PopupMenuItem(value: 'play', child: Text('Play')), const PopupMenuItem(value: 'playlist', child: Text('Add to playlist')), if (showDownload) const PopupMenuItem(value: 'download', child: Text('Download'))]),
+      trailing: PopupMenuButton<String>(onSelected: (v) => _action(context, v), itemBuilder: (_) => [PopupMenuItem(value: 'play', child: UniversalText('Play')), PopupMenuItem(value: 'playlist', child: UniversalText('Add to playlist')), if (showDownload) PopupMenuItem(value: 'download', child: UniversalText('Download'))]),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
     ));
   }
   /// Performs `_action` for this feature. Update this documentation when its contract changes.
   void _action(BuildContext context, String action) {
     if (action == 'play') { Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: media))); return; }
-    if (action == 'download') { Phase2Store.downloads.add(media.id); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${media.title} added to downloads.'))); return; }
+    if (action == 'download') { Phase2Store.downloads.add(media.id); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('${media.title} added to downloads.'))); return; }
     if (action == 'playlist') {
-      if (Phase2Store.playlists.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Create a playlist in My Stuff first.'))); return; }
-      showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), builder: (_) => SafeArea(child: ListView(shrinkWrap: true, children: Phase2Store.playlists.keys.map((name) => ListTile(title: Text(name), leading: const Icon(Icons.playlist_add), onTap: () { Phase2Store.playlists[name]!.add(media.id); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${media.title} to $name.'))); })).toList())));
+      if (Phase2Store.playlists.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Create a playlist in My Stuff first.'))); return; }
+      showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), builder: (_) => SafeArea(child: ListView(shrinkWrap: true, children: Phase2Store.playlists.keys.map((name) => ListTile(title: Text(name), leading: const Icon(Icons.playlist_add), onTap: () { Phase2Store.playlists[name]!.add(media.id); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Added ${media.title} to $name.'))); })).toList())));
     }
   }
 }
@@ -545,7 +546,7 @@ class _StatStrip extends StatelessWidget {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_mini('Library', items), _mini('Watched', watched), _mini('Liked', liked), _mini('Offline', downloads)])));
   /// Performs `_mini` for this feature. Update this documentation when its contract changes.
-  Widget _mini(String label, int value) => Column(children: [Text('$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)), const SizedBox(height: 2), Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11))]);
+  Widget _mini(String label, int value) => Column(children: [UniversalText('$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)), const SizedBox(height: 2), Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11))]);
 }
 
 class _ProgressRow extends StatelessWidget {
@@ -553,7 +554,7 @@ class _ProgressRow extends StatelessWidget {
   const _ProgressRow({required this.label, required this.value, required this.count});
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))), Text('$count', style: const TextStyle(color: Colors.white54))]), const SizedBox(height: 5), ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: value.clamp(0, 1).toDouble(), minHeight: 7))]);
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))), UniversalText('$count', style: const TextStyle(color: Colors.white54))]), const SizedBox(height: 5), ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: value.clamp(0, 1).toDouble(), minHeight: 7))]);
 }
 
 class _Achievement extends StatelessWidget {

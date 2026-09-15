@@ -91,6 +91,17 @@ class EmailService {
             'watch together, and access your media remotely.',
       );
 
+  /// Sends an invitation for an existing streaming account membership.
+  Future<void> memberInvitation(String email, String accountName, String token, DateTime expiresAt) => send(
+        to: email,
+        subject: 'You have been invited to a streaming account',
+        body:
+            'You were invited to join $accountName.\n\n'
+            'Invitation token: $token\n'
+            'This invitation expires: ${expiresAt.toLocal().toString()}\n\n'
+            'Accept the invitation in the streaming service to create or connect your login.',
+      );
+
   /// Performs `newDevice` for this feature. Update this documentation when its contract changes.
   Future<void> newDevice(String email, String deviceName) => send(
         to: email,

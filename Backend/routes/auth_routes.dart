@@ -11,6 +11,7 @@ import '../models/subscription.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
 import '../services/email_service.dart';
+import '../supabase_store.dart';
 
 class AuthRoutes {
   final AuthService authService;
@@ -55,6 +56,24 @@ class AuthRoutes {
       // -----------------------------------------------------------------------
       // LOGOUT
       // -----------------------------------------------------------------------
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/auth/invitations') {
+        await _inviteMember(request);
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/auth/invitations/accept') {
+        await _acceptInvitation(request);
+        return;
+      }
+
+      if (request.method == 'GET' &&
+          path == '/api/v1/auth/members') {
+        await _members(request);
+        return;
+      }
 
       if (request.method == 'POST' &&
           path == '/api/v1/auth/verify-security') {
@@ -248,6 +267,59 @@ class AuthRoutes {
         ),
       },
     );
+  }
+
+  Future<void> _inviteMember(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final body = await _readJsonBody(request);
+    final email = _readRequiredString(body, 'email');
+    final role = body['role']?.toString() ?? 'member';
+    final token = await authService.inviteMember(
+      account: account,
+      email: email,
+      role: role,
+    );
+    _sendJson(request.response, statusCode: HttpStatus.created, body: {
+      'success': true,
+      'message': 'Invitation created.',
+      // Development clients can use the token to complete the flow when SMTP
+      // is not configured. The database stores only its SHA-256 hash.
+      'invitationToken': token,
+    });
+  }
+
+  Future<void> _members(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final members = await SupabaseStore.instance.listAccountMembers(account.id);
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+      'success': true,
+      'members': members,
+    });
+  }
+
+  Future<void> _acceptInvitation(HttpRequest request) async {
+    final body = await _readJsonBody(request);
+    final token = _readRequiredString(body, 'token');
+    final email = _readRequiredString(body, 'email');
+    final password = body['password']?.toString();
+    final result = await authService.acceptMemberInvitation(
+      token: token,
+      email: email,
+      password: password,
+    );
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+      'success': true,
+      'message': 'Invitation accepted. You are now a member of the account.',
+      'membership': result,
+    });
   }
 
   /// Performs `_verifySecurity` for this feature. Update this documentation when its contract changes.

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'app_core.dart';
 import 'main.dart';
+import 'localization.dart';
 
 /// ============================================================
 /// PROFILE SELECTION SCREEN
@@ -72,13 +73,14 @@ class _ProfileSelectionScreenState
     final profile = profiles.last;
     if (HomeCustomizationStore.isConfigured(profile)) return;
 
-    AppController.instance.switchProfile(profile.id);
     final completed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => const CustomizeHomeScreen(firstSetup: true),
-      ),
-    );
+  MaterialPageRoute(
+    fullscreenDialog: true,
+    builder: (_) => const CustomizeHomeScreen(firstSetup: true),
+  ),
+);
+
+if (!mounted || completed != true) return;
 
     if (!mounted) return;
     if (completed == true) {
@@ -120,6 +122,7 @@ class _ProfileSelectionScreenState
 
     try {
       controller.switchProfile(profile.id);
+      await LanguageController.instance.loadForCurrentProfile();
     } catch (error) {
       if (!mounted) return;
 
@@ -224,8 +227,7 @@ class _ProfileSelectionScreenState
 
                         const SizedBox(height: 10),
 
-                        Text(
-                          'Choose a profile to continue',
+                        UniversalText('Choose a profile to continue',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
@@ -278,8 +280,7 @@ class _ProfileSelectionScreenState
 
                         const SizedBox(height: 50),
 
-                        Text(
-                          '${profiles.length} '
+                        UniversalText('${profiles.length} '
                           '${profiles.length == 1 ? 'profile' : 'profiles'}'
                           ' • Maximum 7',
                           style: TextStyle(
@@ -364,7 +365,7 @@ class _ProfileCardState extends State<_ProfileCard> {
 
                 _ProfileMenuButton(
                   icon: Icons.play_circle_outline,
-                  title: 'Use this profile',
+                  title: tr('Use this profile'),
                   subtitle:
                       'Start watching as ${widget.profile.name}',
                   onTap: () {
@@ -377,9 +378,9 @@ class _ProfileCardState extends State<_ProfileCard> {
 
                 _ProfileMenuButton(
                   icon: Icons.edit_outlined,
-                  title: 'Edit Profile',
+                  title: tr('Edit Profile'),
                   subtitle:
-                      'Change name or profile picture',
+                      tr('Change name or profile picture'),
                   onTap: () {
                     Navigator.pop(context);
                     widget.onEdit();
@@ -390,9 +391,9 @@ class _ProfileCardState extends State<_ProfileCard> {
 
                 _ProfileMenuButton(
                   icon: Icons.bar_chart_rounded,
-                  title: 'See Statistics',
+                  title: tr('See Statistics'),
                   subtitle:
-                      'View this profile\'s watching activity',
+                      tr("View this profile's watching activity"),
                   onTap: () {
                     Navigator.pop(context);
                     widget.onStatistics();
@@ -531,8 +532,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                         color: Colors.white54,
                       ),
                       SizedBox(width: 4),
-                      Text(
-                        'Manage',
+                      UniversalText('Manage',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white54,
@@ -831,8 +831,7 @@ class _EditProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to take photo: $error',
+          content: UniversalText('Unable to take photo: $error',
           ),
         ),
       );
@@ -859,8 +858,7 @@ class _EditProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to choose photo: $error',
+          content: UniversalText('Unable to choose photo: $error',
           ),
         ),
       );
@@ -872,21 +870,20 @@ class _EditProfileSheetState
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Delete profile?'),
-            content: Text(
-              'Delete ${widget.profile.name}? '
+            title: const UniversalText('Delete profile?'),
+            content: UniversalText('Delete ${widget.profile.name}? '
               'This cannot be undone.',
             ),
             actions: [
               TextButton(
                 onPressed: () =>
                     Navigator.pop(context, false),
-                child: const Text('CANCEL'),
+                child: const UniversalText('CANCEL'),
               ),
               FilledButton(
                 onPressed: () =>
                     Navigator.pop(context, true),
-                child: const Text('DELETE'),
+                child: const UniversalText('DELETE'),
               ),
             ],
           ),
@@ -917,8 +914,8 @@ class _EditProfileSheetState
       Navigator.of(context).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile deleted.'),
+        SnackBar(
+          content: UniversalText('Profile deleted.'),
         ),
       );
     } catch (error) {
@@ -949,9 +946,8 @@ class _EditProfileSheetState
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter a profile name.',
+        SnackBar(
+          content: UniversalText('Please enter a profile name.',
           ),
         ),
       );
@@ -1054,8 +1050,7 @@ class _EditProfileSheetState
 
               const SizedBox(height: 28),
 
-              const Text(
-                'Edit Profile',
+              const UniversalText('Edit Profile',
                 style: TextStyle(
                   fontSize: 27,
                   fontWeight: FontWeight.w700,
@@ -1065,8 +1060,7 @@ class _EditProfileSheetState
 
               const SizedBox(height: 7),
 
-              Text(
-                'Update your profile information.',
+              UniversalText('Update your profile information.',
                 style: TextStyle(
                   color: Colors.white.withValues(
                     alpha: 0.55,
@@ -1094,7 +1088,7 @@ class _EditProfileSheetState
                   color: Colors.white,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Profile name',
+                  labelText: tr('Profile name'),
                   labelStyle: const TextStyle(
                     color: Colors.white60,
                   ),
@@ -1116,8 +1110,7 @@ class _EditProfileSheetState
 
               const SizedBox(height: 22),
 
-              const Text(
-                'Change profile picture',
+              const UniversalText('Change profile picture',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -1163,7 +1156,7 @@ class _EditProfileSheetState
                     Icons.delete_outline,
                   ),
                   label:
-                      const Text('DELETE PROFILE'),
+                      const UniversalText('DELETE PROFILE'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor:
                         Colors.redAccent,
@@ -1211,8 +1204,7 @@ class _EditProfileSheetState
                             color: Colors.black,
                           ),
                         )
-                      : const Text(
-                          'SAVE CHANGES',
+                      : const UniversalText('SAVE CHANGES',
                           style: TextStyle(
                             fontWeight:
                                 FontWeight.w700,
@@ -1330,8 +1322,7 @@ class ProfileStatisticsSheet
                       crossAxisAlignment:
                           CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Statistics',
+                        const UniversalText('Statistics',
                           style: TextStyle(
                             fontSize: 27,
                             fontWeight:
@@ -1355,12 +1346,12 @@ class ProfileStatisticsSheet
 
               const SizedBox(height: 30),
 
-              const Row(
+              Row(
                 children: [
                   Expanded(
                     child: _StatisticCard(
                       icon: Icons.movie_outlined,
-                      title: 'Movies',
+                      title: tr('Movies'),
                       value: '—',
                     ),
                   ),
@@ -1368,7 +1359,7 @@ class ProfileStatisticsSheet
                   Expanded(
                     child: _StatisticCard(
                       icon: Icons.tv_outlined,
-                      title: 'Shows',
+                      title: tr('Shows'),
                       value: '—',
                     ),
                   ),
@@ -1377,13 +1368,13 @@ class ProfileStatisticsSheet
 
               const SizedBox(height: 12),
 
-              const Row(
+              Row(
                 children: [
                   Expanded(
                     child: _StatisticCard(
                       icon:
                           Icons.schedule_outlined,
-                      title: 'Watch time',
+                      title: tr('Watch time'),
                       value: '—',
                     ),
                   ),
@@ -1392,7 +1383,7 @@ class ProfileStatisticsSheet
                     child: _StatisticCard(
                       icon:
                           Icons.check_circle_outline,
-                      title: 'Completed',
+                      title: tr('Completed'),
                       value: '—',
                     ),
                   ),
@@ -1426,8 +1417,7 @@ class ProfileStatisticsSheet
                           size: 20,
                         ),
                         SizedBox(width: 9),
-                        Text(
-                          'Your watching profile',
+                        UniversalText('Your watching profile',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight:
@@ -1440,8 +1430,7 @@ class ProfileStatisticsSheet
 
                     const SizedBox(height: 10),
 
-                    Text(
-                      'Detailed viewing statistics, '
+                    UniversalText('Detailed viewing statistics, '
                       'favorite genres, watch history, '
                       'and yearly Wrapped data will '
                       'appear here.',
@@ -1749,8 +1738,7 @@ class _CreateProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to take photo: $error',
+          content: UniversalText('Unable to take photo: $error',
           ),
         ),
       );
@@ -1777,8 +1765,7 @@ class _CreateProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to choose photo: $error',
+          content: UniversalText('Unable to choose photo: $error',
           ),
         ),
       );
@@ -1791,9 +1778,8 @@ class _CreateProfileSheetState
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter a profile name.',
+        SnackBar(
+          content: UniversalText('Please enter a profile name.',
           ),
         ),
       );
@@ -1802,9 +1788,8 @@ class _CreateProfileSheetState
 
     if (name.length > 30) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Profile name must be 30 characters or less.',
+        SnackBar(
+          content: UniversalText('Profile name must be 30 characters or less.',
           ),
         ),
       );
@@ -1930,8 +1915,7 @@ class _CreateProfileSheetState
 
               const SizedBox(height: 28),
 
-              const Text(
-                'Create Profile',
+              const UniversalText('Create Profile',
                 style: TextStyle(
                   fontSize: 27,
                   fontWeight: FontWeight.w700,
@@ -1941,8 +1925,7 @@ class _CreateProfileSheetState
 
               const SizedBox(height: 7),
 
-              Text(
-                'Create a profile for your library.',
+              UniversalText('Create a profile for your library.',
                 style: TextStyle(
                   color: Colors.white.withValues(
                     alpha: 0.55,
@@ -1972,7 +1955,7 @@ class _CreateProfileSheetState
                   color: Colors.white,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Profile name',
+                  labelText: tr('Profile name'),
                   labelStyle: const TextStyle(
                     color: Colors.white60,
                   ),
@@ -1994,8 +1977,7 @@ class _CreateProfileSheetState
 
               const SizedBox(height: 24),
 
-              const Text(
-                'Choose an avatar',
+              const UniversalText('Choose an avatar',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -2124,8 +2106,7 @@ class _CreateProfileSheetState
                             color: Colors.black,
                           ),
                         )
-                      : const Text(
-                          'CREATE PROFILE',
+                      : const UniversalText('CREATE PROFILE',
                           style: TextStyle(
                             fontWeight:
                                 FontWeight.w700,
@@ -2249,8 +2230,7 @@ class _CreateProfileCardState
 
                 const SizedBox(height: 13),
 
-                Text(
-                  'Add Profile',
+                UniversalText('Add Profile',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight:
@@ -2267,8 +2247,7 @@ class _CreateProfileCardState
                   opacity: _hovered ? 1 : 0,
                   duration:
                       const Duration(milliseconds: 180),
-                  child: const Text(
-                    'Create new',
+                  child: const UniversalText('Create new',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white54,
@@ -2304,8 +2283,7 @@ class _CreateProfileButton
       child: FilledButton.icon(
         onPressed: onTap,
         icon: const Icon(Icons.add),
-        label: const Text(
-          'CREATE PROFILE',
+        label: const UniversalText('CREATE PROFILE',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             letterSpacing: 0.4,
@@ -2374,8 +2352,7 @@ class _NoProfiles extends StatelessWidget {
 
           const SizedBox(height: 18),
 
-          const Text(
-            'No profiles yet',
+          const UniversalText('No profiles yet',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
@@ -2385,8 +2362,7 @@ class _NoProfiles extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          Text(
-            'Create your first profile to start '
+          UniversalText('Create your first profile to start '
             'using your personal streaming library.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -2442,8 +2418,7 @@ class _ProfileLogo extends StatelessWidget {
 
         const SizedBox(height: 15),
 
-        const Text(
-          'MY STREAMING SERVICE',
+        const UniversalText('MY STREAMING SERVICE',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,

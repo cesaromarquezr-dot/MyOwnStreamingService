@@ -1,6 +1,7 @@
 // Media review UI: private profile reviews plus privacy-safe global reviews.
 import 'package:flutter/material.dart';
 import 'app_core.dart';
+import 'localization.dart';
 
 class MediaReviewEntry {
   final String username;
@@ -54,7 +55,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
   Widget build(BuildContext context) {
     final title = widget.media?.title ?? 'Reviews';
     return Scaffold(
-      appBar: AppBar(title: Text('$title Reviews')),
+      appBar: AppBar(title: UniversalText('$title Reviews')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
@@ -65,9 +66,9 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Text('Write your review', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  const UniversalText('Write your review', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 12),
-                  Text('Your rating: ${score.toStringAsFixed(0)}/10'),
+                  UniversalText('Your rating: ${score.toStringAsFixed(0)}/10'),
                   Slider(
                     value: score,
                     min: 0,
@@ -78,8 +79,8 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
                   ),
                   TextField(
                     controller: label,
-                    decoration: const InputDecoration(
-                      labelText: 'Short label (e.g. Mediocre, Excellent)',
+                    decoration: InputDecoration(
+                      labelText: tr('Short label (e.g. Mediocre, Excellent)'),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -87,33 +88,32 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
                     controller: review,
                     minLines: 3,
                     maxLines: 6,
-                    decoration: const InputDecoration(labelText: 'Your review'),
+                    decoration: InputDecoration(labelText: tr('Your review')),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: username,
-                    decoration: const InputDecoration(
-                      labelText: 'Global review username',
-                      helperText: 'Only this username is shown publicly; never your email.',
+                    decoration: InputDecoration(
+                      labelText: tr('Global review username'),
+                      helperText: tr('Only this username is shown publicly; never your email.'),
                     ),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: translation,
                     onChanged: (value) => setState(() => translation = value),
-                    title: const Text('Translations on for global reviews'),
+                    title: const UniversalText('Translations on for global reviews'),
                   ),
                   FilledButton(
                     onPressed: _submit,
-                    child: const Text('Submit review'),
+                    child: const UniversalText('Submit review'),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Reviews from profiles on this account',
+          const UniversalText('Reviews from profiles on this account',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
           ),
           for (final entry in local) _reviewCard(entry, false),
@@ -121,20 +121,19 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('No profile reviews yet.'),
+                child: UniversalText('No profile reviews yet.'),
               ),
             ),
           const SizedBox(height: 20),
           Row(
             children: <Widget>[
               const Expanded(
-                child: Text(
-                  'Global reviews',
+                child: UniversalText('Global reviews',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                 ),
               ),
               FilterChip(
-                label: const Text('Translation ON'),
+                label: const UniversalText('Translation ON'),
                 selected: translation,
                 onSelected: (value) => setState(() => translation = value),
               ),
@@ -159,7 +158,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Text('Official / critic rating', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const UniversalText('Official / critic rating', style: TextStyle(fontWeight: FontWeight.w800)),
                   Text(media.rating == null ? 'Not available' : '${media.rating}/10${media.ratingReason == null ? '' : ' • ${media.ratingReason}'}'),
                 ],
               ),
@@ -168,7 +167,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Text('Viewer rating', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const UniversalText('Viewer rating', style: TextStyle(fontWeight: FontWeight.w800)),
                   Text(viewerRating == null ? 'No reviews' : '${viewerRating.toStringAsFixed(1)}/10'),
                 ],
               ),
@@ -190,7 +189,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               children: <Widget>[
                 Text(entry.username, style: const TextStyle(fontWeight: FontWeight.w900)),
                 const Spacer(),
-                Text('${entry.score.toStringAsFixed(0)}/10'),
+                UniversalText('${entry.score.toStringAsFixed(0)}/10'),
               ],
             ),
             const SizedBox(height: 4),
@@ -200,7 +199,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
             if (public && translation)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Text('Translation: enabled', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                child: UniversalText('Translation: enabled', style: TextStyle(color: Colors.white38, fontSize: 11)),
               ),
           ],
         ),
@@ -255,13 +254,13 @@ class MusicAchievementsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Music Achievements')),
+      appBar: AppBar(title: const UniversalText('Music Achievements')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: const <Widget>[
-          Card(child: ListTile(leading: Icon(Icons.auto_awesome_rounded), title: Text('Cultured'), subtitle: Text('Explore both film/show and music libraries.'))),
-          Card(child: ListTile(leading: Icon(Icons.music_note_rounded), title: Text('Swiftie'), subtitle: Text('Most of your music listening is Taylor Swift.'))),
-          Card(child: ListTile(leading: Icon(Icons.album_rounded), title: Text('Album Collector'), subtitle: Text('Build a broad album library.'))),
+          Card(child: ListTile(leading: Icon(Icons.auto_awesome_rounded), title: UniversalText('Cultured'), subtitle: UniversalText('Explore both film/show and music libraries.'))),
+          Card(child: ListTile(leading: Icon(Icons.music_note_rounded), title: UniversalText('Swiftie'), subtitle: UniversalText('Most of your music listening is Taylor Swift.'))),
+          Card(child: ListTile(leading: Icon(Icons.album_rounded), title: UniversalText('Album Collector'), subtitle: UniversalText('Build a broad album library.'))),
         ],
       ),
     );

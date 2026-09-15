@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'details.dart';
+import 'localization.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -150,7 +151,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                   if (_searchQuery.trim().isEmpty)
                     SliverToBoxAdapter(
                       child: _buildSectionHeader(
-                        title: 'Your Movies',
+                        title: tr('Your Movies'),
                         subtitle:
                             '${filteredMovies.length} titles',
                       ),
@@ -235,8 +236,7 @@ class _MoviesScreenState extends State<MoviesScreen>
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Movies',
+                    const UniversalText('Movies',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 29,
@@ -258,8 +258,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                         borderRadius:
                             BorderRadius.circular(7),
                       ),
-                      child: Text(
-                        '$movieCount',
+                      child: UniversalText('$movieCount',
                         style: TextStyle(
                           color: Colors.white.withValues(
                             alpha: 0.65,
@@ -364,8 +363,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                   const SizedBox(height: 20),
                   const Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Search movies',
+                    child: UniversalText('Search movies',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 21,
@@ -386,7 +384,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                       });
                     },
                     decoration: InputDecoration(
-                      hintText: 'Search your movie library...',
+                      hintText: tr('Search your movie library...'),
                       hintStyle: TextStyle(
                         color: Colors.white.withValues(
                           alpha: 0.32,
@@ -434,8 +432,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                               BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        'Done',
+                      child: const UniversalText('Done',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                         ),
@@ -474,8 +471,7 @@ class _MoviesScreenState extends State<MoviesScreen>
             ),
           ),
           const SizedBox(width: 7),
-          Text(
-            '$count ${count == 1 ? 'result' : 'results'}',
+          UniversalText('$count ${count == 1 ? 'result' : 'results'}',
             style: TextStyle(
               color: Colors.white.withValues(
                 alpha: 0.45,
@@ -617,8 +613,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                                 ),
                               ),
                             ),
-                            child: const Text(
-                              'FEATURED',
+                            child: const UniversalText('FEATURED',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 8,
@@ -630,8 +625,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                           ),
                           if (movie.releaseYear != null) ...[
                             const SizedBox(width: 8),
-                            Text(
-                              '${movie.releaseYear}',
+                            UniversalText('${movie.releaseYear}',
                               style: TextStyle(
                                 color: Colors.white
                                     .withValues(
@@ -675,8 +669,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Text(
-                            'View details',
+                          UniversalText('View details',
                             style: TextStyle(
                               color: Colors.white
                                   .withValues(
@@ -1110,8 +1103,7 @@ class _MovieCardState extends State<_MovieCard> {
                                 ),
                               ),
                             ),
-                            child: const Text(
-                              'MOVIE',
+                            child: const UniversalText('MOVIE',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 8,
@@ -1144,8 +1136,7 @@ class _MovieCardState extends State<_MovieCard> {
                                     BorderRadius
                                         .circular(7),
                               ),
-                              child: Text(
-                                '${movie.releaseYear}',
+                              child: UniversalText('${movie.releaseYear}',
                                 style:
                                     const TextStyle(
                                   color: Colors.white,
@@ -1199,8 +1190,7 @@ class _MovieCardState extends State<_MovieCard> {
                                 const SizedBox(
                                   height: 5,
                                 ),
-                                Text(
-                                  '${movie.releaseYear}',
+                                UniversalText('${movie.releaseYear}',
                                   style: TextStyle(
                                     color: Colors.white
                                         .withValues(

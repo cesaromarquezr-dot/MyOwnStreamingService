@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 // ============================================================
 // PAYMENT SCREEN
@@ -314,8 +315,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                'SECURE CHECKOUT',
+              UniversalText('SECURE CHECKOUT',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 11,
@@ -396,8 +396,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
               const SizedBox(height: 18),
 
-              Text(
-                'Payment ID: ${widget.paymentId}',
+              UniversalText('Payment ID: ${widget.paymentId}',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.32),
@@ -458,8 +457,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
         const SizedBox(height: 22),
 
-        const Text(
-          'Complete your subscription',
+        const UniversalText('Complete your subscription',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white,
@@ -471,8 +469,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
         const SizedBox(height: 10),
 
-        Text(
-          'Activate your account and start watching.',
+        UniversalText('Activate your account and start watching.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.55),
@@ -572,8 +569,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                   children: [
                     Row(
                       children: [
-                        Text(
-                          '$planName Plan',
+                        UniversalText('$planName Plan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
@@ -637,8 +633,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             mainAxisAlignment:
                 MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Total',
+              UniversalText('Total',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.55),
                   fontSize: 14,
@@ -647,8 +642,7 @@ class _PaymentScreenState extends State<PaymentScreen>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '\$${widget.amount.toStringAsFixed(2)}',
+                  UniversalText('\$${widget.amount.toStringAsFixed(2)}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 25,
@@ -690,8 +684,7 @@ class _PaymentScreenState extends State<PaymentScreen>
       children: [
         const Padding(
           padding: EdgeInsets.only(left: 3),
-          child: Text(
-            'PAYMENT TRANSACTION ID',
+          child: UniversalText('PAYMENT TRANSACTION ID',
             style: TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -715,7 +708,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           ),
           cursorColor: Colors.white,
           decoration: InputDecoration(
-            hintText: 'Enter your transaction ID',
+            hintText: tr('Enter your transaction ID'),
             hintStyle: TextStyle(
               color: Colors.white.withValues(alpha: 0.28),
               fontSize: 14,
@@ -790,8 +783,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           ),
           const SizedBox(width: 11),
           Expanded(
-            child: Text(
-              'Your card or bank details are not sent to this app backend. The payment processor should provide the transaction ID.',
+            child: UniversalText('Your card or bank details are not sent to this app backend. The payment processor should provide the transaction ID.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.42),
                 fontSize: 11.5,
@@ -896,8 +888,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                         ),
                       ),
                       SizedBox(width: 11),
-                      Text(
-                        'VERIFYING PAYMENT...',
+                      UniversalText('VERIFYING PAYMENT...',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -915,8 +906,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                         size: 17,
                       ),
                       SizedBox(width: 9),
-                      Text(
-                        'COMPLETE PAYMENT',
+                      UniversalText('COMPLETE PAYMENT',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -953,8 +943,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
               const SizedBox(height: 28),
 
-              const Text(
-                'Payment successful',
+              const UniversalText('Payment successful',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -966,8 +955,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
               const SizedBox(height: 12),
 
-              Text(
-                'Your subscription has been activated.',
+              UniversalText('Your subscription has been activated.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.62),
@@ -977,8 +965,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
               const SizedBox(height: 7),
 
-              Text(
-                'Please log in to continue.',
+              UniversalText('Please log in to continue.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.4),
@@ -1003,8 +990,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
               const SizedBox(height: 13),
 
-              Text(
-                'Returning you to the app...',
+              UniversalText('Returning you to the app...',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.3),
                   fontSize: 11,
@@ -1091,8 +1077,7 @@ class _PaymentScreenState extends State<PaymentScreen>
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-                Text(
-                  '$planName Plan',
+                UniversalText('$planName Plan',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -1100,8 +1085,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Subscription activated',
+                UniversalText('Subscription activated',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.4),
                     fontSize: 11,
@@ -1111,8 +1095,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             ),
           ),
 
-          Text(
-            '\$${widget.amount.toStringAsFixed(2)}',
+          UniversalText('\$${widget.amount.toStringAsFixed(2)}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,

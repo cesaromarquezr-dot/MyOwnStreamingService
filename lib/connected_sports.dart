@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 class SportsProvider {
   final String id;
@@ -95,9 +96,9 @@ class _ConnectedSportsHubScreenState extends State<ConnectedSportsHubScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Connected Sports'),
+        title: const UniversalText('Connected Sports'),
         actions: [
-          IconButton(onPressed: _load, tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded)),
+          IconButton(onPressed: _load, tooltip: tr('Refresh'), icon: const Icon(Icons.refresh_rounded)),
         ],
       ),
       body: RefreshIndicator(
@@ -111,11 +112,11 @@ class _ConnectedSportsHubScreenState extends State<ConnectedSportsHubScreen> {
               child: const Row(children: [
                 Icon(Icons.hub_rounded, size: 34),
                 SizedBox(width: 12),
-                Expanded(child: Text('Connect the sports services you already use. Your app can then surface scores, games, teams, players, schedules and live status in the same interface.', style: TextStyle(color: Colors.white70, height: 1.4))),
+                Expanded(child: UniversalText('Connect the sports services you already use. Your app can then surface scores, games, teams, players, schedules and live status in the same interface.', style: TextStyle(color: Colors.white70, height: 1.4))),
               ]),
             ),
             const SizedBox(height: 22),
-            const Text('CONNECTED SERVICES', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.3, color: Colors.white54)),
+            const UniversalText('CONNECTED SERVICES', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.3, color: Colors.white54)),
             const SizedBox(height: 10),
             for (final provider in connectedSportsProviders) _providerCard(provider),
             const SizedBox(height: 20),
@@ -124,7 +125,7 @@ class _ConnectedSportsHubScreenState extends State<ConnectedSportsHubScreen> {
             _gamesSection('UPCOMING', upcoming, false),
             if (loading) const Padding(padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator())),
             const SizedBox(height: 12),
-            const Text('Playback remains with the authorized sports provider. This app does not copy or redistribute provider video streams.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
+            const UniversalText('Playback remains with the authorized sports provider. This app does not copy or redistribute provider video streams.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
           ],
         ),
       ),
@@ -150,7 +151,7 @@ class _ConnectedSportsHubScreenState extends State<ConnectedSportsHubScreen> {
             Switch(value: isConnected, onChanged: (_) => _toggle(provider)),
             Text(isConnected ? 'Connected' : 'Connect', style: const TextStyle(fontSize: 11, color: Colors.white54)),
           ]),
-          IconButton(onPressed: () => _openProvider(provider), tooltip: 'Open provider', icon: const Icon(Icons.open_in_new_rounded)),
+          IconButton(onPressed: () => _openProvider(provider), tooltip: tr('Open provider'), icon: const Icon(Icons.open_in_new_rounded)),
         ]),
       ),
     );
@@ -176,7 +177,7 @@ class _ConnectedSportsHubScreenState extends State<ConnectedSportsHubScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         child: ListTile(
           leading: Icon(liveMode ? Icons.circle : Icons.schedule_rounded, color: liveMode ? Colors.redAccent : null),
-          title: Text('${game['awayTeam'] ?? game['away'] ?? 'Away'}  vs  ${game['homeTeam'] ?? game['home'] ?? 'Home'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: UniversalText('${game['awayTeam'] ?? game['away'] ?? 'Away'}  vs  ${game['homeTeam'] ?? game['home'] ?? 'Home'}', style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text([if (game['status'] != null) game['status'].toString(), if (game['score'] != null) game['score'].toString(), if (game['period'] != null) game['period'].toString(), if (game['startTime'] != null) game['startTime'].toString()].join(' • ')),
         ),
       ),
@@ -192,8 +193,8 @@ class ConnectedSportsHomeWidget extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: ListTile(
           leading: const Icon(Icons.sports_rounded),
-          title: const Text('Connected Sports', style: TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: const Text('Scores, live status, teams and schedules from your connected services.'),
+          title: const UniversalText('Connected Sports', style: TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: const UniversalText('Scores, live status, teams and schedules from your connected services.'),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectedSportsHubScreen())),
         ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'details.dart';
+import 'localization.dart';
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -91,8 +92,7 @@ class _SeriesScreenState extends State<SeriesScreen>
                 Row(
                   children: [
                     const Expanded(
-                      child: Text(
-                        'Search TV Shows',
+                      child: UniversalText('Search TV Shows',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 21,
@@ -118,7 +118,7 @@ class _SeriesScreenState extends State<SeriesScreen>
                   ),
                   cursorColor: Colors.white,
                   decoration: InputDecoration(
-                    hintText: 'Search your shows...',
+                    hintText: tr('Search your shows...'),
                     hintStyle: TextStyle(
                       color: Colors.white.withValues(alpha: 0.4),
                     ),
@@ -171,8 +171,7 @@ class _SeriesScreenState extends State<SeriesScreen>
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const Text(
-                      'Search',
+                    child: const UniversalText('Search',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -255,8 +254,7 @@ class _SeriesScreenState extends State<SeriesScreen>
           ),
         ),
         titleSpacing: 20,
-        title: const Text(
-          'TV Shows',
+        title: const UniversalText('TV Shows',
           style: TextStyle(
             color: Colors.white,
             fontSize: 25,
@@ -309,8 +307,7 @@ class _SeriesScreenState extends State<SeriesScreen>
                           child: Row(
                             children: [
                               const Expanded(
-                                child: Text(
-                                  'Your TV Shows',
+                                child: UniversalText('Your TV Shows',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 21,
@@ -320,8 +317,7 @@ class _SeriesScreenState extends State<SeriesScreen>
                                 ),
                               ),
                               if (_searchQuery.trim().isNotEmpty)
-                                Text(
-                                  '${shows.length} result${shows.length == 1 ? '' : 's'}',
+                                UniversalText('${shows.length} result${shows.length == 1 ? '' : 's'}',
                                   style: TextStyle(
                                     color: Colors.white.withValues(
                                       alpha: 0.48,
@@ -331,8 +327,7 @@ class _SeriesScreenState extends State<SeriesScreen>
                                   ),
                                 )
                               else
-                                Text(
-                                  '${shows.length} show${shows.length == 1 ? '' : 's'}',
+                                UniversalText('${shows.length} show${shows.length == 1 ? '' : 's'}',
                                   style: TextStyle(
                                     color: Colors.white.withValues(
                                       alpha: 0.48,
@@ -550,8 +545,7 @@ class _FeaturedShowState extends State<_FeaturedShow> {
                                   ),
                                 ),
                               ),
-                              child: const Text(
-                                'TV SHOW',
+                              child: const UniversalText('TV SHOW',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 10,
@@ -609,8 +603,7 @@ class _FeaturedShowState extends State<_FeaturedShow> {
                                     size: 22,
                                   ),
                                   SizedBox(width: 7),
-                                  Text(
-                                    'Open',
+                                  UniversalText('Open',
                                     style: TextStyle(
                                       color: Colors.black,
                                       fontSize: 14,
@@ -817,8 +810,7 @@ class _ShowCardState extends State<_ShowCard> {
                           color: Colors.white.withValues(alpha: 0.10),
                         ),
                       ),
-                      child: const Text(
-                        'TV',
+                      child: const UniversalText('TV',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 10,
@@ -1105,8 +1097,7 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'No TV Shows Yet',
+            const UniversalText('No TV Shows Yet',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
@@ -1115,8 +1106,7 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            Text(
-              'Your imported TV shows will appear here.\n\n'
+            UniversalText('Your imported TV shows will appear here.\n\n'
               'Use "Add Movie or Show" to import one.',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -1157,8 +1147,7 @@ class _NoSearchResults extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        const Text(
-          'No Shows Found',
+        const UniversalText('No Shows Found',
           style: TextStyle(
             color: Colors.white,
             fontSize: 21,
@@ -1166,8 +1155,7 @@ class _NoSearchResults extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          'Try searching for a different title.',
+        UniversalText('Try searching for a different title.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),

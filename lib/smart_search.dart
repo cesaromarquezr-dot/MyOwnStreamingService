@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'details.dart';
+import 'localization.dart';
 
 class SmartSearch {
   static List<MediaItem> search(
@@ -261,8 +262,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Search',
+                    UniversalText('Search',
                       style:
                           theme.textTheme.headlineMedium
                               ?.copyWith(
@@ -272,8 +272,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      'Find something to watch',
+                    UniversalText('Find something to watch',
                       style: TextStyle(
                         color: Colors.white
                             .withValues(alpha: 0.52),
@@ -336,8 +335,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
               onChanged: performSearch,
               onSubmitted: performSearch,
               decoration: InputDecoration(
-                hintText:
-                    'Search movies, shows, years...',
+                hintText: tr('Search movies, shows, years...'),
                 hintStyle: TextStyle(
                   color: Colors.white
                       .withValues(alpha: 0.38),
@@ -439,8 +437,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           ),
           const Spacer(),
           if (results.isNotEmpty)
-            Text(
-              'YOUR LIBRARY',
+            UniversalText('YOUR LIBRARY',
               style: TextStyle(
                 color: Colors.white
                     .withValues(alpha: 0.35),
@@ -465,11 +462,10 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             22,
             40,
           ),
-          child: const _EmptySearchState(
+          child: _EmptySearchState(
             icon: Icons.search_rounded,
-            title: 'Search your library',
-            message:
-                'Look through your ripped movies and TV shows by title, type, year, or rating.',
+            title: tr('Search your library'),
+            message: tr('Look through your ripped movies and TV shows by title, type, year, or rating.'),
           ),
         ),
       );
@@ -484,11 +480,10 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             22,
             40,
           ),
-          child: const _EmptySearchState(
+          child: _EmptySearchState(
             icon: Icons.movie_filter_outlined,
-            title: 'Nothing found',
-            message:
-                'Try another title, year, rating, movie, or TV show.',
+            title: tr('Nothing found'),
+            message: tr('Try another title, year, rating, movie, or TV show.'),
           ),
         ),
       );
@@ -726,8 +721,7 @@ class _SearchResultCardState
                                       .toString(),
                                 ),
                                 _MetaPill(
-                                  label:
-                                      '★ ${media.rating}',
+                                  label: '★ ${media.rating}',
                                 ),
                               ],
                             ),

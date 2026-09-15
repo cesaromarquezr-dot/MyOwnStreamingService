@@ -9,6 +9,9 @@ import 'package:password_guard/password_guard.dart';
 
 import '../database/database.dart';
 import '../models/account.dart';
+import '../models/account_member.dart';
+import '../supabase_store.dart';
+import 'package:crypto/crypto.dart';
 import '../models/profile.dart';
 import '../models/subscription.dart';
 import 'subscription_service.dart';
@@ -182,8 +185,7 @@ class AuthService {
       plan,
     );
 
-    // Signup must wait for the durable Supabase account row to be written.
-    await database.persistAccount(account);
+    database.saveAccount(account);
 
     await emailService.welcome(
       account.email,
@@ -231,11 +233,38 @@ class AuthService {
       );
     }
 
-    Account? account = database.getAccountByEmail(
-      cleanLogin,
-    );
+    final memberLogins = database.getMemberLoginsByEmail(cleanLogin);
+    Account? account;
+    String passwordHash;
 
-    if (account == null) {
+    if (memberLogins.isNotEmpty) {
+      final active = memberLogins.where((m) => m.status == 'active').toList();
+      if (active.isEmpty) {
+        database.recordFailedLogin(cleanLogin);
+        throw Exception('This account membership is not active.');
+      }
+      final validCandidates = <MemberLoginRecord>[];
+      for (final member in active) {
+        if (await _verifyPassword(password, member.passwordHash)) {
+          validCandidates.add(member);
+        }
+      }
+      if (validCandidates.isEmpty) {
+        database.recordFailedLogin(cleanLogin);
+        throw Exception('Invalid email or password.');
+      }
+      if (validCandidates.length > 1) {
+        throw Exception('This email belongs to multiple streaming accounts. Select an account before signing in.');
+      }
+      final member = validCandidates.single;
+      account = database.getAccountById(member.accountId);
+      passwordHash = member.passwordHash;
+    } else {
+      account = database.getAccountByEmail(cleanLogin);
+      passwordHash = account?.passwordHash ?? '';
+    }
+
+    if (account == null || passwordHash.isEmpty) {
       database.recordFailedLogin(cleanLogin);
       throw Exception(
         'Invalid email or password.',
@@ -244,7 +273,7 @@ class AuthService {
 
     final passwordValid = await _verifyPassword(
       password,
-      account.passwordHash,
+      passwordHash,
     );
 
     if (!passwordValid) {
@@ -254,7 +283,7 @@ class AuthService {
       );
     }
 
-    if (PasswordGuard.needsRehash(
+    if (memberLogins.isEmpty && PasswordGuard.needsRehash(
       account.passwordHash,
     )) {
       account.passwordHash = await _hashPassword(
@@ -356,6 +385,75 @@ class AuthService {
       return false;
     }
     return _verifyPassword(answer.trim().toLowerCase(), account.securityAnswerHash);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ACCOUNT MEMBERS / INVITATIONS
+  // ---------------------------------------------------------------------------
+
+  Future<String> inviteMember({
+    required Account account,
+    required String email,
+    String role = 'member',
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    if (!_isValidEmail(cleanEmail)) throw Exception('A valid member email address is required.');
+    if (cleanEmail == account.email.trim().toLowerCase()) {
+      throw Exception('The account owner is already a member.');
+    }
+    final token = _generateSessionToken();
+    final tokenHash = sha256.convert(utf8.encode(token)).toString();
+    final expiresAt = DateTime.now().toUtc().add(const Duration(days: 7));
+    await SupabaseStore.instance.createMemberInvitation(
+      accountExternalId: account.id,
+      email: cleanEmail,
+      role: role,
+      tokenHash: tokenHash,
+      expiresAt: expiresAt,
+    );
+    await emailService.memberInvitation(
+      cleanEmail,
+      account.username,
+      token,
+      expiresAt,
+    );
+    return token;
+  }
+
+  Future<Map<String, dynamic>> acceptMemberInvitation({
+    required String token,
+    required String email,
+    String? password,
+  }) async {
+    final cleanToken = token.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanToken.isEmpty || !_isValidEmail(cleanEmail)) {
+      throw Exception('A valid invitation and email are required.');
+    }
+    final tokenHash = sha256.convert(utf8.encode(cleanToken)).toString();
+    String? passwordHash;
+    if (password != null && password.isNotEmpty) {
+      if (password.length < 6) throw Exception('Password must be at least 6 characters long.');
+      passwordHash = await _hashPassword(password);
+    }
+    final result = await SupabaseStore.instance.acceptMemberInvitation(
+      tokenHash: tokenHash,
+      email: cleanEmail,
+      passwordHash: passwordHash,
+    );
+    final account = database.getAccountById(result['accountId']?.toString() ?? '');
+    if (account != null) {
+      database.registerMemberLogin(MemberLoginRecord(
+        memberId: result['memberId']?.toString() ?? '',
+        accountId: account.id,
+        email: cleanEmail,
+        passwordHash: result['_passwordHash']?.toString() ?? passwordHash ?? account.passwordHash,
+        role: result['role']?.toString() ?? 'member',
+        status: 'active',
+      ));
+    }
+    result.remove('_passwordHash');
+    return result;
   }
 
   // ---------------------------------------------------------------------------

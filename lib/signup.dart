@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'payment.dart';
 import 'how_it_works.dart';
+import 'localization.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -185,7 +186,7 @@ if (currency.isEmpty) {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: UniversalText(message),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -198,7 +199,7 @@ if (currency.isEmpty) {
     Widget? suffixIcon,
   }) {
     return InputDecoration(
-      labelText: label,
+      labelText: tr(label),
       prefixIcon: Icon(icon),
       suffixIcon: suffixIcon,
       filled: true,
@@ -232,12 +233,12 @@ if (currency.isEmpty) {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        const Text('ACCOUNT SECURITY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const UniversalText('ACCOUNT SECURITY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           initialValue: selectedSecurityQuestion,
           decoration: _inputDecoration(label: 'Security question', icon: Icons.security_rounded),
-          items: securityQuestions.map((q) => DropdownMenuItem(value: q, child: Text(q))).toList(),
+          items: securityQuestions.map((q) => DropdownMenuItem(value: q, child: UniversalText(q))).toList(),
           onChanged: (value) { if (value != null) setState(() => selectedSecurityQuestion = value); },
         ),
         if (selectedSecurityQuestion == 'Create my own question') ...[
@@ -247,7 +248,7 @@ if (currency.isEmpty) {
         const SizedBox(height: 12),
         TextField(controller: securityAnswerController, obscureText: true, decoration: _inputDecoration(label: 'Answer', icon: Icons.key_rounded)),
         const SizedBox(height: 8),
-        const Text('If a sign-in looks suspicious, this question will be asked before access is granted.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.35)),
+        const UniversalText('If a sign-in looks suspicious, this question will be asked before access is granted.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.35)),
       ],
     );
   }
@@ -322,7 +323,7 @@ if (currency.isEmpty) {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child: UniversalText(
                       title,
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
@@ -339,7 +340,7 @@ if (currency.isEmpty) {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(
+              UniversalText(
                 price,
                 style: const TextStyle(
                   fontSize: 24,
@@ -347,7 +348,7 @@ if (currency.isEmpty) {
                 ),
               ),
               const SizedBox(height: 3),
-              Text(
+              UniversalText(
                 subtitle,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.58),
@@ -443,8 +444,7 @@ if (currency.isEmpty) {
 
                             const SizedBox(height: 24),
 
-                            Text(
-                              'Create your account',
+                            UniversalText('Create your account',
                               textAlign: TextAlign.center,
                               style: theme.textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.w800,
@@ -453,8 +453,7 @@ if (currency.isEmpty) {
 
                             const SizedBox(height: 8),
 
-                            Text(
-                              'Start building your personal streaming library.',
+                            UniversalText('Start building your personal streaming library.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.58),
@@ -527,8 +526,7 @@ if (currency.isEmpty) {
 
                             const SizedBox(height: 26),
 
-                            const Text(
-                              'Choose your plan',
+                            const UniversalText('Choose your plan',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
@@ -541,16 +539,16 @@ if (currency.isEmpty) {
                               children: [
                                 _buildPlanCard(
                                   plan: SubscriptionPlan.monthly,
-                                  title: 'Monthly',
+                                  title: tr('Monthly'),
                                   price: '\$10.00',
-                                  subtitle: 'Billed every month',
+                                  subtitle: tr('Billed every month'),
                                 ),
                                 const SizedBox(width: 12),
                                 _buildPlanCard(
                                   plan: SubscriptionPlan.yearly,
-                                  title: 'Yearly',
+                                  title: tr('Yearly'),
                                   price: '\$100.00',
-                                  subtitle: 'Best annual value',
+                                  subtitle: tr('Best annual value'),
                                 ),
                               ],
                             ),
@@ -571,8 +569,7 @@ if (currency.isEmpty) {
                               contentPadding: EdgeInsets.zero,
                               controlAffinity:
                                   ListTileControlAffinity.leading,
-                                title: const Text(
-                                  'Remember me',
+                                title: const UniversalText('Remember me',
                                   style: TextStyle(
                                     fontSize: 14,
                                   ),
@@ -599,7 +596,7 @@ if (currency.isEmpty) {
                                     : const Icon(
                                         Icons.arrow_forward_rounded,
                                       ),
-                                label: Text(
+                                label: UniversalText(
                                   creatingAccount
                                       ? 'Creating account...'
                                       : 'Continue to payment',
@@ -632,7 +629,7 @@ if (currency.isEmpty) {
                                         );
                                       },
                                 icon: const Icon(Icons.policy_outlined, size: 17),
-                                label: const Text('Review legal & privacy'),
+                                label: const UniversalText('Review legal & privacy'),
                               ),
                             ),
 
@@ -648,8 +645,7 @@ if (currency.isEmpty) {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'LEGAL AGREEMENTS',
+                                  const UniversalText('LEGAL AGREEMENTS',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w900,
@@ -657,8 +653,7 @@ if (currency.isEmpty) {
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(
-                                    'Please review and accept all three requirements before continuing to payment.',
+                                  UniversalText('Please review and accept all three requirements before continuing to payment.',
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.58),
                                       fontSize: 12,
@@ -676,7 +671,7 @@ if (currency.isEmpty) {
                                         ? null
                                         : (value) => setState(() => termsAccepted = value ?? false),
                                     controlAffinity: ListTileControlAffinity.leading,
-                                      title: const Text('I agree to the Terms of Service.'),
+                                      title: const UniversalText('I agree to the Terms of Service.'),
                                     ),
                                   ),
                                   Material(
@@ -689,7 +684,7 @@ if (currency.isEmpty) {
                                         ? null
                                         : (value) => setState(() => privacyAccepted = value ?? false),
                                     controlAffinity: ListTileControlAffinity.leading,
-                                      title: const Text('I acknowledge the Privacy Policy.'),
+                                      title: const UniversalText('I acknowledge the Privacy Policy.'),
                                     ),
                                   ),
                                   Material(
@@ -702,7 +697,7 @@ if (currency.isEmpty) {
                                         ? null
                                         : (value) => setState(() => acceptableUseAccepted = value ?? false),
                                     controlAffinity: ListTileControlAffinity.leading,
-                                      title: const Text('I agree to the Copyright & Acceptable Use Policy.'),
+                                      title: const UniversalText('I agree to the Copyright & Acceptable Use Policy.'),
                                     ),
                                   ),
                                 ],
@@ -714,8 +709,7 @@ if (currency.isEmpty) {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  'Already have an account?',
+                                UniversalText('Already have an account?',
                                   style: TextStyle(
                                     color: Colors.white.withValues(
                                       alpha: 0.58,
@@ -727,8 +721,7 @@ if (currency.isEmpty) {
                                   onPressed: () {
                                     Navigator.pop(context);
                                   },
-                                  child: const Text(
-                                    'Sign in',
+                                  child: const UniversalText('Sign in',
                                     style: TextStyle(
                                       color: Colors.red,
                                       fontWeight: FontWeight.w700,
@@ -740,8 +733,7 @@ if (currency.isEmpty) {
 
                             const SizedBox(height: 6),
 
-                            Text(
-                              'By continuing, you confirm that you have reviewed and accepted '
+                            UniversalText('By continuing, you confirm that you have reviewed and accepted '
                               'the Terms of Service, Privacy Policy, and Copyright & '
                               'Acceptable Use Policy.',
                               textAlign: TextAlign.center,

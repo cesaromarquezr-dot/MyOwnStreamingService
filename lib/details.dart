@@ -9,6 +9,8 @@ import 'app_core.dart';
 import 'reviews.dart';
 import 'player.dart';
 import 'group_watch.dart';
+import 'discovery_experience.dart';
+import 'localization.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -93,8 +95,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       return const Padding(
         padding: EdgeInsets.all(24),
         child: Center(
-          child: Text(
-            'No profile selected.',
+          child: UniversalText('No profile selected.',
             style: TextStyle(
               color: Colors.white70,
               fontSize: 16,
@@ -184,6 +185,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
       case 'Reviews':
         return _buildReviews();
+
+      case 'Recommendations':
+        if (!customization.showRecommendations) {
+          return const SizedBox.shrink();
+        }
+        return _buildRecommendations();
 
       case 'Audio & Subtitles':
         if (!customization.showAudioSubtitles) {
@@ -306,8 +313,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Seasons',
+            UniversalText('Seasons',
               textAlign: _textAlignment(),
               style: const TextStyle(
                 color: Colors.white,
@@ -353,8 +359,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           constraints: const BoxConstraints(maxWidth: 360),
           child: DropdownButtonFormField<int>(
             initialValue: selectedSeasonIndex,
-            decoration: const InputDecoration(
-              labelText: 'Season',
+            decoration: InputDecoration(
+              labelText: tr('Season'),
             ),
             items: List.generate(
               orderedSeasons.length,
@@ -444,8 +450,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         color: Colors.white.withValues(alpha: .035),
         borderRadius: BorderRadius.circular(15),
       ),
-      child: const Text(
-        'No episodes are available for this season yet.',
+      child: const UniversalText('No episodes are available for this season yet.',
         textAlign: TextAlign.center,
         style: TextStyle(
           color: Colors.white54,
@@ -530,9 +535,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
     if (episodeMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'This episode does not contain enough information to play.',
+        SnackBar(
+          content: UniversalText('This episode does not contain enough information to play.',
           ),
         ),
       );
@@ -1098,8 +1102,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             icon: const Icon(
               Icons.play_arrow_rounded,
             ),
-            label: const Text(
-              'Play',
+            label: const UniversalText('Play',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -1126,8 +1129,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           icon: const Icon(
             Icons.ondemand_video_outlined,
           ),
-          label: const Text(
-            'Watch Trailer',
+          label: const UniversalText('Watch Trailer',
             style: TextStyle(
               fontWeight: FontWeight.w700,
             ),
@@ -1152,11 +1154,25 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           icon: const Icon(
             Icons.groups_outlined,
           ),
-          label: const Text(
-            'Watch Together',
+          label: const UniversalText('Watch Together',
             style: TextStyle(
               fontWeight: FontWeight.w700,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds explainable, profile-local recommendations for this title.
+  Widget _buildRecommendations() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: DetailsRecommendationsSection(
+        source: media,
+        onOpen: (recommended) => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => MediaDetailsScreen(media: recommended),
           ),
         ),
       ),
@@ -1176,7 +1192,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         child: OutlinedButton.icon(
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReviewsHubScreen(media: media))),
           icon: const Icon(Icons.rate_review_outlined),
-          label: const Text('Reviews'),
+          label: const UniversalText('Reviews'),
         ),
       ),
     );
@@ -1197,8 +1213,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           icon: const Icon(
             Icons.closed_caption_outlined,
           ),
-          label: const Text(
-            'Audio & Subtitles',
+          label: const UniversalText('Audio & Subtitles',
             style: TextStyle(
               fontWeight: FontWeight.w700,
             ),
@@ -1270,7 +1285,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     ? Icons.thumb_up_rounded
                     : Icons.thumb_up_outlined,
               ),
-              label: const Text('Like'),
+              label: const UniversalText('Like'),
             ),
           ),
           const SizedBox(width: 10),
@@ -1294,7 +1309,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     ? Icons.thumb_down_rounded
                     : Icons.thumb_down_outlined,
               ),
-              label: const Text('Dislike'),
+              label: const UniversalText('Dislike'),
             ),
           ),
         ],
@@ -1432,8 +1447,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Information',
+            UniversalText('Information',
               textAlign: _informationTextAlign(),
               style: const TextStyle(
                 color: Colors.white,
@@ -1539,8 +1553,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               child: OutlinedButton.icon(
                 onPressed: _showAddToCollection,
                 icon: const Icon(Icons.collections_bookmark_outlined),
-                label: const Text(
-                  'Add to Collection',
+                label: const UniversalText('Add to Collection',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -1560,7 +1573,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
     if (collections.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No collections are available for this profile.')),
+        SnackBar(content: UniversalText('No collections are available for this profile.')),
       );
       return;
     }
@@ -1574,13 +1587,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
           children: [
-            Text(
-              'Add \'${media.title}\' to Collection',
+            UniversalText('Add \'${media.title}\' to Collection',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Choose a collaborative or private custom collection.',
+            const UniversalText('Choose a collaborative or private custom collection.',
               style: TextStyle(color: Colors.white60),
             ),
             const SizedBox(height: 12),
@@ -1605,7 +1616,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                   Navigator.pop(context);
                   setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Added to ${collection.name}.')),
+                    SnackBar(content: UniversalText('Added to ${collection.name}.')),
                   );
                 },
               ),
@@ -1660,9 +1671,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Watch Together'),
-        content: const Text(
-          'Who do you want to watch with?',
+        title: const UniversalText('Watch Together'),
+        content: const UniversalText('Who do you want to watch with?',
         ),
         actions: [
           TextButton(
@@ -1670,8 +1680,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               Navigator.pop(context);
               _launchGroupWatch();
             },
-            child: const Text(
-              'People in this account',
+            child: const UniversalText('People in this account',
             ),
           ),
           ElevatedButton.icon(
@@ -1682,8 +1691,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             icon: const Icon(
               Icons.share_outlined,
             ),
-            label: const Text(
-              'Other people',
+            label: const UniversalText('Other people',
             ),
           ),
         ],
@@ -1715,8 +1723,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             children: [
               const SizedBox(
                 width: double.infinity,
-                child: Text(
-                  'Invite with…',
+                child: UniversalText('Invite with…',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
@@ -1736,8 +1743,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                          'Group Watch invite ready for $app.',
+                        content: UniversalText('Group Watch invite ready for $app.',
                         ),
                       ),
                     );
@@ -2337,8 +2343,7 @@ class _TrailerPlayerScreenState
         child: _controller == null
             ? const Padding(
                 padding: EdgeInsets.all(24),
-                child: Text(
-                  'Unable to play this trailer.',
+                child: UniversalText('Unable to play this trailer.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white70,

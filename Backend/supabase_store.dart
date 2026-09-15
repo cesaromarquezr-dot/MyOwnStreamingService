@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:supabase/supabase.dart';
 
 import 'models/account.dart';
+import 'models/account_member.dart';
 import 'models/profile.dart';
 import 'models/subscription.dart';
 
@@ -29,10 +30,7 @@ class SupabaseStore {
         .trim();
 
     if (url.isEmpty || key.isEmpty) {
-      throw StateError(
-        'Supabase persistence is not configured. ' 
-        'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.',
-      );
+      return;
     }
 
     _client = SupabaseClient(url, key);
@@ -93,6 +91,46 @@ class SupabaseStore {
     final internalAccountId = row['id']?.toString();
     if (internalAccountId == null || internalAccountId.isEmpty) {
       throw StateError('Supabase did not return the account row ID.');
+    }
+
+    // The account owner's login identity is separate from the account row.
+    // This allows additional emails to become members without creating new
+    // accounts or new home servers.
+    final existingIdentity = await c
+        .from('member_identities')
+        .select('id')
+        .eq('email', account.email.trim().toLowerCase())
+        .maybeSingle();
+    final identityId = existingIdentity?['id']?.toString() ??
+        (await c.from('member_identities').insert({
+          'email': account.email.trim().toLowerCase(),
+          'password_hash': account.passwordHash,
+        }).select('id').single())['id'].toString();
+
+    await c.from('member_identities').update({
+      'password_hash': account.passwordHash,
+    }).eq('id', identityId);
+
+    final existingOwner = await c
+        .from('account_members')
+        .select('id')
+        .eq('account_id', internalAccountId)
+        .eq('identity_id', identityId)
+        .maybeSingle();
+    if (existingOwner == null) {
+      await c.from('account_members').insert({
+        'account_id': internalAccountId,
+        'identity_id': identityId,
+        'role': 'owner',
+        'status': 'active',
+        'display_name': account.username.trim(),
+      });
+    } else {
+      await c.from('account_members').update({
+        'role': 'owner',
+        'status': 'active',
+        'display_name': account.username.trim(),
+      }).eq('id', existingOwner['id']);
     }
 
     // Every account gets exactly one home-server row and one account wishlist.
@@ -286,6 +324,168 @@ class SupabaseStore {
       result.add(account);
     }
 
+    return result;
+  }
+
+  /// Loads individual login identities and their account memberships.
+  /// A single identity may belong to multiple accounts.
+  Future<List<MemberLoginRecord>> loadMemberLogins() async {
+    final c = _db;
+    if (c == null) return const <MemberLoginRecord>[];
+
+    final identities = await c
+        .from('member_identities')
+        .select('id,email,password_hash');
+    final members = await c
+        .from('account_members')
+        .select('id,account_id,identity_id,role,status');
+
+    final result = <MemberLoginRecord>[];
+    for (final rawMember in members) {
+      final member = Map<String, dynamic>.from(rawMember);
+      final identityId = member['identity_id']?.toString() ?? '';
+      Map<String, dynamic>? identityRaw;
+      for (final rawIdentity in identities) {
+        final candidate = Map<String, dynamic>.from(rawIdentity);
+        if (candidate['id']?.toString() == identityId) {
+          identityRaw = candidate;
+          break;
+        }
+      }
+      if (identityRaw == null) continue;
+      final email = identityRaw['email']?.toString().trim().toLowerCase() ?? '';
+      final hash = identityRaw['password_hash']?.toString() ?? '';
+      final accountId = member['account_id']?.toString() ?? '';
+      if (email.isEmpty || hash.isEmpty || accountId.isEmpty) continue;
+      result.add(MemberLoginRecord(
+        memberId: member['id']?.toString() ?? '',
+        accountId: accountId,
+        email: email,
+        passwordHash: hash,
+        role: member['role']?.toString() ?? 'member',
+        status: member['status']?.toString() ?? 'active',
+      ));
+    }
+    return result;
+  }
+
+  Future<String> createMemberInvitation({
+    required String accountExternalId,
+    required String email,
+    String role = 'member',
+    required String tokenHash,
+    required DateTime expiresAt,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+    final account = await c.from('accounts').select('id').eq(
+      'external_account_id', accountExternalId,
+    ).maybeSingle();
+    if (account == null) throw StateError('Account not found in Supabase.');
+    final cleanEmail = email.trim().toLowerCase();
+    final existingIdentity = await c.from('member_identities').select('id').eq(
+      'email', cleanEmail,
+    ).maybeSingle();
+    if (existingIdentity != null) {
+      final existingMembership = await c.from('account_members')
+          .select('id,status')
+          .eq('account_id', account['id'])
+          .eq('identity_id', existingIdentity['id'])
+          .maybeSingle();
+      if (existingMembership != null && existingMembership['status'] == 'active') {
+        throw StateError('That email is already a member of this account.');
+      }
+    }
+    final invitation = await c.from('account_invitations').insert({
+      'account_id': account['id'],
+      'email': cleanEmail,
+      'role': role == 'admin' ? 'admin' : 'member',
+      'token_hash': tokenHash,
+      'expires_at': expiresAt.toUtc().toIso8601String(),
+      'status': 'pending',
+    }).select('id').single();
+    return invitation['id'].toString();
+  }
+
+  Future<Map<String, dynamic>> acceptMemberInvitation({
+    required String tokenHash,
+    required String email,
+    String? passwordHash,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+    final invite = await c.from('account_invitations').select()
+        .eq('token_hash', tokenHash)
+        .eq('status', 'pending')
+        .maybeSingle();
+    if (invite == null) throw StateError('Invitation is invalid or has expired.');
+    final expiresAt = DateTime.tryParse(invite['expires_at']?.toString() ?? '');
+    if (expiresAt == null || !DateTime.now().toUtc().isBefore(expiresAt.toUtc())) {
+      await c.from('account_invitations').update({'status': 'expired'}).eq('id', invite['id']);
+      throw StateError('Invitation has expired.');
+    }
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail != invite['email'].toString().trim().toLowerCase()) {
+      throw StateError('Invitation email does not match.');
+    }
+    var identity = await c.from('member_identities').select('id,email,password_hash')
+        .eq('email', cleanEmail).maybeSingle();
+    if (identity == null) {
+      if (passwordHash == null || passwordHash.isEmpty) {
+        throw StateError('A password is required to create this login.');
+      }
+      identity = await c.from('member_identities').insert({
+        'email': cleanEmail,
+        'password_hash': passwordHash,
+      }).select('id,email,password_hash').single();
+    }
+    final member = await c.from('account_members').upsert({
+      'account_id': invite['account_id'],
+      'identity_id': identity['id'],
+      'role': invite['role'] ?? 'member',
+      'status': 'active',
+    }, onConflict: 'account_id,identity_id').select('id,account_id,role,status').single();
+    await c.from('account_invitations').update({
+      'status': 'accepted',
+      'accepted_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', invite['id']);
+    return {
+      'memberId': member['id'].toString(),
+      'accountId': invite['account_id'].toString(),
+      'email': cleanEmail,
+      'role': member['role']?.toString() ?? 'member',
+      '_passwordHash': identity['password_hash']?.toString() ?? '',
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> listAccountMembers(String accountExternalId) async {
+    final c = _db;
+    if (c == null) return const [];
+    final account = await c.from('accounts').select('id').eq(
+      'external_account_id', accountExternalId,
+    ).maybeSingle();
+    if (account == null) throw StateError('Account not found in Supabase.');
+    final members = await c.from('account_members').select('id,identity_id,role,status,display_name,profile_id')
+        .eq('account_id', account['id']);
+    final identities = await c.from('member_identities').select('id,email');
+    final result = <Map<String, dynamic>>[];
+    for (final raw in members) {
+      final member = Map<String, dynamic>.from(raw);
+      final identityId = member['identity_id']?.toString() ?? '';
+      for (final rawIdentity in identities) {
+        final identity = Map<String, dynamic>.from(rawIdentity);
+        if (identity['id']?.toString() != identityId) continue;
+        result.add({
+          'id': member['id'],
+          'email': identity['email'],
+          'role': member['role'],
+          'status': member['status'],
+          'displayName': member['display_name'],
+          'profileId': member['profile_id'],
+        });
+        break;
+      }
+    }
     return result;
   }
 
@@ -538,6 +738,7 @@ class SupabaseStore {
     Map<String, dynamic>? home,
     Map<String, dynamic>? details,
     Map<String, dynamic>? platform,
+    Map<String, dynamic>? music,
   }) async {
     final c = _db;
     if (c == null) return;
@@ -563,6 +764,7 @@ class SupabaseStore {
         'home_configuration': home ?? <String, dynamic>{},
         'details_configuration': details ?? <String, dynamic>{},
         'platform_configuration': platform ?? <String, dynamic>{},
+        'music_configuration': music ?? <String, dynamic>{},
       },
       onConflict: 'profile_id',
     );

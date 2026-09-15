@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'group_watch.dart';
+import 'localization.dart';
 
 class GroupChatScreen extends StatefulWidget {
   const GroupChatScreen({super.key});
@@ -238,17 +239,17 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create Group Room'),
+        title: const UniversalText('Create Group Room'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Room name')),
+          TextField(controller: nameController, decoration: InputDecoration(labelText: tr('Room name'))),
           const SizedBox(height: 12),
-          TextField(controller: inviteController, decoration: const InputDecoration(labelText: 'Invite usernames/emails', hintText: 'alex@example.com, sam')),
+          TextField(controller: inviteController, decoration: InputDecoration(labelText: tr('Invite usernames/emails'), hintText: tr('alex@example.com, sam'))),
           const SizedBox(height: 8),
-          const Text('Invites are cross-account. Each invited account contributes its first profile to the room.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          const UniversalText('Invites are cross-account. Each invited account contributes its first profile to the room.', style: TextStyle(color: Colors.white54, fontSize: 12)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('CREATE')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('CANCEL')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('CREATE')),
         ],
       ),
     );
@@ -574,8 +575,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'GROUP ROOM',
+                    UniversalText('GROUP ROOM',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.45),
                         fontSize: 11,
@@ -584,8 +584,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                       ),
                     ),
                     const SizedBox(height: 3),
-                    const Text(
-                      'Movie Night',
+                    const UniversalText('Movie Night',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 25,
@@ -708,8 +707,8 @@ class _GroupChatScreenState extends State<GroupChatScreen>
               Expanded(
                 child: _QuickAction(
                   icon: Icons.add_rounded,
-                  title: 'Recommend',
-                  subtitle: 'Suggest a movie',
+                  title: tr('Recommend'),
+                  subtitle: tr('Suggest a movie'),
                   onTap: _createRecommendation,
                 ),
               ),
@@ -717,8 +716,8 @@ class _GroupChatScreenState extends State<GroupChatScreen>
               Expanded(
                 child: _QuickAction(
                   icon: Icons.how_to_vote_rounded,
-                  title: 'Voting',
-                  subtitle: 'Pick the winner',
+                  title: tr('Voting'),
+                  subtitle: tr('Pick the winner'),
                   onTap: _scrollToRecommendations,
                 ),
               ),
@@ -744,7 +743,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionHeading(
-            title: 'GROUP PICKS',
+            title: tr('GROUP PICKS'),
             subtitle: recommendations.isEmpty
                 ? 'Start the movie debate.'
                 : 'Everyone gets a vote.',
@@ -754,7 +753,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                 Icons.add_rounded,
                 size: 17,
               ),
-              label: const Text('Recommend'),
+              label: const UniversalText('Recommend'),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
               ),
@@ -819,9 +818,9 @@ class _GroupChatScreenState extends State<GroupChatScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeading(
-            title: 'GROUP WISHLIST',
-            subtitle: 'Movies the room agreed on.',
+          _SectionHeading(
+            title: tr('GROUP WISHLIST'),
+            subtitle: tr('Movies the room agreed on.'),
           ),
           const SizedBox(height: 12),
           if (_loadingWishlist)
@@ -855,8 +854,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        'Approved recommendations will appear here.',
+                      child: UniversalText('Approved recommendations will appear here.',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.5),
                           fontSize: 13,
@@ -914,8 +912,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'GROUP CHAT',
+                UniversalText('GROUP CHAT',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -924,8 +921,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                   ),
                 ),
                 SizedBox(height: 2),
-                Text(
-                  'Talk about what to watch next.',
+                UniversalText('Talk about what to watch next.',
                   style: TextStyle(
                     color: Color(0xFF77777F),
                     fontSize: 12,
@@ -944,7 +940,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     final roomMessages = controller.activeGroupChatRoom?.messages;
     if (roomMessages != null) {
       if (roomMessages.isEmpty) {
-        return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(24), child: Center(child: Text('Start the conversation', style: TextStyle(color: Colors.white54)))));
+        return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(24), child: Center(child: UniversalText('Start the conversation', style: TextStyle(color: Colors.white54)))));
       }
       return SliverList.builder(
         itemCount: roomMessages.length,
@@ -960,7 +956,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
     }
     final messages = List<ChatMessage>.from(controller.groupMessages);
     if (messages.isEmpty) {
-      return SliverToBoxAdapter(child: Container(margin: const EdgeInsets.only(top: 5), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28), child: const Center(child: Text('Start the conversation', style: TextStyle(color: Colors.white54)))));
+      return SliverToBoxAdapter(child: Container(margin: const EdgeInsets.only(top: 5), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28), child: const Center(child: UniversalText('Start the conversation', style: TextStyle(color: Colors.white54)))));
     }
     return SliverList.builder(
       itemCount: messages.length,
@@ -1012,7 +1008,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
                     ),
                     cursorColor: Colors.white,
                     decoration: InputDecoration(
-                      hintText: 'Message the group...',
+                      hintText: tr('Message the group...'),
                       hintStyle: TextStyle(
                         color: Colors.white.withValues(alpha: 0.35),
                       ),
@@ -1321,8 +1317,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Start Group Watch',
+                        UniversalText('Start Group Watch',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 22,
@@ -1331,8 +1326,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
                           ),
                         ),
                         SizedBox(height: 3),
-                        Text(
-                          'Choose something for everyone to watch.',
+                        UniversalText('Choose something for everyone to watch.',
                           style: TextStyle(
                             color: Color(0xFF77777F),
                             fontSize: 12,
@@ -1367,7 +1361,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
                   ),
                   cursorColor: Colors.white,
                   decoration: InputDecoration(
-                    hintText: 'Search your library...',
+                    hintText: tr('Search your library...'),
                     hintStyle: TextStyle(
                       color: Colors.white.withValues(alpha: 0.3),
                     ),
@@ -1411,8 +1405,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
                             color: Colors.white.withValues(alpha: 0.22),
                           ),
                           const SizedBox(height: 13),
-                          const Text(
-                            'Nothing found',
+                          const UniversalText('Nothing found',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 15,
@@ -1420,8 +1413,7 @@ class _GroupWatchMediaSheetState extends State<_GroupWatchMediaSheet> {
                             ),
                           ),
                           const SizedBox(height: 5),
-                          Text(
-                            'Try another title.',
+                          UniversalText('Try another title.',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 12,
@@ -1587,8 +1579,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Invite to watch',
+                        UniversalText('Invite to watch',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.48),
                             fontSize: 11,
@@ -1609,8 +1600,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          'Choose who gets an invitation.',
+                        UniversalText('Choose who gets an invitation.',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.42),
                             fontSize: 12,
@@ -1627,8 +1617,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
               child: Row(
                 children: [
                   const Expanded(
-                    child: Text(
-                      'INVITE PEOPLE',
+                    child: UniversalText('INVITE PEOPLE',
                       style: TextStyle(
                         color: Colors.white54,
                         fontSize: 11,
@@ -1678,16 +1667,14 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
                               color: Colors.white.withValues(alpha: 0.3),
                             ),
                             const SizedBox(height: 10),
-                            const Text(
-                              'No one else to invite',
+                            const UniversalText('No one else to invite',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              'You can still create a private Group Watch lobby.',
+                            UniversalText('You can still create a private Group Watch lobby.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.42),
@@ -1728,8 +1715,7 @@ class _GroupWatchInviteSheetState extends State<_GroupWatchInviteSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'INVITATION EXPIRATION',
+                  const UniversalText('INVITATION EXPIRATION',
                     style: TextStyle(
                       color: Colors.white54,
                       fontSize: 11,
@@ -2089,8 +2075,7 @@ class _GroupWatchMediaTileState extends State<_GroupWatchMediaTile> {
                           color: Colors.white.withValues(alpha: 0.4),
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          'Invite the group',
+                        UniversalText('Invite the group',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.4),
                             fontSize: 10,
@@ -2232,8 +2217,8 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a movie or show title.'),
+        SnackBar(
+          content: UniversalText('Enter a movie or show title.'),
         ),
       );
       return;
@@ -2282,8 +2267,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Recommend something',
+            const UniversalText('Recommend something',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -2291,8 +2275,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              'Put a movie or show up for the group vote.',
+            UniversalText('Put a movie or show up for the group vote.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.45),
                 fontSize: 13,
@@ -2308,7 +2291,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
               ),
               cursorColor: Colors.white,
               decoration: InputDecoration(
-                labelText: 'Title',
+                labelText: tr('Title'),
                 labelStyle: TextStyle(
                   color: Colors.white.withValues(alpha: 0.5),
                 ),
@@ -2331,8 +2314,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'TYPE',
+            const UniversalText('TYPE',
               style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
@@ -2375,8 +2357,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
               Row(
                 children: [
                   const Expanded(
-                    child: Text(
-                      'WHO CAN VOTE?',
+                    child: UniversalText('WHO CAN VOTE?',
                       style: TextStyle(
                         color: Colors.white54,
                         fontSize: 11,
@@ -2506,8 +2487,7 @@ class _RecommendationSheetState extends State<_RecommendationSheet> {
                     borderRadius: BorderRadius.circular(17),
                   ),
                 ),
-                child: const Text(
-                  'START GROUP VOTE',
+                child: const UniversalText('START GROUP VOTE',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -2683,8 +2663,7 @@ class _RecommendationCard extends StatelessWidget {
             const Spacer(),
             Row(
               children: [
-                Text(
-                  '${yesVotes.round()} YES',
+                UniversalText('${yesVotes.round()} YES',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -2692,8 +2671,7 @@ class _RecommendationCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  '${noVotes.round()} NO',
+                UniversalText('${noVotes.round()} NO',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.45),
                     fontSize: 12,
@@ -2831,7 +2809,7 @@ class _WishlistCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Add to library',
+            tooltip: tr('Add to library'),
             onPressed: onGet,
             icon: const Icon(
               Icons.add_to_queue_rounded,
@@ -2840,7 +2818,7 @@ class _WishlistCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Remove',
+            tooltip: tr('Remove'),
             onPressed: onRemove,
             icon: Icon(
               Icons.close_rounded,
@@ -3482,8 +3460,7 @@ class _EmptyRecommendations extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.25),
           ),
           const SizedBox(height: 13),
-          const Text(
-            'Nothing to vote on yet',
+          const UniversalText('Nothing to vote on yet',
             style: TextStyle(
               color: Colors.white,
               fontSize: 15,
@@ -3491,8 +3468,7 @@ class _EmptyRecommendations extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          Text(
-            'Be the first person to recommend a movie.',
+          UniversalText('Be the first person to recommend a movie.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.4),

@@ -34,7 +34,10 @@ class BackendApi {
   String? _token;
 
   BackendApi({
-    this.baseUrl = const String.fromEnvironment('BACKEND_API_URL', defaultValue: 'https://127.0.0.1:8080/api/v1'),
+    this.baseUrl = const String.fromEnvironment(
+      'BACKEND_API_URL',
+      defaultValue: 'https://127.0.0.1:8080/api/v1',
+    ),
   }) {
     assertSecureEndpoint();
   }
@@ -45,8 +48,14 @@ class BackendApi {
 
   void assertSecureEndpoint() {
     final uri = baseUri;
-    if (uri.scheme != 'https' && uri.host != '127.0.0.1' && uri.host != 'localhost') {
-      throw BackendApiException('Insecure HTTP backend endpoints are not allowed. Configure an HTTPS backend URL.');
+
+    if (uri.scheme != 'https' &&
+        uri.host != '127.0.0.1' &&
+        uri.host != 'localhost') {
+      throw BackendApiException(
+        'Insecure HTTP backend endpoints are not allowed. '
+        'Configure an HTTPS backend URL.',
+      );
     }
   }
 
@@ -76,21 +85,49 @@ class BackendApi {
     return headers;
   }
 
+  // ==========================================================
+  // LEGAL
+  // ==========================================================
+
+  /// Loads the current legal policies from the backend.
   Future<Map<String, dynamic>> getLegalPolicies() async {
-    final response = await http.get(Uri.parse('$baseUrl/legal/policies'), headers: _headers);
+    final response = await http.get(
+      Uri.parse('$baseUrl/legal/policies'),
+      headers: _headers,
+    );
+
     final data = _decodeResponse(response);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BackendApiException(data['error']?.toString() ?? 'Unable to load legal policies.', statusCode: response.statusCode);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to load legal policies.',
+        statusCode: response.statusCode,
+      );
     }
+
     return data;
   }
 
+  /// Loads the authenticated account's legal acceptance state.
   Future<Map<String, dynamic>> getLegalAcceptance() async {
-    final response = await http.get(Uri.parse('$baseUrl/legal/account-acceptance'), headers: _headers);
+    final response = await http.get(
+      Uri.parse('$baseUrl/legal/account-acceptance'),
+      headers: _headers,
+    );
+
     final data = _decodeResponse(response);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BackendApiException(data['error']?.toString() ?? 'Unable to load legal acceptance.', statusCode: response.statusCode);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to load legal acceptance.',
+        statusCode: response.statusCode,
+      );
     }
+
     return data;
   }
 
@@ -107,7 +144,11 @@ class BackendApi {
         'Accept': 'application/json',
       },
     );
-    return _requireSuccess(response, 'Unable to load subscription pricing.');
+
+    return _requireSuccess(
+      response,
+      'Unable to load subscription pricing.',
+    );
   }
 
   // ==========================================================
@@ -115,8 +156,6 @@ class BackendApi {
   // ==========================================================
 
   /// Creates a new account and starts the payment process.
-  ///
-  /// IMPORTANT:
   ///
   /// Signup does NOT authenticate the user.
   ///
@@ -135,7 +174,8 @@ class BackendApi {
   }) async {
     final cleanPlan = plan.trim().toLowerCase();
 
-    if (cleanPlan != 'monthly' && cleanPlan != 'yearly') {
+    if (cleanPlan != 'monthly' &&
+        cleanPlan != 'yearly') {
       throw BackendApiException(
         'Subscription plan must be monthly or yearly.',
       );
@@ -156,15 +196,18 @@ class BackendApi {
         'termsVersion': termsVersion,
         'privacyVersion': privacyVersion,
         'acceptableUseVersion': acceptableUseVersion,
-        'legalAcceptedAt': DateTime.now().toUtc().toIso8601String(),
+        'legalAcceptedAt':
+            DateTime.now().toUtc().toIso8601String(),
       }),
     );
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to create account.',
+        data['error']?.toString() ??
+            'Unable to create account.',
         statusCode: response.statusCode,
       );
     }
@@ -181,7 +224,8 @@ class BackendApi {
     }
 
     final paymentId = payment['id']?.toString();
-    final checkoutToken = payment['checkoutToken']?.toString();
+    final checkoutToken =
+        payment['checkoutToken']?.toString();
 
     if (paymentId == null || paymentId.isEmpty) {
       throw BackendApiException(
@@ -190,7 +234,8 @@ class BackendApi {
       );
     }
 
-    if (checkoutToken == null || checkoutToken.isEmpty) {
+    if (checkoutToken == null ||
+        checkoutToken.isEmpty) {
       throw BackendApiException(
         'Payment session was created but no checkout authorization was returned.',
         statusCode: response.statusCode,
@@ -216,9 +261,11 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to log in.',
+        data['error']?.toString() ??
+            'Unable to log in.',
         statusCode: response.statusCode,
       );
     }
@@ -237,6 +284,83 @@ class BackendApi {
     return data;
   }
 
+  /// Invites another login identity to the currently authenticated account.
+  Future<Map<String, dynamic>> inviteAccountMember({
+    required String email,
+    String role = 'member',
+  }) async {
+    _requireAuthentication();
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/invitations'),
+      headers: _headers,
+      body: jsonEncode({
+        'email': email.trim().toLowerCase(),
+        'role': role,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to create account invitation.',
+    );
+  }
+
+  /// Loads the members of the authenticated streaming account.
+  Future<List<Map<String, dynamic>>> getAccountMembers() async {
+    _requireAuthentication();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/auth/members'),
+      headers: _headers,
+    );
+
+    final data = await _requireSuccess(
+      response,
+      'Unable to load account members.',
+    );
+
+    final raw = data['members'];
+
+    if (raw is! List) {
+      return const [];
+    }
+
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => Map<String, dynamic>.from(item),
+        )
+        .toList();
+  }
+
+  /// Accepts an invitation.
+  ///
+  /// If the email has never logged in before, a password creates
+  /// its identity. Existing identities keep their existing password.
+  Future<Map<String, dynamic>> acceptAccountInvitation({
+    required String token,
+    required String email,
+    String? password,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/invitations/accept'),
+      headers: _headers,
+      body: jsonEncode({
+        'token': token,
+        'email': email.trim().toLowerCase(),
+        if (password != null && password.isNotEmpty)
+          'password': password,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to accept account invitation.',
+    );
+  }
+
+  /// Retrieves the authenticated account.
   Future<Map<String, dynamic>> me() async {
     if (!isAuthenticated) {
       throw BackendApiException(
@@ -251,9 +375,11 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to retrieve account.',
+        data['error']?.toString() ??
+            'Unable to retrieve account.',
         statusCode: response.statusCode,
       );
     }
@@ -261,7 +387,7 @@ class BackendApi {
     return data;
   }
 
-  /// Performs `logout` for this feature. Update this documentation when its contract changes.
+  /// Logs out of the backend account.
   Future<void> logout() async {
     if (!isAuthenticated) {
       return;
@@ -280,40 +406,108 @@ class BackendApi {
   // ==========================================================
   // CROSS-ACCOUNT GROUP CHAT
   // ==========================================================
-  Future<Map<String, dynamic>> createGroupChatRoom({required String name, required String profileId, Set<String>? invitedProfiles}) async {
+
+  /// Creates a cross-account Group Chat room.
+  Future<Map<String, dynamic>> createGroupChatRoom({
+    required String name,
+    required String profileId,
+    Set<String>? invitedProfiles,
+  }) async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/group/chat'), headers: _headers, body: jsonEncode({'name': name.trim(), 'profileId': profileId.trim(), 'invitedProfiles': (invitedProfiles ?? {}).toList()}));
-    return _requireSuccess(response, 'Unable to create group chat room.');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/group/chat'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name.trim(),
+        'profileId': profileId.trim(),
+        'invitedProfiles':
+            (invitedProfiles ?? {}).toList(),
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to create group chat room.',
+    );
   }
 
+  /// Retrieves the Group Chat rooms available to the user.
   Future<Map<String, dynamic>> getGroupChatRooms() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/group/chat'), headers: _headers);
-    return _requireSuccess(response, 'Unable to retrieve group chat rooms.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/group/chat'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve group chat rooms.',
+    );
   }
 
-  Future<Map<String, dynamic>> getGroupChatRoom(String roomId) async {
+  /// Retrieves a Group Chat room and its messages.
+  Future<Map<String, dynamic>> getGroupChatRoom(
+    String roomId,
+  ) async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/group/chat/${Uri.encodeComponent(roomId)}/messages'), headers: _headers);
-    return _requireSuccess(response, 'Unable to retrieve group chat room.');
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/group/chat/'
+        '${Uri.encodeComponent(roomId)}/messages',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve group chat room.',
+    );
   }
 
-  Future<Map<String, dynamic>> sendGroupChatMessage({required String roomId, required String profileId, required String message, String? badgeName}) async {
+  /// Sends a message to a Group Chat room.
+  Future<Map<String, dynamic>> sendGroupChatMessage({
+    required String roomId,
+    required String profileId,
+    required String message,
+    String? badgeName,
+  }) async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/group/chat/${Uri.encodeComponent(roomId)}/messages'), headers: _headers, body: jsonEncode({'profileId': profileId, 'message': message, 'badgeName': badgeName}));
-    return _requireSuccess(response, 'Unable to send group chat message.');
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/group/chat/'
+        '${Uri.encodeComponent(roomId)}/messages',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'profileId': profileId,
+        'message': message,
+        'badgeName': badgeName,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to send group chat message.',
+    );
   }
 
   // ==========================================================
   // PAYMENT
   // ==========================================================
 
+  /// Retrieves a checkout payment status.
   Future<Map<String, dynamic>> getCheckoutPaymentStatus({
     required String paymentId,
     required String checkoutToken,
   }) async {
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException('Payment ID is required.');
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
     }
 
     if (checkoutToken.trim().isEmpty) {
@@ -323,7 +517,8 @@ class BackendApi {
     }
 
     final uri = Uri.parse(
-      '$baseUrl/payment/checkout/status/${Uri.encodeComponent(paymentId)}',
+      '$baseUrl/payment/checkout/status/'
+      '${Uri.encodeComponent(paymentId)}',
     ).replace(
       queryParameters: {
         'checkoutToken': checkoutToken,
@@ -340,7 +535,8 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
         data['error']?.toString() ??
             'Unable to retrieve payment status.',
@@ -351,13 +547,16 @@ class BackendApi {
     return data;
   }
 
+  /// Verifies a checkout payment.
   Future<Map<String, dynamic>> verifyCheckoutPayment({
     required String paymentId,
     required String checkoutToken,
     required String processorTransactionId,
   }) async {
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException('Payment ID is required.');
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
     }
 
     if (checkoutToken.trim().isEmpty) {
@@ -374,7 +573,8 @@ class BackendApi {
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/payment/checkout/verify/${Uri.encodeComponent(paymentId)}',
+        '$baseUrl/payment/checkout/verify/'
+        '${Uri.encodeComponent(paymentId)}',
       ),
       headers: const {
         'Content-Type': 'application/json',
@@ -382,15 +582,18 @@ class BackendApi {
       },
       body: jsonEncode({
         'checkoutToken': checkoutToken,
-        'processorTransactionId': processorTransactionId,
+        'processorTransactionId':
+            processorTransactionId,
       }),
     );
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to verify payment.',
+        data['error']?.toString() ??
+            'Unable to verify payment.',
         statusCode: response.statusCode,
       );
     }
@@ -400,6 +603,7 @@ class BackendApi {
     return data;
   }
 
+  /// Creates an authenticated payment session.
   Future<Map<String, dynamic>> createPayment({
     required String plan,
   }) async {
@@ -411,7 +615,8 @@ class BackendApi {
 
     final cleanPlan = plan.trim().toLowerCase();
 
-    if (cleanPlan != 'monthly' && cleanPlan != 'yearly') {
+    if (cleanPlan != 'monthly' &&
+        cleanPlan != 'yearly') {
       throw BackendApiException(
         'Subscription plan must be monthly or yearly.',
       );
@@ -431,6 +636,7 @@ class BackendApi {
     );
   }
 
+  /// Retrieves an authenticated payment status.
   Future<Map<String, dynamic>> getPaymentStatus({
     required String paymentId,
   }) async {
@@ -441,12 +647,15 @@ class BackendApi {
     }
 
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException('Payment ID is required.');
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
     }
 
     final response = await http.get(
       Uri.parse(
-        '$baseUrl/payment/status/${Uri.encodeComponent(paymentId)}',
+        '$baseUrl/payment/status/'
+        '${Uri.encodeComponent(paymentId)}',
       ),
       headers: _headers,
     );
@@ -457,6 +666,7 @@ class BackendApi {
     );
   }
 
+  /// Verifies an authenticated payment.
   Future<Map<String, dynamic>> verifyPayment({
     required String paymentId,
     required String processorTransactionId,
@@ -468,7 +678,9 @@ class BackendApi {
     }
 
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException('Payment ID is required.');
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
     }
 
     if (processorTransactionId.trim().isEmpty) {
@@ -479,11 +691,13 @@ class BackendApi {
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/payment/verify/${Uri.encodeComponent(paymentId)}',
+        '$baseUrl/payment/verify/'
+        '${Uri.encodeComponent(paymentId)}',
       ),
       headers: _headers,
       body: jsonEncode({
-        'processorTransactionId': processorTransactionId,
+        'processorTransactionId':
+            processorTransactionId,
       }),
     );
 
@@ -493,6 +707,7 @@ class BackendApi {
     );
   }
 
+  /// Cancels an authenticated payment.
   Future<Map<String, dynamic>> cancelPayment({
     required String paymentId,
   }) async {
@@ -503,12 +718,15 @@ class BackendApi {
     }
 
     if (paymentId.trim().isEmpty) {
-      throw BackendApiException('Payment ID is required.');
+      throw BackendApiException(
+        'Payment ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/payment/cancel/${Uri.encodeComponent(paymentId)}',
+        '$baseUrl/payment/cancel/'
+        '${Uri.encodeComponent(paymentId)}',
       ),
       headers: _headers,
     );
@@ -519,25 +737,59 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> addProfile({required String name, String? avatarUrl}) async {
+  // ==========================================================
+  // PROFILES / ACCOUNT
+  // ==========================================================
+
+  /// Creates a new profile.
+  Future<Map<String, dynamic>> addProfile({
+    required String name,
+    String? avatarUrl,
+  }) async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/profiles'), headers: _headers, body: jsonEncode({'name': name.trim(), 'avatarUrl': avatarUrl}));
-    return _requireSuccess(response, 'Unable to create profile.');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/profiles'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name.trim(),
+        'avatarUrl': avatarUrl,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to create profile.',
+    );
   }
 
-
-  Future<Map<String, dynamic>> removeProfile(String profileId) async {
+  /// Removes an existing profile.
+  Future<Map<String, dynamic>> removeProfile(
+    String profileId,
+  ) async {
     _requireAuthentication();
-    final response = await http.delete(Uri.parse('$baseUrl/profiles/${Uri.encodeComponent(profileId)}'), headers: _headers);
-    return _requireSuccess(response, 'Unable to delete profile.');
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/profiles/${Uri.encodeComponent(profileId)}',
+      ),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to delete profile.',
+    );
   }
 
+  /// Updates account-level information.
   Future<Map<String, dynamic>> updateAccount({
     String? username,
     String? email,
     required String currentPassword,
   }) async {
     _requireAuthentication();
+
     final response = await http.put(
       Uri.parse('$baseUrl/auth/me'),
       headers: _headers,
@@ -547,43 +799,82 @@ class BackendApi {
         'currentPassword': currentPassword,
       }),
     );
-    return _requireSuccess(response, 'Unable to update account.');
+
+    return _requireSuccess(
+      response,
+      'Unable to update account.',
+    );
   }
 
+  /// Updates profile information.
   Future<Map<String, dynamic>> updateProfile({
     required String profileId,
     required String name,
     String? avatarUrl,
   }) async {
     _requireAuthentication();
+
     final response = await http.put(
-      Uri.parse('$baseUrl/profiles/${Uri.encodeComponent(profileId)}'),
+      Uri.parse(
+        '$baseUrl/profiles/${Uri.encodeComponent(profileId)}',
+      ),
       headers: _headers,
       body: jsonEncode({
         'name': name.trim(),
         'avatarUrl': avatarUrl,
       }),
     );
-    return _requireSuccess(response, 'Unable to update profile.');
+
+    return _requireSuccess(
+      response,
+      'Unable to update profile.',
+    );
   }
 
+  /// Deletes the authenticated streaming account.
   Future<Map<String, dynamic>> deleteAccount() async {
     _requireAuthentication();
-    final response = await http.delete(Uri.parse('$baseUrl/auth/account'), headers: _headers);
-    final data = _requireSuccess(response, 'Unable to delete account.');
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/auth/account'),
+      headers: _headers,
+    );
+
+    final data = await _requireSuccess(
+      response,
+      'Unable to delete account.',
+    );
+
     clearToken();
+
     return data;
   }
 
-  Future<Map<String, dynamic>> deleteServerMedia(String relativeMediaId) async {
+  // ==========================================================
+  // LIBRARY
+  // ==========================================================
+
+  /// Removes media from the server's database index.
+  Future<Map<String, dynamic>> deleteServerMedia(
+    String relativeMediaId,
+  ) async {
     _requireAuthentication();
+
     final response = await http.delete(
-      Uri.parse('$baseUrl/library/media/${Uri.encodeComponent(relativeMediaId)}'),
+      Uri.parse(
+        '$baseUrl/library/media/'
+        '${Uri.encodeComponent(relativeMediaId)}',
+      ),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to remove media from the database index.');
+
+    return _requireSuccess(
+      response,
+      'Unable to remove media from the database index.',
+    );
   }
 
+  /// Updates metadata for media stored on the home server.
   Future<Map<String, dynamic>> updateServerMediaMetadata({
     required String relativeMediaId,
     String? title,
@@ -594,8 +885,12 @@ class BackendApi {
     Map<String, dynamic>? metadata,
   }) async {
     _requireAuthentication();
+
     final response = await http.put(
-      Uri.parse('$baseUrl/library/media/${Uri.encodeComponent(relativeMediaId)}'),
+      Uri.parse(
+        '$baseUrl/library/media/'
+        '${Uri.encodeComponent(relativeMediaId)}',
+      ),
       headers: _headers,
       body: jsonEncode({
         'title': title,
@@ -606,113 +901,198 @@ class BackendApi {
         'metadata': metadata,
       }),
     );
-    return _requireSuccess(response, 'Unable to update media metadata.');
-  }
 
+    return _requireSuccess(
+      response,
+      'Unable to update media metadata.',
+    );
+  }
 
   /// Scans the home server's completed media directories.
   Future<Map<String, dynamic>> scanServerLibrary() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/library/server-scan'), headers: _headers);
-    return _requireSuccess(response, 'Unable to scan the home server library.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/library/server-scan'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to scan the home server library.',
+    );
   }
 
+  /// Retrieves library privacy settings.
   Future<Map<String, dynamic>> getLibraryPrivacy() async {
     _requireAuthentication();
+
     final response = await http.get(
       Uri.parse('$baseUrl/library/privacy'),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to retrieve library privacy settings.');
-  }
 
-  Future<Map<String, dynamic>> confirmOwnershipDeclaration() async {
-    _requireAuthentication();
-    final response = await http.post(
-      Uri.parse('$baseUrl/library/ownership-declaration'),
-      headers: _headers,
-      body: jsonEncode({'confirmed': true}),
+    return _requireSuccess(
+      response,
+      'Unable to retrieve library privacy settings.',
     );
-    return _requireSuccess(response, 'Unable to record the ownership declaration.');
   }
 
-  Future<Map<String, dynamic>> requestLibraryDeletion() async {
+  /// Confirms the library ownership declaration.
+  Future<Map<String, dynamic>>
+      confirmOwnershipDeclaration() async {
     _requireAuthentication();
+
     final response = await http.post(
-      Uri.parse('$baseUrl/library/deletion-request'),
+      Uri.parse(
+        '$baseUrl/library/ownership-declaration',
+      ),
+      headers: _headers,
+      body: jsonEncode({
+        'confirmed': true,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to record the ownership declaration.',
+    );
+  }
+
+  /// Requests deletion of the home server library.
+  Future<Map<String, dynamic>>
+      requestLibraryDeletion() async {
+    _requireAuthentication();
+
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/library/deletion-request',
+      ),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to request library deletion.');
+
+    return _requireSuccess(
+      response,
+      'Unable to request library deletion.',
+    );
   }
 
+  // ==========================================================
+  // STORAGE
+  // ==========================================================
+
+  /// Retrieves the account's storage information.
   Future<Map<String, dynamic>> getStorage() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/storage'), headers: _headers);
-    return _requireSuccess(response, 'Unable to retrieve storage.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/storage'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve storage.',
+    );
   }
 
   /// Requests a specific amount of additional physical server storage.
-  Future<Map<String, dynamic>> requestMoreStorage({int additionalTerabytes = 1}) async {
+  Future<Map<String, dynamic>> requestMoreStorage({
+    int additionalTerabytes = 1,
+  }) async {
     _requireAuthentication();
+
     final response = await http.post(
       Uri.parse('$baseUrl/storage/request'),
       headers: _headers,
-      body: jsonEncode({'additionalTerabytes': additionalTerabytes}),
+      body: jsonEncode({
+        'additionalTerabytes': additionalTerabytes,
+      }),
     );
-    return _requireSuccess(response, 'Unable to request more storage.');
+
+    return _requireSuccess(
+      response,
+      'Unable to request more storage.',
+    );
   }
 
-  /// Retrieves in-app notifications generated by the backend.
-  Future<Map<String, dynamic>> getStorageNotifications() async {
+  /// Retrieves in-app storage notifications.
+  Future<Map<String, dynamic>>
+      getStorageNotifications() async {
     _requireAuthentication();
+
     final response = await http.get(
       Uri.parse('$baseUrl/storage/notifications'),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to retrieve notifications.');
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve notifications.',
+    );
   }
 
   // ==========================================================
   // SUPABASE SYNCHRONIZATION
   // ==========================================================
 
-  /// Uploads sanitized Flutter account metadata through the authenticated
-  /// backend into Supabase. Physical media files are never included.
-  Future<Map<String, dynamic>> syncProfileCustomizationToSupabase({
+  /// Uploads sanitized Flutter account metadata through the
+  /// authenticated backend into Supabase.
+  ///
+  /// Physical media files are never included.
+  Future<Map<String, dynamic>>
+      syncProfileCustomizationToSupabase({
     required String profileId,
     Map<String, dynamic>? home,
     Map<String, dynamic>? details,
     Map<String, dynamic>? platform,
+    Map<String, dynamic>? music,
   }) async {
     _requireAuthentication();
+
     final response = await http.post(
-      Uri.parse('$baseUrl/supabase/sync/profile/${Uri.encodeComponent(profileId)}'),
+      Uri.parse(
+        '$baseUrl/supabase/sync/profile/'
+        '${Uri.encodeComponent(profileId)}',
+      ),
       headers: _headers,
       body: jsonEncode({
         'home': home ?? <String, dynamic>{},
         'details': details ?? <String, dynamic>{},
         'platform': platform ?? <String, dynamic>{},
+        'music': music ?? <String, dynamic>{},
       }),
     );
-    return _requireSuccess(response, 'Unable to synchronize profile customization.');
+
+    return _requireSuccess(
+      response,
+      'Unable to synchronize profile customization.',
+    );
   }
 
+  /// Synchronizes sanitized account metadata with Supabase.
   Future<Map<String, dynamic>> syncAccountToSupabase({
     required Map<String, dynamic> snapshot,
   }) async {
     _requireAuthentication();
+
     final response = await http.post(
       Uri.parse('$baseUrl/supabase/sync/account'),
       headers: _headers,
       body: jsonEncode(snapshot),
     );
-    return _requireSuccess(response, 'Unable to synchronize account data with Supabase.');
+
+    return _requireSuccess(
+      response,
+      'Unable to synchronize account data with Supabase.',
+    );
   }
 
   // ==========================================================
   // RECOMMENDATIONS
   // ==========================================================
 
+  /// Retrieves personalized recommendations.
   Future<Map<String, dynamic>> getRecommendations({
     String? profileId,
     int limit = 20,
@@ -729,8 +1109,10 @@ class BackendApi {
       'limit': safeLimit.toString(),
     };
 
-    if (profileId != null && profileId.trim().isNotEmpty) {
-      queryParameters['profileId'] = profileId.trim();
+    if (profileId != null &&
+        profileId.trim().isNotEmpty) {
+      queryParameters['profileId'] =
+          profileId.trim();
     }
 
     final uri = Uri.parse(
@@ -754,7 +1136,9 @@ class BackendApi {
   // GROUP RECOMMENDATIONS
   // ==========================================================
 
-  Future<Map<String, dynamic>> createGroupRecommendation({
+  /// Creates a group recommendation.
+  Future<Map<String, dynamic>>
+      createGroupRecommendation({
     required String title,
     required String type,
     required String profileId,
@@ -774,19 +1158,23 @@ class BackendApi {
       );
     }
 
-    if (cleanType != 'movie' && cleanType != 'tvShow') {
+    if (cleanType != 'movie' &&
+        cleanType != 'tvShow') {
       throw BackendApiException(
         'Recommendation type must be "movie" or "tvShow".',
       );
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     String? cleanMediaId = mediaId?.trim();
 
-    if (cleanMediaId != null && cleanMediaId.isEmpty) {
+    if (cleanMediaId != null &&
+        cleanMediaId.isEmpty) {
       cleanMediaId = null;
     }
 
@@ -806,7 +1194,8 @@ class BackendApi {
       'title': cleanTitle,
       'type': cleanType,
       'profileId': cleanProfileId,
-      'activeParticipants': participants.toList(),
+      'activeParticipants':
+          participants.toList(),
     };
 
     if (cleanMediaId != null) {
@@ -814,7 +1203,8 @@ class BackendApi {
     }
 
     if (votingDurationHours != null) {
-      body['votingDurationHours'] = votingDurationHours;
+      body['votingDurationHours'] =
+          votingDurationHours;
     }
 
     final response = await http.post(
@@ -829,7 +1219,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> getGroupRecommendations() async {
+  /// Retrieves group recommendations.
+  Future<Map<String, dynamic>>
+      getGroupRecommendations() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -843,7 +1235,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> getGroupRecommendation({
+  /// Retrieves one group recommendation.
+  Future<Map<String, dynamic>>
+      getGroupRecommendation({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -856,7 +1250,8 @@ class BackendApi {
 
     final response = await http.get(
       Uri.parse(
-        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}',
+        '$baseUrl/group/recommendations/'
+        '${Uri.encodeComponent(recommendationId)}',
       ),
       headers: _headers,
     );
@@ -867,7 +1262,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> voteOnGroupRecommendation({
+  /// Records a yes/no vote on a group recommendation.
+  Future<Map<String, dynamic>>
+      voteOnGroupRecommendation({
     required String recommendationId,
     required String profileId,
     required String vote,
@@ -888,7 +1285,8 @@ class BackendApi {
 
     final cleanVote = vote.trim().toLowerCase();
 
-    if (cleanVote != 'yes' && cleanVote != 'no') {
+    if (cleanVote != 'yes' &&
+        cleanVote != 'no') {
       throw BackendApiException(
         'Vote must be either "yes" or "no".',
       );
@@ -896,7 +1294,8 @@ class BackendApi {
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}/vote',
+        '$baseUrl/group/recommendations/'
+        '${Uri.encodeComponent(recommendationId)}/vote',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -911,7 +1310,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> closeGroupRecommendationVoting({
+  /// Closes group recommendation voting.
+  Future<Map<String, dynamic>>
+      closeGroupRecommendationVoting({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -924,7 +1325,8 @@ class BackendApi {
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}/close',
+        '$baseUrl/group/recommendations/'
+        '${Uri.encodeComponent(recommendationId)}/close',
       ),
       headers: _headers,
     );
@@ -935,7 +1337,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> deleteGroupRecommendation({
+  /// Deletes a group recommendation.
+  Future<Map<String, dynamic>>
+      deleteGroupRecommendation({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -948,7 +1352,8 @@ class BackendApi {
 
     final response = await http.delete(
       Uri.parse(
-        '$baseUrl/group/recommendations/${Uri.encodeComponent(recommendationId)}',
+        '$baseUrl/group/recommendations/'
+        '${Uri.encodeComponent(recommendationId)}',
       ),
       headers: _headers,
     );
@@ -963,7 +1368,9 @@ class BackendApi {
   // GROUP WISHLIST
   // ==========================================================
 
-  Future<Map<String, dynamic>> getGroupWishlist() async {
+  /// Retrieves the Group Wishlist.
+  Future<Map<String, dynamic>>
+      getGroupWishlist() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -977,18 +1384,23 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> removeFromGroupWishlist({
+  /// Removes a media item from the Group Wishlist.
+  Future<Map<String, dynamic>>
+      removeFromGroupWishlist({
     required String mediaId,
   }) async {
     _requireAuthentication();
 
     if (mediaId.trim().isEmpty) {
-      throw BackendApiException('Media ID is required.');
+      throw BackendApiException(
+        'Media ID is required.',
+      );
     }
 
     final response = await http.delete(
       Uri.parse(
-        '$baseUrl/group/wishlist/${Uri.encodeComponent(mediaId)}',
+        '$baseUrl/group/wishlist/'
+        '${Uri.encodeComponent(mediaId)}',
       ),
       headers: _headers,
     );
@@ -999,23 +1411,30 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> acquireGroupWishlistItem({
+  /// Acquires a Group Wishlist item.
+  Future<Map<String, dynamic>>
+      acquireGroupWishlistItem({
     required String mediaId,
     required String profileId,
   }) async {
     _requireAuthentication();
 
     if (mediaId.trim().isEmpty) {
-      throw BackendApiException('Media ID is required.');
+      throw BackendApiException(
+        'Media ID is required.',
+      );
     }
 
     if (profileId.trim().isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/wishlist/${Uri.encodeComponent(mediaId)}/acquire',
+        '$baseUrl/group/wishlist/'
+        '${Uri.encodeComponent(mediaId)}/acquire',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1038,7 +1457,8 @@ class BackendApi {
   ///
   /// Profiles may belong to different accounts when the backend
   /// confirms that they own the same media.
-  Future<Map<String, dynamic>> createGroupWatchSession({
+  Future<Map<String, dynamic>>
+      createGroupWatchSession({
     required String mediaId,
     required String title,
     required String type,
@@ -1054,21 +1474,28 @@ class BackendApi {
     final cleanProfileId = profileId.trim();
 
     if (cleanMediaId.isEmpty) {
-      throw BackendApiException('Media ID is required.');
+      throw BackendApiException(
+        'Media ID is required.',
+      );
     }
 
     if (cleanTitle.isEmpty) {
-      throw BackendApiException('Title is required.');
+      throw BackendApiException(
+        'Title is required.',
+      );
     }
 
-    if (cleanType != 'movie' && cleanType != 'tvShow') {
+    if (cleanType != 'movie' &&
+        cleanType != 'tvShow') {
       throw BackendApiException(
         'Group Watch type must be "movie" or "tvShow".',
       );
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     if (invitationDurationHours != null &&
@@ -1090,7 +1517,8 @@ class BackendApi {
       'title': cleanTitle,
       'type': cleanType,
       'profileId': cleanProfileId,
-      'invitedProfileIds': invitedProfiles.toList(),
+      'invitedProfileIds':
+          invitedProfiles.toList(),
     };
 
     if (invitationDurationHours != null) {
@@ -1110,7 +1538,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> getGroupWatchSessions() async {
+  /// Retrieves Group Watch sessions.
+  Future<Map<String, dynamic>>
+      getGroupWatchSessions() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -1124,7 +1554,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> getGroupWatchSession({
+  /// Retrieves a Group Watch session.
+  Future<Map<String, dynamic>>
+      getGroupWatchSession({
     required String sessionId,
   }) async {
     _requireAuthentication();
@@ -1139,7 +1571,8 @@ class BackendApi {
 
     final response = await http.get(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}',
       ),
       headers: _headers,
     );
@@ -1150,7 +1583,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> acceptGroupWatchInvitation({
+  /// Accepts a Group Watch invitation.
+  Future<Map<String, dynamic>>
+      acceptGroupWatchInvitation({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1166,12 +1601,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/accept',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/accept',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1185,7 +1623,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> declineGroupWatchInvitation({
+  /// Declines a Group Watch invitation.
+  Future<Map<String, dynamic>>
+      declineGroupWatchInvitation({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1201,12 +1641,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/decline',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/decline',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1220,7 +1663,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> setGroupWatchAudioTrack({
+  /// Sets the selected Group Watch audio track.
+  Future<Map<String, dynamic>>
+      setGroupWatchAudioTrack({
     required String sessionId,
     required String profileId,
     String? audioTrackId,
@@ -1238,12 +1683,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/audio',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/audio',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1261,7 +1709,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> setGroupWatchSubtitleTrack({
+  /// Sets the selected Group Watch subtitle track.
+  Future<Map<String, dynamic>>
+      setGroupWatchSubtitleTrack({
     required String sessionId,
     required String profileId,
     String? subtitleTrackId,
@@ -1270,7 +1720,8 @@ class BackendApi {
 
     final cleanSessionId = sessionId.trim();
     final cleanProfileId = profileId.trim();
-    final cleanSubtitleTrackId = subtitleTrackId?.trim();
+    final cleanSubtitleTrackId =
+        subtitleTrackId?.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1279,12 +1730,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/subtitles',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/subtitles',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1302,7 +1756,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> startGroupWatchSession({
+  /// Starts a Group Watch session.
+  Future<Map<String, dynamic>>
+      startGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1318,12 +1774,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/start',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/start',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1337,7 +1796,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> playGroupWatchSession({
+  /// Resumes Group Watch playback.
+  Future<Map<String, dynamic>>
+      playGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1353,12 +1814,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/play',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/play',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1372,7 +1836,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> pauseGroupWatchSession({
+  /// Pauses Group Watch playback.
+  Future<Map<String, dynamic>>
+      pauseGroupWatchSession({
     required String sessionId,
     required String profileId,
     required String reason,
@@ -1390,16 +1856,21 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     if (cleanReason.isEmpty) {
-      throw BackendApiException('Pause reason is required.');
+      throw BackendApiException(
+        'Pause reason is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/pause',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/pause',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1414,7 +1885,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> resumeGroupWatchSession({
+  /// Resumes a paused Group Watch session.
+  Future<Map<String, dynamic>>
+      resumeGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1430,12 +1903,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/resume',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/resume',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1451,11 +1927,10 @@ class BackendApi {
 
   /// Updates the globally synchronized Group Watch position.
   ///
-  /// IMPORTANT:
-  ///
   /// The backend route expects `positionMilliseconds`.
-  /// We therefore send the Duration directly as milliseconds.
-  Future<Map<String, dynamic>> updateGroupWatchPosition({
+  /// The Duration is therefore sent directly as milliseconds.
+  Future<Map<String, dynamic>>
+      updateGroupWatchPosition({
     required String sessionId,
     required String profileId,
     required Duration position,
@@ -1472,7 +1947,9 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     if (position.isNegative) {
@@ -1486,7 +1963,8 @@ class BackendApi {
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/position',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/position',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1502,7 +1980,9 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> endGroupWatchSession({
+  /// Ends a Group Watch session.
+  Future<Map<String, dynamic>>
+      endGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1518,12 +1998,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.post(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}/end',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}/end',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1533,11 +2016,13 @@ class BackendApi {
 
     return _requireSuccess(
       response,
-      'Unable to end Group Watch.',
+      'Unable to end Group Watch session.',
     );
   }
 
-  Future<Map<String, dynamic>> deleteGroupWatchSession({
+  /// Deletes a Group Watch session.
+  Future<Map<String, dynamic>>
+      deleteGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1553,12 +2038,15 @@ class BackendApi {
     }
 
     if (cleanProfileId.isEmpty) {
-      throw BackendApiException('Profile ID is required.');
+      throw BackendApiException(
+        'Profile ID is required.',
+      );
     }
 
     final response = await http.delete(
       Uri.parse(
-        '$baseUrl/group/watch/${Uri.encodeComponent(cleanSessionId)}',
+        '$baseUrl/group/watch/'
+        '${Uri.encodeComponent(cleanSessionId)}',
       ),
       headers: _headers,
       body: jsonEncode({
@@ -1572,142 +2060,295 @@ class BackendApi {
     );
   }
 
-
   // ==========================================================
   // EMAIL / REMOTE ACCESS
   // ==========================================================
-  Future<Map<String, dynamic>> createRemoteAccessCode() async {
+
+  /// Creates a remote access code.
+  Future<Map<String, dynamic>>
+      createRemoteAccessCode() async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/remote/access-code'), headers: _headers);
-    return _requireSuccess(response, 'Unable to create remote access code.');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/remote/access-code'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to create remote access code.',
+    );
   }
 
+  /// Retrieves registered remote computers.
   Future<Map<String, dynamic>> getRemoteWorkers() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/remote/workers'), headers: _headers);
-    return _requireSuccess(response, 'Unable to retrieve remote computers.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/remote/workers'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve remote computers.',
+    );
   }
 
-  Future<Map<String, dynamic>> queueRemoteImport({required String workerId, String driveName = 'Disc reader'}) async {
+  /// Queues a remote disc import job.
+  Future<Map<String, dynamic>> queueRemoteImport({
+    required String workerId,
+    String driveName = 'Disc reader',
+  }) async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/remote/jobs'), headers: _headers, body: jsonEncode({'workerId': workerId, 'driveName': driveName}));
-    return _requireSuccess(response, 'Unable to queue remote disc import.');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/remote/jobs'),
+      headers: _headers,
+      body: jsonEncode({
+        'workerId': workerId,
+        'driveName': driveName,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to queue remote disc import.',
+    );
   }
 
   // ==========================================================
   // ARM
   // ==========================================================
 
+  /// Retrieves the current ARM connection status.
   Future<Map<String, dynamic>> getArmStatus() async {
     _requireAuthentication();
+
     final response = await http.get(
       Uri.parse('$baseUrl/arm/status'),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to connect to ARM.');
+
+    return _requireSuccess(
+      response,
+      'Unable to connect to ARM.',
+    );
   }
 
-   Future<List<dynamic>> getArmDrives() async {
-  _requireAuthentication();
+  /// Retrieves the optical/media drives connected to the ARM system.
+  ///
+  /// The backend returns the drives inside a `drives` list.
+  /// If the response does not contain a valid list, an empty
+  /// list is returned.
+  Future<List<dynamic>> getArmDrives() async {
+    _requireAuthentication();
 
-  final response = await http.get(
-    Uri.parse('$baseUrl/arm/drives'),
-    headers: _headers,
-  );
+    final response = await http.get(
+      Uri.parse('$baseUrl/arm/drives'),
+      headers: _headers,
+    );
 
-  final data = await _requireSuccess(
-    response,
-    'Unable to retrieve ARM drives.',
-  );
+    final data = await _requireSuccess(
+      response,
+      'Unable to retrieve ARM drives.',
+    );
 
-  final drives = data['drives'];
+    final drives = data['drives'];
 
-  if (drives is! List) {
-    return <dynamic>[];
+    if (drives is! List) {
+      return <dynamic>[];
+    }
+
+    return drives;
   }
 
-  return drives;
-}
-
-
+  /// Scans a disc in the selected ARM drive.
   Future<Map<String, dynamic>> scanArmDisc({
     required String driveId,
   }) async {
     _requireAuthentication();
+
     final response = await http.post(
       Uri.parse('$baseUrl/arm/scan'),
       headers: _headers,
-      body: jsonEncode({'driveId': driveId}),
+      body: jsonEncode({
+        'driveId': driveId,
+      }),
     );
-    return _requireSuccess(response, 'Unable to scan the ARM disc.');
+
+    return _requireSuccess(
+      response,
+      'Unable to scan the ARM disc.',
+    );
   }
 
+  /// Starts ARM disc monitoring/import for the selected drive.
   Future<Map<String, dynamic>> startArmImport({
     required String driveId,
   }) async {
     _requireAuthentication();
+
     final response = await http.post(
       Uri.parse('$baseUrl/arm/import'),
       headers: _headers,
-      body: jsonEncode({'driveId': driveId}),
+      body: jsonEncode({
+        'driveId': driveId,
+      }),
     );
-    return _requireSuccess(response, 'Unable to start ARM disc monitoring.');
+
+    return _requireSuccess(
+      response,
+      'Unable to start ARM disc monitoring.',
+    );
   }
 
+  /// Retrieves the current status of an ARM import job.
   Future<Map<String, dynamic>> getArmJob({
     required String jobId,
   }) async {
     _requireAuthentication();
+
     final response = await http.get(
-      Uri.parse('$baseUrl/arm/jobs/${Uri.encodeComponent(jobId)}'),
+      Uri.parse(
+        '$baseUrl/arm/jobs/${Uri.encodeComponent(jobId)}',
+      ),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to retrieve ARM job status.');
+
+    return _requireSuccess(
+      response,
+      'Unable to retrieve ARM job status.',
+    );
   }
 
+  /// Cancels an active ARM import job.
   Future<Map<String, dynamic>> cancelArmJob({
     required String jobId,
   }) async {
     _requireAuthentication();
+
     final response = await http.post(
-      Uri.parse('$baseUrl/arm/jobs/${Uri.encodeComponent(jobId)}/cancel'),
+      Uri.parse(
+        '$baseUrl/arm/jobs/'
+        '${Uri.encodeComponent(jobId)}/cancel',
+      ),
       headers: _headers,
     );
-    return _requireSuccess(response, 'Unable to cancel the ARM import.');
+
+    return _requireSuccess(
+      response,
+      'Unable to cancel the ARM import.',
+    );
   }
 
+  // ==========================================================
+  // LIVE SPORTS
+  // ==========================================================
 
-  Future<Map<String, dynamic>> getLiveSports({String? sport, String? country}) async {
+  /// Retrieves live sports events.
+  Future<Map<String, dynamic>> getLiveSports({
+    String? sport,
+    String? country,
+  }) async {
     _requireAuthentication();
+
     final params = <String, String>{};
-    if (sport != null && sport.isNotEmpty) params['sport'] = sport;
-    if (country != null && country.isNotEmpty) params['country'] = country;
-    final uri = Uri.parse('$baseUrl/sports/live').replace(queryParameters: params);
-    final response = await http.get(uri, headers: _headers);
-    return _requireSuccess(response, 'Unable to load live sports.');
+
+    if (sport != null && sport.isNotEmpty) {
+      params['sport'] = sport;
+    }
+
+    if (country != null && country.isNotEmpty) {
+      params['country'] = country;
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/sports/live',
+    ).replace(
+      queryParameters: params,
+    );
+
+    final response = await http.get(
+      uri,
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to load live sports.',
+    );
   }
 
+  /// Retrieves available sports teams.
   Future<Map<String, dynamic>> getSportsTeams() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/sports/teams'), headers: _headers);
-    return _requireSuccess(response, 'Unable to load sports teams.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/sports/teams'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to load sports teams.',
+    );
   }
 
+  /// Retrieves available sports.
   Future<List<dynamic>> getSports() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/sports'), headers: _headers);
-    final data = await _requireSuccess(response, 'Unable to load sports.');
-    return data['sports'] is List ? data['sports'] as List : <dynamic>[];
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/sports'),
+      headers: _headers,
+    );
+
+    final data = await _requireSuccess(
+      response,
+      'Unable to load sports.',
+    );
+
+    return data['sports'] is List
+        ? data['sports'] as List
+        : <dynamic>[];
   }
 
-  Future<Map<String, dynamic>> getUpcomingSports({String? sport, String? country, int days = 7}) async {
+  /// Retrieves upcoming sports events.
+  Future<Map<String, dynamic>> getUpcomingSports({
+    String? sport,
+    String? country,
+    int days = 7,
+  }) async {
     _requireAuthentication();
-    final params = <String, String>{'days': days.toString()};
-    if (sport != null && sport.isNotEmpty) params['sport'] = sport;
-    if (country != null && country.isNotEmpty) params['country'] = country;
-    final uri = Uri.parse('$baseUrl/sports/upcoming').replace(queryParameters: params);
-    final response = await http.get(uri, headers: _headers);
-    return _requireSuccess(response, 'Unable to load upcoming sports.');
+
+    final params = <String, String>{
+      'days': days.toString(),
+    };
+
+    if (sport != null && sport.isNotEmpty) {
+      params['sport'] = sport;
+    }
+
+    if (country != null && country.isNotEmpty) {
+      params['country'] = country;
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/sports/upcoming',
+    ).replace(
+      queryParameters: params,
+    );
+
+    final response = await http.get(
+      uri,
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to load upcoming sports.',
+    );
   }
 
   // ==========================================================
@@ -1715,45 +2356,117 @@ class BackendApi {
   // ==========================================================
 
   /// Reads the home server storage dashboard.
-  Future<Map<String, dynamic>> getHomeServerStorage() async {
+  Future<Map<String, dynamic>>
+      getHomeServerStorage() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/server/storage'), headers: _headers);
-    return _requireSuccess(response, 'Unable to load home server storage.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/server/storage'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to load home server storage.',
+    );
   }
 
   /// Reads the ARM connection and media-root configuration.
   Future<Map<String, dynamic>> getHomeServerArm() async {
     _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/server/arm'), headers: _headers);
-    return _requireSuccess(response, 'Unable to load ARM server status.');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/server/arm'),
+      headers: _headers,
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to load ARM server status.',
+    );
   }
 
   /// Loads reviews visible inside the current account.
-  Future<Map<String, dynamic>> getReviews(String mediaId) async {
+  Future<Map<String, dynamic>> getReviews(
+    String mediaId,
+  ) async {
     _requireAuthentication();
-    final uri = Uri.parse('$baseUrl/reviews').replace(queryParameters: {'mediaId': mediaId});
-    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load reviews.');
+
+    final uri = Uri.parse(
+      '$baseUrl/reviews',
+    ).replace(
+      queryParameters: {
+        'mediaId': mediaId,
+      },
+    );
+
+    return _requireSuccess(
+      await http.get(
+        uri,
+        headers: _headers,
+      ),
+      'Unable to load reviews.',
+    );
   }
 
   /// Loads public reviews without exposing email or account identifiers.
-  Future<Map<String, dynamic>> getGlobalReviews(String mediaId) async {
+  Future<Map<String, dynamic>> getGlobalReviews(
+    String mediaId,
+  ) async {
     _requireAuthentication();
-    final uri = Uri.parse('$baseUrl/reviews/global').replace(queryParameters: {'mediaId': mediaId});
-    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load global reviews.');
+
+    final uri = Uri.parse(
+      '$baseUrl/reviews/global',
+    ).replace(
+      queryParameters: {
+        'mediaId': mediaId,
+      },
+    );
+
+    return _requireSuccess(
+      await http.get(
+        uri,
+        headers: _headers,
+      ),
+      'Unable to load global reviews.',
+    );
   }
 
   /// Publishes a profile review using a user-selected global pseudonym.
-  Future<Map<String, dynamic>> submitReview({required String mediaId, required String profileId, required double score, required String label, required String text, required String globalUsername}) async {
+  Future<Map<String, dynamic>> submitReview({
+    required String mediaId,
+    required String profileId,
+    required double score,
+    required String label,
+    required String text,
+    required String globalUsername,
+  }) async {
     _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/reviews'), headers: _headers, body: jsonEncode({'mediaId': mediaId, 'profileId': profileId, 'score': score, 'label': label, 'text': text, 'globalUsername': globalUsername}));
-    return _requireSuccess(response, 'Unable to submit review.');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/reviews'),
+      headers: _headers,
+      body: jsonEncode({
+        'mediaId': mediaId,
+        'profileId': profileId,
+        'score': score,
+        'label': label,
+        'text': text,
+        'globalUsername': globalUsername,
+      }),
+    );
+
+    return _requireSuccess(
+      response,
+      'Unable to submit review.',
+    );
   }
 
   // ==========================================================
   // INTERNAL HELPERS
   // ==========================================================
 
-  /// Performs `_requireAuthentication` for this feature. Update this documentation when its contract changes.
+  /// Ensures an authenticated backend token is available.
   void _requireAuthentication() {
     if (!isAuthenticated) {
       throw BackendApiException(
@@ -1762,15 +2475,18 @@ class BackendApi {
     }
   }
 
+  /// Validates a successful HTTP response and decodes its JSON body.
   Future<Map<String, dynamic>> _requireSuccess(
     http.Response response,
     String fallbackError,
   ) async {
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? fallbackError,
+        data['error']?.toString() ??
+            fallbackError,
         statusCode: response.statusCode,
       );
     }
@@ -1779,25 +2495,44 @@ class BackendApi {
   }
 
   // ==========================================================
-  // RESPONSE DECODING
+  // SECURITY
   // ==========================================================
 
-  /// Performs `verifySecurityAnswer` for this feature. Update this documentation when its contract changes.
-  Future<bool> verifySecurityAnswer(String answer) async {
-    if (!isAuthenticated) return false;
+  /// Verifies the authenticated user's security answer.
+  Future<bool> verifySecurityAnswer(
+    String answer,
+  ) async {
+    if (!isAuthenticated) {
+      return false;
+    }
+
     final response = await http.post(
       Uri.parse('$baseUrl/auth/verify-security'),
       headers: _headers,
-      body: jsonEncode({'answer': answer}),
+      body: jsonEncode({
+        'answer': answer,
+      }),
     );
+
     final data = _decodeResponse(response);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BackendApiException(data['error']?.toString() ?? 'Unable to verify security answer.', statusCode: response.statusCode);
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ??
+            'Unable to verify security answer.',
+        statusCode: response.statusCode,
+      );
     }
+
     return data['verified'] == true;
   }
 
-  /// Performs `_decodeResponse` for this feature. Update this documentation when its contract changes.
+  // ==========================================================
+  // RESPONSE DECODING
+  // ==========================================================
+
+  /// Decodes a backend HTTP response into a JSON map.
   Map<String, dynamic> _decodeResponse(
     http.Response response,
   ) {

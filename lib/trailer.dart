@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'localization.dart';
 
 // Simple trailer model used by TrailerScreen.
 //
@@ -47,8 +48,7 @@ Future<void> openTrailer(
             ),
             SizedBox(width: 12),
             Expanded(
-              child: Text(
-                'This trailer does not have a YouTube video ID.',
+              child: UniversalText('This trailer does not have a YouTube video ID.',
                 style: TextStyle(
                   color: Colors.white,
                 ),
@@ -93,8 +93,7 @@ Future<void> openTrailer(
               ),
               SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Unable to open the trailer.',
+                child: UniversalText('Unable to open the trailer.',
                   style: TextStyle(
                     color: Colors.white,
                   ),
@@ -124,8 +123,7 @@ Future<void> openTrailer(
             ),
             SizedBox(width: 12),
             Expanded(
-              child: Text(
-                'Unable to open the trailer.',
+              child: UniversalText('Unable to open the trailer.',
                 style: TextStyle(
                   color: Colors.white,
                 ),
@@ -304,7 +302,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
         children: [
           _buildGlassButton(
             icon: Icons.arrow_back_rounded,
-            tooltip: 'Back',
+            tooltip: tr('Back'),
             onPressed: () {
               Navigator.of(context).maybePop();
             },
@@ -313,8 +311,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
           const SizedBox(width: 15),
 
           Expanded(
-            child: Text(
-              'TRAILER',
+            child: UniversalText('TRAILER',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.45),
                 fontSize: 11,
@@ -326,7 +323,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
 
           _buildGlassButton(
             icon: Icons.open_in_new_rounded,
-            tooltip: 'Open trailer',
+            tooltip: tr('Open trailer'),
             onPressed: openingTrailer
                 ? null
                 : launchTrailer,
@@ -416,8 +413,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              'OFFICIAL TRAILER',
+            UniversalText('OFFICIAL TRAILER',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.48),
                 fontSize: 11,
@@ -438,8 +434,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
 
         const SizedBox(height: 18),
 
-        Text(
-          'The trailer will open on YouTube.',
+        UniversalText('The trailer will open on YouTube.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.32),
@@ -538,8 +533,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
                     size: 18,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'WATCH TRAILER',
+                  UniversalText('WATCH TRAILER',
                     style: TextStyle(
                       color: Colors.white.withValues(
                         alpha: 0.62,
@@ -644,8 +638,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'YouTube trailer',
+                    UniversalText('YouTube trailer',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13,
@@ -653,8 +646,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Video ID: ${widget.trailer.youtubeVideoId}',
+                    UniversalText('Video ID: ${widget.trailer.youtubeVideoId}',
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white.withValues(
@@ -730,8 +722,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
                       size: 23,
                     ),
                     SizedBox(width: 8),
-                    Text(
-                      'WATCH TRAILER',
+                    UniversalText('WATCH TRAILER',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,

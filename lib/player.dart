@@ -9,6 +9,8 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'device_features.dart';
 import 'app_core.dart';
 import 'music.dart';
+import 'xray.dart';
+import 'localization.dart';
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
@@ -1076,7 +1078,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       context: context,
       builder: (_) {
         return _PremiumDialog(
-          title: 'Up Next',
+          title: tr('Up Next'),
           icon: Icons.play_circle_fill_rounded,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1100,7 +1102,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   icon: const Icon(
                     Icons.play_arrow_rounded,
                   ),
-                  label: const Text('PLAY NOW'),
+                  label: const UniversalText('PLAY NOW'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
@@ -1120,8 +1122,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 onPressed: () {
                   Navigator.pop(context);
                 },
-                child: const Text(
-                  'CLOSE',
+                child: const UniversalText('CLOSE',
                   style: TextStyle(
                     color: Colors.white70,
                   ),
@@ -1615,6 +1616,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  /// Opens the X-Ray cast and production information while preserving playback.
+  void showXRay() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => XRayScreen(media: widget.media),
+      ),
+    );
+  }
+
   // ============================================================
   // EXTRAS
   // ============================================================
@@ -1626,11 +1636,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor:
           Colors.transparent,
       builder: (_) {
-        return const SafeArea(
+        return SafeArea(
           child: _PremiumBottomSheet(
             icon:
                 Icons.movie_filter_rounded,
-            title: 'Extras',
+            title: tr('Extras'),
             child: Padding(
               padding:
                   EdgeInsets.only(
@@ -1638,8 +1648,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 right: 20,
                 bottom: 25,
               ),
-              child: Text(
-                'No extras are available for this media item.',
+              child: UniversalText('No extras are available for this media item.',
                 textAlign:
                     TextAlign.center,
                 style: TextStyle(
@@ -1666,10 +1675,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         youtubeController;
 
     if (youtubeUrlInvalid) {
-      return const _PlayerMessage(
+      return _PlayerMessage(
         icon: Icons.link_off_rounded,
-        message:
-            'The trailer URL is not a valid YouTube URL.',
+        message: tr('The trailer URL is not a valid YouTube URL.'),
       );
     }
 
@@ -1692,18 +1700,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
               fit: BoxFit.contain,
               errorBuilder:
                   (_, __, ___) {
-                return const _PlayerMessage(
+                return _PlayerMessage(
                   icon:
                       Icons.movie_rounded,
-                  message:
-                      'No preview available.',
+                  message: tr('No preview available.'),
                 );
               },
             )
-          : const _PlayerMessage(
+          : _PlayerMessage(
               icon: Icons.movie_rounded,
-              message:
-                  'No preview available.',
+              message: tr('No preview available.'),
             ),
     );
   }
@@ -1906,8 +1912,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             EdgeInsets.only(
                           top: 2,
                         ),
-                        child: Text(
-                          'GROUP WATCH',
+                        child: UniversalText('GROUP WATCH',
                           style:
                               TextStyle(
                             color:
@@ -2081,8 +2086,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 EdgeInsets.only(
               bottom: 100,
             ),
-            child: Text(
-              'Credits',
+            child: UniversalText('Credits',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 24,
@@ -2213,14 +2217,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ? null
                       : _resumeGroupWatch,
               child:
-                  const Text(
-                'RESUME',
+                  const UniversalText('RESUME',
               ),
             ),
           if (isPaused &&
               !canResume)
-            const Text(
-              'Waiting...',
+            const UniversalText('Waiting...',
               style:
                   TextStyle(
                 color:
@@ -2327,8 +2329,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 const SizedBox(
                   height: 16,
                 ),
-                const Text(
-                  'Group Watch Paused',
+                const UniversalText('Group Watch Paused',
                   style:
                       TextStyle(
                     color:
@@ -2397,8 +2398,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                       child:
-                          const Text(
-                        'RESUME',
+                          const UniversalText('RESUME',
                         style:
                             TextStyle(
                           fontWeight:
@@ -2409,8 +2409,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   )
                 else
-                  const Text(
-                    'Waiting for the person who paused to resume.',
+                  const UniversalText('Waiting for the person who paused to resume.',
                     textAlign:
                         TextAlign.center,
                     style:
@@ -2595,10 +2594,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       _showGroupWatchSessionInfo,
                 ),
               _BottomControlButton(
-                icon: Icons
-                    .movie_filter_rounded,
-                onPressed:
-                    showExtras,
+                icon: Icons.people_alt_outlined,
+                onPressed: showXRay,
+              ),
+              _BottomControlButton(
+                icon: Icons.movie_filter_rounded,
+                onPressed: showExtras,
               ),
             ],
           ),
@@ -2638,7 +2639,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         return _PremiumBottomSheet(
           icon:
               Icons.people_alt_rounded,
-          title: 'Group Watch',
+          title: tr('Group Watch'),
           child: Padding(
             padding:
                 const EdgeInsets.fromLTRB(
@@ -2675,8 +2676,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   height: 10,
                 ),
                 _InfoRow(
-                  label:
-                      'Participants',
+                  label: 'Participants',
                   value:
                       '${session.participants.length}',
                 ),
@@ -2710,8 +2710,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       );
                     },
                     child:
-                        const Text(
-                      'CLOSE',
+                        const UniversalText('CLOSE',
                     ),
                   ),
                 ),
@@ -3255,8 +3254,7 @@ class _GroupWatchInviteDialogState
             const SizedBox(
               height: 12,
             ),
-            const Text(
-              'Start Group Watch',
+            const UniversalText('Start Group Watch',
               style:
                   TextStyle(
                 color: Colors.white,
@@ -3268,8 +3266,7 @@ class _GroupWatchInviteDialogState
             const SizedBox(
               height: 7,
             ),
-            const Text(
-              'Choose who you want to invite.',
+            const UniversalText('Choose who you want to invite.',
               textAlign:
                   TextAlign.center,
               style:
@@ -3400,8 +3397,7 @@ class _GroupWatchInviteDialogState
                       );
                     },
                     child:
-                        const Text(
-                      'CANCEL',
+                        const UniversalText('CANCEL',
                       style:
                           TextStyle(
                         color:
@@ -3449,8 +3445,7 @@ class _GroupWatchInviteDialogState
                       ),
                     ),
                     child:
-                        const Text(
-                      'INVITE',
+                        const UniversalText('INVITE',
                       style:
                           TextStyle(
                         fontWeight:
@@ -3522,8 +3517,7 @@ class GroupWatchPauseReasonDialog
             const SizedBox(
               height: 12,
             ),
-            const Text(
-              'Why did you pause?',
+            const UniversalText('Why did you pause?',
               style:
                   TextStyle(
                 color: Colors.white,
@@ -3537,8 +3531,7 @@ class GroupWatchPauseReasonDialog
             ),
             _PauseReasonTile(
               emoji: '🔋',
-              title:
-                  'Voy a cargar',
+              title: tr('Voy a cargar'),
               onTap: () {
                 Navigator.pop(
                   context,
@@ -3548,8 +3541,7 @@ class GroupWatchPauseReasonDialog
             ),
             _PauseReasonTile(
               emoji: '🍿',
-              title:
-                  'Voy por un snack',
+              title: tr('Voy por un snack'),
               onTap: () {
                 Navigator.pop(
                   context,
@@ -3559,7 +3551,7 @@ class GroupWatchPauseReasonDialog
             ),
             _PauseReasonTile(
               emoji: '💬',
-              title: 'Otro',
+              title: tr('Otro'),
               onTap: () async {
                 final reason =
                     await showDialog<
@@ -3595,8 +3587,7 @@ class GroupWatchPauseReasonDialog
                 );
               },
               child:
-                  const Text(
-                'CANCEL',
+                  const UniversalText('CANCEL',
                 style:
                     TextStyle(
                   color:
@@ -3742,8 +3733,7 @@ class _GroupWatchCustomPauseReasonDialogState
           mainAxisSize:
               MainAxisSize.min,
           children: [
-            const Text(
-              'Why did you pause?',
+            const UniversalText('Why did you pause?',
               style:
                   TextStyle(
                 color: Colors.white,
@@ -3766,8 +3756,7 @@ class _GroupWatchCustomPauseReasonDialogState
               ),
               decoration:
                   InputDecoration(
-                hintText:
-                    'Enter a reason',
+                hintText: tr('Enter a reason'),
                 hintStyle:
                     const TextStyle(
                   color:
@@ -3805,8 +3794,7 @@ class _GroupWatchCustomPauseReasonDialogState
                       );
                     },
                     child:
-                        const Text(
-                      'CANCEL',
+                        const UniversalText('CANCEL',
                     ),
                   ),
                 ),
@@ -3838,8 +3826,7 @@ class _GroupWatchCustomPauseReasonDialogState
                           Colors.black,
                     ),
                     child:
-                        const Text(
-                      'DONE',
+                        const UniversalText('DONE',
                     ),
                   ),
                 ),
@@ -3949,8 +3936,7 @@ class NextEpisodeCountdown
                 width: 10,
               ),
               const Expanded(
-                child: Text(
-                  'Up Next',
+                child: UniversalText('Up Next',
                   style:
                       TextStyle(
                     color:
@@ -3961,8 +3947,7 @@ class NextEpisodeCountdown
                   ),
                 ),
               ),
-              Text(
-                '$seconds',
+              UniversalText('$seconds',
                 style:
                     const TextStyle(
                   color:
@@ -4024,8 +4009,7 @@ class NextEpisodeCountdown
                     ),
                   ),
                   child:
-                      const Text(
-                    'CANCEL',
+                      const UniversalText('CANCEL',
                   ),
                 ),
               ),
@@ -4054,8 +4038,7 @@ class NextEpisodeCountdown
                     ),
                   ),
                   child:
-                      const Text(
-                    'PLAY NOW',
+                      const UniversalText('PLAY NOW',
                     style:
                         TextStyle(
                       fontWeight:
@@ -4187,8 +4170,7 @@ class _AudioSubtitleOptionsState
                   SizedBox(
                     width: 10,
                   ),
-                  Text(
-                    'Audio & Subtitles',
+                  UniversalText('Audio & Subtitles',
                     style:
                         TextStyle(
                       color:
@@ -4203,8 +4185,7 @@ class _AudioSubtitleOptionsState
               const SizedBox(
                 height: 24,
               ),
-              const Text(
-                'AUDIO',
+              const UniversalText('AUDIO',
                 style:
                     TextStyle(
                   color:
@@ -4222,16 +4203,14 @@ class _AudioSubtitleOptionsState
               _OptionInfoCard(
                 icon:
                     Icons.audiotrack_rounded,
-                title:
-                    'Audio track metadata is not available',
+                title: tr('Audio track metadata is not available'),
                 subtitle:
-                    'No track choices will be invented.',
+                    tr('No track choices will be invented.'),
               ),
               const SizedBox(
                 height: 22,
               ),
-              const Text(
-                'SUBTITLES',
+              const UniversalText('SUBTITLES',
                 style:
                     TextStyle(
                   color:
@@ -4249,10 +4228,9 @@ class _AudioSubtitleOptionsState
               _OptionInfoCard(
                 icon:
                     Icons.subtitles_rounded,
-                title:
-                    'Subtitle track metadata is not available',
+                title: tr('Subtitle track metadata is not available'),
                 subtitle:
-                    'No subtitle choices will be invented.',
+                    tr('No subtitle choices will be invented.'),
               ),
               const SizedBox(
                 height: 10,
@@ -4276,8 +4254,7 @@ class _AudioSubtitleOptionsState
                       subtitlesEnabled,
                   onChanged: null,
                   title:
-                      const Text(
-                    'Subtitles',
+                      const UniversalText('Subtitles',
                     style:
                         TextStyle(
                       color:
@@ -4288,8 +4265,7 @@ class _AudioSubtitleOptionsState
                     ),
                   ),
                   subtitle:
-                      const Text(
-                    'Unavailable until subtitle metadata is provided.',
+                      const UniversalText('Unavailable until subtitle metadata is provided.',
                     style:
                         TextStyle(
                       color:

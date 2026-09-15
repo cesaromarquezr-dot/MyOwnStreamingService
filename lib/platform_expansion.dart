@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 // Profile-scoped settings introduced by the platform expansion pass.
 //
@@ -490,7 +491,7 @@ class PlatformExpansionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Platform Expansion'),
+        title: const UniversalText('Platform Expansion'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -501,22 +502,19 @@ class PlatformExpansionScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'NEXT PLATFORM LAYER',
+                  const UniversalText('NEXT PLATFORM LAYER',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.2,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Profile-scoped controls for security, playback, TV, '
+                  const UniversalText('Profile-scoped controls for security, playback, TV, '
                     'notifications, backup, discovery, collections, sports, '
                     'privacy, kids safety and performance.',
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    'Active profile: '
+                  UniversalText('Active profile: '
                     '${AppController.instance.currentProfile?.name ?? 'Default'}',
                     style: const TextStyle(color: Colors.white60),
                   ),
@@ -551,9 +549,8 @@ class PlatformExpansionScreen extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.file_present_rounded),
-              title: const Text('Backup Manifest Preview'),
-              subtitle: const Text(
-                'Preview the profile-scoped settings that will be backed up.',
+              title: const UniversalText('Backup Manifest Preview'),
+              subtitle: const UniversalText('Preview the profile-scoped settings that will be backed up.',
               ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => _showBackupPreview(context),
@@ -572,7 +569,7 @@ class PlatformExpansionScreen extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Backup Manifest'),
+        title: const UniversalText('Backup Manifest'),
         content: SizedBox(
           width: 600,
           child: SingleChildScrollView(
@@ -589,17 +586,17 @@ class PlatformExpansionScreen extends StatelessWidget {
               if (context.mounted) {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Backup manifest copied to clipboard.'),
+                  SnackBar(
+                    content: UniversalText('Backup manifest copied to clipboard.'),
                   ),
                 );
               }
             },
-            child: const Text('COPY'),
+            child: const UniversalText('COPY'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('DONE'),
+            child: const UniversalText('DONE'),
           ),
         ],
       ),

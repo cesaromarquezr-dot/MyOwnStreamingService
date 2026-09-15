@@ -3,370 +3,10 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'app_core.dart';
 import 'collection_details.dart';
 import 'details.dart';
-
-/// Represents one supported application language.
-class AppLanguage {
-  final String code;
-  final String flag;
-
-  /// Name shown in the language's own language/script.
-  final String nativeName;
-
-  final String englishName;
-
-  const AppLanguage(
-    this.code,
-    this.flag,
-    this.nativeName,
-    this.englishName,
-  );
-}
-
-/// Global profile-aware language state used by every screen.
-class LanguageController extends ChangeNotifier {
-  LanguageController._();
-
-  static final instance = LanguageController._();
-
-  AppLanguage current = languages.first;
-
-  static const languages = <AppLanguage>[
-    AppLanguage('en', '🇬🇧', 'English', 'English'),
-    AppLanguage('es', '🇪🇸', 'Español', 'Spanish'),
-    AppLanguage('fr', '🇫🇷', 'Français', 'French'),
-    AppLanguage('de', '🇩🇪', 'Deutsch', 'German'),
-    AppLanguage('pt', '🇵🇹', 'Português', 'Portuguese'),
-    AppLanguage('it', '🇮🇹', 'Italiano', 'Italian'),
-    AppLanguage('nl', '🇳🇱', 'Nederlands', 'Dutch'),
-    AppLanguage('pl', '🇵🇱', 'Polski', 'Polish'),
-    AppLanguage('tr', '🇹🇷', 'Türkçe', 'Turkish'),
-    AppLanguage('ru', '🇷🇺', 'Русский', 'Russian'),
-    AppLanguage('uk', '🇺🇦', 'Українська', 'Ukrainian'),
-    AppLanguage('ar', '🇸🇦', 'العربية', 'Arabic'),
-    AppLanguage('hi', '🇮🇳', 'हिन्दी', 'Hindi'),
-    AppLanguage('zh', '🇨🇳', '中文', 'Chinese'),
-    AppLanguage('ja', '🇯🇵', '日本語', 'Japanese'),
-    AppLanguage('ko', '🇰🇷', '한국어', 'Korean'),
-  ];
-
-  /// Changes the active language and persists it for the current profile.
-  Future<void> set(AppLanguage value) async {
-    current = value;
-    notifyListeners();
-
-    final prefs = await SharedPreferences.getInstance();
-    final profileId = AppController.instance.currentProfile?.id;
-
-    await prefs.setString(
-      profileId == null
-          ? 'app_language'
-          : 'profile_language_$profileId',
-      value.code,
-    );
-  }
-
-  Future<void> loadForCurrentProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final profileId = AppController.instance.currentProfile?.id;
-
-    final code = prefs.getString(
-      profileId == null
-          ? 'app_language'
-          : 'profile_language_$profileId',
-    );
-
-    if (code == null) return;
-
-    final match = languages.where((item) => item.code == code);
-
-    if (match.isEmpty) return;
-
-    current = match.first;
-    notifyListeners();
-  }
-}
-
-/// Reusable language picker intended to be placed in any app bar or menu.
-class LanguagePicker extends StatelessWidget {
-  const LanguagePicker({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: LanguageController.instance,
-      builder: (_, __) {
-        final language = LanguageController.instance.current;
-
-        return PopupMenuButton<AppLanguage>(
-          tooltip: 'Language',
-          onSelected: LanguageController.instance.set,
-          itemBuilder: (_) {
-            return [
-              for (final item in LanguageController.languages)
-                PopupMenuItem<AppLanguage>(
-                  value: item,
-                  child: Row(
-                    children: [
-                      Text(item.flag),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(item.nativeName),
-                      ),
-                    ],
-                  ),
-                ),
-            ];
-          },
-          child: Container(
-            margin: const EdgeInsets.only(right: 10),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 8,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .07),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              '${language.flag} ${language.nativeName}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Translation lookup for user-facing strings.
-class AppText {
-  static String get(String key) {
-    final language = LanguageController.instance.current.code;
-
-    const data = <String, Map<String, String>>{
-      'language': {
-        'en': 'Language',
-        'es': 'Idioma',
-        'fr': 'Langue',
-        'de': 'Sprache',
-        'pt': 'Idioma',
-        'it': 'Lingua',
-        'ru': 'Язык',
-        'ar': 'اللغة',
-        'zh': '语言',
-        'ja': '言語',
-        'ko': '언어',
-        'hi': 'भाषा',
-      },
-      'home': {
-        'en': 'Home',
-        'es': 'Inicio',
-        'fr': 'Accueil',
-        'de': 'Startseite',
-        'pt': 'Início',
-        'it': 'Home',
-        'ru': 'Главная',
-        'ar': 'الرئيسية',
-        'zh': '首页',
-        'ja': 'ホーム',
-        'ko': '홈',
-        'hi': 'होम',
-      },
-      'movies': {
-        'en': 'Movies',
-        'es': 'Películas',
-        'fr': 'Films',
-        'de': 'Filme',
-        'pt': 'Filmes',
-        'it': 'Film',
-        'ru': 'Фильмы',
-        'ar': 'الأفلام',
-        'zh': '电影',
-        'ja': '映画',
-        'ko': '영화',
-        'hi': 'फ़िल्में',
-      },
-      'tvShows': {
-        'en': 'TV Shows',
-        'es': 'Series',
-        'fr': 'Séries',
-        'de': 'Serien',
-        'pt': 'Séries',
-        'it': 'Serie TV',
-        'ru': 'Сериалы',
-        'ar': 'المسلسلات',
-        'zh': '电视剧',
-        'ja': 'テレビ番組',
-        'ko': 'TV 프로그램',
-        'hi': 'टीवी शो',
-      },
-      'music': {
-        'en': 'Music',
-        'es': 'Música',
-        'fr': 'Musique',
-        'de': 'Musik',
-        'pt': 'Música',
-        'it': 'Musica',
-        'ru': 'Музыка',
-        'ar': 'الموسيقى',
-        'zh': '音乐',
-        'ja': '音楽',
-        'ko': '음악',
-        'hi': 'संगीत',
-      },
-      'search': {
-        'en': 'Search',
-        'es': 'Buscar',
-        'fr': 'Rechercher',
-        'de': 'Suchen',
-        'pt': 'Pesquisar',
-        'it': 'Cerca',
-        'ru': 'Поиск',
-        'ar': 'بحث',
-        'zh': '搜索',
-        'ja': '検索',
-        'ko': '검색',
-        'hi': 'खोज',
-      },
-      'settings': {
-        'en': 'Settings',
-        'es': 'Configuración',
-        'fr': 'Paramètres',
-        'de': 'Einstellungen',
-        'pt': 'Configurações',
-        'it': 'Impostazioni',
-        'ru': 'Настройки',
-        'ar': 'الإعدادات',
-        'zh': '设置',
-        'ja': '設定',
-        'ko': '설정',
-        'hi': 'सेटिनги',
-      },
-      'recommendations': {
-        'en': 'Recommendations',
-        'es': 'Recomendaciones',
-        'fr': 'Recommandations',
-        'de': 'Empfehlungen',
-        'pt': 'Recomendações',
-        'it': 'Consigliati',
-        'ru': 'Рекомендации',
-        'ar': 'التوصيات',
-        'zh': '推荐',
-        'ja': 'おすすめ',
-        'ko': '추천',
-        'hi': 'अनुशंसाएँ',
-      },
-      'collections': {
-        'en': 'Collections',
-        'es': 'Colecciones',
-        'fr': 'Collections',
-        'de': 'Sammlungen',
-        'pt': 'Coleções',
-        'it': 'Raccolte',
-        'ru': 'Коллекции',
-        'ar': 'المجموعات',
-        'zh': '收藏集',
-        'ja': 'コレクション',
-        'ko': '컬렉션',
-        'hi': 'संग्रह',
-      },
-      'monthly': {
-        'en': 'Monthly Wrapped',
-        'es': 'Resumen mensual',
-        'fr': 'Bilan mensuel',
-        'de': 'Monatsrückblick',
-        'pt': 'Resumo mensal',
-        'it': 'Riepilogo mensile',
-        'ru': 'Месячный обзор',
-        'ar': 'الملخص الشهري',
-        'zh': '月度回顾',
-        'ja': '月間まとめ',
-        'ko': '월간 요약',
-        'hi': 'मासिक सारांश',
-      },
-      'yearly': {
-        'en': 'Year-End Wrapped',
-        'es': 'Resumen anual',
-        'fr': 'Bilan annuel',
-        'de': 'Jahresrückblick',
-        'pt': 'Resumo anual',
-        'it': 'Riepilogo annuale',
-        'ru': 'Итоги года',
-        'ar': 'ملخص العام',
-        'zh': '年度回顾',
-        'ja': '年間まとめ',
-        'ko': '연말 요약',
-        'hi': 'वार्षिक सारांश',
-      },
-      'achievements': {
-        'en': 'Achievements',
-        'es': 'Logros',
-        'fr': 'Succès',
-        'de': 'Erfolge',
-        'pt': 'Conquistas',
-        'it': 'Obiettivi',
-        'ru': 'Достижения',
-        'ar': 'الإنجازات',
-        'zh': '成就',
-        'ja': '実績',
-        'ko': '업적',
-        'hi': 'उपलब्धियाँ',
-      },
-      'connectedSports': {
-        'en': 'Connected Sports',
-        'es': 'Deportes conectados',
-        'fr': 'Sports connectés',
-        'de': 'Verbundene Sportdienste',
-        'pt': 'Desporto conectado',
-        'it': 'Sport collegati',
-        'ru': 'Подключённый спорт',
-        'ar': 'الرياضات المتصلة',
-        'zh': '已连接体育',
-        'ja': '接続スポーツ',
-        'ko': '연결된 스포츠',
-        'hi': 'कनेक्टेड स्पोर्ट्स',
-      },
-    };
-
-    return data[key]?[language] ?? data[key]?['en'] ?? key;
-  }
-}
-
-/// A Text widget that automatically rebuilds when language changes.
-class LocalizedText extends StatelessWidget {
-  final String keyName;
-  final TextStyle? style;
-  final TextAlign? textAlign;
-
-  const LocalizedText(
-    this.keyName, {
-    super.key,
-    this.style,
-    this.textAlign,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: LanguageController.instance,
-      builder: (_, __) {
-        return Text(
-          AppText.get(keyName),
-          style: style,
-          textAlign: textAlign,
-        );
-      },
-    );
-  }
-}
+import 'localization.dart';
 
 // -----------------------------------------------------------------------------
 // FEATURE CENTER
@@ -395,7 +35,7 @@ class _FeatureCenterScreenState extends State<FeatureCenterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Discover & Recaps'),
+        title: const UniversalText('Discover & Recaps'),
         actions: const [
           LanguagePicker(),
         ],
@@ -493,15 +133,14 @@ class _RecommendationsPanelState extends State<RecommendationsPanel> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        '${watched.length} watched • ${liked.length} liked',
+                      UniversalText('${watched.length} watched • ${liked.length} liked',
                         style: const TextStyle(
                           color: Colors.white54,
                         ),
                       ),
                       const SizedBox(height: 10),
                       ExpansionTile(
-                        title: const Text('Recommended titles'),
+                        title: const UniversalText('Recommended titles'),
                         subtitle: Text(
                           recommendations.isEmpty
                               ? 'Watch and like more titles to improve recommendations.'
@@ -511,8 +150,7 @@ class _RecommendationsPanelState extends State<RecommendationsPanel> {
                           if (recommendations.isEmpty)
                             const Padding(
                               padding: EdgeInsets.all(16),
-                              child: Text(
-                                'No recommendations yet. Add more titles to your library and build your watch history.',
+                              child: UniversalText('No recommendations yet. Add more titles to your library and build your watch history.',
                               ),
                             )
                           else
@@ -522,8 +160,7 @@ class _RecommendationsPanelState extends State<RecommendationsPanel> {
                                   Icons.movie_outlined,
                                 ),
                                 title: Text(media.title),
-                                subtitle: const Text(
-                                  'Recommended because it matches your current viewing interests.',
+                                subtitle: const UniversalText('Recommended because it matches your current viewing interests.',
                                 ),
                                 trailing: IconButton(
                                   icon: const Icon(
@@ -563,7 +200,7 @@ class _RecommendationsPanelState extends State<RecommendationsPanel> {
             );
           },
           icon: const Icon(Icons.add),
-          label: const Text('Create recommendation & vote'),
+          label: const UniversalText('Create recommendation & vote'),
         ),
       ],
     );
@@ -610,17 +247,17 @@ class _CreateVoteDialogState extends State<_CreateVoteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('New recommendation'),
+      title: const UniversalText('New recommendation'),
       content: TextField(
         controller: titleController,
-        decoration: const InputDecoration(
-          labelText: 'Movie or show title',
+        decoration: InputDecoration(
+          labelText: tr('Movie or show title'),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const UniversalText('Cancel'),
         ),
         ElevatedButton(
           onPressed: () {
@@ -643,7 +280,7 @@ class _CreateVoteDialogState extends State<_CreateVoteDialog> {
 
             Navigator.pop(context);
           },
-          child: const Text('Post'),
+          child: const UniversalText('Post'),
         ),
       ],
     );
@@ -718,14 +355,14 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     icon: const Icon(
                       Icons.create_new_folder_outlined,
                     ),
-                    label: const Text('Create Collection'),
+                    label: const UniversalText('Create Collection'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
                   onPressed: _customize,
                   icon: const Icon(Icons.tune_rounded),
-                  tooltip: 'Customize collections',
+                  tooltip: tr('Customize collections'),
                 ),
               ],
             ),
@@ -909,8 +546,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 10,
                 6,
               ),
-              child: Text(
-                '${media.length} titles'
+              child: UniversalText('${media.length} titles'
                 '${collection.isAutomatic ? ' • automatic' : collection.isShared ? ' • shared' : ' • private'}',
                 style: const TextStyle(
                   color: Colors.white60,
@@ -934,7 +570,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     Icons.add_rounded,
                     size: 18,
                   ),
-                  label: const Text('Add to Collection'),
+                  label: const UniversalText('Add to Collection'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       vertical: 10,
@@ -988,8 +624,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${media.length} titles'
+                      UniversalText('${media.length} titles'
                         '${collection.isShared ? ' • shared' : ' • private'}'
                         '${collection.isAutomatic ? ' • automatic' : ''}',
                         style: const TextStyle(
@@ -1017,7 +652,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                   },
                 ),
                 PopupMenuButton<String>(
-                  tooltip: 'More collection actions',
+                  tooltip: tr('More collection actions'),
                   onSelected: (value) {
                     switch (value) {
                       case 'play':
@@ -1037,31 +672,28 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     }
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'play',
-                      child: Text('Auto Play Collection'),
+                      child: UniversalText('Auto Play Collection'),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'titles',
-                      child: Text(
-                        'Browse collection titles',
+                      child: UniversalText('Browse collection titles',
                       ),
                     ),
                     if (collection.isShared &&
                         collection.canCurrentProfileEdit() &&
                         !collection.isAutomatic)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'manage',
-                        child: Text(
-                          'Manage contributors',
+                        child: UniversalText('Manage contributors',
                         ),
                       ),
                     if (!collection.isOfficial &&
                         collection.canCurrentProfileEdit())
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
-                        child: Text(
-                          'Delete collection',
+                        child: UniversalText('Delete collection',
                         ),
                       ),
                   ],
@@ -1078,7 +710,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                   Icons.add_rounded,
                   size: 18,
                 ),
-                label: const Text('Add to Collection'),
+                label: const UniversalText('Add to Collection'),
               ),
             ),
           ],
@@ -1224,8 +856,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${media.length} titles • ${prefs.itemSort}',
+                  UniversalText('${media.length} titles • ${prefs.itemSort}',
                     style: const TextStyle(
                       color: Colors.white60,
                     ),
@@ -1328,8 +959,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 8,
                 8,
               ),
-              child: Text(
-                '${media.releaseYear ?? ''} • ${media.type}',
+              child: UniversalText('${media.releaseYear ?? ''} • ${media.type}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -1414,8 +1044,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      '${media.releaseYear ?? ''} • ${media.type}',
+                    UniversalText('${media.releaseYear ?? ''} • ${media.type}',
                       style: const TextStyle(
                         color: Colors.white54,
                       ),
@@ -1425,7 +1054,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
               ),
               if (canRemove)
                 IconButton(
-                  tooltip: 'Remove from collection',
+                  tooltip: tr('Remove from collection'),
                   icon: const Icon(
                     Icons.remove_circle_outline,
                   ),
@@ -1538,16 +1167,14 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
-                'Add to ${collection.name}',
+              UniversalText('Add to ${collection.name}',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Choose a library title to add to this collection.',
+              const UniversalText('Choose a library title to add to this collection.',
                 style: TextStyle(
                   color: Colors.white60,
                 ),
@@ -1616,21 +1243,19 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: Text(
-            'Auto Play ${collection.name}',
+          title: UniversalText('Auto Play ${collection.name}',
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Choose how versions and progression should behave. Each movie remains a separate library item; theatrical and extended cuts are versions of that movie.',
+              const UniversalText('Choose how versions and progression should behave. Each movie remains a separate library item; theatrical and extended cuts are versions of that movie.',
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue:
                     collection.autoPlayVersionPreference,
-                decoration: const InputDecoration(
-                  labelText: 'Version preference',
+                decoration: InputDecoration(
+                  labelText: tr('Version preference'),
                 ),
                 items: const [
                   'Preferred version',
@@ -1656,8 +1281,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 },
               ),
               SwitchListTile(
-                title: const Text(
-                  'Auto-play next movie/episode',
+                title: const UniversalText('Auto-play next movie/episode',
                 ),
                 value: collection.autoPlayNextEnabled,
                 onChanged: (value) {
@@ -1669,8 +1293,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
               DropdownButtonFormField<String>(
                 initialValue:
                     collection.autoPlayNextTiming,
-                decoration: const InputDecoration(
-                  labelText: 'Start next item',
+                decoration: InputDecoration(
+                  labelText: tr('Start next item'),
                 ),
                 items: const [
                   'End credits',
@@ -1695,22 +1319,21 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 },
               ),
               const SizedBox(height: 8),
-              const Text(
-                'TV shows do not show a Skip Intro control. Auto-play only advances to the next episode.',
+              const UniversalText('TV shows do not show a Skip Intro control. Auto-play only advances to the next episode.',
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+              child: const UniversalText('Close'),
             ),
             FilledButton(
               onPressed: () {
                 collection.autoPlayEnabled = true;
                 Navigator.pop(context);
               },
-              child: const Text('Start'),
+              child: const UniversalText('Start'),
             ),
           ],
         );
@@ -1730,14 +1353,12 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
             setDialog,
           ) {
             return AlertDialog(
-              title: const Text(
-                'Collection contributors',
+              title: const UniversalText('Collection contributors',
               ),
               content: SingleChildScrollView(
                 child: Column(
                   children: [
-                    const Text(
-                      'Shared collections can be built together. Select the profiles allowed to add and manage titles.',
+                    const UniversalText('Shared collections can be built together. Select the profiles allowed to add and manage titles.',
                     ),
                     for (final profile
                         in controller.currentAccount?.profiles ??
@@ -1786,7 +1407,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                       setState(() {});
                     }
                   },
-                  child: const Text('Done'),
+                  child: const UniversalText('Done'),
                 ),
               ],
             );
@@ -1812,8 +1433,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
             setDialog,
           ) {
             return AlertDialog(
-              title: const Text(
-                'Create custom collection',
+              title: const UniversalText('Create custom collection',
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -1822,23 +1442,21 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     TextField(
                       controller: name,
                       decoration:
-                          const InputDecoration(
-                        labelText: 'Collection name',
+                          InputDecoration(
+                        labelText: tr('Collection name'),
                       ),
                     ),
                     TextField(
                       controller: description,
                       decoration:
-                          const InputDecoration(
-                        labelText: 'Description',
+                          InputDecoration(
+                        labelText: tr('Description'),
                       ),
                     ),
                     SwitchListTile(
-                      title: const Text(
-                        'Shared / collaborative',
+                      title: const UniversalText('Shared / collaborative',
                       ),
-                      subtitle: const Text(
-                        'Other profiles can add titles.',
+                      subtitle: const UniversalText('Other profiles can add titles.',
                       ),
                       value: shared,
                       onChanged: (value) {
@@ -1848,8 +1466,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                       },
                     ),
                     SwitchListTile(
-                      title: const Text(
-                        'Feature on Collections page',
+                      title: const UniversalText('Feature on Collections page',
                       ),
                       value: featured,
                       onChanged: (value) {
@@ -1864,7 +1481,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const UniversalText('Cancel'),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -1883,7 +1500,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
 
                     Navigator.pop(context);
                   },
-                  child: const Text('Create'),
+                  child: const UniversalText('Create'),
                 ),
               ],
             );
@@ -1914,8 +1531,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
             setDialog,
           ) {
             return AlertDialog(
-              title: const Text(
-                'Customize Collections',
+              title: const UniversalText('Customize Collections',
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -2024,7 +1640,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const UniversalText('Cancel'),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -2033,7 +1649,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     );
                     Navigator.pop(context);
                   },
-                  child: const Text('Save'),
+                  child: const UniversalText('Save'),
                 ),
               ],
             );
@@ -2145,8 +1761,7 @@ class WrappedPanel extends StatelessWidget {
                   ),
                 ),
                 title: Text(profile.name),
-                subtitle: Text(
-                  '${controller.watched.length} watched • '
+                subtitle: UniversalText('${controller.watched.length} watched • '
                   '${controller.liked.length} liked',
                 ),
                 trailing: Text(
@@ -2217,8 +1832,7 @@ class AchievementsPanel extends StatelessWidget {
           (profile) {
             return Card(
               child: ListTile(
-                title: Text(
-                  '${profile.name} — '
+                title: UniversalText('${profile.name} — '
                   '${_badgeForProfile(controller, profile.id)}',
                 ),
                 subtitle: const Text(
@@ -2274,8 +1888,7 @@ class SharedActorsPanel extends StatelessWidget {
                     Icons.movie_creation_outlined,
                   ),
                   title: Text(media.title),
-                  subtitle: Text(
-                    '${media.type} • Watched by the account',
+                  subtitle: UniversalText('${media.type} • Watched by the account',
                   ),
                   trailing: const Icon(
                     Icons.star_outline,

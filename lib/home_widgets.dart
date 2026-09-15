@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'music.dart';
+import 'localization.dart';
 
 class HomeLiveSportsWidget extends StatefulWidget {
   final bool compact;
@@ -208,7 +209,7 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Sports shown on Home'),
+          title: const UniversalText('Sports shown on Home'),
           content: SizedBox(
             width: 420,
             child: ListView(
@@ -216,11 +217,11 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
               children: [
                 const Padding(
                   padding: EdgeInsets.only(bottom: 10),
-                  child: Text('Choose which leagues appear in the Home Live Sports ticker. Your team/league follows remain separate.'),
+                  child: UniversalText('Choose which leagues appear in the Home Live Sports ticker. Your team/league follows remain separate.'),
                 ),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Show all leagues'),
+                  title: const UniversalText('Show all leagues'),
                   value: selected.length == _availableLeagues.length,
                   onChanged: (value) => setDialogState(() {
                     selected
@@ -245,8 +246,8 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Save')),
           ],
         ),
       ),
@@ -298,16 +299,16 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
               children: [
                 const Icon(Icons.sports_score_rounded),
                 const SizedBox(width: 8),
-                const Expanded(child: Text('LIVE SPORTS', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
-                IconButton(tooltip: 'Choose leagues shown on Home', onPressed: _chooseVisibleLeagues, icon: const Icon(Icons.filter_list_rounded)),
-                IconButton(tooltip: 'Refresh scores', onPressed: loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
+                const Expanded(child: UniversalText('LIVE SPORTS', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+                IconButton(tooltip: tr('Choose leagues shown on Home'), onPressed: _chooseVisibleLeagues, icon: const Icon(Icons.filter_list_rounded)),
+                IconButton(tooltip: tr('Refresh scores'), onPressed: loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
               ],
             ),
             if (loading) const LinearProgressIndicator(minHeight: 2),
-            if (!loading && live.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('No live games are available right now.')),
+            if (!loading && live.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: UniversalText('No live games are available right now.')),
             if (followedLive && live.isNotEmpty) const Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: Text('A followed team is playing — showing only followed-team live games.', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w700)),
+              child: UniversalText('A followed team is playing — showing only followed-team live games.', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w700)),
             ),
             if (live.isNotEmpty) SizedBox(
               height: 190,
@@ -326,7 +327,7 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
             ),
             if (upcoming.isNotEmpty) ...[
               const SizedBox(height: 10),
-              const Text('UPCOMING', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+              const UniversalText('UPCOMING', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
               const SizedBox(height: 6),
               for (final game in upcoming) _upcomingGame(game),
             ],
@@ -351,9 +352,9 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
               const Icon(Icons.sports_score_rounded, size: 17),
               const SizedBox(width: 5),
               if (game == null)
-                const Expanded(child: Text('LIVE SPORTS', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)))
+                const Expanded(child: UniversalText('LIVE SPORTS', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)))
               else ...[
-                Expanded(child: Text('${game['homeTeam'] ?? 'Home'} ${_score(game, 'home')} - ${_score(game, 'away')} ${game['awayTeam'] ?? 'Away'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900))),
+                Expanded(child: UniversalText('${game['homeTeam'] ?? 'Home'} ${_score(game, 'home')} - ${_score(game, 'away')} ${game['awayTeam'] ?? 'Away'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900))),
                 if (followedLive) const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
               ],
             ],
@@ -374,7 +375,7 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
           children: [
             Icon(Icons.sports_score_rounded),
             SizedBox(width: 8),
-            Text('LIVE SPORTS'),
+            UniversalText('LIVE SPORTS'),
           ],
         ),
         content: SizedBox(
@@ -382,15 +383,14 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
           height: 500,
           child: ListView(
             children: [
-              const Text(
-                'LIVE NOW',
+              const UniversalText('LIVE NOW',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               if (live.isEmpty)
                 const Padding(
                   padding: EdgeInsets.only(bottom: 16),
-                  child: Text('No live games are available right now.'),
+                  child: UniversalText('No live games are available right now.'),
                 )
               else
                 ...live.map(
@@ -401,8 +401,7 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
                 ),
               if (upcoming.isNotEmpty) ...[
                 const Divider(height: 28),
-                const Text(
-                  'UPCOMING',
+                const UniversalText('UPCOMING',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -417,18 +416,18 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
               Navigator.of(dialogContext).pop();
               _chooseVisibleLeagues();
             },
-            child: const Text('Leagues'),
+            child: const UniversalText('Leagues'),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               if (!loading) _load();
             },
-            child: const Text('Refresh'),
+            child: const UniversalText('Refresh'),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
+            child: const UniversalText('Close'),
           ),
         ],
       ),
@@ -454,7 +453,7 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
               if (followed) const SizedBox(width: 5),
               const Icon(Icons.circle, size: 8, color: Colors.redAccent),
               const SizedBox(width: 6),
-              Expanded(child: Text('${game['sport'] ?? 'Sports'} • LIVE', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
+              Expanded(child: UniversalText('${game['sport'] ?? 'Sports'} • LIVE', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
               Text(_liveDetail(game), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
             ],
           ),
@@ -484,13 +483,12 @@ class _HomeLiveSportsWidgetState extends State<HomeLiveSportsWidget> {
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Icon(followed ? Icons.star_rounded : Icons.schedule_rounded, color: followed ? Colors.amber : null),
-      title: Text(
-        '${game['homeTeam'] ?? 'Home'}  vs  ${game['awayTeam'] ?? 'Away'}',
+      title: UniversalText('${game['homeTeam'] ?? 'Home'}  vs  ${game['awayTeam'] ?? 'Away'}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w800),
       ),
-      subtitle: Text('${_upcomingTime(game)} • ${game['competition'] ?? ''}'),
+      subtitle: UniversalText('${_upcomingTime(game)} • ${game['competition'] ?? ''}'),
     );
   }
 }

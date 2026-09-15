@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'music.dart';
+import 'localization.dart';
 
 class MusicAchievementsScreen extends StatelessWidget {
   const MusicAchievementsScreen({super.key});
@@ -32,36 +33,36 @@ class MusicAchievementsScreen extends StatelessWidget {
 
         final badges = <_MusicAchievement>[
           _MusicAchievement(
-            title: 'Cultured',
-            description: 'Explore at least 25 different artists.',
+            title: tr('Cultured'),
+            description: tr('Explore at least 25 different artists.'),
             icon: Icons.public_rounded,
             progress: artists.length,
             target: 25,
           ),
           _MusicAchievement(
-            title: 'Swiftie',
-            description: 'Have Taylor Swift in your music library.',
+            title: tr('Swiftie'),
+            description: tr('Have Taylor Swift in your music library.'),
             icon: Icons.star_rounded,
             progress: taylorSwift ? 1 : 0,
             target: 1,
           ),
           _MusicAchievement(
-            title: 'Album Collector',
-            description: 'Collect at least 10 different albums.',
+            title: tr('Album Collector'),
+            description: tr('Collect at least 10 different albums.'),
             icon: Icons.album_rounded,
             progress: albums.length,
             target: 10,
           ),
           _MusicAchievement(
-            title: 'Genre Explorer',
-            description: 'Explore at least 8 different genres.',
+            title: tr('Genre Explorer'),
+            description: tr('Explore at least 8 different genres.'),
             icon: Icons.explore_rounded,
             progress: genres.length,
             target: 8,
           ),
           _MusicAchievement(
-            title: 'On Repeat',
-            description: 'Reach 100 total music listens.',
+            title: tr('On Repeat'),
+            description: tr('Reach 100 total music listens.'),
             icon: Icons.repeat_rounded,
             progress: totalListens,
             target: 100,
@@ -72,7 +73,7 @@ class MusicAchievementsScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Music Achievements'),
+            title: const UniversalText('Music Achievements'),
           ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -91,12 +92,11 @@ class MusicAchievementsScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            const Text(
-                              'Music Achievements',
+                            const UniversalText('Music Achievements',
                               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 4),
-                            Text('$unlocked of ${badges.length} badges unlocked'),
+                            UniversalText('$unlocked of ${badges.length} badges unlocked'),
                           ],
                         ),
                       ),

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
+import 'localization.dart';
 
 class UltimatePlatformStore {
   UltimatePlatformStore._();
@@ -55,7 +56,7 @@ class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ultimate Streaming Platform'),
+        title: const UniversalText('Ultimate Streaming Platform'),
         actions: [
           IconButton(
             icon: const Icon(Icons.auto_awesome),
@@ -108,7 +109,7 @@ class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
     final items = List<MediaItem>.from(AppController.instance.library);
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add media first.')),
+        SnackBar(content: UniversalText('Add media first.')),
       );
       return;
     }
@@ -158,9 +159,9 @@ class _AiPanelState extends State<_AiPanel> {
         TextField(
           controller: q,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             prefixIcon: Icon(Icons.psychology),
-            hintText: 'Try: funny sci-fi with a strong female lead',
+            hintText: tr('Try: funny sci-fi with a strong female lead'),
           ),
         ),
         const SizedBox(height: 18),
@@ -326,15 +327,15 @@ class _SecurityPanel extends StatelessWidget {
             'Allow anonymous product analytics.', 'privacyAnalytics'),
         ListTile(
           leading: const Icon(Icons.logout),
-          title: const Text('Sign out other devices'),
+          title: const UniversalText('Sign out other devices'),
           onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Remote session control is connected to the platform layer.')),
+            SnackBar(
+                content: UniversalText('Remote session control is connected to the platform layer.')),
           ),
         ),
         ListTile(
           leading: const Icon(Icons.delete_sweep),
-          title: const Text('Clear local activity'),
+          title: const UniversalText('Clear local activity'),
           onTap: () => _confirmClear(context),
         ),
       ],
@@ -361,7 +362,7 @@ class _DevicesPanel extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.check_circle_outline),
             title: Text(x),
-            subtitle: const Text('Platform-ready configuration'),
+            subtitle: const UniversalText('Platform-ready configuration'),
           ),
       ],
     );
@@ -395,7 +396,7 @@ class _StudioPanel extends StatelessWidget {
             title: Text(x),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$x is available from the platform control layer.')),
+              SnackBar(content: UniversalText('$x is available from the platform control layer.')),
             ),
           ),
       ],
@@ -462,13 +463,12 @@ void _confirmClear(BuildContext context) {
   showDialog<void>(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('Clear local activity?'),
-      content: const Text(
-          'This removes local-only activity from the current app session.'),
+      title: const UniversalText('Clear local activity?'),
+      content: const UniversalText('This removes local-only activity from the current app session.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('CANCEL'),
+          child: const UniversalText('CANCEL'),
         ),
         FilledButton(
           onPressed: () {
@@ -477,7 +477,7 @@ void _confirmClear(BuildContext context) {
             controller.watched.clear();
             Navigator.pop(context);
           },
-          child: const Text('CLEAR'),
+          child: const UniversalText('CLEAR'),
         ),
       ],
     ),

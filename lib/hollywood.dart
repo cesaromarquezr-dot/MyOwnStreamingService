@@ -3,6 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'package:flutter/material.dart';
+import 'localization.dart';
 
 /// Actor/Actress discovered from media imported into the user's library.
 class Actor {
@@ -107,8 +108,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
             expandedHeight: 250,
             backgroundColor: const Color(0xFF070707),
             elevation: 0,
-            title: const Text(
-              'Actors',
+            title: const UniversalText('Actors',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
               ),
@@ -158,8 +158,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
                       crossAxisAlignment:
                           CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Your Stars',
+                        UniversalText('Your Stars',
                           style: Theme.of(context)
                               .textTheme
                               .headlineLarge
@@ -169,8 +168,7 @@ class _ActorsScreenState extends State<ActorsScreen> {
                               ),
                         ),
                         const SizedBox(height: 7),
-                        Text(
-                          'Actors and actresses discovered from your library.',
+                        UniversalText('Actors and actresses discovered from your library.',
                           style: TextStyle(
                             color: Colors.grey.shade400,
                             fontSize: 15,
@@ -200,13 +198,13 @@ class _ActorsScreenState extends State<ActorsScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  hintText: 'Search actors...',
+                  hintText: tr('Search actors...'),
                   prefixIcon:
                       const Icon(Icons.search_rounded),
                   suffixIcon: searchQuery.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: 'Clear',
+                          tooltip: tr('Clear'),
                           onPressed: () {
                             setState(() {
                               searchQuery = '';
@@ -762,7 +760,7 @@ class ActorDetailsScreen extends StatelessWidget {
                 [
                   if (actor.biography.isNotEmpty)
                     _InfoSection(
-                      title: 'Biography',
+                      title: tr('Biography'),
                       icon:
                           Icons.auto_stories_outlined,
                       child: Text(
@@ -782,7 +780,7 @@ class ActorDetailsScreen extends StatelessWidget {
                           .isNotEmpty ||
                       actor.partnerName.isNotEmpty)
                     _InfoSection(
-                      title: 'About',
+                      title: tr('About'),
                       icon: Icons.info_outline_rounded,
                       child: Column(
                         children: [
@@ -810,8 +808,7 @@ class ActorDetailsScreen extends StatelessWidget {
                             _ActorInfoRow(
                               icon:
                                   Icons.location_on_outlined,
-                              label:
-                                  'Place of birth',
+                              label: 'Place of birth',
                               value:
                                   actor.placeOfBirth,
                             ),
@@ -820,8 +817,7 @@ class ActorDetailsScreen extends StatelessWidget {
                             _ActorInfoRow(
                               icon:
                                   Icons.favorite_border,
-                              label:
-                                  'Relationship',
+                              label: 'Relationship',
                               value:
                                   actor.relationshipStatus,
                             ),
@@ -1000,16 +996,14 @@ class _NoActorDetails extends StatelessWidget {
             color: Colors.grey.shade600,
           ),
           const SizedBox(height: 12),
-          const Text(
-            'No additional information yet',
+          const UniversalText('No additional information yet',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 17,
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            'More actor information will appear when metadata is available.',
+          UniversalText('More actor information will appear when metadata is available.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.grey.shade500,

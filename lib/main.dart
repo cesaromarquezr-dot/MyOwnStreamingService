@@ -27,8 +27,10 @@ import 'roadmap_features.dart';
 import 'next_gen_features.dart';
 import 'how_it_works.dart';
 import 'connected_sports.dart';
+import 'group_chat.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
+import 'discovery_experience.dart';
 import 'music_achievements.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
@@ -36,37 +38,118 @@ import 'library_hubs.dart';
 import 'home_widgets.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
+import 'localization.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
+  await MusicPageCustomizationStore.initialize();
   await AppController.instance.initializeBadges();
   await PlatformPreferenceStore.initialize();
   runApp(const MyStreamingService());
 }
 /// Implements the `MyStreamingService` class for this feature or UI component.
-class MyStreamingService extends StatelessWidget {
+final GlobalKey<NavigatorState> _appNavigatorKey =
+    GlobalKey<NavigatorState>();
+
+/// Root application widget that owns the global navigator and language picker.
+class MyStreamingService extends StatefulWidget {
   const MyStreamingService({super.key});
+
+  @override
+  State<MyStreamingService> createState() => _MyStreamingServiceState();
+}
+
+/// State for [MyStreamingService], including the global language picker overlay.
+class _MyStreamingServiceState extends State<MyStreamingService> {
+  OverlayEntry? _languagePickerEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _installLanguagePicker();
+    });
+  }
+
+  void _installLanguagePicker() {
+    if (!mounted || _languagePickerEntry != null) {
+      return;
+    }
+
+    final overlay = _appNavigatorKey.currentState?.overlay;
+    if (overlay == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _installLanguagePicker();
+      });
+      return;
+    }
+
+    _languagePickerEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        right: 12,
+        bottom: 12,
+        child: SafeArea(
+          child: Material(
+            color: Colors.transparent,
+            child: const LanguagePicker(),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_languagePickerEntry!);
+  }
+
+  @override
+  void dispose() {
+    _languagePickerEntry?.remove();
+    _languagePickerEntry?.dispose();
+    _languagePickerEntry = null;
+    super.dispose();
+  }
+
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'My Streaming Service',
+      navigatorKey: _appNavigatorKey,
+      title: tr('My Streaming Service'),
       builder: (context, child) {
-        return AnimatedBuilder(
-          animation: LanguageController.instance,
-          builder: (_, __) {
-            final rtl = LanguageController.instance.current.code == 'ar';
-            return Directionality(
-              textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
-              child: ResponsiveScope(
-                child: ResponsiveAppSurface(
-                  child: child ?? const SizedBox.shrink(),
-                ),
-              ),
-            );
-          },
+        // MaterialApp provides the Navigator, but widgets placed directly
+        // above that Navigator do not automatically have an Overlay.
+        // LanguagePicker uses PopupMenuButton, which requires an Overlay
+        // ancestor. Create one here so the picker is available globally
+        // without causing the "No Overlay widget found" red screen.
+        return Overlay(
+          initialEntries: [
+            OverlayEntry(
+              builder: (overlayContext) {
+                return AnimatedBuilder(
+                  animation: LanguageController.instance,
+                  builder: (_, __) {
+                    final rtl =
+                        LanguageController.instance.current.code == 'ar';
+                    return Directionality(
+                      textDirection:
+                          rtl ? TextDirection.rtl : TextDirection.ltr,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ResponsiveScope(
+                            child: ResponsiveAppSurface(
+                              child: child ?? const SizedBox.shrink(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
         );
       },
       debugShowCheckedModeBanner: false,
@@ -115,10 +198,18 @@ class MyStreamingService extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const SplashScreen(),
+      home: _initialPage(),
     );
   }
 }
+Widget _initialPage() {
+  final token = Uri.base.queryParameters['token']?.trim() ?? '';
+  if (token.isNotEmpty) {
+    return InvitationJoinScreen(token: token);
+  }
+  return const SplashScreen();
+}
+
 // ============================================================
 // SPLASH SCREEN
 // ============================================================
@@ -159,8 +250,7 @@ class _SplashScreenState extends State<SplashScreen> {
               color: Colors.red,
             ),
             SizedBox(height: 20),
-            Text(
-              'MY STREAMING SERVICE',
+            UniversalText('MY STREAMING SERVICE',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -201,9 +291,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = passwordController.text;
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Enter your email and password.',
+        SnackBar(
+          content: UniversalText('Enter your email and password.',
           ),
         ),
       );
@@ -236,22 +325,22 @@ class _LoginScreenState extends State<LoginScreen> {
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Suspicious Login Detected'),
+            title: const UniversalText('Suspicious Login Detected'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('This sign-in looks different from a known device or follows recent failed attempts.'),
+                const UniversalText('This sign-in looks different from a known device or follows recent failed attempts.'),
                 const SizedBox(height: 16),
-                const Text('Security question', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w800)),
+                const UniversalText('Security question', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Text(question, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 14),
-                TextField(controller: answerController, autofocus: true, obscureText: true, decoration: const InputDecoration(labelText: 'Enter your answer')),
+                TextField(controller: answerController, autofocus: true, obscureText: true, decoration: InputDecoration(labelText: tr('Enter your answer'))),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('SIGN OUT')),
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('SIGN OUT')),
               FilledButton(onPressed: () async {
                 try {
                   final ok = await controller.backendApi.verifySecurityAnswer(answerController.text);
@@ -259,7 +348,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 } catch (_) {
                   if (dialogContext.mounted) Navigator.pop(dialogContext, false);
                 }
-              }, child: const Text('VERIFY')),
+              }, child: const UniversalText('VERIFY')),
             ],
           ),
         );
@@ -267,7 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (verified != true) {
           await controller.logoutFromBackend();
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Access denied. The security answer was incorrect.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Access denied. The security answer was incorrect.')));
           return;
         }
       }
@@ -335,8 +424,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.red,
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Welcome Back',
+                const UniversalText('Welcome Back',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -346,8 +434,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: emailController,
                   enabled: !loggingIn,
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
+                  decoration: InputDecoration(
+                    labelText: tr('Email address'),
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
@@ -358,7 +446,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   enabled: !loggingIn,
                   obscureText: obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Password',
+                    labelText: tr('Password'),
                     prefixIcon: const Icon(Icons.lock),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
@@ -397,8 +485,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text(
-                            'LOGIN',
+                        : const UniversalText('LOGIN',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
@@ -418,8 +505,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           );
                         },
-                  child: const Text(
-                    'Create a new account',
+                  child: const UniversalText('Create a new account',
                   ),
                 ),
               ],
@@ -469,6 +555,7 @@ class HomeCustomization {
   bool showLiveSports;
   bool showMusic;
   bool showFilm;
+  bool showSeasonalCollections;
   String homeMediaLayout;
   String heroStyle;
   String cardSize;
@@ -498,6 +585,7 @@ class HomeCustomization {
     this.showLiveSports = true,
     this.showMusic = true,
     this.showFilm = true,
+    this.showSeasonalCollections = true,
     this.homeMediaLayout = 'Left & Right',
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
@@ -523,7 +611,7 @@ class HomeCustomization {
           'All Library',
           'Recommendations',
           'Music & Film',
-          'Connected Sports',
+          'Seasonal Collections',
         ],
         navigationOrder = navigationOrder ?? [
           'Profile',
@@ -532,6 +620,7 @@ class HomeCustomization {
           'More',
           'Music',
           'Film',
+          'Group Chat',
         ];
 
   HomeCustomization copy() => HomeCustomization(
@@ -546,6 +635,7 @@ class HomeCustomization {
         showLiveSports: showLiveSports,
         showMusic: showMusic,
         showFilm: showFilm,
+        showSeasonalCollections: showSeasonalCollections,
         homeMediaLayout: homeMediaLayout,
         heroStyle: heroStyle,
         cardSize: cardSize,
@@ -650,7 +740,7 @@ class HomeCustomizationStore {
   static Map<String, dynamic> _toJson(HomeCustomization v) => {
     'showHero': v.showHero, 'showContinueWatching': v.showContinueWatching, 'showRecentlyWatched': v.showRecentlyWatched,
     'showMovies': v.showMovies, 'showTvShows': v.showTvShows, 'showNewAdditions': v.showNewAdditions,
-    'showAllLibrary': v.showAllLibrary, 'showRecommendations': v.showRecommendations, 'showLiveSports': v.showLiveSports, 'showMusic': v.showMusic, 'showFilm': v.showFilm, 'homeMediaLayout': v.homeMediaLayout, 'heroStyle': v.heroStyle,
+    'showAllLibrary': v.showAllLibrary, 'showRecommendations': v.showRecommendations, 'showLiveSports': v.showLiveSports, 'showMusic': v.showMusic, 'showFilm': v.showFilm, 'showSeasonalCollections': v.showSeasonalCollections, 'homeMediaLayout': v.homeMediaLayout, 'heroStyle': v.heroStyle,
     'cardSize': v.cardSize, 'navbarPosition': v.navbarPosition, 'storageBarPosition': v.storageBarPosition, 'liveSportsPosition': v.liveSportsPosition, 'storageBarThickness': v.storageBarThickness,
     'homeBackgroundColor': v.homeBackgroundColor, 'navbarColor': v.navbarColor, 'navbarGlowColor': v.navbarGlowColor, 'navbarItemColor': v.navbarItemColor,
     'navbarStyle': v.navbarStyle, 'navbarOpacity': v.navbarOpacity, 'navbarRadius': v.navbarRadius,
@@ -688,7 +778,7 @@ class HomeCustomizationStore {
     showRecentlyWatched: m['showRecentlyWatched'] == false ? false : true, showMovies: m['showMovies'] == false ? false : true,
     showTvShows: m['showTvShows'] == false ? false : true, showNewAdditions: m['showNewAdditions'] == false ? false : true,
     showAllLibrary: m['showAllLibrary'] == true, showRecommendations: m['showRecommendations'] == false ? false : true, showLiveSports: m['showLiveSports'] == false ? false : true,
-    showMusic: m['showMusic'] == false ? false : true, showFilm: m['showFilm'] == false ? false : true, homeMediaLayout: m['homeMediaLayout']?.toString() ?? 'Left & Right',
+    showMusic: m['showMusic'] == false ? false : true, showFilm: m['showFilm'] == false ? false : true, showSeasonalCollections: m['showSeasonalCollections'] == false ? false : true, homeMediaLayout: m['homeMediaLayout']?.toString() ?? 'Left & Right',
     heroStyle: m['heroStyle']?.toString() ?? 'Cinematic', cardSize: m['cardSize']?.toString() ?? 'Medium',
     navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom', storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom', liveSportsPosition: m['liveSportsPosition']?.toString() ?? 'Top', storageBarThickness: (m['storageBarThickness'] is num ? (m['storageBarThickness'] as num).toDouble() : 12),
     homeBackgroundColor: _colorNameFromStored(m['homeBackgroundColor'], 'Black'),
@@ -700,7 +790,9 @@ class HomeCustomizationStore {
     navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
     sectionOrder: m['sectionOrder'] is List
         ? (List<String>.from(m['sectionOrder'] as List)
-            ..replaceRange(0, (m['sectionOrder'] as List).length, (m['sectionOrder'] as List).map((e) => e.toString() == 'Live Sports' ? 'Connected Sports' : e.toString())))
+            ..replaceRange(0, (m['sectionOrder'] as List).length, (m['sectionOrder'] as List)
+                .map((e) => e.toString() == 'Live Sports' ? 'Connected Sports' : e.toString())
+                .where((e) => e != 'Connected Sports')))
         : null,
     navigationOrder: m['navigationOrder'] is List
         ? (List<String>.from(m['navigationOrder'] as List)
@@ -712,6 +804,7 @@ class HomeCustomizationStore {
 enum _CustomizationPage {
   home,
   details,
+  music,
 }
 
 enum _PreviewDeviceCategory {
@@ -769,6 +862,7 @@ class CustomizeHomeScreen extends StatefulWidget {
 class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   late HomeCustomization draft;
   late DetailsCustomization detailsDraft;
+  late MusicPageCustomization musicDraft;
   _CustomizationPage selectedPage = _CustomizationPage.home;
   bool detailsPreviewTvShow = true;
   _PreviewDeviceCategory _previewCategory = _PreviewDeviceCategory.phone;
@@ -790,6 +884,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     detailsDraft = DetailsCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
+    musicDraft = MusicPageCustomizationStore.settingsFor(
+      AppController.instance.currentProfile,
+    );
+    draft.sectionOrder.removeWhere((section) => section == 'Connected Sports' || section == 'Live Sports');
     _normalizeHomePositions();
   }
 
@@ -819,61 +917,83 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     final profile = AppController.instance.currentProfile;
 
-    if (widget.firstSetup && selectedPage == _CustomizationPage.home) {
+    // First setup is a strict forward-only sequence: Home -> Details -> Music
+    // -> Account Invite. Each step saves before advancing, so a crash or app
+    // restart cannot silently discard the completed customization.
+    if (widget.firstSetup) {
+      if (selectedPage == _CustomizationPage.home) {
+        HomeCustomizationStore.apply(draft, profile);
+        await _syncCustomization(profile);
+        if (!mounted) return;
+        setState(() => selectedPage = _CustomizationPage.details);
+        _resetCustomizationScroll();
+        if (mounted) setState(() => _isSaving = false);
+        return;
+      }
+
+      if (selectedPage == _CustomizationPage.details) {
+        DetailsCustomizationStore.apply(profile, detailsDraft);
+        await _syncCustomization(profile);
+        if (!mounted) return;
+        setState(() => selectedPage = _CustomizationPage.music);
+        _resetCustomizationScroll();
+        if (mounted) setState(() => _isSaving = false);
+        return;
+      }
+
+      // Music is now a mandatory first-setup step.
+      MusicPageCustomizationStore.apply(profile, musicDraft);
       HomeCustomizationStore.apply(draft, profile);
-      if (profile != null && AppController.instance.backendApi.isAuthenticated) {
-        try {
-          await AppController.instance.backendApi.syncProfileCustomizationToSupabase(
-            profileId: profile.id,
-            home: HomeCustomizationStore.snapshotFor(profile),
-            details: DetailsCustomizationStore.snapshotFor(profile),
-            platform: PlatformPreferenceStore.snapshot(),
-          );
-        } catch (_) {}
-      }
+      DetailsCustomizationStore.apply(profile, detailsDraft);
+      await _syncCustomization(profile);
+      await HomeCustomizationStore.markSetupCompleted(profile);
+
       if (!mounted) return;
+      final inviteCompleted = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => const AccountInviteScreen(firstSetup: true),
+        ),
+      );
 
-      setState(() {
-        selectedPage = _CustomizationPage.details;
-      });
-
-      // Home and Details reuse the same ListView. Reset after the Details
-      // content has been laid out so the new customization starts at the top.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_customizationScrollController.hasClients) return;
-        _customizationScrollController.jumpTo(0);
-      });
-
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
+      if (!mounted || inviteCompleted != true) {
+        if (mounted) setState(() => _isSaving = false);
+        return;
       }
+      Navigator.of(context).pop(true);
       return;
     }
 
     HomeCustomizationStore.apply(draft, profile);
     DetailsCustomizationStore.apply(profile, detailsDraft);
+    MusicPageCustomizationStore.apply(profile, musicDraft);
 
-    if (profile != null && AppController.instance.backendApi.isAuthenticated) {
-      try {
-        await AppController.instance.backendApi.syncProfileCustomizationToSupabase(
-          profileId: profile.id,
-          home: HomeCustomizationStore.snapshotFor(profile),
-          details: DetailsCustomizationStore.snapshotFor(profile),
-          platform: PlatformPreferenceStore.snapshot(),
-        );
-      } catch (_) {
-        // Local settings remain usable if Supabase is temporarily unavailable.
-      }
-    }
-
-    if (widget.firstSetup) {
-      await HomeCustomizationStore.markSetupCompleted(profile);
-    }
+    await _syncCustomization(profile);
 
     if (!mounted) return;
     Navigator.of(context).pop(true);
+  }
+
+  Future<void> _syncCustomization(Profile? profile) async {
+    if (profile == null || !AppController.instance.backendApi.isAuthenticated) return;
+    try {
+      await AppController.instance.backendApi.syncProfileCustomizationToSupabase(
+        profileId: profile.id,
+        home: HomeCustomizationStore.snapshotFor(profile),
+        details: DetailsCustomizationStore.snapshotFor(profile),
+        platform: PlatformPreferenceStore.snapshot(),
+        music: MusicPageCustomizationStore.snapshotFor(profile),
+      );
+    } catch (_) {
+      // Local settings remain usable if Supabase is temporarily unavailable.
+    }
+  }
+
+  void _resetCustomizationScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_customizationScrollController.hasClients) return;
+      _customizationScrollController.jumpTo(0);
+    });
   }
 
   void _selectCustomizationPage(_CustomizationPage page) {
@@ -1040,6 +1160,19 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 : () => _selectCustomizationPage(_CustomizationPage.details),
           ),
         ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _customizationButton(
+            label: 'MUSIC PAGE',
+            icon: Icons.music_note_rounded,
+            selected: selectedPage == _CustomizationPage.music,
+            onPressed: widget.firstSetup
+                ? (selectedPage == _CustomizationPage.music
+                    ? null
+                    : () => _selectCustomizationPage(_CustomizationPage.music))
+                : () => _selectCustomizationPage(_CustomizationPage.music),
+          ),
+        ),
       ],
     );
   }
@@ -1076,6 +1209,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   /// Performs `_headerCard` for this feature. Update this documentation when its contract changes.
   Widget _headerCard() {
     final isHome = selectedPage == _CustomizationPage.home;
+    final isMusic = selectedPage == _CustomizationPage.music;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1095,7 +1229,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            isHome ? Icons.home_rounded : Icons.movie_outlined,
+            isHome
+                ? Icons.home_rounded
+                : isMusic
+                    ? Icons.music_note_rounded
+                    : Icons.movie_outlined,
             color: Colors.redAccent,
             size: 30,
           ),
@@ -1105,7 +1243,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 ? (widget.firstSetup
                     ? 'How do you want your main screen to look?'
                     : 'Build your Home screen your way.')
-                : 'Build your Details page your way.',
+                : isMusic
+                    ? 'Build your Music page your way.'
+                    : 'Build your Details page your way.',
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.w900,
@@ -1116,24 +1256,24 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           Text(
             isHome
                 ? 'Choose what appears, change the presentation, position your navigation, and drag Home sections into the order you want.'
-                : 'Choose which Details sections appear, control metadata and poster presentation, and drag sections into the order you want.',
+                : isMusic
+                    ? 'Choose discovery sections, the persistent player, Spotify-inspired mixes, and the order of your Music page.'
+                    : 'Choose which Details sections appear, control metadata and poster presentation, and drag sections into the order you want.',
             style: const TextStyle(
               color: Colors.white60,
               height: 1.45,
             ),
           ),
-          if (!isHome) ...[
+          if (!isHome && !isMusic) ...[
             const SizedBox(height: 12),
-            Text(
-              'Profile: ${AppController.instance.currentProfile?.name ?? 'No profile selected'}',
+            UniversalText('Profile: ${AppController.instance.currentProfile?.name ?? 'No profile selected'}',
               style: const TextStyle(
                 color: Colors.white70,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'These Details settings belong only to the currently selected profile.',
+            const UniversalText('These Details settings belong only to the currently selected profile.',
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ],
@@ -1147,8 +1287,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'PRESENTATION',
+        const UniversalText('PRESENTATION',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1171,8 +1310,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.cardSize = value),
         ),
         const SizedBox(height: 24),
-        const Text(
-          'NAVIGATION & STORAGE',
+        const UniversalText('NAVIGATION & STORAGE',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1189,8 +1327,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         ),
         const SizedBox(height: 12),
         _sectionOrder(
-          title: 'NAVIGATION ORDER',
-          subtitle: 'Drag navbar items to change their order. More stays as the expandable menu.',
+          title: tr('NAVIGATION ORDER'),
+          subtitle: tr('Drag navbar items to change their order. More stays as the expandable menu.'),
           items: draft.navigationOrder,
           onChanged: (newOrder) => setState(() => draft.navigationOrder = newOrder),
         ),
@@ -1202,18 +1340,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() { draft.storageBarPosition = value; _normalizeHomePositions(); }),
         ),
         const SizedBox(height: 8),
-        Text('Storage bar thickness: ${draft.storageBarThickness.round()} px', style: const TextStyle(color: Colors.white70)),
+        UniversalText('Storage bar thickness: ${draft.storageBarThickness.round()} px', style: const TextStyle(color: Colors.white70)),
         Slider(value: draft.storageBarThickness.clamp(4, 32), min: 4, max: 32, divisions: 14, onChanged: (value) => setState(() => draft.storageBarThickness = value)),
-        _dropdown(
-          label: 'Where should Connected Sports appear on Home?',
-          value: draft.liveSportsPosition,
-          values: _availableHomePositions(draft, excludeNavbar: true),
-          onChanged: (value) => setState(() { draft.liveSportsPosition = value; _normalizeHomePositions(); }),
-        ),
-        const SizedBox(height: 8),
-        const Text('A Home position is removed when it is already occupied by the navbar or storage bar.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
+        const UniversalText('A Home position is removed when it is already occupied by the navbar or storage bar.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
         const SizedBox(height: 24),
-        const Text('COLORS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const UniversalText('COLORS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
         const SizedBox(height: 10),
         _colorDropdown(
           label: 'Home background',
@@ -1246,7 +1377,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.navbarStyle = value),
         ),
         const SizedBox(height: 10),
-        Text('Navbar opacity: ${(draft.navbarOpacity * 100).round()}%', style: const TextStyle(color: Colors.white70)),
+        UniversalText('Navbar opacity: ${(draft.navbarOpacity * 100).round()}%', style: const TextStyle(color: Colors.white70)),
         Slider(
           value: draft.navbarOpacity.clamp(.10, 1.0),
           min: .10,
@@ -1255,7 +1386,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: '${(draft.navbarOpacity * 100).round()}%',
           onChanged: (value) => setState(() => draft.navbarOpacity = value),
         ),
-        Text('Navbar corner radius: ${draft.navbarRadius.round()} px', style: const TextStyle(color: Colors.white70)),
+        UniversalText('Navbar corner radius: ${draft.navbarRadius.round()} px', style: const TextStyle(color: Colors.white70)),
         Slider(
           value: draft.navbarRadius.clamp(0, 42),
           min: 0,
@@ -1265,7 +1396,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.navbarRadius = value),
         ),
         const SizedBox(height: 24),
-        const Text('HOME MEDIA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const UniversalText('HOME MEDIA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
         const SizedBox(height: 10),
         _dropdown(
           label: 'Music + Film arrangement',
@@ -1276,8 +1407,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         _toggle('Music', 'Show a Music destination on Home.', draft.showMusic, (v) => setState(() => draft.showMusic = v)),
         _toggle('Film', 'Show Movies and Shows together on Home.', draft.showFilm, (v) => setState(() => draft.showFilm = v)),
         const SizedBox(height: 24),
-        const Text(
-          'SECTIONS',
+        const UniversalText('SECTIONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1328,12 +1458,108 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           draft.showAllLibrary,
           (v) => setState(() => draft.showAllLibrary = v),
         ),
-        _toggle('Connected Sports', 'Show Connected Sports when connected provider data is available.', draft.showLiveSports, (v) => setState(() => draft.showLiveSports = v)),
+         _toggle('Seasonal Collections', 'Show the calendar-based collection for the current month.', draft.showSeasonalCollections, (v) => setState(() => draft.showSeasonalCollections = v)),
         const SizedBox(height: 24),
         _sectionOrder(
-          title: 'SECTION ORDER',
-          subtitle: 'Drag Home sections to change their order.',
+          title: tr('SECTION ORDER'),
+          subtitle: tr('Drag Home sections to change their order.'),
           items: draft.sectionOrder,
+        ),
+      ],
+    );
+  }
+
+  /// Builds the Music customization controls. This page is available from
+  /// Customize App after onboarding and never interrupts the Home → Details → Invite flow.
+  Widget _buildMusicPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const UniversalText('MUSIC PRESENTATION',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Music card style',
+          value: musicDraft.cardStyle,
+          values: const ['Comfortable', 'Compact', 'Large'],
+          onChanged: (value) => setState(() => musicDraft.cardStyle = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Player style',
+          value: musicDraft.playerStyle,
+          values: const ['Bottom player', 'Compact'],
+          onChanged: (value) => setState(() => musicDraft.playerStyle = value),
+        ),
+        const SizedBox(height: 22),
+        const UniversalText('DISCOVERY & PLAYER',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _toggle('Search bar', 'Show Music search.', musicDraft.showSearch,
+            (v) => setState(() => musicDraft.showSearch = v)),
+        _toggle('Player', 'Show the persistent player and queue.',
+            musicDraft.showPlayer,
+            (v) => setState(() => musicDraft.showPlayer = v)),
+        _toggle('Weekly Discovery', 'Show the weekly discovery mix.',
+            musicDraft.showWeeklyDiscovery,
+            (v) => setState(() => musicDraft.showWeeklyDiscovery = v)),
+        _toggle('AI DJ', 'Show the AI DJ launcher.',
+            musicDraft.showAIDJ,
+            (v) => setState(() => musicDraft.showAIDJ = v)),
+        _toggle('System-created playlists',
+            'Show Made For You, Discover Weekly and Daily Mix.',
+            musicDraft.showSystemPlaylists,
+            (v) => setState(() => musicDraft.showSystemPlaylists = v)),
+        _toggle('Liked Songs', 'Show saved favorites.',
+            musicDraft.showLikedSongs,
+            (v) => setState(() => musicDraft.showLikedSongs = v)),
+        _toggle('Recently Played', 'Show recent listening.',
+            musicDraft.showRecentlyPlayed,
+            (v) => setState(() => musicDraft.showRecentlyPlayed = v)),
+        _toggle('Mood & Genre Mixes', 'Show quick mixes from imported metadata.',
+            musicDraft.showMoodMixes,
+            (v) => setState(() => musicDraft.showMoodMixes = v)),
+        const SizedBox(height: 22),
+        const UniversalText('LIBRARY',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _toggle('Artists / Bands', 'Show singers and bands.',
+            musicDraft.showArtists,
+            (v) => setState(() => musicDraft.showArtists = v)),
+        _toggle('Albums', 'Show ripped albums.',
+            musicDraft.showAlbums,
+            (v) => setState(() => musicDraft.showAlbums = v)),
+        _toggle('Playlists', 'Show custom playlists.',
+            musicDraft.showPlaylists,
+            (v) => setState(() => musicDraft.showPlaylists = v)),
+        _toggle('Soundtrack Universe',
+            'Connect songs with the films and shows that use them.',
+            musicDraft.showSoundtrackUniverse,
+            (v) => setState(() => musicDraft.showSoundtrackUniverse = v)),
+        const SizedBox(height: 20),
+        _sectionOrder(
+          title: tr('MUSIC SECTION ORDER'),
+          subtitle: tr('Drag discovery, library and soundtrack sections into your preferred order.'),
+          items: musicDraft.sectionOrder,
+          onChanged: (value) => setState(() => musicDraft.sectionOrder = value),
         ),
       ],
     );
@@ -1344,8 +1570,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'DETAILS PRESENTATION',
+        const UniversalText('DETAILS PRESENTATION',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1376,8 +1601,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         const SizedBox(height: 12),
         _dropdown(label: 'Information alignment', value: detailsDraft.informationAlignment, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.informationAlignment = v)),
         const SizedBox(height: 24),
-        const Text(
-          'DETAILS SECTIONS',
+        const UniversalText('DETAILS SECTIONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1464,9 +1688,14 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           detailsDraft.showLibrary,
           (v) => setState(() => detailsDraft.showLibrary = v),
         ),
+        _toggle(
+          'Recommendations',
+          'Show explainable recommendations based on shared cast, genre, themes, franchise and setting.',
+          detailsDraft.showRecommendations,
+          (v) => setState(() => detailsDraft.showRecommendations = v),
+        ),
         const SizedBox(height: 24),
-        const Text(
-          'SEASONS',
+        const UniversalText('SEASONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1493,8 +1722,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         const SizedBox(height: 12),
         _dropdown(label: 'Episode naming', value: detailsDraft.episodeNaming, values: const ['Actual Title', 'Season X, Episode Y', 'Both'], onChanged: (v) => setState(() => detailsDraft.episodeNaming = v)),
         const SizedBox(height: 24),
-        const Text(
-          'METADATA',
+        const UniversalText('METADATA',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1529,8 +1757,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         ),
         const SizedBox(height: 24),
         _sectionOrder(
-          title: 'DETAILS SECTION ORDER',
-          subtitle: 'Drag Details sections to change their order.',
+          title: tr('DETAILS SECTION ORDER'),
+          subtitle: tr('Drag Details sections to change their order.'),
           items: detailsDraft.sectionOrder,
           onChanged: (newOrder) {
             setState(() {
@@ -1548,9 +1776,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   /// rendered by `MediaDetailsScreen` after it exists in the library.
   Widget _customizationPreview() {
     final isHome = selectedPage == _CustomizationPage.home;
+    final isMusic = selectedPage == _CustomizationPage.music;
     final Widget actualPage = isHome
         ? _buildHomeCustomizationPreview()
-        : _buildDetailsCustomizationPreview();
+        : isMusic
+            ? _buildMusicCustomizationPreview()
+            : _buildDetailsCustomizationPreview();
     final devices = _previewDevices
         .where((device) => device.category == _previewCategory)
         .toList();
@@ -1583,13 +1814,16 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           Row(
             children: [
               Icon(
-                isHome ? Icons.home_rounded : Icons.movie_outlined,
+                isHome
+                    ? Icons.home_rounded
+                    : isMusic
+                        ? Icons.music_note_rounded
+                        : Icons.movie_outlined,
                 color: colorFromName(draft.navbarGlowColor),
               ),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text(
-                  'LIVE DEVICE PREVIEW',
+                child: UniversalText('LIVE DEVICE PREVIEW',
                   style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2),
                 ),
               ),
@@ -1605,8 +1839,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: selectedDevice.name,
-            decoration: const InputDecoration(
-              labelText: 'Device / Screen',
+            decoration: InputDecoration(
+              labelText: tr('Device / Screen'),
               prefixIcon: Icon(Icons.devices_other_rounded),
               border: OutlineInputBorder(),
             ),
@@ -1630,8 +1864,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             const SizedBox(height: 10),
             SegmentedButton<bool>(
               segments: const [
-                ButtonSegment<bool>(value: false, icon: Icon(Icons.movie_outlined), label: Text('Movie')),
-                ButtonSegment<bool>(value: true, icon: Icon(Icons.tv_outlined), label: Text('TV Show')),
+                ButtonSegment<bool>(value: false, icon: Icon(Icons.movie_outlined), label: UniversalText('Movie')),
+                ButtonSegment<bool>(value: true, icon: Icon(Icons.tv_outlined), label: UniversalText('TV Show')),
               ],
               selected: <bool>{detailsPreviewTvShow},
               onSelectionChanged: (value) {
@@ -1683,15 +1917,16 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            '${selectedDevice.name} • ${selectedDevice.width.toInt()} × ${selectedDevice.height.toInt()} • ${isTv ? 'TV remote / focus layout' : 'touch / pointer layout'}',
+          UniversalText('${selectedDevice.name} • ${selectedDevice.width.toInt()} × ${selectedDevice.height.toInt()} • ${isTv ? 'TV remote / focus layout' : 'touch / pointer layout'}',
             style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             isHome
                 ? 'Changes to Home customization are reflected live in the selected device preview.'
-                : 'Changes to Details customization are reflected live in the selected device preview.',
+                : isMusic
+                    ? 'Changes to Music customization are reflected live in the selected device preview.'
+                    : 'Changes to Details customization are reflected live in the selected device preview.',
             style: const TextStyle(color: Colors.white38, fontSize: 11),
           ),
         ],
@@ -1745,6 +1980,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'More',
       'Music',
       'Film',
+      'Group Chat',
     ];
 
     for (final name in draft.navigationOrder) {
@@ -1805,7 +2041,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         'All Library' => draft.showAllLibrary,
         'Recommendations' => draft.showRecommendations,
         'Music & Film' => draft.showMusic || draft.showFilm,
-        'Connected Sports' => draft.showLiveSports,
         _ => false,
       };
       if (!enabled) continue;
@@ -1868,8 +2103,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             Icons.library_music_outlined,
             isTvShow: false,
           ));
-        case 'Connected Sports':
-          sections.add(_homePreviewBar('CONNECTED SPORTS', Icons.sports_soccer_rounded));
+        case 'Seasonal Collections':
+          sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
     }
 
@@ -1883,8 +2118,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               ? const [
                   Padding(
                     padding: EdgeInsets.all(40),
-                    child: Text(
-                      'No Home sections are currently enabled.',
+                    child: UniversalText('No Home sections are currently enabled.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white54),
                     ),
@@ -1918,8 +2152,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, letterSpacing: 1.1),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'FEATURED MOVIE / TV SHOW',
+            const UniversalText('FEATURED MOVIE / TV SHOW',
               style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w800),
             ),
           ],
@@ -2028,6 +2261,154 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 
+  Widget _buildMusicCustomizationPreview() {
+    final sections = <Widget>[];
+    for (final section in musicDraft.sectionOrder) {
+      final enabled = switch (section) {
+        'Weekly Discovery' => musicDraft.showWeeklyDiscovery,
+        'AI DJ' => musicDraft.showAIDJ,
+        'Made For You' => musicDraft.showSystemPlaylists,
+        'Liked Songs' => musicDraft.showLikedSongs,
+        'Recently Played' => musicDraft.showRecentlyPlayed,
+        'Mood Mixes' => musicDraft.showMoodMixes,
+        'Artists' => musicDraft.showArtists,
+        'Albums' => musicDraft.showAlbums,
+        'Playlists' => musicDraft.showPlaylists,
+        'Soundtrack Universe' => musicDraft.showSoundtrackUniverse,
+        _ => false,
+      };
+      if (!enabled) continue;
+      sections.add(
+        _musicPreviewSection(
+          section.toUpperCase(),
+          section == 'AI DJ'
+              ? 'SMART DJ / MIX CONTROLS'
+              : section == 'Made For You'
+                  ? 'MADE FOR YOU • DISCOVER WEEKLY • DAILY MIX'
+                  : 'MUSIC SECTION',
+          section == 'AI DJ'
+              ? Icons.auto_awesome_rounded
+              : section == 'Weekly Discovery'
+                  ? Icons.auto_awesome_rounded
+                  : Icons.music_note_rounded,
+        ),
+      );
+    }
+
+    return Material(
+      color: const Color(0xFF090909),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 70),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: musicDraft.playerStyle == 'Compact' ? 58 : 76,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF151515),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.album_outlined, color: Colors.white38),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: UniversalText('NOW PLAYING • TRACK / ARTIST',
+                        style: TextStyle(
+                            fontSize: 10, fontWeight: FontWeight.w800)),
+                  ),
+                  Icon(
+                    Icons.play_arrow_rounded,
+                    color: colorFromName(draft.navbarGlowColor),
+                  ),
+                  const Icon(Icons.queue_music_rounded, color: Colors.white38),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (sections.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(30),
+                child: UniversalText('No Music sections are currently enabled.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white54),
+                ),
+              )
+            else
+              ...sections,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _musicPreviewSection(String title, String subtitle, IconData icon) {
+    final width = musicDraft.cardStyle == 'Compact'
+        ? 72.0
+        : musicDraft.cardStyle == 'Large'
+            ? 108.0
+            : 90.0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 13),
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white.withValues(alpha: .14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: colorFromName(draft.navbarGlowColor)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle,
+              style: const TextStyle(color: Colors.white38, fontSize: 8)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: width * .82,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 5,
+              separatorBuilder: (_, __) => const SizedBox(width: 7),
+              itemBuilder: (_, index) => Container(
+                width: width,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF151515),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.music_note_rounded,
+                        size: 20, color: Colors.white30),
+                    const SizedBox(height: 4),
+                    UniversalText('ITEM ${index + 1}',
+                        style: const TextStyle(
+                            fontSize: 7, color: Colors.white38)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDetailsCustomizationPreview() {
     final sections = <Widget>[];
 
@@ -2046,8 +2427,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               ? const [
                   Padding(
                     padding: EdgeInsets.all(30),
-                    child: Text(
-                      'No Details sections are currently enabled.',
+                    child: UniversalText('No Details sections are currently enabled.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white54),
                     ),
@@ -2172,7 +2552,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           children: [
             Icon(Icons.movie_outlined, size: 48, color: Colors.white38),
             SizedBox(height: 8),
-            Text('POSTER', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w800)),
+            UniversalText('POSTER', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w800)),
           ],
         ),
       ),
@@ -2564,8 +2944,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 leading: CircleAvatar(
                   radius: 18,
                   backgroundColor: Colors.red.withValues(alpha: .12),
-                  child: Text(
-                    '${index + 1}',
+                  child: UniversalText('${index + 1}',
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -2590,15 +2969,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final isHome = selectedPage == _CustomizationPage.home;
+    final isMusic = selectedPage == _CustomizationPage.music;
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
       appBar: AppBar(
         backgroundColor: const Color(0xFF070707),
         surfaceTintColor: Colors.transparent,
-        title: Text(
+        title: UniversalText(
           widget.firstSetup
-              ? (selectedPage == _CustomizationPage.home ? 'Customize Home' : 'Customize Details')
+              ? (selectedPage == _CustomizationPage.home
+                  ? 'Customize Home'
+                  : selectedPage == _CustomizationPage.details
+                      ? 'Customize Details'
+                      : 'Customize Music')
               : 'Customize App',
         ),
         automaticallyImplyLeading: !widget.firstSetup,
@@ -2607,8 +2991,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             : [
                 TextButton(
                   onPressed: _save,
-                  child: const Text(
-                    'SAVE',
+                  child: const UniversalText('SAVE',
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -2623,7 +3006,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             const SizedBox(height: 18),
             _headerCard(),
             const SizedBox(height: 18),
-            if (isHome) _buildHomePage() else _buildDetailsPage(),
+            if (isHome)
+              _buildHomePage()
+            else if (isMusic)
+              _buildMusicPage()
+            else
+              _buildDetailsPage(),
             _customizationPreview(),
             const SizedBox(height: 26),
             SizedBox(
@@ -2631,13 +3019,15 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               child: ElevatedButton.icon(
                 onPressed: _isSaving ? null : _save,
                 icon: const Icon(Icons.check_rounded),
-                label: Text(
+                label: UniversalText(
                   _isSaving
                       ? 'SAVING...'
                       : widget.firstSetup
                           ? (selectedPage == _CustomizationPage.home
                               ? 'CONTINUE TO DETAILS'
-                              : 'ENTER MY HOME')
+                              : selectedPage == _CustomizationPage.details
+                                  ? 'CONTINUE TO MUSIC'
+                                  : 'CONTINUE TO ACCOUNT INVITE')
                           : 'SAVE CHANGES',
                 ),
               ),
@@ -2774,7 +3164,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   List<String> _normalizedNavigationOrder(List<String> value) {
-    const defaults = <String>['Profile', 'Home', 'Connected Sports', 'More', 'Music', 'Film'];
+    const defaults = <String>['Profile', 'Home', 'Connected Sports', 'More', 'Music', 'Film', 'Group Chat'];
     final result = <String>[];
     for (final name in value) {
       if (defaults.contains(name) && !result.contains(name)) result.add(name);
@@ -2788,14 +3178,15 @@ class _MainScreenState extends State<MainScreen> {
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    // Primary navigation is fixed to six destinations: Profile, Home, Connected Sports,
-    // More, Music and Film. Music and Film expose secondary destinations on hover/tap.
+    // Primary navigation includes Profile, Home, Connected Sports, More, Music, Film,
+    // and Group Chat. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
     final pageByName = <String, Widget>{
       'Profile': const ProfileScreen(),
       'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
       'Connected Sports': const ConnectedSportsHubScreen(),
+      'Group Chat': const GroupChatScreen(),
       'More': const _MoreNavigationPlaceholder(),
       'Music': const MusicScreen(),
       'Film': const MoviesScreen(),
@@ -2836,7 +3227,7 @@ class _MainScreenState extends State<MainScreen> {
         storagePosition: settings.storageBarPosition,
         liveSportsPosition: settings.liveSportsPosition,
         storageThickness: settings.storageBarThickness,
-        showLiveSports: settings.showLiveSports,
+        showLiveSports: false,
         navbar: navbar,
         child: page,
       );
@@ -2910,14 +3301,14 @@ class _StreamingNavigationBar extends StatelessWidget {
       _NavMenuEntry('Actors', Icons.people_outline, () => _open(context, const LibraryActorsScreen())),
       _NavMenuEntry('Collections', Icons.collections_bookmark_outlined, () => _open(context, const LibraryCollectionsScreen())),
       _NavMenuEntry('Directors', Icons.videocam_outlined, () => _open(context, const LibraryDirectorsScreen())),
-      _NavMenuEntry('Franchises', Icons.account_tree_outlined, () => _open(context, const _NavigationDirectoryScreen(title: 'Franchises', icon: Icons.account_tree_outlined))),
-      _NavMenuEntry('Genres', Icons.category_outlined, () => _open(context, const _NavigationDirectoryScreen(title: 'Genres', icon: Icons.category_outlined))),
+      _NavMenuEntry('Franchises', Icons.account_tree_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Franchises'), icon: Icons.account_tree_outlined))),
+      _NavMenuEntry('Genres', Icons.category_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Genres'), icon: Icons.category_outlined))),
       _NavMenuEntry('Wishlist', Icons.favorite_border_rounded, () => _open(context, const FavoritesScreen())),
       _NavMenuEntry('Search', Icons.search_rounded, () => _open(context, const SmartSearchScreen())),
     ];
     final musicEntries = <_NavMenuEntry>[
-      _NavMenuEntry('Singers / Bands', Icons.person_outline_rounded, () => _open(context, const _NavigationDirectoryScreen(title: 'Singers / Bands', icon: Icons.person_outline_rounded))),
-      _NavMenuEntry('Albums', Icons.album_outlined, () => _open(context, const _NavigationDirectoryScreen(title: 'Albums', icon: Icons.album_outlined))),
+      _NavMenuEntry('Singers / Bands', Icons.person_outline_rounded, () => _open(context, _NavigationDirectoryScreen(title: tr('Singers / Bands'), icon: Icons.person_outline_rounded))),
+      _NavMenuEntry('Albums', Icons.album_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Albums'), icon: Icons.album_outlined))),
       _NavMenuEntry('Playlists', Icons.queue_music_rounded, () => _open(context, const MusicScreen())),
       _NavMenuEntry('Soundtrack Universe', Icons.library_music_outlined, () => _open(context, const SoundtrackUniverseScreen())),
     ];
@@ -2926,6 +3317,7 @@ class _StreamingNavigationBar extends StatelessWidget {
       'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
       'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
       'Connected Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Connected Sports'),
+      'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Group Chat'),
       'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
       'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
       'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
@@ -3131,8 +3523,7 @@ class _NavigationDirectoryScreen extends StatelessWidget {
             children: [
               Icon(icon, size: 58, color: Colors.white54),
               const SizedBox(height: 14),
-              Text(
-                '$title will appear here as your library metadata grows.',
+              UniversalText('$title will appear here as your library metadata grows.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white60),
               ),
@@ -3239,123 +3630,123 @@ class _MoreActionsSheet extends StatelessWidget {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return _PremiumSheet(
-      title: 'More',
-      subtitle: 'Manage your streaming service',
+      title: tr('More'),
+      subtitle: tr('Manage your streaming service'),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           _SheetAction(
             icon: Icons.library_add_outlined,
-            title: 'Rip / Import Disc',
-            subtitle: 'DVD, Blu-ray, UHD and approved media import',
+            title: tr('Rip / Import Disc'),
+            subtitle: tr('DVD, Blu-ray, UHD and approved media import'),
             onTap: onImport,
           ),
           _SheetAction(
             icon: Icons.manage_accounts_outlined,
-            title: 'Manage Profiles',
-            subtitle: 'Switch, create, or remove profiles',
+            title: tr('Manage Profiles'),
+            subtitle: tr('Switch, create, or remove profiles'),
             onTap: onProfiles,
           ),
           _SheetAction(
             icon: Icons.favorite_outline_rounded,
-            title: 'Group Wishlist',
-            subtitle: 'See shared movies and shows',
+            title: tr('Group Wishlist'),
+            subtitle: tr('See shared movies and shows'),
             onTap: onWishlist,
           ),
           _SheetAction(
             icon: Icons.tune_rounded,
-            title: 'Customize App',
-            subtitle: 'Customize Home and Details',
+            title: tr('Customize App'),
+            subtitle: tr('Customize Home and Details'),
             onTap: onCustomize,
           ),
           _SheetAction(
             icon: Icons.auto_awesome_rounded,
-            title: 'Discover & Recaps',
-            subtitle: 'Recommendations, collections, achievements and recaps',
+            title: tr('Discover & Recaps'),
+            subtitle: tr('Recommendations, collections, achievements and recaps'),
             onTap: onFeatureCenter,
           ),
           _SheetAction(
             icon: Icons.apps_rounded,
-            title: 'Everything',
-            subtitle: 'Security, AI, stats, travel, backup and more',
+            title: tr('Everything'),
+            subtitle: tr('Security, AI, stats, travel, backup and more'),
             onTap: onEverything,
           ),
           _SheetAction(
             icon: Icons.devices_other_rounded,
-            title: 'Remote Access',
-            subtitle: 'Manage trusted remote computers and imports',
+            title: tr('Remote Access'),
+            subtitle: tr('Manage trusted remote computers and imports'),
             onTap: onRemoteAccess,
           ),
           _SheetAction(
             icon: Icons.settings_rounded,
-            title: 'Account Settings',
-            subtitle: 'Storage, subscription and account controls',
+            title: tr('Account Settings'),
+            subtitle: tr('Storage, subscription and account controls'),
             onTap: onAccountSettings,
           ),
           _SheetAction(
             icon: Icons.devices_rounded,
-            title: 'Device Center',
-            subtitle: 'Downloads, casting, HDMI and Bluetooth guidance',
+            title: tr('Device Center'),
+            subtitle: tr('Downloads, casting, HDMI and Bluetooth guidance'),
             onTap: onDevices,
           ),
           _SheetAction(
             icon: Icons.auto_awesome_rounded,
-            title: 'Next-Gen Features',
-            subtitle: 'Smart discovery, My Stuff, stats, downloads, privacy and advanced settings',
+            title: tr('Next-Gen Features'),
+            subtitle: tr('Smart discovery, My Stuff, stats, downloads, privacy and advanced settings'),
             onTap: onNextGen,
           ),
           _SheetAction(
             icon: Icons.tune_rounded,
-            title: 'Platform Expansion',
-            subtitle: 'Security, playback, TV, backup, discovery, sports, privacy and kids controls',
+            title: tr('Platform Expansion'),
+            subtitle: tr('Security, playback, TV, backup, discovery, sports, privacy and kids controls'),
             onTap: onPlatformExpansion,
           ),
           _SheetAction(
             icon: Icons.notifications_active_outlined,
-            title: 'Notifications',
-            subtitle: 'Recent profile activity and messages',
+            title: tr('Notifications'),
+            subtitle: tr('Recent profile activity and messages'),
             onTap: onNotifications,
           ),
           _SheetAction(
             icon: Icons.favorite_rounded,
-            title: 'Favorites',
-            subtitle: 'Liked movies, shows, songs, albums and playlists',
+            title: tr('Favorites'),
+            subtitle: tr('Liked movies, shows, songs, albums and playlists'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FavoritesScreen())),
           ),
           _SheetAction(
             icon: Icons.workspace_premium_rounded,
-            title: 'Ultimate Platform',
-            subtitle: 'AI, premium player, family, social, cloud, security, devices and Studio',
+            title: tr('Ultimate Platform'),
+            subtitle: tr('AI, premium player, family, social, cloud, security, devices and Studio'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UltimatePlatformScreen())),
           ),
           _SheetAction(
             icon: Icons.privacy_tip_outlined,
-            title: 'Privacy & Ownership',
-            subtitle: 'Private library, authorized media, storage and account deletion',
+            title: tr('Privacy & Ownership'),
+            subtitle: tr('Private library, authorized media, storage and account deletion'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryPrivacyScreen())),
           ),
           _SheetAction(
             icon: Icons.storage_rounded,
-            title: 'Server Storage',
-            subtitle: 'Movies, Series, Music and available capacity',
+            title: tr('Server Storage'),
+            subtitle: tr('Movies, Series, Music and available capacity'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StorageDashboardScreen())),
           ),
           _SheetAction(
             icon: Icons.dns_rounded,
-            title: 'Home Server & ARM',
-            subtitle: 'Server health, ARM connection and media import pipeline',
+            title: tr('Home Server & ARM'),
+            subtitle: tr('Server health, ARM connection and media import pipeline'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HomeServerScreen())),
           ),
           _SheetAction(
             icon: Icons.emoji_events_outlined,
-            title: 'Music Achievements',
-            subtitle: 'Music badges such as Cultured and Swiftie',
+            title: tr('Music Achievements'),
+            subtitle: tr('Music badges such as Cultured and Swiftie'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MusicAchievementsScreen())),
           ),
           _SheetAction(
             icon: Icons.rocket_launch_rounded,
-            title: '100-Feature Roadmap',
-            subtitle: 'Open every implemented roadmap feature',
+            title: tr('100-Feature Roadmap'),
+            subtitle: tr('Open every implemented roadmap feature'),
             onTap: onRoadmapFeatures,
           ),
         ],
@@ -3496,7 +3887,7 @@ class _ActivitySheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final activity = AppController.instance.activity;
     return _PremiumSheet(
-      title: 'Notifications',
+      title: tr('Notifications'),
       subtitle: activity.isEmpty ? 'You are all caught up' : 'Recent activity',
       child: SizedBox(
         height: MediaQuery.of(context).size.height * .55,
@@ -3507,7 +3898,7 @@ class _ActivitySheet extends StatelessWidget {
                   children: [
                     Icon(Icons.notifications_none_rounded, size: 54, color: Colors.white38),
                     SizedBox(height: 12),
-                    Text('No activity yet.', style: TextStyle(color: Colors.white60)),
+                    UniversalText('No activity yet.', style: TextStyle(color: Colors.white60)),
                   ],
                 ),
               )
@@ -3619,7 +4010,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (profile == null) {
       return const Scaffold(
         backgroundColor: Color(0xFF070707),
-        body: Center(child: Text('No profile selected.')),
+        body: Center(child: UniversalText('No profile selected.')),
       );
     }
 
@@ -3658,8 +4049,7 @@ class _HomeScreenState extends State<HomeScreen>
               backgroundColor: const Color(0xE6070707),
               surfaceTintColor: Colors.transparent,
               titleSpacing: 20,
-              title: const Text(
-                'Home',
+              title: const UniversalText('Home',
                 style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 1.1),
               ),
               actions: [
@@ -3687,9 +4077,9 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Your library is empty', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800)),
+                        UniversalText('Your library is empty', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800)),
                         SizedBox(height: 8),
-                        Text('Please add using the 3 dots in the navbar.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 14)),
+                        UniversalText('Please add using the 3 dots in the navbar.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 14)),
                       ],
                     ),
                   ),
@@ -3729,9 +4119,9 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Recommendations': items = recommendations; subtitle = 'Picked for your profile'; enabled = settings.showRecommendations; break;
     case 'Music & Film':
       return [if (settings.showMusic || settings.showFilm) SliverToBoxAdapter(child: _HomeMusicFilmChooser(settings: settings))];
-    case 'Connected Sports':
-      return settings.showLiveSports
-          ? [const SliverToBoxAdapter(child: ConnectedSportsHomeWidget())]
+    case 'Seasonal Collections':
+      return settings.showSeasonalCollections
+          ? [SliverToBoxAdapter(child: _HomeSeasonalCollections())]
           : const [];
     default: return const [];
   }
@@ -3740,6 +4130,93 @@ List<Widget> _buildHomeSectionSlivers(
     SliverToBoxAdapter(child: _PremiumSectionHeader(title: section, subtitle: subtitle)),
     SliverToBoxAdapter(child: MediaHorizontalList(media: items)),
   ];
+}
+
+/// Calendar-aware Home section using only media already owned by the account.
+class _HomeSeasonalCollections extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final title = SeasonalCollectionEngine.titleFor(DateTime.now());
+    final matches = SeasonalCollectionEngine.matching(
+      AppController.instance.library,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.calendar_month_rounded),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                UniversalText('${matches.length} titles',
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            const UniversalText('Seasonal collection • updates with the calendar',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            if (matches.isEmpty)
+              const UniversalText('No matching titles in your library yet.',
+                style: TextStyle(color: Colors.white38),
+              )
+            else
+              SizedBox(
+                height: 90,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: matches.take(8).length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 9),
+                  itemBuilder: (_, index) => Container(
+                    width: 150,
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .04),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Text(
+                      matches[index].title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SeasonalCollectionsScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.open_in_new_rounded, size: 17),
+              label: const UniversalText('OPEN SEASONAL COLLECTION'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Implements the `_HomeMusicFilmChooser` class for this feature or UI component.
@@ -3771,12 +4248,12 @@ class _HomeMusicFilmChooser extends StatelessWidget {
   Widget build(BuildContext context) {
     final panels = <Widget>[];
     if (settings.showMusic) {
-      panels.add(_panel(context, title: 'Music', subtitle: 'Songs, albums and playlists', icon: Icons.music_note_rounded, actions: [
+      panels.add(_panel(context, title: tr('Music'), subtitle: tr('Songs, albums and playlists'), icon: Icons.music_note_rounded, actions: [
         _action(context, 'Open Music', Icons.play_circle_outline_rounded, const MusicScreen()),
       ]));
     }
     if (settings.showFilm) {
-      panels.add(_panel(context, title: 'Film', subtitle: 'Movies or shows', icon: Icons.movie_creation_outlined, actions: [
+      panels.add(_panel(context, title: tr('Film'), subtitle: tr('Movies or shows'), icon: Icons.movie_creation_outlined, actions: [
         Row(children: [Expanded(child: _action(context, 'Movies', Icons.movie_outlined, const MoviesScreen())), const SizedBox(width: 8), Expanded(child: _action(context, 'Shows', Icons.tv_rounded, const SeriesScreen()))]),
       ]));
     }
@@ -3853,7 +4330,7 @@ class _HomeHero extends StatelessWidget {
                   style: const TextStyle(fontSize: 31, height: 1.05, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 7),
-                Text('Welcome back, $profileName', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                UniversalText('Welcome back, $profileName', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 17),
                 FilledButton.icon(
                   onPressed: onPlay,
@@ -3864,7 +4341,7 @@ class _HomeHero extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Open', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const UniversalText('Open', style: TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ],
             ),
@@ -3914,7 +4391,7 @@ class ActivityButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => IconButton(
-        tooltip: 'Notifications',
+        tooltip: tr('Notifications'),
         icon: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -4108,11 +4585,10 @@ class ActorsFallbackScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Actors'),
+        title: const UniversalText('Actors'),
       ),
       body: const Center(
-        child: Text(
-          'Actors',
+        child: UniversalText('Actors',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -4418,7 +4894,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     if (!verificationPassed || reviewJob == null) return;
     if (!ownershipConfirmed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please confirm that you own or are legally authorized to use this media.')),
+        SnackBar(content: UniversalText('Please confirm that you own or are legally authorized to use this media.')),
       );
       return;
     }
@@ -4440,7 +4916,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
     if (selectedTitles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least one title from the disc before adding it.')),
+        SnackBar(content: UniversalText('Select at least one title from the disc before adding it.')),
       );
       return;
     }
@@ -4538,7 +5014,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Movie or Show'),
+        title: const UniversalText('Add Movie or Show'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -4549,21 +5025,19 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'ARM AUTOMATIC DISC IMPORT',
+                  const UniversalText('ARM AUTOMATIC DISC IMPORT',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'ARM stays enabled. Insert a DVD, Blu-ray, or 4K Ultra HD disc and ARM will detect it and perform the extraction automatically.',
+                  const UniversalText('ARM stays enabled. Insert a DVD, Blu-ray, or 4K Ultra HD disc and ARM will detect it and perform the extraction automatically.',
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('ARM'),
+                    title: const UniversalText('ARM'),
                     subtitle: Text(
                       armConnected
                           ? 'Connected — ARM is enabled permanently'
@@ -4586,8 +5060,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     const SizedBox(height: 8),
                     LinearProgressIndicator(value: progress),
                     const SizedBox(height: 8),
-                    Text(
-                      '${(progress * 100).round()}% • $statusMessage',
+                    UniversalText('${(progress * 100).round()}% • $statusMessage',
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -4596,7 +5069,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     child: ElevatedButton.icon(
                       onPressed: importing ? null : _startArmImport,
                       icon: const Icon(Icons.play_circle_fill),
-                      label: const Text('DETECT DISC / START ARM MONITOR'),
+                      label: const UniversalText('DETECT DISC / START ARM MONITOR'),
                     ),
                   ),
                 ],
@@ -4613,13 +5086,11 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'MULTI-TITLE DISC DETECTED',
+                    const UniversalText('MULTI-TITLE DISC DETECTED',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      'ARM found ${detectedDiscTitles.length} separate title candidates on this physical disc. Each selected movie will become its own library item while remaining linked to the same disc.',
+                    UniversalText('ARM found ${detectedDiscTitles.length} separate title candidates on this physical disc. Each selected movie will become its own library item while remaining linked to the same disc.',
                       style: const TextStyle(color: Colors.white70, height: 1.35),
                     ),
                     const SizedBox(height: 10),
@@ -4643,8 +5114,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                           });
                         },
                         title: Text(title['canonicalTitle']?.toString() ?? title['title']?.toString() ?? 'Unknown title'),
-                        subtitle: Text(
-                          '${title['discTitle'] == null ? '' : 'Disc: ${title['discTitle']} • '}${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
+                        subtitle: UniversalText('${title['discTitle'] == null ? '' : 'Disc: ${title['discTitle']} • '}${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
                         ),
                         controlAffinity: ListTileControlAffinity.leading,
                       );
@@ -4681,19 +5151,16 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     ),
                     const SizedBox(height: 10),
                     if (verification?['durationSeconds'] != null)
-                      Text(
-                        'Ripped runtime: ${_formatSeconds(verification!['durationSeconds'])}',
+                      UniversalText('Ripped runtime: ${_formatSeconds(verification!['durationSeconds'])}',
                       ),
                     if (verification?['chapterCount'] != null)
-                      Text(
-                        'Chapters detected: ${verification!['chapterCount']}',
+                      UniversalText('Chapters detected: ${verification!['chapterCount']}',
                       ),
                     const SizedBox(height: 8),
                     ..._strings(verification?['failures']).map(
                       (failure) => Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '• $failure',
+                        child: UniversalText('• $failure',
                           style: const TextStyle(color: Colors.redAccent),
                         ),
                       ),
@@ -4705,20 +5172,19 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
           if (reviewJob != null && verificationPassed) ...[
             const SizedBox(height: 20),
-            const Text(
-              'IMPORT REVIEW',
+            const UniversalText('IMPORT REVIEW',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: selectedType,
-              decoration: const InputDecoration(
-                labelText: 'Media Type',
+              decoration: InputDecoration(
+                labelText: tr('Media Type'),
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: 'movie', child: Text('Movie')),
-                DropdownMenuItem(value: 'tvShow', child: Text('TV Show')),
+                DropdownMenuItem(value: 'movie', child: UniversalText('Movie')),
+                DropdownMenuItem(value: 'tvShow', child: UniversalText('TV Show')),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => selectedType = value);
@@ -4727,8 +5193,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title',
+              decoration: InputDecoration(
+                labelText: tr('Title'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -4736,16 +5202,16 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             TextField(
               controller: yearController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Year',
+              decoration: InputDecoration(
+                labelText: tr('Year'),
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: selectedDiscType,
-              decoration: const InputDecoration(
-                labelText: 'Disc Type',
+              decoration: InputDecoration(
+                labelText: tr('Disc Type'),
                 border: OutlineInputBorder(),
               ),
               items: discTypes
@@ -4763,8 +5229,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: selectedRegion,
-              decoration: const InputDecoration(
-                labelText: 'Region',
+              decoration: InputDecoration(
+                labelText: tr('Region'),
                 border: OutlineInputBorder(),
               ),
               items: regions
@@ -4783,9 +5249,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             TextField(
               controller: posterController,
               keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Poster URL (optional fallback)',
-                hintText: 'Use this if the disc/metadata provider has no poster.',
+              decoration: InputDecoration(
+                labelText: tr('Poster URL (optional fallback)'),
+                hintText: tr('Use this if the disc/metadata provider has no poster.'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -4793,9 +5259,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             TextField(
               controller: trailerController,
               keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Trailer URL (optional fallback)',
-                hintText: 'Use this if the disc/metadata provider has no trailer.',
+              decoration: InputDecoration(
+                labelText: tr('Trailer URL (optional fallback)'),
+                hintText: tr('Use this if the disc/metadata provider has no trailer.'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -4804,8 +5270,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               controller: descriptionController,
               minLines: 3,
               maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: 'Description',
+              decoration: InputDecoration(
+                labelText: tr('Description'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -4816,8 +5282,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 contentPadding: EdgeInsets.zero,
                 value: ownershipConfirmed,
                 onChanged: (value) => setState(() => ownershipConfirmed = value ?? false),
-                title: const Text('I own or am legally authorized to use this media.'),
-                subtitle: const Text('My Streaming Service provides storage and streaming infrastructure; applicable local law determines what copying and remote streaming are permitted.'),
+                title: const UniversalText('I own or am legally authorized to use this media.'),
+                subtitle: const UniversalText('My Streaming Service provides storage and streaming infrastructure; applicable local law determines what copying and remote streaming are permitted.'),
               ),
             ),
             const SizedBox(height: 8),
@@ -4827,8 +5293,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 color: Colors.white.withValues(alpha: .04),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Text(
-                'When you add this verified disc, its actors, directors, writers, music, genres, tags, chapters, audio tracks, subtitles, and extras will be cataloged with the media.',
+              child: UniversalText('When you add this verified disc, its actors, directors, writers, music, genres, tags, chapters, audio tracks, subtitles, and extras will be cataloged with the media.',
                 style: TextStyle(color: Colors.grey.shade300),
               ),
             ),
@@ -4839,14 +5304,13 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               child: FilledButton.icon(
                 onPressed: _addVerifiedDiscToLibrary,
                 icon: const Icon(Icons.library_add),
-                label: const Text('ADD TO LIBRARY'),
+                label: const UniversalText('ADD TO LIBRARY'),
               ),
             ),
           ],
 
           const SizedBox(height: 30),
-          Text(
-            'Current profile: ${controller.currentProfile?.name ?? 'None'}',
+          UniversalText('Current profile: ${controller.currentProfile?.name ?? 'None'}',
             style: TextStyle(color: Colors.grey.shade400),
           ),
         ],
@@ -4879,9 +5343,9 @@ class TrailersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final trailers = AppController.instance.library.where((m) => m.trailerUrl?.trim().isNotEmpty == true).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Trailers')),
+      appBar: AppBar(title: const UniversalText('Trailers')),
       body: trailers.isEmpty
-          ? const Center(child: Text('No trailers have been added to your library yet. ARM review can add a YouTube link when a disc does not contain a trailer.'))
+          ? const Center(child: UniversalText('No trailers have been added to your library yet. ARM review can add a YouTube link when a disc does not contain a trailer.'))
           : ListView.builder(
               padding: const EdgeInsets.all(18),
               itemCount: trailers.length,
@@ -4915,22 +5379,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final account = controller.currentAccount;
 
     if (account == null) {
-      return const Scaffold(body: Center(child: Text('No account is logged in.')));
+      return const Scaffold(body: Center(child: UniversalText('No account is logged in.')));
     }
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
       appBar: AppBar(
-        title: const Text('Profiles', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const UniversalText('Profiles', style: TextStyle(fontWeight: FontWeight.w800)),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
         children: [
-          const Text('Who is watching?', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const UniversalText('Who is watching?', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          Text('${account.profiles.length}/7 profiles', style: const TextStyle(color: Colors.white54)),
+          UniversalText('${account.profiles.length}/7 profiles', style: const TextStyle(color: Colors.white54)),
           const SizedBox(height: 24),
           ...account.profiles.map(
             (profile) => Padding(
@@ -4962,7 +5426,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   });
                 },
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('CREATE PROFILE'),
+                label: const UniversalText('CREATE PROFILE'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -4993,7 +5457,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 TextButton(
                   onPressed: () => showDialog(context: context, builder: (_) => const SubscribeDialog()),
-                  child: const Text('Manage'),
+                  child: const UniversalText('Manage'),
                 ),
               ],
             ),
@@ -5010,7 +5474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             },
             icon: const Icon(Icons.logout_rounded),
-            label: const Text('LOG OUT'),
+            label: const UniversalText('LOG OUT'),
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.redAccent,
               side: BorderSide(color: Colors.red.withValues(alpha: .35)),
@@ -5069,8 +5533,8 @@ class _ProfileManagementCard extends StatelessWidget {
                   if (value == 'delete') onDelete();
                 },
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'switch', child: Text('Switch')), 
-                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  PopupMenuItem(value: 'switch', child: UniversalText('Switch')), 
+                  PopupMenuItem(value: 'delete', child: UniversalText('Delete')),
                 ],
               ),
             ],
@@ -5145,18 +5609,18 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Create Profile'),
+      title: const UniversalText('Create Profile'),
       content: TextField(
         controller: nameController,
         autofocus: true,
         textCapitalization: TextCapitalization.words,
-        decoration: const InputDecoration(
-          labelText: 'Profile name',
+        decoration: InputDecoration(
+          labelText: tr('Profile name'),
           prefixIcon: Icon(Icons.person_outline_rounded),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('CANCEL')),
         FilledButton(
           onPressed: () {
             final name = nameController.text.trim();
@@ -5164,7 +5628,7 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
             AppController.instance.addProfile(name);
             Navigator.pop(context);
           },
-          child: const Text('CREATE'),
+          child: const UniversalText('CREATE'),
         ),
       ],
     );
@@ -5185,22 +5649,18 @@ class SubscribeDialog extends StatelessWidget {
         AppController.instance;
 
     return AlertDialog(
-      title: const Text(
-        'Subscription',
+      title: const UniversalText('Subscription',
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Choose your subscription.',
+          const UniversalText('Choose your subscription.',
           ),
           const SizedBox(height: 20),
           ListTile(
-            title: const Text(
-              '\$54.99 USD / month',
+            title: const UniversalText('\$54.99 USD / month',
             ),
-            subtitle: const Text(
-              'No free trial',
+            subtitle: const UniversalText('No free trial',
             ),
             onTap: () {
               controller.subscribe(
@@ -5210,11 +5670,9 @@ class SubscribeDialog extends StatelessWidget {
             },
           ),
           ListTile(
-            title: const Text(
-              '\$599.99 USD / year',
+            title: const UniversalText('\$599.99 USD / year',
             ),
-            subtitle: const Text(
-              'Save \$59.89 compared with 12 monthly payments',
+            subtitle: const UniversalText('Save \$59.89 compared with 12 monthly payments',
             ),
             onTap: () {
               controller.subscribe(
@@ -5326,8 +5784,8 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: const Text('Group', style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [IconButton(tooltip: 'Refresh', onPressed: loading ? null : loadGroupData, icon: const Icon(Icons.refresh_rounded))],
+        title: const UniversalText('Group', style: TextStyle(fontWeight: FontWeight.w900)),
+        actions: [IconButton(tooltip: tr('Refresh'), onPressed: loading ? null : loadGroupData, icon: const Icon(Icons.refresh_rounded))],
       ),
       body: Column(
         children: [
@@ -5349,30 +5807,30 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
                       Container(width: 54, height: 54, decoration: BoxDecoration(color: Colors.red.withValues(alpha: .14), borderRadius: BorderRadius.circular(17)), child: const Icon(Icons.groups_rounded, size: 28)),
                       const SizedBox(width: 14),
                       const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Watch together', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                        UniversalText('Watch together', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                         SizedBox(height: 4),
-                        Text('Chat, recommend titles, and build a shared watchlist.', style: TextStyle(color: Colors.white60, height: 1.35)),
+                        UniversalText('Chat, recommend titles, and build a shared watchlist.', style: TextStyle(color: Colors.white60, height: 1.35)),
                       ])),
                     ]),
                   ),
                   const SizedBox(height: 20),
-                  _GroupSectionHeader(title: 'Group Chat', icon: Icons.chat_bubble_outline_rounded, action: _SmallHeaderButton(icon: Icons.movie_outlined, label: 'Recommend', onTap: openRecommendationDialog)),
+                  _GroupSectionHeader(title: tr('Group Chat'), icon: Icons.chat_bubble_outline_rounded, action: _SmallHeaderButton(icon: Icons.movie_outlined, label: 'Recommend', onTap: openRecommendationDialog)),
                   const SizedBox(height: 10),
                   if (controller.groupMessages.isEmpty)
-                    const _GroupEmptyCard(icon: Icons.forum_outlined, title: 'No messages yet', subtitle: 'Start the conversation below.')
+                    _GroupEmptyCard(icon: Icons.forum_outlined, title: tr('No messages yet'), subtitle: tr('Start the conversation below.'))
                   else
                     ...controller.groupMessages.map((message) => _GroupMessageBubble(sender: message.sender, message: message.message, time: _formatTime(message.timestamp), badgeName: controller.currentProfileBadge())),
                   if (controller.groupRecommendations.isNotEmpty) ...[
                     const SizedBox(height: 22),
-                    _GroupSectionHeader(title: 'Recommendations', icon: Icons.auto_awesome_outlined, action: IconButton(onPressed: refreshRecommendations, icon: const Icon(Icons.refresh_rounded))),
+                    _GroupSectionHeader(title: tr('Recommendations'), icon: Icons.auto_awesome_outlined, action: IconButton(onPressed: refreshRecommendations, icon: const Icon(Icons.refresh_rounded))),
                     const SizedBox(height: 10),
                     ...controller.groupRecommendations.map((recommendation) => GroupRecommendationCard(recommendation: recommendation, onChanged: () { if (mounted) setState(() {}); })),
                   ],
                   const SizedBox(height: 22),
-                  _GroupSectionHeader(title: 'Shared Wishlist', icon: Icons.favorite_outline_rounded, action: IconButton(onPressed: refreshWishlist, icon: const Icon(Icons.refresh_rounded))),
+                  _GroupSectionHeader(title: tr('Shared Wishlist'), icon: Icons.favorite_outline_rounded, action: IconButton(onPressed: refreshWishlist, icon: const Icon(Icons.refresh_rounded))),
                   const SizedBox(height: 10),
                   if (controller.wishlist.isEmpty)
-                    const _GroupEmptyCard(icon: Icons.favorite_border_rounded, title: 'Your group wishlist is empty', subtitle: 'Approved recommendations will appear here.')
+                    _GroupEmptyCard(icon: Icons.favorite_border_rounded, title: tr('Your group wishlist is empty'), subtitle: tr('Approved recommendations will appear here.'))
                   else
                     ...controller.wishlist.map((item) => GroupWishlistCard(item: item, onChanged: () { if (mounted) setState(() {}); })),
                   const SizedBox(height: 20),
@@ -5386,7 +5844,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               decoration: BoxDecoration(color: const Color(0xFF101010), border: Border(top: BorderSide(color: Colors.white.withValues(alpha: .07)))),
               child: Row(children: [
-                Expanded(child: TextField(controller: messageController, onSubmitted: (_) => sendMessage(), textInputAction: TextInputAction.send, decoration: InputDecoration(hintText: 'Message the group...', filled: true, fillColor: Colors.white.withValues(alpha: .05), prefixIcon: const Icon(Icons.chat_bubble_outline_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none)))),
+                Expanded(child: TextField(controller: messageController, onSubmitted: (_) => sendMessage(), textInputAction: TextInputAction.send, decoration: InputDecoration(hintText: tr('Message the group...'), filled: true, fillColor: Colors.white.withValues(alpha: .05), prefixIcon: const Icon(Icons.chat_bubble_outline_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none)))),
                 const SizedBox(width: 8),
                 Material(color: Colors.red, borderRadius: BorderRadius.circular(17), child: InkWell(onTap: sendMessage, borderRadius: BorderRadius.circular(17), child: const SizedBox(width: 52, height: 52, child: Icon(Icons.send_rounded)))),
               ]),
@@ -5531,9 +5989,8 @@ class _AddGroupRecommendationDialogState
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Enter a movie or TV show title.',
+        SnackBar(
+          content: UniversalText('Enter a movie or TV show title.',
           ),
         ),
       );
@@ -5548,9 +6005,8 @@ class _AddGroupRecommendationDialogState
 
     if (currentProfile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No profile is currently selected.',
+        SnackBar(
+          content: UniversalText('No profile is currently selected.',
           ),
         ),
       );
@@ -5563,9 +6019,8 @@ class _AddGroupRecommendationDialogState
     if (durationHours == null ||
         durationHours <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Enter a valid custom voting duration.',
+        SnackBar(
+          content: UniversalText('Enter a valid custom voting duration.',
           ),
         ),
       );
@@ -5616,8 +6071,7 @@ class _AddGroupRecommendationDialogState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to create recommendation: $message',
+          content: UniversalText('Unable to create recommendation: $message',
           ),
         ),
       );
@@ -5657,8 +6111,7 @@ class _AddGroupRecommendationDialogState
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text(
-        'Recommend to the Group',
+      title: const UniversalText('Recommend to the Group',
       ),
       content: SizedBox(
         width: 500,
@@ -5669,8 +6122,7 @@ class _AddGroupRecommendationDialogState
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Recommend any movie or TV show to the group. '
+              const UniversalText('Recommend any movie or TV show to the group. '
                 'It does not have to already exist in your library.',
               ),
               const SizedBox(
@@ -5683,11 +6135,9 @@ class _AddGroupRecommendationDialogState
                     !submitting,
                 autofocus: true,
                 decoration:
-                    const InputDecoration(
-                  labelText:
-                      'Movie or TV show title',
-                  hintText:
-                      'Enter a title...',
+                    InputDecoration(
+                  labelText: tr('Movie or TV show title'),
+                  hintText: tr('Enter a title...'),
                   prefixIcon:
                       Icon(Icons.search),
                   border:
@@ -5701,8 +6151,8 @@ class _AddGroupRecommendationDialogState
                 initialValue:
                     selectedType,
                 decoration:
-                    const InputDecoration(
-                  labelText: 'Type',
+                    InputDecoration(
+                  labelText: tr('Type'),
                   border:
                       OutlineInputBorder(),
                 ),
@@ -5717,8 +6167,7 @@ class _AddGroupRecommendationDialogState
                         SizedBox(
                           width: 10,
                         ),
-                        Text(
-                          'Movie',
+                        UniversalText('Movie',
                         ),
                       ],
                     ),
@@ -5733,8 +6182,7 @@ class _AddGroupRecommendationDialogState
                         SizedBox(
                           width: 10,
                         ),
-                        Text(
-                          'TV Show',
+                        UniversalText('TV Show',
                         ),
                       ],
                     ),
@@ -5759,35 +6207,30 @@ class _AddGroupRecommendationDialogState
                 initialValue:
                     selectedDuration,
                 decoration:
-                    const InputDecoration(
-                  labelText:
-                      'Voting duration',
+                    InputDecoration(
+                  labelText: tr('Voting duration'),
                   border:
                       OutlineInputBorder(),
                 ),
                 items: const [
                   DropdownMenuItem<String>(
                     value: '24h',
-                    child: Text(
-                      '24 hours',
+                    child: UniversalText('24 hours',
                     ),
                   ),
                   DropdownMenuItem<String>(
                     value: '3d',
-                    child: Text(
-                      '3 days',
+                    child: UniversalText('3 days',
                     ),
                   ),
                   DropdownMenuItem<String>(
                     value: '1w',
-                    child: Text(
-                      '1 week',
+                    child: UniversalText('1 week',
                     ),
                   ),
                   DropdownMenuItem<String>(
                     value: 'custom',
-                    child: Text(
-                      'Custom',
+                    child: UniversalText('Custom',
                     ),
                   ),
                 ],
@@ -5821,11 +6264,9 @@ class _AddGroupRecommendationDialogState
                         keyboardType:
                             TextInputType.number,
                         decoration:
-                            const InputDecoration(
-                          labelText:
-                              'Amount',
-                          hintText:
-                              'Example: 12',
+                            InputDecoration(
+                          labelText: tr('Amount'),
+                          hintText: tr('Example: 12'),
                           border:
                               OutlineInputBorder(),
                         ),
@@ -5844,9 +6285,8 @@ class _AddGroupRecommendationDialogState
                         initialValue:
                             customDurationUnit,
                         decoration:
-                            const InputDecoration(
-                          labelText:
-                              'Unit',
+                            InputDecoration(
+                          labelText: tr('Unit'),
                           border:
                               OutlineInputBorder(),
                         ),
@@ -5856,8 +6296,7 @@ class _AddGroupRecommendationDialogState
                             value:
                                 'hours',
                             child:
-                                Text(
-                              'Hours',
+                                UniversalText('Hours',
                             ),
                           ),
                           DropdownMenuItem<
@@ -5865,8 +6304,7 @@ class _AddGroupRecommendationDialogState
                             value:
                                 'days',
                             child:
-                                Text(
-                              'Days',
+                                UniversalText('Days',
                             ),
                           ),
                         ],
@@ -5918,8 +6356,7 @@ class _AddGroupRecommendationDialogState
                         context,
                       ).pop();
                     },
-          child: const Text(
-            'CANCEL',
+          child: const UniversalText('CANCEL',
           ),
         ),
         ElevatedButton.icon(
@@ -5940,8 +6377,7 @@ class _AddGroupRecommendationDialogState
                   : const Icon(
                       Icons.send,
                     ),
-          label: const Text(
-            'RECOMMEND',
+          label: const UniversalText('RECOMMEND',
           ),
         ),
       ],
@@ -6380,8 +6816,7 @@ class _GroupRecommendationCardState
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${typeIsMovie ? 'Movie' : 'TV Show'} '
+                      UniversalText('${typeIsMovie ? 'Movie' : 'TV Show'} '
                         'recommended by $recommender',
                         style: TextStyle(
                           color:
@@ -6425,8 +6860,7 @@ class _GroupRecommendationCardState
                     size: 18,
                   ),
                   SizedBox(width: 7),
-                  Text(
-                    'Voting ended',
+                  UniversalText('Voting ended',
                     style: TextStyle(
                       fontWeight:
                           FontWeight.w600,
@@ -6512,8 +6946,7 @@ class _GroupRecommendationCardState
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          'You voted '
+                        child: UniversalText('You voted '
                           '${currentVote.toUpperCase()}',
                           style:
                               const TextStyle(
@@ -6526,8 +6959,7 @@ class _GroupRecommendationCardState
                   ),
                 )
               else if (currentProfile == null)
-                Text(
-                  'Select a profile to vote.',
+                UniversalText('Select a profile to vote.',
                   style: TextStyle(
                     color:
                         Colors.grey.shade400,
@@ -6546,8 +6978,7 @@ class _GroupRecommendationCardState
                         icon: const Icon(
                           Icons.check,
                         ),
-                        label: const Text(
-                          'YES',
+                        label: const UniversalText('YES',
                         ),
                         style:
                             ElevatedButton
@@ -6573,8 +7004,7 @@ class _GroupRecommendationCardState
                         icon: const Icon(
                           Icons.close,
                         ),
-                        label: const Text(
-                          'NO',
+                        label: const UniversalText('NO',
                         ),
                         style:
                             ElevatedButton
@@ -6600,8 +7030,7 @@ class _GroupRecommendationCardState
                   ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Added to Group Wishlist',
+                    child: UniversalText('Added to Group Wishlist',
                       style: TextStyle(
                         color: Colors.green,
                         fontWeight:
@@ -6622,8 +7051,7 @@ class _GroupRecommendationCardState
                   ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Recommendation rejected',
+                    child: UniversalText('Recommendation rejected',
                       style: TextStyle(
                         color: Colors.red,
                         fontWeight:
@@ -6644,8 +7072,7 @@ class _GroupRecommendationCardState
                   ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Recommendation expired',
+                    child: UniversalText('Recommendation expired',
                       style: TextStyle(
                         color: Colors.red,
                         fontWeight:
@@ -6663,8 +7090,7 @@ class _GroupRecommendationCardState
                     const EdgeInsets.only(
                   top: 8,
                 ),
-                child: Text(
-                  'No votes yet.',
+                child: UniversalText('No votes yet.',
                   style: TextStyle(
                     color:
                         Colors.grey.shade500,
@@ -6737,16 +7163,14 @@ class _VotePercentage extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
-                Text(
-                  '${_formatPercentageValue(percentage)}%',
+                UniversalText('${_formatPercentageValue(percentage)}%',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight:
                         FontWeight.bold,
                   ),
                 ),
-                Text(
-                  '$votes vote${votes == 1 ? '' : 's'}',
+                UniversalText('$votes vote${votes == 1 ? '' : 's'}',
                   style: TextStyle(
                     color:
                         Colors.grey.shade500,
@@ -6807,8 +7231,7 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '${item.title} removed from the group wishlist.',
+          content: UniversalText('${item.title} removed from the group wishlist.',
           ),
         ),
       );
@@ -6817,8 +7240,7 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to remove item: $error',
+          content: UniversalText('Unable to remove item: $error',
           ),
         ),
       );
@@ -6838,9 +7260,8 @@ class GroupWishlistCard
     if (account == null ||
         account.profiles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No profiles are available.',
+        SnackBar(
+          content: UniversalText('No profiles are available.',
           ),
         ),
       );
@@ -6876,8 +7297,7 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '${item.title} was acquired for ${selectedProfile.name}.',
+          content: UniversalText('${item.title} was acquired for ${selectedProfile.name}.',
           ),
         ),
       );
@@ -6886,8 +7306,7 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to acquire item: $error',
+          content: UniversalText('Unable to acquire item: $error',
           ),
         ),
       );
@@ -6932,14 +7351,12 @@ class GroupWishlistCard
           itemBuilder: (_) => const [
             PopupMenuItem<String>(
               value: 'acquire',
-              child: Text(
-                'Acquire / Rip',
+              child: UniversalText('Acquire / Rip',
               ),
             ),
             PopupMenuItem<String>(
               value: 'remove',
-              child: Text(
-                'Remove',
+              child: UniversalText('Remove',
               ),
             ),
           ],
@@ -6968,8 +7385,7 @@ class SelectAcquisitionProfileDialog
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text(
-        'Add to Which Profile?',
+      title: const UniversalText('Add to Which Profile?',
       ),
       content: SizedBox(
         width: 450,
@@ -6977,8 +7393,7 @@ class SelectAcquisitionProfileDialog
           mainAxisSize:
               MainAxisSize.min,
           children: [
-            const Text(
-              'Choose the profile whose personal library should receive this movie or show.',
+            const UniversalText('Choose the profile whose personal library should receive this movie or show.',
             ),
             const SizedBox(height: 15),
             ...profiles.map(
@@ -7010,8 +7425,7 @@ class SelectAcquisitionProfileDialog
                     profile.id ==
                             currentProfile
                                 ?.id
-                        ? const Text(
-                            'Current profile',
+                        ? const UniversalText('Current profile',
                           )
                         : null,
                 trailing:
@@ -7036,7 +7450,7 @@ class SelectAcquisitionProfileDialog
             context,
           ),
           child:
-              const Text('CANCEL'),
+              const UniversalText('CANCEL'),
         ),
       ],
     );
@@ -7090,8 +7504,7 @@ class _WishlistDialogState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to load group wishlist: $error',
+          content: UniversalText('Unable to load group wishlist: $error',
           ),
         ),
       );
@@ -7111,8 +7524,7 @@ class _WishlistDialogState
         AppController.instance;
 
     return AlertDialog(
-      title: const Text(
-        'Group Wishlist',
+      title: const UniversalText('Group Wishlist',
       ),
       content: SizedBox(
         width: 600,
@@ -7137,8 +7549,7 @@ class _WishlistDialogState
                         SizedBox(
                           height: 15,
                         ),
-                        Text(
-                          'No group wishlist items.',
+                        UniversalText('No group wishlist items.',
                           style:
                               TextStyle(
                             fontSize: 18,
@@ -7149,8 +7560,7 @@ class _WishlistDialogState
                         SizedBox(
                           height: 8,
                         ),
-                        Text(
-                          'Shared items for the group will appear here.',
+                        UniversalText('Shared items for the group will appear here.',
                           textAlign:
                               TextAlign.center,
                         ),
@@ -7180,7 +7590,7 @@ class _WishlistDialogState
           onPressed: () =>
               Navigator.pop(context),
           child:
-              const Text('CLOSE'),
+              const UniversalText('CLOSE'),
         ),
         ElevatedButton.icon(
           onPressed:
@@ -7189,7 +7599,7 @@ class _WishlistDialogState
             Icons.refresh,
           ),
           label:
-              const Text('REFRESH'),
+              const UniversalText('REFRESH'),
         ),
       ],
     );
@@ -7218,12 +7628,12 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
     final account = controller.currentAccount;
     final currentProfile = controller.currentProfile;
     if (account == null || currentProfile == null) {
-      return const Scaffold(body: Center(child: Text('No account or profile selected.')));
+      return const Scaffold(body: Center(child: UniversalText('No account or profile selected.')));
     }
     final invitees = account.profiles.where((profile) => profile.id != currentProfile.id).toList();
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
-      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const Text('Group Watch', style: TextStyle(fontWeight: FontWeight.w900))),
+      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const UniversalText('Group Watch', style: TextStyle(fontWeight: FontWeight.w900))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
         children: [
@@ -7238,12 +7648,12 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
             ]),
           ),
           const SizedBox(height: 22),
-          const Text('Invite people', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          const UniversalText('Invite people', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
-          const Text('Select the profiles you want to watch with.', style: TextStyle(color: Colors.white54)),
+          const UniversalText('Select the profiles you want to watch with.', style: TextStyle(color: Colors.white54)),
           const SizedBox(height: 12),
           if (invitees.isEmpty)
-            const _GroupEmptyCard(icon: Icons.people_outline_rounded, title: 'No other profiles', subtitle: 'Create another profile to invite someone.')
+            _GroupEmptyCard(icon: Icons.people_outline_rounded, title: tr('No other profiles'), subtitle: tr('Create another profile to invite someone.'))
           else
             ...invitees.map((profile) {
               final selected = selectedProfiles.contains(profile.id);
@@ -7299,24 +7709,24 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
-      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const Text('Your preferences', style: TextStyle(fontWeight: FontWeight.w900))),
+      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const UniversalText('Your preferences', style: TextStyle(fontWeight: FontWeight.w900))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
         children: [
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.white.withValues(alpha: .07))),
-            child: Row(children: [const Icon(Icons.groups_rounded, size: 30), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.media.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 3), const Text('Choose your language settings before starting.', style: TextStyle(color: Colors.white54, fontSize: 12))]))]),
+            child: Row(children: [const Icon(Icons.groups_rounded, size: 30), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.media.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 3), const UniversalText('Choose your language settings before starting.', style: TextStyle(color: Colors.white54, fontSize: 12))]))]),
           ),
           const SizedBox(height: 22),
-          const Text('Audio', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const UniversalText('Audio', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
             child: DropdownButtonFormField<String>(
               initialValue: audio,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.language_rounded), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-              items: const [DropdownMenuItem(value: 'Original audio', child: Text('Original audio'))],
+              decoration: InputDecoration(prefixIcon: Icon(Icons.language_rounded), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+              items: const [DropdownMenuItem(value: 'Original audio', child: UniversalText('Original audio'))],
               onChanged: (value) { if (value != null) setState(() => audio = value); },
             ),
           ),
@@ -7329,8 +7739,8 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
               clipBehavior: Clip.antiAlias,
               child: SwitchListTile.adaptive(
                 tileColor: Colors.transparent,
-                title: const Text('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text('Use subtitles for this session', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                title: const UniversalText('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const UniversalText('Use subtitles for this session', style: TextStyle(color: Colors.white38, fontSize: 12)),
                 value: subtitlesEnabled,
                 onChanged: (value) => setState(() => subtitlesEnabled = value),
               ),
@@ -7343,7 +7753,7 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
               Navigator.pop(context);
             },
             icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('START GROUP WATCH'),
+            label: const UniversalText('START GROUP WATCH'),
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
           ),
         ],

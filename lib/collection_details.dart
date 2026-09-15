@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'player.dart';
+import 'localization.dart';
 
 /// Full-screen collection details view. It uses the same profile Details
 /// customization as movies and series, while adapting the content sections
@@ -193,7 +194,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         Text(collection.name, textAlign: _textAlignment(), maxLines: 2, overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.05)),
         const SizedBox(height: 8),
-        Text('${items.length} titles • ${collection.isAutomatic ? 'automatic' : collection.isShared ? 'collaborative' : 'private'}',
+        UniversalText('${items.length} titles • ${collection.isAutomatic ? 'automatic' : collection.isShared ? 'collaborative' : 'private'}',
             textAlign: _textAlignment(), style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
       ],
     );
@@ -248,12 +249,12 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
   Widget _buildItems() {
     final media = items;
     if (media.isEmpty) {
-      return const Padding(padding: EdgeInsets.only(bottom: 24), child: Card(child: Padding(padding: EdgeInsets.all(20), child: Text('This collection has no available titles on your server.'))));
+      return const Padding(padding: EdgeInsets.only(bottom: 24), child: Card(child: Padding(padding: EdgeInsets.all(20), child: UniversalText('This collection has no available titles on your server.'))));
     }
 
     final title = Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text('Collection Items', textAlign: _textAlignment(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+      child: UniversalText('Collection Items', textAlign: _textAlignment(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
     );
 
     if (preferences.itemLayout == 'List') {
@@ -285,8 +286,8 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: _image(media.imageUrl)),
-            Padding(padding: const EdgeInsets.fromLTRB(10, 9, 10, 2), child: Text('${index + 1}. ${media.title}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))),
-            Padding(padding: const EdgeInsets.fromLTRB(10, 2, 10, 9), child: Text('${media.releaseYear ?? ''} • ${media.type}', style: const TextStyle(color: Colors.white54, fontSize: 12))),
+            Padding(padding: const EdgeInsets.fromLTRB(10, 9, 10, 2), child: UniversalText('${index + 1}. ${media.title}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))),
+            Padding(padding: const EdgeInsets.fromLTRB(10, 2, 10, 9), child: UniversalText('${media.releaseYear ?? ''} • ${media.type}', style: const TextStyle(color: Colors.white54, fontSize: 12))),
           ]),
         ),
       );
@@ -295,8 +296,8 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         margin: const EdgeInsets.only(bottom: 9),
         child: ListTile(
           leading: SizedBox(width: 52, height: 68, child: _image(media.imageUrl)),
-          title: Text('${index + 1}. ${media.title}', style: const TextStyle(fontWeight: FontWeight.w800)),
-          subtitle: Text('${media.releaseYear ?? ''} • ${media.type}'),
+          title: UniversalText('${index + 1}. ${media.title}', style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: UniversalText('${media.releaseYear ?? ''} • ${media.type}'),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
         ),
@@ -305,7 +306,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
   Widget _buildInformation() => Padding(
         padding: const EdgeInsets.only(bottom: 24),
         child: Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Information', textAlign: _textAlignment(), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+          UniversalText('Information', textAlign: _textAlignment(), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           _info('Items', '${items.length}'),
           _info('Sort', preferences.itemSort),
@@ -319,7 +320,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         child: OutlinedButton.icon(
           onPressed: collection.isAutomatic ? null : _showCollectionActions,
           icon: const Icon(Icons.tune_rounded),
-          label: const Text('Collection Actions'),
+          label: const UniversalText('Collection Actions'),
         ),
       );
 
@@ -332,8 +333,8 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
 
   void _showCollectionActions() {
     showModalBottomSheet<void>(context: context, showDragHandle: true, builder: (_) => SafeArea(child: ListView(shrinkWrap: true, children: [
-      ListTile(leading: const Icon(Icons.play_arrow_rounded), title: const Text('Play first item'), onTap: () { Navigator.pop(context); _selectedItem = 0; _playSelected(); }),
-      ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Collection settings'), subtitle: Text(collection.sortMode)),
+      ListTile(leading: const Icon(Icons.play_arrow_rounded), title: const UniversalText('Play first item'), onTap: () { Navigator.pop(context); _selectedItem = 0; _playSelected(); }),
+      ListTile(leading: const Icon(Icons.edit_outlined), title: const UniversalText('Collection settings'), subtitle: Text(collection.sortMode)),
     ])));
   }
 

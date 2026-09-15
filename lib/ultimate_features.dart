@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'music.dart';
+import 'localization.dart';
 
 class UltimateFeaturesScreen extends StatefulWidget {
   const UltimateFeaturesScreen({super.key});
@@ -72,19 +73,18 @@ class _UltimateFeaturesScreenState
     await showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('AI Movie Concierge'),
+        title: const UniversalText('AI Movie Concierge'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Ask about your own library. '
+            const UniversalText('Ask about your own library. '
               'Example: “I have 90 minutes, what should I watch?”',
             ),
             const SizedBox(height: 12),
             TextField(
               controller: textController,
-              decoration: const InputDecoration(
-                hintText: 'What do you want to watch?',
+              decoration: InputDecoration(
+                hintText: tr('What do you want to watch?'),
               ),
             ),
           ],
@@ -94,7 +94,7 @@ class _UltimateFeaturesScreenState
             onPressed: () {
               Navigator.pop(context);
             },
-            child: const Text('CANCEL'),
+            child: const UniversalText('CANCEL'),
           ),
           FilledButton(
             onPressed: () {
@@ -116,7 +116,7 @@ class _UltimateFeaturesScreenState
                 'Concierge: Try “$pick”.',
               );
             },
-            child: const Text('ASK'),
+            child: const UniversalText('ASK'),
           ),
         ],
       ),
@@ -169,7 +169,7 @@ class _UltimateFeaturesScreenState
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Movie Battle'),
+        title: const UniversalText('Movie Battle'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -182,8 +182,7 @@ class _UltimateFeaturesScreenState
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'VS',
+            const UniversalText('VS',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
               ),
@@ -204,7 +203,7 @@ class _UltimateFeaturesScreenState
             onPressed: () {
               Navigator.pop(context);
             },
-            child: const Text('PICK ONE'),
+            child: const UniversalText('PICK ONE'),
           ),
         ],
       ),
@@ -247,14 +246,14 @@ class _UltimateFeaturesScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Everything'),
+        title: const UniversalText('Everything'),
         actions: [
           IconButton(
             onPressed: _aiConcierge,
             icon: const Icon(
               Icons.auto_awesome_rounded,
             ),
-            tooltip: 'AI Concierge',
+            tooltip: tr('AI Concierge'),
           ),
         ],
       ),
@@ -469,8 +468,7 @@ class _UltimateFeaturesScreenState
                 },
               ),
               ListTile(
-                title: const Text(
-                  'Channel style',
+                title: const UniversalText('Channel style',
                 ),
                 subtitle: Text(
                   channel,
@@ -487,16 +485,14 @@ class _UltimateFeaturesScreenState
                   await showDialog<void>(
                     context: context,
                     builder: (_) => AlertDialog(
-                      title: const Text(
-                        'Channel name',
+                      title: const UniversalText('Channel name',
                       ),
                       content: TextField(
                         controller:
                             textController,
                         decoration:
-                            const InputDecoration(
-                          hintText:
-                              'My Streaming Channel',
+                            InputDecoration(
+                          hintText: tr('My Streaming Channel'),
                         ),
                       ),
                       actions: [
@@ -507,7 +503,7 @@ class _UltimateFeaturesScreenState
                             );
                           },
                           child:
-                              const Text('CANCEL'),
+                              const UniversalText('CANCEL'),
                         ),
                         FilledButton(
                           onPressed: () {
@@ -527,7 +523,7 @@ class _UltimateFeaturesScreenState
                             );
                           },
                           child:
-                              const Text('SAVE'),
+                              const UniversalText('SAVE'),
                         ),
                       ],
                     ),
@@ -684,16 +680,14 @@ class _UltimateFeaturesScreenState
           crossAxisAlignment:
               CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Your streaming universe',
+            const UniversalText('Your streaming universe',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Everything in one place: library, devices, security, '
+            const UniversalText('Everything in one place: library, devices, security, '
               'travel, games, discovery and server controls.',
             ),
             const SizedBox(height: 16),
@@ -702,13 +696,11 @@ class _UltimateFeaturesScreenState
               runSpacing: 8,
               children: [
                 Chip(
-                  label: Text(
-                    '${controller.library.length} library titles',
+                  label: UniversalText('${controller.library.length} library titles',
                   ),
                 ),
                 Chip(
-                  label: Text(
-                    '${controller.currentAccount?.profiles.length ?? 0} profiles',
+                  label: UniversalText('${controller.currentAccount?.profiles.length ?? 0} profiles',
                   ),
                 ),
                 Chip(
@@ -824,8 +816,7 @@ class OwnerDashboardScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Owner Dashboard',
+        title: const UniversalText('Owner Dashboard',
         ),
       ),
       body: ListView(
@@ -838,8 +829,7 @@ class OwnerDashboardScreen extends StatelessWidget {
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Account control center',
+                  const UniversalText('Account control center',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
@@ -857,8 +847,7 @@ class OwnerDashboardScreen extends StatelessWidget {
                     minHeight: 10,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '${_size(account?.storageUsedBytes ?? 0)} '
+                  UniversalText('${_size(account?.storageUsedBytes ?? 0)} '
                     'used of '
                     '${_size(account?.storageLimitBytes ?? 1000000000000)}',
                   ),
@@ -933,8 +922,7 @@ class OwnerDashboardScreen extends StatelessWidget {
             context,
           ).showSnackBar(
             SnackBar(
-              content: Text(
-                '$title controls opened.',
+              content: UniversalText('$title controls opened.',
               ),
             ),
           );
@@ -959,8 +947,7 @@ class SecurityCenterScreen
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Security Center',
+        title: const UniversalText('Security Center',
         ),
       ),
       body: ListView(
@@ -1074,8 +1061,7 @@ class StatisticsScreen
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Advanced Statistics',
+        title: const UniversalText('Advanced Statistics',
         ),
       ),
       body: ListView(
@@ -1123,8 +1109,7 @@ class StatisticsScreen
 
           const SizedBox(height: 12),
 
-          const Text(
-            'Profile personality',
+          const UniversalText('Profile personality',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
@@ -1184,8 +1169,7 @@ class MovieMapScreen
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Movie Map',
+        title: const UniversalText('Movie Map',
         ),
       ),
       body: ListView(
@@ -1201,16 +1185,14 @@ class MovieMapScreen
                     size: 70,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Your Movie Map',
+                  const UniversalText('Your Movie Map',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'When location metadata is available, '
+                  const UniversalText('When location metadata is available, '
                     'titles can be grouped by filming location '
                     'and story setting.',
                     textAlign: TextAlign.center,
@@ -1221,9 +1203,8 @@ class MovieMapScreen
                       ScaffoldMessenger.of(
                         context,
                       ).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Map metadata will populate as titles are identified.',
+                        SnackBar(
+                          content: UniversalText('Map metadata will populate as titles are identified.',
                           ),
                         ),
                       );
@@ -1231,8 +1212,7 @@ class MovieMapScreen
                     icon: const Icon(
                       Icons.explore,
                     ),
-                    label: const Text(
-                      'EXPLORE',
+                    label: const UniversalText('EXPLORE',
                     ),
                   ),
                 ],
@@ -1271,8 +1251,7 @@ class ChannelScreen
       ),
       body: list.isEmpty
           ? const Center(
-              child: Text(
-                'Add media to generate your channel.',
+              child: UniversalText('Add media to generate your channel.',
               ),
             )
           : ListView.builder(
@@ -1287,15 +1266,13 @@ class ChannelScreen
                 return Card(
                   child: ListTile(
                     leading: CircleAvatar(
-                      child: Text(
-                        '${index + 1}',
+                      child: UniversalText('${index + 1}',
                       ),
                     ),
                     title: Text(
                       media.title,
                     ),
-                    subtitle: Text(
-                      '${hour.toString().padLeft(2, '0')}:00 • ${media.type}',
+                    subtitle: UniversalText('${hour.toString().padLeft(2, '0')}:00 • ${media.type}',
                     ),
                     trailing: const Icon(
                       Icons.play_arrow_rounded,
@@ -1323,8 +1300,7 @@ class NotificationCenterScreen
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Notification Center',
+        title: const UniversalText('Notification Center',
         ),
       ),
       body: ListView(
@@ -1402,8 +1378,7 @@ class _BackupScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Backup & Recovery',
+        title: const UniversalText('Backup & Recovery',
         ),
       ),
       body: ListView(
@@ -1412,16 +1387,14 @@ class _BackupScreenState
           const Card(
             child: Padding(
               padding: EdgeInsets.all(18),
-              child: Text(
-                'Backups protect your library metadata and account configuration. '
+              child: UniversalText('Backups protect your library metadata and account configuration. '
                 'Actual media backups depend on the server storage you connect.',
               ),
             ),
           ),
 
           SwitchListTile(
-            title: const Text(
-              'Library metadata',
+            title: const UniversalText('Library metadata',
             ),
             value: metadata,
             onChanged: (value) {
@@ -1432,8 +1405,7 @@ class _BackupScreenState
           ),
 
           SwitchListTile(
-            title: const Text(
-              'Watch history',
+            title: const UniversalText('Watch history',
             ),
             value: history,
             onChanged: (value) {
@@ -1444,8 +1416,7 @@ class _BackupScreenState
           ),
 
           SwitchListTile(
-            title: const Text(
-              'Profiles & settings',
+            title: const UniversalText('Profiles & settings',
             ),
             value: profiles,
             onChanged: (value) {
@@ -1456,8 +1427,7 @@ class _BackupScreenState
           ),
 
           SwitchListTile(
-            title: const Text(
-              'Collections & achievements',
+            title: const UniversalText('Collections & achievements',
             ),
             value: collections,
             onChanged: (value) {
@@ -1474,9 +1444,8 @@ class _BackupScreenState
               ScaffoldMessenger.of(
                 context,
               ).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Backup job queued.',
+                SnackBar(
+                  content: UniversalText('Backup job queued.',
                   ),
                 ),
               );
@@ -1484,8 +1453,7 @@ class _BackupScreenState
             icon: const Icon(
               Icons.backup,
             ),
-            label: const Text(
-              'BACK UP NOW',
+            label: const UniversalText('BACK UP NOW',
             ),
           ),
         ],

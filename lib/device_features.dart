@@ -10,6 +10,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Device, TV casting, account pairing and road-trip controls.
 ///
@@ -49,7 +50,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Devices & Road Trip'),
+        title: const UniversalText('Devices & Road Trip'),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 36),
@@ -61,14 +62,12 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.qr_code_2_rounded),
-              title: const Text(
-                'Show TV sign-in QR / code',
+              title: const UniversalText('Show TV sign-in QR / code',
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              subtitle: const Text(
-                'Use this when you are signing the TV app into your account.',
+              subtitle: const UniversalText('Use this when you are signing the TV app into your account.',
               ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () {
@@ -113,14 +112,12 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               children: [
                 SwitchListTile.adaptive(
                   value: carMode,
-                  title: const Text(
-                    'Road Trip Mode',
+                  title: const UniversalText('Road Trip Mode',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  subtitle: const Text(
-                    'Prioritize downloaded movies and shows when you are offline.',
+                  subtitle: const UniversalText('Prioritize downloaded movies and shows when you are offline.',
                   ),
                   onChanged: (value) {
                     setState(() {
@@ -134,9 +131,8 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
                   SwitchListTile.adaptive(
                     value: audioOnly,
-                    title: const Text('Audio-only fallback'),
-                    subtitle: const Text(
-                      'If the car has no compatible screen, keep audio playing '
+                    title: const UniversalText('Audio-only fallback'),
+                    subtitle: const UniversalText('If the car has no compatible screen, keep audio playing '
                       'while the phone shows the video.',
                     ),
                     onChanged: (value) {
@@ -148,18 +144,16 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
                   ListTile(
                     leading: const Icon(Icons.usb_rounded),
-                    title: const Text('USB / car screen'),
-                    subtitle: const Text(
-                      'Use a compatible USB media connection when the vehicle '
+                    title: const UniversalText('USB / car screen'),
+                    subtitle: const UniversalText('Use a compatible USB media connection when the vehicle '
                       'supports video playback.',
                     ),
                   ),
 
                   ListTile(
                     leading: const Icon(Icons.bluetooth_rounded),
-                    title: const Text('Bluetooth audio'),
-                    subtitle: const Text(
-                      'Connect your phone to the car for audio. Bluetooth '
+                    title: const UniversalText('Bluetooth audio'),
+                    subtitle: const UniversalText('Connect your phone to the car for audio. Bluetooth '
                       'video support depends on the vehicle.',
                     ),
                   ),
@@ -179,14 +173,12 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                   leading: const Icon(
                     Icons.download_for_offline_rounded,
                   ),
-                  title: const Text(
-                    'Download Center',
+                  title: const UniversalText('Download Center',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  subtitle: Text(
-                    '${downloads.length} title'
+                  subtitle: UniversalText('${downloads.length} title'
                     '${downloads.length == 1 ? '' : 's'} '
                     'marked for your next trip.',
                   ),
@@ -198,11 +190,10 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
                 const Divider(height: 1),
 
-                const ListTile(
+                ListTile(
                   leading: Icon(Icons.info_outline_rounded),
-                  title: Text('Download before leaving'),
-                  subtitle: Text(
-                    'Offline playback requires a licensed downloadable video '
+                  title: UniversalText('Download before leaving'),
+                  subtitle: UniversalText('Offline playback requires a licensed downloadable video '
                     'source; trailers and metadata are not full movie downloads.',
                   ),
                 ),
@@ -212,8 +203,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
           if (profile != null) ...[
             const SizedBox(height: 12),
-            Text(
-              'Signed in as ${profile.name}',
+            UniversalText('Signed in as ${profile.name}',
               style: const TextStyle(
                 color: Colors.white54,
               ),
@@ -250,16 +240,14 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Watch anywhere',
+                  UniversalText('Watch anywhere',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   SizedBox(height: 5),
-                  Text(
-                    'Cast from your phone or tablet, pair a TV, and prepare '
+                  UniversalText('Cast from your phone or tablet, pair a TV, and prepare '
                     'an offline road-trip library.',
                     style: TextStyle(
                       color: Colors.white60,
@@ -343,8 +331,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Pair a TV',
+              const UniversalText('Pair a TV',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
@@ -353,8 +340,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
               const SizedBox(height: 8),
 
-              const Text(
-                'On the TV, open My Streaming Service and choose '
+              const UniversalText('On the TV, open My Streaming Service and choose '
                 'Sign in / Pair device.',
               ),
 
@@ -372,7 +358,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                     icon: const Icon(
                       Icons.qr_code_scanner_rounded,
                     ),
-                    label: const Text('Scan QR code'),
+                    label: const UniversalText('Scan QR code'),
                   ),
 
                   OutlinedButton.icon(
@@ -383,15 +369,14 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                     icon: const Icon(
                       Icons.password_rounded,
                     ),
-                    label: const Text('Enter TV code'),
+                    label: const UniversalText('Enter TV code'),
                   ),
                 ],
               ),
 
               const SizedBox(height: 8),
 
-              const Text(
-                'Pairing signs you in without typing your account password '
+              const UniversalText('Pairing signs you in without typing your account password '
                 'on the TV.',
                 style: TextStyle(
                   color: Colors.white54,
@@ -413,20 +398,20 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     await showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Enter TV code'),
+        title: const UniversalText('Enter TV code'),
         content: TextField(
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.number,
           maxLength: 6,
-          decoration: const InputDecoration(
-            hintText: '6-digit code',
+          decoration: InputDecoration(
+            hintText: tr('6-digit code'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
 
           FilledButton(
@@ -436,7 +421,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                 _showPaired();
               }
             },
-            child: const Text('Pair'),
+            child: const UniversalText('Pair'),
           ),
         ],
       ),
@@ -469,9 +454,8 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
   /// Performs `_showPaired` for this feature. Update this documentation when its contract changes.
   void _showPaired() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'TV paired. You can now send playback to it.',
+      SnackBar(
+        content: UniversalText('TV paired. You can now send playback to it.',
         ),
       ),
     );
@@ -492,19 +476,16 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               leading: const Icon(
                 Icons.cast_rounded,
               ),
-              title: Text(
-                'Cast to ${device.name}',
+              title: UniversalText('Cast to ${device.name}',
               ),
-              subtitle: const Text(
-                'Chromecast / AirPlay / compatible smart-TV transport',
+              subtitle: const UniversalText('Chromecast / AirPlay / compatible smart-TV transport',
               ),
               onTap: () {
                 Navigator.pop(context);
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      'Ready to cast to ${device.name}. '
+                    content: UniversalText('Ready to cast to ${device.name}. '
                       'Start a movie and choose Cast.',
                     ),
                   ),
@@ -516,19 +497,16 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
               leading: const Icon(
                 Icons.link_rounded,
               ),
-              title: const Text(
-                'Use as remote',
+              title: const UniversalText('Use as remote',
               ),
-              subtitle: const Text(
-                'Control play, pause, seek, audio and subtitles.',
+              subtitle: const UniversalText('Control play, pause, seek, audio and subtitles.',
               ),
               onTap: () {
                 Navigator.pop(context);
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Remote controls are ready for the paired-device flow.',
+                  SnackBar(
+                    content: UniversalText('Remote controls are ready for the paired-device flow.',
                     ),
                   ),
                 );
@@ -556,8 +534,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Offline Download Center',
+                const UniversalText('Offline Download Center',
                   style: TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w900,
@@ -566,8 +543,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
 
                 const SizedBox(height: 8),
 
-                const Text(
-                  'Choose titles to prepare for a road trip. Actual offline '
+                const UniversalText('Choose titles to prepare for a road trip. Actual offline '
                   'video storage must come from a licensed downloadable source.',
                 ),
 
@@ -576,8 +552,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                 if (media.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text(
-                      'Your library is empty.',
+                    child: UniversalText('Your library is empty.',
                     ),
                   )
                 else
@@ -611,8 +586,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                   icon: const Icon(
                     Icons.check_rounded,
                   ),
-                  label: const Text(
-                    'Done',
+                  label: const UniversalText('Done',
                   ),
                 ),
               ],
@@ -664,7 +638,7 @@ class TvPairingScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sign in on TV'),
+        title: const UniversalText('Sign in on TV'),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -678,8 +652,7 @@ class TvPairingScreen extends StatelessWidget {
 
               const SizedBox(height: 14),
 
-              const Text(
-                'Scan this QR code',
+              const UniversalText('Scan this QR code',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
@@ -688,8 +661,7 @@ class TvPairingScreen extends StatelessWidget {
 
               const SizedBox(height: 8),
 
-              const Text(
-                'Or enter the code shown below on the TV.',
+              const UniversalText('Or enter the code shown below on the TV.',
               ),
 
               const SizedBox(height: 24),
@@ -713,8 +685,7 @@ class TvPairingScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              const Text(
-                'This code is temporary and should only be used on your TV.',
+              const UniversalText('This code is temporary and should only be used on your TV.',
                 style: TextStyle(
                   color: Colors.white54,
                 ),
@@ -736,7 +707,7 @@ class _QrScannerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan TV QR code'),
+        title: const UniversalText('Scan TV QR code'),
       ),
       body: MobileScanner(
         onDetect: (capture) {

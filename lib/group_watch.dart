@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 class GroupWatchScreen extends StatefulWidget {
   final MediaItem media;
@@ -387,7 +388,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   /// Performs `_chooseAudio` for this feature. Update this documentation when its contract changes.
   Future<void> _chooseAudio() async {
     final selected = await _showTrackPicker(
-      title: 'Audio',
+      title: tr('Audio'),
       tracks: _audioTracks,
       selectedId: _localAudioTrackId,
     );
@@ -419,7 +420,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   /// Performs `_chooseSubtitles` for this feature. Update this documentation when its contract changes.
   Future<void> _chooseSubtitles() async {
     final selected = await _showTrackPicker(
-      title: 'Subtitles',
+      title: tr('Subtitles'),
       tracks: _subtitleTracks,
       selectedId: _localSubtitleTrackId ?? 'none',
     );
@@ -476,8 +477,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  'Your choice only affects your playback.',
+                UniversalText('Your choice only affects your playback.',
                   style: TextStyle(
                     color: Colors.grey.shade500,
                     fontSize: 12,
@@ -627,7 +627,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
 
               return AlertDialog(
                 backgroundColor: const Color(0xFF171717),
-                title: const Text('Why are you pausing?'),
+                title: const UniversalText('Why are you pausing?'),
                 content: SizedBox(
                   width: 440,
                   child: SingleChildScrollView(
@@ -653,7 +653,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                           ),
                           const RadioListTile<String>(
                             value: 'custom',
-                            title: Text('Custom reason'),
+                            title: UniversalText('Custom reason'),
                           ),
                           if (custom) ...[
                             const SizedBox(height: 8),
@@ -661,10 +661,9 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                               controller: textController,
                               autofocus: true,
                               maxLines: 3,
-                              decoration: const InputDecoration(
-                                labelText: 'Tell everyone why',
-                                hintText:
-                                    'Example: I need five minutes.',
+                              decoration: InputDecoration(
+                                labelText: tr('Tell everyone why'),
+                                hintText: tr('Example: I need five minutes.'),
                                 border: OutlineInputBorder(),
                               ),
                             ),
@@ -679,7 +678,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                     onPressed: () {
                       Navigator.pop(dialogContext);
                     },
-                    child: const Text('CANCEL'),
+                    child: const UniversalText('CANCEL'),
                   ),
                   FilledButton(
                     onPressed: selected == null
@@ -705,7 +704,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                               selected,
                             );
                           },
-                    child: const Text('PAUSE'),
+                    child: const UniversalText('PAUSE'),
                   ),
                 ],
               );
@@ -766,18 +765,17 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF171717),
-          title: const Text('End Group Watch?'),
-          content: const Text(
-            'Everyone will leave this synchronized watch session.',
+          title: const UniversalText('End Group Watch?'),
+          content: const UniversalText('Everyone will leave this synchronized watch session.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('CANCEL'),
+              child: const UniversalText('CANCEL'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('END SESSION'),
+              child: const UniversalText('END SESSION'),
             ),
           ],
         );
@@ -991,8 +989,8 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     if (participant != null && participant.isDeclined) {
       return _buildSimpleState(
         icon: Icons.block_outlined,
-        title: 'Invitation declined',
-        message: 'You declined this Group Watch invitation.',
+        title: tr('Invitation declined'),
+        message: tr('You declined this Group Watch invitation.'),
         button: 'GO BACK',
       );
     }
@@ -1000,8 +998,8 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
     if (session.isEnded) {
       return _buildSimpleState(
         icon: Icons.check_circle_outline,
-        title: 'Group Watch ended',
-        message: 'Thanks for watching together.',
+        title: tr('Group Watch ended'),
+        message: tr('Thanks for watching together.'),
         button: 'DONE',
       );
     }
@@ -1013,7 +1011,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   Widget _buildErrorState() {
     return _buildSimpleState(
       icon: Icons.cloud_off_outlined,
-      title: 'Unable to load Group Watch',
+      title: tr('Unable to load Group Watch'),
       message: _errorMessage ?? 'Unknown error.',
       button: 'TRY AGAIN',
       onPressed: _initialize,
@@ -1024,8 +1022,8 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   Widget _buildMissingSessionState() {
     return _buildSimpleState(
       icon: Icons.groups_2_outlined,
-      title: 'Group Watch session not found',
-      message: 'The session may have ended or is no longer available.',
+      title: tr('Group Watch session not found'),
+      message: tr('The session may have ended or is no longer available.'),
       button: 'GO BACK',
     );
   }
@@ -1034,9 +1032,8 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
   Widget _buildExpiredState() {
     return _buildSimpleState(
       icon: Icons.link_off_rounded,
-      title: 'This invitation link is expired.',
-      message:
-          'The Group Watch invitation is no longer available because its invitation window has ended.',
+      title: tr('This invitation link is expired.'),
+      message: tr('The Group Watch invitation is no longer available because its invitation window has ended.'),
       button: 'GO BACK',
     );
   }
@@ -1143,8 +1140,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                           ),
                         ),
                         const SizedBox(height: 18),
-                        const Text(
-                          'You have been invited',
+                        const UniversalText('You have been invited',
                           style: TextStyle(
                             fontSize: 27,
                             fontWeight: FontWeight.w800,
@@ -1152,8 +1148,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 10),
-                        Text(
-                          '${host?.profileName ?? 'Someone'} invited you to watch ${widget.media.title}.',
+                        UniversalText('${host?.profileName ?? 'Someone'} invited you to watch ${widget.media.title}.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.grey.shade400,
@@ -1173,7 +1168,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                                   minimumSize:
                                       const Size(0, 54),
                                 ),
-                                child: const Text('DECLINE'),
+                                child: const UniversalText('DECLINE'),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -1188,7 +1183,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                                 icon: const Icon(
                                   Icons.check_rounded,
                                 ),
-                                label: const Text('ACCEPT'),
+                                label: const UniversalText('ACCEPT'),
                               ),
                             ),
                           ],
@@ -1461,8 +1456,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
             const Icon(Icons.groups_rounded, size: 21),
             const SizedBox(width: 9),
             const Expanded(
-              child: Text(
-                'GROUP WATCH',
+              child: UniversalText('GROUP WATCH',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
@@ -1473,7 +1467,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
             _statusBadge(session),
             const SizedBox(width: 5),
             IconButton(
-              tooltip: 'Participants',
+              tooltip: tr('Participants'),
               onPressed: () {
                 _showParticipantsSheet(session);
               },
@@ -1483,7 +1477,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
             ),
             if (_isHost)
               IconButton(
-                tooltip: 'End session',
+                tooltip: tr('End session'),
                 onPressed: _working ? null : _endSession,
                 icon: const Icon(
                   Icons.more_horiz_rounded,
@@ -1770,15 +1764,13 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                 crossAxisAlignment:
                     CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '$ready/${accepted.length}',
+                  UniversalText('$ready/${accepted.length}',
                     style: const TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  Text(
-                    'ready',
+                  UniversalText('ready',
                     style: TextStyle(
                       color: Colors.grey.shade500,
                       fontSize: 11,
@@ -1826,8 +1818,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-                Text(
-                  '$name paused the watch',
+                UniversalText('$name paused the watch',
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                   ),
@@ -1867,11 +1858,11 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
           crossAxisAlignment:
               CrossAxisAlignment.start,
           children: [
-            const _Heading(
+            _Heading(
               icon: Icons.tune_rounded,
-              title: 'Your preferences',
+              title: tr('Your preferences'),
               subtitle:
-                  'Everyone can choose independently.',
+                  tr('Everyone can choose independently.'),
             ),
             const SizedBox(height: 16),
             Row(
@@ -1879,7 +1870,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                 Expanded(
                   child: _PreferenceTile(
                     icon: Icons.language_rounded,
-                    title: 'Audio',
+                    title: tr('Audio'),
                     value: _audioLabel(
                       participant.audioTrackId ??
                           _localAudioTrackId,
@@ -1892,7 +1883,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                 Expanded(
                   child: _PreferenceTile(
                     icon: Icons.subtitles_outlined,
-                    title: 'Subtitles',
+                    title: tr('Subtitles'),
                     value: _subtitleLabel(
                       participant.subtitleTrackId ??
                           _localSubtitleTrackId,
@@ -1948,25 +1939,24 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: _Heading(
                     icon: Icons.people_alt_outlined,
-                    title: 'People watching',
-                    subtitle: 'Live participant status',
+                    title: tr('People watching'),
+                    subtitle: tr('Live participant status'),
                   ),
                 ),
                 TextButton(
                   onPressed: () {
                     _showParticipantsSheet(session);
                   },
-                  child: const Text('VIEW ALL'),
+                  child: const UniversalText('VIEW ALL'),
                 ),
               ],
             ),
             const SizedBox(height: 15),
             if (participants.isEmpty)
-              Text(
-                'No participants found.',
+              UniversalText('No participants found.',
                 style: TextStyle(
                   color: Colors.grey.shade500,
                 ),
@@ -2217,8 +2207,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Playback is synchronized',
+              const UniversalText('Playback is synchronized',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                 ),
@@ -2240,7 +2229,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
           onPressed:
               _working ? null : _pauseSession,
           icon: const Icon(Icons.pause_rounded),
-          label: const Text('PAUSE'),
+          label: const UniversalText('PAUSE'),
         ),
       ],
     );
@@ -2270,8 +2259,7 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
         ),
         if (!_canResume) ...[
           const SizedBox(height: 10),
-          Text(
-            'The person who paused must return before playback can resume.',
+          UniversalText('The person who paused must return before playback can resume.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.grey.shade500,
@@ -2419,16 +2407,14 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                 28,
               ),
               children: [
-                const Text(
-                  'Participants',
+                const UniversalText('Participants',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 5),
-                Text(
-                  '${participants.length} participant${participants.length == 1 ? '' : 's'} in this session',
+                UniversalText('${participants.length} participant${participants.length == 1 ? '' : 's'} in this session',
                   style: TextStyle(
                     color: Colors.grey.shade500,
                   ),

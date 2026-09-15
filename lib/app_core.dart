@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
 import './supabase/supabase_service.dart';
+import 'localization.dart';
 
 enum SubscriptionPlan {
   monthly,
@@ -2491,7 +2492,7 @@ class AppController extends ChangeNotifier {
 
       sendGroupMessage(
         message:
-            '$icon ${currentProfile?.name ?? 'You'} recommended the $typeLabel "$titleForMessage"',
+            tr("$icon ${currentProfile?.name ?? 'You'} recommended the $typeLabel \"$titleForMessage\""),
       );
       addNotification(
         action: 'added a $typeLabel recommendation "$titleForMessage"',
@@ -3899,7 +3900,7 @@ class AppController extends ChangeNotifier {
 
     sendGroupMessage(
       message:
-          '$profileName paused the Group Watch — ${_pauseReasonDisplay(cleanedReason)}',
+          tr('$profileName paused the Group Watch — ${_pauseReasonDisplay(cleanedReason)}'),
     );
 
     notifyListeners();
@@ -4785,6 +4786,7 @@ class DetailsCustomization {
   bool showReactions;
   bool showInformation;
   bool showLibrary;
+  bool showRecommendations;
 
   bool showReleaseYear;
   bool showRating;
@@ -4818,6 +4820,7 @@ class DetailsCustomization {
     this.showReactions = true,
     this.showInformation = true,
     this.showLibrary = true,
+    this.showRecommendations = true,
     this.showReleaseYear = true,
     this.showRating = true,
     this.showContentRating = true,
@@ -4846,6 +4849,7 @@ class DetailsCustomization {
               'Trailer',
               'Group Watch',
               'Reviews',
+              'Recommendations',
               'Audio & Subtitles',
               'Reactions',
               'Information',
@@ -4867,6 +4871,7 @@ class DetailsCustomization {
       showReactions: showReactions,
       showInformation: showInformation,
       showLibrary: showLibrary,
+      showRecommendations: showRecommendations,
       showReleaseYear: showReleaseYear,
       showRating: showRating,
       showContentRating: showContentRating,
@@ -4913,6 +4918,9 @@ class DetailsCustomizationStore {
     if (!value.sectionOrder.contains('Collection Items')) {
       value.sectionOrder.add('Collection Items');
     }
+    if (!value.sectionOrder.contains('Recommendations')) {
+      value.sectionOrder.add('Recommendations');
+    }
     return value.copy();
   }
 
@@ -4945,7 +4953,7 @@ class DetailsCustomizationStore {
     'showOwnership': v.showOwnership, 'showDescription': v.showDescription, 'showSeasons': v.showSeasons,
     'showPlay': v.showPlay, 'showTrailer': v.showTrailer, 'showGroupWatch': v.showGroupWatch,
     'showAudioSubtitles': v.showAudioSubtitles, 'showReactions': v.showReactions, 'showInformation': v.showInformation,
-    'showLibrary': v.showLibrary, 'showReleaseYear': v.showReleaseYear, 'showRating': v.showRating,
+    'showLibrary': v.showLibrary, 'showRecommendations': v.showRecommendations, 'showReleaseYear': v.showReleaseYear, 'showRating': v.showRating,
     'showContentRating': v.showContentRating, 'showRuntime': v.showRuntime, 'posterStyle': v.posterStyle,
     'posterPosition': v.posterPosition, 'posterSize': v.posterSize, 'titleAlignment': v.titleAlignment,
     'buttonAlignment': v.buttonAlignment, 'informationAlignment': v.informationAlignment, 'seasonPlacement': v.seasonPlacement,
@@ -4960,7 +4968,7 @@ class DetailsCustomizationStore {
     showPlay: m['showPlay'] == false ? false : true, showTrailer: m['showTrailer'] == false ? false : true,
     showGroupWatch: m['showGroupWatch'] == false ? false : true, showAudioSubtitles: m['showAudioSubtitles'] == false ? false : true,
     showReactions: m['showReactions'] == false ? false : true, showInformation: m['showInformation'] == false ? false : true,
-    showLibrary: m['showLibrary'] == false ? false : true, showReleaseYear: m['showReleaseYear'] == false ? false : true,
+    showLibrary: m['showLibrary'] == false ? false : true, showRecommendations: m['showRecommendations'] == false ? false : true, showReleaseYear: m['showReleaseYear'] == false ? false : true,
     showRating: m['showRating'] == false ? false : true, showContentRating: m['showContentRating'] == false ? false : true,
     showRuntime: m['showRuntime'] == false ? false : true, posterStyle: m['posterStyle']?.toString() ?? 'Standard',
     posterPosition: m['posterPosition']?.toString() ?? 'Center', posterSize: m['posterSize']?.toString() ?? 'Medium',

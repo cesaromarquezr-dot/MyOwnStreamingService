@@ -5,6 +5,7 @@
 // Customizable server storage dashboard used by the More menu and home server.
 
 import 'package:flutter/material.dart';
+import 'localization.dart';
 
 const Map<String, Color> namedColors = {
   'Red': Colors.red,
@@ -91,13 +92,12 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Server Storage'),
+        title: const UniversalText('Server Storage'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
-            'Media storage',
+          const UniversalText('Media storage',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w900,
@@ -106,8 +106,7 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
 
           const SizedBox(height: 6),
 
-          const Text(
-            'No media has been imported yet. Storage usage will remain at 0 until media is added.',
+          const UniversalText('No media has been imported yet. Storage usage will remain at 0 until media is added.',
           ),
 
           const SizedBox(height: 20),
@@ -119,7 +118,7 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
           FilledButton.icon(
             onPressed: _edit,
             icon: const Icon(Icons.palette_outlined),
-            label: const Text('Customize storage colors'),
+            label: const UniversalText('Customize storage colors'),
           ),
 
           const SizedBox(height: 12),
@@ -127,7 +126,7 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
           OutlinedButton.icon(
             onPressed: _showInfo,
             icon: const Icon(Icons.info_outline),
-            label: const Text('How storage is calculated'),
+            label: const UniversalText('How storage is calculated'),
           ),
         ],
       ),
@@ -207,7 +206,7 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Storage colors'),
+          title: const UniversalText('Storage colors'),
 
           content: SizedBox(
             width: 420,
@@ -260,7 +259,7 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text('$category color'),
+          title: UniversalText('$category color'),
 
           content: SizedBox(
             width: 420,
@@ -341,9 +340,8 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
       context: context,
       builder: (_) {
         return const AlertDialog(
-          title: Text('Storage'),
-          content: Text(
-            'Storage starts at 0 because no media has been imported. '
+          title: UniversalText('Storage'),
+          content: UniversalText('Storage starts at 0 because no media has been imported. '
             'Storage usage will increase when movies, series, music, '
             'or other media are actually imported into the server.',
           ),

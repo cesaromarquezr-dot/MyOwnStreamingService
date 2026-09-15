@@ -3,6 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import '../models/account.dart';
+import '../models/account_member.dart';
 import '../models/media.dart';
 import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
@@ -81,43 +82,27 @@ class Database {
   /// Loads persistent account data from Supabase into the in-memory cache.
   /// The backend remains the authoritative API; Supabase is the durable store.
   Future<void> initializePersistent() async {
-  try {
-    final store = SupabaseStore.instance;
+    try {
+      final store = SupabaseStore.instance;
+      if (!store.enabled) return;
 
-    print('Persistent initialization: Supabase enabled = ${store.enabled}');
-
-    if (!store.enabled) {
-      print('Persistent initialization: Supabase is disabled.');
-      return;
+      final accounts = await store.loadAccounts();
+      for (final account in accounts) {
+        _cacheAccount(account);
+      }
+      final memberLogins = await store.loadMemberLogins();
+      for (final login in memberLogins) {
+        registerMemberLogin(login);
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'Unable to load persistent database state. Starting with in-memory cache.',
+        name: 'Database',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
-
-    print('Persistent initialization: loading accounts from Supabase...');
-
-    final stopwatch = Stopwatch()..start();
-    final accounts = await store.loadAccounts();
-    stopwatch.stop();
-
-    print(
-      'Persistent initialization: loaded ${accounts.length} accounts '
-      'in ${stopwatch.elapsedMilliseconds} ms.',
-    );
-
-    for (final account in accounts) {
-      _cacheAccount(account);
-    }
-
-    print('Persistent initialization: complete.');
-  } catch (error, stackTrace) {
-    print('Persistent initialization FAILED: $error');
-
-    developer.log(
-      'Unable to load persistent database state. Starting with in-memory cache.',
-      name: 'Database',
-      error: error,
-      stackTrace: stackTrace,
-    );
   }
-}
 
   void _cacheAccount(Account account) {
     final username = account.username.trim().toLowerCase();
@@ -126,36 +111,6 @@ class Database {
     accountsById[account.id] = account;
     if (username.isNotEmpty) accountIdByUsername[username] = account.id;
     if (email.isNotEmpty) accountIdByEmail[email] = account.id;
-  }
-
-  /// Updates the in-memory account cache and waits for Supabase persistence.
-  /// This is used by operations, such as signup, that must not return success
-  /// until the durable account row has been written.
-  Future<void> persistAccount(Account account) async {
-    final username = account.username.trim().toLowerCase();
-    final email = account.email.trim().toLowerCase();
-
-    final previous = accountsById[account.id];
-    if (previous != null) {
-      final previousUsername = previous.username.trim().toLowerCase();
-      final previousEmail = previous.email.trim().toLowerCase();
-
-      if (previousUsername != username &&
-          accountIdByUsername[previousUsername] == account.id) {
-        accountIdByUsername.remove(previousUsername);
-      }
-
-      if (previousEmail != email &&
-          accountIdByEmail[previousEmail] == account.id) {
-        accountIdByEmail.remove(previousEmail);
-      }
-    }
-
-    accountsById[account.id] = account;
-    accountIdByUsername[username] = account.id;
-    accountIdByEmail[email] = account.id;
-
-    await SupabaseStore.instance.upsertAccount(account);
   }
 
   void _persistAccount(Account account) {
@@ -182,6 +137,11 @@ class Database {
 
   final Map<String, String> accountIdByEmail =
       {};
+
+  // Login identities are separate from accounts. A person can belong to
+  // multiple accounts, so email must never be used as the account ID.
+  final Map<String, List<MemberLoginRecord>> memberLoginsByEmail =
+      <String, List<MemberLoginRecord>>{};
 
   // ---------------------------------------------------------------------------
   // SESSIONS
@@ -285,6 +245,31 @@ class Database {
     }
 
     return accountsById[accountId];
+  }
+
+  List<MemberLoginRecord> getMemberLoginsByEmail(String email) {
+    return List<MemberLoginRecord>.unmodifiable(
+      memberLoginsByEmail[email.trim().toLowerCase()] ?? const <MemberLoginRecord>[],
+    );
+  }
+
+  void registerMemberLogin(MemberLoginRecord login) {
+    final key = login.email.trim().toLowerCase();
+    final entries = memberLoginsByEmail.putIfAbsent(key, () => <MemberLoginRecord>[]);
+    entries.removeWhere((existing) => existing.memberId == login.memberId);
+    entries.add(login);
+  }
+
+  void removeMemberLogin(String email, {String? accountId}) {
+    final key = email.trim().toLowerCase();
+    final entries = memberLoginsByEmail[key];
+    if (entries == null) return;
+    if (accountId == null) {
+      memberLoginsByEmail.remove(key);
+      return;
+    }
+    entries.removeWhere((login) => login.accountId == accountId);
+    if (entries.isEmpty) memberLoginsByEmail.remove(key);
   }
 
   Account? getAccountByEmail(
@@ -393,6 +378,15 @@ class Database {
 
     accountsById[account.id] = account;
 
+    registerMemberLogin(MemberLoginRecord(
+      memberId: 'owner_${account.id}',
+      accountId: account.id,
+      email: email,
+      passwordHash: account.passwordHash,
+      role: 'owner',
+      status: 'active',
+    ));
+
     accountIdByUsername[username] =
         account.id;
 
@@ -423,6 +417,10 @@ class Database {
     accountIdByEmail.remove(email);
 
     accountsById.remove(accountId);
+
+    for (final email in memberLoginsByEmail.keys.toList()) {
+      removeMemberLogin(email, accountId: accountId);
+    }
 
     deleteSessionsForAccount(
       accountId,

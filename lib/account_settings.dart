@@ -5,6 +5,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Implements the `AccountSettingsScreen` class for this feature or UI component.
 class AccountSettingsScreen extends StatefulWidget {
@@ -139,27 +140,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Request more storage'),
+          title: const UniversalText('Request more storage'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Additional storage is physical storage that will be purchased and installed on your account server after payment is received.'),
+              const UniversalText('Additional storage is physical storage that will be purchased and installed on your account server after payment is received.'),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 initialValue: selectedTb,
-                decoration: const InputDecoration(labelText: 'Additional storage'),
-                items: [for (final tb in options) DropdownMenuItem(value: tb, child: Text('+ $tb TB'))],
+                decoration: InputDecoration(labelText: tr('Additional storage')),
+                items: [for (final tb in options) DropdownMenuItem(value: tb, child: UniversalText('+ $tb TB'))],
                 onChanged: (value) => setDialogState(() => selectedTb = value ?? 1),
               ),
               const SizedBox(height: 12),
-              Text('Additional fee: ${_price(selectedTb * pricePerTbUsd)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+              UniversalText('Additional fee: ${_price(selectedTb * pricePerTbUsd)}', style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              const Text('This is a request for physical hardware. The platform owner will review the request, receive payment, obtain the storage, install it, and then update your server capacity.'),
+              const UniversalText('This is a request for physical hardware. The platform owner will review the request, receive payment, obtain the storage, install it, and then update your server capacity.'),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+            TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('CANCEL')),
             FilledButton(
               onPressed: () async {
                 Navigator.pop(context);
@@ -183,13 +184,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     requestStatus = 'requested';
                   });
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage request sent. Please wait for the platform owner to contact you.')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Storage request sent. Please wait for the platform owner to contact you.')));
                 } catch (e) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                 }
               },
-              child: const Text('SEND REQUEST'),
+              child: const UniversalText('SEND REQUEST'),
             ),
           ],
         ),
@@ -202,19 +203,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final ok = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Delete account?'),
-            content: const Text(
-              'This permanently removes the account, profiles, sessions, '
+            title: const UniversalText('Delete account?'),
+            content: const UniversalText('This permanently removes the account, profiles, sessions, '
               'remote workers and account data. This cannot be undone.',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('CANCEL'),
+                child: const UniversalText('CANCEL'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('DELETE ACCOUNT'),
+                child: const UniversalText('DELETE ACCOUNT'),
               ),
             ],
           ),
@@ -253,7 +253,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Account Settings'),
+        title: const UniversalText('Account Settings'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(18),
@@ -264,24 +264,21 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Subscription & currency',
+                  const UniversalText('Subscription & currency',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Your base plan is \$10/month or \$100/year USD equivalent. '
+                  UniversalText('Your base plan is \$10/month or \$100/year USD equivalent. '
                     'Your checkout display uses your device/account country: '
                     '${_currency()}. Current conversion is configurable by '
                     'the service and should be refreshed by the production '
                     'billing provider.',
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Monthly: ${_price(10)}   •   Yearly: ${_price(100)}',
+                  UniversalText('Monthly: ${_price(10)}   •   Yearly: ${_price(100)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                     ),
@@ -303,15 +300,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     children: [
                       const Icon(Icons.storage_rounded),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Server storage',
+                      const UniversalText('Server storage',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                       const Spacer(),
-                      Text('${(pct * 100).toStringAsFixed(0)}%'),
+                      UniversalText('${(pct * 100).toStringAsFixed(0)}%'),
                     ],
                   ),
 
@@ -324,14 +320,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
                   const SizedBox(height: 8),
 
-                  Text(
-                    '${_size(used)} used of ${_size(limit)}',
+                  UniversalText('${_size(used)} used of ${_size(limit)}',
                   ),
 
                   const SizedBox(height: 8),
                   if (pending)
-                    Text(
-                      'Request: +$requestedTb TB • ${requestStatus.replaceAll('_', ' ')} • Fee: ${_price(requestFeeUsd)}',
+                    UniversalText('Request: +$requestedTb TB • ${requestStatus.replaceAll('_', ' ')} • Fee: ${_price(requestFeeUsd)}',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
 
@@ -356,9 +350,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           const Card(
             child: ListTile(
               leading: Icon(Icons.devices),
-              title: Text('Device roles'),
-              subtitle: Text(
-                'PC/desktop: remote disc importing. '
+              title: UniversalText('Device roles'),
+              subtitle: UniversalText('PC/desktop: remote disc importing. '
                 'Phone/tablet: downloads and casting. '
                 'TV: best big-screen experience. '
                 'HDMI from a computer is supported where the hardware '
@@ -375,9 +368,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 Icons.delete_forever,
                 color: Colors.redAccent,
               ),
-              title: const Text('Delete account'),
-              subtitle: const Text(
-                'Permanently stop using the service and remove the account.',
+              title: const UniversalText('Delete account'),
+              subtitle: const UniversalText('Permanently stop using the service and remove the account.',
               ),
               onTap: _deleteAccount,
             ),

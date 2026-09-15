@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Implements the `LiveSportsScreen` class for this feature or UI component.
 class LiveSportsScreen extends StatefulWidget {
@@ -159,25 +160,25 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
           }).toList();
 
           return AlertDialog(
-            title: const Text('Follow Teams & Leagues'),
+            title: const UniversalText('Follow Teams & Leagues'),
             content: SizedBox(
               width: 560,
               height: 620,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Follow any available team in any supported league. Followed teams get priority on Home when they are playing live.'),
+                  const UniversalText('Follow any available team in any supported league. Followed teams get priority on Home when they are playing live.'),
                   const SizedBox(height: 14),
                   TextField(
                     controller: searchController,
                     onChanged: (value) => setDialogState(() => search = value),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       prefixIcon: Icon(Icons.search),
-                      hintText: 'Search teams...',
+                      hintText: tr('Search teams...'),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text('LEAGUES', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+                  const UniversalText('LEAGUES', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
                   const SizedBox(height: 4),
                   Expanded(
                     child: loadingTeams
@@ -207,7 +208,7 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
                                   child: Row(
                                     children: [
                                       Expanded(child: Text(entry['league']?.toString() ?? 'League', style: const TextStyle(fontWeight: FontWeight.w900))),
-                                      Text('${(entry['teams'] is List ? (entry['teams'] as List).length : 0)} teams', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                      UniversalText('${(entry['teams'] is List ? (entry['teams'] as List).length : 0)} teams', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                                     ],
                                   ),
                                 ),
@@ -241,7 +242,7 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
                               if (filteredLeagues.isEmpty && normalizedSearch.isNotEmpty)
                                 const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 24),
-                                  child: Center(child: Text('No teams or leagues match your search.')),
+                                  child: Center(child: UniversalText('No teams or leagues match your search.')),
                                 ),
                             ],
                           ),
@@ -250,8 +251,8 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Save')),
             ],
           );
         },
@@ -311,10 +312,10 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Live Sports'),
+        title: const UniversalText('Live Sports'),
         actions: [
-          IconButton(onPressed: _showFollowing, icon: const Icon(Icons.star_outline_rounded), tooltip: 'Follow teams and leagues'),
-          IconButton(onPressed: loading || upcomingLoading ? null : _refreshAll, icon: const Icon(Icons.refresh), tooltip: 'Refresh sports'),
+          IconButton(onPressed: _showFollowing, icon: const Icon(Icons.star_outline_rounded), tooltip: tr('Follow teams and leagues')),
+          IconButton(onPressed: loading || upcomingLoading ? null : _refreshAll, icon: const Icon(Icons.refresh), tooltip: tr('Refresh sports')),
         ],
       ),
       body: RefreshIndicator(
@@ -328,22 +329,22 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('GLOBAL LIVE SPORTS', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                    const UniversalText('GLOBAL LIVE SPORTS', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
                     const SizedBox(height: 6),
-                    const Text('Live scores are discovered from the scoreboard feed. Authorized original video broadcasts play directly inside this app.'),
+                    const UniversalText('Live scores are discovered from the scoreboard feed. Authorized original video broadcasts play directly inside this app.'),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
                       initialValue: sport,
                       items: sports.map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
                       onChanged: (v) { if (v != null) { setState(() => sport = v); _load(); _loadUpcoming(); } },
-                      decoration: const InputDecoration(labelText: 'Sport', border: OutlineInputBorder()),
+                      decoration: InputDecoration(labelText: tr('Sport'), border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: country,
                       items: countries.map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
                       onChanged: (v) { if (v != null) { setState(() => country = v); _load(); _loadUpcoming(); } },
-                      decoration: const InputDecoration(labelText: 'Country', border: OutlineInputBorder()),
+                      decoration: InputDecoration(labelText: tr('Country'), border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(onPressed: _showFollowing, icon: const Icon(Icons.star_border), label: Text(followedTeams.isEmpty && followedLeagues.isEmpty ? 'Follow teams & leagues' : 'Manage following')),
@@ -353,23 +354,23 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
             ),
             const SizedBox(height: 16),
             if (followed.isNotEmpty) ...[
-              const Text('FOLLOWING', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: Colors.white70)),
+              const UniversalText('FOLLOWING', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: Colors.white70)),
               const SizedBox(height: 8),
               ...followed.take(8).map(_upcomingCard),
               const SizedBox(height: 10),
             ],
-            const Text('LIVE NOW', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: Colors.white70)),
+            const UniversalText('LIVE NOW', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: Colors.white70)),
             const SizedBox(height: 8),
             if (loading) const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator())),
             if (!loading && error != null) Card(child: Padding(padding: const EdgeInsets.all(20), child: Text(error!))),
-            if (!loading && error == null && games.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(24), child: Text('There are no live games matching these filters right now.'))),
+            if (!loading && error == null && games.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(24), child: UniversalText('There are no live games matching these filters right now.'))),
             ...games.map(_gameCard),
             const SizedBox(height: 20),
-            const Text('UPCOMING GAMES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: Colors.white70)),
+            const UniversalText('UPCOMING GAMES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: Colors.white70)),
             const SizedBox(height: 8),
             if (upcomingLoading) const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator())),
             if (!upcomingLoading && upcomingError != null) Card(child: Padding(padding: const EdgeInsets.all(20), child: Text(upcomingError!))),
-            if (!upcomingLoading && upcomingError == null && upcomingGames.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(24), child: Text('No upcoming games were returned for these filters.'))),
+            if (!upcomingLoading && upcomingError == null && upcomingGames.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(24), child: UniversalText('No upcoming games were returned for these filters.'))),
             ..._groupUpcomingGames(),
           ],
         ),
@@ -404,8 +405,8 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Icon(followed ? Icons.star_rounded : Icons.schedule_rounded, color: followed ? Colors.amber : null),
-        title: Text('${game['sport'] ?? 'Sport'} • $date', style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text('${_timeLabel(game)} • ${game['homeTeam'] ?? 'Home'} vs ${game['awayTeam'] ?? 'Away'}\n${game['competition'] ?? ''}'),
+        title: UniversalText('${game['sport'] ?? 'Sport'} • $date', style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: UniversalText('${_timeLabel(game)} • ${game['homeTeam'] ?? 'Home'} vs ${game['awayTeam'] ?? 'Away'}\n${game['competition'] ?? ''}'),
         isThreeLine: true,
       ),
     );
@@ -431,16 +432,16 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
               Flexible(child: Text(game['competition']?.toString() ?? '', textAlign: TextAlign.end)),
             ]),
             const SizedBox(height: 12),
-            Text('${game['homeTeam']}  vs  ${game['awayTeam']}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            UniversalText('${game['homeTeam']}  vs  ${game['awayTeam']}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            Text('${game['sport']} • ${game['country']}'),
+            UniversalText('${game['sport']} • ${game['country']}'),
             if (followed) ...[
               const SizedBox(height: 6),
-              const Text('Following', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.w800)),
+              const UniversalText('Following', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.w800)),
             ],
             const SizedBox(height: 12),
             if (playable.isNotEmpty) ...playable.map((broadcast) => _broadcastTile(game, broadcast))
-            else const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.live_tv_outlined), title: Text('Live game detected'), subtitle: Text('No authorized in-app video stream is attached to this game yet. Scores remain available.')),
+            else ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.live_tv_outlined), title: UniversalText('Live game detected'), subtitle: UniversalText('No authorized in-app video stream is attached to this game yet. Scores remain available.')),
           ],
         ),
       ),
@@ -477,7 +478,7 @@ class _LiveSportsScreenState extends State<LiveSportsScreen> {
             )));
           },
           icon: const Icon(Icons.play_arrow),
-          label: const Text('WATCH'),
+          label: const UniversalText('WATCH'),
         ),
       ),
     );
@@ -567,7 +568,7 @@ class _SportsPlayerScreenState extends State<SportsPlayerScreen> {
   void _showError(Object error) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Unable to play this broadcast: $error'),
+        content: UniversalText('Unable to play this broadcast: $error'),
       ),
     );
   }
@@ -655,8 +656,7 @@ class _SportsPlayerScreenState extends State<SportsPlayerScreen> {
                             horizontal: 9,
                             vertical: 5,
                           ),
-                          child: Text(
-                            '● LIVE',
+                          child: UniversalText('● LIVE',
                             style: TextStyle(fontWeight: FontWeight.w900),
                           ),
                         ),
@@ -679,14 +679,14 @@ class _SportsPlayerScreenState extends State<SportsPlayerScreen> {
                             ? Icons.pause
                             : Icons.play_arrow,
                       ),
-                      tooltip: 'Play/Pause',
+                      tooltip: tr('Play/Pause'),
                     ),
                     IconButton(
                       onPressed: _toggleMute,
                       icon: Icon(
                         _muted ? Icons.volume_off : Icons.volume_up,
                       ),
-                      tooltip: 'Mute',
+                      tooltip: tr('Mute'),
                     ),
                     Expanded(
                       child: _controller.value.duration > Duration.zero &&
@@ -696,7 +696,7 @@ class _SportsPlayerScreenState extends State<SportsPlayerScreen> {
                               allowScrubbing: true,
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                             )
-                          : const Text('LIVE'),
+                          : const UniversalText('LIVE'),
                     ),
                   ],
                 ),
@@ -725,17 +725,16 @@ class _SportsPlayerScreenState extends State<SportsPlayerScreen> {
                         if (widget.originalBroadcast)
                           const Chip(
                             avatar: Icon(Icons.verified, size: 18),
-                            label: Text('Original broadcast'),
+                            label: UniversalText('Original broadcast'),
                           ),
                         if (widget.includesHalftime)
-                          const Chip(label: Text('Halftime included')),
+                          const Chip(label: UniversalText('Halftime included')),
                         if (widget.includesCommercialBreaks)
-                          const Chip(label: Text('Original commercial breaks')),
+                          const Chip(label: UniversalText('Original commercial breaks')),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Playback stays inside the streaming service. The available picture, halftime programming, commercial breaks, and other broadcast elements depend on what the authorized provider includes in this stream.',
+                    const UniversalText('Playback stays inside the streaming service. The available picture, halftime programming, commercial breaks, and other broadcast elements depend on what the authorized provider includes in this stream.',
                     ),
                   ],
                 ),
