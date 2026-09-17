@@ -81,6 +81,17 @@ class MediaItem {
   final String? originalLanguage;
   final String? countryOfOrigin;
   final String? canonicalTitle;
+  final String? language;
+  final String? adaptationGroupId;
+  final String? adaptationGroupName;
+  final List<String> relationshipTypes;
+
+  // Profile-level access. An empty list means the account's legacy library
+  // visibility rules apply; a populated list is an explicit access allow-list.
+  final List<String> accessibleProfileIds;
+
+  // Actual merchant relationships. An empty list means no Shop/Merchandise action.
+  final List<String> eligibleMerchandiseProductIds;
 
   // Franchise/collection metadata. A franchise is different from a physical disc collection.
   final String? franchiseId;
@@ -116,6 +127,12 @@ class MediaItem {
     this.originalLanguage,
     this.countryOfOrigin,
     this.canonicalTitle,
+    this.language,
+    this.adaptationGroupId,
+    this.adaptationGroupName,
+    List<String>? relationshipTypes,
+    List<String>? accessibleProfileIds,
+    List<String>? eligibleMerchandiseProductIds,
     this.franchiseId,
     this.franchiseName,
     this.franchiseType,
@@ -151,7 +168,20 @@ class MediaItem {
        chapters = chapters ?? <String>[],
        audioTracks = audioTracks ?? <String>[],
        subtitles = subtitles ?? <String>[],
-       extras = extras ?? <String>[];
+       extras = extras ?? <String>[],
+       relationshipTypes = relationshipTypes ?? <String>[],
+       accessibleProfileIds = accessibleProfileIds ?? <String>[],
+       eligibleMerchandiseProductIds = eligibleMerchandiseProductIds ?? <String>[];
+
+  /// Returns whether the current profile has explicit access to this library item.
+  bool isAccessibleTo(Profile? profile) {
+    if (profile == null) return false;
+    if (accessibleProfileIds.isEmpty) return true;
+    return accessibleProfileIds.contains(profile.id);
+  }
+
+  /// Returns whether a real merchant/product relationship exists for Shop.
+  bool get hasEligibleMerchandise => eligibleMerchandiseProductIds.isNotEmpty;
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
     return MediaItem(
@@ -187,6 +217,12 @@ class MediaItem {
       originalLanguage: json['originalLanguage']?.toString(),
       countryOfOrigin: json['countryOfOrigin']?.toString(),
       canonicalTitle: json['canonicalTitle']?.toString(),
+      language: json['language']?.toString(),
+      adaptationGroupId: json['adaptationGroupId']?.toString(),
+      adaptationGroupName: json['adaptationGroupName']?.toString(),
+      relationshipTypes: _stringList(json['relationshipTypes']),
+      accessibleProfileIds: _stringList(json['accessibleProfileIds']),
+      eligibleMerchandiseProductIds: _stringList(json['eligibleMerchandiseProductIds']),
       franchiseId: json['franchiseId']?.toString(),
       franchiseName: json['franchiseName']?.toString(),
       franchiseType: json['franchiseType']?.toString(),
@@ -238,7 +274,7 @@ class MediaItem {
       'discCollectionId': discCollectionId,
       'discCollectionTitle': discCollectionTitle,
       'discNumber': discNumber,
-      'discTitleId': discTitleId, 'discTitle': discTitle, 'discMarketCountry': discMarketCountry, 'originalTitle': originalTitle, 'originalLanguage': originalLanguage, 'countryOfOrigin': countryOfOrigin, 'canonicalTitle': canonicalTitle,
+      'discTitleId': discTitleId, 'discTitle': discTitle, 'discMarketCountry': discMarketCountry, 'originalTitle': originalTitle, 'originalLanguage': originalLanguage, 'countryOfOrigin': countryOfOrigin, 'canonicalTitle': canonicalTitle, 'language': language, 'adaptationGroupId': adaptationGroupId, 'adaptationGroupName': adaptationGroupName, 'relationshipTypes': relationshipTypes, 'accessibleProfileIds': accessibleProfileIds, 'eligibleMerchandiseProductIds': eligibleMerchandiseProductIds,
       'franchiseId': franchiseId,
       'franchiseName': franchiseName,
       'franchiseType': franchiseType,
@@ -1914,7 +1950,7 @@ class AppController extends ChangeNotifier {
   /// Performs `isOwned` for this feature. Update this documentation when its contract changes.
   bool isOwned(String mediaId) {
     return library.any(
-      (item) => item.id == mediaId,
+      (item) => item.id == mediaId && item.isAccessibleTo(currentProfile),
     );
   }
 
@@ -1923,6 +1959,7 @@ class AppController extends ChangeNotifier {
     library
       ..clear()
       ..addAll(media);
+    _refreshAutomaticCollections();
     notifyListeners();
   }
 
@@ -4652,27 +4689,126 @@ class AppController extends ChangeNotifier {
   String _normalizeCollectionTitle(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
 
   /// Performs `_refreshAutomaticCollections` for this feature. Update this documentation when its contract changes.
+  ///
+  /// Automatic collections are created as soon as authoritative franchise or
+  /// adaptation metadata identifies at least one library title. The previous
+  /// implementation waited for the complete franchise count, which meant a
+  /// partially owned franchise could never appear on the Collections screen.
   void _refreshAutomaticCollections() {
     final definitions = <Map<String, dynamic>>[
-      {'id':'back-to-the-future','name':'Back to the Future Trilogy','type':'Trilogy','expected':3, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('back to the future')},
-      {'id':'ted','name':'Ted Collection','type':'Duology','expected':2, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title) == 'ted' || _normalizeCollectionTitle(m.title).startsWith('ted ')},
-      {'id':'harry-potter','name':'Harry Potter Collection','type':'Saga','expected':8, 'match': (MediaItem m) => RegExp(r'^harry potter').hasMatch(_normalizeCollectionTitle(m.title))},
-      {'id':'twilight','name':'Twilight Saga Collection','type':'Saga','expected':5, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('twilight')},
-      {'id':'jurassic','name':'Jurassic Park / Jurassic World Collection','type':'Franchise','expected':7, 'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('jurassic park') || _normalizeCollectionTitle(m.title).contains('jurassic world')},
+      {
+        'id': 'back-to-the-future',
+        'name': 'Back to the Future Trilogy',
+        'type': 'Trilogy',
+        'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('back to the future'),
+      },
+      {
+        'id': 'ted',
+        'name': 'Ted Collection',
+        'type': 'Duology',
+        'match': (MediaItem m) => _normalizeCollectionTitle(m.title) == 'ted' || _normalizeCollectionTitle(m.title).startsWith('ted '),
+      },
+      {
+        'id': 'harry-potter',
+        'name': 'Harry Potter Collection',
+        'type': 'Saga',
+        'match': (MediaItem m) => RegExp(r'^harry potter').hasMatch(_normalizeCollectionTitle(m.title)),
+      },
+      {
+        'id': 'twilight',
+        'name': 'Twilight Saga Collection',
+        'type': 'Saga',
+        'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('twilight'),
+      },
+      {
+        'id': 'jurassic',
+        'name': 'Jurassic Park / Jurassic World Collection',
+        'type': 'Franchise',
+        'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('jurassic park') || _normalizeCollectionTitle(m.title).contains('jurassic world'),
+      },
     ];
-    for (final definition in definitions) {
-      final matches = library.where((m) => (definition['match'] as bool Function(MediaItem))(m)).toList();
-      if (matches.length < (definition['expected'] as int)) continue;
-      var existing = collections.where((c) => c.isAutomatic && c.automaticFranchiseId == definition['id']);
-      final collection = existing.isEmpty ? MediaCollection(
-        id: _generateId('collection'), name: definition['name'] as String, isOfficial: true, isAutomatic: true,
-        isFeatured: true, isShared: true, automaticFranchiseId: definition['id'] as String,
-        automaticFranchiseType: definition['type'] as String, contributorProfileIds: <String>{...?currentAccount?.profiles.map((p) => p.id)},
-      ) : existing.first;
-      if (existing.isEmpty) { collections.add(collection); featuredCollectionOrder.add(collection.id); }
-      collection.mediaIds..clear()..addAll(matches.map((m) => m.id));
+
+    final automaticIds = <String>{};
+
+    // Prefer importer/provider franchise metadata over title heuristics.
+    final byFranchise = <String, List<MediaItem>>{};
+    for (final media in library) {
+      final franchiseId = media.franchiseId?.trim();
+      final franchiseName = media.franchiseName?.trim();
+      if (franchiseId == null || franchiseId.isEmpty || franchiseName == null || franchiseName.isEmpty) continue;
+      byFranchise.putIfAbsent(franchiseId, () => <MediaItem>[]).add(media);
     }
+    for (final entry in byFranchise.entries) {
+      final collectionId = 'franchise:${entry.key}';
+      automaticIds.add(collectionId);
+      final collection = _ensureAutomaticCollection(
+        id: collectionId,
+        name: entry.value.first.franchiseName!,
+        type: entry.value.first.franchiseType ?? 'Franchise',
+      );
+      collection.mediaIds
+        ..clear()
+        ..addAll(entry.value.map((m) => m.id));
+    }
+
+    // Fallback rules keep existing local/demo libraries useful until an
+    // authoritative metadata provider has populated franchiseId.
+    for (final definition in definitions) {
+      final matches = library
+          .where((m) => (definition['match'] as bool Function(MediaItem))(m))
+          .toList();
+      if (matches.isEmpty) continue;
+      final id = definition['id'] as String;
+      automaticIds.add(id);
+      final collection = _ensureAutomaticCollection(
+        id: id,
+        name: definition['name'] as String,
+        type: definition['type'] as String,
+      );
+      collection.mediaIds
+        ..clear()
+        ..addAll(matches.map((m) => m.id));
+    }
+
+    // Keep automatic collections synchronized with the library. Custom
+    // collections are never touched by this cleanup.
+    collections.removeWhere((collection) =>
+        collection.isAutomatic &&
+        collection.automaticFranchiseId != null &&
+        !automaticIds.contains(collection.automaticFranchiseId));
+    featuredCollectionOrder.removeWhere((id) =>
+        !collections.any((collection) => collection.id == id));
   }
+
+  /// Creates or retrieves one authoritative automatic franchise collection.
+  MediaCollection _ensureAutomaticCollection({
+    required String id,
+    required String name,
+    required String type,
+  }) {
+    final existing = collections.where(
+      (collection) => collection.isAutomatic && collection.automaticFranchiseId == id,
+    );
+    if (existing.isNotEmpty) return existing.first;
+
+    final collection = MediaCollection(
+      id: _generateId('collection'),
+      name: name,
+      isOfficial: true,
+      isAutomatic: true,
+      isFeatured: true,
+      isShared: true,
+      automaticFranchiseId: id,
+      automaticFranchiseType: type,
+      contributorProfileIds: <String>{...?currentAccount?.profiles.map((p) => p.id)},
+    );
+    collections.add(collection);
+    if (!featuredCollectionOrder.contains(collection.id)) {
+      featuredCollectionOrder.add(collection.id);
+    }
+    return collection;
+  }
+
   // ---------------------------------------------------------------------------
   // ID GENERATION
   // ---------------------------------------------------------------------------
@@ -4749,6 +4885,7 @@ class DetailsCustomization {
   bool showInformation;
   bool showLibrary;
   bool showRecommendations;
+  bool showShop;
 
   bool showReleaseYear;
   bool showRating;
@@ -4783,6 +4920,7 @@ class DetailsCustomization {
     this.showInformation = true,
     this.showLibrary = true,
     this.showRecommendations = true,
+    this.showShop = true,
     this.showReleaseYear = true,
     this.showRating = true,
     this.showContentRating = true,
@@ -4810,6 +4948,7 @@ class DetailsCustomization {
               'Play',
               'Trailer',
               'Group Watch',
+              'Shop',
               'Reviews',
               'Recommendations',
               'Audio & Subtitles',
@@ -4834,6 +4973,7 @@ class DetailsCustomization {
       showInformation: showInformation,
       showLibrary: showLibrary,
       showRecommendations: showRecommendations,
+      showShop: showShop,
       showReleaseYear: showReleaseYear,
       showRating: showRating,
       showContentRating: showContentRating,
@@ -4915,7 +5055,7 @@ class DetailsCustomizationStore {
     'showOwnership': v.showOwnership, 'showDescription': v.showDescription, 'showSeasons': v.showSeasons,
     'showPlay': v.showPlay, 'showTrailer': v.showTrailer, 'showGroupWatch': v.showGroupWatch,
     'showAudioSubtitles': v.showAudioSubtitles, 'showReactions': v.showReactions, 'showInformation': v.showInformation,
-    'showLibrary': v.showLibrary, 'showRecommendations': v.showRecommendations, 'showReleaseYear': v.showReleaseYear, 'showRating': v.showRating,
+    'showLibrary': v.showLibrary, 'showRecommendations': v.showRecommendations, 'showShop': v.showShop, 'showReleaseYear': v.showReleaseYear, 'showRating': v.showRating,
     'showContentRating': v.showContentRating, 'showRuntime': v.showRuntime, 'posterStyle': v.posterStyle,
     'posterPosition': v.posterPosition, 'posterSize': v.posterSize, 'titleAlignment': v.titleAlignment,
     'buttonAlignment': v.buttonAlignment, 'informationAlignment': v.informationAlignment, 'seasonPlacement': v.seasonPlacement,
@@ -4930,7 +5070,7 @@ class DetailsCustomizationStore {
     showPlay: m['showPlay'] == false ? false : true, showTrailer: m['showTrailer'] == false ? false : true,
     showGroupWatch: m['showGroupWatch'] == false ? false : true, showAudioSubtitles: m['showAudioSubtitles'] == false ? false : true,
     showReactions: m['showReactions'] == false ? false : true, showInformation: m['showInformation'] == false ? false : true,
-    showLibrary: m['showLibrary'] == false ? false : true, showRecommendations: m['showRecommendations'] == false ? false : true, showReleaseYear: m['showReleaseYear'] == false ? false : true,
+    showLibrary: m['showLibrary'] == false ? false : true, showRecommendations: m['showRecommendations'] == false ? false : true, showShop: m['showShop'] == false ? false : true, showReleaseYear: m['showReleaseYear'] == false ? false : true,
     showRating: m['showRating'] == false ? false : true, showContentRating: m['showContentRating'] == false ? false : true,
     showRuntime: m['showRuntime'] == false ? false : true, posterStyle: m['posterStyle']?.toString() ?? 'Standard',
     posterPosition: m['posterPosition']?.toString() ?? 'Center', posterSize: m['posterSize']?.toString() ?? 'Medium',

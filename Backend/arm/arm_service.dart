@@ -112,6 +112,35 @@ class ArmService {
     );
   }
 
+  /// Builds the automatic library-import plan for every title discovered on a disc.
+  ///
+  /// Each detected title receives its own stable content entry while retaining
+  /// the originating drive/disc relationship. Music titles prefer FLAC as the
+  /// lossless archive format; video titles preserve their source format.
+  List<Map<String, dynamic>> buildAutomaticImportPlan(ArmDisc disc) {
+    return disc.titles.map((title) => {
+          'titleId': title.id,
+          'title': title.title,
+          'mediaType': title.mediaType,
+          'classification': title.classification,
+          'outputPath': title.outputPath,
+          'discId': disc.driveId,
+          'discTitle': disc.title,
+          'discType': disc.discType,
+          'region': title.detectedRegion ?? disc.region,
+          'marketCountry': title.discMarketCountry,
+          'archiveFormat': title.preferredArchiveFormat,
+          'losslessAudio': title.isMusic,
+          'artwork': title.metadata['artwork'] ?? title.metadata['poster'],
+          'description': title.metadata['description'] ?? title.metadata['overview'],
+          'cast': title.metadata['cast'] ?? title.metadata['actors'],
+          'artist': title.artist,
+          'album': title.album,
+          'trackNumber': title.trackNumber,
+          'discNumber': title.discNumber,
+        }).toList(growable: false);
+  }
+
   /// Performs `startImport` for this feature. Update this documentation when its contract changes.
   Future<ArmRipJob> startImport({required String driveId}) async {
     final local = ArmRipJob(

@@ -129,6 +129,7 @@ class GroupWatchService {
           _accountOwnsMedia(
         participantAccount,
         cleanMediaId,
+        profileId,
       );
 
       if (!ownsMedia) {
@@ -344,6 +345,7 @@ class GroupWatchService {
     if (!_accountOwnsMedia(
       participantAccount,
       session.mediaId,
+      cleanProfileId,
     )) {
       throw StateError(
         'You no longer own this media, so you cannot join this Group Watch.',
@@ -1059,23 +1061,24 @@ if (hostProfile == null) {
   bool _accountOwnsMedia(
     Account account,
     String mediaId,
+    String profileId,
   ) {
-    final String cleanMediaId =
-        mediaId.trim();
+    final String cleanMediaId = mediaId.trim();
+    final String cleanProfileId = profileId.trim();
+    if (cleanMediaId.isEmpty || cleanProfileId.isEmpty) return false;
 
-    if (cleanMediaId.isEmpty) {
+    final media = database.getMediaById(cleanMediaId);
+    if (media == null) return false;
+    if (!account.hasProfile(cleanProfileId)) return false;
+
+    // Explicit profile access takes precedence over account-wide legacy data.
+    if (media.accessibleProfileIds.isNotEmpty &&
+        !media.accessibleProfileIds.contains(cleanProfileId)) {
       return false;
     }
 
-    for (final profile in account.profiles) {
-      if (profile.ownedMediaIds.contains(
-        cleanMediaId,
-      )) {
-        return true;
-      }
-    }
-
-    return false;
+    final profile = account.getProfileById(cleanProfileId);
+    return profile?.ownedMediaIds.contains(cleanMediaId) == true;
   }
 
   // ---------------------------------------------------------------------------

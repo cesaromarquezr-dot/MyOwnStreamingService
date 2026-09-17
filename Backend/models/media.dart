@@ -25,6 +25,13 @@ class Media {
   // will have a trailer.
   final String? trailerUrl;
 
+  // International/adaptation graph metadata.
+  final String? countryOfOrigin;
+  final String? language;
+  final String? adaptationGroupId;
+  final String? adaptationGroupName;
+  final List<String> relationshipTypes;
+
   // Discovery / recommendation metadata.
   final List<String> genres;
   final List<String> tags;
@@ -72,6 +79,10 @@ class Media {
   final List<WatchOption> watchOptions;
   final List<PurchaseOption> purchaseOptions;
 
+  // Optional profile-level allow-list. Empty means the account's legacy
+  // ownership model applies; populated means explicit profile access.
+  final List<String> accessibleProfileIds;
+
   Media({
     required this.id,
     required this.title,
@@ -82,6 +93,11 @@ class Media {
     this.rating,
     this.ratingReason,
     this.trailerUrl,
+    this.countryOfOrigin,
+    this.language,
+    this.adaptationGroupId,
+    this.adaptationGroupName,
+    this.relationshipTypes = const [],
     this.genres = const [],
     this.tags = const [],
     this.themes = const [],
@@ -109,6 +125,7 @@ class Media {
     this.extras = const [],
     this.watchOptions = const [],
     this.purchaseOptions = const [],
+    this.accessibleProfileIds = const [],
   });
 
   bool get isMovie {
@@ -131,6 +148,11 @@ class Media {
       'rating': rating,
       'ratingReason': ratingReason,
       'trailerUrl': trailerUrl,
+      'countryOfOrigin': countryOfOrigin,
+      'language': language,
+      'adaptationGroupId': adaptationGroupId,
+      'adaptationGroupName': adaptationGroupName,
+      'relationshipTypes': relationshipTypes,
 
       'genres': List<String>.from(genres),
       'tags': List<String>.from(tags),
@@ -170,6 +192,7 @@ class Media {
       'purchaseOptions': purchaseOptions
           .map((option) => option.toJson())
           .toList(),
+      'accessibleProfileIds': accessibleProfileIds,
     };
   }
 
@@ -185,6 +208,11 @@ class Media {
       rating: json['rating'] is num ? (json['rating'] as num).toDouble() : double.tryParse(json['rating']?.toString() ?? ''),
       ratingReason: json['ratingReason']?.toString(),
       trailerUrl: _nullableString(json['trailerUrl']),
+      countryOfOrigin: _nullableString(json['countryOfOrigin']),
+      language: _nullableString(json['language']),
+      adaptationGroupId: _nullableString(json['adaptationGroupId']),
+      adaptationGroupName: _nullableString(json['adaptationGroupName']),
+      relationshipTypes: _stringList(json['relationshipTypes']),
 
       genres: _stringList(json['genres']),
       tags: _stringList(json['tags']),
@@ -223,6 +251,7 @@ class Media {
 
       purchaseOptions:
           _purchaseOptions(json['purchaseOptions']),
+      accessibleProfileIds: _stringList(json['accessibleProfileIds']),
     );
   }
 

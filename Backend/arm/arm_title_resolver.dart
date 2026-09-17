@@ -41,6 +41,13 @@ class ArmTitleResolver {
       discTitle: discTitle,
       discMarketCountry: title.discMarketCountry,
       detectedRegion: title.detectedRegion,
+      audioCodec: title.audioCodec,
+      archiveFormat: title.archiveFormat,
+      losslessAudio: title.losslessAudio,
+      trackNumber: title.trackNumber,
+      discNumber: title.discNumber,
+      artist: title.artist,
+      album: title.album,
     );
   }
 }

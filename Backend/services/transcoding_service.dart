@@ -1,24 +1,32 @@
 // FILE: Backend/services/transcoding_service.dart.
 // Purpose: Selects direct play, remux, audio-only transcode, or full transcode and creates cached copies.
 
-import 'dart:async';
 import 'dart:io';
 
 import '../models/media_capabilities.dart';
 import '../models/playback_profile.dart';
 import 'media_analyzer_service.dart';
 import 'transcode_cache_service.dart';
+import 'transcoding_scheduler_service.dart';
 
 class TranscodingService {
   final MediaAnalyzerService analyzer;
   final TranscodeCacheService cache;
   final String ffmpegExecutable;
+  final TranscodingSchedulerService scheduler;
 
-  const TranscodingService({
+  TranscodingService({
     required this.analyzer,
     required this.cache,
     this.ffmpegExecutable = 'ffmpeg',
-  });
+    TranscodingSchedulerService? scheduler,
+  }) : scheduler = scheduler ??
+          TranscodingSchedulerService(
+            maxConcurrentJobs: int.tryParse(
+                  Platform.environment['TRANSCODE_MAX_CONCURRENT'] ?? '',
+                ) ??
+                2,
+          );
 
   PlaybackProfile decide(MediaProbe media, MediaCapabilities device) {
     final videoOk = device.videoCodecs.contains(media.videoCodec) &&
@@ -78,34 +86,36 @@ class TranscodingService {
   }
 
   Future<File> prepare(File input, PlaybackProfile profile) async {
-    await cache.ensureDirectory();
-    final key = cache.key(input.path, profile.toJson());
-    final output = cache.fileFor(key);
-    if (output.existsSync() && output.lengthSync() > 0) return output;
+    return scheduler.schedule(() async {
+      await cache.ensureDirectory();
+      final key = cache.key(input.path, profile.toJson());
+      final output = cache.fileFor(key);
+      if (output.existsSync() && output.lengthSync() > 0) return output;
 
-    final args = <String>['-y', '-i', input.path];
-    if (profile.mode == 'remux') {
-      args.addAll(['-map', '0:v:0?', '-map', '0:a:0?', '-c', 'copy', '-movflags', '+faststart']);
-    } else if (profile.mode == 'audioTranscode') {
-      args.addAll(['-map', '0:v:0?', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']);
-    } else {
-      args.addAll([
-        '-map', '0:v:0?', '-map', '0:a:0?',
-        '-c:v', Platform.environment['TRANSCODE_VIDEO_ENCODER'] ?? 'libx264',
-        '-preset', Platform.environment['TRANSCODE_PRESET'] ?? 'veryfast',
-        '-crf', Platform.environment['TRANSCODE_CRF'] ?? '21',
-        '-vf', 'scale=${profile.width}:${profile.height}:force_original_aspect_ratio=decrease',
-        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
-      ]);
-    }
-    args.add(output.path);
+      final args = <String>['-y', '-i', input.path];
+      if (profile.mode == 'remux') {
+        args.addAll(['-map', '0:v:0?', '-map', '0:a:0?', '-c', 'copy', '-movflags', '+faststart']);
+      } else if (profile.mode == 'audioTranscode') {
+        args.addAll(['-map', '0:v:0?', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']);
+      } else {
+        args.addAll([
+          '-map', '0:v:0?', '-map', '0:a:0?',
+          '-c:v', Platform.environment['TRANSCODE_VIDEO_ENCODER'] ?? 'libx264',
+          '-preset', Platform.environment['TRANSCODE_PRESET'] ?? 'veryfast',
+          '-crf', Platform.environment['TRANSCODE_CRF'] ?? '21',
+          '-vf', 'scale=${profile.width}:${profile.height}:force_original_aspect_ratio=decrease',
+          '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
+        ]);
+      }
+      args.add(output.path);
 
-    final result = await Process.run(ffmpegExecutable, args);
-    if (result.exitCode != 0 || !output.existsSync()) {
-      if (output.existsSync()) await output.delete();
-      throw StateError('ffmpeg failed: ${result.stderr}');
-    }
-    return output;
+      final result = await Process.run(ffmpegExecutable, args);
+      if (result.exitCode != 0 || !output.existsSync()) {
+        if (output.existsSync()) await output.delete();
+        throw StateError('ffmpeg failed: ${result.stderr}');
+      }
+      return output;
+    });
   }
 
   int _targetBitrate(int width, int height) {

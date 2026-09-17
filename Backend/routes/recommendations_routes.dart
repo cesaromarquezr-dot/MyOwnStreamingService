@@ -273,6 +273,11 @@ class RecommendationsRoutes {
           media.franchises.isNotEmpty
               ? media.franchises.first
               : null,
+      countryOfOrigin: media.countryOfOrigin,
+      language: media.language,
+      adaptationGroupId: media.adaptationGroupId,
+      adaptationGroupName: media.adaptationGroupName,
+      relationshipTypes: List<String>.from(media.relationshipTypes),
 
       actors:
           List<String>.from(media.actors),

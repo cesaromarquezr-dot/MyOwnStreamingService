@@ -33,6 +33,8 @@ enum RecommendationReasonType {
   tag,
   preference,
   recentInterest,
+  internationalAdaptation,
+  crossFormat,
 }
 
 /// Where the user can watch a title.
@@ -142,6 +144,11 @@ class RecommendationMedia {
 
   final String? seriesId;
   final String? franchiseId;
+  final String? countryOfOrigin;
+  final String? language;
+  final String? adaptationGroupId;
+  final String? adaptationGroupName;
+  final List<String> relationshipTypes;
 
   final List<String> actors;
   final List<String> characters;
@@ -166,6 +173,11 @@ class RecommendationMedia {
     this.mediaType = 'movie',
     this.seriesId,
     this.franchiseId,
+    this.countryOfOrigin,
+    this.language,
+    this.adaptationGroupId,
+    this.adaptationGroupName,
+    this.relationshipTypes = const [],
     this.actors = const [],
     this.characters = const [],
     this.franchises = const [],
@@ -190,6 +202,11 @@ class RecommendationMedia {
       'mediaType': mediaType,
       'seriesId': seriesId,
       'franchiseId': franchiseId,
+      'countryOfOrigin': countryOfOrigin,
+      'language': language,
+      'adaptationGroupId': adaptationGroupId,
+      'adaptationGroupName': adaptationGroupName,
+      'relationshipTypes': relationshipTypes,
       'actors': actors,
       'characters': characters,
       'franchises': franchises,
@@ -270,6 +287,8 @@ class RecommendationWeights {
   final double reference;
 
   final double similarity;
+  final double internationalAdaptation;
+  final double crossFormat;
 
   /// Penalties.
   final double dislikedPenalty;
@@ -289,6 +308,8 @@ class RecommendationWeights {
     this.tag = 5,
     this.reference = 20,
     this.similarity = 15,
+    this.internationalAdaptation = 28,
+    this.crossFormat = 12,
     this.dislikedPenalty = 1000,
     this.alreadyWatchedPenalty = 20,
     this.recentlyWatchedPenalty = 25,
@@ -700,6 +721,55 @@ class RecommendationsService {
     }
 
     // ------------------------------------------------------------
+    // INTERNATIONAL / LOCAL ADAPTATION
+    // ------------------------------------------------------------
+
+    final candidateAdaptation = _normalize(candidate.adaptationGroupId ?? '');
+    final sourceAdaptation = _normalize(source.adaptationGroupId ?? '');
+    final hasAdaptationRelationship = candidateAdaptation.isNotEmpty &&
+        candidateAdaptation == sourceAdaptation;
+    final explicitAdaptationRelationship = candidate.relationshipTypes.any(_isAdaptationRelationship) ||
+        source.relationshipTypes.any(_isAdaptationRelationship);
+
+    if (hasAdaptationRelationship || explicitAdaptationRelationship) {
+      score += weights.internationalAdaptation;
+      final countryText = candidate.countryOfOrigin?.trim();
+      final countrySuffix = countryText == null || countryText.isEmpty
+          ? ''
+          : ' from $countryText';
+      reasons.add(
+        RecommendationReason(
+          type: RecommendationReasonType.internationalAdaptation,
+          title: 'International or local adaptation',
+          description:
+              'Because you watched "${source.title}", this is a related production$countrySuffix of the same concept or adaptation family.',
+          relatedMediaIds: [source.id],
+        ),
+      );
+    }
+
+    // Different formats can still be meaningfully related: live action,
+    // animation/anime, competition formats, music, specials, and other
+    // cataloged forms should not be excluded merely because the format differs.
+    final crossFormatSignal = candidate.mediaType != source.mediaType &&
+        (_intersection(candidate.genres, source.genres).isNotEmpty ||
+            _intersection(candidate.themes, source.themes).isNotEmpty ||
+            _intersection(candidate.references, source.references).isNotEmpty ||
+            candidate.relationshipTypes.any((type) => type.toLowerCase().contains('adapt')));
+    if (crossFormatSignal) {
+      score += weights.crossFormat;
+      reasons.add(
+        RecommendationReason(
+          type: RecommendationReasonType.crossFormat,
+          title: 'Related across formats',
+          description:
+              'This title is connected to "${source.title}" while using a different media format.',
+          relatedMediaIds: [source.id],
+        ),
+      );
+    }
+
+    // ------------------------------------------------------------
     // CHARACTER
     // ------------------------------------------------------------
 
@@ -1053,6 +1123,11 @@ class RecommendationsService {
       score: score,
       reasons: reasons,
     );
+  }
+
+  bool _isAdaptationRelationship(String type) {
+    final value = type.toLowerCase();
+    return value.contains('adapt') || value.contains('remake') || value.contains('reboot') || value.contains('local version');
   }
 
   String? _hybridGenreReason(

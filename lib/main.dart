@@ -24,6 +24,7 @@ import 'film.dart';
 import 'how_it_works.dart';
 import 'connected_sports.dart';
 import 'group_chat.dart';
+import 'shop.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'library_hubs.dart';
@@ -639,6 +640,7 @@ class HomeCustomization {
           'More',
           'Music',
           'Film',
+          'Shop',
           'Group Chat',
         ];
 
@@ -2013,6 +2015,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'More',
       'Music',
       'Film',
+      'Shop',
       'Group Chat',
     ];
 
@@ -3215,6 +3218,7 @@ class _MainScreenState extends State<MainScreen> {
       'More',
       'Music',
       'Film',
+      'Shop',
       'Group Chat',
     ];
 
@@ -3272,8 +3276,8 @@ class _MainScreenState extends State<MainScreen> {
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film,
-    // and Group Chat. Music and Film expose secondary destinations on hover/tap.
+    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film, Shop,
+    // and Group Chat. Music and Film expose secondary destinations on hover/tap. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
     final pageByName = <String, Widget>{
@@ -3285,6 +3289,9 @@ class _MainScreenState extends State<MainScreen> {
       'Surprise Me': const _MoreNavigationPlaceholder(),
       'Music': const MusicScreen(),
       'Film': const FilmExperienceScreen(),
+      'Shop': ShopScreen(
+        onHome: () => setState(() => selectedDestination = 'Home'),
+      ),
     };
     final pages = navigationOrder.map((name) => pageByName[name]!).toList();
     final safeSelectedIndex = navigationOrder.indexOf(selectedDestination).clamp(0, pages.length - 1).toInt();
@@ -3416,6 +3423,7 @@ class _StreamingNavigationBar extends StatelessWidget {
       'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
       'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
       'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
+      'Shop': const _NavItemData(Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
     };
     final actions = <Widget>[
       for (final name in navigationOrder)

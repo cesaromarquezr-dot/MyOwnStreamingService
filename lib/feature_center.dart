@@ -298,6 +298,16 @@ class CollectionsPanel extends StatefulWidget {
 }
 
 class _CollectionsPanelState extends State<CollectionsPanel> {
+  String _searchQuery = '';
+
+  /// Returns a readable secondary text color in both the light and dark app themes.
+  Color get _secondaryTextColor =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: .68);
+
+  /// Returns a subtle text color used for collection metadata and hints.
+  Color get _mutedTextColor =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: .52);
+
   @override
   void initState() {
     super.initState();
@@ -307,42 +317,54 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
-    final prefs = controller.currentCollectionPreferences;
-    final all = controller.collections;
 
-    final mine = all
-        .where(
-          (c) =>
-              c.createdByProfileId ==
-              controller.currentProfile?.id,
-        )
-        .toList();
-
-    final liked = all
-        .where(
-          (c) =>
-              c.isLikedByCurrentProfile &&
-              !mine.contains(c),
-        )
-        .toList();
-
-    final automatic =
-        all.where((c) => c.isAutomatic).toList();
-
-    final custom =
-        all.where((c) => !c.isAutomatic).toList();
-
-    final ordered = _orderCollections(all, prefs);
-
+    // Keep every derived collection list inside AnimatedBuilder so changes to
+    // libraries, likes, contributors, or preferences immediately repaint the
+    // page. The previous implementation captured these lists before the
+    // builder ran, which could leave the screen visually empty or stale.
     return AnimatedBuilder(
       animation: controller,
       builder: (_, __) {
-        return ListView(
-          padding: const EdgeInsets.all(18),
-          children: [
+        final prefs = controller.currentCollectionPreferences;
+        final query = _searchQuery.trim().toLowerCase();
+        final all = controller.collections
+            .where((collection) =>
+                query.isEmpty ||
+                collection.name.toLowerCase().contains(query) ||
+                collection.description.toLowerCase().contains(query))
+            .toList();
+        final mine = all
+            .where((c) => c.createdByProfileId == controller.currentProfile?.id)
+            .toList();
+        final liked = all
+            .where((c) => c.isLikedByCurrentProfile && !mine.contains(c))
+            .toList();
+        final automatic = all.where((c) => c.isAutomatic).toList();
+        final custom = all.where((c) => !c.isAutomatic).toList();
+        final ordered = _orderCollections(all, prefs);
+
+        // CollectionsPanel can be opened directly from Home as well as
+        // embedded inside FeatureCenterScreen. Give it its own Material
+        // surface so Material widgets such as TextField, Card, ChoiceChip,
+        // IconButton and dialogs always have the required ancestor.
+        return Scaffold(
+  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+  appBar: AppBar(
+    leading: IconButton(
+      tooltip: tr('Back to Home'),
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () {
+        Navigator.of(context).pop();
+      },
+    ),
+    title: const UniversalText('Collections'),
+  ),
+  body: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
+            children: [
             _hero(
               '📚 Collections',
-              'Automatic franchise collections and collaborative custom collections, personalized per profile.',
+              'Automatic franchise collections, collaborative custom collections, and profile-personalized library organization.',
             ),
             const SizedBox(height: 12),
             Row(
@@ -350,9 +372,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: _create,
-                    icon: const Icon(
-                      Icons.create_new_folder_outlined,
-                    ),
+                    icon: const Icon(Icons.create_new_folder_outlined),
                     label: const UniversalText('Create Collection'),
                   ),
                 ),
@@ -364,28 +384,149 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            TextField(
+              onChanged: (value) => setState(() => _searchQuery = value),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: tr('Search collections'),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: tr('Clear search'),
+                        onPressed: () => setState(() => _searchQuery = ''),
+                        icon: const Icon(Icons.clear_rounded),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _collectionStats(
+              total: all.length,
+              automatic: automatic.length,
+              custom: custom.length,
+              liked: liked.length,
+            ),
             const SizedBox(height: 18),
-            if (ordered.isNotEmpty) ...[
-              _hero(
+            if (ordered.isEmpty) ...[
+              _sectionHeading(
+                'Your Collections',
+                'Automatic and custom collections will appear here.',
+              ),
+              const SizedBox(height: 8),
+              _collectionsEmptyState(controller),
+            ] else ...[
+              _sectionHeading(
                 'All Collections',
                 '${automatic.length} automatic • ${custom.length} custom',
               ),
               const SizedBox(height: 8),
               _collectionLayout(ordered, prefs),
+              const SizedBox(height: 20),
+              for (final section in controller.collectionSectionOrder)
+                _buildSection(section, all, mine, liked, prefs),
             ],
-            const SizedBox(height: 18),
-            for (final section
-                in controller.collectionSectionOrder)
-              _buildSection(
-                section,
-                all,
-                mine,
-                liked,
-                prefs,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Shows the collection counts at a glance without replacing the actual
+  /// collection cards or their permission-aware actions.
+  Widget _collectionStats({
+    required int total,
+    required int automatic,
+    required int custom,
+    required int liked,
+  }) {
+    final entries = <({String label, int value, IconData icon})>[
+      (label: 'Collections', value: total, icon: Icons.collections_bookmark_outlined),
+      (label: 'Automatic', value: automatic, icon: Icons.auto_awesome_outlined),
+      (label: 'Custom', value: custom, icon: Icons.edit_note_outlined),
+      (label: 'Liked', value: liked, icon: Icons.favorite_border_rounded),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 800 ? 4 : 2;
+        return GridView.count(
+          crossAxisCount: columns,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 2.6,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          children: [
+            for (final entry in entries)
+              Card(
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(entry.icon),
+                  title: Text('${entry.value}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                  subtitle: UniversalText(entry.label),
+                ),
               ),
           ],
         );
       },
+    );
+  }
+
+  /// Renders a compact empty state so the Collections screen never becomes a
+  /// large blank page when a profile has not created or imported any titles.
+  Widget _collectionsEmptyState(AppController controller) {
+    final hasLibrary = controller.library.isNotEmpty;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const Icon(Icons.collections_bookmark_outlined, size: 56),
+            const SizedBox(height: 12),
+            UniversalText(
+              hasLibrary
+                  ? 'No collections match your search.'
+                  : 'Your Collections Are Ready',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            UniversalText(
+              hasLibrary
+                  ? 'Try another search or clear the filter.'
+                  : 'Create a custom collection now, or import media with ARM. Automatic franchise collections will be generated when verified relationships are identified.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _secondaryTextColor, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _create,
+              icon: const Icon(Icons.add_rounded),
+              label: const UniversalText('Create your first collection'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Renders a section heading without the oversized hero treatment used for
+  /// the page-level header, keeping the screen readable on desktop and TV.
+  Widget _sectionHeading(String title, String subtitle) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 2),
+              UniversalText(subtitle, style: TextStyle(color: _secondaryTextColor)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -546,8 +687,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
               ),
               child: UniversalText('${media.length} titles'
                 '${collection.isAutomatic ? ' • automatic' : collection.isShared ? ' • shared' : ' • private'}',
-                style: const TextStyle(
-                  color: Colors.white60,
+                style: TextStyle(
+                  color: _mutedTextColor,
                   fontSize: 12,
                 ),
               ),
@@ -625,8 +766,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                       UniversalText('${media.length} titles'
                         '${collection.isShared ? ' • shared' : ' • private'}'
                         '${collection.isAutomatic ? ' • automatic' : ''}',
-                        style: const TextStyle(
-                          color: Colors.white60,
+                        style: TextStyle(
+                          color: _mutedTextColor,
                           fontSize: 12,
                         ),
                       ),
@@ -855,8 +996,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                   ),
                   const SizedBox(height: 4),
                   UniversalText('${media.length} titles • ${prefs.itemSort}',
-                    style: const TextStyle(
-                      color: Colors.white60,
+                    style: TextStyle(
+                      color: _mutedTextColor,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -960,8 +1101,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
               child: UniversalText('${media.releaseYear ?? ''} • ${media.type}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white54,
+                style: TextStyle(
+                  color: _secondaryTextColor,
                   fontSize: 11,
                 ),
               ),
@@ -1043,8 +1184,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     ),
                     const SizedBox(height: 3),
                     UniversalText('${media.releaseYear ?? ''} • ${media.type}',
-                      style: const TextStyle(
-                        color: Colors.white54,
+                      style: TextStyle(
+                        color: _secondaryTextColor,
                       ),
                     ),
                   ],
@@ -1172,9 +1313,9 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 ),
               ),
               const SizedBox(height: 8),
-              const UniversalText('Choose a library title to add to this collection.',
+              UniversalText('Choose a library title to add to this collection.',
                 style: TextStyle(
-                  color: Colors.white60,
+                  color: _mutedTextColor,
                 ),
               ),
               const SizedBox(height: 12),

@@ -17,3 +17,13 @@ The backend treats NAS storage as a first-class subsystem. See `docs/STORAGE_ARC
 ## Storage subsystem
 
 Storage is a first-class subsystem. See `docs/STORAGE_ARCHITECTURE.md` for HDD/SSD tiers, RAID availability, backups, UPS behavior, and the authenticated `/api/v1/storage/system` endpoint.
+
+## Automated media pipeline additions
+
+The backend now treats ARM as the automated media-ingestion layer. ARM is designed to monitor configured optical drives, scan complete discs, enumerate every title/track, preserve the physical-release relationship, and produce a separate library import plan for every detected entertainment item. Metadata fields can carry artwork, posters, descriptions, cast, artist, album, release/market information, and region data.
+
+Music imports prefer **FLAC** as the lossless archive/master representation. Lossless masters are retained while playback-specific AAC/MP3/Opus/etc. versions are derived only when a device requires them.
+
+Playback transcoding uses a bounded concurrent scheduler. Set `TRANSCODE_MAX_CONCURRENT` to control the number of simultaneous ffmpeg jobs. Direct Play and remuxing remain preferred so the server does not spend CPU/GPU resources on unnecessary conversions.
+
+Recommendations include country/language and adaptation-group relationships so verified international/local productions can be surfaced as related works. Shop/Merchandise eligibility is represented separately from entertainment metadata and must be backed by a real merchant/product relationship.

@@ -32,6 +32,20 @@ class MediaIntelligenceService {
         'eventSystem': true,
         'privacyFirstRecaps': true,
         'futureMediaTypes': true,
+        'armAutomaticDiscIngestion': true,
+        'armMultiTitleDiscImport': true,
+        'armMetadataArtworkCastImport': true,
+        'armLosslessFlacArchive': true,
+        'armRepairRecovery': true,
+        'concurrentTranscoding': true,
+        'internationalAdaptationRecommendations': true,
+        'crossFormatRecommendations': true,
+        'profileLevelMediaAccess': true,
+        'eligibleMerchandiseOnly': true,
+        'shopGraphRelationships': true,
+        'groupWatchCompatibility': true,
+        'universalStableIds': true,
+        'singleSourceOfTruth': true,
       };
 
   /// Adds a work to the global catalog and records a media-created event.

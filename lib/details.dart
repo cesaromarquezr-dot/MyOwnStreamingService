@@ -178,10 +178,16 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         return _buildTrailer();
 
       case 'Group Watch':
-        if (!customization.showGroupWatch) {
+        if (!customization.showGroupWatch || !AppController.instance.isOwned(media.id)) {
           return const SizedBox.shrink();
         }
         return _buildGroupWatch();
+
+      case 'Shop':
+        if (!customization.showShop || !media.hasEligibleMerchandise) {
+          return const SizedBox.shrink();
+        }
+        return _buildShop();
 
       case 'Reviews':
         return _buildReviews();
@@ -1134,6 +1140,41 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // SHOP
+  // ===========================================================================
+
+  /// Shows Shop only when the catalog contains a real eligible merchant/product relationship.
+  Widget _buildShop() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        height: 52,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            showDialog<void>(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const UniversalText('Shop this title'),
+                content: UniversalText(
+                  '${media.eligibleMerchandiseProductIds.length} eligible merchandise product${media.eligibleMerchandiseProductIds.length == 1 ? '' : 's'} are linked to this title.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const UniversalText('Close'),
+                  ),
+                ],
+              ),
+            );
+          },
+          icon: const Icon(Icons.storefront_outlined),
+          label: const UniversalText('Shop Merchandise', style: TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
     );

@@ -55,6 +55,13 @@ class ArmDiscTitle {
   final String? discTitle;
   final String? discMarketCountry;
   final String? detectedRegion;
+  final String? audioCodec;
+  final String archiveFormat;
+  final bool losslessAudio;
+  final int? trackNumber;
+  final int? discNumber;
+  final String? artist;
+  final String? album;
 
   ArmDiscTitle({
     required this.id,
@@ -73,7 +80,23 @@ class ArmDiscTitle {
     this.discTitle,
     this.discMarketCountry,
     this.detectedRegion,
+    this.audioCodec,
+    this.archiveFormat = 'flac',
+    this.losslessAudio = false,
+    this.trackNumber,
+    this.discNumber,
+    this.artist,
+    this.album,
   });
+
+  /// Indicates that this disc title should be treated as music rather than video.
+  bool get isMusic => mediaType.toLowerCase().contains('music') ||
+      mediaType.toLowerCase().contains('audio') ||
+      classification?.toLowerCase() == 'track' ||
+      classification?.toLowerCase() == 'album';
+
+  /// Selects the preferred lossless archive representation for music.
+  String get preferredArchiveFormat => isMusic ? 'flac' : 'source';
 
   bool get isFeatureMovie {
     final type = mediaType.toLowerCase();
@@ -101,6 +124,13 @@ class ArmDiscTitle {
       discTitle: json['discTitle']?.toString() ?? json['title']?.toString(),
       discMarketCountry: json['discMarketCountry']?.toString() ?? json['discCountry']?.toString(),
       detectedRegion: json['detectedRegion']?.toString() ?? json['region']?.toString(),
+      audioCodec: json['audioCodec']?.toString() ?? json['codec_name']?.toString(),
+      archiveFormat: json['archiveFormat']?.toString() ?? (json['mediaType']?.toString().toLowerCase().contains('music') == true ? 'flac' : 'source'),
+      losslessAudio: json['losslessAudio'] == true || _isLosslessCodec(json['audioCodec'] ?? json['codec_name']),
+      trackNumber: _int(json['trackNumber'] ?? json['track']),
+      discNumber: _int(json['discNumber'] ?? json['disc']),
+      artist: json['artist']?.toString(),
+      album: json['album']?.toString(),
     );
   }
 
@@ -122,10 +152,23 @@ class ArmDiscTitle {
         'discTitle': discTitle,
         'discMarketCountry': discMarketCountry,
         'detectedRegion': detectedRegion,
+        'audioCodec': audioCodec,
+        'archiveFormat': archiveFormat,
+        'losslessAudio': losslessAudio,
+        'trackNumber': trackNumber,
+        'discNumber': discNumber,
+        'artist': artist,
+        'album': album,
       };
 
   static double? _double(dynamic value) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '');
   static int? _int(dynamic value) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+
+  /// Detects common lossless codecs so ARM can prefer FLAC for music archives.
+  static bool _isLosslessCodec(dynamic value) {
+    final codec = value?.toString().toLowerCase().trim();
+    return codec == 'flac' || codec == 'alac' || codec == 'wavpack' || codec == 'pcm_s16le' || codec == 'pcm_s24le' || codec == 'pcm_s32le';
+  }
 }
 
 class ArmDisc {
