@@ -13,6 +13,7 @@ import 'app_core.dart';
 import 'music_favorites.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'profile_content_safety.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -24,6 +25,14 @@ class MusicTrack {
   final String? audioUrl;
   final Duration duration;
   final List<String> genres;
+  /// Additional artists explicitly credited on the track, such as features.
+  final List<String> featuredArtists;
+  /// Optional richer genre/subgenre metadata from the home-server importer.
+  final List<String> subgenres;
+  /// Explicit-content flag supplied by licensed/import metadata.
+  final bool explicit;
+  /// Mature-theme flag supplied by licensed/import metadata.
+  final bool matureTheme;
 
   const MusicTrack({
     required this.id,
@@ -34,6 +43,10 @@ class MusicTrack {
     this.audioUrl,
     this.duration = Duration.zero,
     this.genres = const <String>[],
+    this.featuredArtists = const <String>[],
+    this.subgenres = const <String>[],
+    this.explicit = false,
+    this.matureTheme = false,
   });
 }
 
@@ -216,6 +229,10 @@ class MusicLibraryStore extends ChangeNotifier {
   bool shuffle = false;
   bool repeat = false;
 
+  /// Tracks the ordered queue used by AI DJ and normal playback.
+  final List<String> queue = <String>[];
+  bool aiDjActive = false;
+
   String homeBackground = '0xFF090909';
   String navbarColor = '0xFF101010';
   String navbarGlow = '0xFFFF0000';
@@ -261,6 +278,15 @@ class MusicLibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces the current playback queue without changing the source files.
+  void setQueue(Iterable<MusicTrack> tracks, {bool aiDj = false}) {
+    queue
+      ..clear()
+      ..addAll(tracks.map((track) => track.id));
+    aiDjActive = aiDj;
+    notifyListeners();
+  }
+
   /// Records one listening event for music statistics and discovery ordering.
   void recordListen(String trackId) {
     listenCounts[trackId] = (listenCounts[trackId] ?? 0) + 1;
@@ -278,12 +304,20 @@ class MusicPlaybackController extends ChangeNotifier {
   bool isPlaying = false;
   bool loading = false;
   bool _resumeAfterVideo = false;
+  bool _advancing = false;
 
   VideoPlayerController? get videoController => _controller;
   bool get isReady => _controller?.value.isInitialized == true;
 
   /// Starts a server-provided audio stream for a track.
   Future<void> play(MusicTrack track) async {
+    final profile = AppController.instance.currentProfile;
+    if (profileBlocksExplicitMusic(profile) && track.explicit) {
+      return;
+    }
+    if (profileBlocksMatureMusic(profile) && track.matureTheme) {
+      return;
+    }
     final url = track.audioUrl?.trim();
     currentTrack = track;
     MusicLibraryStore.instance.currentTrackId = track.id;
@@ -308,6 +342,7 @@ class MusicPlaybackController extends ChangeNotifier {
 
     final controller = VideoPlayerController.networkUrl(uri);
     _controller = controller;
+    controller.addListener(_handlePlaybackTick);
     try {
       await controller.initialize();
       await controller.play();
@@ -317,6 +352,45 @@ class MusicPlaybackController extends ChangeNotifier {
     } finally {
       loading = false;
       notifyListeners();
+    }
+  }
+
+  /// Advances an AI DJ queue when the active track finishes.
+  void _handlePlaybackTick() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (!controller.value.isCompleted || _advancing) return;
+
+    final store = MusicLibraryStore.instance;
+    if (!store.aiDjActive || store.queue.isEmpty) return;
+
+    _advanceAiDj();
+  }
+
+  /// Selects the next queued AI DJ track and starts it automatically.
+  Future<void> _advanceAiDj() async {
+    if (_advancing) return;
+    _advancing = true;
+    try {
+      final store = MusicLibraryStore.instance;
+      final currentId = currentTrack?.id;
+      final index = currentId == null ? -1 : store.queue.indexOf(currentId);
+      var nextIndex = index + 1;
+      if (nextIndex >= store.queue.length) nextIndex = 0;
+
+      if (store.queue.isEmpty) return;
+      final nextId = store.queue[nextIndex];
+      MusicTrack? next;
+      for (final track in store.tracks) {
+        if (track.id == nextId) {
+          next = track;
+          break;
+        }
+      }
+      if (next == null) return;
+      await play(next);
+    } finally {
+      _advancing = false;
     }
   }
 
@@ -394,7 +468,13 @@ class _MusicScreenState extends State<MusicScreen> {
                       IconButton(
                         onPressed: _showSearch,
                         icon: const Icon(Icons.search_rounded),
+                        tooltip: 'Search music',
                       ),
+                    IconButton(
+                      onPressed: _openDiscover,
+                      icon: const Icon(Icons.explore_rounded),
+                      tooltip: 'Discover music',
+                    ),
                     IconButton(
                       onPressed: _showCustomization,
                       icon: const Icon(Icons.tune_rounded),
@@ -463,10 +543,11 @@ class _MusicScreenState extends State<MusicScreen> {
       if (section == 'Weekly Discovery' && settings.showWeeklyDiscovery) {
         output.add(_trackSection(
           'Weekly Discovery',
-          'A fresh mix from your imported music and listening history',
+          'Fresh music selected from artists, genres and listening activity',
           _weeklyDiscovery(),
           Icons.auto_awesome_rounded,
         ));
+        output.add(_discoverEntrySection());
       } else if (section == 'AI DJ' && settings.showAIDJ) {
         output.add(_aiDjSection());
       } else if (section == 'Made For You' && settings.showSystemPlaylists) {
@@ -514,19 +595,54 @@ class _MusicScreenState extends State<MusicScreen> {
     return output;
   }
 
+  bool _isAllowedForCurrentProfile(MusicTrack track) {
+    final profile = AppController.instance.currentProfile;
+    if (profileBlocksExplicitMusic(profile) && track.explicit) return false;
+    if (profileBlocksMatureMusic(profile) && track.matureTheme) return false;
+    return true;
+  }
+
   List<MusicTrack> _weeklyDiscovery() {
-    final items = List<MusicTrack>.from(library.tracks);
-    items.sort((a, b) {
-      final count =
-          (library.listenCounts[b.id] ?? 0).compareTo(library.listenCounts[a.id] ?? 0);
-      if (count != 0) return count;
-      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    });
-    return items.take(8).toList();
+    final tracks = library.tracks.where(_isAllowedForCurrentProfile).toList();
+    if (tracks.isEmpty) return const <MusicTrack>[];
+
+    // Discover Weekly follows artist relationships, including featured
+    // artists, then uses genres/subgenres and listening activity as supporting
+    // signals. Everything remains limited to the imported home-server library.
+    final seeds = tracks.where((track) => (library.listenCounts[track.id] ?? 0) > 0).toList();
+    final seedTracks = seeds.isEmpty ? tracks.take(5).toList() : seeds;
+    final seedArtists = <String>{};
+    final seedFeatured = <String>{};
+    final seedGenres = <String>{};
+    final seedSubgenres = <String>{};
+    for (final track in seedTracks) {
+      seedArtists.add(track.artist.toLowerCase());
+      seedFeatured.addAll(track.featuredArtists.map((a) => a.toLowerCase()));
+      seedGenres.addAll(track.genres.map((g) => g.toLowerCase()));
+      seedSubgenres.addAll(track.subgenres.map((g) => g.toLowerCase()));
+    }
+
+    final scored = <MusicTrack, int>{};
+    for (final track in tracks) {
+      var score = 0;
+      final artist = track.artist.toLowerCase();
+      final features = track.featuredArtists.map((a) => a.toLowerCase()).toSet();
+      if (seedFeatured.contains(artist)) score += 18;
+      if (seedArtists.contains(artist)) score += 12;
+      if (features.any(seedArtists.contains)) score += 16;
+      score += track.genres.map((g) => g.toLowerCase()).where(seedGenres.contains).length * 4;
+      score += track.subgenres.map((g) => g.toLowerCase()).where(seedSubgenres.contains).length * 6;
+      score += (library.listenCounts[track.id] ?? 0).clamp(0, 5);
+      if (score > 0) scored[track] = score;
+    }
+
+    final items = scored.keys.toList()
+      ..sort((a, b) => scored[b]!.compareTo(scored[a]!));
+    return items.take(12).toList();
   }
 
   List<MusicTrack> _recentlyPlayed() {
-    final items = List<MusicTrack>.from(library.tracks);
+    final items = library.tracks.where(_isAllowedForCurrentProfile).toList();
     items.sort(
       (a, b) => (library.listenCounts[b.id] ?? 0)
           .compareTo(library.listenCounts[a.id] ?? 0),
@@ -534,7 +650,36 @@ class _MusicScreenState extends State<MusicScreen> {
     return items.take(8).toList();
   }
 
+  Widget _discoverEntrySection() {
+    final tracks = _discoverTracks();
+    return SliverToBoxAdapter(
+      child: Card(
+        margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+        child: ListTile(
+          leading: const CircleAvatar(child: Icon(Icons.explore_rounded)),
+          title: const UniversalText('Discover'),
+          subtitle: Text(tracks.isEmpty
+              ? 'Discover music from your imported library.'
+              : '${tracks.length} discovery picks based on artists, genres and related listening.'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _openDiscover,
+        ),
+      ),
+    );
+  }
+
+  List<MusicTrack> _discoverTracks() {
+    final tracks = library.tracks.where(_isAllowedForCurrentProfile).toList();
+    tracks.sort((a, b) {
+      final aScore = (library.listenCounts[a.id] ?? 0) + a.genres.length + a.subgenres.length;
+      final bScore = (library.listenCounts[b.id] ?? 0) + b.genres.length + b.subgenres.length;
+      return bScore.compareTo(aScore);
+    });
+    return tracks.take(18).toList();
+  }
+
   Widget _aiDjSection() {
+    final mix = _buildAiDjMix();
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
@@ -552,35 +697,77 @@ class _MusicScreenState extends State<MusicScreen> {
               children: [
                 Icon(Icons.auto_awesome_rounded),
                 SizedBox(width: 8),
-                UniversalText('AI DJ',
-                    style:
-                        TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                UniversalText('AI DJ', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
               ],
             ),
             const SizedBox(height: 6),
-            const UniversalText('A hands-free mix built from your listening history, artists, genres and imported library.',
+            const UniversalText(
+              'A continuous hands-free mix built from your listening history, artists, genres and imported library.',
               style: TextStyle(color: Colors.white70, height: 1.35),
             ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: library.tracks.isEmpty ? null : _startAiDj,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const UniversalText('START AI DJ'),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: mix.isEmpty ? null : _startAiDj,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const UniversalText('START AI DJ'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: mix.isEmpty ? null : _openAiDj,
+                  icon: const Icon(Icons.queue_music_rounded),
+                  label: const UniversalText('VIEW MIX'),
+                ),
+              ],
             ),
+            if (mix.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text('${mix.length} tracks selected • AI DJ will continue automatically', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            ],
           ],
         ),
       ),
     );
   }
 
+  List<MusicTrack> _buildAiDjMix() {
+    final tracks = List<MusicTrack>.from(_weeklyDiscovery());
+    if (tracks.length < 2) return tracks;
+
+    // Interleave artists where possible so the DJ does not simply replay an album.
+    final result = <MusicTrack>[];
+    final remaining = List<MusicTrack>.from(tracks);
+    String? lastArtist;
+    while (remaining.isNotEmpty) {
+      var index = remaining.indexWhere((track) => track.artist != lastArtist);
+      if (index < 0) index = 0;
+      final track = remaining.removeAt(index);
+      result.add(track);
+      lastArtist = track.artist;
+    }
+    return result;
+  }
+
   Future<void> _startAiDj() async {
-    final tracks = _weeklyDiscovery();
-    if (tracks.isEmpty) return;
-    await playback.play(tracks.first);
+    final mix = _buildAiDjMix();
+    if (mix.isEmpty) return;
+    library.setQueue(mix, aiDj: true);
+    await playback.play(mix.first);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: UniversalText('AI DJ started with ${tracks.first.title}.')),
+      SnackBar(content: UniversalText('AI DJ started with ${mix.first.title} and queued ${mix.length} tracks.')),
     );
+  }
+
+  void _openAiDj() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const MusicAiDjScreen()));
+  }
+
+  void _openDiscover() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const MusicDiscoverScreen()));
   }
 
   Widget _systemPlaylistSection() {
@@ -1000,6 +1187,135 @@ class _MusicScreenState extends State<MusicScreen> {
       ),
     );
     controller.dispose();
+  }
+}
+
+/// Dedicated music discovery experience.
+class MusicDiscoverScreen extends StatelessWidget {
+  const MusicDiscoverScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final store = MusicLibraryStore.instance;
+    final tracks = store.tracks.where((track) {
+      final profile = AppController.instance.currentProfile;
+      if (profileBlocksExplicitMusic(profile) && track.explicit) return false;
+      if (profileBlocksMatureMusic(profile) && track.matureTheme) return false;
+      return true;
+    }).toList();
+    tracks.sort((a, b) {
+      final aScore = (store.listenCounts[a.id] ?? 0) + a.genres.length * 2 + a.subgenres.length;
+      final bScore = (store.listenCounts[b.id] ?? 0) + b.genres.length * 2 + b.subgenres.length;
+      return bScore.compareTo(aScore);
+    });
+    return Scaffold(
+      appBar: AppBar(title: const UniversalText('Discover Music')),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          const UniversalText('Discover', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          const UniversalText('Explore music already available in your account server using listening history, artists, genres and soundtrack connections.', style: TextStyle(color: Colors.white60)),
+          const SizedBox(height: 18),
+          _discoverGroup(context, 'Because You Listen', tracks.take(8).toList()),
+          const SizedBox(height: 18),
+          _discoverGroup(context, 'Artists & Genres To Explore', tracks.skip(8).take(8).toList()),
+          const SizedBox(height: 18),
+          _discoverGroup(context, 'Soundtrack Connections', tracks.where((track) => track.genres.any((g) => g.toLowerCase().contains('soundtrack'))).take(8).toList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _discoverGroup(BuildContext context, String title, List<MusicTrack> tracks) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        if (tracks.isEmpty)
+          const Card(child: ListTile(title: UniversalText('Nothing to show yet.')))
+        else
+          for (final track in tracks)
+            Card(
+              child: ListTile(
+                leading: _MusicDiscoverArtwork(track: track),
+                title: Text(track.title),
+                subtitle: Text('${track.artist} • ${track.album}'),
+                trailing: const Icon(Icons.play_arrow_rounded),
+                onTap: () => MusicPlaybackController.instance.play(track),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+/// Dedicated AI DJ queue view for inspecting and starting the generated mix.
+class MusicAiDjScreen extends StatelessWidget {
+  const MusicAiDjScreen({super.key});
+
+  List<MusicTrack> _mix() {
+    final store = MusicLibraryStore.instance;
+    final tracks = store.tracks.where((track) {
+      final profile = AppController.instance.currentProfile;
+      if (profileBlocksExplicitMusic(profile) && track.explicit) return false;
+      if (profileBlocksMatureMusic(profile) && track.matureTheme) return false;
+      return true;
+    }).toList();
+    tracks.sort((a, b) => (store.listenCounts[b.id] ?? 0).compareTo(store.listenCounts[a.id] ?? 0));
+    return tracks.take(18).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mix = _mix();
+    return Scaffold(
+      appBar: AppBar(title: const UniversalText('AI DJ')),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          const UniversalText('Your AI DJ', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          const UniversalText('A continuous queue assembled from your listening activity and music library. Playback stays on your account server.', style: TextStyle(color: Colors.white60)),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: mix.isEmpty ? null : () async {
+              MusicLibraryStore.instance.setQueue(mix, aiDj: true);
+              await MusicPlaybackController.instance.play(mix.first);
+              if (context.mounted) Navigator.pop(context);
+            },
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const UniversalText('START AI DJ'),
+          ),
+          const SizedBox(height: 14),
+          for (var i = 0; i < mix.length; i++)
+            Card(
+              child: ListTile(
+                leading: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                title: Text(mix[i].title),
+                subtitle: Text(mix[i].artist),
+                trailing: IconButton(
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  onPressed: () => MusicPlaybackController.instance.play(mix[i]),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MusicDiscoverArtwork extends StatelessWidget {
+  final MusicTrack track;
+  const _MusicDiscoverArtwork({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final url = track.artworkUrl?.trim();
+    if (url == null || url.isEmpty) return const CircleAvatar(child: Icon(Icons.album_rounded));
+    return CircleAvatar(backgroundImage: NetworkImage(url));
   }
 }
 

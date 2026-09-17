@@ -114,8 +114,17 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       final music = raw.whereType<Map>().where((m) => m['type']?.toString() == 'music').map((m) => MusicTrack(
         id: m['id']?.toString() ?? '',
         title: m['title']?.toString() ?? 'Imported Song',
-        artist: 'Imported Artist',
-        album: 'Server Library',
+        artist: m['artist']?.toString() ?? 'Imported Artist',
+        album: m['album']?.toString() ?? 'Server Library',
+        genres: (m['genres'] is List)
+            ? List<String>.from((m['genres'] as List).map((e) => e.toString()))
+            : const <String>[],
+        subgenres: (m['subgenres'] is List)
+            ? List<String>.from((m['subgenres'] as List).map((e) => e.toString()))
+            : const <String>[],
+        featuredArtists: (m['featuredArtists'] is List)
+            ? List<String>.from((m['featuredArtists'] as List).map((e) => e.toString()))
+            : const <String>[],
         audioUrl: '${serverApi.baseUrl}/library/stream?path=${Uri.encodeComponent(m['id']?.toString() ?? '')}',
       )).toList();
       MusicLibraryStore.instance.tracks

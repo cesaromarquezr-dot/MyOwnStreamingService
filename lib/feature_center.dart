@@ -28,8 +28,7 @@ class _FeatureCenterScreenState extends State<FeatureCenterScreen> {
       'Recommendations',
       'Collections',
       'Monthly Wrapped',
-      'Achievements',
-      'Year-End Wrapped',
+      'Year End Wrapped',
       'Shared Actors',
     ];
 
@@ -69,7 +68,6 @@ class _FeatureCenterScreenState extends State<FeatureCenterScreen> {
                 RecommendationsPanel(),
                 CollectionsPanel(),
                 WrappedPanel(monthly: true),
-                AchievementsPanel(),
                 WrappedPanel(monthly: false),
                 SharedActorsPanel(),
               ],

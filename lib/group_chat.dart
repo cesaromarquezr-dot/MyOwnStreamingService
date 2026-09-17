@@ -566,11 +566,7 @@ class _GroupChatScreenState extends State<GroupChatScreen>
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
           child: Row(
             children: [
-              _CircleButton(
-                icon: Icons.arrow_back_rounded,
-                onTap: () => Navigator.of(context).maybePop(),
-              ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 4),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

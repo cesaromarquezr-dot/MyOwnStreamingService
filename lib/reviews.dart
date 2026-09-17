@@ -246,23 +246,3 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
     super.dispose();
   }
 }
-
-/// Displays music-aware profile badges alongside movie/show achievements.
-class MusicAchievementsScreen extends StatelessWidget {
-  const MusicAchievementsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const UniversalText('Music Achievements')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: const <Widget>[
-          Card(child: ListTile(leading: Icon(Icons.auto_awesome_rounded), title: UniversalText('Cultured'), subtitle: UniversalText('Explore both film/show and music libraries.'))),
-          Card(child: ListTile(leading: Icon(Icons.music_note_rounded), title: UniversalText('Swiftie'), subtitle: UniversalText('Most of your music listening is Taylor Swift.'))),
-          Card(child: ListTile(leading: Icon(Icons.album_rounded), title: UniversalText('Album Collector'), subtitle: UniversalText('Build a broad album library.'))),
-        ],
-      ),
-    );
-  }
-}

@@ -234,6 +234,30 @@ class RecommendationsRoutes {
     return history;
   }
 
+  List<String> _deriveSubgenres(
+    List<String> genres,
+    List<String> tags,
+    List<String> themes,
+  ) {
+    final text = '${genres.join(' ')} ${tags.join(' ')} ${themes.join(' ')}'.toLowerCase();
+    const values = <String>[
+      'adventure', 'disaster', 'martial arts', 'spy',
+      'romantic comedy', 'rom-com', 'slapstick', 'dark comedy', 'black comedy', 'mockumentary', 'satire',
+      'biopic', 'historical drama', 'legal drama', 'courtroom', 'melodrama', 'medical drama', 'police procedural', 'crime drama', 'teen drama', 'dramedy',
+      'slasher', 'supernatural horror', 'psychological horror', 'zombie', 'found footage',
+      'space opera', 'dystopian', 'cyberpunk', 'time travel',
+      'psychological thriller', 'crime thriller', 'political thriller', 'techno-thriller',
+      'historical romance', 'romantic drama',
+      'high fantasy', 'epic fantasy', 'urban fantasy', 'dark fantasy',
+      'film noir', 'gangster', 'heist', 'neo-noir',
+      'spaghetti western', 'revisionist western', 'epic western', 'space western',
+      'military drama', 'anti-war', 'war biographical',
+      'cgi animation', 'stop motion', 'anime', 'adult animation',
+      'competition show', 'self-improvement', 'reality', 'talk show', 'interview', 'game show', 'variety show', 'award show', 'news', 'cooking', 'home and garden', 'educational', 'court show', 'religious programming', 'music television',
+    ];
+    return values.where(text.contains).toList();
+  }
+
   recommendations.RecommendationMedia
       _toRecommendationMedia(
     Media media,
@@ -261,6 +285,9 @@ class RecommendationsRoutes {
 
       genres:
           List<String>.from(media.genres),
+
+      subgenres:
+          _deriveSubgenres(media.genres, media.tags, media.themes),
 
       themes:
           List<String>.from(media.themes),

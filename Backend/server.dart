@@ -46,11 +46,13 @@ import 'routes/remote_access_routes.dart';
 import 'routes/storage_routes.dart';
 import 'routes/platform_routes.dart';
 import 'routes/library_routes.dart';
+import 'routes/playback_routes.dart';
 import 'routes/legal_routes.dart';
 import 'routes/sports_routes.dart';
 import 'routes/review_routes.dart';
 import 'routes/home_server_routes.dart';
 import 'routes/supabase_sync_routes.dart';
+import 'routes/media_intelligence_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -64,6 +66,11 @@ import 'services/remote_access_service.dart';
 import 'services/sports_service.dart';
 import 'services/review_service.dart';
 import 'services/home_server_service.dart';
+import 'services/media_intelligence_service.dart';
+import 'services/media_analyzer_service.dart';
+import 'services/transcode_cache_service.dart';
+import 'services/transcoding_service.dart';
+import 'services/storage_manager_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -88,6 +95,7 @@ Future<void> main() async {
   );
 
   final recommendationsService = const RecommendationsService();
+  final mediaIntelligenceService = MediaIntelligenceService();
 
   final searchService = SearchService(
     database: database,
@@ -204,9 +212,12 @@ Future<void> main() async {
 
   final remoteAccessService = RemoteAccessService(database);
 
+  final storageManagerService = const StorageManagerService();
+
   final storageRoutes = StorageRoutes(
     authentication: authentication,
     email: emailService,
+    storageManager: storageManagerService,
   );
 
   final platformRoutes = PlatformRoutes(
@@ -216,6 +227,15 @@ Future<void> main() async {
 
   final libraryRoutes = LibraryRoutes(
     authentication: authentication,
+  );
+
+  final transcodingService = TranscodingService(
+    analyzer: const MediaAnalyzerService(),
+    cache: TranscodeCacheService(),
+  );
+  final playbackRoutes = PlaybackRoutes(
+    authentication: authentication,
+    transcoding: transcodingService,
   );
 
   final legalRoutes = LegalRoutes(
@@ -239,6 +259,11 @@ Future<void> main() async {
 
   final supabaseSyncRoutes = SupabaseSyncRoutes(
     authentication: authentication,
+  );
+
+  final mediaIntelligenceRoutes = MediaIntelligenceRoutes(
+    authentication: authentication,
+    service: mediaIntelligenceService,
   );
 
   final remoteAccessRoutes = RemoteAccessRoutes(
@@ -401,10 +426,12 @@ Future<void> main() async {
       storageRoutes,
       platformRoutes,
       libraryRoutes,
+      playbackRoutes,
       legalRoutes,
       reviewRoutes,
       homeServerRoutes,
       supabaseSyncRoutes,
+      mediaIntelligenceRoutes,
     );
   }
 }
@@ -426,10 +453,12 @@ Future<void> _handleRequest(
   StorageRoutes storageRoutes,
   PlatformRoutes platformRoutes,
   LibraryRoutes libraryRoutes,
+  PlaybackRoutes playbackRoutes,
   LegalRoutes legalRoutes,
   ReviewRoutes reviewRoutes,
   HomeServerRoutes homeServerRoutes,
   SupabaseSyncRoutes supabaseSyncRoutes,
+  MediaIntelligenceRoutes mediaIntelligenceRoutes,
 ) async {
   try {
     _addCorsHeaders(request.response);
@@ -465,6 +494,11 @@ Future<void> _handleRequest(
         path == '/api/v1/profiles' ||
         path.startsWith('/api/v1/profiles/')) {
       await authRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/media-intelligence/')) {
+      await mediaIntelligenceRoutes.handle(request);
       return;
     }
 
@@ -537,6 +571,15 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/platform/')) {
       await platformRoutes.handle(request);
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // PLAYBACK ROUTES
+    // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/playback/')) {
+      await playbackRoutes.handle(request);
       return;
     }
 

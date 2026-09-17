@@ -94,6 +94,23 @@ class Database {
       for (final login in memberLogins) {
         registerMemberLogin(login);
       }
+
+      // Account.passwordHash is the canonical owner credential. Re-register
+      // each owner identity from the durable account record so a stale member
+      // identity cannot take precedence over a valid account password.
+      for (final account in accountsById.values) {
+        if (account.email.trim().isEmpty || account.passwordHash.trim().isEmpty) {
+          continue;
+        }
+        registerMemberLogin(MemberLoginRecord(
+          memberId: 'owner_${account.id}',
+          accountId: account.id,
+          email: account.email.trim().toLowerCase(),
+          passwordHash: account.passwordHash,
+          role: 'owner',
+          status: 'active',
+        ));
+      }
     } catch (error, stackTrace) {
       developer.log(
         'Unable to load persistent database state. Starting with in-memory cache.',
@@ -124,6 +141,14 @@ class Database {
         );
       }),
     );
+  }
+
+  /// Persists an account and waits for the durable Supabase write to finish.
+  /// Use this for authentication-critical operations such as account creation
+  /// and password changes so a successful HTTP response is never returned
+  /// before the credential has been durably stored.
+  Future<void> persistAccountAndWait(Account account) async {
+    await SupabaseStore.instance.upsertAccount(account);
   }
 
   // ---------------------------------------------------------------------------

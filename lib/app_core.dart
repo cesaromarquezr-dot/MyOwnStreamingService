@@ -1459,6 +1459,77 @@ class AppController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // BACKEND SESSION RESTORE
+  // ---------------------------------------------------------------------------
+
+  /// Restores a previously authenticated account from the encrypted device session.
+  Future<bool> restoreBackendSession() async {
+    try {
+      final restored = await backendApi.restoreToken();
+      if (!restored) return false;
+
+      final response = await backendApi.getCurrentAccount();
+      final accountData = response['account'];
+      if (accountData is! Map) throw BackendApiException('The saved session returned an invalid account.');
+
+      _applyBackendAccount(Map<String, dynamic>.from(accountData));
+      notifyListeners();
+      return true;
+    } catch (_) {
+      await backendApi.clearToken();
+      currentAccount = null;
+      currentProfile = null;
+      return false;
+    }
+  }
+
+  /// Applies backend account data to the local account/profile model.
+  void _applyBackendAccount(Map<String, dynamic> accountMap) {
+    final username = accountMap['username']?.toString() ?? '';
+    final accountEmail = accountMap['email']?.toString() ?? '';
+    if (username.isEmpty || accountEmail.isEmpty) {
+      throw BackendApiException('The server returned incomplete account information.');
+    }
+
+    final subscriptionData = accountMap['subscription'];
+    var plan = SubscriptionPlan.monthly;
+    if (subscriptionData is Map && subscriptionData['plan']?.toString().toLowerCase() == 'yearly') {
+      plan = SubscriptionPlan.yearly;
+    }
+    var subscriptionStatus = SubscriptionStatus.expired;
+    if (subscriptionData is Map && subscriptionData['status']?.toString().toLowerCase() == 'active') {
+      subscriptionStatus = SubscriptionStatus.active;
+    }
+
+    final profiles = <Profile>[];
+    final profilesData = accountMap['profiles'];
+    if (profilesData is List) {
+      for (final item in profilesData) {
+        if (item is Map) profiles.add(Profile.fromJson(Map<String, dynamic>.from(item)));
+      }
+    }
+
+    currentAccount = UserAccount(
+      id: accountMap['id']?.toString() ?? '',
+      username: username,
+      email: accountEmail,
+      subscription: Subscription(plan: plan, status: subscriptionStatus),
+      profiles: profiles,
+      storageLimitBytes: accountMap['storageLimitBytes'] is num ? (accountMap['storageLimitBytes'] as num).toInt() : 1000000000000,
+      storageUsedBytes: accountMap['storageUsedBytes'] is num ? (accountMap['storageUsedBytes'] as num).toInt() : 0,
+      storageRequestPending: accountMap['storageRequestPending'] == true,
+      storageRequestAt: accountMap['storageRequestAt'] != null ? DateTime.tryParse(accountMap['storageRequestAt'].toString()) : null,
+      storageRequestedTerabytes: accountMap['storageRequestedTerabytes'] is num ? (accountMap['storageRequestedTerabytes'] as num).toInt() : 0,
+      storageRequestFeeUsd: accountMap['storageRequestFeeUsd'] is num ? (accountMap['storageRequestFeeUsd'] as num).toDouble() : 0,
+      storageRequestStatus: accountMap['storageRequestStatus']?.toString() ?? 'none',
+    );
+    currentProfile = profiles.isEmpty ? null : profiles.first;
+    activeProfileIds
+      ..clear()
+      ..addAll(currentProfile == null ? <String>[] : <String>[currentProfile!.id]);
+  }
+
+  // ---------------------------------------------------------------------------
   // BACKEND LOGIN
   // ---------------------------------------------------------------------------
 
@@ -1478,121 +1549,12 @@ class AppController extends ChangeNotifier {
         ? Map<String, dynamic>.from(response['security'] as Map)
         : null;
 
-    final accountData =
-        response['account'];
-
+    final accountData = response['account'];
     if (accountData is! Map) {
-      throw BackendApiException(
-        'The server returned an invalid account response.',
-      );
+      throw BackendApiException('The server returned an invalid account response.');
     }
 
-    final accountMap =
-        Map<String, dynamic>.from(
-      accountData,
-    );
-
-    final username =
-        accountMap['username']
-                ?.toString() ??
-            '';
-
-    final accountEmail =
-        accountMap['email']
-                ?.toString() ??
-            '';
-
-    if (username.isEmpty ||
-        email.isEmpty) {
-      throw BackendApiException(
-        'The server returned incomplete account information.',
-      );
-    }
-
-    final subscriptionData =
-        accountMap['subscription'];
-
-    SubscriptionPlan plan =
-        SubscriptionPlan.monthly;
-
-    if (subscriptionData is Map) {
-      final planValue =
-          subscriptionData['plan']
-              ?.toString()
-              .toLowerCase();
-
-      if (planValue == 'yearly') {
-        plan =
-            SubscriptionPlan.yearly;
-      }
-    }
-
-    SubscriptionStatus
-        subscriptionStatus =
-        SubscriptionStatus.expired;
-
-    if (subscriptionData is Map) {
-      final statusValue =
-          subscriptionData['status']
-              ?.toString()
-              .toLowerCase();
-
-      if (statusValue == 'active') {
-        subscriptionStatus =
-            SubscriptionStatus.active;
-      }
-    }
-
-    final List<Profile> profiles =
-        <Profile>[];
-
-    final profilesData =
-        accountMap['profiles'];
-
-    if (profilesData is List) {
-      for (final item in profilesData) {
-        if (item is Map) {
-          profiles.add(
-            Profile.fromJson(
-              Map<String, dynamic>.from(
-                item,
-              ),
-            ),
-          );
-        }
-      }
-    }
-
-    // New accounts intentionally keep ZERO profiles. The owner creates the
-    // first profile from the profile-selection screen after signing in.
-
-    currentAccount =
-        UserAccount(
-      id: accountMap['id']?.toString() ?? '',
-      username: username,
-      email: accountEmail,
-      subscription:
-          Subscription(
-        plan: plan,
-        status:
-            subscriptionStatus,
-      ),
-      profiles: profiles,
-      storageLimitBytes: accountMap['storageLimitBytes'] is num ? (accountMap['storageLimitBytes'] as num).toInt() : 1000000000000,
-      storageUsedBytes: accountMap['storageUsedBytes'] is num ? (accountMap['storageUsedBytes'] as num).toInt() : 0,
-      storageRequestPending: accountMap['storageRequestPending'] == true,
-      storageRequestAt: accountMap['storageRequestAt'] != null ? DateTime.tryParse(accountMap['storageRequestAt'].toString()) : null,
-      storageRequestedTerabytes: accountMap['storageRequestedTerabytes'] is num ? (accountMap['storageRequestedTerabytes'] as num).toInt() : 0,
-      storageRequestFeeUsd: accountMap['storageRequestFeeUsd'] is num ? (accountMap['storageRequestFeeUsd'] as num).toDouble() : 0,
-      storageRequestStatus: accountMap['storageRequestStatus']?.toString() ?? 'none',
-    );
-
-    currentProfile = profiles.isEmpty ? null : profiles.first;
-
-    activeProfileIds.clear();
-    if (currentProfile != null) {
-      activeProfileIds.add(currentProfile!.id);
-    }
+    _applyBackendAccount(Map<String, dynamic>.from(accountData));
 
     recommendations.clear();
     groupRecommendations.clear();
@@ -1663,7 +1625,7 @@ class AppController extends ChangeNotifier {
         await backendApi.logout();
       }
     } finally {
-    backendApi.clearToken();
+    await backendApi.clearToken();
 
       currentAccount = null;
       currentProfile = null;

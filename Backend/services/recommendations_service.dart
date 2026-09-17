@@ -27,6 +27,8 @@ enum RecommendationReasonType {
   music,
   similar,
   genre,
+  subgenre,
+  hybridGenre,
   theme,
   tag,
   preference,
@@ -145,6 +147,7 @@ class RecommendationMedia {
   final List<String> characters;
   final List<String> franchises;
   final List<String> genres;
+  final List<String> subgenres;
   final List<String> themes;
   final List<String> tags;
   final List<String> directors;
@@ -167,6 +170,7 @@ class RecommendationMedia {
     this.characters = const [],
     this.franchises = const [],
     this.genres = const [],
+    this.subgenres = const [],
     this.themes = const [],
     this.tags = const [],
     this.directors = const [],
@@ -190,6 +194,7 @@ class RecommendationMedia {
       'characters': characters,
       'franchises': franchises,
       'genres': genres,
+      'subgenres': subgenres,
       'themes': themes,
       'tags': tags,
       'directors': directors,
@@ -735,8 +740,8 @@ class RecommendationsService {
           type: RecommendationReasonType.multipleActors,
           title: 'Multiple familiar actors',
           description:
-              'This recommendation shares multiple actors '
-              'with "${source.title}".',
+              'Because you watched "${source.title}", you saw '
+              '${sharedActors.take(2).join(', ')} in it.',
           relatedMediaIds: [source.id],
         ),
       );
@@ -748,8 +753,40 @@ class RecommendationsService {
           type: RecommendationReasonType.actor,
           title: 'Same actor',
           description:
-              'This recommendation shares an actor '
-              'with "${source.title}".',
+              'Because you watched "${source.title}", you saw '
+              '${sharedActors.first} in it.',
+          relatedMediaIds: [source.id],
+        ),
+      );
+    }
+
+    // ------------------------------------------------------------
+    // SEMANTIC MEDIA RELATIONSHIPS
+    // ------------------------------------------------------------
+
+    if (_isAdultAnimation(source) && _isAdultAnimation(candidate)) {
+      score += weights.similarity;
+      reasons.add(
+        RecommendationReason(
+          type: RecommendationReasonType.similar,
+          title: 'Similar adult animation',
+          description:
+              'Because you watched "${source.title}", this is another '
+              'adult-animation title with a related comedy style.',
+          relatedMediaIds: [source.id],
+        ),
+      );
+    }
+
+    if (_isFriendGroupSitcom(source) && _isFriendGroupSitcom(candidate)) {
+      score += weights.similarity;
+      reasons.add(
+        RecommendationReason(
+          type: RecommendationReasonType.similar,
+          title: 'Similar friend-group sitcom',
+          description:
+              'Because you watched "${source.title}", this title has '
+              'similar friend-group and ensemble-sitcom relationships.',
           relatedMediaIds: [source.id],
         ),
       );
@@ -831,6 +868,38 @@ class RecommendationsService {
     // ------------------------------------------------------------
     // GENRES
     // ------------------------------------------------------------
+
+    final sharedSubgenres = _intersection(
+      candidate.subgenres,
+      source.subgenres,
+    );
+
+    if (sharedSubgenres.isNotEmpty) {
+      score += weights.genre * 2 * sharedSubgenres.length;
+      reasons.add(
+        RecommendationReason(
+          type: RecommendationReasonType.subgenre,
+          title: 'Same subgenre',
+          description:
+              'Because you watched "${source.title}", this title shares ' +
+              'the ${sharedSubgenres.take(2).join(' and ')} subgenre.',
+          relatedMediaIds: [source.id],
+        ),
+      );
+    }
+
+    final hybridReason = _hybridGenreReason(source, candidate);
+    if (hybridReason != null) {
+      score += weights.similarity;
+      reasons.add(
+        RecommendationReason(
+          type: RecommendationReasonType.hybridGenre,
+          title: 'Related hybrid genre',
+          description: 'Because you watched "${source.title}", this title blends related genre conventions: $hybridReason.',
+          relatedMediaIds: [source.id],
+        ),
+      );
+    }
 
     final sharedGenres = _intersection(
       candidate.genres,
@@ -984,6 +1053,96 @@ class RecommendationsService {
       score: score,
       reasons: reasons,
     );
+  }
+
+  String? _hybridGenreReason(
+    RecommendationMedia source,
+    RecommendationMedia candidate,
+  ) {
+    final sourceText = _normalize(
+      '${source.title} ${source.genres.join(' ')} ${source.subgenres.join(' ')} ${source.tags.join(' ')}',
+    );
+    final candidateText = _normalize(
+      '${candidate.title} ${candidate.genres.join(' ')} ${candidate.subgenres.join(' ')} ${candidate.tags.join(' ')}',
+    );
+    const pairs = <List<String>>[
+      ['action', 'comedy'],
+      ['science fiction', 'horror'],
+      ['crime', 'thriller'],
+      ['romance', 'comedy'],
+      ['romance', 'drama'],
+      ['comedy', 'drama'],
+      ['fantasy', 'adventure'],
+      ['science fiction', 'western'],
+    ];
+    for (final pair in pairs) {
+      if (_containsAny(sourceText, pair) && _containsAny(candidateText, pair)) {
+        return '${pair[0]} + ${pair[1]}';
+      }
+    }
+    return null;
+  }
+
+  bool _containsAny(String value, List<String> terms) =>
+      terms.any(value.contains);
+
+  bool _isAdultAnimation(RecommendationMedia media) {
+    final text = _normalize(
+      '${media.title} ${media.genres.join(' ')} ${media.tags.join(' ')}',
+    );
+
+    final knownAdultAnimation = [
+      'south park',
+      'rick and morty',
+      'family guy',
+      'american dad',
+      'the simpsons',
+      'futurama',
+      'bojack horseman',
+      'archer',
+    ].any(text.contains);
+
+    if (knownAdultAnimation) {
+      return true;
+    }
+
+    final animation = text.contains('animation') ||
+        text.contains('animated') ||
+        text.contains('cartoon');
+    final adult = text.contains('adult') ||
+        text.contains('mature') ||
+        text.contains('satire');
+
+    return animation && adult;
+  }
+
+  bool _isFriendGroupSitcom(RecommendationMedia media) {
+    final text = _normalize(
+      '${media.title} ${media.genres.join(' ')} ${media.themes.join(' ')} '
+      '${media.tags.join(' ')}',
+    );
+
+    final sitcom = text.contains('sitcom') ||
+        text.contains('comedy series') ||
+        text.contains('situation comedy');
+    final ensemble = text.contains('friend') ||
+        text.contains('friendship') ||
+        text.contains('ensemble') ||
+        text.contains('group of friends');
+
+    if (sitcom && ensemble) {
+      return true;
+    }
+
+    // Classification hints preserve the Friends examples already established
+    // by the project while still requiring the candidate to be in the catalog.
+    return [
+      'friends',
+      'how i met your mother',
+      'brooklyn nine-nine',
+      'modern family',
+      'abbott elementary',
+    ].any(text.contains);
   }
 
   /// Checks whether either title is referenced by the other.

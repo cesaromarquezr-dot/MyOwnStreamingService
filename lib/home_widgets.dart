@@ -541,9 +541,7 @@ class HomeStorageProgressBar extends StatelessWidget {
 class HomePositionedLayout extends StatelessWidget {
   final String navbarPosition;
   final String storagePosition;
-  final String liveSportsPosition;
   final double storageThickness;
-  final bool showLiveSports;
   final Widget navbar;
   final Widget child;
 
@@ -551,9 +549,7 @@ class HomePositionedLayout extends StatelessWidget {
     super.key,
     required this.navbarPosition,
     required this.storagePosition,
-    required this.liveSportsPosition,
     required this.storageThickness,
-    required this.showLiveSports,
     required this.navbar,
     required this.child,
   });
@@ -565,7 +561,6 @@ class HomePositionedLayout extends StatelessWidget {
     final bySide = <String, List<int>>{for (final side in _sides) side: <int>[]};
     if (_sides.contains(navbarPosition)) bySide[navbarPosition]!.add(0);
     if (_sides.contains(storagePosition)) bySide[storagePosition]!.add(1);
-    if (showLiveSports && _sides.contains(liveSportsPosition)) bySide[liveSportsPosition]!.add(2);
 
     final top = _edgeSize(bySide['Top']!, horizontal: true);
     final bottom = _edgeSize(bySide['Bottom']!, horizontal: true);
@@ -584,7 +579,7 @@ class HomePositionedLayout extends StatelessWidget {
           compact: compact,
         );
       }
-      return HomeLiveSportsWidget(compact: compact);
+      return const SizedBox.shrink();
     }
 
     Widget edge(String side) {

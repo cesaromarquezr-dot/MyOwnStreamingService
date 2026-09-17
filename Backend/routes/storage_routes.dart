@@ -8,21 +8,28 @@ import 'dart:io';
 import '../middleware/authentication.dart';
 import '../config.dart';
 import '../services/email_service.dart';
+import '../services/storage_manager_service.dart';
 
 /// Implements the `StorageRoutes` class for this feature or UI component.
 class StorageRoutes {
   final AuthenticationMiddleware authentication;
   final EmailService email;
+  final StorageManagerService storageManager;
 
   StorageRoutes({
     required this.authentication,
     required this.email,
+    this.storageManager = const StorageManagerService(),
   });
 
   /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(HttpRequest request) async {
     try {
       final path = request.uri.path;
+
+      if (request.method == 'GET' && path == '/api/v1/storage/system') {
+        return await _system(request);
+      }
 
       if (request.method == 'GET' && path == '/api/v1/storage') {
         return await _get(request);
@@ -66,6 +73,12 @@ class StorageRoutes {
         },
       );
     }
+  }
+
+  /// Returns live NAS filesystem, RAID, backup, and UPS information.
+  Future<void> _system(HttpRequest r) async {
+    if (authentication.authenticate(r) == null) return await _unauth(r);
+    return await _json(r.response, 200, await storageManager.snapshot());
   }
 
   /// Performs `_get` for this feature. Update this documentation when its contract changes.

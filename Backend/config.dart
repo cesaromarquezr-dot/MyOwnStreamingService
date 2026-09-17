@@ -64,6 +64,8 @@ class AppConfig {
   // MEDIA STORAGE
   // ============================================================
 
+  static String get mediaLibraryPath => mediaRoot;
+
   static String get mediaRoot {
     final configuredPath =
         Platform.environment['MEDIA_ROOT']?.trim();

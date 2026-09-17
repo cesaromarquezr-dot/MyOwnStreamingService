@@ -18,7 +18,7 @@ import 'connected_sports.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
 import 'music_achievements.dart';
-import 'reviews.dart' hide MusicAchievementsScreen;
+import 'reviews.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
 import 'localization.dart';
@@ -166,7 +166,7 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(131, 'Guess the Song', Icons.quiz_rounded, 'Music guessing game based on songs and soundtracks.', (_) => const MusicScreen()),
       _RoadmapFeature(132, 'Soundtrack Universe', Icons.album_rounded, 'Connect movies, shows, albums and songs into soundtrack experiences.', (_) => const MusicScreen()),
       _RoadmapFeature(133, 'Music Statistics', Icons.bar_chart_rounded, 'Track music songs, playlists and listening alongside movie/TV statistics.', (_) => const StatisticsScreen()),
-      _RoadmapFeature(134, 'Music Achievements & Badges', Icons.emoji_events_rounded, 'Badges such as Cultured, Swiftie and Album Collector.', (_) => const MusicAchievementsScreen()),
+      _RoadmapFeature(134, 'Music Achievements & Badges', Icons.emoji_events_rounded, 'Badges such as Cultured, Swiftie and Album Collector.', (_) => const AchievementsScreen()),
       _RoadmapFeature(135, 'Profile Reviews', Icons.rate_review_outlined, 'Rate titles from 0-10 with a custom review label and text.', (_) => const ReviewsHubScreen()),
       _RoadmapFeature(136, 'Global Privacy-Safe Reviews', Icons.public_rounded, 'Publish reviews under a custom username without exposing email or account identity.', (_) => const ReviewsHubScreen()),
       _RoadmapFeature(137, 'Official vs Viewer Ratings', Icons.star_half_rounded, 'Show provider/critic rating separately from the community 10-point rating.', (_) => const ReviewsHubScreen()),

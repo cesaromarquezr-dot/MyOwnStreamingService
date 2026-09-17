@@ -69,6 +69,9 @@ class SupabaseSyncRoutes {
         platform: body['platform'] is Map
             ? Map<String, dynamic>.from(body['platform'] as Map)
             : null,
+        music: body['music'] is Map
+            ? Map<String, dynamic>.from(body['music'] as Map)
+            : null,
       );
 
       return await _json(request.response, 200, {

@@ -15,27 +15,21 @@ import 'movies.dart';
 import 'series.dart';
 import 'smart_search.dart';
 import 'details.dart';
-import 'profiles.dart';
 import 'feature_center.dart';
-import 'ultimate_features.dart';
-import 'ultimate_platform.dart';
-import 'library_privacy.dart';
+import 'profiles.dart';
 import 'remote_access.dart';
 import 'account_settings.dart';
 import 'device_features.dart';
-import 'roadmap_features.dart';
-import 'next_gen_features.dart';
+import 'film.dart';
 import 'how_it_works.dart';
 import 'connected_sports.dart';
 import 'group_chat.dart';
-import 'platform_expansion.dart';
 import 'music.dart';
-import 'discovery_experience.dart';
-import 'music_achievements.dart';
 import 'home_server.dart';
-import 'storage_dashboard.dart';
 import 'library_hubs.dart';
 import 'home_widgets.dart';
+import 'platform_expansion.dart';
+import 'discovery_experience.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
 import 'localization.dart';
@@ -224,16 +218,30 @@ class _SplashScreenState extends State<SplashScreen> {
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
+    _restoreOrShowWelcome();
+  }
+
+  /// Restores an existing encrypted session. Returning users skip the
+  /// How It Works, sign-up, and login screens and go directly to profile selection.
+  Future<void> _restoreOrShowWelcome() async {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    final restored = await AppController.instance.restoreBackendSession();
+    if (!mounted) return;
+
+    if (restored) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => HowItWorksScreen(
-            loginBuilder: (_) => const LoginScreen(),
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
       );
-    });
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => HowItWorksScreen(
+          loginBuilder: (_) => const LoginScreen(),
+        ),
+      ),
+    );
   }
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
@@ -368,6 +376,20 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(
           builder: (_) => ProfileSelectionScreen(
             onProfileSelected: (context) {
+              // First-time profile setup opens Customize App before the normal
+              // home screen. Completion is persisted per profile, so logout
+              // and login do not show first-time setup again.
+              if (!HomeCustomizationStore.isConfigured(
+                AppController.instance.currentProfile,
+              )) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CustomizeHomeScreen(firstSetup: true),
+                  ),
+                );
+                return;
+              }
+
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => const MainScreen(),
@@ -552,7 +574,6 @@ class HomeCustomization {
   bool showNewAdditions;
   bool showAllLibrary;
   bool showRecommendations;
-  bool showLiveSports;
   bool showMusic;
   bool showFilm;
   bool showSeasonalCollections;
@@ -561,7 +582,6 @@ class HomeCustomization {
   String cardSize;
   String navbarPosition;
   String storageBarPosition;
-  String liveSportsPosition;
   double storageBarThickness;
   String homeBackgroundColor;
   String navbarColor;
@@ -582,7 +602,6 @@ class HomeCustomization {
     this.showNewAdditions = true,
     this.showAllLibrary = false,
     this.showRecommendations = true,
-    this.showLiveSports = true,
     this.showMusic = true,
     this.showFilm = true,
     this.showSeasonalCollections = true,
@@ -591,7 +610,6 @@ class HomeCustomization {
     this.cardSize = 'Medium',
     this.navbarPosition = 'Bottom',
     this.storageBarPosition = 'Bottom',
-    this.liveSportsPosition = 'Top',
     this.storageBarThickness = 12,
     this.homeBackgroundColor = 'Black',
     this.navbarColor = 'Black',
@@ -616,7 +634,8 @@ class HomeCustomization {
         navigationOrder = navigationOrder ?? [
           'Profile',
           'Home',
-          'Connected Sports',
+          'Sports',
+          'Surprise Me',
           'More',
           'Music',
           'Film',
@@ -632,7 +651,6 @@ class HomeCustomization {
         showNewAdditions: showNewAdditions,
         showAllLibrary: showAllLibrary,
         showRecommendations: showRecommendations,
-        showLiveSports: showLiveSports,
         showMusic: showMusic,
         showFilm: showFilm,
         showSeasonalCollections: showSeasonalCollections,
@@ -641,7 +659,6 @@ class HomeCustomization {
         cardSize: cardSize,
         navbarPosition: navbarPosition,
         storageBarPosition: storageBarPosition,
-        liveSportsPosition: liveSportsPosition,
         storageBarThickness: storageBarThickness,
         homeBackgroundColor: homeBackgroundColor,
         navbarColor: navbarColor,
@@ -678,6 +695,14 @@ class HomeCustomizationStore {
           if (!settings.sectionOrder.contains('Music & Film')) {
             settings.sectionOrder.add('Music & Film');
           }
+          if (!settings.navigationOrder.contains('Surprise Me')) {
+            final moreIndex = settings.navigationOrder.indexOf('More');
+            if (moreIndex >= 0) {
+              settings.navigationOrder.insert(moreIndex, 'Surprise Me');
+            } else {
+              settings.navigationOrder.add('Surprise Me');
+            }
+          }
           _settings[key.substring(settingsPrefix.length)] = settings;
         } catch (_) {}
       } else if (key.startsWith(setupPrefix) && _prefs!.getBool(key) == true) {
@@ -688,8 +713,18 @@ class HomeCustomizationStore {
 
   static String _key(Profile? profile) => profile?.id ?? 'default';
 
-  static HomeCustomization settingsFor(Profile? profile) =>
-      _settings.putIfAbsent(_key(profile), () => HomeCustomization()).copy();
+  static HomeCustomization settingsFor(Profile? profile) {
+    final value = _settings.putIfAbsent(_key(profile), () => HomeCustomization());
+    if (!value.navigationOrder.contains('Surprise Me')) {
+      final moreIndex = value.navigationOrder.indexOf('More');
+      if (moreIndex >= 0) {
+        value.navigationOrder.insert(moreIndex, 'Surprise Me');
+      } else {
+        value.navigationOrder.add('Surprise Me');
+      }
+    }
+    return value.copy();
+  }
 
   static HomeCustomization get settings => settingsFor(AppController.instance.currentProfile);
 
@@ -740,8 +775,8 @@ class HomeCustomizationStore {
   static Map<String, dynamic> _toJson(HomeCustomization v) => {
     'showHero': v.showHero, 'showContinueWatching': v.showContinueWatching, 'showRecentlyWatched': v.showRecentlyWatched,
     'showMovies': v.showMovies, 'showTvShows': v.showTvShows, 'showNewAdditions': v.showNewAdditions,
-    'showAllLibrary': v.showAllLibrary, 'showRecommendations': v.showRecommendations, 'showLiveSports': v.showLiveSports, 'showMusic': v.showMusic, 'showFilm': v.showFilm, 'showSeasonalCollections': v.showSeasonalCollections, 'homeMediaLayout': v.homeMediaLayout, 'heroStyle': v.heroStyle,
-    'cardSize': v.cardSize, 'navbarPosition': v.navbarPosition, 'storageBarPosition': v.storageBarPosition, 'liveSportsPosition': v.liveSportsPosition, 'storageBarThickness': v.storageBarThickness,
+    'showAllLibrary': v.showAllLibrary, 'showRecommendations': v.showRecommendations, 'showMusic': v.showMusic, 'showFilm': v.showFilm, 'showSeasonalCollections': v.showSeasonalCollections, 'homeMediaLayout': v.homeMediaLayout, 'heroStyle': v.heroStyle,
+    'cardSize': v.cardSize, 'navbarPosition': v.navbarPosition, 'storageBarPosition': v.storageBarPosition, 'storageBarThickness': v.storageBarThickness,
     'homeBackgroundColor': v.homeBackgroundColor, 'navbarColor': v.navbarColor, 'navbarGlowColor': v.navbarGlowColor, 'navbarItemColor': v.navbarItemColor,
     'navbarStyle': v.navbarStyle, 'navbarOpacity': v.navbarOpacity, 'navbarRadius': v.navbarRadius,
     'sectionOrder': v.sectionOrder, 'navigationOrder': v.navigationOrder,
@@ -777,10 +812,10 @@ class HomeCustomizationStore {
     showHero: m['showHero'] == false ? false : true, showContinueWatching: m['showContinueWatching'] == false ? false : true,
     showRecentlyWatched: m['showRecentlyWatched'] == false ? false : true, showMovies: m['showMovies'] == false ? false : true,
     showTvShows: m['showTvShows'] == false ? false : true, showNewAdditions: m['showNewAdditions'] == false ? false : true,
-    showAllLibrary: m['showAllLibrary'] == true, showRecommendations: m['showRecommendations'] == false ? false : true, showLiveSports: m['showLiveSports'] == false ? false : true,
-    showMusic: m['showMusic'] == false ? false : true, showFilm: m['showFilm'] == false ? false : true, showSeasonalCollections: m['showSeasonalCollections'] == false ? false : true, homeMediaLayout: m['homeMediaLayout']?.toString() ?? 'Left & Right',
+    showAllLibrary: m['showAllLibrary'] == true, showRecommendations: m['showRecommendations'] == false ? false : true,
+    showMusic: m['showMusic'] == false ? false : true, showFilm: m['showFilm'] == false ? false : true, showSeasonalCollections: m['showSeasonalCollections'] == false ? false : true, homeMediaLayout: m['homeMediaLayout']?.toString() == 'Top & Bottom' ? 'Under Banner' : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
     heroStyle: m['heroStyle']?.toString() ?? 'Cinematic', cardSize: m['cardSize']?.toString() ?? 'Medium',
-    navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom', storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom', liveSportsPosition: m['liveSportsPosition']?.toString() ?? 'Top', storageBarThickness: (m['storageBarThickness'] is num ? (m['storageBarThickness'] as num).toDouble() : 12),
+    navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom', storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom', storageBarThickness: (m['storageBarThickness'] is num ? (m['storageBarThickness'] as num).toDouble() : 12),
     homeBackgroundColor: _colorNameFromStored(m['homeBackgroundColor'], 'Black'),
     navbarColor: _colorNameFromStored(m['navbarColor'], 'Black'),
     navbarGlowColor: _colorNameFromStored(m['navbarGlowColor'], 'Red'),
@@ -791,12 +826,12 @@ class HomeCustomizationStore {
     sectionOrder: m['sectionOrder'] is List
         ? (List<String>.from(m['sectionOrder'] as List)
             ..replaceRange(0, (m['sectionOrder'] as List).length, (m['sectionOrder'] as List)
-                .map((e) => e.toString() == 'Live Sports' ? 'Connected Sports' : e.toString())
-                .where((e) => e != 'Connected Sports')))
+                .map((e) => e.toString() == 'Live Sports' ? 'Sports' : e.toString())
+                .where((e) => e != 'Sports')))
         : null,
     navigationOrder: m['navigationOrder'] is List
         ? (List<String>.from(m['navigationOrder'] as List)
-            ..replaceRange(0, (m['navigationOrder'] as List).length, (m['navigationOrder'] as List).map((e) => e.toString() == 'Live Sports' ? 'Connected Sports' : e.toString())))
+            ..replaceRange(0, (m['navigationOrder'] as List).length, (m['navigationOrder'] as List).map((e) => e.toString() == 'Live Sports' ? 'Sports' : e.toString())))
         : null,
   );
 }
@@ -887,7 +922,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     musicDraft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
-    draft.sectionOrder.removeWhere((section) => section == 'Connected Sports' || section == 'Live Sports');
+    draft.sectionOrder.removeWhere((section) => section == 'Sports' || section == 'Live Sports');
     _normalizeHomePositions();
   }
 
@@ -902,9 +937,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     if (!positions.contains(draft.storageBarPosition) && draft.storageBarPosition != 'Hidden') {
       draft.storageBarPosition = 'Bottom';
     }
-    if (!positions.contains(draft.liveSportsPosition)) {
-      draft.liveSportsPosition = 'Top';
-    }
   }
 
   /// Performs `_save` for this feature. Update this documentation when its contract changes.
@@ -917,8 +949,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
     final profile = AppController.instance.currentProfile;
 
-    // First setup is a strict forward-only sequence: Home -> Details -> Music
-    // -> Account Invite. Each step saves before advancing, so a crash or app
+    // First setup is a strict forward-only sequence: Home -> Details -> Music.
+    // Each step saves before advancing, so a crash or app
     // restart cannot silently discard the completed customization.
     if (widget.firstSetup) {
       if (selectedPage == _CustomizationPage.home) {
@@ -941,7 +973,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         return;
       }
 
-      // Music is now a mandatory first-setup step.
+      // Music completes the first-time profile setup. The completion flag is
+      // stored per profile so returning to the app will not reopen customization.
       MusicPageCustomizationStore.apply(profile, musicDraft);
       HomeCustomizationStore.apply(draft, profile);
       DetailsCustomizationStore.apply(profile, detailsDraft);
@@ -949,18 +982,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       await HomeCustomizationStore.markSetupCompleted(profile);
 
       if (!mounted) return;
-      final inviteCompleted = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => const AccountInviteScreen(firstSetup: true),
-        ),
+      // The profile is now fully customized, so go directly to Home. Account
+      // invitations remain available later from the More (three-dot) menu.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainScreen()),
       );
-
-      if (!mounted || inviteCompleted != true) {
-        if (mounted) setState(() => _isSaving = false);
-        return;
-      }
-      Navigator.of(context).pop(true);
       return;
     }
 
@@ -1399,13 +1425,19 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         const UniversalText('HOME MEDIA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
         const SizedBox(height: 10),
         _dropdown(
-          label: 'Music + Film arrangement',
+          label: 'Music, Film & Collections placement',
           value: draft.homeMediaLayout,
-          values: const ['Left & Right', 'Top & Bottom'],
+          values: const ['Left & Right', 'Under Banner'],
           onChanged: (value) => setState(() => draft.homeMediaLayout = value),
         ),
         _toggle('Music', 'Show a Music destination on Home.', draft.showMusic, (v) => setState(() => draft.showMusic = v)),
-        _toggle('Film', 'Show Movies and Shows together on Home.', draft.showFilm, (v) => setState(() => draft.showFilm = v)),
+        _toggle('Film', 'Show the dedicated Film experience on Home.', draft.showFilm, (v) => setState(() => draft.showFilm = v)),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.collections_bookmark_outlined),
+          title: Text('Collections'),
+          subtitle: Text('The Collections entry remains available with Music and Film.'),
+        ),
         const SizedBox(height: 24),
         const UniversalText('SECTIONS',
           style: TextStyle(
@@ -1976,7 +2008,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     const defaults = <String>[
       'Profile',
       'Home',
-      'Connected Sports',
+      'Sports',
+      'Surprise Me',
       'More',
       'Music',
       'Film',
@@ -2015,9 +2048,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     return HomePositionedLayout(
       navbarPosition: draft.navbarPosition,
       storagePosition: draft.storageBarPosition,
-      liveSportsPosition: draft.liveSportsPosition,
       storageThickness: draft.storageBarThickness,
-      showLiveSports: draft.showLiveSports,
       navbar: previewNavbar,
       child: page,
     );
@@ -2030,6 +2061,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     if (draft.showHero) {
       sections.add(_homePreviewHero());
     }
+    sections.add(_homePreviewMediaEntryButtons());
 
     for (final section in draft.sectionOrder) {
       final enabled = switch (section) {
@@ -2097,12 +2129,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             isTvShow: false,
           ));
         case 'Music & Film':
-          sections.add(_homePreviewMediaSection(
-            'MUSIC & FILM',
-            'Music, films and soundtracks',
-            Icons.library_music_outlined,
-            isTvShow: false,
-          ));
+          break;
         case 'Seasonal Collections':
           sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
@@ -2160,6 +2187,39 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       ),
     );
   }
+
+  Widget _homePreviewMediaEntryButtons() {
+    final buttons = <Widget>[
+      if (draft.showMusic) _previewEntry('MUSIC', Icons.music_note_rounded),
+      if (draft.showFilm) _previewEntry('FILM', Icons.movie_creation_outlined),
+      _previewEntry('COLLECTIONS', Icons.collections_bookmark_outlined),
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+        color: const Color(0xFF121212),
+      ),
+      child: draft.homeMediaLayout == 'Under Banner'
+          ? Column(children: [for (var i = 0; i < buttons.length; i++) ...[buttons[i], if (i != buttons.length - 1) const SizedBox(height: 8)]])
+          : Row(children: [for (var i = 0; i < buttons.length; i++) ...[Expanded(child: buttons[i]), if (i != buttons.length - 1) const SizedBox(width: 8)]]),
+    );
+  }
+
+  Widget _previewEntry(String label, IconData icon) => Container(
+        height: 54,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .18)),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 18, color: Colors.white54),
+          const SizedBox(width: 7),
+          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white54)),
+        ]),
+      );
 
   Widget _homePreviewMediaSection(
     String title,
@@ -3071,89 +3131,70 @@ class _MainScreenState extends State<MainScreen> {
       isScrollControlled: true,
       builder: (_) => _MoreActionsSheet(
         onImport: () { Navigator.pop(context); _openImport(); },
-        onProfiles: () { Navigator.pop(context); _openProfiles(); },
-        onWishlist: () {
-          Navigator.pop(context);
-          showDialog<void>(context: context, builder: (_) => const WishlistDialog());
-        },
-        onCustomize: () {
-          Navigator.pop(context);
-          Navigator.of(context).push<bool>(
-            MaterialPageRoute(
-              fullscreenDialog: true,
-              builder: (_) => const CustomizeHomeScreen(),
-            ),
-          ).then((_) { if (mounted) setState(() {}); });
-        },
-        onFeatureCenter: () { Navigator.pop(context); _openFeatureCenter(); },
-        onEverything: () { Navigator.pop(context); _openEverything(); },
         onRemoteAccess: () { Navigator.pop(context); _openRemoteAccess(); },
-        onAccountSettings: () { Navigator.pop(context); _openAccountSettings(); },
+        onSettings: () { Navigator.pop(context); _openAccountSettings(); },
         onDevices: () { Navigator.pop(context); _openDevices(); },
-        onRoadmapFeatures: () { Navigator.pop(context); _openRoadmapFeatures(); },
-        onNextGen: () { Navigator.pop(context); _openNextGen(); },
-        onPlatformExpansion: () { Navigator.pop(context); _openPlatformExpansion(); },
-        onNotifications: () { Navigator.pop(context); _openNotifications(); },
+        onHomeServer: () { Navigator.pop(context); _openHomeServer(); },
+        onMembers: () { Navigator.pop(context); _openMembers(); },
+        onCustomize: () { Navigator.pop(context); _openCustomize(); },
       ),
     );
   }
 
-  /// Performs `_openImport` for this feature. Update this documentation when its contract changes.
+  /// Opens the media import/rip workflow.
   void _openImport() {
-    Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const ImportMediaScreen()))
-        .then((_) { if (mounted) setState(() {}); });
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ImportMediaScreen()),
+    ).then((_) { if (mounted) setState(() {}); });
   }
 
-  /// Performs `_openProfiles` for this feature. Update this documentation when its contract changes.
-  void _openProfiles() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()))
-        .then((_) { if (mounted) setState(() {}); });
-  }
-
-  /// Performs `_openFeatureCenter` for this feature. Update this documentation when its contract changes.
-  void _openFeatureCenter() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const FeatureCenterScreen()));
-  }
-
-  /// Performs `_openEverything` for this feature. Update this documentation when its contract changes.
-  void _openEverything() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const UltimateFeaturesScreen()));
-  }
-
-  /// Performs `_openRemoteAccess` for this feature. Update this documentation when its contract changes.
+  /// Opens the remote-access management page.
   void _openRemoteAccess() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const RemoteAccessScreen()));
   }
 
-  /// Performs `_openAccountSettings` for this feature. Update this documentation when its contract changes.
+  /// Opens application/account settings.
   void _openAccountSettings() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsScreen()));
   }
 
-  /// Performs `_openDevices` for this feature. Update this documentation when its contract changes.
+  /// Opens the device center.
   void _openDevices() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()));
   }
 
-  /// Performs `_openRoadmapFeatures` for this feature. Update this documentation when its contract changes.
-  void _openRoadmapFeatures() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const RoadmapFeaturesScreen()));
+  /// Opens the account home-server dashboard.
+  void _openHomeServer() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const HomeServerScreen()));
   }
 
-  /// Performs `_openNextGen` for this feature. Update this documentation when its contract changes.
-  void _openNextGen() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const NextGenFeaturesScreen()));
+  /// Opens account-member management without duplicating it in the server dashboard menu.
+  void _openMembers() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountInviteScreen()));
   }
 
-  /// Performs `_openPlatformExpansion` for this feature. Update this documentation when its contract changes.
-  void _openPlatformExpansion() {
+  /// Opens Customize App on demand after first-time setup has been completed.
+  void _openCustomize() {
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const CustomizeHomeScreen()),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Opens profile selection, which is the central place for switching and managing profiles.
+  void _openProfiles() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const PlatformExpansionScreen()),
-    );
+      MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
-  /// Performs `_openNotifications` for this feature. Update this documentation when its contract changes.
+  /// Opens the notifications activity sheet from the Home bell.
   void _openNotifications() {
     showModalBottomSheet<void>(
       context: context,
@@ -3163,33 +3204,87 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  /// Normalizes saved navigation names while preserving the current navbar architecture.
+  /// Legacy `Connected Sports` and `Live Sports` values are migrated to `Sports`.
   List<String> _normalizedNavigationOrder(List<String> value) {
-    const defaults = <String>['Profile', 'Home', 'Connected Sports', 'More', 'Music', 'Film', 'Group Chat'];
+    const defaults = <String>[
+      'Profile',
+      'Home',
+      'Sports',
+      'Surprise Me',
+      'More',
+      'Music',
+      'Film',
+      'Group Chat',
+    ];
+
     final result = <String>[];
-    for (final name in value) {
-      if (defaults.contains(name) && !result.contains(name)) result.add(name);
+    for (final rawName in value) {
+      final name = rawName == 'Connected Sports' || rawName == 'Live Sports'
+          ? 'Sports'
+          : rawName;
+      if (defaults.contains(name) && !result.contains(name)) {
+        result.add(name);
+      }
     }
+
     for (final name in defaults) {
       if (!result.contains(name)) result.add(name);
     }
+
     return result;
+  }
+
+  void _surpriseMe() {
+    final controller = AppController.instance;
+    final library = List<MediaItem>.from(controller.library);
+    if (library.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your library is empty. Add media before using Surprise Me.')),
+      );
+      return;
+    }
+
+    final eligible = library.where((item) => item.type.trim().isNotEmpty).toList();
+    if (eligible.isEmpty) return;
+    final item = (eligible..shuffle()).first;
+    final type = item.type.toLowerCase();
+
+    if (type.contains('song') || type.contains('track') || type.contains('music')) {
+      // The MediaItem catalog remains the source of truth for the app while
+      // MusicLibraryStore handles actual audio playback when that track is loaded.
+      final music = MusicLibraryStore.instance.tracks.where((track) => track.id == item.id).toList();
+      if (music.isNotEmpty) {
+        MusicPlaybackController.instance.play(music.first);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Surprise Me is playing ${music.first.title}.')),
+        );
+        return;
+      }
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)),
+    );
   }
 
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    // Primary navigation includes Profile, Home, Connected Sports, More, Music, Film,
+    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film,
     // and Group Chat. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
     final pageByName = <String, Widget>{
       'Profile': const ProfileScreen(),
       'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
-      'Connected Sports': const ConnectedSportsHubScreen(),
+      'Sports': const ConnectedSportsHubScreen(),
       'Group Chat': const GroupChatScreen(),
       'More': const _MoreNavigationPlaceholder(),
+      'Surprise Me': const _MoreNavigationPlaceholder(),
       'Music': const MusicScreen(),
-      'Film': const MoviesScreen(),
+      'Film': const FilmExperienceScreen(),
     };
     final pages = navigationOrder.map((name) => pageByName[name]!).toList();
     final safeSelectedIndex = navigationOrder.indexOf(selectedDestination).clamp(0, pages.length - 1).toInt();
@@ -3200,6 +3295,7 @@ class _MainScreenState extends State<MainScreen> {
         final name = navigationOrder[index];
         if (name == 'Profile') { _openProfiles(); return; }
         if (name == 'More') { _openMore(); return; }
+        if (name == 'Surprise Me') { _surpriseMe(); return; }
         final destination = navigationOrder[index];
         if (destination != selectedDestination) {
           setState(() => selectedDestination = destination);
@@ -3225,9 +3321,7 @@ class _MainScreenState extends State<MainScreen> {
       content = HomePositionedLayout(
         navbarPosition: settings.navbarPosition,
         storagePosition: settings.storageBarPosition,
-        liveSportsPosition: settings.liveSportsPosition,
         storageThickness: settings.storageBarThickness,
-        showLiveSports: false,
         navbar: navbar,
         child: page,
       );
@@ -3316,7 +3410,8 @@ class _StreamingNavigationBar extends StatelessWidget {
     final dataByName = <String, _NavItemData>{
       'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
       'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
-      'Connected Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Connected Sports'),
+      'Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Sports'),
+      'Surprise Me': const _NavItemData(Icons.shuffle_rounded, Icons.shuffle_rounded, 'Surprise Me'),
       'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Group Chat'),
       'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
       'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
@@ -3326,6 +3421,8 @@ class _StreamingNavigationBar extends StatelessWidget {
       for (final name in navigationOrder)
         if (name == 'More')
           _NavButton(data: dataByName[name]!, selected: false, vertical: vertical, onTap: onMore, color: itemColor)
+        else if (name == 'Surprise Me')
+          _NavButton(data: dataByName[name]!, selected: false, vertical: vertical, onTap: () => onSelect(navigationOrder.indexOf(name)), color: itemColor)
         else if (name == 'Music')
           _NavMenuButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, color: itemColor, entries: musicEntries, onTap: () => onSelect(navigationOrder.indexOf(name)), menuSide: position == 'Right' ? AxisDirection.left : AxisDirection.right, menuVerticalDirection: (position == 'Bottom' || position == 'Floating') ? AxisDirection.up : AxisDirection.down)
         else if (name == 'Film')
@@ -3597,37 +3694,26 @@ class _NavButtonState extends State<_NavButton> {
 /// Implements the `_MoreActionsSheet` class for this feature or UI component.
 class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onImport;
-  final VoidCallback onProfiles;
-  final VoidCallback onWishlist;
-  final VoidCallback onCustomize;
-  final VoidCallback onFeatureCenter;
-  final VoidCallback onEverything;
   final VoidCallback onRemoteAccess;
-  final VoidCallback onAccountSettings;
+  final VoidCallback onSettings;
   final VoidCallback onDevices;
-  final VoidCallback onRoadmapFeatures;
-  final VoidCallback onNextGen;
-  final VoidCallback onPlatformExpansion;
-  final VoidCallback onNotifications;
+  final VoidCallback onHomeServer;
+  final VoidCallback onMembers;
+  final VoidCallback onCustomize;
 
   const _MoreActionsSheet({
     required this.onImport,
-    required this.onProfiles,
-    required this.onWishlist,
-    required this.onCustomize,
-    required this.onFeatureCenter,
-    required this.onEverything,
     required this.onRemoteAccess,
-    required this.onAccountSettings,
+    required this.onSettings,
     required this.onDevices,
-    required this.onRoadmapFeatures,
-    required this.onNextGen,
-    required this.onPlatformExpansion,
-    required this.onNotifications,
+    required this.onHomeServer,
+    required this.onMembers,
+    required this.onCustomize,
   });
 
   @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  /// Builds the intentionally compact utility menu. Feature destinations live
+  /// on their dedicated pages instead of being duplicated in this menu.
   Widget build(BuildContext context) {
     return _PremiumSheet(
       title: tr('More'),
@@ -3637,39 +3723,9 @@ class _MoreActionsSheet extends StatelessWidget {
         children: [
           _SheetAction(
             icon: Icons.library_add_outlined,
-            title: tr('Rip / Import Disc'),
+            title: tr('Import / Rip'),
             subtitle: tr('DVD, Blu-ray, UHD and approved media import'),
             onTap: onImport,
-          ),
-          _SheetAction(
-            icon: Icons.manage_accounts_outlined,
-            title: tr('Manage Profiles'),
-            subtitle: tr('Switch, create, or remove profiles'),
-            onTap: onProfiles,
-          ),
-          _SheetAction(
-            icon: Icons.favorite_outline_rounded,
-            title: tr('Group Wishlist'),
-            subtitle: tr('See shared movies and shows'),
-            onTap: onWishlist,
-          ),
-          _SheetAction(
-            icon: Icons.tune_rounded,
-            title: tr('Customize App'),
-            subtitle: tr('Customize Home and Details'),
-            onTap: onCustomize,
-          ),
-          _SheetAction(
-            icon: Icons.auto_awesome_rounded,
-            title: tr('Discover & Recaps'),
-            subtitle: tr('Recommendations, collections, achievements and recaps'),
-            onTap: onFeatureCenter,
-          ),
-          _SheetAction(
-            icon: Icons.apps_rounded,
-            title: tr('Everything'),
-            subtitle: tr('Security, AI, stats, travel, backup and more'),
-            onTap: onEverything,
           ),
           _SheetAction(
             icon: Icons.devices_other_rounded,
@@ -3679,9 +3735,9 @@ class _MoreActionsSheet extends StatelessWidget {
           ),
           _SheetAction(
             icon: Icons.settings_rounded,
-            title: tr('Account Settings'),
+            title: tr('Settings'),
             subtitle: tr('Storage, subscription and account controls'),
-            onTap: onAccountSettings,
+            onTap: onSettings,
           ),
           _SheetAction(
             icon: Icons.devices_rounded,
@@ -3690,64 +3746,22 @@ class _MoreActionsSheet extends StatelessWidget {
             onTap: onDevices,
           ),
           _SheetAction(
-            icon: Icons.auto_awesome_rounded,
-            title: tr('Next-Gen Features'),
-            subtitle: tr('Smart discovery, My Stuff, stats, downloads, privacy and advanced settings'),
-            onTap: onNextGen,
+            icon: Icons.dns_rounded,
+            title: tr('Home Server'),
+            subtitle: tr('Server health, storage and media import pipeline'),
+            onTap: onHomeServer,
+          ),
+          _SheetAction(
+            icon: Icons.people_alt_outlined,
+            title: tr('Members'),
+            subtitle: tr('Manage people who can use this account'),
+            onTap: onMembers,
           ),
           _SheetAction(
             icon: Icons.tune_rounded,
-            title: tr('Platform Expansion'),
-            subtitle: tr('Security, playback, TV, backup, discovery, sports, privacy and kids controls'),
-            onTap: onPlatformExpansion,
-          ),
-          _SheetAction(
-            icon: Icons.notifications_active_outlined,
-            title: tr('Notifications'),
-            subtitle: tr('Recent profile activity and messages'),
-            onTap: onNotifications,
-          ),
-          _SheetAction(
-            icon: Icons.favorite_rounded,
-            title: tr('Favorites'),
-            subtitle: tr('Liked movies, shows, songs, albums and playlists'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FavoritesScreen())),
-          ),
-          _SheetAction(
-            icon: Icons.workspace_premium_rounded,
-            title: tr('Ultimate Platform'),
-            subtitle: tr('AI, premium player, family, social, cloud, security, devices and Studio'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UltimatePlatformScreen())),
-          ),
-          _SheetAction(
-            icon: Icons.privacy_tip_outlined,
-            title: tr('Privacy & Ownership'),
-            subtitle: tr('Private library, authorized media, storage and account deletion'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LibraryPrivacyScreen())),
-          ),
-          _SheetAction(
-            icon: Icons.storage_rounded,
-            title: tr('Server Storage'),
-            subtitle: tr('Movies, Series, Music and available capacity'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StorageDashboardScreen())),
-          ),
-          _SheetAction(
-            icon: Icons.dns_rounded,
-            title: tr('Home Server & ARM'),
-            subtitle: tr('Server health, ARM connection and media import pipeline'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HomeServerScreen())),
-          ),
-          _SheetAction(
-            icon: Icons.emoji_events_outlined,
-            title: tr('Music Achievements'),
-            subtitle: tr('Music badges such as Cultured and Swiftie'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MusicAchievementsScreen())),
-          ),
-          _SheetAction(
-            icon: Icons.rocket_launch_rounded,
-            title: tr('100-Feature Roadmap'),
-            subtitle: tr('Open every implemented roadmap feature'),
-            onTap: onRoadmapFeatures,
+            title: tr('Customize App'),
+            subtitle: tr('Change your Home, Details and Music page layout'),
+            onTap: onCustomize,
           ),
         ],
       ),
@@ -3755,7 +3769,6 @@ class _MoreActionsSheet extends StatelessWidget {
   }
 }
 
-/// Implements the `_SheetAction` class for this feature or UI component.
 class _SheetAction extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -4068,6 +4081,9 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
+            SliverToBoxAdapter(
+              child: _HomeMediaEntryButtons(settings: settings),
+            ),
             if (library.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -4118,7 +4134,7 @@ List<Widget> _buildHomeSectionSlivers(
     case 'All Library': items = library; subtitle = 'Everything in your library'; enabled = settings.showAllLibrary; break;
     case 'Recommendations': items = recommendations; subtitle = 'Picked for your profile'; enabled = settings.showRecommendations; break;
     case 'Music & Film':
-      return [if (settings.showMusic || settings.showFilm) SliverToBoxAdapter(child: _HomeMusicFilmChooser(settings: settings))];
+      return const [];
     case 'Seasonal Collections':
       return settings.showSeasonalCollections
           ? [SliverToBoxAdapter(child: _HomeSeasonalCollections())]
@@ -4140,6 +4156,10 @@ class _HomeSeasonalCollections extends StatelessWidget {
     final matches = SeasonalCollectionEngine.matching(
       AppController.instance.library,
     );
+    final songs = SeasonalCollectionEngine.matchingSongs(
+      MusicLibraryStore.instance.tracks,
+    );
+    final total = matches.length + songs.length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -4164,13 +4184,13 @@ class _HomeSeasonalCollections extends StatelessWidget {
                         fontSize: 19, fontWeight: FontWeight.w900),
                   ),
                 ),
-                UniversalText('${matches.length} titles',
+                UniversalText('$total items',
                   style: const TextStyle(color: Colors.white38, fontSize: 11),
                 ),
               ],
             ),
             const SizedBox(height: 5),
-            const UniversalText('Seasonal collection • updates with the calendar',
+            const UniversalText('Seasonal collection • movies, TV episodes/shows and songs • updates with the calendar',
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             const SizedBox(height: 12),
@@ -4183,7 +4203,7 @@ class _HomeSeasonalCollections extends StatelessWidget {
                 height: 90,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: matches.take(8).length,
+                  itemCount: (matches.length + songs.length).clamp(0, 8),
                   separatorBuilder: (_, __) => const SizedBox(width: 9),
                   itemBuilder: (_, index) => Container(
                     width: 150,
@@ -4193,7 +4213,7 @@ class _HomeSeasonalCollections extends StatelessWidget {
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: Text(
-                      matches[index].title,
+                      index < matches.length ? matches[index].title : songs[index - matches.length].title,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w800),
@@ -4220,48 +4240,43 @@ class _HomeSeasonalCollections extends StatelessWidget {
 }
 
 /// Implements the `_HomeMusicFilmChooser` class for this feature or UI component.
-class _HomeMusicFilmChooser extends StatelessWidget {
+class _HomeMediaEntryButtons extends StatelessWidget {
   final HomeCustomization settings;
-  const _HomeMusicFilmChooser({required this.settings});
+  const _HomeMediaEntryButtons({required this.settings});
 
-  Widget _panel(BuildContext context, {required String title, required String subtitle, required IconData icon, required List<Widget> actions}) {
-    return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .045),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+  Widget _button(BuildContext context, String title, String subtitle, IconData icon, Widget page) =>
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
+          icon: Icon(icon),
+          label: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+            ],
+          ),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            alignment: Alignment.centerLeft,
+          ),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Icon(icon, size: 22), const SizedBox(width: 8), Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)))]),
-          const SizedBox(height: 5),
-          Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          const SizedBox(height: 12),
-          ...actions,
-        ]),
-    );
-  }
-
-  Widget _action(BuildContext context, String label, IconData icon, Widget page) => SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)), icon: Icon(icon, size: 17), label: Text(label)));
+      );
 
   @override
   Widget build(BuildContext context) {
-    final panels = <Widget>[];
-    if (settings.showMusic) {
-      panels.add(_panel(context, title: tr('Music'), subtitle: tr('Songs, albums and playlists'), icon: Icons.music_note_rounded, actions: [
-        _action(context, 'Open Music', Icons.play_circle_outline_rounded, const MusicScreen()),
-      ]));
-    }
-    if (settings.showFilm) {
-      panels.add(_panel(context, title: tr('Film'), subtitle: tr('Movies or shows'), icon: Icons.movie_creation_outlined, actions: [
-        Row(children: [Expanded(child: _action(context, 'Movies', Icons.movie_outlined, const MoviesScreen())), const SizedBox(width: 8), Expanded(child: _action(context, 'Shows', Icons.tv_rounded, const SeriesScreen()))]),
-      ]));
-    }
-    if (panels.isEmpty) return const SizedBox.shrink();
-    final body = settings.homeMediaLayout == 'Top & Bottom'
-        ? Column(children: [for (var i = 0; i < panels.length; i++) ...[panels[i], if (i != panels.length - 1) const SizedBox(height: 12)]])
-        : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [for (var i = 0; i < panels.length; i++) ...[Expanded(child: panels[i]), if (i != panels.length - 1) const SizedBox(width: 12)]]);
-    return Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0), child: body);
+    final buttons = <Widget>[
+      if (settings.showMusic) _button(context, 'Music', 'Songs, albums & playlists', Icons.music_note_rounded, const MusicScreen()),
+      if (settings.showFilm) _button(context, 'Film', 'Movies, TV & franchises', Icons.movie_creation_outlined, const FilmExperienceScreen()),
+      _button(context, 'Collections', 'Organize your media', Icons.collections_bookmark_outlined, const CollectionsPanel()),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: settings.homeMediaLayout == 'Top & Bottom'
+          ? Column(children: [for (var i = 0; i < buttons.length; i++) ...[buttons[i], if (i != buttons.length - 1) const SizedBox(height: 8)]])
+          : Row(children: [for (var i = 0; i < buttons.length; i++) ...[buttons[i], if (i != buttons.length - 1) const SizedBox(width: 10)]]),
+    );
   }
 }
 

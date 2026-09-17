@@ -44,7 +44,7 @@ class AuthRoutes {
       }
 
       // -----------------------------------------------------------------------
-      // LOGIN (EMAIL + PASSWORD)
+      // LOGIN (EMAIL OR USERNAME + PASSWORD)
       // -----------------------------------------------------------------------
 
       if (request.method == 'POST' &&
@@ -78,6 +78,18 @@ class AuthRoutes {
       if (request.method == 'POST' &&
           path == '/api/v1/auth/verify-security') {
         await _verifySecurity(request);
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/auth/password-recovery/question') {
+        await _passwordRecoveryQuestion(request);
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          path == '/api/v1/auth/password-recovery/reset') {
+        await _passwordRecoveryReset(request);
         return;
       }
 
@@ -169,12 +181,13 @@ class AuthRoutes {
       if (!request.response.headers.contentType
           .toString()
           .contains('application/json')) {
+        final message = _errorMessage(error);
         _sendJson(
           request.response,
-          statusCode: HttpStatus.internalServerError,
+          statusCode: _authErrorStatusCode(message),
           body: {
             'success': false,
-            'error': _errorMessage(error),
+            'error': message,
           },
         );
       }
@@ -337,6 +350,58 @@ class AuthRoutes {
       'verified': valid,
       'message': valid ? 'Security answer verified.' : 'Incorrect security answer.',
     });
+  }
+
+  // ===========================================================================
+  // PASSWORD RECOVERY
+  // ===========================================================================
+
+  /// Returns the security question for an existing account without exposing
+  /// the security answer or password hash.
+  Future<void> _passwordRecoveryQuestion(HttpRequest request) async {
+    final body = await _readJsonBody(request);
+    final login = (body['login'] ?? body['email'])?.toString().trim() ?? '';
+    if (login.isEmpty) {
+      throw Exception('email is required.');
+    }
+
+    final question = authService.getSecurityQuestion(login);
+
+    _sendJson(
+      request.response,
+      statusCode: HttpStatus.ok,
+      body: {
+        'success': true,
+        'question': question,
+      },
+    );
+  }
+
+  /// Verifies the recovery answer and permanently updates the existing
+  /// account password. The plaintext password is never persisted.
+  Future<void> _passwordRecoveryReset(HttpRequest request) async {
+    final body = await _readJsonBody(request);
+    final login = (body['login'] ?? body['email'])?.toString().trim() ?? '';
+    if (login.isEmpty) {
+      throw Exception('email is required.');
+    }
+    final securityAnswer = _readRequiredString(body, 'securityAnswer');
+    final newPassword = _readRequiredString(body, 'newPassword');
+
+    await authService.resetPassword(
+      login: login,
+      securityAnswer: securityAnswer,
+      newPassword: newPassword,
+    );
+
+    _sendJson(
+      request.response,
+      statusCode: HttpStatus.ok,
+      body: {
+        'success': true,
+        'message': 'Password reset successfully. You can now sign in with your new password.',
+      },
+    );
   }
 
   // ===========================================================================
@@ -862,6 +927,39 @@ class AuthRoutes {
     }
 
     return text;
+  }
+
+  /// Maps authentication/business errors to appropriate HTTP status codes so
+  /// invalid credentials are not incorrectly reported as server errors.
+  int _authErrorStatusCode(String message) {
+    final normalized = message.toLowerCase();
+
+    if (normalized.contains('invalid email or password') ||
+        normalized.contains('incorrect security answer') ||
+        normalized.contains('could not verify the account recovery')) {
+      return HttpStatus.unauthorized;
+    }
+
+    if (normalized.contains('already in use') ||
+        normalized.contains('email address is already')) {
+      return HttpStatus.conflict;
+    }
+
+    if (normalized.contains('authentication required')) {
+      return HttpStatus.unauthorized;
+    }
+
+    if (normalized.contains('required') ||
+        normalized.contains('invalid subscription plan') ||
+        normalized.contains('password must be at least')) {
+      return HttpStatus.badRequest;
+    }
+
+    if (normalized.contains('subscription is not active')) {
+      return HttpStatus.forbidden;
+    }
+
+    return HttpStatus.internalServerError;
   }
 
   /// Performs `_sendAuthenticationRequired` for this feature. Update this documentation when its contract changes.

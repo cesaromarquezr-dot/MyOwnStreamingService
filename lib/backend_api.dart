@@ -5,6 +5,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Implements the `BackendApiException` class for this feature or UI component.
 class BackendApiException implements Exception {
@@ -32,6 +33,8 @@ class BackendApi {
   final String baseUrl;
 
   String? _token;
+  static const _tokenStorageKey = 'backend_session_token';
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   BackendApi({
     this.baseUrl = const String.fromEnvironment(
@@ -43,6 +46,17 @@ class BackendApi {
   }
 
   String? get token => _token;
+
+  /// Restores the authenticated session token from encrypted device storage.
+  Future<bool> restoreToken() async {
+    final stored = await _secureStorage.read(key: _tokenStorageKey);
+    if (stored == null || stored.trim().isEmpty) {
+      _token = null;
+      return false;
+    }
+    _token = stored.trim();
+    return true;
+  }
 
   Uri get baseUri => Uri.parse(baseUrl);
 
@@ -63,13 +77,15 @@ class BackendApi {
       _token != null && _token!.isNotEmpty;
 
   /// Performs `setToken` for this feature. Update this documentation when its contract changes.
-  void setToken(String token) {
+  Future<void> setToken(String token) async {
     _token = token;
+    await _secureStorage.write(key: _tokenStorageKey, value: token);
   }
 
   /// Performs `clearToken` for this feature. Update this documentation when its contract changes.
-  void clearToken() {
+  Future<void> clearToken() async {
     _token = null;
+    await _secureStorage.delete(key: _tokenStorageKey);
   }
 
   Map<String, String> get _headers {
@@ -245,7 +261,9 @@ class BackendApi {
     return data;
   }
 
-  /// Logs into an account.
+  /// Logs into an account using the account email or username.
+  /// The backend receives the canonical `email` field for compatibility with
+  /// the authentication route; the value may also be a username.
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -254,7 +272,7 @@ class BackendApi {
       Uri.parse('$baseUrl/auth/login'),
       headers: _headers,
       body: jsonEncode({
-        'email': email.trim().toLowerCase(),
+        'email': email.trim(),
         'password': password,
       }),
     );
@@ -279,9 +297,19 @@ class BackendApi {
       );
     }
 
-    setToken(token);
+    await setToken(token);
 
     return data;
+  }
+
+  /// Loads the currently authenticated account without asking for the password again.
+  Future<Map<String, dynamic>> getCurrentAccount() async {
+    _requireAuthentication();
+    final response = await http.get(
+      Uri.parse('$baseUrl/auth/me'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to restore the account session.');
   }
 
   /// Invites another login identity to the currently authenticated account.
@@ -358,6 +386,55 @@ class BackendApi {
       response,
       'Unable to accept account invitation.',
     );
+  }
+
+  /// Retrieves the security question for an existing account without
+  /// returning any password or security-answer material.
+  Future<String> getPasswordRecoveryQuestion({required String email}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/password-recovery/question'),
+      headers: _headers,
+      body: jsonEncode({'email': email.trim()}),
+    );
+
+    final data = _decodeResponse(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ?? 'Unable to start password recovery.',
+        statusCode: response.statusCode,
+      );
+    }
+
+    final question = data['question']?.toString().trim() ?? '';
+    if (question.isEmpty) {
+      throw BackendApiException('The account does not have a recovery question configured.');
+    }
+    return question;
+  }
+
+  /// Changes an existing account password using its security answer.
+  Future<void> resetPassword({
+    required String email,
+    required String securityAnswer,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/password-recovery/reset'),
+      headers: _headers,
+      body: jsonEncode({
+        'email': email.trim(),
+        'securityAnswer': securityAnswer,
+        'newPassword': newPassword,
+      }),
+    );
+
+    final data = _decodeResponse(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendApiException(
+        data['error']?.toString() ?? 'Unable to reset the account password.',
+        statusCode: response.statusCode,
+      );
+    }
   }
 
   /// Retrieves the authenticated account.
@@ -976,6 +1053,45 @@ class BackendApi {
       'Unable to request library deletion.',
     );
   }
+
+  // ==========================================================
+  // PLAYBACK / CODEC NEGOTIATION
+  // ==========================================================
+
+  /// Asks the account server to inspect a media file and prepare the best
+  /// playback mode for the current device.
+  Future<Map<String, dynamic>> preparePlayback({
+    required String path,
+    Map<String, dynamic>? capabilities,
+  }) async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/playback/prepare'),
+      headers: _headers,
+      body: jsonEncode({
+        'path': path,
+        'capabilities': capabilities ?? <String, dynamic>{},
+      }),
+    );
+    return _requireSuccess(response, 'Unable to prepare playback.');
+  }
+
+  /// Returns conservative capabilities for the Flutter player. The server
+  /// remains the authority and can choose a safer transcode when uncertain.
+  Map<String, dynamic> playbackCapabilities() => {
+        'videoCodecs': <String>['h264'],
+        'audioCodecs': <String>['aac', 'mp3'],
+        'containers': <String>['mp4'],
+        'maxWidth': 3840,
+        'maxHeight': 2160,
+        'hdr': false,
+      };
+
+  /// Builds an authenticated URL for the server's direct/remuxed/transcoded
+  /// media stream. The bearer token is supplied by the player as a header.
+  Uri playbackUri(String relativePath) => Uri.parse(
+        '$baseUrl/library/stream?path=${Uri.encodeQueryComponent(relativePath)}',
+      );
 
   // ==========================================================
   // STORAGE

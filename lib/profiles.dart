@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_core.dart';
+import 'music_achievements.dart';
+import 'profile_content_safety.dart';
 import 'main.dart';
 import 'localization.dart';
 
@@ -73,14 +75,15 @@ class _ProfileSelectionScreenState
     final profile = profiles.last;
     if (HomeCustomizationStore.isConfigured(profile)) return;
 
+    AppController.instance.switchProfile(profile.id);
+    await LanguageController.instance.loadForCurrentProfile();
+    if (!mounted) return;
     final completed = await Navigator.of(context).push<bool>(
-  MaterialPageRoute(
-    fullscreenDialog: true,
-    builder: (_) => const CustomizeHomeScreen(firstSetup: true),
-  ),
-);
-
-if (!mounted || completed != true) return;
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const CustomizeHomeScreen(firstSetup: true),
+      ),
+    );
 
     if (!mounted) return;
     if (completed == true) {
@@ -114,6 +117,14 @@ if (!mounted || completed != true) return;
     );
 
     if (!mounted) return;
+  }
+
+  /// Opens the unified Music, Movies, and Shows achievements for a profile.
+  void _showAchievements(Profile profile) {
+    AppController.instance.switchProfile(profile.id);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AchievementsScreen()),
+    );
   }
 
   /// Performs `_selectProfile` for this feature. Update this documentation when its contract changes.
@@ -259,6 +270,9 @@ if (!mounted || completed != true) return;
                                   onStatistics: () {
                                     _showStatistics(profile);
                                   },
+                                  onAchievements: () {
+                                    _showAchievements(profile);
+                                  },
                                 ),
                               ),
                               if (profiles.length < 7)
@@ -312,12 +326,14 @@ class _ProfileCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onStatistics;
+  final VoidCallback onAchievements;
 
   const _ProfileCard({
     required this.profile,
     required this.onTap,
     required this.onEdit,
     required this.onStatistics,
+    required this.onAchievements,
   });
 
   @override
@@ -397,6 +413,18 @@ class _ProfileCardState extends State<_ProfileCard> {
                   onTap: () {
                     Navigator.pop(context);
                     widget.onStatistics();
+                  },
+                ),
+
+                const SizedBox(height: 10),
+
+                _ProfileMenuButton(
+                  icon: Icons.emoji_events_outlined,
+                  title: tr('Achievements'),
+                  subtitle: tr('View Music, Movies and Shows achievements'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onAchievements();
                   },
                 ),
               ],
@@ -1143,6 +1171,26 @@ class _EditProfileSheetState
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 18),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _saving
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProfileContentSafetyScreen(
+                                profile: widget.profile,
+                              ),
+                            ),
+                          ),
+                  icon: const Icon(Icons.shield_outlined),
+                  label: const UniversalText('CONTENT & SAFETY'),
+                ),
               ),
 
               const SizedBox(height: 28),

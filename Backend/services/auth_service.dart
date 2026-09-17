@@ -186,6 +186,7 @@ class AuthService {
     );
 
     database.saveAccount(account);
+    await database.persistAccountAndWait(account);
 
     await emailService.welcome(
       account.email,
@@ -225,67 +226,79 @@ class AuthService {
     String userAgent = 'unknown',
   }) async {
     final cleanLogin = login.trim();
+    final normalizedLogin = cleanLogin.toLowerCase();
 
     if (cleanLogin.isEmpty || password.isEmpty) {
-      database.recordFailedLogin(cleanLogin);
+      database.recordFailedLogin(normalizedLogin);
       throw Exception(
         'Invalid email or password.',
       );
     }
 
-    final memberLogins = database.getMemberLoginsByEmail(cleanLogin);
-    Account? account;
-    String passwordHash;
+    // Account.passwordHash is the canonical owner credential. Do not let a
+    // stale owner member-identity row override it during authentication.
+    Account? account = database.getAccountByEmail(normalizedLogin);
+    if (account == null) {
+      account = database.getAccountByUsername(normalizedLogin);
+    }
 
-    if (memberLogins.isNotEmpty) {
-      final active = memberLogins.where((m) => m.status == 'active').toList();
-      if (active.isEmpty) {
-        database.recordFailedLogin(cleanLogin);
-        throw Exception('This account membership is not active.');
-      }
-      final validCandidates = <MemberLoginRecord>[];
-      for (final member in active) {
+    String? passwordHash;
+
+    if (account != null && account.passwordHash.isNotEmpty &&
+        await _verifyPassword(password, account.passwordHash)) {
+      passwordHash = account.passwordHash;
+
+      // Keep the canonical owner identity synchronized for legacy/member-based
+      // operations without using it as the source of truth for owner login.
+      database.registerMemberLogin(MemberLoginRecord(
+        memberId: 'owner_${account.id}',
+        accountId: account.id,
+        email: account.email.trim().toLowerCase(),
+        passwordHash: account.passwordHash,
+        role: 'owner',
+        status: 'active',
+      ));
+    }
+
+    // An email may also identify an invited member of another account. Test
+    // every active identity rather than trusting whichever row is returned
+    // first from persistent storage.
+    if (passwordHash == null) {
+      final memberLogins =
+          database.getMemberLoginsByEmail(normalizedLogin);
+      final activeMembers =
+          memberLogins.where((member) => member.status == 'active').toList();
+      final matches = <MemberLoginRecord>[];
+
+      for (final member in activeMembers) {
         if (await _verifyPassword(password, member.passwordHash)) {
-          validCandidates.add(member);
+          final memberAccount = database.getAccountById(member.accountId);
+          if (memberAccount != null) {
+            matches.add(member);
+          }
         }
       }
-      if (validCandidates.isEmpty) {
-        database.recordFailedLogin(cleanLogin);
-        throw Exception('Invalid email or password.');
+
+      if (matches.length == 1) {
+        final member = matches.single;
+        account = database.getAccountById(member.accountId);
+        passwordHash = member.passwordHash;
+      } else if (matches.length > 1) {
+        throw Exception(
+          'This email belongs to multiple streaming accounts. Select an account before signing in.',
+        );
       }
-      if (validCandidates.length > 1) {
-        throw Exception('This email belongs to multiple streaming accounts. Select an account before signing in.');
-      }
-      final member = validCandidates.single;
-      account = database.getAccountById(member.accountId);
-      passwordHash = member.passwordHash;
-    } else {
-      account = database.getAccountByEmail(cleanLogin);
-      passwordHash = account?.passwordHash ?? '';
     }
 
-    if (account == null || passwordHash.isEmpty) {
-      database.recordFailedLogin(cleanLogin);
+    if (account == null || passwordHash == null || passwordHash.isEmpty) {
+      database.recordFailedLogin(normalizedLogin);
       throw Exception(
         'Invalid email or password.',
       );
     }
 
-    final passwordValid = await _verifyPassword(
-      password,
-      passwordHash,
-    );
-
-    if (!passwordValid) {
-      database.recordFailedLogin(cleanLogin);
-      throw Exception(
-        'Invalid email or password.',
-      );
-    }
-
-    if (memberLogins.isEmpty && PasswordGuard.needsRehash(
-      account.passwordHash,
-    )) {
+    if (passwordHash == account.passwordHash &&
+        PasswordGuard.needsRehash(account.passwordHash)) {
       account.passwordHash = await _hashPassword(
         password,
       );
@@ -301,7 +314,7 @@ class AuthService {
 
     final recentFailures =
         database.recentFailedLoginCount(
-      cleanLogin,
+      normalizedLogin,
     );
 
     final normalizedIp = ipAddress.trim().isEmpty
@@ -361,7 +374,7 @@ class AuthService {
     );
 
     database.clearFailedLoginAttempts(
-      cleanLogin,
+      normalizedLogin,
     );
 
     knownFingerprints.add(
@@ -375,16 +388,60 @@ class AuthService {
     );
   }
 
-  /// Performs `verifySecurityAnswer` for this feature. Update this documentation when its contract changes.
-  Future<bool> verifySecurityAnswer({
-    required String token,
-    required String answer,
-  }) async {
-    final account = accountFromToken(token);
-    if (account == null || answer.trim().isEmpty || account.securityAnswerHash.isEmpty) {
-      return false;
+  // ---------------------------------------------------------------------------
+  // PASSWORD RECOVERY
+  // ---------------------------------------------------------------------------
+
+  /// Returns the configured security question for an account recovery request.
+  /// The answer itself is never returned by the backend.
+  String getSecurityQuestion(String login) {
+    final normalized = login.trim().toLowerCase();
+    Account? account = database.getAccountByEmail(normalized);
+    account ??= database.getAccountByUsername(normalized);
+
+    if (account == null || account.securityQuestion.trim().isEmpty) {
+      throw Exception('We could not find an account with those sign-in details.');
     }
-    return _verifyPassword(answer.trim().toLowerCase(), account.securityAnswerHash);
+
+    return account.securityQuestion.trim();
+  }
+
+  /// Resets an existing account password after the account security answer
+  /// has been verified. The plaintext password is never persisted.
+  Future<void> resetPassword({
+    required String login,
+    required String securityAnswer,
+    required String newPassword,
+  }) async {
+    final normalized = login.trim().toLowerCase();
+    final answer = securityAnswer.trim().toLowerCase();
+
+    if (newPassword.length < 6) {
+      throw Exception('Password must be at least 6 characters long.');
+    }
+    if (answer.isEmpty) {
+      throw Exception('Security answer is required.');
+    }
+
+    Account? account = database.getAccountByEmail(normalized);
+    account ??= database.getAccountByUsername(normalized);
+
+    if (account == null || account.securityAnswerHash.trim().isEmpty) {
+      throw Exception('We could not verify the account recovery request.');
+    }
+
+    final valid = await _verifyPassword(answer, account.securityAnswerHash);
+    if (!valid) {
+      throw Exception('Incorrect security answer.');
+    }
+
+    account.passwordHash = await _hashPassword(newPassword);
+
+    // Update the in-memory canonical account and persist the new credential
+    // before reporting success. This prevents the next login from falling
+    // back to a stale member identity or disappearing after a restart.
+    database.saveAccount(account);
+    await database.persistAccountAndWait(account);
   }
 
   // ---------------------------------------------------------------------------
@@ -510,6 +567,24 @@ class AuthService {
 
     return database.getSession(
       cleanToken,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // SECURITY VERIFICATION
+  // ---------------------------------------------------------------------------
+
+  /// Verifies the authenticated account's security answer. The plaintext
+  /// answer is compared only against the stored Argon2id hash.
+  Future<bool> verifySecurityAnswer({
+    required String token,
+    required String answer,
+  }) async {
+    final account = accountFromToken(token);
+    if (account == null || answer.trim().isEmpty) return false;
+    return _verifyPassword(
+      answer.trim().toLowerCase(),
+      account.securityAnswerHash,
     );
   }
 

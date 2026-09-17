@@ -29,6 +29,7 @@ dependencies:
   # YouTube trailer playback.
   youtube_player_flutter: ^10.0.1
   video_player: ^2.10.1
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:

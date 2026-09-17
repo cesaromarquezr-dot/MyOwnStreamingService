@@ -115,6 +115,32 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
 
           const SizedBox(height: 18),
 
+          const SizedBox(height: 8),
+
+          _architectureCard(
+            Icons.storage_rounded,
+            'HDD RAID media pool',
+            'Primary movies, series, and music storage. RAID provides availability when a drive fails; it is not a backup.',
+          ),
+
+          _architectureCard(
+            Icons.speed_rounded,
+            'SSD performance tier',
+            'Use SSD storage for the database, metadata, thumbnails, indexes, and disposable transcode cache.',
+          ),
+
+          _architectureCard(
+            Icons.backup_rounded,
+            'Separate backups',
+            'Backups protect against deletion, corruption, ransomware, and catastrophic NAS failure. Original media is never replaced by a transcode.',
+          ),
+
+          _architectureCard(
+            Icons.battery_charging_full_rounded,
+            'UPS protection',
+            'UPS monitoring allows the server to stop non-essential work and shut down cleanly before battery runtime is exhausted.',
+          ),
+
           FilledButton.icon(
             onPressed: _edit,
             icon: const Icon(Icons.palette_outlined),
@@ -129,6 +155,16 @@ class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
             label: const UniversalText('How storage is calculated'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _architectureCard(IconData icon, String title, String description) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Padding(padding: const EdgeInsets.only(top: 6), child: Text(description)),
       ),
     );
   }
