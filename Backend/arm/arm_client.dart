@@ -10,9 +10,16 @@ class ArmClient {
 
   final Duration timeout;
 
+  // ARM credentials are read only by the backend from its environment.
+  // They are never shipped to Flutter or persisted in the client.
+  final String? username;
+  final String? password;
+
   ArmClient({
     required this.armServerUrl,
     this.timeout = const Duration(seconds: 15),
+    this.username,
+    this.password,
   });
 
   Uri _buildUri(String path) {
@@ -38,11 +45,12 @@ class ArmClient {
             )
             .timeout(timeout);
 
-        final response = await request.close()
-            .timeout(timeout);
+        _applyAuthentication(request);
+        final response = await request.close().timeout(timeout);
 
-        return response.statusCode >= 200 &&
-            response.statusCode < 500;
+        // 401/403 means ARM is reachable but authentication is not valid.
+        // Treat that as unavailable to the authenticated integration.
+        return response.statusCode >= 200 && response.statusCode < 300;
       } finally {
         client.close();
       }
@@ -67,10 +75,8 @@ class ArmClient {
           )
           .timeout(timeout);
 
-      request.headers.set(
-        HttpHeaders.acceptHeader,
-        'application/json',
-      );
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      _applyAuthentication(request);
 
       final response = await request
           .close()
@@ -104,6 +110,14 @@ class ArmClient {
     }
   }
 
+  /// Adds HTTP Basic authentication when ARM credentials are configured.
+  void _applyAuthentication(HttpClientRequest request) {
+    final user = username?.trim() ?? '';
+    final secret = password ?? '';
+    if (user.isEmpty) return;
+    request.headers.set(HttpHeaders.authorizationHeader, 'Basic ${base64Encode(utf8.encode('$user:$secret'))}');
+  }
+
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
@@ -120,10 +134,8 @@ class ArmClient {
       request.headers.contentType =
           ContentType.json;
 
-      request.headers.set(
-        HttpHeaders.acceptHeader,
-        'application/json',
-      );
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      _applyAuthentication(request);
 
       if (body != null) {
         request.write(

@@ -50,6 +50,7 @@ import 'routes/playback_routes.dart';
 import 'routes/legal_routes.dart';
 import 'routes/sports_routes.dart';
 import 'routes/review_routes.dart';
+import 'routes/rating_routes.dart';
 import 'routes/home_server_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/media_intelligence_routes.dart';
@@ -65,6 +66,7 @@ import 'services/email_service.dart';
 import 'services/remote_access_service.dart';
 import 'services/sports_service.dart';
 import 'services/review_service.dart';
+import 'services/rating_service.dart';
 import 'services/home_server_service.dart';
 import 'services/media_intelligence_service.dart';
 import 'services/media_analyzer_service.dart';
@@ -195,6 +197,8 @@ Future<void> main() async {
   //
   final armClient = ArmClient(
     armServerUrl: AppConfig.armServerUrl,
+    username: Platform.environment['ARM_USERNAME'],
+    password: Platform.environment['ARM_PASSWORD'],
   );
 
   final armService = ArmService(
@@ -250,6 +254,11 @@ Future<void> main() async {
   final reviewRoutes = ReviewRoutes(
     authentication: authentication,
     service: ReviewService(database),
+  );
+
+  final ratingRoutes = RatingRoutes(
+    authentication: authentication,
+    service: RatingService(database),
   );
 
   final homeServerRoutes = HomeServerRoutes(
@@ -429,6 +438,7 @@ Future<void> main() async {
       playbackRoutes,
       legalRoutes,
       reviewRoutes,
+      ratingRoutes,
       homeServerRoutes,
       supabaseSyncRoutes,
       mediaIntelligenceRoutes,
@@ -456,6 +466,7 @@ Future<void> _handleRequest(
   PlaybackRoutes playbackRoutes,
   LegalRoutes legalRoutes,
   ReviewRoutes reviewRoutes,
+  RatingRoutes ratingRoutes,
   HomeServerRoutes homeServerRoutes,
   SupabaseSyncRoutes supabaseSyncRoutes,
   MediaIntelligenceRoutes mediaIntelligenceRoutes,
@@ -607,6 +618,11 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/reviews')) {
       await reviewRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/ratings')) {
+      await ratingRoutes.handle(request);
       return;
     }
 

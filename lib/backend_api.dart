@@ -2579,6 +2579,53 @@ class BackendApi {
   }
 
   // ==========================================================
+  // RATINGS
+  // ==========================================================
+
+  /// Loads provider ratings and the current profile's personal rating.
+  Future<Map<String, dynamic>> getRatings({
+    required String mediaId,
+    String? title,
+    int? year,
+    String mediaType = 'movie',
+    String? tmdbId,
+    String? musicBrainzId,
+    String? profileId,
+    bool refresh = false,
+  }) async {
+    _requireAuthentication();
+    final query = <String, String>{
+      'mediaId': mediaId,
+      if (title != null && title.isNotEmpty) 'title': title,
+      if (year != null) 'year': year.toString(),
+      'mediaType': mediaType,
+      if (tmdbId != null && tmdbId.isNotEmpty) 'tmdbId': tmdbId,
+      if (musicBrainzId != null && musicBrainzId.isNotEmpty) 'musicBrainzId': musicBrainzId,
+      if (profileId != null && profileId.isNotEmpty) 'profileId': profileId,
+      'refresh': refresh.toString(),
+    };
+    final uri = Uri.parse('$baseUrl/ratings').replace(queryParameters: query);
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load media ratings.');
+  }
+
+  /// Saves a profile rating in half-star increments from 0.5 to 5.0.
+  Future<Map<String, dynamic>> saveUserRating({
+    required String mediaId,
+    required String profileId,
+    required double stars,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/ratings/user'),
+        headers: _headers,
+        body: jsonEncode({'mediaId': mediaId, 'profileId': profileId, 'stars': stars}),
+      ),
+      'Unable to save your rating.',
+    );
+  }
+
+  // ==========================================================
   // INTERNAL HELPERS
   // ==========================================================
 

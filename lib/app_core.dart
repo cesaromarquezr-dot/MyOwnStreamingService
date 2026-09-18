@@ -64,6 +64,9 @@ class MediaItem {
   /// Optional explicit audience/community rating maintained separately from the official rating.
   final double? audienceRating;
   final int audienceReviewCount;
+  /// Provider ratings are kept as separate source records; they are not combined.
+  final List<Map<String, dynamic>> externalRatings;
+  final double? userRatingStars;
   final String? trailerUrl;
   final DateTime addedAt;
   final List<Map<String, dynamic>> seasons;
@@ -157,7 +160,10 @@ class MediaItem {
     this.ratingReason,
     this.audienceRating,
     this.audienceReviewCount = 0,
-  }) : addedAt = addedAt ?? DateTime.now(),
+    List<Map<String, dynamic>>? externalRatings,
+    this.userRatingStars,
+  }) : externalRatings = externalRatings ?? const <Map<String, dynamic>>[],
+       addedAt = addedAt ?? DateTime.now(),
        seasons = seasons ?? <Map<String, dynamic>>[],
        actors = actors ?? <String>[],
        directors = directors ?? <String>[],
@@ -203,6 +209,8 @@ class MediaItem {
       ratingReason: json['ratingReason']?.toString(),
       audienceRating: json['audienceRating'] is num ? (json['audienceRating'] as num).toDouble() : double.tryParse(json['audienceRating']?.toString() ?? ''),
       audienceReviewCount: json['audienceReviewCount'] is num ? (json['audienceReviewCount'] as num).toInt() : int.tryParse(json['audienceReviewCount']?.toString() ?? '') ?? 0,
+      externalRatings: json['externalRatings'] is List ? (json['externalRatings'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : const <Map<String, dynamic>>[],
+      userRatingStars: json['userRatingStars'] is num ? (json['userRatingStars'] as num).toDouble() : double.tryParse(json['userRatingStars']?.toString() ?? ''),
       trailerUrl: json['trailerUrl']?.toString(),
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
       discType: json['discType']?.toString(),
@@ -267,6 +275,8 @@ class MediaItem {
       'ratingReason': ratingReason,
       'audienceRating': audienceRating,
       'audienceReviewCount': audienceReviewCount,
+      'externalRatings': externalRatings,
+      'userRatingStars': userRatingStars,
       'trailerUrl': trailerUrl,
       'addedAt': addedAt.toIso8601String(),
       'discType': discType,

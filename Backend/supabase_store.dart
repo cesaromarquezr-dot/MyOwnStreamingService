@@ -10,6 +10,7 @@ import 'models/account.dart';
 import 'models/account_member.dart';
 import 'models/profile.dart';
 import 'models/subscription.dart';
+import 'models/rating.dart';
 
 class SupabaseStore {
   SupabaseStore._();
@@ -37,6 +38,48 @@ class SupabaseStore {
   }
 
   SupabaseClient? get _db => _client;
+
+  /// Loads private profile ratings belonging to the supplied account.
+  Future<List<UserMediaRating>> loadUserMediaRatings(String accountId) async {
+    final c = _db;
+    if (c == null) return const [];
+    final rows = await c.from('profile_media_ratings').select('media_id,profile_id,stars,updated_at').eq('account_id', accountId);
+    return rows.whereType<Map>().map((row) => UserMediaRating(
+      mediaId: row['media_id']?.toString() ?? '',
+      profileId: row['profile_id']?.toString() ?? '',
+      stars: row['stars'] is num ? (row['stars'] as num).toDouble() : double.tryParse(row['stars']?.toString() ?? '') ?? 0,
+      updatedAt: DateTime.tryParse(row['updated_at']?.toString() ?? '') ?? DateTime.now(),
+    )).toList();
+  }
+
+  /// Persists a provider rating snapshot without storing provider credentials.
+  Future<void> upsertExternalRating(String mediaId, ExternalRating rating) async {
+    final c = _db;
+    if (c == null) return;
+    await c.from('media_external_ratings').upsert({
+      'media_id': mediaId,
+      'provider': rating.provider.name,
+      'rating_kind': rating.kind.name,
+      'value': rating.value,
+      'scale': rating.scale,
+      'vote_count': rating.voteCount,
+      'source_url': rating.url,
+      'updated_at': (rating.updatedAt ?? DateTime.now()).toIso8601String(),
+    }, onConflict: 'media_id,provider,rating_kind');
+  }
+
+  /// Persists a private profile rating.
+  Future<void> upsertUserMediaRating(UserMediaRating rating, String accountId) async {
+    final c = _db;
+    if (c == null) return;
+    await c.from('profile_media_ratings').upsert({
+      'account_id': accountId,
+      'profile_id': rating.profileId,
+      'media_id': rating.mediaId,
+      'stars': rating.stars,
+      'updated_at': rating.updatedAt.toIso8601String(),
+    }, onConflict: 'account_id,profile_id,media_id');
+  }
 
   Future<Map<String, dynamic>?> accountByAuthUserId(
     String authUserId,

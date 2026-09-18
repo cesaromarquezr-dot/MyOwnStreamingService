@@ -57,3 +57,11 @@ The available container does not include the Dart or Flutter executables, so `da
 - Login performs a best-effort synchronization, and storage-request code synchronizes after a successful request.
 - The service-role key must never be placed in Flutter, web assets, mobile builds, or desktop client configuration.
 - Physical media remains on the account's home server and is never uploaded to Supabase.
+
+## ARM optical-drive and rating integration
+
+- ARM is treated as the ripping engine on the machine physically connected to the optical drive. The Flutter app/backend monitors ARM jobs rather than attempting to access `/dev/sr*` directly.
+- ARM credentials are backend-only environment variables (`ARM_USERNAME`, `ARM_PASSWORD`).
+- Provider rating credentials are backend-only. TMDB uses `TMDB_API_KEY`; IMDb and Rotten Tomatoes are optional licensed-provider URL adapters.
+- Provider scores remain separate. The recommendation layer may normalize scores internally, but the UI preserves the provider's original scale and source.
+- Profile ratings use 0.5-star increments from 0.5 through 5.0 and are stored separately from external scores and text reviews.

@@ -3,6 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'dart:math';
+import 'dart:io';
 
 import 'arm_client.dart';
 import 'arm_models.dart';
@@ -35,7 +36,7 @@ class ArmService {
     // supported JSON UI API exposes jobs rather than a separate "insert disc"
     // command, so we infer active drives from current jobs and optional
     // ARM_DRIVES configuration.
-    final configured = const String.fromEnvironment('ARM_DRIVES', defaultValue: '');
+    final configured = (Platform.environment['ARM_DRIVES'] ?? const String.fromEnvironment('ARM_DRIVES', defaultValue: '')).trim();
     final drives = <ArmDrive>[];
 
     for (final raw in configured.split(',')) {

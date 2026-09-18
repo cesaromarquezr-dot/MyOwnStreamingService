@@ -33,6 +33,9 @@ class MusicTrack {
   final bool explicit;
   /// Mature-theme flag supplied by licensed/import metadata.
   final bool matureTheme;
+  /// Provider ratings for this recording/album are kept as separate source records.
+  final List<Map<String, dynamic>> externalRatings;
+  final double? userRatingStars;
 
   const MusicTrack({
     required this.id,
@@ -47,6 +50,8 @@ class MusicTrack {
     this.subgenres = const <String>[],
     this.explicit = false,
     this.matureTheme = false,
+    this.externalRatings = const <Map<String, dynamic>>[],
+    this.userRatingStars,
   });
 }
 

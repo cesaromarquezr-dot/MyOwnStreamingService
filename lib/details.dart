@@ -11,6 +11,7 @@ import 'player.dart';
 import 'group_watch.dart';
 import 'discovery_experience.dart';
 import 'localization.dart';
+import 'rating_system.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -115,11 +116,24 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final section in customization.sectionOrder)
+          for (final section in _sectionsWithRatings())
             _buildSection(section),
         ],
       ),
     );
+  }
+
+  List<String> _sectionsWithRatings() {
+    final sections = List<String>.from(customization.sectionOrder);
+    if (!sections.contains('Ratings')) {
+      final metadataIndex = sections.indexOf('Metadata');
+      if (metadataIndex >= 0) {
+        sections.insert(metadataIndex + 1, 'Ratings');
+      } else {
+        sections.add('Ratings');
+      }
+    }
+    return sections;
   }
 
   // ===========================================================================
@@ -146,6 +160,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           return const SizedBox.shrink();
         }
         return _buildMetadata();
+
+      case 'Ratings':
+        return _buildRatingsPanel();
 
       case 'Ownership':
         if (!customization.showOwnership) {
@@ -860,6 +877,19 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // ===========================================================================
 
   /// Performs `_buildMetadata` for this feature. Update this documentation when its contract changes.
+  /// Displays provider ratings and the current profile's personal rating.
+  Widget _buildRatingsPanel() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: MediaRatingsPanel(
+        mediaId: media.id,
+        title: media.title,
+        year: media.releaseYear,
+        mediaType: media.type,
+      ),
+    );
+  }
+
   Widget _buildMetadata() {
     final pills = <Widget>[];
 

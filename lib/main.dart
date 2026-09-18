@@ -4673,6 +4673,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   String statusMessage = 'ARM is always enabled for disc imports.';
   String? jobId;
   String? driveId;
+  List<Map<String, dynamic>> armDrives = <Map<String, dynamic>>[];
+  Timer? _driveMonitorTimer;
 
   Map<String, dynamic>? reviewJob;
   Map<String, dynamic>? verification;
@@ -4685,12 +4687,71 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _pollTimer?.cancel();
+    _driveMonitorTimer?.cancel();
     titleController.dispose();
     yearController.dispose();
     posterController.dispose();
     trailerController.dispose();
     descriptionController.dispose();
     super.dispose();
+  }
+
+  /// Performs `_startArmImport` for this feature. Update this documentation when its contract changes.
+  @override
+  void initState() {
+    super.initState();
+    _startDriveMonitoring();
+  }
+
+  /// Polls ARM for physical drive/job changes so disc insertion can begin the
+  /// ARM monitoring flow without requiring a second manual start button.
+  void _startDriveMonitoring() {
+    _driveMonitorTimer?.cancel();
+    _driveMonitorTimer = Timer.periodic(const Duration(seconds: 3), (_) => _refreshArmDrives());
+    _refreshArmDrives();
+  }
+
+  /// Refreshes the optical-drive list and automatically attaches a new ARM job.
+  Future<void> _refreshArmDrives() async {
+    if (!mounted) return;
+    try {
+      final api = AppController.instance.backendApi;
+      final status = await api.getArmStatus();
+      if (status['connected'] != true) {
+        if (mounted) setState(() { armConnected = false; statusMessage = 'ARM is offline. Insertions will be detected when ARM reconnects.'; });
+        return;
+      }
+      final drives = (await api.getArmDrives()).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+      if (!mounted) return;
+      setState(() { armConnected = true; armDrives = drives; });
+
+      if (!importing) {
+        final inserted = drives.firstWhere((drive) => drive['discInserted'] == true, orElse: () => <String, dynamic>{});
+        final detectedId = inserted['id']?.toString();
+        if (detectedId != null && detectedId.isNotEmpty) {
+          await _startArmImportForDrive(detectedId);
+        }
+      }
+    } catch (_) {
+      // The drive monitor is best-effort and retries on its next interval.
+    }
+  }
+
+  /// Starts the local monitor for a physical ARM drive after ARM has detected a disc.
+  Future<void> _startArmImportForDrive(String selectedDriveId) async {
+    if (importing) return;
+    setState(() { importing = true; driveId = selectedDriveId; progress = 0; verificationPassed = false; reviewJob = null; verification = null; statusMessage = 'Disc detected. ARM is starting the automatic rip...'; });
+    try {
+      final result = await AppController.instance.backendApi.startArmImport(driveId: selectedDriveId);
+      final job = result['job'];
+      if (job is! Map) throw BackendApiException('ARM did not return a rip job.');
+      jobId = job['id']?.toString();
+      if (jobId == null || jobId!.isEmpty) throw BackendApiException('ARM did not return a local job ID.');
+      _beginPolling();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { importing = false; statusMessage = error.toString().replaceFirst('Exception: ', ''); });
+    }
   }
 
   /// Performs `_startArmImport` for this feature. Update this documentation when its contract changes.
@@ -4719,14 +4780,11 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       armConnected = true;
 
       final drives = await api.getArmDrives();
-      final drive = drives.whereType<Map>().cast<Map<String, dynamic>>().firstWhere(
-            (item) => item['available'] != false,
-            orElse: () => <String, dynamic>{
-              'id': 'arm-auto',
-              'name': 'ARM automatic drive monitor',
-            },
-          );
-
+      armDrives = drives.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+      final drive = armDrives.firstWhere(
+        (item) => item['available'] != false,
+        orElse: () => <String, dynamic>{'id': 'arm-auto', 'name': 'ARM automatic drive monitor'},
+      );
       driveId = drive['id']?.toString() ?? 'arm-auto';
 
       final result = await api.startArmImport(driveId: driveId!);
@@ -5085,6 +5143,18 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     const SizedBox(height: 8),
                     UniversalText('${(progress * 100).round()}% • $statusMessage',
                     ),
+                  ],
+                  if (armDrives.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const UniversalText('OPTICAL DRIVES', style: TextStyle(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    ...armDrives.map((drive) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(drive['discInserted'] == true ? Icons.album_rounded : Icons.disc_full_rounded),
+                      title: Text(drive['name']?.toString() ?? drive['id']?.toString() ?? 'Optical drive'),
+                      subtitle: Text(drive['discInserted'] == true ? 'Disc detected — ARM is monitoring this drive.' : 'No disc detected.'),
+                      trailing: drive['discInserted'] == true ? const Icon(Icons.check_circle_rounded) : const Icon(Icons.remove_circle_outline),
+                    )),
                   ],
                   const SizedBox(height: 12),
                   SizedBox(

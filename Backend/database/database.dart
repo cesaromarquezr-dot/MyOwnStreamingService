@@ -11,6 +11,7 @@ import '../models/group_chat_room.dart';
 import '../models/profile.dart';
 import '../models/remote_worker.dart';
 import '../models/review.dart';
+import '../models/rating.dart';
 import '../supabase_store.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
@@ -90,6 +91,17 @@ class Database {
       for (final account in accounts) {
         _cacheAccount(account);
       }
+      for (final account in accounts) {
+        try {
+          final ratings = await store.loadUserMediaRatings(account.id);
+          for (final rating in ratings) {
+            userMediaRatings['${account.id}:${rating.profileId}:${rating.mediaId}'] = rating;
+          }
+        } catch (error, stackTrace) {
+          developer.log('Unable to load profile ratings.', name: 'Database', error: error, stackTrace: stackTrace);
+        }
+      }
+
       final memberLogins = await store.loadMemberLogins();
       for (final login in memberLogins) {
         registerMemberLogin(login);
@@ -227,6 +239,9 @@ class Database {
 
   // Media reviews are kept here by the current backend persistence abstraction.
   final Map<String, MediaReview> reviewsById = <String, MediaReview>{};
+
+  // Profile ratings are separate from public text reviews and external provider scores.
+  final Map<String, UserMediaRating> userMediaRatings = <String, UserMediaRating>{};
 
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
