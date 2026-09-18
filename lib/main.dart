@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
+import 'arm_importer.dart';
 import 'signup.dart';
 import 'movies.dart';
 import 'series.dart';
@@ -5015,63 +5016,84 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         ? (job['discNumber'] as num).toInt()
         : int.tryParse(job['discNumber']?.toString() ?? '');
 
-    for (final titleData in selectedTitles) {
-      final title = (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true ? titleData['canonicalTitle']?.toString().trim() : titleData['title']?.toString().trim()) ?? '';
-      final discTitle = titleData['discTitle']?.toString() ?? titleData['title']?.toString();
-      if (title.isEmpty) continue;
+    final decision = ApprovalDecision(
+      jobId: job['id']?.toString() ?? jobId ?? '',
+      // No metadata provider is integrated yet, so this remains intentionally null.
+      selectedMetadataId: null,
+      reviewerProfileId: AppController.instance.currentProfile?.id,
+    );
 
-      final metadata = titleData['metadata'] is Map
-          ? Map<String, dynamic>.from(titleData['metadata'] as Map)
-          : <String, dynamic>{};
-      final year = titleData['year'] is num
-          ? (titleData['year'] as num).toInt()
-          : int.tryParse(titleData['year']?.toString() ?? '') ??
-              (metadata['year'] is num
-                  ? (metadata['year'] as num).toInt()
-                  : int.tryParse(metadata['year']?.toString() ?? '') ??
-                      (job['year'] is num
-                          ? (job['year'] as num).toInt()
-                          : int.tryParse(job['year']?.toString() ?? '')));
-      final media = MediaItem(
-        id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
-        title: title,
-        type: _normalizeMediaType(titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
-        imageUrl: poster.isEmpty
-            ? (titleData['posterUrl']?.toString() ?? metadata['posterUrl']?.toString() ?? job['posterUrl']?.toString())
-            : poster,
-        description: descriptionController.text.trim().isEmpty
-            ? titleData['description']?.toString() ?? metadata['description']?.toString() ?? job['description']?.toString() ?? DescriptionGenerator.movie(title: title, year: year)
-            : descriptionController.text.trim(),
-        releaseYear: year,
-        trailerUrl: trailer.isEmpty
-            ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
-            : trailer,
-        discType: selectedDiscType,
-        discRegion: titleData['detectedRegion']?.toString() ?? job['region']?.toString() ?? selectedRegion,
-        discTitle: discTitle,
-        discMarketCountry: titleData['discMarketCountry']?.toString() ?? job['discMarketCountry']?.toString(),
-        originalTitle: titleData['originalTitle']?.toString() ?? titleData['canonicalTitle']?.toString(),
-        originalLanguage: titleData['originalLanguage']?.toString(),
-        countryOfOrigin: titleData['countryOfOrigin']?.toString(),
-        canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
-
-        discCollectionId: collectionId,
-        discCollectionTitle: collectionTitle,
-        discNumber: discNumber,
-        discTitleId: titleData['id']?.toString(),
-        actors: _strings(titleData['actors']).isNotEmpty ? _strings(titleData['actors']) : (metadata['actors'] is List ? _strings(metadata['actors']) : _strings(job['actors'])),
-        directors: _strings(titleData['directors']).isNotEmpty ? _strings(titleData['directors']) : (metadata['directors'] is List ? _strings(metadata['directors']) : _strings(job['directors'])),
-        writers: _strings(titleData['writers']).isNotEmpty ? _strings(titleData['writers']) : (metadata['writers'] is List ? _strings(metadata['writers']) : _strings(job['writers'])),
-        music: _strings(titleData['music']).isNotEmpty ? _strings(titleData['music']) : (metadata['music'] is List ? _strings(metadata['music']) : _strings(job['music'])),
-        genres: _strings(titleData['genres']).isNotEmpty ? _strings(titleData['genres']) : (metadata['genres'] is List ? _strings(metadata['genres']) : _strings(job['genres'])),
-        tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
-        chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
-        audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
-        subtitles: _strings(titleData['subtitles']).isNotEmpty ? _strings(titleData['subtitles']) : (metadata['subtitles'] is List ? _strings(metadata['subtitles']) : _strings(job['subtitles'])),
-        extras: _strings(titleData['extras']).isNotEmpty ? _strings(titleData['extras']) : (metadata['extras'] is List ? _strings(metadata['extras']) : _strings(job['extras'])),
+    try {
+      await const LibraryImporter().import(
+        decision: decision,
+        verificationPassed: verificationPassed,
+        writer: () async {
+          for (final titleData in selectedTitles) {
+        final title = (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true ? titleData['canonicalTitle']?.toString().trim() : titleData['title']?.toString().trim()) ?? '';
+        final discTitle = titleData['discTitle']?.toString() ?? titleData['title']?.toString();
+        if (title.isEmpty) continue;
+  
+        final metadata = titleData['metadata'] is Map
+            ? Map<String, dynamic>.from(titleData['metadata'] as Map)
+            : <String, dynamic>{};
+        final year = titleData['year'] is num
+            ? (titleData['year'] as num).toInt()
+            : int.tryParse(titleData['year']?.toString() ?? '') ??
+                (metadata['year'] is num
+                    ? (metadata['year'] as num).toInt()
+                    : int.tryParse(metadata['year']?.toString() ?? '') ??
+                        (job['year'] is num
+                            ? (job['year'] as num).toInt()
+                            : int.tryParse(job['year']?.toString() ?? '')));
+        final media = MediaItem(
+          id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
+          title: title,
+          type: _normalizeMediaType(titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
+          imageUrl: poster.isEmpty
+              ? (titleData['posterUrl']?.toString() ?? metadata['posterUrl']?.toString() ?? job['posterUrl']?.toString())
+              : poster,
+          description: descriptionController.text.trim().isEmpty
+              ? titleData['description']?.toString() ?? metadata['description']?.toString() ?? job['description']?.toString() ?? DescriptionGenerator.movie(title: title, year: year)
+              : descriptionController.text.trim(),
+          releaseYear: year,
+          trailerUrl: trailer.isEmpty
+              ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
+              : trailer,
+          discType: selectedDiscType,
+          discRegion: titleData['detectedRegion']?.toString() ?? job['region']?.toString() ?? selectedRegion,
+          discTitle: discTitle,
+          discMarketCountry: titleData['discMarketCountry']?.toString() ?? job['discMarketCountry']?.toString(),
+          originalTitle: titleData['originalTitle']?.toString() ?? titleData['canonicalTitle']?.toString(),
+          originalLanguage: titleData['originalLanguage']?.toString(),
+          countryOfOrigin: titleData['countryOfOrigin']?.toString(),
+          canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
+  
+          discCollectionId: collectionId,
+          discCollectionTitle: collectionTitle,
+          discNumber: discNumber,
+          discTitleId: titleData['id']?.toString(),
+          actors: _strings(titleData['actors']).isNotEmpty ? _strings(titleData['actors']) : (metadata['actors'] is List ? _strings(metadata['actors']) : _strings(job['actors'])),
+          directors: _strings(titleData['directors']).isNotEmpty ? _strings(titleData['directors']) : (metadata['directors'] is List ? _strings(metadata['directors']) : _strings(job['directors'])),
+          writers: _strings(titleData['writers']).isNotEmpty ? _strings(titleData['writers']) : (metadata['writers'] is List ? _strings(metadata['writers']) : _strings(job['writers'])),
+          music: _strings(titleData['music']).isNotEmpty ? _strings(titleData['music']) : (metadata['music'] is List ? _strings(metadata['music']) : _strings(job['music'])),
+          genres: _strings(titleData['genres']).isNotEmpty ? _strings(titleData['genres']) : (metadata['genres'] is List ? _strings(metadata['genres']) : _strings(job['genres'])),
+          tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
+          chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
+          audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
+          subtitles: _strings(titleData['subtitles']).isNotEmpty ? _strings(titleData['subtitles']) : (metadata['subtitles'] is List ? _strings(metadata['subtitles']) : _strings(job['subtitles'])),
+          extras: _strings(titleData['extras']).isNotEmpty ? _strings(titleData['extras']) : (metadata['extras'] is List ? _strings(metadata['extras']) : _strings(job['extras'])),
+        );
+  
+        AppController.instance.addToLibrary(media);
+          }
+        },
       );
-
-      AppController.instance.addToLibrary(media);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))),
+      );
+      return;
     }
 
     if (!mounted) return;

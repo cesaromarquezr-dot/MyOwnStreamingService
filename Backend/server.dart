@@ -76,6 +76,7 @@ import 'services/storage_manager_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
+import 'arm/mock_arm_service.dart';
 
 Future<void> main() async {
   SupabaseStore.instance.initialize();
@@ -187,23 +188,57 @@ Future<void> main() async {
     watchService: groupWatchService,
   );
 
-  // ------------------------------------------------------------
-  // ARM CONNECTION
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+// ARM SERVICE CONFIGURATION
+// ---------------------------------------------------------------------------
+//
+// Phase 1 development can use the deterministic mock ARM service when
+// ARM_MOCK=true is supplied to the backend process.
+//
+// IMPORTANT:
+// - Mock mode is NEVER enabled automatically.
+// - The production/default path remains the real authenticated ARM client.
+// - ARM credentials are read from environment variables and are never sent
+//   to Flutter.
+// - This explicit switch helps prevent accidentally running mock mode in
+//   production.
+//
+// Development:
+//   $env:ARM_MOCK="true"
+//   dart run server.dart
+//
+// Production / real ARM:
+//   ARM_MOCK must be unset or set to false.
+// ---------------------------------------------------------------------------
 
-  //
-  // IMPORTANT:
-  // Replace this with the actual address of your ARM server.
-  //
-  final armClient = ArmClient(
-    armServerUrl: AppConfig.armServerUrl,
-    username: Platform.environment['ARM_USERNAME'],
-    password: Platform.environment['ARM_PASSWORD'],
-  );
+final armMockEnabled =
+    (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() == 'true';
 
-  final armService = ArmService(
-    client: armClient,
-  );
+final armVerificationPasses =
+    (Platform.environment['ARM_MOCK_VERIFY_FAIL'] ?? '')
+            .trim()
+            .toLowerCase() !=
+        'true';
+
+final armService = armMockEnabled
+    ? MockArmService(
+        verificationPasses: armVerificationPasses,
+      )
+    : ArmService(
+        client: ArmClient(
+          armServerUrl: AppConfig.armServerUrl,
+          username: Platform.environment['ARM_USERNAME'],
+          password: Platform.environment['ARM_PASSWORD'],
+        ),
+      );
+
+// Make the selected ARM mode obvious in the backend console.
+// This is intentionally a status message only; no credentials are printed.
+print(
+  armMockEnabled
+      ? 'ARM mode: MOCK (Phase 1)'
+      : 'ARM mode: REAL',
+);
 
   final armRoutes = ArmRoutes(
     armService: armService,
