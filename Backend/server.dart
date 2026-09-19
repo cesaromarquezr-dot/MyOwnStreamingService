@@ -50,7 +50,6 @@ import 'routes/playback_routes.dart';
 import 'routes/legal_routes.dart';
 import 'routes/sports_routes.dart';
 import 'routes/review_routes.dart';
-import 'routes/rating_routes.dart';
 import 'routes/home_server_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/media_intelligence_routes.dart';
@@ -66,7 +65,6 @@ import 'services/email_service.dart';
 import 'services/remote_access_service.dart';
 import 'services/sports_service.dart';
 import 'services/review_service.dart';
-import 'services/rating_service.dart';
 import 'services/home_server_service.dart';
 import 'services/media_intelligence_service.dart';
 import 'services/media_analyzer_service.dart';
@@ -188,57 +186,41 @@ Future<void> main() async {
     watchService: groupWatchService,
   );
 
+  // ------------------------------------------------------------
+  // ARM CONNECTION
+  // ------------------------------------------------------------
+
+  //
+  // IMPORTANT:
+  // Replace this with the actual address of your ARM server.
+  //
   // ---------------------------------------------------------------------------
-// ARM SERVICE CONFIGURATION
-// ---------------------------------------------------------------------------
-//
-// Phase 1 development can use the deterministic mock ARM service when
-// ARM_MOCK=true is supplied to the backend process.
-//
-// IMPORTANT:
-// - Mock mode is NEVER enabled automatically.
-// - The production/default path remains the real authenticated ARM client.
-// - ARM credentials are read from environment variables and are never sent
-//   to Flutter.
-// - This explicit switch helps prevent accidentally running mock mode in
-//   production.
-//
-// Development:
-//   $env:ARM_MOCK="true"
-//   dart run server.dart
-//
-// Production / real ARM:
-//   ARM_MOCK must be unset or set to false.
-// ---------------------------------------------------------------------------
+  // ARM SERVICE CONFIGURATION
+  // ---------------------------------------------------------------------------
+  // Phase 1 development can use the deterministic mock ARM service when
+  // ARM_MOCK=true is supplied to the backend process.
+  //
+  // IMPORTANT:
+  // - Mock mode is NEVER enabled automatically.
+  // - The real authenticated ARM client remains the default path.
+  // - ARM credentials are read only by the backend and are never sent to Flutter.
+  final armMockEnabled =
+      (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() == 'true';
+  final armVerificationPasses =
+      (Platform.environment['ARM_MOCK_VERIFY_FAIL'] ?? '').trim().toLowerCase() !=
+          'true';
 
-final armMockEnabled =
-    (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() == 'true';
+  final armService = armMockEnabled
+      ? MockArmService(verificationPasses: armVerificationPasses)
+      : ArmService(
+          client: ArmClient(
+            armServerUrl: AppConfig.armServerUrl,
+            username: Platform.environment['ARM_USERNAME'],
+            password: Platform.environment['ARM_PASSWORD'],
+          ),
+        );
 
-final armVerificationPasses =
-    (Platform.environment['ARM_MOCK_VERIFY_FAIL'] ?? '')
-            .trim()
-            .toLowerCase() !=
-        'true';
-
-final armService = armMockEnabled
-    ? MockArmService(
-        verificationPasses: armVerificationPasses,
-      )
-    : ArmService(
-        client: ArmClient(
-          armServerUrl: AppConfig.armServerUrl,
-          username: Platform.environment['ARM_USERNAME'],
-          password: Platform.environment['ARM_PASSWORD'],
-        ),
-      );
-
-// Make the selected ARM mode obvious in the backend console.
-// This is intentionally a status message only; no credentials are printed.
-print(
-  armMockEnabled
-      ? 'ARM mode: MOCK (Phase 1)'
-      : 'ARM mode: REAL',
-);
+  print(armMockEnabled ? 'ARM mode: MOCK (Phase 1)' : 'ARM mode: REAL');
 
   final armRoutes = ArmRoutes(
     armService: armService,
@@ -289,11 +271,6 @@ print(
   final reviewRoutes = ReviewRoutes(
     authentication: authentication,
     service: ReviewService(database),
-  );
-
-  final ratingRoutes = RatingRoutes(
-    authentication: authentication,
-    service: RatingService(database),
   );
 
   final homeServerRoutes = HomeServerRoutes(
@@ -473,7 +450,6 @@ print(
       playbackRoutes,
       legalRoutes,
       reviewRoutes,
-      ratingRoutes,
       homeServerRoutes,
       supabaseSyncRoutes,
       mediaIntelligenceRoutes,
@@ -501,7 +477,6 @@ Future<void> _handleRequest(
   PlaybackRoutes playbackRoutes,
   LegalRoutes legalRoutes,
   ReviewRoutes reviewRoutes,
-  RatingRoutes ratingRoutes,
   HomeServerRoutes homeServerRoutes,
   SupabaseSyncRoutes supabaseSyncRoutes,
   MediaIntelligenceRoutes mediaIntelligenceRoutes,
@@ -653,11 +628,6 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/reviews')) {
       await reviewRoutes.handle(request);
-      return;
-    }
-
-    if (path.startsWith('/api/v1/ratings')) {
-      await ratingRoutes.handle(request);
       return;
     }
 

@@ -68,6 +68,7 @@ class Media {
   final String? discTitleId;
   final List<String> chapters;
   final List<String> audioTracks;
+  final List<String> languages;
   final List<String> subtitles;
   final List<String> extras;
 
@@ -121,6 +122,7 @@ class Media {
     this.discTitleId,
     this.chapters = const [],
     this.audioTracks = const [],
+    this.languages = const [],
     this.subtitles = const [],
     this.extras = const [],
     this.watchOptions = const [],
@@ -182,6 +184,7 @@ class Media {
       'discTitleId': discTitleId,
       'chapters': List<String>.from(chapters),
       'audioTracks': List<String>.from(audioTracks),
+      'languages': List<String>.from(languages),
       'subtitles': List<String>.from(subtitles),
       'extras': List<String>.from(extras),
 
@@ -243,6 +246,7 @@ class Media {
       discTitleId: _nullableString(json['discTitleId']),
       chapters: _stringList(json['chapters']),
       audioTracks: _stringList(json['audioTracks']),
+      languages: _stringList(json['languages']),
       subtitles: _stringList(json['subtitles']),
       extras: _stringList(json['extras']),
 

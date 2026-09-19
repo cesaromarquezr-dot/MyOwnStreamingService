@@ -4,6 +4,9 @@ import 'app_core.dart';
 import 'details.dart';
 import 'feature_center.dart';
 import 'music_favorites.dart';
+import 'movies.dart';
+import 'music.dart';
+import 'shop.dart';
 import 'localization.dart';
 
 class LibraryCollectionsScreen extends StatelessWidget {
@@ -12,6 +15,23 @@ class LibraryCollectionsScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const UniversalText('Collections')),
         body: const CollectionsPanel(),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: 2,
+          onDestinationSelected: (index) {
+            if (index == 0) { Navigator.popUntil(context, (route) => route.isFirst); }
+            if (index == 1) { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const MoviesScreen())); }
+            if (index == 2) return;
+            if (index == 3) { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const MusicScreen())); }
+            if (index == 4) { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen())); }
+          },
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.movie_outlined), selectedIcon: Icon(Icons.movie_rounded), label: 'Movies'),
+            NavigationDestination(icon: Icon(Icons.collections_bookmark_outlined), selectedIcon: Icon(Icons.collections_bookmark_rounded), label: 'Collections'),
+            NavigationDestination(icon: Icon(Icons.music_note_outlined), selectedIcon: Icon(Icons.music_note_rounded), label: 'Music'),
+            NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), selectedIcon: Icon(Icons.shopping_bag_rounded), label: 'Shop'),
+          ],
+        ),
       );
 }
 

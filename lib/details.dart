@@ -11,7 +11,7 @@ import 'player.dart';
 import 'group_watch.dart';
 import 'discovery_experience.dart';
 import 'localization.dart';
-import 'rating_system.dart';
+import 'shop.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -116,24 +116,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final section in _sectionsWithRatings())
+          for (final section in customization.sectionOrder)
             _buildSection(section),
         ],
       ),
     );
-  }
-
-  List<String> _sectionsWithRatings() {
-    final sections = List<String>.from(customization.sectionOrder);
-    if (!sections.contains('Ratings')) {
-      final metadataIndex = sections.indexOf('Metadata');
-      if (metadataIndex >= 0) {
-        sections.insert(metadataIndex + 1, 'Ratings');
-      } else {
-        sections.add('Ratings');
-      }
-    }
-    return sections;
   }
 
   // ===========================================================================
@@ -160,9 +147,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           return const SizedBox.shrink();
         }
         return _buildMetadata();
-
-      case 'Ratings':
-        return _buildRatingsPanel();
 
       case 'Ownership':
         if (!customization.showOwnership) {
@@ -201,7 +185,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         return _buildGroupWatch();
 
       case 'Shop':
-        if (!customization.showShop || !media.hasEligibleMerchandise) {
+        if (!customization.showShop) {
+          return const SizedBox.shrink();
+        }
+        final hasContextualProducts = ShopCatalog.instance
+            .productsForAssociation(
+              media.type == 'tvShow' ? 'show' : 'movie',
+              media.id,
+              name: media.title,
+            )
+            .isNotEmpty;
+        if (!hasContextualProducts) {
           return const SizedBox.shrink();
         }
         return _buildShop();
@@ -877,19 +871,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // ===========================================================================
 
   /// Performs `_buildMetadata` for this feature. Update this documentation when its contract changes.
-  /// Displays provider ratings and the current profile's personal rating.
-  Widget _buildRatingsPanel() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
-      child: MediaRatingsPanel(
-        mediaId: media.id,
-        title: media.title,
-        year: media.releaseYear,
-        mediaType: media.type,
-      ),
-    );
-  }
-
   Widget _buildMetadata() {
     final pills = <Widget>[];
 
@@ -1185,27 +1166,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: SizedBox(
         height: 52,
-        child: OutlinedButton.icon(
-          onPressed: () {
-            showDialog<void>(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const UniversalText('Shop this title'),
-                content: UniversalText(
-                  '${media.eligibleMerchandiseProductIds.length} eligible merchandise product${media.eligibleMerchandiseProductIds.length == 1 ? '' : 's'} are linked to this title.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const UniversalText('Close'),
-                  ),
-                ],
-              ),
-            );
-          },
-          icon: const Icon(Icons.storefront_outlined),
-          label: const UniversalText('Shop Merchandise', style: TextStyle(fontWeight: FontWeight.w700)),
-        ),
+        width: double.infinity,
+        child: ContextualShopButton.forMedia(context, media),
       ),
     );
   }
@@ -1277,19 +1239,50 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Widget _buildAudioSubtitles() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
-      child: SizedBox(
-        height: 52,
-        child: OutlinedButton.icon(
-          onPressed: _openAudioSubtitleOptions,
-          icon: const Icon(
-            Icons.closed_caption_outlined,
-          ),
-          label: const UniversalText('Audio & Subtitles',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (media.languages.isNotEmpty ||
+              media.audioTracks.isNotEmpty ||
+              media.subtitles.isNotEmpty ||
+              media.extras.isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (media.languages.isNotEmpty)
+                      Text('Languages: ${media.languages.join(', ')}'),
+                    if (media.audioTracks.isNotEmpty)
+                      Text('Audio: ${media.audioTracks.join(', ')}'),
+                    if (media.subtitles.isNotEmpty)
+                      Text('Subtitles: ${media.subtitles.join(', ')}'),
+                    if (media.extras.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Extras',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      for (final extra in media.extras) Text('• $extra'),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: _openAudioSubtitleOptions,
+              icon: const Icon(Icons.closed_caption_outlined),
+              label: const UniversalText(
+                'Audio & Subtitles',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -8,6 +8,8 @@ import 'app_core.dart';
 import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
+import 'music.dart';
+import 'shop.dart';
 
 /// Full-screen collection details view. It uses the same profile Details
 /// customization as movies and series, while adapting the content sections
@@ -99,7 +101,55 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 44),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [for (final section in sections) _section(section)],
+        children: [
+          for (final section in sections) _section(section),
+          if (collection.isCombinedPlaylistCollection) _buildCombinedMusic(),
+          if (ShopCatalog.instance.productsForAssociation('collection', collection.id, name: collection.name).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ContextualShopButton.forCollection(collection),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows the music side of a combined playlist/collection.
+  Widget _buildCombinedMusic() {
+    final store = MusicLibraryStore.instance;
+    final tracks = collection.musicTrackIds
+        .map((id) => store.tracks.where((track) => track.id == id).isEmpty ? null : store.tracks.where((track) => track.id == id).first)
+        .whereType<MusicTrack>()
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Combined Playlist', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              Text('${tracks.length} song(s) included with ${items.length} media title(s).'),
+              const SizedBox(height: 10),
+              if (tracks.isEmpty) const UniversalText('The playlist tracks are not currently loaded.'),
+              for (final track in tracks)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.music_note_rounded),
+                  title: Text(track.title),
+                  subtitle: Text('${track.artist} • ${track.album}'),
+                  trailing: IconButton(
+                    tooltip: 'Play',
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    onPressed: () => MusicPlaybackController.instance.play(track),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

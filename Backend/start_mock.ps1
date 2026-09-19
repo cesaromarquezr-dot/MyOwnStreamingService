@@ -2,11 +2,7 @@
 #
 # Purpose:
 # Starts the Dart backend in Phase 1 ARM mock mode for local development.
-#
-# This script intentionally sets ARM_MOCK only for the current PowerShell
-# process. It does not permanently modify Windows environment variables.
-#
-# The real ARM service remains the default when ARM_MOCK is not enabled.
+# The environment variables apply only to this PowerShell process.
 
 $ErrorActionPreference = "Stop"
 
@@ -16,11 +12,7 @@ Write-Host " Streaming Service Backend - MOCK ARM" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Enable the deterministic Phase 1 ARM simulator for this backend process.
 $env:ARM_MOCK = "true"
-
-# Make sure a previous test-only verification failure setting does not
-# accidentally carry into this development session.
 $env:ARM_MOCK_VERIFY_FAIL = "false"
 
 Write-Host "ARM mode: MOCK (Phase 1)" -ForegroundColor Yellow

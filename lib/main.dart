@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
-import 'arm_importer.dart';
 import 'signup.dart';
 import 'movies.dart';
 import 'series.dart';
@@ -43,6 +42,7 @@ Future<void> main() async {
   await MusicPageCustomizationStore.initialize();
   await AppController.instance.initializeBadges();
   await PlatformPreferenceStore.initialize();
+  await ShopCatalog.instance.initialize();
   runApp(const MyStreamingService());
 }
 /// Implements the `MyStreamingService` class for this feature or UI component.
@@ -2008,15 +2008,17 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
   Widget _buildHomeCustomizationPreview() {
     final navigationOrder = <String>[];
-    const defaults = <String>[
+    final defaults = <String>[
       'Profile',
       'Home',
+      'Collections',
       'Sports',
       'Surprise Me',
       'More',
       'Music',
       'Film',
       'Shop',
+      if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
       'Group Chat',
     ];
 
@@ -3211,15 +3213,17 @@ class _MainScreenState extends State<MainScreen> {
   /// Normalizes saved navigation names while preserving the current navbar architecture.
   /// Legacy `Connected Sports` and `Live Sports` values are migrated to `Sports`.
   List<String> _normalizedNavigationOrder(List<String> value) {
-    const defaults = <String>[
+    final defaults = <String>[
       'Profile',
       'Home',
+      'Collections',
       'Sports',
       'Surprise Me',
       'More',
       'Music',
       'Film',
       'Shop',
+      if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
       'Group Chat',
     ];
 
@@ -3284,6 +3288,7 @@ class _MainScreenState extends State<MainScreen> {
     final pageByName = <String, Widget>{
       'Profile': const ProfileScreen(),
       'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
+      'Collections': const CollectionsPanel(),
       'Sports': const ConnectedSportsHubScreen(),
       'Group Chat': const GroupChatScreen(),
       'More': const _MoreNavigationPlaceholder(),
@@ -3293,10 +3298,16 @@ class _MainScreenState extends State<MainScreen> {
       'Shop': ShopScreen(
         onHome: () => setState(() => selectedDestination = 'Home'),
       ),
+      if (ShopCatalog.instance.hasCurrentAccountStore)
+        'Seller Dashboard': SellerDashboardScreen(onHome: () => setState(() => selectedDestination = 'Shop')),
     };
-    final pages = navigationOrder.map((name) => pageByName[name]!).toList();
-    final safeSelectedIndex = navigationOrder.indexOf(selectedDestination).clamp(0, pages.length - 1).toInt();
-    final selectedName = navigationOrder[safeSelectedIndex];
+    final safeNavigationOrder = navigationOrder.where(pageByName.containsKey).toList();
+    final pages = safeNavigationOrder.map((name) => pageByName[name]!).toList();
+    final effectiveNavigationOrder = safeNavigationOrder.isEmpty ? <String>['Home'] : safeNavigationOrder;
+    final effectivePages = safeNavigationOrder.isEmpty ? <Widget>[pageByName['Home']!] : pages;
+    final selectedIndex = effectiveNavigationOrder.indexOf(selectedDestination);
+    final safeSelectedIndex = (selectedIndex >= 0 ? selectedIndex : 0).clamp(0, effectivePages.length - 1).toInt();
+    final selectedName = effectiveNavigationOrder[safeSelectedIndex];
     final navbar = _StreamingNavigationBar(
       position: settings.navbarPosition,
       onSelect: (index) {
@@ -3321,7 +3332,7 @@ class _MainScreenState extends State<MainScreen> {
     );
     final page = AnimatedSwitcher(
       duration: const Duration(milliseconds: 280),
-      child: KeyedSubtree(key: ValueKey(selectedName), child: pages[safeSelectedIndex]),
+      child: KeyedSubtree(key: ValueKey(selectedName), child: effectivePages[safeSelectedIndex]),
     );
 
     Widget content;
@@ -3418,6 +3429,7 @@ class _StreamingNavigationBar extends StatelessWidget {
     final dataByName = <String, _NavItemData>{
       'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
       'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
+      'Collections': const _NavItemData(Icons.collections_bookmark_outlined, Icons.collections_bookmark_rounded, 'Collections'),
       'Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Sports'),
       'Surprise Me': const _NavItemData(Icons.shuffle_rounded, Icons.shuffle_rounded, 'Surprise Me'),
       'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Group Chat'),
@@ -3425,6 +3437,7 @@ class _StreamingNavigationBar extends StatelessWidget {
       'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
       'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
       'Shop': const _NavItemData(Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
+      'Seller Dashboard': const _NavItemData(Icons.storefront_outlined, Icons.storefront_rounded, 'Seller Dashboard'),
     };
     final actions = <Widget>[
       for (final name in navigationOrder)
@@ -4641,6 +4654,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   final posterController = TextEditingController();
   final trailerController = TextEditingController();
   final descriptionController = TextEditingController();
+  final languagesController = TextEditingController();
+  final subtitlesController = TextEditingController();
+  final extrasController = TextEditingController();
 
   static const discTypes = <String>[
     'DVD',
@@ -4674,8 +4690,6 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   String statusMessage = 'ARM is always enabled for disc imports.';
   String? jobId;
   String? driveId;
-  List<Map<String, dynamic>> armDrives = <Map<String, dynamic>>[];
-  Timer? _driveMonitorTimer;
 
   Map<String, dynamic>? reviewJob;
   Map<String, dynamic>? verification;
@@ -4688,71 +4702,15 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _pollTimer?.cancel();
-    _driveMonitorTimer?.cancel();
     titleController.dispose();
     yearController.dispose();
     posterController.dispose();
     trailerController.dispose();
     descriptionController.dispose();
+    languagesController.dispose();
+    subtitlesController.dispose();
+    extrasController.dispose();
     super.dispose();
-  }
-
-  /// Performs `_startArmImport` for this feature. Update this documentation when its contract changes.
-  @override
-  void initState() {
-    super.initState();
-    _startDriveMonitoring();
-  }
-
-  /// Polls ARM for physical drive/job changes so disc insertion can begin the
-  /// ARM monitoring flow without requiring a second manual start button.
-  void _startDriveMonitoring() {
-    _driveMonitorTimer?.cancel();
-    _driveMonitorTimer = Timer.periodic(const Duration(seconds: 3), (_) => _refreshArmDrives());
-    _refreshArmDrives();
-  }
-
-  /// Refreshes the optical-drive list and automatically attaches a new ARM job.
-  Future<void> _refreshArmDrives() async {
-    if (!mounted) return;
-    try {
-      final api = AppController.instance.backendApi;
-      final status = await api.getArmStatus();
-      if (status['connected'] != true) {
-        if (mounted) setState(() { armConnected = false; statusMessage = 'ARM is offline. Insertions will be detected when ARM reconnects.'; });
-        return;
-      }
-      final drives = (await api.getArmDrives()).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
-      if (!mounted) return;
-      setState(() { armConnected = true; armDrives = drives; });
-
-      if (!importing) {
-        final inserted = drives.firstWhere((drive) => drive['discInserted'] == true, orElse: () => <String, dynamic>{});
-        final detectedId = inserted['id']?.toString();
-        if (detectedId != null && detectedId.isNotEmpty) {
-          await _startArmImportForDrive(detectedId);
-        }
-      }
-    } catch (_) {
-      // The drive monitor is best-effort and retries on its next interval.
-    }
-  }
-
-  /// Starts the local monitor for a physical ARM drive after ARM has detected a disc.
-  Future<void> _startArmImportForDrive(String selectedDriveId) async {
-    if (importing) return;
-    setState(() { importing = true; driveId = selectedDriveId; progress = 0; verificationPassed = false; reviewJob = null; verification = null; statusMessage = 'Disc detected. ARM is starting the automatic rip...'; });
-    try {
-      final result = await AppController.instance.backendApi.startArmImport(driveId: selectedDriveId);
-      final job = result['job'];
-      if (job is! Map) throw BackendApiException('ARM did not return a rip job.');
-      jobId = job['id']?.toString();
-      if (jobId == null || jobId!.isEmpty) throw BackendApiException('ARM did not return a local job ID.');
-      _beginPolling();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() { importing = false; statusMessage = error.toString().replaceFirst('Exception: ', ''); });
-    }
   }
 
   /// Performs `_startArmImport` for this feature. Update this documentation when its contract changes.
@@ -4781,11 +4739,14 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       armConnected = true;
 
       final drives = await api.getArmDrives();
-      armDrives = drives.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
-      final drive = armDrives.firstWhere(
-        (item) => item['available'] != false,
-        orElse: () => <String, dynamic>{'id': 'arm-auto', 'name': 'ARM automatic drive monitor'},
-      );
+      final drive = drives.whereType<Map>().cast<Map<String, dynamic>>().firstWhere(
+            (item) => item['available'] != false,
+            orElse: () => <String, dynamic>{
+              'id': 'arm-auto',
+              'name': 'ARM automatic drive monitor',
+            },
+          );
+
       driveId = drive['id']?.toString() ?? 'arm-auto';
 
       final result = await api.startArmImport(driveId: driveId!);
@@ -4874,6 +4835,12 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     final verificationData = job['verification'];
     final discType = job['discType']?.toString();
     final region = job['region']?.toString();
+    final source = (job['titles'] is List && (job['titles'] as List).isNotEmpty && (job['titles'] as List).first is Map)
+        ? Map<String, dynamic>.from((job['titles'] as List).first as Map)
+        : job;
+    final sourceMetadata = source['metadata'] is Map
+        ? Map<String, dynamic>.from(source['metadata'] as Map)
+        : <String, dynamic>{};
 
     final rawTitles = job['titles'];
     final titles = <Map<String, dynamic>>[];
@@ -4929,6 +4896,21 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
           discTypes.contains(discType) ? discType! : selectedDiscType;
       selectedRegion =
           regions.contains(region) ? region! : selectedRegion;
+      languagesController.text = _strings(source['languages']).isNotEmpty
+          ? _strings(source['languages']).join(', ')
+          : _strings(sourceMetadata['languages']).isNotEmpty
+              ? _strings(sourceMetadata['languages']).join(', ')
+              : _strings(job['languages']).join(', ');
+      subtitlesController.text = _strings(source['subtitles']).isNotEmpty
+          ? _strings(source['subtitles']).join(', ')
+          : _strings(sourceMetadata['subtitles']).isNotEmpty
+              ? _strings(sourceMetadata['subtitles']).join(', ')
+              : _strings(job['subtitles']).join(', ');
+      extrasController.text = _strings(source['extras']).isNotEmpty
+          ? _strings(source['extras']).join(', ')
+          : _strings(sourceMetadata['extras']).isNotEmpty
+              ? _strings(sourceMetadata['extras']).join(', ')
+              : _strings(job['extras']).join(', ');
       statusMessage = verificationPassed
           ? titles.length > 1
               ? 'Disc verified. ARM detected ${titles.length} separate titles on this disc. Review them before adding them to your library.'
@@ -5016,84 +4998,64 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         ? (job['discNumber'] as num).toInt()
         : int.tryParse(job['discNumber']?.toString() ?? '');
 
-    final decision = ApprovalDecision(
-      jobId: job['id']?.toString() ?? jobId ?? '',
-      // No metadata provider is integrated yet, so this remains intentionally null.
-      selectedMetadataId: null,
-      reviewerProfileId: AppController.instance.currentProfile?.id,
-    );
+    for (final titleData in selectedTitles) {
+      final title = (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true ? titleData['canonicalTitle']?.toString().trim() : titleData['title']?.toString().trim()) ?? '';
+      final discTitle = titleData['discTitle']?.toString() ?? titleData['title']?.toString();
+      if (title.isEmpty) continue;
 
-    try {
-      await const LibraryImporter().import(
-        decision: decision,
-        verificationPassed: verificationPassed,
-        writer: () async {
-          for (final titleData in selectedTitles) {
-        final title = (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true ? titleData['canonicalTitle']?.toString().trim() : titleData['title']?.toString().trim()) ?? '';
-        final discTitle = titleData['discTitle']?.toString() ?? titleData['title']?.toString();
-        if (title.isEmpty) continue;
-  
-        final metadata = titleData['metadata'] is Map
-            ? Map<String, dynamic>.from(titleData['metadata'] as Map)
-            : <String, dynamic>{};
-        final year = titleData['year'] is num
-            ? (titleData['year'] as num).toInt()
-            : int.tryParse(titleData['year']?.toString() ?? '') ??
-                (metadata['year'] is num
-                    ? (metadata['year'] as num).toInt()
-                    : int.tryParse(metadata['year']?.toString() ?? '') ??
-                        (job['year'] is num
-                            ? (job['year'] as num).toInt()
-                            : int.tryParse(job['year']?.toString() ?? '')));
-        final media = MediaItem(
-          id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
-          title: title,
-          type: _normalizeMediaType(titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
-          imageUrl: poster.isEmpty
-              ? (titleData['posterUrl']?.toString() ?? metadata['posterUrl']?.toString() ?? job['posterUrl']?.toString())
-              : poster,
-          description: descriptionController.text.trim().isEmpty
-              ? titleData['description']?.toString() ?? metadata['description']?.toString() ?? job['description']?.toString() ?? DescriptionGenerator.movie(title: title, year: year)
-              : descriptionController.text.trim(),
-          releaseYear: year,
-          trailerUrl: trailer.isEmpty
-              ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
-              : trailer,
-          discType: selectedDiscType,
-          discRegion: titleData['detectedRegion']?.toString() ?? job['region']?.toString() ?? selectedRegion,
-          discTitle: discTitle,
-          discMarketCountry: titleData['discMarketCountry']?.toString() ?? job['discMarketCountry']?.toString(),
-          originalTitle: titleData['originalTitle']?.toString() ?? titleData['canonicalTitle']?.toString(),
-          originalLanguage: titleData['originalLanguage']?.toString(),
-          countryOfOrigin: titleData['countryOfOrigin']?.toString(),
-          canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
-  
-          discCollectionId: collectionId,
-          discCollectionTitle: collectionTitle,
-          discNumber: discNumber,
-          discTitleId: titleData['id']?.toString(),
-          actors: _strings(titleData['actors']).isNotEmpty ? _strings(titleData['actors']) : (metadata['actors'] is List ? _strings(metadata['actors']) : _strings(job['actors'])),
-          directors: _strings(titleData['directors']).isNotEmpty ? _strings(titleData['directors']) : (metadata['directors'] is List ? _strings(metadata['directors']) : _strings(job['directors'])),
-          writers: _strings(titleData['writers']).isNotEmpty ? _strings(titleData['writers']) : (metadata['writers'] is List ? _strings(metadata['writers']) : _strings(job['writers'])),
-          music: _strings(titleData['music']).isNotEmpty ? _strings(titleData['music']) : (metadata['music'] is List ? _strings(metadata['music']) : _strings(job['music'])),
-          genres: _strings(titleData['genres']).isNotEmpty ? _strings(titleData['genres']) : (metadata['genres'] is List ? _strings(metadata['genres']) : _strings(job['genres'])),
-          tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
-          chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
-          audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
-          subtitles: _strings(titleData['subtitles']).isNotEmpty ? _strings(titleData['subtitles']) : (metadata['subtitles'] is List ? _strings(metadata['subtitles']) : _strings(job['subtitles'])),
-          extras: _strings(titleData['extras']).isNotEmpty ? _strings(titleData['extras']) : (metadata['extras'] is List ? _strings(metadata['extras']) : _strings(job['extras'])),
-        );
-  
-        AppController.instance.addToLibrary(media);
-          }
-        },
+      final metadata = titleData['metadata'] is Map
+          ? Map<String, dynamic>.from(titleData['metadata'] as Map)
+          : <String, dynamic>{};
+      final year = titleData['year'] is num
+          ? (titleData['year'] as num).toInt()
+          : int.tryParse(titleData['year']?.toString() ?? '') ??
+              (metadata['year'] is num
+                  ? (metadata['year'] as num).toInt()
+                  : int.tryParse(metadata['year']?.toString() ?? '') ??
+                      (job['year'] is num
+                          ? (job['year'] as num).toInt()
+                          : int.tryParse(job['year']?.toString() ?? '')));
+      final media = MediaItem(
+        id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
+        title: title,
+        type: _normalizeMediaType(titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
+        imageUrl: poster.isEmpty
+            ? (titleData['posterUrl']?.toString() ?? metadata['posterUrl']?.toString() ?? job['posterUrl']?.toString())
+            : poster,
+        description: descriptionController.text.trim().isEmpty
+            ? titleData['description']?.toString() ?? metadata['description']?.toString() ?? job['description']?.toString() ?? DescriptionGenerator.movie(title: title, year: year)
+            : descriptionController.text.trim(),
+        releaseYear: year,
+        trailerUrl: trailer.isEmpty
+            ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
+            : trailer,
+        discType: selectedDiscType,
+        discRegion: titleData['detectedRegion']?.toString() ?? job['region']?.toString() ?? selectedRegion,
+        discTitle: discTitle,
+        discMarketCountry: titleData['discMarketCountry']?.toString() ?? job['discMarketCountry']?.toString(),
+        originalTitle: titleData['originalTitle']?.toString() ?? titleData['canonicalTitle']?.toString(),
+        originalLanguage: titleData['originalLanguage']?.toString(),
+        countryOfOrigin: titleData['countryOfOrigin']?.toString(),
+        canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
+
+        discCollectionId: collectionId,
+        discCollectionTitle: collectionTitle,
+        discNumber: discNumber,
+        discTitleId: titleData['id']?.toString(),
+        actors: _strings(titleData['actors']).isNotEmpty ? _strings(titleData['actors']) : (metadata['actors'] is List ? _strings(metadata['actors']) : _strings(job['actors'])),
+        directors: _strings(titleData['directors']).isNotEmpty ? _strings(titleData['directors']) : (metadata['directors'] is List ? _strings(metadata['directors']) : _strings(job['directors'])),
+        writers: _strings(titleData['writers']).isNotEmpty ? _strings(titleData['writers']) : (metadata['writers'] is List ? _strings(metadata['writers']) : _strings(job['writers'])),
+        music: _strings(titleData['music']).isNotEmpty ? _strings(titleData['music']) : (metadata['music'] is List ? _strings(metadata['music']) : _strings(job['music'])),
+        genres: _strings(titleData['genres']).isNotEmpty ? _strings(titleData['genres']) : (metadata['genres'] is List ? _strings(metadata['genres']) : _strings(job['genres'])),
+        tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
+        chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
+        audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
+        languages: languagesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+        subtitles: subtitlesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+        extras: extrasController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
       );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))),
-      );
-      return;
+
+      AppController.instance.addToLibrary(media);
     }
 
     if (!mounted) return;
@@ -5165,18 +5127,6 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     const SizedBox(height: 8),
                     UniversalText('${(progress * 100).round()}% • $statusMessage',
                     ),
-                  ],
-                  if (armDrives.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const UniversalText('OPTICAL DRIVES', style: TextStyle(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 6),
-                    ...armDrives.map((drive) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(drive['discInserted'] == true ? Icons.album_rounded : Icons.disc_full_rounded),
-                      title: Text(drive['name']?.toString() ?? drive['id']?.toString() ?? 'Optical drive'),
-                      subtitle: Text(drive['discInserted'] == true ? 'Disc detected — ARM is monitoring this drive.' : 'No disc detected.'),
-                      trailing: drive['discInserted'] == true ? const Icon(Icons.check_circle_rounded) : const Icon(Icons.remove_circle_outline),
-                    )),
                   ],
                   const SizedBox(height: 12),
                   SizedBox(
@@ -5390,6 +5340,38 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: languagesController,
+              decoration: InputDecoration(
+                labelText: tr('Languages found'),
+                hintText: tr('English, Spanish, French'),
+                helperText: tr('Separate multiple languages with commas.'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: subtitlesController,
+              decoration: InputDecoration(
+                labelText: tr('Subtitles found'),
+                hintText: tr('English, Spanish, French'),
+                helperText: tr('Separate multiple subtitle languages with commas.'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: extrasController,
+              minLines: 2,
+              maxLines: 5,
+              decoration: InputDecoration(
+                labelText: tr('Extras found'),
+                hintText: tr('Behind the scenes, deleted scenes, audio commentary, trailers from other movies'),
+                helperText: tr('Each extra can be entered as a comma-separated item.'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
             const SizedBox(height: 18),
             Material(
               color: Colors.transparent,
@@ -5408,7 +5390,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 color: Colors.white.withValues(alpha: .04),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: UniversalText('When you add this verified disc, its actors, directors, writers, music, genres, tags, chapters, audio tracks, subtitles, and extras will be cataloged with the media.',
+              child: UniversalText('When you add this verified disc, its languages, audio tracks, subtitles, extras, actors, directors, writers, music, genres, tags, and chapters will be cataloged with the media.',
                 style: TextStyle(color: Colors.grey.shade300),
               ),
             ),

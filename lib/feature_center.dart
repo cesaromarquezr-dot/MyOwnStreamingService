@@ -7,6 +7,8 @@ import 'app_core.dart';
 import 'collection_details.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'music.dart';
+import 'shop.dart';
 
 // -----------------------------------------------------------------------------
 // FEATURE CENTER
@@ -348,18 +350,8 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
         // surface so Material widgets such as TextField, Card, ChoiceChip,
         // IconButton and dialogs always have the required ancestor.
         return Scaffold(
-  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-  appBar: AppBar(
-    leading: IconButton(
-      tooltip: tr('Back to Home'),
-      icon: const Icon(Icons.arrow_back),
-      onPressed: () {
-        Navigator.of(context).pop();
-      },
-    ),
-    title: const UniversalText('Collections'),
-  ),
-  body: ListView(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: ListView(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
             children: [
             _hero(
@@ -375,6 +367,12 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                     icon: const Icon(Icons.create_new_folder_outlined),
                     label: const UniversalText('Create Collection'),
                   ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _combineCollectionAndPlaylist,
+                  icon: const Icon(Icons.merge_type_rounded),
+                  label: const UniversalText('Combine'),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
@@ -764,6 +762,7 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                       ),
                       const SizedBox(height: 4),
                       UniversalText('${media.length} titles'
+                        '${collection.isCombinedPlaylistCollection ? ' • ${collection.musicTrackIds.length} songs' : ''}'
                         '${collection.isShared ? ' • shared' : ' • private'}'
                         '${collection.isAutomatic ? ' • automatic' : ''}',
                         style: TextStyle(
@@ -852,6 +851,14 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
                 label: const UniversalText('Add to Collection'),
               ),
             ),
+            if (ShopCatalog.instance.productsForAssociation('collection', collection.id, name: collection.name).isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ContextualShopButton.forCollection(collection),
+                ),
+              ),
           ],
         ),
       ),
@@ -1654,6 +1661,98 @@ class _CollectionsPanelState extends State<CollectionsPanel> {
         setState(() {});
       }
     });
+  }
+
+  /// Combines an existing media collection with an existing music playlist.
+  /// The result stays in Collections while containing both media and music.
+  Future<void> _combineCollectionAndPlaylist() async {
+    final controller = AppController.instance;
+    final collections = controller.collections
+        .where((c) => !c.isAutomatic && c.canCurrentProfileEdit())
+        .toList();
+    final playlists = MusicLibraryStore.instance.playlists.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .toList();
+    if (collections.isEmpty || playlists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: UniversalText('Create a custom collection and a music playlist first.'),
+        ),
+      );
+      return;
+    }
+
+    MediaCollection selectedCollection = collections.first;
+    String selectedPlaylist = playlists.first.key;
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const UniversalText('Combine Collection + Playlist'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const UniversalText(
+                  "Example: combine an 80's movie collection with an 80's music playlist so both appear in one collection/playlist.",
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<MediaCollection>(
+                  initialValue: selectedCollection,
+                  decoration: const InputDecoration(labelText: 'Collection'),
+                  items: collections
+                      .map((collection) => DropdownMenuItem(
+                            value: collection,
+                            child: Text(collection.name),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) setDialog(() => selectedCollection = value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedPlaylist,
+                  decoration: const InputDecoration(labelText: 'Playlist'),
+                  items: playlists
+                      .map((entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text('${entry.key} (${entry.value.length} songs)'),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) setDialog(() => selectedPlaylist = value);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')),
+            FilledButton(
+              onPressed: () {
+                final trackIds = MusicLibraryStore.instance.playlists[selectedPlaylist] ?? const <String>[];
+                final combined = controller.createCollection(
+                  name: '${selectedCollection.name} + $selectedPlaylist',
+                  description: 'Combined media collection and music playlist.',
+                  shared: selectedCollection.isShared,
+                  musicTrackIds: trackIds,
+                  combinedPlaylistCollection: true,
+                );
+                combined.mediaIds.addAll(selectedCollection.mediaIds);
+                Navigator.pop(context);
+                setState(() {});
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(content: Text('Created combined collection: ${combined.name}')),
+                );
+              },
+              child: const UniversalText('Create Combined'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _customize() {

@@ -64,9 +64,6 @@ class MediaItem {
   /// Optional explicit audience/community rating maintained separately from the official rating.
   final double? audienceRating;
   final int audienceReviewCount;
-  /// Provider ratings are kept as separate source records; they are not combined.
-  final List<Map<String, dynamic>> externalRatings;
-  final double? userRatingStars;
   final String? trailerUrl;
   final DateTime addedAt;
   final List<Map<String, dynamic>> seasons;
@@ -111,6 +108,8 @@ class MediaItem {
   final List<String> tags;
   final List<String> chapters;
   final List<String> audioTracks;
+  /// Languages detected on the imported disc, kept separately from audio-track labels.
+  final List<String> languages;
   final List<String> subtitles;
   final List<String> extras;
 
@@ -148,6 +147,7 @@ class MediaItem {
     List<String>? tags,
     List<String>? chapters,
     List<String>? audioTracks,
+    List<String>? languages,
     List<String>? subtitles,
     List<String>? extras,
     required this.id,
@@ -160,10 +160,7 @@ class MediaItem {
     this.ratingReason,
     this.audienceRating,
     this.audienceReviewCount = 0,
-    List<Map<String, dynamic>>? externalRatings,
-    this.userRatingStars,
-  }) : externalRatings = externalRatings ?? const <Map<String, dynamic>>[],
-       addedAt = addedAt ?? DateTime.now(),
+  }) : addedAt = addedAt ?? DateTime.now(),
        seasons = seasons ?? <Map<String, dynamic>>[],
        actors = actors ?? <String>[],
        directors = directors ?? <String>[],
@@ -173,6 +170,7 @@ class MediaItem {
        tags = tags ?? <String>[],
        chapters = chapters ?? <String>[],
        audioTracks = audioTracks ?? <String>[],
+       languages = languages ?? <String>[],
        subtitles = subtitles ?? <String>[],
        extras = extras ?? <String>[],
        relationshipTypes = relationshipTypes ?? <String>[],
@@ -209,8 +207,6 @@ class MediaItem {
       ratingReason: json['ratingReason']?.toString(),
       audienceRating: json['audienceRating'] is num ? (json['audienceRating'] as num).toDouble() : double.tryParse(json['audienceRating']?.toString() ?? ''),
       audienceReviewCount: json['audienceReviewCount'] is num ? (json['audienceReviewCount'] as num).toInt() : int.tryParse(json['audienceReviewCount']?.toString() ?? '') ?? 0,
-      externalRatings: json['externalRatings'] is List ? (json['externalRatings'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : const <Map<String, dynamic>>[],
-      userRatingStars: json['userRatingStars'] is num ? (json['userRatingStars'] as num).toDouble() : double.tryParse(json['userRatingStars']?.toString() ?? ''),
       trailerUrl: json['trailerUrl']?.toString(),
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
       discType: json['discType']?.toString(),
@@ -243,6 +239,7 @@ class MediaItem {
       tags: _stringList(json['tags']),
       chapters: _stringList(json['chapters']),
       audioTracks: _stringList(json['audioTracks']),
+      languages: _stringList(json['languages']),
       subtitles: _stringList(json['subtitles']),
       extras: _stringList(json['extras']),
       seasons: (json['seasons'] is List)
@@ -275,8 +272,6 @@ class MediaItem {
       'ratingReason': ratingReason,
       'audienceRating': audienceRating,
       'audienceReviewCount': audienceReviewCount,
-      'externalRatings': externalRatings,
-      'userRatingStars': userRatingStars,
       'trailerUrl': trailerUrl,
       'addedAt': addedAt.toIso8601String(),
       'discType': discType,
@@ -297,6 +292,7 @@ class MediaItem {
       'tags': tags,
       'chapters': chapters,
       'audioTracks': audioTracks,
+      'languages': languages,
       'subtitles': subtitles,
       'extras': extras,
       'seasons': seasons,
@@ -481,6 +477,10 @@ class MediaCollection {
   String autoPlayNextTiming;
   final List<String> mediaIds;
   final List<String> episodeKeys;
+  /// Music track IDs included when this collection is also a playlist.
+  final List<String> musicTrackIds;
+  /// True when the same container intentionally combines film/TV collection items and music playlist items.
+  final bool isCombinedPlaylistCollection;
   final Set<String> likedByProfileIds;
   final Set<String> contributorProfileIds;
   DateTime createdAt;
@@ -505,11 +505,14 @@ class MediaCollection {
     this.autoPlayNextTiming = 'End credits',
     List<String>? mediaIds,
     List<String>? episodeKeys,
+    List<String>? musicTrackIds,
+    this.isCombinedPlaylistCollection = false,
     Set<String>? likedByProfileIds,
     Set<String>? contributorProfileIds,
     DateTime? createdAt,
   })  : mediaIds = mediaIds ?? <String>[],
         episodeKeys = episodeKeys ?? <String>[],
+        musicTrackIds = musicTrackIds ?? <String>[],
         likedByProfileIds = likedByProfileIds ?? <String>{},
         contributorProfileIds = contributorProfileIds ?? <String>{},
         createdAt = createdAt ?? DateTime.now();
@@ -544,7 +547,8 @@ class MediaCollection {
     'autoPlayNextEnabled': autoPlayNextEnabled,
     'autoPlayVersionPreference': autoPlayVersionPreference,
     'autoPlayNextTiming': autoPlayNextTiming,
-    'mediaIds': mediaIds, 'episodeKeys': episodeKeys, 'likedByProfileIds': likedByProfileIds.toList(),
+    'mediaIds': mediaIds, 'episodeKeys': episodeKeys, 'musicTrackIds': musicTrackIds,
+    'isCombinedPlaylistCollection': isCombinedPlaylistCollection, 'likedByProfileIds': likedByProfileIds.toList(),
     'contributorProfileIds': contributorProfileIds.toList(),
     'createdAt': createdAt.toIso8601String(),
   };
@@ -562,6 +566,8 @@ class MediaCollection {
     autoPlayNextTiming: json['autoPlayNextTiming']?.toString() ?? 'End credits',
     mediaIds: (json['mediaIds'] as List?)?.map((e) => e.toString()).toList(),
     episodeKeys: (json['episodeKeys'] as List?)?.map((e) => e.toString()).toList(),
+    musicTrackIds: (json['musicTrackIds'] as List?)?.map((e) => e.toString()).toList(),
+    isCombinedPlaylistCollection: json['isCombinedPlaylistCollection'] == true,
     likedByProfileIds: (json['likedByProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
     contributorProfileIds: (json['contributorProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
     createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
@@ -4586,11 +4592,15 @@ class AppController extends ChangeNotifier {
   MediaCollection createCollection({
     required String name, String description = '', bool shared = true, bool featured = false,
     bool automatic = false, String posterMode = 'First 4 Posters', String? customPosterUrl,
+    Iterable<String> musicTrackIds = const <String>[],
+    bool combinedPlaylistCollection = false,
   }) {
     final collection = MediaCollection(
       id: _generateId('collection'), name: name.trim(), description: description.trim(),
       createdByProfileId: currentProfile?.id, isShared: shared, isFeatured: featured,
       isAutomatic: automatic, posterMode: posterMode, customPosterUrl: customPosterUrl,
+      musicTrackIds: musicTrackIds.toList(),
+      isCombinedPlaylistCollection: combinedPlaylistCollection,
       contributorProfileIds: shared ? <String>{...?currentAccount?.profiles.map((p) => p.id)} : <String>{},
     );
     // The creator always has edit/add rights.

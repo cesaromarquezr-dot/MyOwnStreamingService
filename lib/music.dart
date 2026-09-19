@@ -14,6 +14,7 @@ import 'music_favorites.dart';
 import 'details.dart';
 import 'localization.dart';
 import 'profile_content_safety.dart';
+import 'shop.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -33,9 +34,6 @@ class MusicTrack {
   final bool explicit;
   /// Mature-theme flag supplied by licensed/import metadata.
   final bool matureTheme;
-  /// Provider ratings for this recording/album are kept as separate source records.
-  final List<Map<String, dynamic>> externalRatings;
-  final double? userRatingStars;
 
   const MusicTrack({
     required this.id,
@@ -50,8 +48,6 @@ class MusicTrack {
     this.subgenres = const <String>[],
     this.explicit = false,
     this.matureTheme = false,
-    this.externalRatings = const <Map<String, dynamic>>[],
-    this.userRatingStars,
   });
 }
 
@@ -937,6 +933,21 @@ class _MusicScreenState extends State<MusicScreen> {
                                   ],
                                 ),
                               ),
+                              if (ShopCatalog.instance.productsForAssociation('song', track.id, name: track.title).isNotEmpty)
+                                IconButton(
+                                  tooltip: 'Shop this song',
+                                  icon: const Icon(Icons.storefront_outlined, size: 19),
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ShopScreen(
+                                        contextAssociationType: 'song',
+                                        contextAssociationId: track.id,
+                                        contextAssociationName: track.title,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -1036,16 +1047,35 @@ class _MusicScreenState extends State<MusicScreen> {
               child: ListTile(
                 title: Text(entry.key),
                 subtitle: UniversalText('${entry.value.length} songs'),
-                trailing: IconButton(
-                  icon: Icon(
-                    MusicFavoritesBridge.likedPlaylists().contains(entry.key)
-                        ? Icons.favorite
-                        : Icons.favorite_border,
-                  ),
-                  onPressed: () {
-                    MusicFavoritesBridge.togglePlaylist(entry.key);
-                    setState(() {});
-                  },
+                trailing: Wrap(
+                  children: [
+                    if (ShopCatalog.instance.productsForAssociation('playlist', entry.key, name: entry.key).isNotEmpty)
+                      IconButton(
+                        tooltip: 'Shop related products',
+                        icon: const Icon(Icons.storefront_outlined),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ShopScreen(
+                              contextAssociationType: 'playlist',
+                              contextAssociationId: entry.key,
+                              contextAssociationName: entry.key,
+                            ),
+                          ),
+                        ),
+                      ),
+                    IconButton(
+                      icon: Icon(
+                        MusicFavoritesBridge.likedPlaylists().contains(entry.key)
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                      ),
+                      onPressed: () {
+                        MusicFavoritesBridge.togglePlaylist(entry.key);
+                        setState(() {});
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1247,7 +1277,33 @@ class MusicDiscoverScreen extends StatelessWidget {
                 leading: _MusicDiscoverArtwork(track: track),
                 title: Text(track.title),
                 subtitle: Text('${track.artist} • ${track.album}'),
-                trailing: const Icon(Icons.play_arrow_rounded),
+                trailing: Wrap(
+                  children: [
+                    if (ShopCatalog.instance.productsForAssociation('song', track.id, name: track.title).isNotEmpty)
+                      IconButton(
+                        tooltip: 'Shop song products',
+                        icon: const Icon(Icons.storefront_outlined),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: 'song', contextAssociationId: track.id, contextAssociationName: track.title))),
+                      ),
+                    if (ShopCatalog.instance.productsForAssociation('artist', track.artist, name: track.artist).isNotEmpty)
+                      IconButton(
+                        tooltip: 'Shop artist products',
+                        icon: const Icon(Icons.person_outline_rounded),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: 'artist', contextAssociationId: track.artist, contextAssociationName: track.artist))),
+                      ),
+                    if (ShopCatalog.instance.productsForAssociation('album', track.album, name: track.album).isNotEmpty)
+                      IconButton(
+                        tooltip: 'Shop album products',
+                        icon: const Icon(Icons.album_outlined),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: 'album', contextAssociationId: track.album, contextAssociationName: track.album))),
+                      ),
+                    IconButton(
+                      tooltip: 'Play',
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      onPressed: () => MusicPlaybackController.instance.play(track),
+                    ),
+                  ],
+                ),
                 onTap: () => MusicPlaybackController.instance.play(track),
               ),
             ),
@@ -1357,6 +1413,22 @@ class _MusicSearchDelegate extends SearchDelegate<MusicTrack?> {
           ListTile(
             title: Text(track.title),
             subtitle: UniversalText('${track.artist} • ${track.album}'),
+            trailing: ShopCatalog.instance.productsForAssociation('song', track.id, name: track.title).isNotEmpty
+                ? IconButton(
+                    tooltip: 'Shop this song',
+                    icon: const Icon(Icons.storefront_outlined),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ShopScreen(
+                          contextAssociationType: 'song',
+                          contextAssociationId: track.id,
+                          contextAssociationName: track.title,
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
             onTap: () {
               MusicPlaybackController.instance.play(track);
               close(context, track);
