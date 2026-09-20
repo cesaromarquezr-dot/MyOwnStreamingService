@@ -316,10 +316,42 @@ class _LoginScreenState extends State<LoginScreen> {
     final controller = AppController.instance;
 
     try {
-      await controller.loginWithBackend(
+      final loginResponse = await controller.loginWithBackend(
         email: email,
         password: password,
       );
+
+      if (loginResponse['requiresMfa'] == true) {
+        if (!mounted) return;
+        final codeController = TextEditingController();
+        final verified = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const UniversalText('Multi-factor authentication'),
+            content: TextField(controller: codeController, autofocus: true, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Enter the 6-digit code sent to your email')),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('CANCEL')),
+              FilledButton(onPressed: () async {
+                try {
+                  await controller.backendApi.verifyMfaLogin(email: email, code: codeController.text);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+                } catch (_) {
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, false);
+                }
+              }, child: const UniversalText('VERIFY')),
+            ],
+          ),
+        );
+        codeController.dispose();
+        if (verified != true) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('MFA verification was not completed.')));
+          return;
+        }
+        final account = await controller.backendApi.getCurrentAccount();
+        controller.applyBackendAccountFromResponse(account);
+      }
 
       final security = controller.lastLoginSecurity;
       if (security?['suspicious'] == true) {
@@ -2011,7 +2043,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     final defaults = <String>[
       'Profile',
       'Home',
-      'Collections',
       'Sports',
       'Surprise Me',
       'More',
@@ -3216,7 +3247,6 @@ class _MainScreenState extends State<MainScreen> {
     final defaults = <String>[
       'Profile',
       'Home',
-      'Collections',
       'Sports',
       'Surprise Me',
       'More',
@@ -3288,7 +3318,6 @@ class _MainScreenState extends State<MainScreen> {
     final pageByName = <String, Widget>{
       'Profile': const ProfileScreen(),
       'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
-      'Collections': const CollectionsPanel(),
       'Sports': const ConnectedSportsHubScreen(),
       'Group Chat': const GroupChatScreen(),
       'More': const _MoreNavigationPlaceholder(),
@@ -3299,15 +3328,11 @@ class _MainScreenState extends State<MainScreen> {
         onHome: () => setState(() => selectedDestination = 'Home'),
       ),
       if (ShopCatalog.instance.hasCurrentAccountStore)
-        'Seller Dashboard': SellerDashboardScreen(onHome: () => setState(() => selectedDestination = 'Shop')),
+        'Seller Dashboard': SellerDashboardScreen(),
     };
-    final safeNavigationOrder = navigationOrder.where(pageByName.containsKey).toList();
-    final pages = safeNavigationOrder.map((name) => pageByName[name]!).toList();
-    final effectiveNavigationOrder = safeNavigationOrder.isEmpty ? <String>['Home'] : safeNavigationOrder;
-    final effectivePages = safeNavigationOrder.isEmpty ? <Widget>[pageByName['Home']!] : pages;
-    final selectedIndex = effectiveNavigationOrder.indexOf(selectedDestination);
-    final safeSelectedIndex = (selectedIndex >= 0 ? selectedIndex : 0).clamp(0, effectivePages.length - 1).toInt();
-    final selectedName = effectiveNavigationOrder[safeSelectedIndex];
+    final pages = navigationOrder.map((name) => pageByName[name]!).toList();
+    final safeSelectedIndex = navigationOrder.indexOf(selectedDestination).clamp(0, pages.length - 1).toInt();
+    final selectedName = navigationOrder[safeSelectedIndex];
     final navbar = _StreamingNavigationBar(
       position: settings.navbarPosition,
       onSelect: (index) {
@@ -3332,7 +3357,7 @@ class _MainScreenState extends State<MainScreen> {
     );
     final page = AnimatedSwitcher(
       duration: const Duration(milliseconds: 280),
-      child: KeyedSubtree(key: ValueKey(selectedName), child: effectivePages[safeSelectedIndex]),
+      child: KeyedSubtree(key: ValueKey(selectedName), child: pages[safeSelectedIndex]),
     );
 
     Widget content;
@@ -3429,7 +3454,6 @@ class _StreamingNavigationBar extends StatelessWidget {
     final dataByName = <String, _NavItemData>{
       'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
       'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
-      'Collections': const _NavItemData(Icons.collections_bookmark_outlined, Icons.collections_bookmark_rounded, 'Collections'),
       'Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Sports'),
       'Surprise Me': const _NavItemData(Icons.shuffle_rounded, Icons.shuffle_rounded, 'Surprise Me'),
       'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Group Chat'),

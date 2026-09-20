@@ -20,6 +20,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   late final AnimationController _animationController;
 
   String _searchQuery = '';
+  String _sortMode = 'Default';
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -53,17 +54,56 @@ class _SeriesScreenState extends State<SeriesScreen>
           type == 'tv show';
     }).toList();
 
-    if (_searchQuery.trim().isEmpty) {
-      return shows;
-    }
+    final result = _searchQuery.trim().isEmpty
+        ? List<MediaItem>.from(shows)
+        : shows.where((show) {
+            return show.title.toLowerCase().contains(_searchQuery.trim().toLowerCase());
+          }).toList();
 
-    final query = _searchQuery.trim().toLowerCase();
-
-    return shows.where((show) {
-      return show.title.toLowerCase().contains(query);
-    }).toList();
+    _sortMedia(result);
+    return result;
   }
 
+
+  /// Sorts the visible TV-show list without changing the underlying library order.
+  void _sortMedia(List<MediaItem> items) {
+    switch (_sortMode) {
+      case 'A-Z':
+        items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        break;
+      case 'Z-A':
+        items.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        break;
+      case 'Oldest to Newest':
+        items.sort((a, b) => (a.releaseYear ?? 0).compareTo(b.releaseYear ?? 0));
+        break;
+      case 'Newest to Oldest':
+        items.sort((a, b) => (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0));
+        break;
+      default:
+        break;
+    }
+  }
+
+  /// Displays the TV-show organization dropdown.
+  Widget _sortDropdown() {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: _sortMode,
+        dropdownColor: const Color(0xFF151515),
+        icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+        items: const [
+          DropdownMenuItem(value: 'Default', child: Text('Default')),
+          DropdownMenuItem(value: 'A-Z', child: Text('A-Z')),
+          DropdownMenuItem(value: 'Z-A', child: Text('Z-A')),
+          DropdownMenuItem(value: 'Oldest to Newest', child: Text('Oldest to Newest')),
+          DropdownMenuItem(value: 'Newest to Oldest', child: Text('Newest to Oldest')),
+        ],
+        onChanged: (value) => setState(() => _sortMode = value ?? 'Default'),
+      ),
+    );
+  }
   /// Performs `_openSearch` for this feature. Update this documentation when its contract changes.
   void _openSearch() {
     final controller = TextEditingController(text: _searchQuery);
@@ -316,6 +356,8 @@ class _SeriesScreenState extends State<SeriesScreen>
                                   ),
                                 ),
                               ),
+                              _sortDropdown(),
+                              const SizedBox(width: 8),
                               if (_searchQuery.trim().isNotEmpty)
                                 UniversalText('${shows.length} result${shows.length == 1 ? '' : 's'}',
                                   style: TextStyle(

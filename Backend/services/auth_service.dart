@@ -18,14 +18,16 @@ import 'subscription_service.dart';
 import 'email_service.dart';
 
 class AuthLoginResult {
-  final String token;
+  final String? token;
   final bool suspicious;
   final List<String> reasons;
+  final bool requiresMfa;
 
   const AuthLoginResult({
     required this.token,
     required this.suspicious,
     required this.reasons,
+    this.requiresMfa = false,
   });
 }
 
@@ -41,6 +43,15 @@ class AuthService {
     required this.subscriptionService,
     required this.emailService,
   });
+
+  /// Records a security event without writing passwords, bearer tokens, or MFA codes to logs.
+  Future<void> _audit(String eventType, {String? accountId, Map<String, dynamic> metadata = const {}}) async {
+    try {
+      await SupabaseStore.instance.recordSecurityEvent(accountId: accountId, eventType: eventType, metadata: metadata);
+    } catch (_) {
+      // Security telemetry must never make authentication fail.
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // ID / TOKEN GENERATION
@@ -132,9 +143,9 @@ class AuthService {
     }
 
 
-    if (password.length < 6) {
+    if (password.length < 10) {
       throw Exception(
-        'Password must be at least 6 characters long.',
+        'Password must be at least 10 characters long.',
       );
     }
 
@@ -230,9 +241,14 @@ class AuthService {
 
     if (cleanLogin.isEmpty || password.isEmpty) {
       database.recordFailedLogin(normalizedLogin);
+      await _audit('login_failed', metadata: {'identifierHash': sha256.convert(utf8.encode(normalizedLogin)).toString()});
       throw Exception(
         'Invalid email or password.',
       );
+    }
+
+    if (database.recentFailedLoginCount(normalizedLogin) >= 10) {
+      throw Exception('Too many failed login attempts. Try again later.');
     }
 
     // Account.passwordHash is the canonical owner credential. Do not let a
@@ -292,6 +308,7 @@ class AuthService {
 
     if (account == null || passwordHash == null || passwordHash.isEmpty) {
       database.recordFailedLogin(normalizedLogin);
+      await _audit('login_failed', metadata: {'identifierHash': sha256.convert(utf8.encode(normalizedLogin)).toString()});
       throw Exception(
         'Invalid email or password.',
       );
@@ -363,6 +380,16 @@ class AuthService {
       );
     }
 
+    if (account.mfaEnabled) {
+      await startMfaEnrollment(account);
+      return AuthLoginResult(
+        token: null,
+        suspicious: suspicious,
+        reasons: reasons,
+        requiresMfa: true,
+      );
+    }
+
     final token = _generateSessionToken();
 
     database.saveSession(
@@ -380,12 +407,136 @@ class AuthService {
     knownFingerprints.add(
       fingerprint,
     );
+    await _audit('login_success', accountId: account.id, metadata: {'suspicious': suspicious, 'ip': normalizedIp});
 
     return AuthLoginResult(
       token: token,
       suspicious: suspicious,
       reasons: reasons,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // SESSION ROTATION / MFA
+  // ---------------------------------------------------------------------------
+
+  /// Rotates a bearer session token so a stolen token cannot be reused after rotation.
+  String? rotateSession(String token) {
+    final newToken = _generateSessionToken();
+    final accountId = database.rotateSession(token.trim(), newToken);
+    if (accountId == null) return null;
+    return newToken;
+  }
+
+  /// Starts an email-based MFA enrollment challenge. The plaintext code is only
+  /// sent through the configured email provider; the backend stores its hash.
+  Future<void> startMfaEnrollment(Account account) async {
+    final code = (100000 + _random.nextInt(900000)).toString();
+    final codeHash = sha256.convert(utf8.encode(code)).toString();
+    account.mfaChallengeHash = codeHash;
+    account.mfaChallengeExpiresAt = DateTime.now().toUtc().add(const Duration(minutes: 10));
+    database.saveAccount(account);
+    await database.persistAccountAndWait(account);
+    await _audit('mfa_challenge_sent', accountId: account.id);
+    await emailService.mfaCode(account.email, code);
+  }
+
+  /// Confirms the MFA challenge and enables MFA without persisting the plaintext code.
+  Future<void> verifyMfaEnrollment(Account account, String code) async {
+    final expires = account.mfaChallengeExpiresAt;
+    if (expires == null || !DateTime.now().toUtc().isBefore(expires.toUtc())) {
+      throw Exception('The MFA verification code has expired.');
+    }
+    final expected = account.mfaChallengeHash;
+    final actual = sha256.convert(utf8.encode(code.trim())).toString();
+    if (expected.isEmpty || actual != expected) {
+      throw Exception('Incorrect MFA verification code.');
+    }
+    account.mfaEnabled = true;
+    account.mfaChallengeHash = '';
+    account.mfaChallengeExpiresAt = null;
+    database.saveAccount(account);
+    await database.persistAccountAndWait(account);
+    await _audit('mfa_enabled', accountId: account.id);
+  }
+
+  /// Disables MFA and clears any outstanding verification challenge.
+  Future<void> disableMfa(Account account) async {
+    account.mfaEnabled = false;
+    account.mfaChallengeHash = '';
+    account.mfaChallengeExpiresAt = null;
+    database.saveAccount(account);
+    await database.persistAccountAndWait(account);
+    await _audit('mfa_disabled', accountId: account.id);
+  }
+
+  /// Changes an account password after verifying the current password.
+  Future<void> changePassword({required Account account, required String currentPassword, required String newPassword}) async {
+    if (newPassword.length < 10) throw Exception('New password must be at least 10 characters long.');
+    if (currentPassword.isEmpty || !await _verifyPassword(currentPassword, account.passwordHash)) {
+      throw Exception('Current password is incorrect.');
+    }
+    account.passwordHash = await _hashPassword(newPassword);
+    database.saveAccount(account);
+    await database.persistAccountAndWait(account);
+    database.deleteSessionsForAccount(account.id);
+    await _audit('password_changed', accountId: account.id);
+  }
+
+  /// Completes an MFA-protected login and issues a fresh session token.
+  Future<AuthLoginResult> verifyMfaLogin({required String login, required String code, String ipAddress = 'unknown', String userAgent = 'unknown'}) async {
+    final normalized = login.trim().toLowerCase();
+    Account? account = database.getAccountByEmail(normalized);
+    account ??= database.getAccountByUsername(normalized);
+    if (account == null || !account.mfaEnabled) throw Exception('MFA verification is not available for this account.');
+    final expires = account.mfaChallengeExpiresAt;
+    final actual = sha256.convert(utf8.encode(code.trim())).toString();
+    if (expires == null || !DateTime.now().toUtc().isBefore(expires.toUtc()) || actual != account.mfaChallengeHash) {
+      database.recordFailedLogin('mfa:$normalized');
+      throw Exception('Invalid or expired MFA code.');
+    }
+    account.mfaChallengeHash = '';
+    account.mfaChallengeExpiresAt = null;
+    database.saveAccount(account);
+    await database.persistAccountAndWait(account);
+    final token = _generateSessionToken();
+    database.saveSession(token, account.id, ttl: Database.defaultSessionLifetime, ipAddress: ipAddress, userAgent: userAgent);
+    database.clearFailedLoginAttempts('mfa:$normalized');
+    await _audit('mfa_login_success', accountId: account.id, metadata: {'ip': ipAddress});
+    return AuthLoginResult(token: token, suspicious: false, reasons: const [], requiresMfa: false);
+  }
+
+  /// Returns a redacted session list suitable for the account security screen.
+  List<Map<String, dynamic>> sessionsForAccount(Account account, String currentToken) {
+    final current = currentToken.trim();
+    return database.getSessionsForAccount(account.id).map((session) {
+      final tokenHash = sha256.convert(utf8.encode(_sessionFingerprint(session))).toString();
+      return {
+        'sessionId': tokenHash,
+        'current': _sessionFingerprint(session) == _sessionFingerprint(database.getSession(current) ?? session),
+        'createdAt': session.createdAt.toIso8601String(),
+        'expiresAt': session.expiresAt.toIso8601String(),
+        'lastUsedAt': session.lastUsedAt.toIso8601String(),
+        'ipAddress': session.ipAddress,
+        'userAgent': session.userAgent,
+      };
+    }).toList();
+  }
+
+  String _sessionFingerprint(SessionRecord session) => '${session.createdAt.microsecondsSinceEpoch}|${session.accountId}|${session.ipAddress}|${session.userAgent}';
+
+  /// Revokes one redacted session identifier without exposing bearer tokens.
+  bool revokeSessionById(Account account, String sessionId) {
+    for (final entry in database.sessions.entries.toList()) {
+      final session = entry.value;
+      if (session.accountId != account.id) continue;
+      final fingerprint = sha256.convert(utf8.encode(_sessionFingerprint(session))).toString();
+      if (fingerprint == sessionId.trim()) {
+        database.deleteSession(entry.key);
+        return true;
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -417,7 +568,7 @@ class AuthService {
     final answer = securityAnswer.trim().toLowerCase();
 
     if (newPassword.length < 6) {
-      throw Exception('Password must be at least 6 characters long.');
+      throw Exception('Password must be at least 10 characters long.');
     }
     if (answer.isEmpty) {
       throw Exception('Security answer is required.');
@@ -490,7 +641,7 @@ class AuthService {
     final tokenHash = sha256.convert(utf8.encode(cleanToken)).toString();
     String? passwordHash;
     if (password != null && password.isNotEmpty) {
-      if (password.length < 6) throw Exception('Password must be at least 6 characters long.');
+      if (password.length < 10) throw Exception('Password must be at least 10 characters long.');
       passwordHash = await _hashPassword(password);
     }
     final result = await SupabaseStore.instance.acceptMemberInvitation(

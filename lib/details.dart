@@ -173,7 +173,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         return _buildPlay();
 
       case 'Trailer':
-        if (!customization.showTrailer || !hasTrailer) {
+        if (!customization.showTrailer) {
           return const SizedBox.shrink();
         }
         return _buildTrailer();
@@ -186,16 +186,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
       case 'Shop':
         if (!customization.showShop) {
-          return const SizedBox.shrink();
-        }
-        final hasContextualProducts = ShopCatalog.instance
-            .productsForAssociation(
-              media.type == 'tvShow' ? 'show' : 'movie',
-              media.id,
-              name: media.title,
-            )
-            .isNotEmpty;
-        if (!hasContextualProducts) {
           return const SizedBox.shrink();
         }
         return _buildShop();
@@ -1142,7 +1132,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: SizedBox(
         height: 52,
         child: OutlinedButton.icon(
-          onPressed: pressedTrailer ? null : watchTrailer,
+          onPressed: pressedTrailer || !hasTrailer ? null : watchTrailer,
           icon: const Icon(
             Icons.ondemand_video_outlined,
           ),
@@ -1160,7 +1150,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // SHOP
   // ===========================================================================
 
-  /// Shows Shop only when the catalog contains a real eligible merchant/product relationship.
+  /// Opens the marketplace in the context of this movie or TV show.
   Widget _buildShop() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),

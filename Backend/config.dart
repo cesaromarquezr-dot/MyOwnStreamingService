@@ -44,6 +44,85 @@ class AppConfig {
 
   static String get apiBaseUrl => '$baseUrl/api/$apiVersion';
 
+
+  // ============================================================
+  // SELF-HOSTING / REVERSE PROXY
+  // ============================================================
+
+  /// Public HTTPS URL users should use. Never expose the internal backend port.
+  static String get publicUrl => baseUrl;
+
+  /// When true, only the configured reverse proxy may reach the backend.
+  static bool get requireTrustedProxy => _environmentBool('REQUIRE_TRUSTED_PROXY', false);
+
+  /// Shared secret NGINX Proxy Manager adds as X-Streaming-Proxy-Key.
+  static String get proxySharedSecret => Platform.environment['PROXY_SHARED_SECRET']?.trim() ?? '';
+
+  /// CIDRs belonging to Cloudflare/NPM/private proxy networks.
+  static List<String> get trustedProxyCidrs => _environmentList('TRUSTED_PROXY_CIDRS');
+
+  /// CIDRs allowed to access endpoints marked VPN/private.
+  static List<String> get vpnCidrs => _environmentList('VPN_CIDRS');
+
+  /// Maximum requests per client IP per minute.
+  static int get rateLimitPerMinute => _environmentInt('RATE_LIMIT_PER_MINUTE', 120);
+
+  /// Whether Dart terminates TLS itself. Set false when NGINX Proxy Manager terminates TLS.
+  static bool get backendTlsEnabled => _environmentBool('BACKEND_TLS_ENABLED', true);
+
+  /// Allowed web origins. Use exact HTTPS origins in production; '*' is only for
+  /// development and non-browser clients.
+  static List<String> get allowedOrigins {
+  final configured = _environmentList('ALLOWED_ORIGINS');
+
+  if (configured.isNotEmpty) {
+    return configured;
+  }
+
+  // Local Flutter Web development fallback.
+  return <String>[
+    'http://localhost',
+    'http://127.0.0.1',
+  ];
+}
+
+  /// DDNS hostname advertised by the home server.
+  static String get ddnsHostname => Platform.environment['DDNS_HOSTNAME']?.trim() ?? '';
+
+  /// DDNS provider name used by the deployment tooling.
+  static String get ddnsProvider => Platform.environment['DDNS_PROVIDER']?.trim() ?? '';
+
+  /// Public port exposed by the firewall/reverse proxy.
+  static int get publicHttpsPort => _environmentInt('PUBLIC_HTTPS_PORT', 443);
+
+  /// Internal backend port. This should not be port-forwarded from the router.
+  static int get internalBackendPort => port;
+
+  static List<String> _environmentList(String name) {
+    final value = Platform.environment[name]?.trim() ?? '';
+    if (value.isEmpty) return <String>[];
+    return value.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
+  }
+
+  static bool _environmentBool(String name, bool defaultValue) {
+    final value = Platform.environment[name]?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return defaultValue;
+    return value == '1' || value == 'true' || value == 'yes';
+  }
+
+  // ============================================================
+  // ARM SERVER URL
+  // ============================================================
+
+  // ============================================================
+  // WORLDWIDE POSTAL CODE LOOKUP
+  // ============================================================
+
+  /// Optional GeoNames username used by the postal-code lookup route.
+  /// The username stays on the backend and is never sent to Flutter.
+  static String get geonamesUsername =>
+      Platform.environment['GEONAMES_USERNAME']?.trim() ?? '';
+
   // ============================================================
   // ARM SERVER URL
   // ============================================================

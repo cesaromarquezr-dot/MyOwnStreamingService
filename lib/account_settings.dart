@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
+import 'self_hosting_settings.dart';
+import 'security_settings.dart';
+
 /// Implements the `AccountSettingsScreen` class for this feature or UI component.
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -258,6 +261,30 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.security),
+              title: const UniversalText('Security & Privacy'),
+              subtitle: const UniversalText('Password, MFA, active sessions, secure transport, and security controls.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SecuritySettingsScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.dns),
+              title: const UniversalText('Self-hosting & Server Connection'),
+              subtitle: const UniversalText('Cloudflare, DDNS, reverse proxy, VPN, HTTPS, and firewall status.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SelfHostingSettingsScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),

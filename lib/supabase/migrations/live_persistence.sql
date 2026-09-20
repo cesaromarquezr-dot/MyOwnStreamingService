@@ -121,3 +121,9 @@ comment on table public.account_private_credentials is
 
 comment on table public.profile_customization_snapshots is
   'Profile-scoped UI customization state synchronized from the backend; physical media is never stored here.';
+
+
+-- Security: MFA challenge state stores only a hash and expiration, never the plaintext code.
+alter table public.account_private_credentials add column if not exists mfa_enabled boolean not null default false;
+alter table public.account_private_credentials add column if not exists mfa_challenge_hash text;
+alter table public.account_private_credentials add column if not exists mfa_challenge_expires_at timestamptz;

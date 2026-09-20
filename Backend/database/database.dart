@@ -8,10 +8,11 @@ import '../models/media.dart';
 import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
 import '../models/group_chat_room.dart';
+import '../models/payment_session.dart';
+import '../models/subscription.dart';
 import '../models/profile.dart';
 import '../models/remote_worker.dart';
 import '../models/review.dart';
-import '../models/rating.dart';
 import '../supabase_store.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
@@ -57,8 +58,7 @@ class SessionRecord {
 class Database {
   Database._();
 
-  static final Database instance =
-      Database._();
+  static final Database instance = Database._();
 
   // ---------------------------------------------------------------------------
   // SESSION CONFIGURATION
@@ -72,9 +72,7 @@ class Database {
   // - device revocation
   // - suspicious-login detection
   // - per-device sessions
-  // - session rotation
-  static const Duration defaultSessionLifetime =
-      Duration(days: 30);
+  static const Duration defaultSessionLifetime = Duration(days: 30);
 
   // ---------------------------------------------------------------------------
   // PERSISTENCE
@@ -91,15 +89,10 @@ class Database {
       for (final account in accounts) {
         _cacheAccount(account);
       }
-      for (final account in accounts) {
-        try {
-          final ratings = await store.loadUserMediaRatings(account.id);
-          for (final rating in ratings) {
-            userMediaRatings['${account.id}:${rating.profileId}:${rating.mediaId}'] = rating;
-          }
-        } catch (error, stackTrace) {
-          developer.log('Unable to load profile ratings.', name: 'Database', error: error, stackTrace: stackTrace);
-        }
+
+      final payments = await store.loadPayments();
+      for (final payment in payments) {
+        paymentsById[payment.id] = payment;
       }
 
       final memberLogins = await store.loadMemberLogins();
@@ -111,9 +104,11 @@ class Database {
       // each owner identity from the durable account record so a stale member
       // identity cannot take precedence over a valid account password.
       for (final account in accountsById.values) {
-        if (account.email.trim().isEmpty || account.passwordHash.trim().isEmpty) {
+        if (account.email.trim().isEmpty ||
+            account.passwordHash.trim().isEmpty) {
           continue;
         }
+
         registerMemberLogin(MemberLoginRecord(
           memberId: 'owner_${account.id}',
           accountId: account.id,
@@ -135,16 +130,25 @@ class Database {
 
   void _cacheAccount(Account account) {
     final username = account.username.trim().toLowerCase();
+
     final email = account.email.trim().toLowerCase();
 
     accountsById[account.id] = account;
-    if (username.isNotEmpty) accountIdByUsername[username] = account.id;
-    if (email.isNotEmpty) accountIdByEmail[email] = account.id;
+
+    if (username.isNotEmpty) {
+      accountIdByUsername[username] = account.id;
+    }
+
+    if (email.isNotEmpty) {
+      accountIdByEmail[email] = account.id;
+    }
   }
 
   void _persistAccount(Account account) {
     unawaited(
-      SupabaseStore.instance.upsertAccount(account).catchError((error, stackTrace) {
+      SupabaseStore.instance
+          .upsertAccount(account)
+          .catchError((error, stackTrace) {
         developer.log(
           'Account persistence failed.',
           name: 'Database',
@@ -159,8 +163,79 @@ class Database {
   /// Use this for authentication-critical operations such as account creation
   /// and password changes so a successful HTTP response is never returned
   /// before the credential has been durably stored.
-  Future<void> persistAccountAndWait(Account account) async {
+  Future<void> persistAccountAndWait(
+    Account account,
+  ) async {
     await SupabaseStore.instance.upsertAccount(account);
+  }
+
+  // ---------------------------------------------------------------------------
+  // PAYMENT PERSISTENCE
+  // ---------------------------------------------------------------------------
+
+  /// Stores a payment session in the in-memory cache and asynchronously
+  /// persists it to the durable Supabase payment store.
+  void savePayment(
+    PaymentSession payment,
+  ) {
+    paymentsById[payment.id] = payment;
+
+    unawaited(
+      SupabaseStore.instance
+          .upsertPayment(payment)
+          .catchError((error, stackTrace) {
+        developer.log(
+          'Payment persistence failed.',
+          name: 'Database',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }),
+    );
+  }
+
+  /// Persists a payment session and waits for the durable Supabase write
+  /// to finish.
+  ///
+  /// This is available for payment operations where the caller must not
+  /// receive a successful response until the payment state has been
+  /// durably stored.
+  Future<void> persistPaymentAndWait(
+    PaymentSession payment,
+  ) async {
+    paymentsById[payment.id] = payment;
+
+    await SupabaseStore.instance.upsertPayment(payment);
+  }
+
+  /// Retrieves a payment session from the in-memory payment cache.
+  PaymentSession? getPayment(
+    String paymentId,
+  ) {
+    final normalizedId = paymentId.trim();
+
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    return paymentsById[normalizedId];
+  }
+
+  /// Returns all payment sessions belonging to an account.
+  List<PaymentSession> getPaymentsForAccount(
+    String accountId,
+  ) {
+    final normalizedAccountId = accountId.trim();
+
+    if (normalizedAccountId.isEmpty) {
+      return const <PaymentSession>[];
+    }
+
+    return paymentsById.values
+        .where(
+          (payment) => payment.accountId == normalizedAccountId,
+        )
+        .toList();
   }
 
   // ---------------------------------------------------------------------------
@@ -169,16 +244,22 @@ class Database {
 
   final Map<String, Account> accountsById = {};
 
-  final Map<String, String> accountIdByUsername =
-      {};
+  final Map<String, String> accountIdByUsername = {};
 
-  final Map<String, String> accountIdByEmail =
-      {};
+  final Map<String, String> accountIdByEmail = {};
 
   // Login identities are separate from accounts. A person can belong to
   // multiple accounts, so email must never be used as the account ID.
   final Map<String, List<MemberLoginRecord>> memberLoginsByEmail =
       <String, List<MemberLoginRecord>>{};
+
+  // ---------------------------------------------------------------------------
+  // PAYMENTS
+  // ---------------------------------------------------------------------------
+
+  /// Payment sessions are cached here after being loaded from the durable
+  /// Supabase store. Supabase remains the persistent source of truth.
+  final Map<String, PaymentSession> paymentsById = <String, PaymentSession>{};
 
   // ---------------------------------------------------------------------------
   // SESSIONS
@@ -193,42 +274,77 @@ class Database {
   final Map<String, Set<String>> knownLoginFingerprints = {};
 
   final Map<String, String> oneTimeCodesByAccountId = {};
+
   final Map<String, DateTime> oneTimeCodeExpiryByAccountId = {};
+
   final Map<String, RemoteWorker> remoteWorkersById = {};
+
   final Map<String, RemoteImportJob> remoteImportJobsById = {};
 
   /// Performs `getKnownLoginFingerprints` for this feature. Update this documentation when its contract changes.
-  Set<String> getKnownLoginFingerprints(String accountId) =>
-      knownLoginFingerprints.putIfAbsent(accountId, () => <String>{});
+  Set<String> getKnownLoginFingerprints(
+    String accountId,
+  ) =>
+      knownLoginFingerprints.putIfAbsent(
+        accountId,
+        () => <String>{},
+      );
 
   /// Performs `recordFailedLogin` for this feature. Update this documentation when its contract changes.
-  void recordFailedLogin(String login) {
+  void recordFailedLogin(
+    String login,
+  ) {
     final key = login.trim().toLowerCase();
+
     if (key.isEmpty) return;
 
     final now = DateTime.now();
-    final attempts = failedLoginAttempts.putIfAbsent(key, () => []);
-    attempts.removeWhere((time) => now.difference(time) > const Duration(minutes: 15));
+
+    final attempts = failedLoginAttempts.putIfAbsent(
+      key,
+      () => [],
+    );
+
+    attempts.removeWhere(
+      (time) => now.difference(time) > const Duration(minutes: 15),
+    );
+
     attempts.add(now);
+
     if (attempts.length > 10) {
-      attempts.removeRange(0, attempts.length - 10);
+      attempts.removeRange(
+        0,
+        attempts.length - 10,
+      );
     }
   }
 
   /// Performs `recentFailedLoginCount` for this feature. Update this documentation when its contract changes.
-  int recentFailedLoginCount(String login) {
+  int recentFailedLoginCount(
+    String login,
+  ) {
     final key = login.trim().toLowerCase();
+
     final attempts = failedLoginAttempts[key];
+
     if (attempts == null) return 0;
 
     final now = DateTime.now();
-    attempts.removeWhere((time) => now.difference(time) > const Duration(minutes: 15));
+
+    attempts.removeWhere(
+      (time) => now.difference(time) > const Duration(minutes: 15),
+    );
+
     return attempts.length;
   }
 
   /// Performs `clearFailedLoginAttempts` for this feature. Update this documentation when its contract changes.
-  void clearFailedLoginAttempts(String login) {
-    failedLoginAttempts.remove(login.trim().toLowerCase());
+  void clearFailedLoginAttempts(
+    String login,
+  ) {
+    failedLoginAttempts.remove(
+      login.trim().toLowerCase(),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -240,26 +356,22 @@ class Database {
   // Media reviews are kept here by the current backend persistence abstraction.
   final Map<String, MediaReview> reviewsById = <String, MediaReview>{};
 
-  // Profile ratings are separate from public text reviews and external provider scores.
-  final Map<String, UserMediaRating> userMediaRatings = <String, UserMediaRating>{};
-
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
 
-  final Map<String, GroupRecommendation>
-      groupRecommendationsById =
+  final Map<String, GroupRecommendation> groupRecommendationsById =
       <String, GroupRecommendation>{};
 
   // ---------------------------------------------------------------------------
   // GROUP WATCH
   // ---------------------------------------------------------------------------
 
-  final Map<String, GroupWatchSession>
-      groupWatchSessionsById =
+  final Map<String, GroupWatchSession> groupWatchSessionsById =
       <String, GroupWatchSession>{};
 
-  final Map<String, GroupChatRoom> groupChatRoomsById = <String, GroupChatRoom>{};
+  final Map<String, GroupChatRoom> groupChatRoomsById =
+      <String, GroupChatRoom>{};
 
   // ---------------------------------------------------------------------------
   // ACCOUNTS
@@ -274,11 +386,9 @@ class Database {
   Account? getAccountByUsername(
     String username,
   ) {
-    final normalized =
-        username.trim().toLowerCase();
+    final normalized = username.trim().toLowerCase();
 
-    final accountId =
-        accountIdByUsername[normalized];
+    final accountId = accountIdByUsername[normalized];
 
     if (accountId == null) {
       return null;
@@ -287,39 +397,62 @@ class Database {
     return accountsById[accountId];
   }
 
-  List<MemberLoginRecord> getMemberLoginsByEmail(String email) {
+  List<MemberLoginRecord> getMemberLoginsByEmail(
+    String email,
+  ) {
     return List<MemberLoginRecord>.unmodifiable(
-      memberLoginsByEmail[email.trim().toLowerCase()] ?? const <MemberLoginRecord>[],
+      memberLoginsByEmail[email.trim().toLowerCase()] ??
+          const <MemberLoginRecord>[],
     );
   }
 
-  void registerMemberLogin(MemberLoginRecord login) {
+  void registerMemberLogin(
+    MemberLoginRecord login,
+  ) {
     final key = login.email.trim().toLowerCase();
-    final entries = memberLoginsByEmail.putIfAbsent(key, () => <MemberLoginRecord>[]);
-    entries.removeWhere((existing) => existing.memberId == login.memberId);
+
+    final entries = memberLoginsByEmail.putIfAbsent(
+      key,
+      () => <MemberLoginRecord>[],
+    );
+
+    entries.removeWhere(
+      (existing) => existing.memberId == login.memberId,
+    );
+
     entries.add(login);
   }
 
-  void removeMemberLogin(String email, {String? accountId}) {
+  void removeMemberLogin(
+    String email, {
+    String? accountId,
+  }) {
     final key = email.trim().toLowerCase();
+
     final entries = memberLoginsByEmail[key];
+
     if (entries == null) return;
+
     if (accountId == null) {
       memberLoginsByEmail.remove(key);
       return;
     }
-    entries.removeWhere((login) => login.accountId == accountId);
-    if (entries.isEmpty) memberLoginsByEmail.remove(key);
+
+    entries.removeWhere(
+      (login) => login.accountId == accountId,
+    );
+
+    if (entries.isEmpty) {
+      memberLoginsByEmail.remove(key);
+    }
   }
 
   Account? getAccountByEmail(
     String email,
   ) {
-    final normalized =
-        email.trim().toLowerCase();
+    final normalized = email.trim().toLowerCase();
 
-    final accountId =
-        accountIdByEmail[normalized];
+    final accountId = accountIdByEmail[normalized];
 
     if (accountId == null) {
       return null;
@@ -332,8 +465,7 @@ class Database {
     String profileId,
   ) {
     for (final account in accountsById.values) {
-      if (account.getProfileById(profileId) !=
-          null) {
+      if (account.getProfileById(profileId) != null) {
         return account;
       }
     }
@@ -345,8 +477,7 @@ class Database {
     String profileId,
   ) {
     for (final account in accountsById.values) {
-      final profile =
-          account.getProfileById(profileId);
+      final profile = account.getProfileById(profileId);
 
       if (profile != null) {
         return profile;
@@ -360,8 +491,7 @@ class Database {
     String profileId,
   ) {
     for (final account in accountsById.values) {
-      if (account.getProfileById(profileId) !=
-          null) {
+      if (account.getProfileById(profileId) != null) {
         return account.id;
       }
     }
@@ -381,57 +511,61 @@ class Database {
     required String accountId,
     required String profileId,
   }) {
-    final account =
-        getAccountById(accountId);
+    final account = getAccountById(accountId);
 
     if (account == null) {
       return false;
     }
 
-    return account.getProfileById(profileId) !=
-        null;
+    return account.getProfileById(profileId) != null;
   }
 
   /// Performs `saveAccount` for this feature. Update this documentation when its contract changes.
   void saveAccount(
     Account account,
   ) {
-    final username =
-        account.username.trim().toLowerCase();
+    final username = account.username.trim().toLowerCase();
 
-    final email =
-        account.email.trim().toLowerCase();
+    final email = account.email.trim().toLowerCase();
 
     final previous = accountsById[account.id];
+
     if (previous != null) {
       final previousUsername = previous.username.trim().toLowerCase();
+
       final previousEmail = previous.email.trim().toLowerCase();
+
       if (previousUsername != username &&
           accountIdByUsername[previousUsername] == account.id) {
-        accountIdByUsername.remove(previousUsername);
+        accountIdByUsername.remove(
+          previousUsername,
+        );
       }
+
       if (previousEmail != email &&
           accountIdByEmail[previousEmail] == account.id) {
-        accountIdByEmail.remove(previousEmail);
+        accountIdByEmail.remove(
+          previousEmail,
+        );
       }
     }
 
     accountsById[account.id] = account;
 
-    registerMemberLogin(MemberLoginRecord(
-      memberId: 'owner_${account.id}',
-      accountId: account.id,
-      email: email,
-      passwordHash: account.passwordHash,
-      role: 'owner',
-      status: 'active',
-    ));
+    registerMemberLogin(
+      MemberLoginRecord(
+        memberId: 'owner_${account.id}',
+        accountId: account.id,
+        email: email,
+        passwordHash: account.passwordHash,
+        role: 'owner',
+        status: 'active',
+      ),
+    );
 
-    accountIdByUsername[username] =
-        account.id;
+    accountIdByUsername[username] = account.id;
 
-    accountIdByEmail[email] =
-        account.id;
+    accountIdByEmail[email] = account.id;
 
     _persistAccount(account);
   }
@@ -440,26 +574,33 @@ class Database {
   void deleteAccount(
     String accountId,
   ) {
-    final account =
-        accountsById[accountId];
+    final account = accountsById[accountId];
 
     if (account == null) {
       return;
     }
 
-    final username =
-        account.username.trim().toLowerCase();
+    final username = account.username.trim().toLowerCase();
 
-    final email =
-        account.email.trim().toLowerCase();
+    final email = account.email.trim().toLowerCase();
 
-    accountIdByUsername.remove(username);
-    accountIdByEmail.remove(email);
+    accountIdByUsername.remove(
+      username,
+    );
 
-    accountsById.remove(accountId);
+    accountIdByEmail.remove(
+      email,
+    );
+
+    accountsById.remove(
+      accountId,
+    );
 
     for (final email in memberLoginsByEmail.keys.toList()) {
-      removeMemberLogin(email, accountId: accountId);
+      removeMemberLogin(
+        email,
+        accountId: accountId,
+      );
     }
 
     deleteSessionsForAccount(
@@ -468,21 +609,25 @@ class Database {
 
     // Remove Group Watch sessions hosted by
     // this account.
-    groupWatchSessionsById
-        .removeWhere(
-      (_, session) =>
-          session.accountId == accountId,
+    groupWatchSessionsById.removeWhere(
+      (_, session) => session.accountId == accountId,
+    );
+
+    paymentsById.removeWhere(
+      (_, payment) => payment.accountId == accountId,
     );
 
     unawaited(
-      SupabaseStore.instance.deleteAccount(accountId).catchError((error, stackTrace) {
-        developer.log(
-          'Account deletion persistence failed.',
-          name: 'Database',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }),
+      SupabaseStore.instance.deleteAccount(accountId).catchError(
+        (error, stackTrace) {
+          developer.log(
+            'Account deletion persistence failed.',
+            name: 'Database',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        },
+      ),
     );
   }
 
@@ -500,8 +645,7 @@ class Database {
   }) {
     final now = DateTime.now();
 
-    final lifetime =
-        ttl ?? defaultSessionLifetime;
+    final lifetime = ttl ?? defaultSessionLifetime;
 
     sessions[token] = SessionRecord(
       token: token,
@@ -548,8 +692,7 @@ class Database {
   Account? getAccountForSession(
     String token,
   ) {
-    final accountId =
-        getAccountIdForSession(token);
+    final accountId = getAccountIdForSession(token);
 
     if (accountId == null) {
       return null;
@@ -565,13 +708,38 @@ class Database {
     sessions.remove(token);
   }
 
+  /// Replaces an existing session token while preserving its account/device metadata.
+  String? rotateSession(
+    String oldToken,
+    String newToken,
+  ) {
+    final session = getSession(oldToken);
+
+    if (session == null) return null;
+
+    sessions.remove(oldToken);
+
+    sessions[newToken] = SessionRecord(
+      token: newToken,
+      accountId: session.accountId,
+      createdAt: DateTime.now(),
+      expiresAt: DateTime.now().add(
+        defaultSessionLifetime,
+      ),
+      lastUsedAt: DateTime.now(),
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+    );
+
+    return session.accountId;
+  }
+
   /// Performs `deleteSessionsForAccount` for this feature. Update this documentation when its contract changes.
   void deleteSessionsForAccount(
     String accountId,
   ) {
     sessions.removeWhere(
-      (_, session) =>
-          session.accountId == accountId,
+      (_, session) => session.accountId == accountId,
     );
   }
 
@@ -579,17 +747,17 @@ class Database {
   List<SessionRecord> getSessionsForAccount(
     String accountId,
   ) {
-    final result =
-        <SessionRecord>[];
+    final result = <SessionRecord>[];
 
-    final expiredTokens =
-        <String>[];
+    final expiredTokens = <String>[];
 
     for (final entry in sessions.entries) {
       final session = entry.value;
 
       if (session.isExpired) {
-        expiredTokens.add(entry.key);
+        expiredTokens.add(
+          entry.key,
+        );
         continue;
       }
 
@@ -603,8 +771,7 @@ class Database {
     }
 
     result.sort(
-      (a, b) =>
-          b.lastUsedAt.compareTo(
+      (a, b) => b.lastUsedAt.compareTo(
         a.lastUsedAt,
       ),
     );
@@ -631,17 +798,16 @@ class Database {
 
   /// Performs `getAllMedia` for this feature. Update this documentation when its contract changes.
   List<Media> getAllMedia() {
-    final media =
-        mediaById.values.toList();
+    final media = mediaById.values.toList();
 
     media.sort(
       (a, b) {
         final aDate = a.releaseDate;
+
         final bDate = b.releaseDate;
 
         if (aDate != null && bDate != null) {
-          final dateCompare =
-              bDate.compareTo(aDate);
+          final dateCompare = bDate.compareTo(aDate);
 
           if (dateCompare != 0) {
             return dateCompare;
@@ -657,12 +823,13 @@ class Database {
         }
 
         final aYear = a.year;
+
         final bYear = b.year;
 
-        if (aYear != null &&
-            bYear != null &&
-            aYear != bYear) {
-          return bYear.compareTo(aYear);
+        if (aYear != null && bYear != null && aYear != bYear) {
+          return bYear.compareTo(
+            aYear,
+          );
         }
 
         if (aYear != null) {
@@ -673,9 +840,7 @@ class Database {
           return 1;
         }
 
-        return a.title
-            .toLowerCase()
-            .compareTo(
+        return a.title.toLowerCase().compareTo(
               b.title.toLowerCase(),
             );
       },
@@ -708,8 +873,7 @@ class Database {
   ) {
     return getAllMedia()
         .where(
-          (media) =>
-              media.seriesId == seriesId,
+          (media) => media.seriesId == seriesId,
         )
         .toList();
   }
@@ -718,14 +882,18 @@ class Database {
   bool hasMedia(
     String mediaId,
   ) {
-    return mediaById.containsKey(mediaId);
+    return mediaById.containsKey(
+      mediaId,
+    );
   }
 
   /// Performs `deleteMedia` for this feature. Update this documentation when its contract changes.
   void deleteMedia(
     String mediaId,
   ) {
-    mediaById.remove(mediaId);
+    mediaById.remove(
+      mediaId,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -736,43 +904,35 @@ class Database {
   void saveGroupRecommendation(
     GroupRecommendation recommendation,
   ) {
-    groupRecommendationsById[
-            recommendation.id] =
-        recommendation;
+    groupRecommendationsById[recommendation.id] = recommendation;
   }
 
-  GroupRecommendation?
-      getGroupRecommendationById(
+  GroupRecommendation? getGroupRecommendationById(
     String recommendationId,
   ) {
-    return groupRecommendationsById[
-        recommendationId];
+    return groupRecommendationsById[recommendationId];
   }
 
-  List<GroupRecommendation>
-      getGroupRecommendationsForAccount(
+  List<GroupRecommendation> getGroupRecommendationsForAccount(
     String accountId,
   ) {
-    return groupRecommendationsById
-        .values
+    return groupRecommendationsById.values
         .where(
-          (recommendation) =>
-              recommendation.accountId ==
-              accountId,
+          (recommendation) => recommendation.accountId == accountId,
         )
         .toList();
   }
 
-  List<GroupRecommendation>
-      getVotingGroupRecommendationsForAccount(
+  List<GroupRecommendation> getVotingGroupRecommendationsForAccount(
     String accountId,
   ) {
     return getGroupRecommendationsForAccount(
       accountId,
-    ).where(
-      (recommendation) =>
-          recommendation.isVotingOpen,
-    ).toList();
+    )
+        .where(
+          (recommendation) => recommendation.isVotingOpen,
+        )
+        .toList();
   }
 
   /// Performs `deleteGroupRecommendation` for this feature. Update this documentation when its contract changes.
@@ -797,80 +957,64 @@ class Database {
   void saveGroupWatchSession(
     GroupWatchSession session,
   ) {
-    groupWatchSessionsById[
-            session.id] =
-        session;
+    groupWatchSessionsById[session.id] = session;
   }
 
-  GroupWatchSession?
-      getGroupWatchSessionById(
+  GroupWatchSession? getGroupWatchSessionById(
     String sessionId,
   ) {
-    return groupWatchSessionsById[
-        sessionId];
+    return groupWatchSessionsById[sessionId];
   }
 
-  List<GroupWatchSession>
-      getGroupWatchSessionsForAccount(
+  List<GroupWatchSession> getGroupWatchSessionsForAccount(
     String accountId,
   ) {
-    return groupWatchSessionsById.values
-        .where(
-          (session) {
-            if (session.accountId ==
-                accountId) {
-              return true;
-            }
+    return groupWatchSessionsById.values.where(
+      (session) {
+        if (session.accountId == accountId) {
+          return true;
+        }
 
-            for (final participant
-                in session.participants.values) {
-              if (participant.accountId ==
-                  accountId) {
-                return true;
-              }
-            }
+        for (final participant in session.participants.values) {
+          if (participant.accountId == accountId) {
+            return true;
+          }
+        }
 
-            return false;
-          },
-        )
-        .toList();
+        return false;
+      },
+    ).toList();
   }
 
   /// Performs `getGroupWatchSessionsForProfile` for this feature. Update this documentation when its contract changes.
   List<GroupWatchSession> getGroupWatchSessionsForProfile(
-  String profileId,
-) {
-  return groupWatchSessionsById.values
-      .where(
-        (session) =>
-            session.hostProfileId == profileId ||
-            session.participants.containsKey(profileId),
-      )
-      .toList();
-}
-
-  List<GroupWatchSession>
-      getActiveGroupWatchSessions() {
+    String profileId,
+  ) {
     return groupWatchSessionsById.values
         .where(
           (session) =>
-              session.status ==
-                  GroupWatchSessionStatus.playing ||
-              session.status ==
-                  GroupWatchSessionStatus.paused,
+              session.hostProfileId == profileId ||
+              session.participants.containsKey(profileId),
         )
         .toList();
   }
 
-  List<GroupWatchSession>
-      getWaitingGroupWatchSessions() {
+  List<GroupWatchSession> getActiveGroupWatchSessions() {
     return groupWatchSessionsById.values
         .where(
           (session) =>
-              session.status ==
-                  GroupWatchSessionStatus.waiting ||
-              session.status ==
-                  GroupWatchSessionStatus.ready,
+              session.status == GroupWatchSessionStatus.playing ||
+              session.status == GroupWatchSessionStatus.paused,
+        )
+        .toList();
+  }
+
+  List<GroupWatchSession> getWaitingGroupWatchSessions() {
+    return groupWatchSessionsById.values
+        .where(
+          (session) =>
+              session.status == GroupWatchSessionStatus.waiting ||
+              session.status == GroupWatchSessionStatus.ready,
         )
         .toList();
   }
@@ -898,6 +1042,10 @@ class Database {
     accountsById.clear();
     accountIdByUsername.clear();
     accountIdByEmail.clear();
+
+    memberLoginsByEmail.clear();
+
+    paymentsById.clear();
 
     sessions.clear();
 

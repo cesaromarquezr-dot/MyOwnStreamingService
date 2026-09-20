@@ -35,6 +35,7 @@ import 'config.dart';
 import 'supabase_store.dart';
 import 'database/database.dart';
 import 'middleware/authentication.dart';
+import 'self_hosting_security.dart';
 
 import 'routes/auth_routes.dart';
 import 'routes/recommendations_routes.dart';
@@ -53,6 +54,8 @@ import 'routes/review_routes.dart';
 import 'routes/home_server_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/media_intelligence_routes.dart';
+import 'routes/location_routes.dart';
+import 'routes/self_hosting_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -282,6 +285,13 @@ Future<void> main() async {
     authentication: authentication,
   );
 
+  final locationRoutes = LocationRoutes();
+  final selfHostingSecurity = SelfHostingSecurity();
+  final selfHostingRoutes = SelfHostingRoutes(
+    authentication: authentication,
+    security: selfHostingSecurity,
+  );
+
   final mediaIntelligenceRoutes = MediaIntelligenceRoutes(
     authentication: authentication,
     service: mediaIntelligenceService,
@@ -308,78 +318,53 @@ Future<void> main() async {
       .resolve('certs/127.0.0.1+2-key.pem')
       .toFilePath();
 
-  final certificatePath =
-      Platform.environment['TLS_CERTIFICATE_PATH']?.trim();
+  final certificatePath = Platform.environment['TLS_CERTIFICATE_PATH']?.trim();
+  final privateKeyPath = Platform.environment['TLS_PRIVATE_KEY_PATH']?.trim();
+  final privateKeyPassword = Platform.environment['TLS_PRIVATE_KEY_PASSWORD'];
 
-  final privateKeyPath =
-      Platform.environment['TLS_PRIVATE_KEY_PATH']?.trim();
+  final resolvedCertificatePath = certificatePath == null || certificatePath.isEmpty
+      ? defaultCertificatePath
+      : certificatePath;
+  final resolvedPrivateKeyPath = privateKeyPath == null || privateKeyPath.isEmpty
+      ? defaultPrivateKeyPath
+      : privateKeyPath;
 
-  final privateKeyPassword =
-      Platform.environment['TLS_PRIVATE_KEY_PASSWORD'];
-
-  final resolvedCertificatePath =
-      certificatePath == null || certificatePath.isEmpty
-          ? defaultCertificatePath
-          : certificatePath;
-
-  final resolvedPrivateKeyPath =
-      privateKeyPath == null || privateKeyPath.isEmpty
-          ? defaultPrivateKeyPath
-          : privateKeyPath;
-
-  final certificateFile =
-      File(resolvedCertificatePath);
-
-  final privateKeyFile =
-      File(resolvedPrivateKeyPath);
-
-  if (!certificateFile.existsSync()) {
-    throw StateError(
-      'Unable to find the HTTPS certificate.\n'
-      'Expected: $resolvedCertificatePath',
-    );
-  }
-
-  if (!privateKeyFile.existsSync()) {
-    throw StateError(
-      'Unable to find the HTTPS private key.\n'
-      'Expected: $resolvedPrivateKeyPath',
-    );
-  }
-
-  final securityContext = SecurityContext();
-
-  try {
-    securityContext.useCertificateChain(
-      resolvedCertificatePath,
-    );
-
-    if (privateKeyPassword != null &&
-        privateKeyPassword.isNotEmpty) {
-      securityContext.usePrivateKey(
-        resolvedPrivateKeyPath,
-        password: privateKeyPassword,
-      );
-    } else {
-      securityContext.usePrivateKey(
-        resolvedPrivateKeyPath,
-      );
+  SecurityContext? securityContext;
+  if (AppConfig.backendTlsEnabled) {
+    final certificateFile = File(resolvedCertificatePath);
+    final privateKeyFile = File(resolvedPrivateKeyPath);
+    if (!certificateFile.existsSync()) {
+      throw StateError('Unable to find the HTTPS certificate. Expected: $resolvedCertificatePath');
     }
-  } on TlsException catch (error) {
-    throw StateError(
-      'Unable to load the HTTPS certificate/private key: $error',
-    );
-  } on FileSystemException catch (error) {
-    throw StateError(
-      'Unable to access the HTTPS certificate/private key: $error',
-    );
+    if (!privateKeyFile.existsSync()) {
+      throw StateError('Unable to find the HTTPS private key. Expected: $resolvedPrivateKeyPath');
+    }
+
+    securityContext = SecurityContext();
+    try {
+      securityContext.useCertificateChain(resolvedCertificatePath);
+      if (privateKeyPassword != null && privateKeyPassword.isNotEmpty) {
+        securityContext.usePrivateKey(resolvedPrivateKeyPath, password: privateKeyPassword);
+      } else {
+        securityContext.usePrivateKey(resolvedPrivateKeyPath);
+      }
+    } on TlsException catch (error) {
+      throw StateError('Unable to load the HTTPS certificate/private key: $error');
+    } on FileSystemException catch (error) {
+      throw StateError('Unable to access the HTTPS certificate/private key: $error');
+    }
   }
 
-  final server = await HttpServer.bindSecure(
-    AppConfig.host,
-    AppConfig.port,
-    securityContext,
-  );
+  final server = AppConfig.backendTlsEnabled
+      ? await HttpServer.bindSecure(
+          AppConfig.host,
+          AppConfig.port,
+          securityContext!,
+        )
+      : await HttpServer.bind(
+          AppConfig.host,
+          AppConfig.port,
+        );
 
   // ============================================================
   // STARTUP BANNER
@@ -391,13 +376,14 @@ Future<void> main() async {
   print('==========================================');
   print('');
 
-  print('Backend started successfully with HTTPS.');
+  print(AppConfig.backendTlsEnabled
+      ? 'Backend started successfully with HTTPS.'
+      : 'Backend started behind a reverse proxy using internal HTTP.');
   print('Address: ${AppConfig.baseUrl}');
   print('API:     ${AppConfig.apiBaseUrl}');
   print('');
 
-  print('TLS certificate: configured');
-  print('TLS private key: configured');
+  print('TLS termination: ${AppConfig.backendTlsEnabled ? 'Dart backend' : 'NGINX Proxy Manager'}');
   print('');
 
   print(
@@ -430,7 +416,9 @@ Future<void> main() async {
 
   print('');
 
-  print('Waiting for HTTPS requests...');
+  print(AppConfig.backendTlsEnabled
+      ? 'Waiting for HTTPS requests...'
+      : 'Waiting for internal proxy requests...');
   print('');
 
   await for (final request in server) {
@@ -453,6 +441,9 @@ Future<void> main() async {
       homeServerRoutes,
       supabaseSyncRoutes,
       mediaIntelligenceRoutes,
+      locationRoutes,
+      selfHostingRoutes,
+      selfHostingSecurity,
     );
   }
 }
@@ -480,9 +471,31 @@ Future<void> _handleRequest(
   HomeServerRoutes homeServerRoutes,
   SupabaseSyncRoutes supabaseSyncRoutes,
   MediaIntelligenceRoutes mediaIntelligenceRoutes,
+  LocationRoutes locationRoutes,
+  SelfHostingRoutes selfHostingRoutes,
+  SelfHostingSecurity selfHostingSecurity,
 ) async {
   try {
-    _addCorsHeaders(request.response);
+    // Reject direct public access when production is configured behind NPM.
+    if (!selfHostingSecurity.proxyRequirementSatisfied(request)) {
+      await _sendJson(request.response, HttpStatus.forbidden, {
+        'success': false,
+        'error': 'Direct backend access is disabled; use the configured reverse proxy.',
+      });
+      return;
+    }
+
+    final clientIp = selfHostingSecurity.clientIp(request);
+    if (!selfHostingSecurity.allowRate(clientIp)) {
+      await _sendJson(request.response, HttpStatus.tooManyRequests, {
+        'success': false,
+        'error': 'Rate limit exceeded.',
+      });
+      return;
+    }
+
+    _addSecurityHeaders(request.response);
+    _addCorsHeaders(request);
 
     // ----------------------------------------------------------
     // CORS PREFLIGHT
@@ -520,6 +533,20 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/media-intelligence/')) {
       await mediaIntelligenceRoutes.handle(request);
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // WORLDWIDE LOCATION / POSTAL CODE LOOKUP
+    // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/self-hosting/')) {
+      await selfHostingRoutes.handle(request);
+      return;
+    }
+
+    if (path.startsWith('/api/v1/location/')) {
+      await locationRoutes.handle(request);
       return;
     }
 
@@ -735,21 +762,73 @@ Future<void> _sendJson(
 // CORS
 // ============================================================
 
-void _addCorsHeaders(
-  HttpResponse response,
-) {
-  response.headers.set(
-    'Access-Control-Allow-Origin',
-    '*',
-  );
+void _addSecurityHeaders(HttpResponse response) {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'no-referrer');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (AppConfig.backendTlsEnabled || AppConfig.publicUrl.startsWith('https://')) {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+}
 
-  response.headers.set(
+void _addCorsHeaders(HttpRequest request) {
+  final origin = request.headers.value('Origin');
+  final allowed = AppConfig.allowedOrigins;
+
+  bool originAllowed = false;
+
+  if (origin != null) {
+    originAllowed = allowed.contains('*') || allowed.contains(origin);
+
+    // Development convenience: allow localhost/127.0.0.1 with any port
+    // when that hostname has explicitly been enabled.
+    if (!originAllowed && allowed.isNotEmpty) {
+      try {
+        final uri = Uri.parse(origin);
+
+        final isLocalHost =
+            uri.scheme == 'http' &&
+            (uri.host == 'localhost' || uri.host == '127.0.0.1');
+
+        if (isLocalHost) {
+          originAllowed = allowed.any((configured) {
+            try {
+              final configuredUri = Uri.parse(configured);
+
+              return configuredUri.scheme == uri.scheme &&
+                  configuredUri.host == uri.host;
+            } catch (_) {
+              return false;
+            }
+          });
+        }
+      } catch (_) {
+        originAllowed = false;
+      }
+    }
+
+    if (originAllowed) {
+      request.response.headers.set(
+        'Access-Control-Allow-Origin',
+        origin,
+      );
+      request.response.headers.set('Vary', 'Origin');
+    }
+  } else if (allowed.isEmpty) {
+    request.response.headers.set(
+      'Access-Control-Allow-Origin',
+      '*',
+    );
+  }
+
+  request.response.headers.set(
     'Access-Control-Allow-Methods',
-    'GET, POST, DELETE, OPTIONS',
+    'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   );
 
-  response.headers.set(
+  request.response.headers.set(
     'Access-Control-Allow-Headers',
-    'Origin, Content-Type, Accept, Authorization',
+    'Origin, Content-Type, Accept, Authorization, X-Streaming-Proxy-Key',
   );
 }

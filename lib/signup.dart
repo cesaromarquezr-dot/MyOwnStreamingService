@@ -74,8 +74,8 @@ class _SignupScreenState extends State<SignupScreen> {
     return;
   }
 
-  if (password.length < 6) {
-    _showMessage('Password must be at least 6 characters.');
+  if (password.length < 10) {
+    _showMessage('Password must be at least 10 characters.');
     return;
   }
 

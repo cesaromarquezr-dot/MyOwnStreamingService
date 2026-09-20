@@ -6,109 +6,15 @@ import 'dart:math';
 
 import '../database/database.dart';
 import '../models/account.dart';
+import '../models/payment_session.dart';
 import '../models/subscription.dart';
 import 'subscription_service.dart';
-
-enum PaymentStatus {
-  pending,
-  processing,
-  succeeded,
-  failed,
-  cancelled,
-}
-
-class PaymentSession {
-  final String id;
-  final String accountId;
-  final SubscriptionPlan plan;
-  final double amount;
-  final String currency;
-  final PaymentStatus status;
-  final DateTime createdAt;
-  final DateTime? expiresAt;
-  final DateTime? completedAt;
-  final String? processorTransactionId;
-  final String? failureReason;
-
-  // Temporary secret used only during the pre-login signup
-  // checkout flow.
-  //
-  // This is NOT an authentication token and must never be used
-  // to access the account.
-  final String? checkoutToken;
-
-  PaymentSession({
-    required this.id,
-    required this.accountId,
-    required this.plan,
-    required this.amount,
-    required this.currency,
-    required this.status,
-    required this.createdAt,
-    this.expiresAt,
-    this.completedAt,
-    this.processorTransactionId,
-    this.failureReason,
-    this.checkoutToken,
-  });
-
-  PaymentSession copyWith({
-    PaymentStatus? status,
-    DateTime? expiresAt,
-    DateTime? completedAt,
-    String? processorTransactionId,
-    String? failureReason,
-    String? checkoutToken,
-  }) {
-    return PaymentSession(
-      id: id,
-      accountId: accountId,
-      plan: plan,
-      amount: amount,
-      currency: currency,
-      status: status ?? this.status,
-      createdAt: createdAt,
-      expiresAt: expiresAt ?? this.expiresAt,
-      completedAt: completedAt ?? this.completedAt,
-      processorTransactionId:
-          processorTransactionId ?? this.processorTransactionId,
-      failureReason:
-          failureReason ?? this.failureReason,
-      checkoutToken:
-          checkoutToken ?? this.checkoutToken,
-    );
-  }
-
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
-  Map<String, dynamic> toJson({
-    bool includeCheckoutToken = false,
-  }) {
-    return {
-      'id': id,
-      'accountId': accountId,
-      'plan': plan.name,
-      'amount': amount,
-      'currency': currency,
-      'status': status.name,
-      'createdAt': createdAt.toIso8601String(),
-      'expiresAt': expiresAt?.toIso8601String(),
-      'completedAt': completedAt?.toIso8601String(),
-      'processorTransactionId': processorTransactionId,
-      'failureReason': failureReason,
-      if (includeCheckoutToken)
-        'checkoutToken': checkoutToken,
-    };
-  }
-}
 
 class PaymentService {
   final Database database;
   final SubscriptionService subscriptionService;
 
   final Random _random = Random();
-
-  final Map<String, PaymentSession> _payments =
-      <String, PaymentSession>{};
 
   PaymentService({
     required this.database,
@@ -121,8 +27,7 @@ class PaymentService {
 
   /// Performs `_generatePaymentId` for this feature. Update this documentation when its contract changes.
   String _generatePaymentId() {
-    final timestamp =
-        DateTime.now().microsecondsSinceEpoch;
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
 
     return 'pay_$timestamp${_random.nextInt(100000)}';
   }
@@ -133,14 +38,12 @@ class PaymentService {
 
   /// Performs `_generateCheckoutToken` for this feature. Update this documentation when its contract changes.
   String _generateCheckoutToken() {
-    final timestamp =
-        DateTime.now().microsecondsSinceEpoch;
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
 
-    final randomPart =
-        List.generate(
-          4,
-          (_) => _random.nextInt(1000000),
-        ).join();
+    final randomPart = List.generate(
+      4,
+      (_) => _random.nextInt(1000000),
+    ).join();
 
     return 'checkout_$timestamp$randomPart';
   }
@@ -192,13 +95,11 @@ class PaymentService {
       );
     }
 
-    final existingSubscription =
-        account.subscription;
+    final existingSubscription = account.subscription;
 
     if (existingSubscription != null &&
         existingSubscription.active &&
-        existingSubscription.expiresAt
-            .isAfter(DateTime.now())) {
+        existingSubscription.expiresAt.isAfter(DateTime.now())) {
       throw Exception(
         'Account already has an active subscription.',
       );
@@ -207,14 +108,11 @@ class PaymentService {
     final now = DateTime.now();
 
     // Signup checkout sessions are intentionally short-lived.
-    final expiresAt =
-        now.add(const Duration(minutes: 30));
+    final expiresAt = now.add(const Duration(minutes: 30));
 
-    final paymentId =
-        _generatePaymentId();
+    final paymentId = _generatePaymentId();
 
-    final checkoutToken =
-        _generateCheckoutToken();
+    final checkoutToken = _generateCheckoutToken();
 
     final payment = PaymentSession(
       id: paymentId,
@@ -228,7 +126,7 @@ class PaymentService {
       checkoutToken: checkoutToken,
     );
 
-    _payments[paymentId] = payment;
+    database.savePayment(payment);
 
     return payment;
   }
@@ -240,14 +138,15 @@ class PaymentService {
   PaymentSession? getPayment(
     String paymentId,
   ) {
-    final normalizedId =
-        paymentId.trim();
+    final normalizedId = paymentId.trim();
 
     if (normalizedId.isEmpty) {
       return null;
     }
 
-    return _payments[normalizedId];
+    return database.getPayment(
+      normalizedId,
+    );
   }
 
   // ------------------------------------------------------------
@@ -259,8 +158,7 @@ class PaymentService {
     PaymentSession payment,
     Account account,
   ) {
-    return payment.accountId ==
-        account.id;
+    return payment.accountId == account.id;
   }
 
   // ------------------------------------------------------------
@@ -276,22 +174,19 @@ class PaymentService {
     required String paymentId,
     required String checkoutToken,
   }) {
-    final payment =
-        getPayment(paymentId);
+    final payment = getPayment(paymentId);
 
     if (payment == null) {
       return false;
     }
 
-    final token =
-        checkoutToken.trim();
+    final token = checkoutToken.trim();
 
     if (token.isEmpty) {
       return false;
     }
 
-    if (payment.checkoutToken == null ||
-        payment.checkoutToken!.isEmpty) {
+    if (payment.checkoutToken == null || payment.checkoutToken!.isEmpty) {
       return false;
     }
 
@@ -311,8 +206,7 @@ class PaymentService {
     required String paymentId,
     required String checkoutToken,
   }) {
-    final payment =
-        getPayment(paymentId);
+    final payment = getPayment(paymentId);
 
     if (payment == null) {
       throw Exception(
@@ -344,29 +238,24 @@ class PaymentService {
     required String paymentId,
     required Account account,
   }) {
-    final payment =
-        _getPaymentForAccount(
+    final payment = _getPaymentForAccount(
       paymentId,
       account,
     );
 
     _ensureNotExpired(payment);
 
-    if (payment.status !=
-        PaymentStatus.pending) {
+    if (payment.status != PaymentStatus.pending) {
       throw Exception(
         'Payment is no longer pending.',
       );
     }
 
-    final updated =
-        payment.copyWith(
-      status:
-          PaymentStatus.processing,
+    final updated = payment.copyWith(
+      status: PaymentStatus.processing,
     );
 
-    _payments[payment.id] =
-        updated;
+    database.savePayment(updated);
 
     return updated;
   }
@@ -390,8 +279,7 @@ class PaymentService {
     required Account account,
     required String processorTransactionId,
   }) {
-    final payment =
-        getPaymentForCheckout(
+    final payment = getPaymentForCheckout(
       paymentId: paymentId,
       checkoutToken: checkoutToken,
     );
@@ -405,8 +293,7 @@ class PaymentService {
       );
     }
 
-    final transactionId =
-        processorTransactionId.trim();
+    final transactionId = processorTransactionId.trim();
 
     if (transactionId.isEmpty) {
       throw Exception(
@@ -414,20 +301,17 @@ class PaymentService {
       );
     }
 
-    if (payment.status ==
-        PaymentStatus.succeeded) {
+    if (payment.status == PaymentStatus.succeeded) {
       return payment;
     }
 
-    if (payment.status ==
-        PaymentStatus.cancelled) {
+    if (payment.status == PaymentStatus.cancelled) {
       throw Exception(
         'Payment has been cancelled.',
       );
     }
 
-    if (payment.status ==
-        PaymentStatus.failed) {
+    if (payment.status == PaymentStatus.failed) {
       throw Exception(
         'Payment has already failed.',
       );
@@ -472,21 +356,15 @@ class PaymentService {
       account,
     );
 
-    final completedAt =
-        DateTime.now();
+    final completedAt = DateTime.now();
 
-    final updated =
-        payment.copyWith(
-      status:
-          PaymentStatus.succeeded,
-      completedAt:
-          completedAt,
-      processorTransactionId:
-          transactionId,
+    final updated = payment.copyWith(
+      status: PaymentStatus.succeeded,
+      completedAt: completedAt,
+      processorTransactionId: transactionId,
     );
 
-    _payments[payment.id] =
-        updated;
+    database.savePayment(updated);
 
     database.saveAccount(
       account,
@@ -508,16 +386,14 @@ class PaymentService {
     required Account account,
     required String processorTransactionId,
   }) {
-    final payment =
-        _getPaymentForAccount(
+    final payment = _getPaymentForAccount(
       paymentId,
       account,
     );
 
     _ensureNotExpired(payment);
 
-    final transactionId =
-        processorTransactionId.trim();
+    final transactionId = processorTransactionId.trim();
 
     if (transactionId.isEmpty) {
       throw Exception(
@@ -525,20 +401,17 @@ class PaymentService {
       );
     }
 
-    if (payment.status ==
-        PaymentStatus.succeeded) {
+    if (payment.status == PaymentStatus.succeeded) {
       return payment;
     }
 
-    if (payment.status ==
-        PaymentStatus.cancelled) {
+    if (payment.status == PaymentStatus.cancelled) {
       throw Exception(
         'Payment has been cancelled.',
       );
     }
 
-    if (payment.status ==
-        PaymentStatus.failed) {
+    if (payment.status == PaymentStatus.failed) {
       throw Exception(
         'Payment has already failed.',
       );
@@ -560,21 +433,15 @@ class PaymentService {
       account,
     );
 
-    final completedAt =
-        DateTime.now();
+    final completedAt = DateTime.now();
 
-    final updated =
-        payment.copyWith(
-      status:
-          PaymentStatus.succeeded,
-      completedAt:
-          completedAt,
-      processorTransactionId:
-          transactionId,
+    final updated = payment.copyWith(
+      status: PaymentStatus.succeeded,
+      completedAt: completedAt,
+      processorTransactionId: transactionId,
     );
 
-    _payments[payment.id] =
-        updated;
+    database.savePayment(updated);
 
     database.saveAccount(
       account,
@@ -592,34 +459,26 @@ class PaymentService {
     required Account account,
     String? reason,
   }) {
-    final payment =
-        _getPaymentForAccount(
+    final payment = _getPaymentForAccount(
       paymentId,
       account,
     );
 
-    if (payment.status ==
-        PaymentStatus.succeeded) {
+    if (payment.status == PaymentStatus.succeeded) {
       throw Exception(
         'A successful payment cannot be marked as failed.',
       );
     }
 
     final failureReason =
-        reason?.trim().isNotEmpty == true
-            ? reason!.trim()
-            : 'Payment failed.';
+        reason?.trim().isNotEmpty == true ? reason!.trim() : 'Payment failed.';
 
-    final updated =
-        payment.copyWith(
-      status:
-          PaymentStatus.failed,
-      failureReason:
-          failureReason,
+    final updated = payment.copyWith(
+      status: PaymentStatus.failed,
+      failureReason: failureReason,
     );
 
-    _payments[payment.id] =
-        updated;
+    database.savePayment(updated);
 
     return updated;
   }
@@ -632,27 +491,22 @@ class PaymentService {
     required String paymentId,
     required Account account,
   }) {
-    final payment =
-        _getPaymentForAccount(
+    final payment = _getPaymentForAccount(
       paymentId,
       account,
     );
 
-    if (payment.status ==
-        PaymentStatus.succeeded) {
+    if (payment.status == PaymentStatus.succeeded) {
       throw Exception(
         'A successful payment cannot be cancelled.',
       );
     }
 
-    final updated =
-        payment.copyWith(
-      status:
-          PaymentStatus.cancelled,
+    final updated = payment.copyWith(
+      status: PaymentStatus.cancelled,
     );
 
-    _payments[payment.id] =
-        updated;
+    database.savePayment(updated);
 
     return updated;
   }
@@ -668,16 +522,14 @@ class PaymentService {
     required Account account,
     required String processorTransactionId,
   }) {
-    final payment =
-        _getPaymentForAccount(
+    final payment = _getPaymentForAccount(
       paymentId,
       account,
     );
 
     _ensureNotExpired(payment);
 
-    final transactionId =
-        processorTransactionId.trim();
+    final transactionId = processorTransactionId.trim();
 
     if (transactionId.isEmpty) {
       throw Exception(
@@ -693,15 +545,12 @@ class PaymentService {
       );
     }
 
-    if (payment.status ==
-        PaymentStatus.succeeded) {
+    if (payment.status == PaymentStatus.succeeded) {
       return payment;
     }
 
-    if (payment.status !=
-            PaymentStatus.pending &&
-        payment.status !=
-            PaymentStatus.processing) {
+    if (payment.status != PaymentStatus.pending &&
+        payment.status != PaymentStatus.processing) {
       throw Exception(
         'Payment cannot be used for renewal.',
       );
@@ -716,21 +565,15 @@ class PaymentService {
       account,
     );
 
-    final completedAt =
-        DateTime.now();
+    final completedAt = DateTime.now();
 
-    final updated =
-        payment.copyWith(
-      status:
-          PaymentStatus.succeeded,
-      completedAt:
-          completedAt,
-      processorTransactionId:
-          transactionId,
+    final updated = payment.copyWith(
+      status: PaymentStatus.succeeded,
+      completedAt: completedAt,
+      processorTransactionId: transactionId,
     );
 
-    _payments[payment.id] =
-        updated;
+    database.savePayment(updated);
 
     database.saveAccount(
       account,
@@ -743,17 +586,12 @@ class PaymentService {
   // PAYMENTS FOR ACCOUNT
   // ------------------------------------------------------------
 
-  List<PaymentSession>
-      getPaymentsForAccount(
+  List<PaymentSession> getPaymentsForAccount(
     Account account,
   ) {
-    return _payments.values
-        .where(
-          (payment) =>
-              payment.accountId ==
-              account.id,
-        )
-        .toList();
+    return database.getPaymentsForAccount(
+      account.id,
+    );
   }
 
   // ------------------------------------------------------------
@@ -764,8 +602,7 @@ class PaymentService {
     String paymentId,
     Account account,
   ) {
-    final normalizedId =
-        paymentId.trim();
+    final normalizedId = paymentId.trim();
 
     if (normalizedId.isEmpty) {
       throw Exception(
@@ -773,8 +610,9 @@ class PaymentService {
       );
     }
 
-    final payment =
-        _payments[normalizedId];
+    final payment = database.getPayment(
+      normalizedId,
+    );
 
     if (payment == null) {
       throw Exception(
@@ -802,8 +640,7 @@ class PaymentService {
   bool _isCheckoutExpired(
     PaymentSession payment,
   ) {
-    final expiresAt =
-        payment.expiresAt;
+    final expiresAt = payment.expiresAt;
 
     if (expiresAt == null) {
       return false;
@@ -819,8 +656,7 @@ class PaymentService {
     PaymentSession payment,
   ) {
     if (_isCheckoutExpired(payment) &&
-        payment.status !=
-            PaymentStatus.succeeded) {
+        payment.status != PaymentStatus.succeeded) {
       throw Exception(
         'Payment checkout session has expired.',
       );

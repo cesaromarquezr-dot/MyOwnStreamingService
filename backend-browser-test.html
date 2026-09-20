@@ -1,0 +1,46 @@
+﻿<!doctype html>
+<html>
+<body>
+<h2>Backend Signup Test</h2>
+<button onclick="testSignup()">Test Signup</button>
+<pre id="output"></pre>
+
+<script>
+async function testSignup() {
+  const output = document.getElementById('output');
+
+  try {
+    const response = await fetch(
+      'https://127.0.0.1:8080/api/v1/auth/signup',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: 'browser-test-' + Date.now() + '@example.com',
+          password: 'TestPassword123!',
+          firstProfileName: '',
+          plan: 'monthly',
+          securityQuestion: 'What was the name of your first pet?',
+          securityAnswer: 'Fluffy',
+          termsVersion: '2026-09-10',
+          privacyVersion: '2026-09-10',
+          acceptableUseVersion: '2026-09-10',
+          legalAcceptedAt: new Date().toISOString()
+        })
+      }
+    );
+
+    const text = await response.text();
+
+    output.textContent =
+      'HTTP ' + response.status + '\\n\\n' + text;
+  } catch (error) {
+    output.textContent =
+      'FETCH ERROR:\\n\\n' + error;
+  }
+}
+</script>
+</body>
+</html>

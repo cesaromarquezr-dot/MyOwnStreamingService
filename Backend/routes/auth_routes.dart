@@ -8,6 +8,7 @@ import 'dart:io';
 
 import '../middleware/authentication.dart';
 import '../models/subscription.dart';
+import '../models/account.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
 import '../services/email_service.dart';
@@ -96,6 +97,44 @@ class AuthRoutes {
       if (request.method == 'POST' &&
           path == '/api/v1/auth/logout') {
         await _logout(request);
+        return;
+      }
+
+      if (request.method == 'POST' && path == '/api/v1/auth/session/rotate') {
+        await _rotateSession(request);
+        return;
+      }
+
+      if (request.method == 'GET' && path == '/api/v1/security/status') {
+        await _securityStatus(request);
+        return;
+      }
+      if (request.method == 'GET' && path == '/api/v1/security/sessions') {
+        await _securitySessions(request);
+        return;
+      }
+      if (request.method == 'POST' && path == '/api/v1/security/sessions/revoke') {
+        await _securityRevokeSession(request);
+        return;
+      }
+      if (request.method == 'POST' && path == '/api/v1/security/password') {
+        await _securityPassword(request);
+        return;
+      }
+      if (request.method == 'POST' && path == '/api/v1/security/mfa/start') {
+        await _securityMfaStart(request);
+        return;
+      }
+      if (request.method == 'POST' && path == '/api/v1/security/mfa/verify') {
+        await _securityMfaVerify(request);
+        return;
+      }
+      if (request.method == 'POST' && path == '/api/v1/security/mfa/disable') {
+        await _securityMfaDisable(request);
+        return;
+      }
+      if (request.method == 'POST' && path == '/api/v1/auth/mfa/verify-login') {
+        await _mfaVerifyLogin(request);
         return;
       }
 
@@ -440,7 +479,16 @@ class AuthRoutes {
       userAgent: userAgent,
     );
 
-    final token = loginResult.token;
+    if (loginResult.requiresMfa || loginResult.token == null) {
+      _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+        'success': true,
+        'requiresMfa': true,
+        'message': 'MFA verification is required before a session can be created.',
+      });
+      return;
+    }
+
+    final token = loginResult.token!;
 
     final account =
         authService.accountFromToken(
@@ -518,6 +566,124 @@ class AuthRoutes {
         'message': 'Logged out successfully.',
       },
     );
+  }
+
+  Future<void> _securityStatus(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+      'success': true,
+      'mfaEnabled': account.mfaEnabled,
+      'activeSessions': databaseSessions(account).length,
+      'passwordPolicy': {'minimumLength': 10, 'algorithm': 'Argon2id'},
+      'secureTransportRequired': true,
+      'csrfModel': 'Bearer-token API; no cookie-authenticated state-changing endpoints',
+      'passkeys': {'status': 'available-for-web-webauthn-integration', 'registered': false},
+    });
+  }
+
+  List<Map<String, dynamic>> databaseSessions(Account account) => authService.sessionsForAccount(account, '');
+
+  Future<void> _securitySessions(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final token = authentication.extractToken(request) ?? '';
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {'success': true, 'sessions': authService.sessionsForAccount(account, token)});
+  }
+
+  Future<void> _securityRevokeSession(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final body = await _readJsonBody(request);
+    final sessionId = _readRequiredString(body, 'sessionId');
+    final revoked = authService.revokeSessionById(account, sessionId);
+    _sendJson(request.response, statusCode: revoked ? HttpStatus.ok : HttpStatus.notFound, body: {'success': revoked, 'message': revoked ? 'Session revoked.' : 'Session not found.'});
+  }
+
+  Future<void> _securityPassword(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final body = await _readJsonBody(request);
+    await authService.changePassword(account: account, currentPassword: _readRequiredString(body, 'currentPassword'), newPassword: _readRequiredString(body, 'newPassword'));
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {'success': true, 'message': 'Password changed. All sessions were revoked.'});
+  }
+
+  Future<void> _securityMfaStart(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    await authService.startMfaEnrollment(account);
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {'success': true, 'message': 'MFA verification code sent to the account email.'});
+  }
+
+  Future<void> _securityMfaVerify(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final body = await _readJsonBody(request);
+    await authService.verifyMfaEnrollment(account, _readRequiredString(body, 'code'));
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {'success': true, 'mfaEnabled': true});
+  }
+
+  Future<void> _securityMfaDisable(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    await authService.disableMfa(account);
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {'success': true, 'mfaEnabled': false});
+  }
+
+  Future<void> _mfaVerifyLogin(HttpRequest request) async {
+    final body = await _readJsonBody(request);
+    final ip = request.connectionInfo?.remoteAddress.address ?? 'unknown';
+    final agent = request.headers.value(HttpHeaders.userAgentHeader) ?? 'unknown';
+    final result = await authService.verifyMfaLogin(login: _readRequiredString(body, 'email'), code: _readRequiredString(body, 'code'), ipAddress: ip, userAgent: agent);
+    final token = result.token;
+    final session = token == null ? null : authService.sessionFromToken(token);
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {'success': true, 'token': token, 'expiresAt': session?.expiresAt.toIso8601String(), 'requiresMfa': false});
+  }
+
+  Future<void> _rotateSession(HttpRequest request) async {
+    final account = authentication.authenticate(request);
+    if (account == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final oldToken = authentication.extractToken(request);
+    if (oldToken == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final token = authService.rotateSession(oldToken);
+    if (token == null) {
+      _sendAuthenticationRequired(request.response);
+      return;
+    }
+    final session = authService.sessionFromToken(token);
+    _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+      'success': true,
+      'token': token,
+      'expiresAt': session?.expiresAt.toIso8601String(),
+      'accountId': account.id,
+    });
   }
 
   // ===========================================================================

@@ -1586,7 +1586,7 @@ class AppController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Performs `loginWithBackend` for this feature. Update this documentation when its contract changes.
-  Future<void> loginWithBackend({
+  Future<Map<String, dynamic>> loginWithBackend({
     required String email,
     required String password,
   }) async {
@@ -1600,6 +1600,10 @@ class AppController extends ChangeNotifier {
     lastLoginSecurity = response['security'] is Map
         ? Map<String, dynamic>.from(response['security'] as Map)
         : null;
+
+    if (response['requiresMfa'] == true) {
+      return response;
+    }
 
     final accountData = response['account'];
     if (accountData is! Map) {
@@ -1643,6 +1647,13 @@ class AppController extends ChangeNotifier {
     await loadGroupWishlist();
     await loadGroupRecommendations();
     await loadGroupWatchSessions();
+    return response;
+  }
+
+  /// Applies a fresh account response after MFA completes a login.
+  void applyBackendAccountFromResponse(Map<String, dynamic> response) {
+    final account = response['account'];
+    if (account is Map) _applyBackendAccount(Map<String, dynamic>.from(account));
   }
 
   // ---------------------------------------------------------------------------

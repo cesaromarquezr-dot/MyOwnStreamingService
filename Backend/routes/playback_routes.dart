@@ -7,13 +7,16 @@ import 'dart:io';
 import '../middleware/authentication.dart';
 import '../models/media_capabilities.dart';
 import '../services/media_analyzer_service.dart';
+import '../services/media_access_policy.dart';
 import '../services/transcoding_service.dart';
 
 class PlaybackRoutes {
   final AuthenticationMiddleware authentication;
   final TranscodingService transcoding;
+  final MediaAccessPolicy mediaAccessPolicy;
 
-  PlaybackRoutes({required this.authentication, required this.transcoding});
+  PlaybackRoutes({required this.authentication, required this.transcoding, MediaAccessPolicy? mediaAccessPolicy})
+      : mediaAccessPolicy = mediaAccessPolicy ?? MediaAccessPolicy();
 
   Future<void> handle(HttpRequest request) async {
     final account = authentication.authenticate(request);
@@ -52,6 +55,7 @@ class PlaybackRoutes {
           'path': playbackPath,
           'mode': profile.mode,
           'message': output == null ? 'Direct playback selected.' : 'Compatible playback copy is ready.',
+          'mediaAccessPolicy': mediaAccessPolicy.toJson(),
         });
       } catch (e) {
         return _json(request.response, 500, {'success': false, 'error': 'Playback preparation failed.', 'details': '$e'});

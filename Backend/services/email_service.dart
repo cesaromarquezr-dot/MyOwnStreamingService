@@ -102,6 +102,13 @@ class EmailService {
             'Accept the invitation in the streaming service to create or connect your login.',
       );
 
+  /// Sends a short-lived MFA verification code without storing the plaintext code.
+  Future<void> mfaCode(String email, String code) => send(
+        to: email,
+        subject: 'Your streaming service MFA code',
+        body: 'Your verification code is $code. It expires in 10 minutes. If you did not request this, secure your account immediately.',
+      );
+
   /// Performs `newDevice` for this feature. Update this documentation when its contract changes.
   Future<void> newDevice(String email, String deviceName) => send(
         to: email,

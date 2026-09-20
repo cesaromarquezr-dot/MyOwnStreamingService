@@ -22,6 +22,11 @@ class Account {
   String securityQuestion;
   String securityAnswerHash;
 
+  // MFA uses a short-lived email challenge. Only the challenge hash is stored.
+  bool mfaEnabled;
+  String mfaChallengeHash;
+  DateTime? mfaChallengeExpiresAt;
+
   Subscription? subscription;
 
   final List<Profile> profiles;
@@ -59,6 +64,9 @@ class Account {
     required this.passwordHash,
     this.securityQuestion = '',
     this.securityAnswerHash = '',
+    this.mfaEnabled = false,
+    this.mfaChallengeHash = '',
+    this.mfaChallengeExpiresAt,
     this.subscription,
     List<Profile>? profiles,
     List<String>? sharedMediaIds,
@@ -301,6 +309,7 @@ class Account {
       'username': username,
       'email': email,
       'securityQuestion': securityQuestion,
+      'mfaEnabled': mfaEnabled,
 
       'profiles': profiles
           .map(

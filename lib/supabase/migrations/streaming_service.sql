@@ -394,6 +394,41 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
+-- PaymentSession persistence fields.
+--
+-- These fields allow the backend PaymentSession model to survive a
+-- backend restart and reconstruct pending/processing/completed payment
+-- sessions from Supabase.
+alter table public.payments
+  add column if not exists plan text;
+
+alter table public.payments
+  add column if not exists checkout_token text;
+
+alter table public.payments
+  add column if not exists expires_at timestamptz;
+
+alter table public.payments
+  add column if not exists completed_at timestamptz;
+
+alter table public.payments
+  add column if not exists processor_transaction_id text;
+
+alter table public.payments
+  add column if not exists failure_reason text;
+
+-- provider_payment_id is the backend PaymentSession ID for the current
+-- backend payment provider implementation. It must remain unique so
+-- persistence can safely update an existing payment instead of creating
+-- duplicate rows after a backend restart or retry.
+create unique index if not exists payments_provider_payment_id_unique
+  on public.payments(provider_payment_id)
+  where provider_payment_id is not null;
+
+-- Efficiently load an account's payment history in chronological order.
+create index if not exists payments_account_created_at_idx
+  on public.payments(account_id, created_at desc);
+
 -- ============================================================
 -- PROFILE UI / FEATURES
 -- ============================================================
@@ -825,7 +860,20 @@ create index if not exists idx_watch_history_profile_time on public.watch_histor
 create index if not exists idx_reviews_media on public.reviews(media_catalog_id, created_at desc);
 create index if not exists idx_group_watch_participants_session on public.group_watch_participants(session_id);
 create index if not exists idx_activity_account_time on public.activity_events(account_id, created_at desc);
+comment on table public.payments is
+  'Persistent payment-session records for account subscriptions. Payment records contain transaction metadata and checkout state; actual payment processing is performed by the configured backend payment provider.';
 
+comment on column public.payments.provider_payment_id is
+  'Backend/provider payment-session identifier. Unique when present so payment persistence is idempotent.';
+
+comment on column public.payments.checkout_token is
+  'Temporary checkout authorization token used by the backend checkout flow.';
+
+comment on column public.payments.processor_transaction_id is
+  'Transaction identifier returned by the external payment processor after payment completion.';
+
+comment on column public.payments.failure_reason is
+  'Backend/payment-provider failure information associated with an unsuccessful payment attempt.';
 -- ============================================================
 -- RLS
 -- ============================================================
@@ -976,3 +1024,9 @@ comment on table public.server_media is 'Metadata/index of media physically stor
 comment on column public.server_media.relative_media_key is 'Server-private lookup key/path. Never expose directly to untrusted clients.';
 comment on table public.group_watch_participants is 'Cross-account participants. Playback is allowed only when every participant server has the exact same version_key.';
 comment on table public.reviews is 'Public reviews expose public_username only; account/profile IDs remain private under RLS.';
+
+
+-- Application security fields: only hashes/challenge metadata are stored; plaintext passwords/MFA codes are never persisted.
+alter table if exists public.account_private_credentials add column if not exists mfa_enabled boolean not null default false;
+alter table if exists public.account_private_credentials add column if not exists mfa_challenge_hash text;
+alter table if exists public.account_private_credentials add column if not exists mfa_challenge_expires_at timestamptz;

@@ -933,21 +933,6 @@ class _MusicScreenState extends State<MusicScreen> {
                                   ],
                                 ),
                               ),
-                              if (ShopCatalog.instance.productsForAssociation('song', track.id, name: track.title).isNotEmpty)
-                                IconButton(
-                                  tooltip: 'Shop this song',
-                                  icon: const Icon(Icons.storefront_outlined, size: 19),
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ShopScreen(
-                                        contextAssociationType: 'song',
-                                        contextAssociationId: track.id,
-                                        contextAssociationName: track.title,
-                                      ),
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -1413,22 +1398,6 @@ class _MusicSearchDelegate extends SearchDelegate<MusicTrack?> {
           ListTile(
             title: Text(track.title),
             subtitle: UniversalText('${track.artist} • ${track.album}'),
-            trailing: ShopCatalog.instance.productsForAssociation('song', track.id, name: track.title).isNotEmpty
-                ? IconButton(
-                    tooltip: 'Shop this song',
-                    icon: const Icon(Icons.storefront_outlined),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ShopScreen(
-                          contextAssociationType: 'song',
-                          contextAssociationId: track.id,
-                          contextAssociationName: track.title,
-                        ),
-                      ),
-                    ),
-                  )
-                : null,
             onTap: () {
               MusicPlaybackController.instance.play(track);
               close(context, track);

@@ -19,6 +19,7 @@ class _MoviesScreenState extends State<MoviesScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pageController;
   String _searchQuery = '';
+  String _sortMode = 'Default';
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -98,12 +99,14 @@ class _MoviesScreenState extends State<MoviesScreen>
         .toList();
 
     final filteredMovies = _searchQuery.trim().isEmpty
-        ? movies
+        ? List<MediaItem>.from(movies)
         : movies.where((movie) {
             return movie.title
                 .toLowerCase()
                 .contains(_searchQuery.toLowerCase());
           }).toList();
+
+    _sortMedia(filteredMovies);
 
     final featuredMovie =
         filteredMovies.isNotEmpty ? filteredMovies.first : null;
@@ -202,6 +205,46 @@ class _MoviesScreenState extends State<MoviesScreen>
     );
   }
 
+
+  /// Sorts the visible movie list without changing the underlying library order.
+  void _sortMedia(List<MediaItem> items) {
+    switch (_sortMode) {
+      case 'A-Z':
+        items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        break;
+      case 'Z-A':
+        items.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
+        break;
+      case 'Oldest to Newest':
+        items.sort((a, b) => (a.releaseYear ?? 0).compareTo(b.releaseYear ?? 0));
+        break;
+      case 'Newest to Oldest':
+        items.sort((a, b) => (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0));
+        break;
+      default:
+        break;
+    }
+  }
+
+  /// Displays the movie organization dropdown.
+  Widget _sortDropdown() {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: _sortMode,
+        dropdownColor: const Color(0xFF151515),
+        icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+        items: const [
+          DropdownMenuItem(value: 'Default', child: Text('Default')),
+          DropdownMenuItem(value: 'A-Z', child: Text('A-Z')),
+          DropdownMenuItem(value: 'Z-A', child: Text('Z-A')),
+          DropdownMenuItem(value: 'Oldest to Newest', child: Text('Oldest to Newest')),
+          DropdownMenuItem(value: 'Newest to Oldest', child: Text('Newest to Oldest')),
+        ],
+        onChanged: (value) => setState(() => _sortMode = value ?? 'Default'),
+      ),
+    );
+  }
   // ============================================================
   // TOP BAR
   // ============================================================
@@ -282,6 +325,8 @@ class _MoviesScreenState extends State<MoviesScreen>
                     fontSize: 12,
                   ),
                 ),
+                const SizedBox(height: 5),
+                Align(alignment: Alignment.centerLeft, child: _sortDropdown()),
               ],
             ),
           ),
