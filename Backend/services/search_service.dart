@@ -1,6 +1,10 @@
 // FILE: `Backend/services/search_service.dart`.
 // Purpose: Implements the search service portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// Search is intentionally catalog-wide. Authorization/privacy decisions for
+// which catalog entries an account may actually open or play remain outside
+// this relevance engine.
 
 import '../database/database.dart';
 import '../models/media.dart';
@@ -12,10 +16,6 @@ enum SearchResultType {
 }
 
 /// A single media search result.
-///
-/// Actors and other metadata are represented through the
-/// [matchedBy] field. The frontend can use the complete media
-/// object to determine how the result should be displayed.
 class SearchResult {
   final Media media;
   final List<String> matchedBy;
@@ -25,25 +25,21 @@ class SearchResult {
     required this.matchedBy,
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
-      'type': media.type == MediaType.movie
-          ? 'movie'
-          : 'tvShow',
+      'type': media.type == MediaType.movie ? 'movie' : 'tvShow',
       'media': media.toJson(),
-      'matchedBy': matchedBy,
+      'matchedBy': List<String>.unmodifiable(matchedBy),
     };
   }
 }
 
 /// Backend service responsible for global Smart Search.
 ///
-/// This searches the complete media catalog, not merely the
-/// titles owned by the current profile.
+/// This searches the complete media catalog, not merely the titles owned by
+/// the current profile.
 ///
 /// Searchable metadata includes:
-///
 /// - title
 /// - description
 /// - actors
@@ -58,6 +54,11 @@ class SearchResult {
 /// - music
 /// - year
 class SearchService {
+  static const int defaultLimit = 50;
+  static const int maximumLimit = 100;
+  static const int maximumQueryLength = 200;
+  static const int maximumMetadataValueLength = 1000;
+
   final Database database;
 
   SearchService({
@@ -66,41 +67,31 @@ class SearchService {
 
   /// Searches the complete catalog.
   ///
-  /// Examples:
-  ///
-  ///     Spider-Man
-  ///     Clint Eastwood
-  ///     Jurassic Park
-  ///     Christopher Daniel Barnes
-  ///     1993
-  ///
-  /// Results are ranked by how strongly the search term
-  /// matches the media metadata.
+  /// Results are ranked by how strongly the search term matches the media
+  /// metadata.
   List<SearchResult> search(
     String query, {
     int? limit,
   }) {
-    final normalizedQuery =
-        _normalize(query);
+    final normalizedQuery = _validateAndNormalizeQuery(query);
+    final effectiveLimit = _validateLimit(limit);
 
     if (normalizedQuery.isEmpty) {
       return [];
     }
 
     final catalog = database.getAllMedia();
-
     final results = <_ScoredSearchResult>[];
 
     for (final media in catalog) {
       final matchedBy = <String>[];
-      int score = 0;
+      var score = 0;
 
       // --------------------------------------------------------
       // TITLE
       // --------------------------------------------------------
 
-      final title =
-          _normalize(media.title);
+      final title = _normalize(media.title);
 
       if (title == normalizedQuery) {
         score += 1000;
@@ -117,10 +108,7 @@ class SearchService {
       // DESCRIPTION
       // --------------------------------------------------------
 
-      if (_contains(
-        media.description,
-        normalizedQuery,
-      )) {
+      if (_contains(media.description, normalizedQuery)) {
         score += 100;
         matchedBy.add('description');
       }
@@ -129,13 +117,7 @@ class SearchService {
       // ACTORS
       // --------------------------------------------------------
 
-      final actorMatch =
-          _matchList(
-        media.actors,
-        normalizedQuery,
-      );
-
-      if (actorMatch) {
+      if (_matchList(media.actors, normalizedQuery)) {
         score += 500;
         matchedBy.add('actor');
       }
@@ -144,13 +126,7 @@ class SearchService {
       // CHARACTERS
       // --------------------------------------------------------
 
-      final characterMatch =
-          _matchList(
-        media.characters,
-        normalizedQuery,
-      );
-
-      if (characterMatch) {
+      if (_matchList(media.characters, normalizedQuery)) {
         score += 450;
         matchedBy.add('character');
       }
@@ -159,13 +135,7 @@ class SearchService {
       // FRANCHISES
       // --------------------------------------------------------
 
-      final franchiseMatch =
-          _matchList(
-        media.franchises,
-        normalizedQuery,
-      );
-
-      if (franchiseMatch) {
+      if (_matchList(media.franchises, normalizedQuery)) {
         score += 400;
         matchedBy.add('franchise');
       }
@@ -174,13 +144,7 @@ class SearchService {
       // REFERENCES
       // --------------------------------------------------------
 
-      final referenceMatch =
-          _matchList(
-        media.references,
-        normalizedQuery,
-      );
-
-      if (referenceMatch) {
+      if (_matchList(media.references, normalizedQuery)) {
         score += 350;
         matchedBy.add('reference');
       }
@@ -189,13 +153,7 @@ class SearchService {
       // DIRECTORS
       // --------------------------------------------------------
 
-      final directorMatch =
-          _matchList(
-        media.directors,
-        normalizedQuery,
-      );
-
-      if (directorMatch) {
+      if (_matchList(media.directors, normalizedQuery)) {
         score += 300;
         matchedBy.add('director');
       }
@@ -204,13 +162,7 @@ class SearchService {
       // WRITERS
       // --------------------------------------------------------
 
-      final writerMatch =
-          _matchList(
-        media.writers,
-        normalizedQuery,
-      );
-
-      if (writerMatch) {
+      if (_matchList(media.writers, normalizedQuery)) {
         score += 250;
         matchedBy.add('writer');
       }
@@ -219,13 +171,7 @@ class SearchService {
       // GENRES
       // --------------------------------------------------------
 
-      final genreMatch =
-          _matchList(
-        media.genres,
-        normalizedQuery,
-      );
-
-      if (genreMatch) {
+      if (_matchList(media.genres, normalizedQuery)) {
         score += 200;
         matchedBy.add('genre');
       }
@@ -234,13 +180,7 @@ class SearchService {
       // THEMES
       // --------------------------------------------------------
 
-      final themeMatch =
-          _matchList(
-        media.themes,
-        normalizedQuery,
-      );
-
-      if (themeMatch) {
+      if (_matchList(media.themes, normalizedQuery)) {
         score += 175;
         matchedBy.add('theme');
       }
@@ -249,13 +189,7 @@ class SearchService {
       // TAGS
       // --------------------------------------------------------
 
-      final tagMatch =
-          _matchList(
-        media.tags,
-        normalizedQuery,
-      );
-
-      if (tagMatch) {
+      if (_matchList(media.tags, normalizedQuery)) {
         score += 150;
         matchedBy.add('tag');
       }
@@ -264,13 +198,7 @@ class SearchService {
       // MUSIC
       // --------------------------------------------------------
 
-      final musicMatch =
-          _matchList(
-        media.music,
-        normalizedQuery,
-      );
-
-      if (musicMatch) {
+      if (_matchList(media.music, normalizedQuery)) {
         score += 125;
         matchedBy.add('music');
       }
@@ -280,10 +208,7 @@ class SearchService {
       // --------------------------------------------------------
 
       if (media.year != null &&
-          media.year
-              .toString()
-              .toLowerCase() ==
-              normalizedQuery) {
+          media.year.toString() == normalizedQuery) {
         score += 700;
         matchedBy.add('year');
       }
@@ -293,10 +218,7 @@ class SearchService {
       // --------------------------------------------------------
 
       if (media.releaseDate != null &&
-          media.releaseDate!
-              .year
-              .toString() ==
-              normalizedQuery) {
+          media.releaseDate!.year.toString() == normalizedQuery) {
         score += 700;
 
         if (!matchedBy.contains('year')) {
@@ -304,70 +226,31 @@ class SearchService {
         }
       }
 
-      // --------------------------------------------------------
-      // KEEP MATCHES ONLY
-      // --------------------------------------------------------
-
       if (score > 0) {
         results.add(
           _ScoredSearchResult(
             media: media,
-            matchedBy: matchedBy,
+            matchedBy: List<String>.unmodifiable(matchedBy),
             score: score,
           ),
         );
       }
     }
 
-    // ----------------------------------------------------------
-    // SORT BY RELEVANCE
-    // ----------------------------------------------------------
+    _sortScoredResults(results);
 
-    results.sort(
-      (a, b) {
-        final scoreComparison =
-            b.score.compareTo(a.score);
+    final selected = effectiveLimit == null
+        ? results
+        : results.take(effectiveLimit);
 
-        if (scoreComparison != 0) {
-          return scoreComparison;
-        }
-
-        final yearA =
-            a.media.year ?? 0;
-        final yearB =
-            b.media.year ?? 0;
-
-        final yearComparison =
-            yearB.compareTo(yearA);
-
-        if (yearComparison != 0) {
-          return yearComparison;
-        }
-
-        return a.media.title
-            .toLowerCase()
-            .compareTo(
-              b.media.title.toLowerCase(),
-            );
-      },
-    );
-
-    final output = results
+    return selected
         .map(
           (result) => SearchResult(
             media: result.media,
             matchedBy: result.matchedBy,
           ),
         )
-        .toList();
-
-    if (limit != null &&
-        limit > 0 &&
-        output.length > limit) {
-      return output.take(limit).toList();
-    }
-
-    return output;
+        .toList(growable: false);
   }
 
   /// Searches only movies.
@@ -375,19 +258,16 @@ class SearchService {
     String query, {
     int? limit,
   }) {
-    return search(
-      query,
-      limit: null,
-    )
-        .where(
-          (result) =>
-              result.media.type ==
-              MediaType.movie,
-        )
-        .take(
-          limit ?? 100,
-        )
-        .toList();
+    final effectiveLimit = _validateLimit(limit);
+    final results = search(query);
+
+    final filtered = results.where(
+      (result) => result.media.type == MediaType.movie,
+    );
+
+    return effectiveLimit == null
+        ? filtered.toList(growable: false)
+        : filtered.take(effectiveLimit).toList(growable: false);
   }
 
   /// Searches only TV shows.
@@ -395,32 +275,25 @@ class SearchService {
     String query, {
     int? limit,
   }) {
-    return search(
-      query,
-      limit: null,
-    )
-        .where(
-          (result) =>
-              result.media.type ==
-              MediaType.tvShow,
-        )
-        .take(
-          limit ?? 100,
-        )
-        .toList();
+    final effectiveLimit = _validateLimit(limit);
+    final results = search(query);
+
+    final filtered = results.where(
+      (result) => result.media.type == MediaType.tvShow,
+    );
+
+    return effectiveLimit == null
+        ? filtered.toList(growable: false)
+        : filtered.take(effectiveLimit).toList(growable: false);
   }
 
-  /// Returns every media item associated with a particular
-  /// actor.
-  ///
-  /// This allows a search such as "Clint Eastwood" to return
-  /// every movie/show containing that actor.
+  /// Returns every media item associated with a particular actor.
   List<SearchResult> searchActor(
     String actorName, {
     int? limit,
   }) {
-    final normalized =
-        _normalize(actorName);
+    final normalized = _validateAndNormalizeQuery(actorName);
+    final effectiveLimit = _validateLimit(limit);
 
     if (normalized.isEmpty) {
       return [];
@@ -442,29 +315,20 @@ class SearchService {
         )
         .toList();
 
-    _sortByMostRecent(results);
+    _sortPublicResults(results);
 
-    if (limit != null &&
-        limit > 0 &&
-        results.length > limit) {
-      return results.take(limit).toList();
-    }
-
-    return results;
+    return effectiveLimit == null
+        ? results
+        : results.take(effectiveLimit).toList(growable: false);
   }
 
-  /// Returns every media item containing a reference to the
-  /// searched subject.
-  ///
-  /// For example, if Ted 2 contains "Jurassic Park" in its
-  /// references metadata, searching "Jurassic Park" can return
-  /// Ted 2 as a reference result.
+  /// Returns every media item containing a reference to the searched subject.
   List<SearchResult> searchReferences(
     String reference, {
     int? limit,
   }) {
-    final normalized =
-        _normalize(reference);
+    final normalized = _validateAndNormalizeQuery(reference);
+    final effectiveLimit = _validateLimit(limit);
 
     if (normalized.isEmpty) {
       return [];
@@ -486,22 +350,49 @@ class SearchService {
         )
         .toList();
 
-    _sortByMostRecent(results);
+    _sortPublicResults(results);
 
-    if (limit != null &&
-        limit > 0 &&
-        results.length > limit) {
-      return results.take(limit).toList();
-    }
-
-    return results;
+    return effectiveLimit == null
+        ? results
+        : results.take(effectiveLimit).toList(growable: false);
   }
 
   // ==========================================================
-  // HELPERS
+  // VALIDATION
   // ==========================================================
 
-  /// Performs `_normalize` for this feature. Update this documentation when its contract changes.
+  String _validateAndNormalizeQuery(String value) {
+    if (value.contains('\u0000')) {
+      throw Exception('Search query contains an invalid character.');
+    }
+
+    if (value.length > maximumQueryLength) {
+      throw Exception(
+        'Search query must not exceed $maximumQueryLength characters.',
+      );
+    }
+
+    return _normalize(value);
+  }
+
+  int? _validateLimit(int? limit) {
+    if (limit == null) {
+      return defaultLimit;
+    }
+
+    if (limit < 1 || limit > maximumLimit) {
+      throw Exception(
+        'Search limit must be between 1 and $maximumLimit.',
+      );
+    }
+
+    return limit;
+  }
+
+  // ==========================================================
+  // NORMALIZATION / MATCHING
+  // ==========================================================
+
   String _normalize(String value) {
     return value
         .trim()
@@ -509,32 +400,48 @@ class SearchService {
         .replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  /// Performs `_contains` for this feature. Update this documentation when its contract changes.
   bool _contains(
     String? value,
     String normalizedQuery,
   ) {
-    if (value == null ||
-        value.trim().isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return false;
     }
 
-    return _normalize(value)
-        .contains(normalizedQuery);
+    if (value.length > maximumMetadataValueLength) {
+      value = value.substring(0, maximumMetadataValueLength);
+    }
+
+    return _normalize(value).contains(normalizedQuery);
   }
 
-  /// Performs `_matchList` for this feature. Update this documentation when its contract changes.
   bool _matchList(
     List<String> values,
     String normalizedQuery,
   ) {
+    if (normalizedQuery.isEmpty) {
+      return false;
+    }
+
     for (final value in values) {
-      final normalizedValue =
-          _normalize(value);
+      if (value.isEmpty) {
+        continue;
+      }
+
+      var candidate = value;
+
+      if (candidate.length > maximumMetadataValueLength) {
+        candidate = candidate.substring(0, maximumMetadataValueLength);
+      }
+
+      final normalizedValue = _normalize(candidate);
+
+      if (normalizedValue.isEmpty) {
+        continue;
+      }
 
       if (normalizedValue == normalizedQuery ||
-          normalizedValue.contains(normalizedQuery) ||
-          normalizedQuery.contains(normalizedValue)) {
+          normalizedValue.contains(normalizedQuery)) {
         return true;
       }
     }
@@ -542,29 +449,67 @@ class SearchService {
     return false;
   }
 
-  /// Performs `_sortByMostRecent` for this feature. Update this documentation when its contract changes.
-  void _sortByMostRecent(
-    List<SearchResult> results,
+  // ==========================================================
+  // SORTING
+  // ==========================================================
+
+  void _sortScoredResults(
+    List<_ScoredSearchResult> results,
   ) {
     results.sort(
       (a, b) {
-        final yearA =
-            a.media.year ?? 0;
-        final yearB =
-            b.media.year ?? 0;
+        final scoreComparison = b.score.compareTo(a.score);
 
-        final yearComparison =
-            yearB.compareTo(yearA);
+        if (scoreComparison != 0) {
+          return scoreComparison;
+        }
+
+        final yearA = a.media.year ?? 0;
+        final yearB = b.media.year ?? 0;
+
+        final yearComparison = yearB.compareTo(yearA);
 
         if (yearComparison != 0) {
           return yearComparison;
         }
 
-        return a.media.title
-            .toLowerCase()
-            .compareTo(
-              b.media.title.toLowerCase(),
-            );
+        final titleComparison = _normalize(a.media.title).compareTo(
+          _normalize(b.media.title),
+        );
+
+        if (titleComparison != 0) {
+          return titleComparison;
+        }
+
+        // Stable deterministic tie-breaker for duplicate titles.
+        return a.media.id.compareTo(b.media.id);
+      },
+    );
+  }
+
+  void _sortPublicResults(
+    List<SearchResult> results,
+  ) {
+    results.sort(
+      (a, b) {
+        final yearA = a.media.year ?? 0;
+        final yearB = b.media.year ?? 0;
+
+        final yearComparison = yearB.compareTo(yearA);
+
+        if (yearComparison != 0) {
+          return yearComparison;
+        }
+
+        final titleComparison = _normalize(a.media.title).compareTo(
+          _normalize(b.media.title),
+        );
+
+        if (titleComparison != 0) {
+          return titleComparison;
+        }
+
+        return a.media.id.compareTo(b.media.id);
       },
     );
   }

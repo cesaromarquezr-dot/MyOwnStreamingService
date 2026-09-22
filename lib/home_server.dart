@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'app_core.dart';
 import 'storage_dashboard.dart';
 import 'music.dart';
+import 'shop.dart';
 import 'localization.dart';
 
 /// Displays the authenticated account's home server and its members.
@@ -130,6 +131,8 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       MusicLibraryStore.instance.tracks
         ..clear()
         ..addAll(music);
+      MusicLibraryStore.instance.registerShopEntities();
+      ShopCatalog.instance.syncShopEntityIndex();
       AppController.instance.replaceLibraryFromServer(media);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

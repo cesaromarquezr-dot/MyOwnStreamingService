@@ -1,6 +1,14 @@
 // FILE: `Backend/models/media.dart`.
 // Purpose: Implements the media portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// Media is the application-facing playable/catalog representation of a
+// movie or TV item. Physical releases, discs and disc contents remain
+// separate provenance entities and can be associated with this model through
+// their IDs.
+//
+// This model intentionally remains compatible with the existing JSON
+// contract. New physical-media fields are additive.
 
 enum MediaType {
   movie,
@@ -60,6 +68,9 @@ class Media {
   final DateTime? releaseDate;
 
   // Physical-disc/archive metadata.
+  //
+  // These identify the physical provenance of the imported/playable item.
+  // They do not replace the canonical media ID.
   final String? discType;
   final String? discRegion;
   final String? discCollectionId;
@@ -71,6 +82,22 @@ class Media {
   final List<String> languages;
   final List<String> subtitles;
   final List<String> extras;
+
+  // ARM / physical-media provenance.
+  //
+  // These fields are optional so existing catalog records remain valid.
+  // A bonus feature, deleted scene, commentary, trailer or other disc
+  // content can retain its physical source without becoming a fake movie.
+  final String? physicalReleaseId;
+  final String? physicalDiscId;
+  final String? discContentId;
+  final bool isBonusContent;
+
+  // Canonical music identity.
+  //
+  // For music imports, this can point at the canonical recording rather than
+  // creating a duplicate song for every soundtrack/album release.
+  final String? canonicalRecordingId;
 
   // Availability.
   //
@@ -125,6 +152,11 @@ class Media {
     this.languages = const [],
     this.subtitles = const [],
     this.extras = const [],
+    this.physicalReleaseId,
+    this.physicalDiscId,
+    this.discContentId,
+    this.isBonusContent = false,
+    this.canonicalRecordingId,
     this.watchOptions = const [],
     this.purchaseOptions = const [],
     this.accessibleProfileIds = const [],
@@ -138,7 +170,41 @@ class Media {
     return type == MediaType.tvShow;
   }
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
+  bool get hasPhysicalProvenance {
+    return physicalReleaseId != null ||
+        physicalDiscId != null ||
+        discContentId != null ||
+        discCollectionId != null;
+  }
+
+  bool get hasCanonicalRecording {
+    return canonicalRecordingId?.trim().isNotEmpty == true;
+  }
+
+  bool get hasTrailer {
+    return trailerUrl?.trim().isNotEmpty == true;
+  }
+
+  bool get hasAvailability =>
+      watchOptions.isNotEmpty || purchaseOptions.isNotEmpty;
+
+  bool get hasEpisodePosition =>
+      seasonNumber != null || episodeNumber != null;
+
+  bool get isEpisode =>
+      type == MediaType.tvShow &&
+      (episodeNumber != null || seasonNumber != null);
+
+  /// Basic identity validation.
+  ///
+  /// This deliberately does not reject a media item merely because optional
+  /// metadata is missing. Metadata enrichment can happen later.
+  bool get isValid =>
+      id.trim().isNotEmpty &&
+      title.trim().isNotEmpty;
+
+  /// Performs `toJson` for this feature. Update this documentation when its
+  /// contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -154,7 +220,7 @@ class Media {
       'language': language,
       'adaptationGroupId': adaptationGroupId,
       'adaptationGroupName': adaptationGroupName,
-      'relationshipTypes': relationshipTypes,
+      'relationshipTypes': List<String>.from(relationshipTypes),
 
       'genres': List<String>.from(genres),
       'tags': List<String>.from(tags),
@@ -176,6 +242,7 @@ class Media {
       'totalEpisodesInSeason': totalEpisodesInSeason,
 
       'releaseDate': releaseDate?.toIso8601String(),
+
       'discType': discType,
       'discRegion': discRegion,
       'discCollectionId': discCollectionId,
@@ -188,29 +255,36 @@ class Media {
       'subtitles': List<String>.from(subtitles),
       'extras': List<String>.from(extras),
 
-      'watchOptions': watchOptions
-          .map((option) => option.toJson())
-          .toList(),
+      'physicalReleaseId': physicalReleaseId,
+      'physicalDiscId': physicalDiscId,
+      'discContentId': discContentId,
+      'isBonusContent': isBonusContent,
+      'canonicalRecordingId': canonicalRecordingId,
 
-      'purchaseOptions': purchaseOptions
-          .map((option) => option.toJson())
-          .toList(),
-      'accessibleProfileIds': accessibleProfileIds,
+      'watchOptions':
+          watchOptions.map((option) => option.toJson()).toList(),
+
+      'purchaseOptions':
+          purchaseOptions.map((option) => option.toJson()).toList(),
+
+      'accessibleProfileIds':
+          List<String>.from(accessibleProfileIds),
     };
   }
 
   factory Media.fromJson(Map<String, dynamic> json) {
     return Media(
-      id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
+      id: _stringValue(json['id']),
+      title: _stringValue(json['title']),
       type: _parseMediaType(json['type']),
 
       year: _parseInt(json['year']),
-      posterUrl: json['posterUrl']?.toString(),
-      description: json['description']?.toString(),
-      rating: json['rating'] is num ? (json['rating'] as num).toDouble() : double.tryParse(json['rating']?.toString() ?? ''),
-      ratingReason: json['ratingReason']?.toString(),
+      posterUrl: _nullableString(json['posterUrl']),
+      description: _nullableString(json['description']),
+      rating: _parseDouble(json['rating']),
+      ratingReason: _nullableString(json['ratingReason']),
       trailerUrl: _nullableString(json['trailerUrl']),
+
       countryOfOrigin: _nullableString(json['countryOfOrigin']),
       language: _nullableString(json['language']),
       adaptationGroupId: _nullableString(json['adaptationGroupId']),
@@ -238,10 +312,12 @@ class Media {
           _parseInt(json['totalEpisodesInSeason']),
 
       releaseDate: _parseDate(json['releaseDate']),
+
       discType: _nullableString(json['discType']),
       discRegion: _nullableString(json['discRegion']),
       discCollectionId: _nullableString(json['discCollectionId']),
-      discCollectionTitle: _nullableString(json['discCollectionTitle']),
+      discCollectionTitle:
+          _nullableString(json['discCollectionTitle']),
       discNumber: _parseInt(json['discNumber']),
       discTitleId: _nullableString(json['discTitleId']),
       chapters: _stringList(json['chapters']),
@@ -250,22 +326,188 @@ class Media {
       subtitles: _stringList(json['subtitles']),
       extras: _stringList(json['extras']),
 
+      physicalReleaseId:
+          _nullableString(json['physicalReleaseId']),
+      physicalDiscId:
+          _nullableString(json['physicalDiscId']),
+      discContentId:
+          _nullableString(json['discContentId']),
+      isBonusContent:
+          _parseBool(json['isBonusContent']),
+      canonicalRecordingId:
+          _nullableString(json['canonicalRecordingId']),
+
       watchOptions:
           _watchOptions(json['watchOptions']),
 
       purchaseOptions:
           _purchaseOptions(json['purchaseOptions']),
-      accessibleProfileIds: _stringList(json['accessibleProfileIds']),
+
+      accessibleProfileIds:
+          _stringList(json['accessibleProfileIds']),
+    );
+  }
+
+  /// Creates an immutable-style updated copy.
+  Media copyWith({
+    String? id,
+    String? title,
+    MediaType? type,
+    int? year,
+    String? posterUrl,
+    String? description,
+    double? rating,
+    String? ratingReason,
+    String? trailerUrl,
+    String? countryOfOrigin,
+    String? language,
+    String? adaptationGroupId,
+    String? adaptationGroupName,
+    List<String>? relationshipTypes,
+    List<String>? genres,
+    List<String>? tags,
+    List<String>? themes,
+    List<String>? actors,
+    List<String>? characters,
+    List<String>? directors,
+    List<String>? writers,
+    List<String>? franchises,
+    List<String>? references,
+    List<String>? music,
+    String? seriesId,
+    int? seasonNumber,
+    int? episodeNumber,
+    int? totalEpisodesInSeason,
+    DateTime? releaseDate,
+    String? discType,
+    String? discRegion,
+    String? discCollectionId,
+    String? discCollectionTitle,
+    int? discNumber,
+    String? discTitleId,
+    List<String>? chapters,
+    List<String>? audioTracks,
+    List<String>? languages,
+    List<String>? subtitles,
+    List<String>? extras,
+    String? physicalReleaseId,
+    String? physicalDiscId,
+    String? discContentId,
+    bool? isBonusContent,
+    String? canonicalRecordingId,
+    List<WatchOption>? watchOptions,
+    List<PurchaseOption>? purchaseOptions,
+    List<String>? accessibleProfileIds,
+    bool clearYear = false,
+    bool clearPosterUrl = false,
+    bool clearDescription = false,
+    bool clearRating = false,
+    bool clearRatingReason = false,
+    bool clearTrailerUrl = false,
+    bool clearCountryOfOrigin = false,
+    bool clearLanguage = false,
+    bool clearAdaptationGroupId = false,
+    bool clearAdaptationGroupName = false,
+    bool clearSeriesId = false,
+    bool clearReleaseDate = false,
+    bool clearPhysicalReleaseId = false,
+    bool clearPhysicalDiscId = false,
+    bool clearDiscContentId = false,
+    bool clearCanonicalRecordingId = false,
+  }) {
+    return Media(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      type: type ?? this.type,
+
+      year: clearYear ? null : (year ?? this.year),
+      posterUrl: clearPosterUrl ? null : (posterUrl ?? this.posterUrl),
+      description:
+          clearDescription ? null : (description ?? this.description),
+      rating: clearRating ? null : (rating ?? this.rating),
+      ratingReason:
+          clearRatingReason ? null : (ratingReason ?? this.ratingReason),
+      trailerUrl:
+          clearTrailerUrl ? null : (trailerUrl ?? this.trailerUrl),
+
+      countryOfOrigin: clearCountryOfOrigin
+          ? null
+          : (countryOfOrigin ?? this.countryOfOrigin),
+      language:
+          clearLanguage ? null : (language ?? this.language),
+      adaptationGroupId: clearAdaptationGroupId
+          ? null
+          : (adaptationGroupId ?? this.adaptationGroupId),
+      adaptationGroupName: clearAdaptationGroupName
+          ? null
+          : (adaptationGroupName ?? this.adaptationGroupName),
+
+      relationshipTypes:
+          relationshipTypes ?? this.relationshipTypes,
+      genres: genres ?? this.genres,
+      tags: tags ?? this.tags,
+      themes: themes ?? this.themes,
+
+      actors: actors ?? this.actors,
+      characters: characters ?? this.characters,
+      directors: directors ?? this.directors,
+      writers: writers ?? this.writers,
+
+      franchises: franchises ?? this.franchises,
+      references: references ?? this.references,
+      music: music ?? this.music,
+
+      seriesId: clearSeriesId ? null : (seriesId ?? this.seriesId),
+      seasonNumber: seasonNumber ?? this.seasonNumber,
+      episodeNumber: episodeNumber ?? this.episodeNumber,
+      totalEpisodesInSeason:
+          totalEpisodesInSeason ?? this.totalEpisodesInSeason,
+
+      releaseDate:
+          clearReleaseDate ? null : (releaseDate ?? this.releaseDate),
+
+      discType: discType ?? this.discType,
+      discRegion: discRegion ?? this.discRegion,
+      discCollectionId: discCollectionId ?? this.discCollectionId,
+      discCollectionTitle:
+          discCollectionTitle ?? this.discCollectionTitle,
+      discNumber: discNumber ?? this.discNumber,
+      discTitleId: discTitleId ?? this.discTitleId,
+      chapters: chapters ?? this.chapters,
+      audioTracks: audioTracks ?? this.audioTracks,
+      languages: languages ?? this.languages,
+      subtitles: subtitles ?? this.subtitles,
+      extras: extras ?? this.extras,
+
+      physicalReleaseId: clearPhysicalReleaseId
+          ? null
+          : (physicalReleaseId ?? this.physicalReleaseId),
+      physicalDiscId: clearPhysicalDiscId
+          ? null
+          : (physicalDiscId ?? this.physicalDiscId),
+      discContentId: clearDiscContentId
+          ? null
+          : (discContentId ?? this.discContentId),
+      isBonusContent: isBonusContent ?? this.isBonusContent,
+      canonicalRecordingId: clearCanonicalRecordingId
+          ? null
+          : (canonicalRecordingId ?? this.canonicalRecordingId),
+
+      watchOptions: watchOptions ?? this.watchOptions,
+      purchaseOptions: purchaseOptions ?? this.purchaseOptions,
+      accessibleProfileIds:
+          accessibleProfileIds ?? this.accessibleProfileIds,
     );
   }
 
   static MediaType _parseMediaType(dynamic value) {
-    final type = value?.toString().trim();
+    final type = value?.toString().trim().toLowerCase();
 
     switch (type) {
-      case 'tvShow':
-      case 'tv_show':
       case 'tvshow':
+      case 'tv_show':
+      case 'tv show':
+      case 'series':
         return MediaType.tvShow;
 
       case 'movie':
@@ -287,14 +529,56 @@ class Media {
       return value.toInt();
     }
 
-    return int.tryParse(
-      value.toString().trim(),
-    );
+    return int.tryParse(value.toString().trim());
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(value.toString().trim());
+  }
+
+  static bool _parseBool(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is num) {
+      return value != 0;
+    }
+
+    if (value is String) {
+      switch (value.trim().toLowerCase()) {
+        case 'true':
+        case '1':
+        case 'yes':
+        case 'on':
+          return true;
+
+        case 'false':
+        case '0':
+        case 'no':
+        case 'off':
+          return false;
+      }
+    }
+
+    return false;
   }
 
   static DateTime? _parseDate(dynamic value) {
     if (value == null) {
       return null;
+    }
+
+    if (value is DateTime) {
+      return value;
     }
 
     final text = value.toString().trim();
@@ -304,6 +588,19 @@ class Media {
     }
 
     return DateTime.tryParse(text);
+  }
+
+  static String _stringValue(
+    dynamic value, {
+    String fallback = '',
+  }) {
+    if (value == null) {
+      return fallback;
+    }
+
+    final text = value.toString().trim();
+
+    return text.isEmpty ? fallback : text;
   }
 
   static String? _nullableString(dynamic value) {
@@ -321,12 +618,18 @@ class Media {
   }
 
   static List<String> _stringList(dynamic value) {
+    if (value is String) {
+      final text = value.trim();
+
+      return text.isEmpty ? const [] : [text];
+    }
+
     if (value is! List) {
-      return [];
+      return const [];
     }
 
     return value
-        .map((item) => item.toString().trim())
+        .map((item) => item?.toString().trim() ?? '')
         .where((item) => item.isNotEmpty)
         .toList();
   }
@@ -335,17 +638,21 @@ class Media {
     dynamic value,
   ) {
     if (value is! List) {
-      return [];
+      return const [];
     }
 
     return value
         .whereType<Map>()
-        .map((item) {
-          return WatchOption.fromJson(
+        .map(
+          (item) => WatchOption.fromJson(
             Map<String, dynamic>.from(item),
-          );
-        })
-        .where((option) => option.provider.isNotEmpty)
+          ),
+        )
+        .where(
+          (option) =>
+              option.provider.trim().isNotEmpty &&
+              option.type.trim().isNotEmpty,
+        )
         .toList();
   }
 
@@ -353,17 +660,21 @@ class Media {
     dynamic value,
   ) {
     if (value is! List) {
-      return [];
+      return const [];
     }
 
     return value
         .whereType<Map>()
-        .map((item) {
-          return PurchaseOption.fromJson(
+        .map(
+          (item) => PurchaseOption.fromJson(
             Map<String, dynamic>.from(item),
-          );
-        })
-        .where((option) => option.retailer.isNotEmpty)
+          ),
+        )
+        .where(
+          (option) =>
+              option.retailer.trim().isNotEmpty &&
+              option.title.trim().isNotEmpty,
+        )
         .toList();
   }
 }
@@ -373,13 +684,18 @@ class WatchOption {
   final String type;
   final String? url;
 
-  WatchOption({
+  const WatchOption({
     required this.provider,
     required this.type,
     this.url,
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
+  bool get isValid =>
+      provider.trim().isNotEmpty &&
+      type.trim().isNotEmpty;
+
+  bool get hasUrl => url?.trim().isNotEmpty == true;
+
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
@@ -392,10 +708,35 @@ class WatchOption {
     Map<String, dynamic> json,
   ) {
     return WatchOption(
-      provider: json['provider']?.toString() ?? '',
-      type: json['type']?.toString() ?? '',
+      provider: _stringValue(json['provider']),
+      type: _stringValue(json['type']),
       url: _nullableString(json['url']),
     );
+  }
+
+  WatchOption copyWith({
+    String? provider,
+    String? type,
+    String? url,
+    bool clearUrl = false,
+  }) {
+    return WatchOption(
+      provider: provider ?? this.provider,
+      type: type ?? this.type,
+      url: clearUrl ? null : (url ?? this.url),
+    );
+  }
+
+  static String _stringValue(
+    dynamic value, {
+    String fallback = '',
+  }) {
+    if (value == null) {
+      return fallback;
+    }
+
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
   }
 
   static String? _nullableString(dynamic value) {
@@ -421,7 +762,7 @@ class PurchaseOption {
   final String url;
   final String format;
 
-  PurchaseOption({
+  const PurchaseOption({
     required this.retailer,
     required this.title,
     required this.price,
@@ -430,7 +771,14 @@ class PurchaseOption {
     required this.format,
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
+  bool get isValid =>
+      retailer.trim().isNotEmpty &&
+      title.trim().isNotEmpty &&
+      price >= 0 &&
+      currency.trim().isNotEmpty &&
+      url.trim().isNotEmpty &&
+      format.trim().isNotEmpty;
+
   Map<String, dynamic> toJson() {
     return {
       'retailer': retailer,
@@ -446,15 +794,30 @@ class PurchaseOption {
     Map<String, dynamic> json,
   ) {
     return PurchaseOption(
-      retailer: json['retailer']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
+      retailer: _stringValue(json['retailer']),
+      title: _stringValue(json['title']),
       price: _parsePrice(json['price']),
-      currency:
-          json['currency']?.toString().trim().isNotEmpty == true
-              ? json['currency'].toString().trim()
-              : 'USD',
-      url: json['url']?.toString() ?? '',
-      format: json['format']?.toString() ?? '',
+      currency: _currency(json['currency']),
+      url: _stringValue(json['url']),
+      format: _stringValue(json['format']),
+    );
+  }
+
+  PurchaseOption copyWith({
+    String? retailer,
+    String? title,
+    double? price,
+    String? currency,
+    String? url,
+    String? format,
+  }) {
+    return PurchaseOption(
+      retailer: retailer ?? this.retailer,
+      title: title ?? this.title,
+      price: price ?? this.price,
+      currency: currency ?? this.currency,
+      url: url ?? this.url,
+      format: format ?? this.format,
     );
   }
 
@@ -467,5 +830,23 @@ class PurchaseOption {
           value?.toString().trim() ?? '',
         ) ??
         0.0;
+  }
+
+  static String _currency(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+
+    return text.isEmpty ? 'USD' : text;
+  }
+
+  static String _stringValue(
+    dynamic value, {
+    String fallback = '',
+  }) {
+    if (value == null) {
+      return fallback;
+    }
+
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
   }
 }

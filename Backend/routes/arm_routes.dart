@@ -1,6 +1,19 @@
 // FILE: `Backend/routes/arm_routes.dart`.
-// Purpose: Implements the arm routes portion of the streaming service.
+//
+// Purpose: Implements the ARM routes portion of the streaming service.
+//
 // This file is part of the documented Flutter/home-server architecture.
+//
+// ARM route responsibilities:
+// - authenticate the caller
+// - validate HTTP input
+// - invoke ArmService
+// - serialize ARM/domain models
+// - return appropriate HTTP responses
+//
+// ARM business logic, disc detection, ripping, verification, physical-media
+// modeling, recording identity, and persistence belong to the ARM service and
+// persistence layers rather than this route class.
 
 import 'dart:convert';
 import 'dart:io';
@@ -10,7 +23,6 @@ import '../middleware/authentication.dart';
 
 class ArmRoutes {
   final ArmService armService;
-
   final AuthenticationMiddleware authentication;
 
   ArmRoutes({
@@ -18,18 +30,14 @@ class ArmRoutes {
     required this.authentication,
   });
 
-  /// Performs `handle` for this feature. Update this documentation when its contract changes.
   Future<void> handle(
     HttpRequest request,
   ) async {
     _addCorsHeaders(request.response);
 
     if (request.method == 'OPTIONS') {
-      request.response.statusCode =
-          HttpStatus.noContent;
-
+      request.response.statusCode = HttpStatus.noContent;
       await request.response.close();
-
       return;
     }
 
@@ -60,16 +68,15 @@ class ArmRoutes {
         return;
       }
 
-      if (request.method == 'GET' &&
-          path.startsWith('/api/v1/arm/jobs/')) {
-        await _job(request);
+      if (request.method == 'POST' &&
+          _isCancelPath(path)) {
+        await _cancel(request);
         return;
       }
 
-      if (request.method == 'POST' &&
-          path.startsWith('/api/v1/arm/jobs/') &&
-          path.endsWith('/cancel')) {
-        await _cancel(request);
+      if (request.method == 'GET' &&
+          _isJobPath(path)) {
+        await _job(request);
         return;
       }
 
@@ -81,7 +88,7 @@ class ArmRoutes {
           'error': 'ARM route not found.',
         },
       );
-    } catch (error) {
+    } on FormatException catch (error) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -90,23 +97,36 @@ class ArmRoutes {
           'error': _cleanError(error),
         },
       );
+    } on ArgumentError catch (error) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': _cleanError(error),
+        },
+      );
+    } catch (error) {
+      await _sendJson(
+        request.response,
+        _statusCodeForError(error),
+        {
+          'success': false,
+          'error': _cleanError(error),
+        },
+      );
     }
   }
 
-  /// Performs `_status` for this feature. Update this documentation when its contract changes.
   Future<void> _status(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
+    if (!_authenticate(request)) {
       await _sendUnauthorized(request.response);
       return;
     }
 
-    final connected =
-        await armService.isConnected();
+    final connected = await armService.isConnected();
 
     await _sendJson(
       request.response,
@@ -119,20 +139,15 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_drives` for this feature. Update this documentation when its contract changes.
   Future<void> _drives(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
+    if (!_authenticate(request)) {
       await _sendUnauthorized(request.response);
       return;
     }
 
-    final drives =
-        await armService.findDrives();
+    final drives = await armService.findDrives();
 
     await _sendJson(
       request.response,
@@ -146,24 +161,21 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_scan` for this feature. Update this documentation when its contract changes.
   Future<void> _scan(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
+    if (!_authenticate(request)) {
       await _sendUnauthorized(request.response);
       return;
     }
 
     final body = await _readJson(request);
+    final driveId = _requiredString(
+      body,
+      'driveId',
+    );
 
-    final driveId = body['driveId'];
-
-    if (driveId is! String ||
-        driveId.trim().isEmpty) {
+    if (driveId == null) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -172,7 +184,6 @@ class ArmRoutes {
           'error': 'driveId is required.',
         },
       );
-
       return;
     }
 
@@ -190,24 +201,22 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_import` for this feature. Update this documentation when its contract changes.
   Future<void> _import(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
+    if (!_authenticate(request)) {
       await _sendUnauthorized(request.response);
       return;
     }
 
     final body = await _readJson(request);
 
-    final driveId = body['driveId'];
+    final driveId = _requiredString(
+      body,
+      'driveId',
+    );
 
-    if (driveId is! String ||
-        driveId.trim().isEmpty) {
+    if (driveId == null) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -216,7 +225,6 @@ class ArmRoutes {
           'error': 'driveId is required.',
         },
       );
-
       return;
     }
 
@@ -235,25 +243,17 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_job` for this feature. Update this documentation when its contract changes.
   Future<void> _job(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
+    if (!_authenticate(request)) {
       await _sendUnauthorized(request.response);
       return;
     }
 
-    const prefix = '/api/v1/arm/jobs/';
+    final jobId = _jobIdFromPath(request.uri.path);
 
-    final jobId = request.uri.path.substring(
-      prefix.length,
-    );
-
-    if (jobId.isEmpty) {
+    if (jobId == null) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -262,13 +262,10 @@ class ArmRoutes {
           'error': 'Job ID is required.',
         },
       );
-
       return;
     }
 
-    final job = await armService.refreshJob(
-      jobId,
-    );
+    final job = await armService.refreshJob(jobId);
 
     await _sendJson(
       request.response,
@@ -280,33 +277,19 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_cancel` for this feature. Update this documentation when its contract changes.
   Future<void> _cancel(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
-
-    if (account == null) {
+    if (!_authenticate(request)) {
       await _sendUnauthorized(request.response);
       return;
     }
 
-    const prefix = '/api/v1/arm/jobs/';
-    const suffix = '/cancel';
-
-    var jobId = request.uri.path.substring(
-      prefix.length,
+    final jobId = _cancelJobIdFromPath(
+      request.uri.path,
     );
 
-    if (jobId.endsWith(suffix)) {
-      jobId = jobId.substring(
-        0,
-        jobId.length - suffix.length,
-      );
-    }
-
-    if (jobId.isEmpty) {
+    if (jobId == null) {
       await _sendJson(
         request.response,
         HttpStatus.badRequest,
@@ -315,13 +298,10 @@ class ArmRoutes {
           'error': 'Job ID is required.',
         },
       );
-
       return;
     }
 
-    final job = await armService.cancelJob(
-      jobId,
-    );
+    final job = await armService.cancelJob(jobId);
 
     await _sendJson(
       request.response,
@@ -334,6 +314,10 @@ class ArmRoutes {
     );
   }
 
+  bool _authenticate(HttpRequest request) {
+    return authentication.authenticate(request) != null;
+  }
+
   Future<Map<String, dynamic>> _readJson(
     HttpRequest request,
   ) async {
@@ -341,23 +325,102 @@ class ArmRoutes {
         await utf8.decoder.bind(request).join();
 
     if (content.trim().isEmpty) {
-      return {};
+      return <String, dynamic>{};
     }
 
     final decoded = jsonDecode(content);
 
     if (decoded is! Map) {
-      throw Exception(
+      throw const FormatException(
         'Request body must be a JSON object.',
       );
     }
 
-    return Map<String, dynamic>.from(
-      decoded,
-    );
+    return Map<String, dynamic>.from(decoded);
   }
 
-  /// Performs `_sendUnauthorized` for this feature. Update this documentation when its contract changes.
+  String? _requiredString(
+    Map<String, dynamic> body,
+    String key,
+  ) {
+    final value = body[key];
+
+    if (value is! String) {
+      return null;
+    }
+
+    final normalized = value.trim();
+
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return normalized;
+  }
+
+  bool _isJobPath(String path) {
+    const prefix = '/api/v1/arm/jobs/';
+
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final remainder = path.substring(prefix.length);
+
+    if (remainder.isEmpty) {
+      return false;
+    }
+
+    // A normal job route must contain exactly one job ID.
+    return !remainder.contains('/');
+  }
+
+  bool _isCancelPath(String path) {
+    const prefix = '/api/v1/arm/jobs/';
+    const suffix = '/cancel';
+
+    if (!path.startsWith(prefix) ||
+        !path.endsWith(suffix)) {
+      return false;
+    }
+
+    final jobId = path.substring(
+      prefix.length,
+      path.length - suffix.length,
+    );
+
+    return jobId.trim().isNotEmpty &&
+        !jobId.contains('/');
+  }
+
+  String? _jobIdFromPath(String path) {
+    const prefix = '/api/v1/arm/jobs/';
+
+    if (!_isJobPath(path)) {
+      return null;
+    }
+
+    final jobId = path.substring(prefix.length).trim();
+
+    return jobId.isEmpty ? null : jobId;
+  }
+
+  String? _cancelJobIdFromPath(String path) {
+    const prefix = '/api/v1/arm/jobs/';
+    const suffix = '/cancel';
+
+    if (!_isCancelPath(path)) {
+      return null;
+    }
+
+    final jobId = path.substring(
+      prefix.length,
+      path.length - suffix.length,
+    ).trim();
+
+    return jobId.isEmpty ? null : jobId;
+  }
+
   Future<void> _sendUnauthorized(
     HttpResponse response,
   ) async {
@@ -371,23 +434,20 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
   Future<void> _sendJson(
     HttpResponse response,
     int statusCode,
     Map<String, dynamic> data,
   ) async {
+    if (response.headers.contentType == null) {
+      response.headers.contentType = ContentType.json;
+    }
+
     response.statusCode = statusCode;
-
-    response.headers.contentType =
-        ContentType.json;
-
     response.write(jsonEncode(data));
-
     await response.close();
   }
 
-  /// Performs `_addCorsHeaders` for this feature. Update this documentation when its contract changes.
   void _addCorsHeaders(
     HttpResponse response,
   ) {
@@ -407,12 +467,38 @@ class ArmRoutes {
     );
   }
 
-  /// Performs `_cleanError` for this feature. Update this documentation when its contract changes.
+  int _statusCodeForError(Object error) {
+    final message = _cleanError(error).toLowerCase();
+
+    if (message.contains('not found') ||
+        message.contains('unknown job') ||
+        message.contains('unknown drive') ||
+        message.contains('does not exist')) {
+      return HttpStatus.notFound;
+    }
+
+    if (message.contains('already cancelled') ||
+        message.contains('already completed') ||
+        message.contains('already finished') ||
+        message.contains('cannot cancel')) {
+      return HttpStatus.conflict;
+    }
+
+    if (message.contains('not connected') ||
+        message.contains('no drive') ||
+        message.contains('drive unavailable') ||
+        message.contains('disc unavailable')) {
+      return HttpStatus.serviceUnavailable;
+    }
+
+    return HttpStatus.internalServerError;
+  }
+
   String _cleanError(Object error) {
     final message = error.toString();
 
     if (message.startsWith('Exception: ')) {
-      return message.substring(11);
+      return message.substring('Exception: '.length);
     }
 
     return message;

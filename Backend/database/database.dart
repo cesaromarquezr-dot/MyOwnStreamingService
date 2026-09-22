@@ -1,7 +1,22 @@
 // FILE: `Backend/database/database.dart`.
 // Purpose: Implements the database portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// The database maintains the backend's authoritative in-memory state while
+// Supabase provides durable persistence for the entities that currently have
+// a SupabaseStore implementation.
+//
+// ARM ingestion state is also modeled here so physical release, physical
+// disc, disc content, rip-job and canonical music-recording relationships
+// survive across individual service calls during the backend process.
+//
+// Durable ARM persistence can be added to SupabaseStore/database migrations
+// without changing the public Database API defined here.
 
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import '../arm/arm_models.dart';
 import '../models/account.dart';
 import '../models/account_member.dart';
 import '../models/media.dart';
@@ -14,8 +29,6 @@ import '../models/profile.dart';
 import '../models/remote_worker.dart';
 import '../models/review.dart';
 import '../supabase_store.dart';
-import 'dart:async';
-import 'dart:developer' as developer;
 
 class SessionRecord {
   final String token;
@@ -43,7 +56,8 @@ class SessionRecord {
     return !DateTime.now().isBefore(expiresAt);
   }
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
+  /// Performs `toJson` for this feature. Update this documentation when its
+  /// contract changes.
   Map<String, dynamic> toJson() {
     return {
       'createdAt': createdAt.toIso8601String(),
@@ -79,23 +93,34 @@ class Database {
   // ---------------------------------------------------------------------------
 
   /// Loads persistent account data from Supabase into the in-memory cache.
-  /// The backend remains the authoritative API; Supabase is the durable store.
+  ///
+  /// The backend remains the authoritative API; Supabase is the durable
+  /// store for the entities currently supported by SupabaseStore.
+  ///
+  /// ARM ingestion entities are intentionally not loaded here yet because
+  /// their durable schema/store implementation is being introduced separately.
   Future<void> initializePersistent() async {
     try {
       final store = SupabaseStore.instance;
-      if (!store.enabled) return;
+
+      if (!store.enabled) {
+        return;
+      }
 
       final accounts = await store.loadAccounts();
+
       for (final account in accounts) {
         _cacheAccount(account);
       }
 
       final payments = await store.loadPayments();
+
       for (final payment in payments) {
         paymentsById[payment.id] = payment;
       }
 
       final memberLogins = await store.loadMemberLogins();
+
       for (final login in memberLogins) {
         registerMemberLogin(login);
       }
@@ -109,14 +134,16 @@ class Database {
           continue;
         }
 
-        registerMemberLogin(MemberLoginRecord(
-          memberId: 'owner_${account.id}',
-          accountId: account.id,
-          email: account.email.trim().toLowerCase(),
-          passwordHash: account.passwordHash,
-          role: 'owner',
-          status: 'active',
-        ));
+        registerMemberLogin(
+          MemberLoginRecord(
+            memberId: 'owner_${account.id}',
+            accountId: account.id,
+            email: account.email.trim().toLowerCase(),
+            passwordHash: account.passwordHash,
+            role: 'owner',
+            status: 'active',
+          ),
+        );
       }
     } catch (error, stackTrace) {
       developer.log(
@@ -130,7 +157,6 @@ class Database {
 
   void _cacheAccount(Account account) {
     final username = account.username.trim().toLowerCase();
-
     final email = account.email.trim().toLowerCase();
 
     accountsById[account.id] = account;
@@ -160,6 +186,7 @@ class Database {
   }
 
   /// Persists an account and waits for the durable Supabase write to finish.
+  ///
   /// Use this for authentication-critical operations such as account creation
   /// and password changes so a successful HTTP response is never returned
   /// before the credential has been durably stored.
@@ -196,10 +223,6 @@ class Database {
 
   /// Persists a payment session and waits for the durable Supabase write
   /// to finish.
-  ///
-  /// This is available for payment operations where the caller must not
-  /// receive a successful response until the payment state has been
-  /// durably stored.
   Future<void> persistPaymentAndWait(
     PaymentSession payment,
   ) async {
@@ -242,11 +265,11 @@ class Database {
   // ACCOUNTS
   // ---------------------------------------------------------------------------
 
-  final Map<String, Account> accountsById = {};
+  final Map<String, Account> accountsById = <String, Account>{};
 
-  final Map<String, String> accountIdByUsername = {};
+  final Map<String, String> accountIdByUsername = <String, String>{};
 
-  final Map<String, String> accountIdByEmail = {};
+  final Map<String, String> accountIdByEmail = <String, String>{};
 
   // Login identities are separate from accounts. A person can belong to
   // multiple accounts, so email must never be used as the account ID.
@@ -259,29 +282,377 @@ class Database {
 
   /// Payment sessions are cached here after being loaded from the durable
   /// Supabase store. Supabase remains the persistent source of truth.
-  final Map<String, PaymentSession> paymentsById = <String, PaymentSession>{};
+  final Map<String, PaymentSession> paymentsById =
+      <String, PaymentSession>{};
 
   // ---------------------------------------------------------------------------
   // SESSIONS
   // ---------------------------------------------------------------------------
 
-  final Map<String, SessionRecord> sessions = {};
+  final Map<String, SessionRecord> sessions = <String, SessionRecord>{};
 
   // Recent failed login timestamps, keyed by normalized username/email.
   // This is intentionally bounded and in-memory for the current backend.
-  final Map<String, List<DateTime>> failedLoginAttempts = {};
+  final Map<String, List<DateTime>> failedLoginAttempts =
+      <String, List<DateTime>>{};
 
-  final Map<String, Set<String>> knownLoginFingerprints = {};
+  final Map<String, Set<String>> knownLoginFingerprints =
+      <String, Set<String>>{};
 
-  final Map<String, String> oneTimeCodesByAccountId = {};
+  final Map<String, String> oneTimeCodesByAccountId =
+      <String, String>{};
 
-  final Map<String, DateTime> oneTimeCodeExpiryByAccountId = {};
+  final Map<String, DateTime> oneTimeCodeExpiryByAccountId =
+      <String, DateTime>{};
 
-  final Map<String, RemoteWorker> remoteWorkersById = {};
+  final Map<String, RemoteWorker> remoteWorkersById =
+      <String, RemoteWorker>{};
 
-  final Map<String, RemoteImportJob> remoteImportJobsById = {};
+  final Map<String, RemoteImportJob> remoteImportJobsById =
+      <String, RemoteImportJob>{};
 
-  /// Performs `getKnownLoginFingerprints` for this feature. Update this documentation when its contract changes.
+  // ---------------------------------------------------------------------------
+  // ARM INGESTION
+  // ---------------------------------------------------------------------------
+  //
+  // These maps are the backend's current in-process ARM ingestion store.
+  //
+  // The important distinction is:
+  //
+  //   rip job       = operation/lifecycle
+  //   release       = physical publication/edition
+  //   physical disc = individual physical medium
+  //   content       = material found on that disc
+  //   recording     = canonical music recording identity
+  //
+  // A physical release may contain multiple physical discs and a disc may
+  // contain multiple content items. Music tracks reference recordings rather
+  // than creating a new canonical recording for every release.
+
+  final Map<String, ArmRipJob> armRipJobsById =
+      <String, ArmRipJob>{};
+
+  final Map<String, ArmPhysicalRelease> armPhysicalReleasesById =
+      <String, ArmPhysicalRelease>{};
+
+  final Map<String, ArmPhysicalDisc> armPhysicalDiscsById =
+      <String, ArmPhysicalDisc>{};
+
+  final Map<String, ArmDiscContent> armDiscContentsById =
+      <String, ArmDiscContent>{};
+
+  final Map<String, ArmMusicRecording> armMusicRecordingsById =
+      <String, ArmMusicRecording>{};
+
+  /// Returns all ARM rip jobs currently known to this backend process.
+  List<ArmRipJob> getArmRipJobs() {
+    return List<ArmRipJob>.unmodifiable(
+      armRipJobsById.values,
+    );
+  }
+
+  /// Saves an ARM rip job in the in-memory ingestion store.
+  ///
+  /// Associated physical-release, physical-disc, disc-content and recording
+  /// entities are also indexed when present on the job.
+  void saveArmRipJob(
+    ArmRipJob job,
+  ) {
+    armRipJobsById[job.id] = job;
+
+    final release = job.physicalRelease;
+
+    if (release != null) {
+      saveArmPhysicalRelease(release);
+    }
+
+    final disc = job.physicalDisc;
+
+    if (disc != null) {
+      saveArmPhysicalDisc(disc);
+    }
+
+    for (final recording in job.recordings) {
+      saveArmMusicRecording(recording);
+    }
+
+    if (disc != null) {
+      for (final content in disc.contents) {
+        saveArmDiscContent(content);
+      }
+    }
+  }
+
+  /// Retrieves an ARM rip job by ID.
+  ArmRipJob? getArmRipJobById(
+    String jobId,
+  ) {
+    final normalizedId = jobId.trim();
+
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    return armRipJobsById[normalizedId];
+  }
+
+  /// Deletes an ARM rip job from the in-memory ingestion store.
+  ///
+  /// Physical provenance is deliberately not deleted here. A completed
+  /// release/disc/content record may be referenced by the library import
+  /// workflow even after the transient rip job is no longer needed.
+  void deleteArmRipJob(
+    String jobId,
+  ) {
+    armRipJobsById.remove(
+      jobId.trim(),
+    );
+  }
+
+  /// Saves a physical media release.
+  void saveArmPhysicalRelease(
+    ArmPhysicalRelease release,
+  ) {
+    armPhysicalReleasesById[release.id] = release;
+
+    for (final disc in release.discs) {
+      saveArmPhysicalDisc(disc);
+    }
+  }
+
+  /// Retrieves a physical release by ID.
+  ArmPhysicalRelease? getArmPhysicalReleaseById(
+    String releaseId,
+  ) {
+    final normalizedId = releaseId.trim();
+
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    return armPhysicalReleasesById[normalizedId];
+  }
+
+  /// Returns all physical releases currently known to the backend.
+  List<ArmPhysicalRelease> getArmPhysicalReleases() {
+    return List<ArmPhysicalRelease>.unmodifiable(
+      armPhysicalReleasesById.values,
+    );
+  }
+
+  /// Returns physical releases whose title matches the supplied title.
+  ///
+  /// This is intentionally a discovery helper, not an identity merge.
+  /// Persistence/metadata resolution must use stronger identifiers such as
+  /// barcode, edition, provider identifiers and reviewed metadata before
+  /// deciding that two releases are the same physical release.
+  List<ArmPhysicalRelease> findArmPhysicalReleasesByTitle(
+    String title,
+  ) {
+    final normalizedTitle = title.trim().toLowerCase();
+
+    if (normalizedTitle.isEmpty) {
+      return const <ArmPhysicalRelease>[];
+    }
+
+    return armPhysicalReleasesById.values
+        .where(
+          (release) =>
+              release.title.trim().toLowerCase() == normalizedTitle,
+        )
+        .toList();
+  }
+
+  /// Saves a physical disc and indexes its disc contents.
+  void saveArmPhysicalDisc(
+    ArmPhysicalDisc disc,
+  ) {
+    armPhysicalDiscsById[disc.id] = disc;
+
+    for (final content in disc.contents) {
+      saveArmDiscContent(content);
+    }
+  }
+
+  /// Retrieves a physical disc by ID.
+  ArmPhysicalDisc? getArmPhysicalDiscById(
+    String discId,
+  ) {
+    final normalizedId = discId.trim();
+
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    return armPhysicalDiscsById[normalizedId];
+  }
+
+  /// Returns all physical discs belonging to a physical release.
+  List<ArmPhysicalDisc> getArmPhysicalDiscsForRelease(
+    String releaseId,
+  ) {
+    final normalizedReleaseId = releaseId.trim();
+
+    if (normalizedReleaseId.isEmpty) {
+      return const <ArmPhysicalDisc>[];
+    }
+
+    final discs = armPhysicalDiscsById.values
+        .where(
+          (disc) => disc.releaseId == normalizedReleaseId,
+        )
+        .toList();
+
+    discs.sort(
+      (a, b) => a.discNumber.compareTo(
+        b.discNumber,
+      ),
+    );
+
+    return discs;
+  }
+
+  /// Saves a single disc-content record.
+  void saveArmDiscContent(
+    ArmDiscContent content,
+  ) {
+    armDiscContentsById[content.id] = content;
+  }
+
+  /// Retrieves disc content by ID.
+  ArmDiscContent? getArmDiscContentById(
+    String contentId,
+  ) {
+    final normalizedId = contentId.trim();
+
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    return armDiscContentsById[normalizedId];
+  }
+
+  /// Returns all content items belonging to a physical disc.
+  List<ArmDiscContent> getArmDiscContentsForDisc(
+    String discId,
+  ) {
+    final normalizedDiscId = discId.trim();
+
+    if (normalizedDiscId.isEmpty) {
+      return const <ArmDiscContent>[];
+    }
+
+    return armDiscContentsById.values
+        .where(
+          (content) => content.discId == normalizedDiscId,
+        )
+        .toList();
+  }
+
+  /// Returns only primary/feature content from a physical disc.
+  List<ArmDiscContent> getPrimaryArmDiscContentsForDisc(
+    String discId,
+  ) {
+    return getArmDiscContentsForDisc(discId)
+        .where(
+          (content) => content.primary,
+        )
+        .toList();
+  }
+
+  /// Returns bonus/non-primary content from a physical disc.
+  List<ArmDiscContent> getBonusArmDiscContentsForDisc(
+    String discId,
+  ) {
+    return getArmDiscContentsForDisc(discId)
+        .where(
+          (content) => content.isBonus,
+        )
+        .toList();
+  }
+
+  /// Saves a canonical music recording candidate.
+  ///
+  /// The database deliberately does not automatically merge recordings based
+  /// only on title or artist. Different performances can share those values.
+  /// Strong identifiers such as ISRC, verified duration and audio fingerprints
+  /// should be used by the identity-resolution layer.
+  void saveArmMusicRecording(
+    ArmMusicRecording recording,
+  ) {
+    armMusicRecordingsById[recording.id] = recording;
+  }
+
+  /// Retrieves a canonical music recording by ID.
+  ArmMusicRecording? getArmMusicRecordingById(
+    String recordingId,
+  ) {
+    final normalizedId = recordingId.trim();
+
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    return armMusicRecordingsById[normalizedId];
+  }
+
+  /// Returns all canonical music recordings currently known to the backend.
+  List<ArmMusicRecording> getArmMusicRecordings() {
+    return List<ArmMusicRecording>.unmodifiable(
+      armMusicRecordingsById.values,
+    );
+  }
+
+  /// Finds recordings with a matching ISRC.
+  ///
+  /// ISRC is treated as a strong identity signal, but the caller should still
+  /// validate provider metadata and recording version before performing a
+  /// permanent merge.
+  List<ArmMusicRecording> findArmMusicRecordingsByIsrc(
+    String isrc,
+  ) {
+    final normalizedIsrc = isrc.trim().toUpperCase();
+
+    if (normalizedIsrc.isEmpty) {
+      return const <ArmMusicRecording>[];
+    }
+
+    return armMusicRecordingsById.values
+        .where(
+          (recording) =>
+              recording.isrc?.trim().toUpperCase() == normalizedIsrc,
+        )
+        .toList();
+  }
+
+  /// Finds recordings with a matching audio fingerprint.
+  ///
+  /// Fingerprints are compared as normalized strings. Fingerprint generation
+  /// and similarity scoring remain outside this database cache.
+  List<ArmMusicRecording> findArmMusicRecordingsByFingerprint(
+    String fingerprint,
+  ) {
+    final normalizedFingerprint = fingerprint.trim().toLowerCase();
+
+    if (normalizedFingerprint.isEmpty) {
+      return const <ArmMusicRecording>[];
+    }
+
+    return armMusicRecordingsById.values
+        .where(
+          (recording) =>
+              recording.audioFingerprint?.trim().toLowerCase() ==
+              normalizedFingerprint,
+        )
+        .toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // LOGIN SECURITY
+  // ---------------------------------------------------------------------------
+
+  /// Performs `getKnownLoginFingerprints` for this feature. Update this
+  /// documentation when its contract changes.
   Set<String> getKnownLoginFingerprints(
     String accountId,
   ) =>
@@ -290,19 +661,22 @@ class Database {
         () => <String>{},
       );
 
-  /// Performs `recordFailedLogin` for this feature. Update this documentation when its contract changes.
+  /// Performs `recordFailedLogin` for this feature. Update this documentation
+  /// when its contract changes.
   void recordFailedLogin(
     String login,
   ) {
     final key = login.trim().toLowerCase();
 
-    if (key.isEmpty) return;
+    if (key.isEmpty) {
+      return;
+    }
 
     final now = DateTime.now();
 
     final attempts = failedLoginAttempts.putIfAbsent(
       key,
-      () => [],
+      () => <DateTime>[],
     );
 
     attempts.removeWhere(
@@ -319,7 +693,8 @@ class Database {
     }
   }
 
-  /// Performs `recentFailedLoginCount` for this feature. Update this documentation when its contract changes.
+  /// Performs `recentFailedLoginCount` for this feature. Update this
+  /// documentation when its contract changes.
   int recentFailedLoginCount(
     String login,
   ) {
@@ -327,7 +702,9 @@ class Database {
 
     final attempts = failedLoginAttempts[key];
 
-    if (attempts == null) return 0;
+    if (attempts == null) {
+      return 0;
+    }
 
     final now = DateTime.now();
 
@@ -338,7 +715,8 @@ class Database {
     return attempts.length;
   }
 
-  /// Performs `clearFailedLoginAttempts` for this feature. Update this documentation when its contract changes.
+  /// Performs `clearFailedLoginAttempts` for this feature. Update this
+  /// documentation when its contract changes.
   void clearFailedLoginAttempts(
     String login,
   ) {
@@ -351,10 +729,11 @@ class Database {
   // MEDIA
   // ---------------------------------------------------------------------------
 
-  final Map<String, Media> mediaById = {};
+  final Map<String, Media> mediaById = <String, Media>{};
 
   // Media reviews are kept here by the current backend persistence abstraction.
-  final Map<String, MediaReview> reviewsById = <String, MediaReview>{};
+  final Map<String, MediaReview> reviewsById =
+      <String, MediaReview>{};
 
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
@@ -411,6 +790,10 @@ class Database {
   ) {
     final key = login.email.trim().toLowerCase();
 
+    if (key.isEmpty) {
+      return;
+    }
+
     final entries = memberLoginsByEmail.putIfAbsent(
       key,
       () => <MemberLoginRecord>[],
@@ -431,7 +814,9 @@ class Database {
 
     final entries = memberLoginsByEmail[key];
 
-    if (entries == null) return;
+    if (entries == null) {
+      return;
+    }
 
     if (accountId == null) {
       memberLoginsByEmail.remove(key);
@@ -499,14 +884,16 @@ class Database {
     return null;
   }
 
-  /// Performs `hasProfile` for this feature. Update this documentation when its contract changes.
+  /// Performs `hasProfile` for this feature. Update this documentation when
+  /// its contract changes.
   bool hasProfile(
     String profileId,
   ) {
     return getProfileById(profileId) != null;
   }
 
-  /// Performs `profileBelongsToAccount` for this feature. Update this documentation when its contract changes.
+  /// Performs `profileBelongsToAccount` for this feature. Update this
+  /// documentation when its contract changes.
   bool profileBelongsToAccount({
     required String accountId,
     required String profileId,
@@ -520,20 +907,22 @@ class Database {
     return account.getProfileById(profileId) != null;
   }
 
-  /// Performs `saveAccount` for this feature. Update this documentation when its contract changes.
+  /// Performs `saveAccount` for this feature. Update this documentation when
+  /// its contract changes.
   void saveAccount(
     Account account,
   ) {
     final username = account.username.trim().toLowerCase();
-
     final email = account.email.trim().toLowerCase();
 
     final previous = accountsById[account.id];
 
     if (previous != null) {
-      final previousUsername = previous.username.trim().toLowerCase();
+      final previousUsername =
+          previous.username.trim().toLowerCase();
 
-      final previousEmail = previous.email.trim().toLowerCase();
+      final previousEmail =
+          previous.email.trim().toLowerCase();
 
       if (previousUsername != username &&
           accountIdByUsername[previousUsername] == account.id) {
@@ -563,14 +952,19 @@ class Database {
       ),
     );
 
-    accountIdByUsername[username] = account.id;
+    if (username.isNotEmpty) {
+      accountIdByUsername[username] = account.id;
+    }
 
-    accountIdByEmail[email] = account.id;
+    if (email.isNotEmpty) {
+      accountIdByEmail[email] = account.id;
+    }
 
     _persistAccount(account);
   }
 
-  /// Performs `deleteAccount` for this feature. Update this documentation when its contract changes.
+  /// Performs `deleteAccount` for this feature. Update this documentation when
+  /// its contract changes.
   void deleteAccount(
     String accountId,
   ) {
@@ -581,20 +975,12 @@ class Database {
     }
 
     final username = account.username.trim().toLowerCase();
-
     final email = account.email.trim().toLowerCase();
 
-    accountIdByUsername.remove(
-      username,
-    );
+    accountIdByUsername.remove(username);
+    accountIdByEmail.remove(email);
 
-    accountIdByEmail.remove(
-      email,
-    );
-
-    accountsById.remove(
-      accountId,
-    );
+    accountsById.remove(accountId);
 
     for (final email in memberLoginsByEmail.keys.toList()) {
       removeMemberLogin(
@@ -603,12 +989,9 @@ class Database {
       );
     }
 
-    deleteSessionsForAccount(
-      accountId,
-    );
+    deleteSessionsForAccount(accountId);
 
-    // Remove Group Watch sessions hosted by
-    // this account.
+    // Remove Group Watch sessions hosted by this account.
     groupWatchSessionsById.removeWhere(
       (_, session) => session.accountId == accountId,
     );
@@ -635,7 +1018,8 @@ class Database {
   // SESSIONS
   // ---------------------------------------------------------------------------
 
-  /// Performs `saveSession` for this feature. Update this documentation when its contract changes.
+  /// Performs `saveSession` for this feature. Update this documentation when
+  /// its contract changes.
   void saveSession(
     String token,
     String accountId, {
@@ -643,13 +1027,19 @@ class Database {
     String ipAddress = 'unknown',
     String userAgent = 'unknown',
   }) {
-    final now = DateTime.now();
+    final normalizedToken = token.trim();
+    final normalizedAccountId = accountId.trim();
 
+    if (normalizedToken.isEmpty || normalizedAccountId.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
     final lifetime = ttl ?? defaultSessionLifetime;
 
-    sessions[token] = SessionRecord(
-      token: token,
-      accountId: accountId,
+    sessions[normalizedToken] = SessionRecord(
+      token: normalizedToken,
+      accountId: normalizedAccountId,
       createdAt: now,
       expiresAt: now.add(lifetime),
       lastUsedAt: now,
@@ -701,32 +1091,36 @@ class Database {
     return getAccountById(accountId);
   }
 
-  /// Performs `deleteSession` for this feature. Update this documentation when its contract changes.
+  /// Performs `deleteSession` for this feature. Update this documentation
+  /// when its contract changes.
   void deleteSession(
     String token,
   ) {
     sessions.remove(token);
   }
 
-  /// Replaces an existing session token while preserving its account/device metadata.
+  /// Replaces an existing session token while preserving its
+  /// account/device metadata.
   String? rotateSession(
     String oldToken,
     String newToken,
   ) {
     final session = getSession(oldToken);
 
-    if (session == null) return null;
+    if (session == null) {
+      return null;
+    }
+
+    final now = DateTime.now();
 
     sessions.remove(oldToken);
 
     sessions[newToken] = SessionRecord(
       token: newToken,
       accountId: session.accountId,
-      createdAt: DateTime.now(),
-      expiresAt: DateTime.now().add(
-        defaultSessionLifetime,
-      ),
-      lastUsedAt: DateTime.now(),
+      createdAt: now,
+      expiresAt: now.add(defaultSessionLifetime),
+      lastUsedAt: now,
       ipAddress: session.ipAddress,
       userAgent: session.userAgent,
     );
@@ -734,7 +1128,8 @@ class Database {
     return session.accountId;
   }
 
-  /// Performs `deleteSessionsForAccount` for this feature. Update this documentation when its contract changes.
+  /// Performs `deleteSessionsForAccount` for this feature. Update this
+  /// documentation when its contract changes.
   void deleteSessionsForAccount(
     String accountId,
   ) {
@@ -743,21 +1138,19 @@ class Database {
     );
   }
 
-  /// Performs `getSessionsForAccount` for this feature. Update this documentation when its contract changes.
+  /// Performs `getSessionsForAccount` for this feature. Update this
+  /// documentation when its contract changes.
   List<SessionRecord> getSessionsForAccount(
     String accountId,
   ) {
     final result = <SessionRecord>[];
-
     final expiredTokens = <String>[];
 
     for (final entry in sessions.entries) {
       final session = entry.value;
 
       if (session.isExpired) {
-        expiredTokens.add(
-          entry.key,
-        );
+        expiredTokens.add(entry.key);
         continue;
       }
 
@@ -783,7 +1176,8 @@ class Database {
   // MEDIA
   // ---------------------------------------------------------------------------
 
-  /// Performs `saveMedia` for this feature. Update this documentation when its contract changes.
+  /// Performs `saveMedia` for this feature. Update this documentation when
+  /// its contract changes.
   void saveMedia(
     Media media,
   ) {
@@ -796,14 +1190,14 @@ class Database {
     return mediaById[mediaId];
   }
 
-  /// Performs `getAllMedia` for this feature. Update this documentation when its contract changes.
+  /// Performs `getAllMedia` for this feature. Update this documentation when
+  /// its contract changes.
   List<Media> getAllMedia() {
     final media = mediaById.values.toList();
 
     media.sort(
       (a, b) {
         final aDate = a.releaseDate;
-
         final bDate = b.releaseDate;
 
         if (aDate != null && bDate != null) {
@@ -823,13 +1217,12 @@ class Database {
         }
 
         final aYear = a.year;
-
         final bYear = b.year;
 
-        if (aYear != null && bYear != null && aYear != bYear) {
-          return bYear.compareTo(
-            aYear,
-          );
+        if (aYear != null &&
+            bYear != null &&
+            aYear != bYear) {
+          return bYear.compareTo(aYear);
         }
 
         if (aYear != null) {
@@ -849,7 +1242,8 @@ class Database {
     return media;
   }
 
-  /// Performs `getMovies` for this feature. Update this documentation when its contract changes.
+  /// Performs `getMovies` for this feature. Update this documentation when
+  /// its contract changes.
   List<Media> getMovies() {
     return getAllMedia()
         .where(
@@ -858,7 +1252,8 @@ class Database {
         .toList();
   }
 
-  /// Performs `getTvShows` for this feature. Update this documentation when its contract changes.
+  /// Performs `getTvShows` for this feature. Update this documentation when
+  /// its contract changes.
   List<Media> getTvShows() {
     return getAllMedia()
         .where(
@@ -867,7 +1262,8 @@ class Database {
         .toList();
   }
 
-  /// Performs `getSeries` for this feature. Update this documentation when its contract changes.
+  /// Performs `getSeries` for this feature. Update this documentation when
+  /// its contract changes.
   List<Media> getSeries(
     String seriesId,
   ) {
@@ -878,29 +1274,28 @@ class Database {
         .toList();
   }
 
-  /// Performs `hasMedia` for this feature. Update this documentation when its contract changes.
+  /// Performs `hasMedia` for this feature. Update this documentation when
+  /// its contract changes.
   bool hasMedia(
     String mediaId,
   ) {
-    return mediaById.containsKey(
-      mediaId,
-    );
+    return mediaById.containsKey(mediaId);
   }
 
-  /// Performs `deleteMedia` for this feature. Update this documentation when its contract changes.
+  /// Performs `deleteMedia` for this feature. Update this documentation when
+  /// its contract changes.
   void deleteMedia(
     String mediaId,
   ) {
-    mediaById.remove(
-      mediaId,
-    );
+    mediaById.remove(mediaId);
   }
 
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
 
-  /// Performs `saveGroupRecommendation` for this feature. Update this documentation when its contract changes.
+  /// Performs `saveGroupRecommendation` for this feature. Update this
+  /// documentation when its contract changes.
   void saveGroupRecommendation(
     GroupRecommendation recommendation,
   ) {
@@ -918,7 +1313,8 @@ class Database {
   ) {
     return groupRecommendationsById.values
         .where(
-          (recommendation) => recommendation.accountId == accountId,
+          (recommendation) =>
+              recommendation.accountId == accountId,
         )
         .toList();
   }
@@ -926,25 +1322,23 @@ class Database {
   List<GroupRecommendation> getVotingGroupRecommendationsForAccount(
     String accountId,
   ) {
-    return getGroupRecommendationsForAccount(
-      accountId,
-    )
+    return getGroupRecommendationsForAccount(accountId)
         .where(
           (recommendation) => recommendation.isVotingOpen,
         )
         .toList();
   }
 
-  /// Performs `deleteGroupRecommendation` for this feature. Update this documentation when its contract changes.
+  /// Performs `deleteGroupRecommendation` for this feature. Update this
+  /// documentation when its contract changes.
   void deleteGroupRecommendation(
     String recommendationId,
   ) {
-    groupRecommendationsById.remove(
-      recommendationId,
-    );
+    groupRecommendationsById.remove(recommendationId);
   }
 
-  /// Performs `clearGroupRecommendations` for this feature. Update this documentation when its contract changes.
+  /// Performs `clearGroupRecommendations` for this feature. Update this
+  /// documentation when its contract changes.
   void clearGroupRecommendations() {
     groupRecommendationsById.clear();
   }
@@ -953,7 +1347,8 @@ class Database {
   // GROUP WATCH
   // ---------------------------------------------------------------------------
 
-  /// Performs `saveGroupWatchSession` for this feature. Update this documentation when its contract changes.
+  /// Performs `saveGroupWatchSession` for this feature. Update this
+  /// documentation when its contract changes.
   void saveGroupWatchSession(
     GroupWatchSession session,
   ) {
@@ -986,7 +1381,8 @@ class Database {
     ).toList();
   }
 
-  /// Performs `getGroupWatchSessionsForProfile` for this feature. Update this documentation when its contract changes.
+  /// Performs `getGroupWatchSessionsForProfile` for this feature. Update this
+  /// documentation when its contract changes.
   List<GroupWatchSession> getGroupWatchSessionsForProfile(
     String profileId,
   ) {
@@ -1019,16 +1415,16 @@ class Database {
         .toList();
   }
 
-  /// Performs `deleteGroupWatchSession` for this feature. Update this documentation when its contract changes.
+  /// Performs `deleteGroupWatchSession` for this feature. Update this
+  /// documentation when its contract changes.
   void deleteGroupWatchSession(
     String sessionId,
   ) {
-    groupWatchSessionsById.remove(
-      sessionId,
-    );
+    groupWatchSessionsById.remove(sessionId);
   }
 
-  /// Performs `clearGroupWatchSessions` for this feature. Update this documentation when its contract changes.
+  /// Performs `clearGroupWatchSessions` for this feature. Update this
+  /// documentation when its contract changes.
   void clearGroupWatchSessions() {
     groupWatchSessionsById.clear();
   }
@@ -1037,7 +1433,10 @@ class Database {
   // CLEAR
   // ---------------------------------------------------------------------------
 
-  /// Performs `clear` for this feature. Update this documentation when its contract changes.
+  /// Clears all in-memory database state.
+  ///
+  /// This does not delete durable Supabase data. It only resets the current
+  /// backend process cache.
   void clear() {
     accountsById.clear();
     accountIdByUsername.clear();
@@ -1049,10 +1448,28 @@ class Database {
 
     sessions.clear();
 
+    failedLoginAttempts.clear();
+    knownLoginFingerprints.clear();
+    oneTimeCodesByAccountId.clear();
+    oneTimeCodeExpiryByAccountId.clear();
+
+    remoteWorkersById.clear();
+    remoteImportJobsById.clear();
+
     mediaById.clear();
+    reviewsById.clear();
 
     groupRecommendationsById.clear();
 
     groupWatchSessionsById.clear();
+    groupChatRoomsById.clear();
+
+    // ARM ingestion state is process-local at this stage. Durable ARM
+    // persistence will be handled by the database/store migration layer.
+    armRipJobsById.clear();
+    armPhysicalReleasesById.clear();
+    armPhysicalDiscsById.clear();
+    armDiscContentsById.clear();
+    armMusicRecordingsById.clear();
   }
 }

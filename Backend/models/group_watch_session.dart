@@ -1,6 +1,10 @@
 // FILE: `Backend/models/group_watch_session.dart`.
 // Purpose: Implements the group watch session portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// Group Watch supports profiles from different accounts. The session's
+// accountId identifies the host account; each participant independently
+// carries the accountId that owns that participant profile.
 
 enum GroupWatchSessionStatus {
   waiting,
@@ -19,9 +23,6 @@ enum GroupWatchInvitationStatus {
 
 class GroupWatchParticipant {
   /// The account that owns this profile.
-  ///
-  /// This allows Group Watch sessions to contain profiles
-  /// belonging to different accounts.
   final String accountId;
 
   /// The profile participating in the Group Watch.
@@ -46,10 +47,17 @@ class GroupWatchParticipant {
   bool get hasAccepted =>
       invitationStatus == GroupWatchInvitationStatus.accepted;
 
-  bool get canJoin =>
-      invitationStatus == GroupWatchInvitationStatus.accepted;
+  bool get canJoin => hasAccepted;
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
+  bool get isPending =>
+      invitationStatus == GroupWatchInvitationStatus.pending;
+
+  bool get isDeclined =>
+      invitationStatus == GroupWatchInvitationStatus.declined;
+
+  bool get isExpired =>
+      invitationStatus == GroupWatchInvitationStatus.expired;
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'accountId': accountId,
@@ -65,11 +73,11 @@ class GroupWatchParticipant {
     Map<String, dynamic> json,
   ) {
     final String invitationStatus =
-        json['invitationStatus'] as String? ??
+        json['invitationStatus']?.toString() ??
             GroupWatchInvitationStatus.pending.name;
 
     final String? joinedAtString =
-        json['joinedAt'] as String?;
+        json['joinedAt']?.toString();
 
     return GroupWatchParticipant(
       accountId: json['accountId']?.toString() ?? '',
@@ -80,14 +88,24 @@ class GroupWatchParticipant {
         orElse: () =>
             GroupWatchInvitationStatus.pending,
       ),
-      audioTrackId:
-          json['audioTrackId']?.toString(),
-      subtitleTrackId:
-          json['subtitleTrackId']?.toString(),
+      audioTrackId: _nullableString(json['audioTrackId']),
+      subtitleTrackId: _nullableString(
+        json['subtitleTrackId'],
+      ),
       joinedAt: joinedAtString != null
           ? DateTime.tryParse(joinedAtString)
           : null,
     );
+  }
+
+  static String? _nullableString(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    final String valueString = value.toString().trim();
+
+    return valueString.isEmpty ? null : valueString;
   }
 }
 
@@ -96,8 +114,8 @@ class GroupWatchSession {
 
   /// The account that created/owns the Group Watch session.
   ///
-  /// This is the host account. Participants do NOT have to
-  /// belong to this account.
+  /// This is the host account. Participants do not have to belong
+  /// to this account.
   final String accountId;
 
   /// The profile that created/hosts the Group Watch.
@@ -164,6 +182,29 @@ class GroupWatchSession {
                 <String, GroupWatchParticipant>{};
 
   // ---------------------------------------------------------------------------
+  // SESSION STATE
+  // ---------------------------------------------------------------------------
+
+  bool get hasStarted => startedAt != null;
+
+  bool get hasEnded =>
+      status == GroupWatchSessionStatus.ended ||
+      endedAt != null;
+
+  bool get isWaiting =>
+      status == GroupWatchSessionStatus.waiting;
+
+  bool get isReady =>
+      status == GroupWatchSessionStatus.ready;
+
+  bool get isPaused =>
+      status == GroupWatchSessionStatus.paused;
+
+  bool get isPlayingNow =>
+      status == GroupWatchSessionStatus.playing &&
+      isPlaying;
+
+  // ---------------------------------------------------------------------------
   // PARTICIPANTS
   // ---------------------------------------------------------------------------
 
@@ -173,14 +214,12 @@ class GroupWatchSession {
     return participants[profileId];
   }
 
-  /// Performs `hasParticipant` for this feature. Update this documentation when its contract changes.
   bool hasParticipant(
     String profileId,
   ) {
     return participants.containsKey(profileId);
   }
 
-  /// Performs `hasAccepted` for this feature. Update this documentation when its contract changes.
   bool hasAccepted(
     String profileId,
   ) {
@@ -200,11 +239,20 @@ class GroupWatchSession {
   }
 
   /// Returns all accepted participants.
-  List<GroupWatchParticipant>
-      get acceptedParticipants {
+  List<GroupWatchParticipant> get acceptedParticipants {
     return participants.values
         .where(
           (participant) => participant.hasAccepted,
+        )
+        .toList();
+  }
+
+  List<GroupWatchParticipant> get pendingParticipants {
+    return participants.values
+        .where(
+          (participant) =>
+              participant.invitationStatus ==
+              GroupWatchInvitationStatus.pending,
         )
         .toList();
   }
@@ -213,7 +261,8 @@ class GroupWatchSession {
     return acceptedParticipantIds.length;
   }
 
-  /// Returns the account ID associated with a participant.
+  int get participantCount => participants.length;
+
   String? accountIdForProfile(
     String profileId,
   ) {
@@ -229,8 +278,48 @@ class GroupWatchSession {
     return participants[profileId]?.accountId == accountId;
   }
 
-  bool get hasStarted {
-    return startedAt != null;
+  /// Adds or replaces an invitation.
+  ///
+  /// A profile ID is the unique participant key within a session.
+  /// The account ID is retained separately so cross-account sessions
+  /// remain supported.
+  bool addParticipant(
+    GroupWatchParticipant participant,
+  ) {
+    final String cleanProfileId =
+        participant.profileId.trim();
+
+    final String cleanAccountId =
+        participant.accountId.trim();
+
+    if (cleanProfileId.isEmpty ||
+        cleanAccountId.isEmpty) {
+      return false;
+    }
+
+    if (hasStarted || hasEnded) {
+      return false;
+    }
+
+    participants[cleanProfileId] = participant;
+
+    return true;
+  }
+
+  bool removeParticipant(
+    String profileId,
+  ) {
+    final String cleanProfileId = profileId.trim();
+
+    if (cleanProfileId.isEmpty) {
+      return false;
+    }
+
+    if (hasStarted || hasEnded) {
+      return false;
+    }
+
+    return participants.remove(cleanProfileId) != null;
   }
 
   // ---------------------------------------------------------------------------
@@ -238,11 +327,7 @@ class GroupWatchSession {
   // ---------------------------------------------------------------------------
 
   bool get areInvitationsOpen {
-    if (hasStarted) {
-      return false;
-    }
-
-    if (status == GroupWatchSessionStatus.ended) {
+    if (hasStarted || hasEnded) {
       return false;
     }
 
@@ -252,10 +337,13 @@ class GroupWatchSession {
   }
 
   bool get invitationsHaveExpired {
+    if (hasStarted || hasEnded) {
+      return false;
+    }
+
     return !areInvitationsOpen;
   }
 
-  /// Performs `canAcceptInvitation` for this feature. Update this documentation when its contract changes.
   bool canAcceptInvitation(
     String profileId,
   ) {
@@ -266,20 +354,13 @@ class GroupWatchSession {
       return false;
     }
 
-    if (hasStarted) {
+    if (hasStarted || hasEnded) {
       return false;
     }
 
-    if (status == GroupWatchSessionStatus.ended) {
-      return false;
-    }
-
-    if (DateTime.now().isAfter(
-          invitationExpiresAt,
-        ) ||
-        DateTime.now().isAtSameMomentAs(
-          invitationExpiresAt,
-        )) {
+    if (!DateTime.now().isBefore(
+      invitationExpiresAt,
+    )) {
       return false;
     }
 
@@ -287,7 +368,6 @@ class GroupWatchSession {
         GroupWatchInvitationStatus.pending;
   }
 
-  /// Performs `acceptInvitation` for this feature. Update this documentation when its contract changes.
   bool acceptInvitation(
     String profileId,
   ) {
@@ -301,12 +381,11 @@ class GroupWatchSession {
     participant.invitationStatus =
         GroupWatchInvitationStatus.accepted;
 
-    participant.joinedAt = DateTime.now();
+    participant.joinedAt ??= DateTime.now();
 
     return true;
   }
 
-  /// Performs `declineInvitation` for this feature. Update this documentation when its contract changes.
   bool declineInvitation(
     String profileId,
   ) {
@@ -317,7 +396,7 @@ class GroupWatchSession {
       return false;
     }
 
-    if (hasStarted) {
+    if (hasStarted || hasEnded) {
       return false;
     }
 
@@ -332,7 +411,6 @@ class GroupWatchSession {
     return true;
   }
 
-  /// Performs `expirePendingInvitations` for this feature. Update this documentation when its contract changes.
   void expirePendingInvitations() {
     for (final GroupWatchParticipant participant
         in participants.values) {
@@ -348,7 +426,6 @@ class GroupWatchSession {
   // AUDIO / SUBTITLES
   // ---------------------------------------------------------------------------
 
-  /// Performs `setAudioTrack` for this feature. Update this documentation when its contract changes.
   bool setAudioTrack(
     String profileId,
     String? audioTrackId,
@@ -356,24 +433,19 @@ class GroupWatchSession {
     final GroupWatchParticipant? participant =
         participants[profileId];
 
-    if (participant == null) {
+    if (participant == null ||
+        !participant.hasAccepted ||
+        hasStarted ||
+        hasEnded) {
       return false;
     }
 
-    if (!participant.hasAccepted) {
-      return false;
-    }
-
-    if (hasStarted) {
-      return false;
-    }
-
-    participant.audioTrackId = audioTrackId;
+    participant.audioTrackId =
+        _cleanNullableId(audioTrackId);
 
     return true;
   }
 
-  /// Performs `setSubtitleTrack` for this feature. Update this documentation when its contract changes.
   bool setSubtitleTrack(
     String profileId,
     String? subtitleTrackId,
@@ -381,20 +453,15 @@ class GroupWatchSession {
     final GroupWatchParticipant? participant =
         participants[profileId];
 
-    if (participant == null) {
-      return false;
-    }
-
-    if (!participant.hasAccepted) {
-      return false;
-    }
-
-    if (hasStarted) {
+    if (participant == null ||
+        !participant.hasAccepted ||
+        hasStarted ||
+        hasEnded) {
       return false;
     }
 
     participant.subtitleTrackId =
-        subtitleTrackId;
+        _cleanNullableId(subtitleTrackId);
 
     return true;
   }
@@ -404,18 +471,13 @@ class GroupWatchSession {
   // ---------------------------------------------------------------------------
 
   bool get canStart {
-    if (status == GroupWatchSessionStatus.ended) {
-      return false;
-    }
-
-    if (hasStarted) {
+    if (hasEnded || hasStarted) {
       return false;
     }
 
     return acceptedParticipantCount > 0;
   }
 
-  /// Performs `start` for this feature. Update this documentation when its contract changes.
   bool start() {
     if (!canStart) {
       return false;
@@ -439,13 +501,8 @@ class GroupWatchSession {
   // PLAYBACK
   // ---------------------------------------------------------------------------
 
-  /// Performs `play` for this feature. Update this documentation when its contract changes.
   bool play() {
-    if (status == GroupWatchSessionStatus.ended) {
-      return false;
-    }
-
-    if (!hasStarted) {
+    if (hasEnded || !hasStarted) {
       return false;
     }
 
@@ -466,19 +523,10 @@ class GroupWatchSession {
     required String profileId,
     required String reason,
   }) {
-    if (status == GroupWatchSessionStatus.ended) {
-      return false;
-    }
-
-    if (!hasStarted) {
-      return false;
-    }
-
-    if (!hasAccepted(profileId)) {
-      return false;
-    }
-
-    if (!isPlaying) {
+    if (hasEnded ||
+        !hasStarted ||
+        !hasAccepted(profileId) ||
+        !isPlaying) {
       return false;
     }
 
@@ -502,15 +550,16 @@ class GroupWatchSession {
   bool resume(
     String profileId,
   ) {
-    if (status == GroupWatchSessionStatus.ended) {
-      return false;
-    }
-
-    if (status != GroupWatchSessionStatus.paused) {
+    if (hasEnded ||
+        status != GroupWatchSessionStatus.paused) {
       return false;
     }
 
     if (pausedByProfileId != profileId) {
+      return false;
+    }
+
+    if (!hasAccepted(profileId)) {
       return false;
     }
 
@@ -531,15 +580,9 @@ class GroupWatchSession {
     required String profileId,
     required Duration position,
   }) {
-    if (status == GroupWatchSessionStatus.ended) {
-      return false;
-    }
-
-    if (!hasStarted) {
-      return false;
-    }
-
-    if (!hasAccepted(profileId)) {
+    if (hasEnded ||
+        !hasStarted ||
+        !hasAccepted(profileId)) {
       return false;
     }
 
@@ -556,8 +599,11 @@ class GroupWatchSession {
   // END
   // ---------------------------------------------------------------------------
 
-  /// Performs `end` for this feature. Update this documentation when its contract changes.
   void end() {
+    if (hasEnded) {
+      return;
+    }
+
     status = GroupWatchSessionStatus.ended;
     isPlaying = false;
     endedAt = DateTime.now();
@@ -570,12 +616,12 @@ class GroupWatchSession {
   // JSON
   // ---------------------------------------------------------------------------
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
 
-      // Host account.
+      // Host account. Participant account IDs are stored inside
+      // the participant records.
       'accountId': accountId,
 
       'hostProfileId': hostProfileId,
@@ -641,100 +687,72 @@ class GroupWatchSession {
             : <String, dynamic>{};
 
     final String statusString =
-        json['status'] as String? ??
+        json['status']?.toString() ??
             GroupWatchSessionStatus.waiting.name;
 
-    final String createdAtString =
-        json['createdAt'] as String;
+    final String sessionAccountId =
+        json['accountId']?.toString() ?? '';
 
-    final String invitationExpiresAtString =
-        json['invitationExpiresAt'] as String;
+    final DateTime createdAt =
+        _parseDateTime(
+      json['createdAt'],
+      fallback: DateTime.now(),
+    );
+
+    final DateTime invitationExpiresAt =
+        _parseDateTime(
+      json['invitationExpiresAt'],
+      fallback: createdAt,
+    );
 
     final dynamic rawPlaybackPositionMs =
         json['playbackPositionMs'];
 
     final int playbackPositionMs =
-        rawPlaybackPositionMs is int
-            ? rawPlaybackPositionMs
-            : rawPlaybackPositionMs is num
-                ? rawPlaybackPositionMs.toInt()
-                : int.tryParse(
-                      rawPlaybackPositionMs
-                              ?.toString() ??
-                          '',
-                    ) ??
-                    0;
-
-    final String sessionAccountId =
-        json['accountId']?.toString() ?? '';
+        _parseInt(rawPlaybackPositionMs);
 
     return GroupWatchSession(
-      id: json['id'] as String,
-
-      // This remains the HOST account.
+      id: json['id']?.toString() ?? '',
       accountId: sessionAccountId,
-
       hostProfileId:
-          json['hostProfileId'] as String,
-
+          json['hostProfileId']?.toString() ?? '',
       mediaId:
-          json['mediaId'] as String,
-
+          json['mediaId']?.toString() ?? '',
       title:
-          json['title'] as String,
-
+          json['title']?.toString() ?? '',
       type:
-          json['type'] as String,
-
-      createdAt:
-          DateTime.parse(
-        createdAtString,
-      ),
-
+          json['type']?.toString() ?? '',
+      createdAt: createdAt,
       invitationExpiresAt:
-          DateTime.parse(
-        invitationExpiresAtString,
-      ),
-
+          invitationExpiresAt,
       startedAt:
-          json['startedAt'] != null
-              ? DateTime.parse(
-                  json['startedAt'] as String,
-                )
-              : null,
-
+          _parseNullableDateTime(
+        json['startedAt'],
+      ),
       endedAt:
-          json['endedAt'] != null
-              ? DateTime.parse(
-                  json['endedAt'] as String,
-                )
-              : null,
-
+          _parseNullableDateTime(
+        json['endedAt'],
+      ),
       status:
           GroupWatchSessionStatus.values.firstWhere(
         (status) => status.name == statusString,
         orElse: () =>
             GroupWatchSessionStatus.waiting,
       ),
-
       playbackPosition:
           Duration(
-        milliseconds:
-            playbackPositionMs,
+        milliseconds: playbackPositionMs,
       ),
-
       isPlaying:
-          json['isPlaying'] as bool? ??
-              false,
-
+          json['isPlaying'] as bool? ?? false,
       pausedByProfileId:
-          json['pausedByProfileId']
-              ?.toString(),
-
+          _nullableString(
+        json['pausedByProfileId'],
+      ),
       pauseReason:
-          json['pauseReason']
-              ?.toString(),
-
+          _nullableString(
+        json['pauseReason'],
+      ),
       participants:
           participantsJson.map(
         (
@@ -755,9 +773,11 @@ class GroupWatchSession {
           participantJson['profileId'] ??=
               profileId;
 
-          // Older sessions did not store the
-          // participant's account ID. Keep those
-          // sessions readable rather than crashing.
+          // Older sessions did not store the participant's
+          // account ID. Keep those sessions readable rather
+          // than crashing. This fallback is the host account
+          // because that is the only account identity older
+          // session records are guaranteed to contain.
           participantJson['accountId'] ??=
               sessionAccountId;
 
@@ -770,5 +790,91 @@ class GroupWatchSession {
         },
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // PARSING HELPERS
+  // ---------------------------------------------------------------------------
+
+  static DateTime _parseDateTime(
+    dynamic value, {
+    required DateTime fallback,
+  }) {
+    if (value is DateTime) {
+      return value;
+    }
+
+    final String? valueString =
+        _nullableString(value);
+
+    if (valueString == null) {
+      return fallback;
+    }
+
+    return DateTime.tryParse(valueString) ??
+        fallback;
+  }
+
+  static DateTime? _parseNullableDateTime(
+    dynamic value,
+  ) {
+    if (value is DateTime) {
+      return value;
+    }
+
+    final String? valueString =
+        _nullableString(value);
+
+    if (valueString == null) {
+      return null;
+    }
+
+    return DateTime.tryParse(valueString);
+  }
+
+  static int _parseInt(
+    dynamic value,
+  ) {
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
+  }
+
+  static String? _nullableString(
+    dynamic value,
+  ) {
+    if (value == null) {
+      return null;
+    }
+
+    final String valueString =
+        value.toString().trim();
+
+    return valueString.isEmpty
+        ? null
+        : valueString;
+  }
+
+  static String? _cleanNullableId(
+    String? value,
+  ) {
+    if (value == null) {
+      return null;
+    }
+
+    final String cleanValue = value.trim();
+
+    return cleanValue.isEmpty
+        ? null
+        : cleanValue;
   }
 }

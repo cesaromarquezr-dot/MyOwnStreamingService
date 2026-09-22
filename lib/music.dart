@@ -234,6 +234,89 @@ class MusicLibraryStore extends ChangeNotifier {
   final List<String> queue = <String>[];
   bool aiDjActive = false;
 
+  /// Publishes lightweight music metadata to the Shop association index.
+  /// Audio files and private track data remain on the account's home server.
+  void registerShopEntities() {
+    final entities = <ShopEntity>[];
+
+    for (final track in tracks) {
+      entities.add(
+        ShopEntity(
+          type: 'song',
+          id: track.id,
+          name: track.title,
+          subtitle: 'Song • ${track.artist}',
+        ),
+      );
+
+      if (track.artist.trim().isNotEmpty) {
+        final artistId = 'artist:${track.artist.trim().toLowerCase()}';
+        entities.add(
+          ShopEntity(
+            type: 'artist',
+            id: artistId,
+            name: track.artist,
+            subtitle: 'Artist',
+          ),
+        );
+      }
+
+      if (track.album.trim().isNotEmpty) {
+        final albumId =
+            'album:${track.artist.trim().toLowerCase()}:${track.album.trim().toLowerCase()}';
+        entities.add(
+          ShopEntity(
+            type: 'album',
+            id: albumId,
+            name: track.album,
+            subtitle: 'Album • ${track.artist}',
+          ),
+        );
+      }
+
+      for (final genre in track.genres) {
+        final clean = genre.trim();
+        if (clean.isEmpty) continue;
+        entities.add(
+          ShopEntity(
+            type: 'genre',
+            id: 'music-genre:${clean.toLowerCase()}',
+            name: clean,
+            subtitle: 'Music genre',
+          ),
+        );
+      }
+
+      for (final artist in track.featuredArtists) {
+        final clean = artist.trim();
+        if (clean.isEmpty) continue;
+        entities.add(
+          ShopEntity(
+            type: 'artist',
+            id: 'artist:${clean.toLowerCase()}',
+            name: clean,
+            subtitle: 'Featured artist',
+          ),
+        );
+      }
+    }
+
+    for (final playlistName in playlists.keys) {
+      final clean = playlistName.trim();
+      if (clean.isEmpty) continue;
+      entities.add(
+        ShopEntity(
+          type: 'playlist',
+          id: 'playlist:${clean.toLowerCase()}',
+          name: clean,
+          subtitle: 'Music playlist',
+        ),
+      );
+    }
+
+    ShopCatalog.instance.registerExternalEntities(entities);
+  }
+
   String homeBackground = '0xFF090909';
   String navbarColor = '0xFF101010';
   String navbarGlow = '0xFFFF0000';
@@ -441,6 +524,13 @@ class MusicScreen extends StatefulWidget {
 class _MusicScreenState extends State<MusicScreen> {
   final library = MusicLibraryStore.instance;
   final playback = MusicPlaybackController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    library.registerShopEntities();
+    ShopCatalog.instance.syncShopEntityIndex();
+  }
 
   MusicPageCustomization get customization =>
       MusicPageCustomizationStore.settingsFor(

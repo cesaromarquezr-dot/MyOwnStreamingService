@@ -673,6 +673,7 @@ class HomeCustomization {
           'More',
           'Music',
           'Film',
+          'Collections',
           'Shop',
           'Group Chat',
         ];
@@ -1460,7 +1461,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         const UniversalText('HOME MEDIA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
         const SizedBox(height: 10),
         _dropdown(
-          label: 'Music, Film & Collections placement',
+          label: 'Music & Film placement',
           value: draft.homeMediaLayout,
           values: const ['Left & Right', 'Under Banner'],
           onChanged: (value) => setState(() => draft.homeMediaLayout = value),
@@ -1471,7 +1472,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.collections_bookmark_outlined),
           title: Text('Collections'),
-          subtitle: Text('The Collections entry remains available with Music and Film.'),
+          subtitle: Text('Collections is available directly from the navigation bar.'),
         ),
         const SizedBox(height: 24),
         const UniversalText('SECTIONS',
@@ -2048,6 +2049,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'More',
       'Music',
       'Film',
+      'Collections',
       'Shop',
       if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
       'Group Chat',
@@ -3135,9 +3137,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 }
-
-
-
 // ============================================================
 // MAIN SCREEN
 // ============================================================
@@ -3252,6 +3251,7 @@ class _MainScreenState extends State<MainScreen> {
       'More',
       'Music',
       'Film',
+      'Collections',
       'Shop',
       if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
       'Group Chat',
@@ -3311,8 +3311,8 @@ class _MainScreenState extends State<MainScreen> {
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film, Shop,
-    // and Group Chat. Music and Film expose secondary destinations on hover/tap. Music and Film expose secondary destinations on hover/tap.
+    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film, Collections, Shop,
+    // Seller Dashboard when available, and Group Chat. Music and Film expose secondary destinations on hover/tap. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
     final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
     final pageByName = <String, Widget>{
@@ -3324,6 +3324,7 @@ class _MainScreenState extends State<MainScreen> {
       'Surprise Me': const _MoreNavigationPlaceholder(),
       'Music': const MusicScreen(),
       'Film': const FilmExperienceScreen(),
+      'Collections': const CollectionsPanel(),
       'Shop': ShopScreen(
         onHome: () => setState(() => selectedDestination = 'Home'),
       ),
@@ -3437,7 +3438,6 @@ class _StreamingNavigationBar extends StatelessWidget {
       _NavMenuEntry('Series', Icons.tv_outlined, () => _open(context, const SeriesScreen())),
       _NavMenuEntry('Trailers', Icons.play_circle_outline, () => _open(context, const TrailersScreen())),
       _NavMenuEntry('Actors', Icons.people_outline, () => _open(context, const LibraryActorsScreen())),
-      _NavMenuEntry('Collections', Icons.collections_bookmark_outlined, () => _open(context, const LibraryCollectionsScreen())),
       _NavMenuEntry('Directors', Icons.videocam_outlined, () => _open(context, const LibraryDirectorsScreen())),
       _NavMenuEntry('Franchises', Icons.account_tree_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Franchises'), icon: Icons.account_tree_outlined))),
       _NavMenuEntry('Genres', Icons.category_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Genres'), icon: Icons.category_outlined))),
@@ -3460,6 +3460,7 @@ class _StreamingNavigationBar extends StatelessWidget {
       'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
       'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
       'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
+      'Collections': const _NavItemData(Icons.collections_bookmark_outlined, Icons.collections_bookmark_rounded, 'Collections'),
       'Shop': const _NavItemData(Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
       'Seller Dashboard': const _NavItemData(Icons.storefront_outlined, Icons.storefront_rounded, 'Seller Dashboard'),
     };
@@ -4315,7 +4316,6 @@ class _HomeMediaEntryButtons extends StatelessWidget {
     final buttons = <Widget>[
       if (settings.showMusic) _button(context, 'Music', 'Songs, albums & playlists', Icons.music_note_rounded, const MusicScreen()),
       if (settings.showFilm) _button(context, 'Film', 'Movies, TV & franchises', Icons.movie_creation_outlined, const FilmExperienceScreen()),
-      _button(context, 'Collections', 'Organize your media', Icons.collections_bookmark_outlined, const CollectionsPanel()),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
@@ -5074,7 +5074,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
         chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
         audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
-        languages: languagesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+        language: languagesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).join(', '),
         subtitles: subtitlesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
         extras: extrasController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
       );

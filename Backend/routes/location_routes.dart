@@ -2,18 +2,47 @@
 // Purpose: Provides secure, provider-backed postal-code lookup for store and
 // checkout address flows. Country/state/city selection itself is bundled in
 // Flutter; this route is used when the UI needs postal-code results for a city.
+//
+// Security notes:
+// - This endpoint is intentionally public because checkout address forms may
+//   need postal-code lookup before authentication.
+// - Only city/country/postal-code search parameters are sent to GeoNames.
+// - Provider credentials are never returned to clients.
+// - Provider requests have bounded timeouts.
+// - Provider failures are normalized into generic API errors.
+// - Responses are marked no-store because postal lookup is an external,
+//   provider-backed request rather than authoritative account data.
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../config.dart';
 
 class LocationRoutes {
+  static const String _postalCodesPath =
+      '/api/v1/location/postal-codes';
+
+  static const Duration _providerTimeout = Duration(seconds: 8);
+
+  static const int _maxCityLength = 120;
+  static const int _maxPostalCodeLength = 32;
+
   /// Handles public geographic lookup requests.
   Future<void> handle(HttpRequest request) async {
+    _applyCors(request);
+
+    if (request.method == 'OPTIONS') {
+      await _empty(request, 204);
+      return;
+    }
+
     final path = request.uri.path;
-    if (request.method == 'GET' && path == '/api/v1/location/postal-codes') {
-      return _postalCodes(request);
+
+    if (request.method == 'GET' && path == _postalCodesPath) {
+      await _postalCodes(request);
+      return;
     }
 
     await _json(request, 404, {
@@ -23,69 +52,291 @@ class LocationRoutes {
   }
 
   Future<void> _postalCodes(HttpRequest request) async {
-    final username = AppConfig.geonamesUsername;
-    final country = request.uri.queryParameters['country']?.trim().toUpperCase();
+    final username = AppConfig.geonamesUsername.trim();
+
+    final country =
+        request.uri.queryParameters['country']?.trim().toUpperCase();
+
     final city = request.uri.queryParameters['city']?.trim();
-    final postal = request.uri.queryParameters['postalCode']?.trim();
+
+    final postal =
+        request.uri.queryParameters['postalCode']?.trim();
 
     if (username.isEmpty) {
-      return _json(request, 503, {
+      await _json(request, 503, {
         'success': false,
-        'error': 'Postal-code provider is not configured. Set GEONAMES_USERNAME on the backend.',
+        'error': 'Postal-code provider is not configured.',
       });
+      return;
     }
-    if (country == null || country.length != 2 || city == null || city.isEmpty) {
-      return _json(request, 400, {
+
+    if (!_isValidCountry(country)) {
+      await _json(request, 400, {
         'success': false,
-        'error': 'country (ISO-2) and city are required.',
+        'error': 'country must be a valid ISO-2 country code.',
       });
+      return;
+    }
+
+    if (city == null || city.isEmpty) {
+      await _json(request, 400, {
+        'success': false,
+        'error': 'city is required.',
+      });
+      return;
+    }
+
+    if (city.length > _maxCityLength) {
+      await _json(request, 400, {
+        'success': false,
+        'error': 'city is too long.',
+      });
+      return;
+    }
+
+    if (postal != null && postal.length > _maxPostalCodeLength) {
+      await _json(request, 400, {
+        'success': false,
+        'error': 'postalCode is too long.',
+      });
+      return;
     }
 
     final query = <String, String>{
       'placename': city,
-      'country': country,
+      'country': country!,
       'maxRows': '1000',
       'username': username,
       'type': 'json',
     };
-    if (postal != null && postal.isNotEmpty) query['postalcode'] = postal;
 
-    final uri = Uri.https('secure.geonames.org', '/postalCodeSearchJSON', query);
-    final client = HttpClient();
+    if (postal != null && postal.isNotEmpty) {
+      query['postalcode'] = postal;
+    }
+
+    final uri = Uri.https(
+      'secure.geonames.org',
+      '/postalCodeSearchJSON',
+      query,
+    );
+
+    final client = HttpClient()
+      ..connectionTimeout = _providerTimeout;
+
     try {
-      final response = await (await client.getUrl(uri)).close();
-      final body = await response.transform(utf8.decoder).join();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return _json(request, 502, {
+      final providerResponse = await client
+          .getUrl(uri)
+          .timeout(_providerTimeout)
+          .then((request) => request.close())
+          .timeout(_providerTimeout);
+
+      final body = await providerResponse
+          .transform(utf8.decoder)
+          .join()
+          .timeout(_providerTimeout);
+
+      if (providerResponse.statusCode < 200 ||
+          providerResponse.statusCode >= 300) {
+        developer.log(
+          'GeoNames returned HTTP ${providerResponse.statusCode}.',
+          name: 'location_routes',
+        );
+
+        await _json(request, 502, {
           'success': false,
-          'error': 'Postal-code provider returned HTTP ${response.statusCode}.',
+          'error': 'Postal-code provider is temporarily unavailable.',
         });
+        return;
       }
-      final decoded = jsonDecode(body);
+
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(body);
+      } on FormatException catch (error, stackTrace) {
+        developer.log(
+          'GeoNames returned invalid JSON.',
+          name: 'location_routes',
+          error: error,
+          stackTrace: stackTrace,
+        );
+
+        await _json(request, 502, {
+          'success': false,
+          'error': 'Postal-code provider returned an invalid response.',
+        });
+        return;
+      }
+
+      // GeoNames may return HTTP 200 with a JSON-level error object.
+      if (decoded is Map && decoded['status'] is Map) {
+        final providerStatus = decoded['status'];
+        final providerMessage = providerStatus is Map
+            ? providerStatus['message']?.toString()
+            : null;
+
+        developer.log(
+          'GeoNames reported a provider error'
+          '${providerMessage == null ? '.' : ': $providerMessage'}',
+          name: 'location_routes',
+        );
+
+        await _json(request, 502, {
+          'success': false,
+          'error': 'Postal-code provider rejected the lookup.',
+        });
+        return;
+      }
+
       final codes = <String>{};
+
       if (decoded is Map && decoded['postalCodes'] is List) {
         for (final row in decoded['postalCodes'] as List) {
-          if (row is Map && row['postalCode'] != null) {
-            final value = row['postalCode'].toString().trim();
-            if (value.isNotEmpty) codes.add(value);
+          if (row is! Map) {
+            continue;
+          }
+
+          final value = row['postalCode']?.toString().trim();
+
+          if (value != null && value.isNotEmpty) {
+            codes.add(value);
           }
         }
       }
-      return _json(request, 200, {
+
+      final sortedCodes = codes.toList()..sort();
+
+      await _json(request, 200, {
         'success': true,
         'country': country,
         'city': city,
-        'postalCodes': codes.toList()..sort(),
+        'postalCodes': sortedCodes,
+      });
+    } on TimeoutException catch (error, stackTrace) {
+      developer.log(
+        'GeoNames postal-code lookup timed out.',
+        name: 'location_routes',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
+      await _json(request, 504, {
+        'success': false,
+        'error': 'Postal-code provider timed out.',
+      });
+    } on SocketException catch (error, stackTrace) {
+      developer.log(
+        'GeoNames postal-code lookup failed at the network layer.',
+        name: 'location_routes',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
+      await _json(request, 502, {
+        'success': false,
+        'error': 'Postal-code provider is unavailable.',
+      });
+    } on HttpException catch (error, stackTrace) {
+      developer.log(
+        'GeoNames postal-code lookup failed.',
+        name: 'location_routes',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
+      await _json(request, 502, {
+        'success': false,
+        'error': 'Postal-code provider is unavailable.',
+      });
+    } catch (error, stackTrace) {
+      developer.log(
+        'Unexpected postal-code lookup failure.',
+        name: 'location_routes',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
+      await _json(request, 502, {
+        'success': false,
+        'error': 'Postal-code lookup failed.',
       });
     } finally {
       client.close(force: true);
     }
   }
 
-  Future<void> _json(HttpRequest request, int status, Map<String, dynamic> data) async {
-    request.response.statusCode = status;
-    request.response.headers.contentType = ContentType.json;
-    request.response.write(jsonEncode(data));
-    await request.response.close();
+  bool _isValidCountry(String? country) {
+    if (country == null || country.length != 2) {
+      return false;
+    }
+
+    return RegExp(r'^[A-Z]{2}$').hasMatch(country);
+  }
+
+  void _applyCors(HttpRequest request) {
+    final headers = request.response.headers;
+
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set(
+      'Access-Control-Allow-Methods',
+      'GET, OPTIONS',
+    );
+    headers.set(
+      'Access-Control-Allow-Headers',
+      'Authorization, Content-Type',
+    );
+    headers.set(
+      'Access-Control-Expose-Headers',
+      'Content-Type',
+    );
+  }
+
+  Future<void> _json(
+    HttpRequest request,
+    int status,
+    Map<String, dynamic> data,
+  ) async {
+    if (_responseHasStarted(request)) {
+      return;
+    }
+
+    final response = request.response;
+
+    response.statusCode = status;
+    response.headers.contentType = ContentType.json;
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate',
+    );
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+
+    response.write(jsonEncode(data));
+    await response.close();
+  }
+
+  Future<void> _empty(
+    HttpRequest request,
+    int status,
+  ) async {
+    if (_responseHasStarted(request)) {
+      return;
+    }
+
+    final response = request.response;
+
+    response.statusCode = status;
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate',
+    );
+    response.headers.set('Pragma', 'no-cache');
+
+    await response.close();
+  }
+
+  bool _responseHasStarted(HttpRequest request) {
+    return request.response.headers.contentType != null ||
+        request.response.statusCode != 200;
   }
 }

@@ -1,6 +1,16 @@
 // FILE: `Backend/middleware/authentication.dart`.
 // Purpose: Implements the authentication portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// Authentication is intentionally kept at the middleware boundary. Route
+// handlers can authenticate a request without needing to know how tokens are
+// extracted or how accounts are resolved.
+//
+// Expected header:
+//   Authorization: Bearer <token>
+//
+// No passwords, credentials, or raw authentication tokens are logged or
+// persisted by this middleware.
 
 import 'dart:io';
 
@@ -8,67 +18,73 @@ import '../models/account.dart';
 import '../services/auth_service.dart';
 
 class AuthenticationMiddleware {
-  final AuthService authService;
+final AuthService authService;
 
-  AuthenticationMiddleware({
-    required this.authService,
-  });
+AuthenticationMiddleware({
+required this.authService,
+});
 
-  Account? authenticate(
-    HttpRequest request,
-  ) {
-    final authorization =
-        request.headers.value(
-      HttpHeaders.authorizationHeader,
-    );
+/// Resolves the authenticated account for [request].
+///
+/// Returns null when:
+/// - the Authorization header is missing;
+/// - the authentication scheme is not Bearer;
+/// - the Bearer token is empty;
+/// - the AuthService cannot resolve the token to an account.
+Account? authenticate(
+HttpRequest request,
+) {
+final token = extractToken(request);
 
-    if (authorization == null) {
-      return null;
-    }
+if (token == null) {
+  return null;
+}
 
-    if (!authorization.startsWith(
-      'Bearer ',
-    )) {
-      return null;
-    }
+return authService.accountFromToken(token);
 
-    final token =
-        authorization.substring(7).trim();
+}
 
-    if (token.isEmpty) {
-      return null;
-    }
+/// Extracts a Bearer token from the Authorization header.
+///
+/// The authentication scheme comparison is case-insensitive, while the
+/// token itself is preserved exactly after surrounding whitespace is
+/// removed.
+String? extractToken(
+HttpRequest request,
+) {
+final authorization = request.headers.value(
+HttpHeaders.authorizationHeader,
+);
 
-    return authService.accountFromToken(
-      token,
-    );
-  }
+if (authorization == null) {
+  return null;
+}
 
-  String? extractToken(
-    HttpRequest request,
-  ) {
-    final authorization =
-        request.headers.value(
-      HttpHeaders.authorizationHeader,
-    );
+final value = authorization.trim();
 
-    if (authorization == null) {
-      return null;
-    }
+if (value.isEmpty) {
+  return null;
+}
 
-    if (!authorization.startsWith(
-      'Bearer ',
-    )) {
-      return null;
-    }
+final separator = value.indexOf(' ');
 
-    final token =
-        authorization.substring(7).trim();
+if (separator <= 0) {
+  return null;
+}
 
-    if (token.isEmpty) {
-      return null;
-    }
+final scheme = value.substring(0, separator);
 
-    return token;
-  }
+if (scheme.toLowerCase() != 'bearer') {
+  return null;
+}
+
+final token = value.substring(separator + 1).trim();
+
+if (token.isEmpty) {
+  return null;
+}
+
+return token;
+
+}
 }

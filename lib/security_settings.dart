@@ -34,7 +34,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       if (!mounted) return;
       setState(() {
         mfaEnabled = status['mfaEnabled'] == true;
-        sessions = active;
+        final rawSessions = active['sessions'];
+        sessions = rawSessions is List
+            ? rawSessions.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+            : <Map<String, dynamic>>[];
         error = null;
         loading = false;
       });
@@ -65,7 +68,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         );
         controller.dispose();
         if (code == null || code.trim().isEmpty) return;
-        await api.verifyMfaEnrollment(code);
+        await api.verifyMfaEnrollment(code: code);
       } else {
         await api.disableMfa();
       }
@@ -128,7 +131,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                     leading: Icon(session['current'] == true ? Icons.devices : Icons.device_unknown),
                     title: Text(session['current'] == true ? 'This session' : 'Signed-in session'),
                     subtitle: Text('${session['ipAddress'] ?? 'unknown'}\n${session['userAgent'] ?? 'unknown'}\nLast used: ${session['lastUsedAt'] ?? 'unknown'}'),
-                    trailing: session['current'] == true ? null : IconButton(icon: const Icon(Icons.logout), onPressed: () async { await AppController.instance.backendApi.revokeSecuritySession(session['sessionId'].toString()); await _load(); }),
+                    trailing: session['current'] == true ? null : IconButton(icon: const Icon(Icons.logout), onPressed: () async { await AppController.instance.backendApi.revokeSecuritySession(sessionId: session['sessionId'].toString()); await _load(); }),
                   ),
                 ]))),
                 const SizedBox(height: 12),

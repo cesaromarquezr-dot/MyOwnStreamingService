@@ -18,7 +18,6 @@ class BackendApiException implements Exception {
   });
 
   @override
-
   /// Performs `toString` for this feature. Update this documentation when its contract changes.
   String toString() {
     if (statusCode != null) {
@@ -74,7 +73,8 @@ class BackendApi {
     }
   }
 
-  bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+  bool get isAuthenticated =>
+      _token != null && _token!.isNotEmpty;
 
   /// Performs `setToken` for this feature. Update this documentation when its contract changes.
   Future<void> setToken(String token) async {
@@ -102,50 +102,6 @@ class BackendApi {
   }
 
   // ==========================================================
-  // WORLDWIDE LOCATION
-  // ==========================================================
-
-  /// Looks up postal/ZIP codes for a selected city through the backend's
-  /// configured postal provider. Provider credentials never reach Flutter.
-  Future<List<String>> getPostalCodes({
-    required String countryCode,
-    required String city,
-  }) async {
-    final uri = Uri.parse('$baseUrl/location/postal-codes').replace(
-      queryParameters: {
-        'country': countryCode,
-        'city': city,
-      },
-    );
-    final response = await http.get(uri, headers: _headers);
-    final data = _decodeResponse(response);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to load postal codes.',
-        statusCode: response.statusCode,
-      );
-    }
-    return (data['postalCodes'] as List?)
-            ?.map((value) => value.toString())
-            .where((value) => value.trim().isNotEmpty)
-            .toList() ??
-        <String>[];
-  }
-
-  // ==========================================================
-  // SELF-HOSTING STATUS
-  // ==========================================================
-
-  /// Loads authenticated reverse-proxy, DDNS, VPN, and port status.
-  Future<Map<String, dynamic>> getSelfHostingStatus() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/self-hosting/status'),
-      headers: _headers,
-    );
-    return _requireSuccess(response, 'Unable to load self-hosting status.');
-  }
-
-  // ==========================================================
   // LEGAL
   // ==========================================================
 
@@ -158,9 +114,11 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to load legal policies.',
+        data['error']?.toString() ??
+            'Unable to load legal policies.',
         statusCode: response.statusCode,
       );
     }
@@ -177,9 +135,11 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to load legal acceptance.',
+        data['error']?.toString() ??
+            'Unable to load legal acceptance.',
         statusCode: response.statusCode,
       );
     }
@@ -230,7 +190,8 @@ class BackendApi {
   }) async {
     final cleanPlan = plan.trim().toLowerCase();
 
-    if (cleanPlan != 'monthly' && cleanPlan != 'yearly') {
+    if (cleanPlan != 'monthly' &&
+        cleanPlan != 'yearly') {
       throw BackendApiException(
         'Subscription plan must be monthly or yearly.',
       );
@@ -251,15 +212,18 @@ class BackendApi {
         'termsVersion': termsVersion,
         'privacyVersion': privacyVersion,
         'acceptableUseVersion': acceptableUseVersion,
-        'legalAcceptedAt': DateTime.now().toUtc().toIso8601String(),
+        'legalAcceptedAt':
+            DateTime.now().toUtc().toIso8601String(),
       }),
     );
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to create account.',
+        data['error']?.toString() ??
+            'Unable to create account.',
         statusCode: response.statusCode,
       );
     }
@@ -276,7 +240,8 @@ class BackendApi {
     }
 
     final paymentId = payment['id']?.toString();
-    final checkoutToken = payment['checkoutToken']?.toString();
+    final checkoutToken =
+        payment['checkoutToken']?.toString();
 
     if (paymentId == null || paymentId.isEmpty) {
       throw BackendApiException(
@@ -285,7 +250,8 @@ class BackendApi {
       );
     }
 
-    if (checkoutToken == null || checkoutToken.isEmpty) {
+    if (checkoutToken == null ||
+        checkoutToken.isEmpty) {
       throw BackendApiException(
         'Payment session was created but no checkout authorization was returned.',
         statusCode: response.statusCode,
@@ -313,14 +279,20 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to log in.',
+        data['error']?.toString() ??
+            'Unable to log in.',
         statusCode: response.statusCode,
       );
     }
 
     final token = data['token']?.toString();
+
+    if (data['requiresMfa'] == true) {
+      return data;
+    }
 
     if (token == null || token.isEmpty) {
       throw BackendApiException(
@@ -331,21 +303,6 @@ class BackendApi {
 
     await setToken(token);
 
-    return data;
-  }
-
-  /// Rotates the current bearer token and replaces the encrypted local session token.
-  Future<Map<String, dynamic>> rotateSession() async {
-    _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/auth/session/rotate'),
-        headers: _headers);
-    final data =
-        await _requireSuccess(response, 'Unable to rotate the session.');
-    final token = data['token']?.toString();
-    if (token == null || token.isEmpty) {
-      throw BackendApiException('Session rotation returned no token.');
-    }
-    await setToken(token);
     return data;
   }
 
@@ -424,7 +381,8 @@ class BackendApi {
       body: jsonEncode({
         'token': token,
         'email': email.trim().toLowerCase(),
-        if (password != null && password.isNotEmpty) 'password': password,
+        if (password != null && password.isNotEmpty)
+          'password': password,
       }),
     );
 
@@ -453,8 +411,7 @@ class BackendApi {
 
     final question = data['question']?.toString().trim() ?? '';
     if (question.isEmpty) {
-      throw BackendApiException(
-          'The account does not have a recovery question configured.');
+      throw BackendApiException('The account does not have a recovery question configured.');
     }
     return question;
   }
@@ -499,9 +456,11 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to retrieve account.',
+        data['error']?.toString() ??
+            'Unable to retrieve account.',
         statusCode: response.statusCode,
       );
     }
@@ -543,7 +502,8 @@ class BackendApi {
       body: jsonEncode({
         'name': name.trim(),
         'profileId': profileId.trim(),
-        'invitedProfiles': (invitedProfiles ?? {}).toList(),
+        'invitedProfiles':
+            (invitedProfiles ?? {}).toList(),
       }),
     );
 
@@ -656,9 +616,11 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to retrieve payment status.',
+        data['error']?.toString() ??
+            'Unable to retrieve payment status.',
         statusCode: response.statusCode,
       );
     }
@@ -701,15 +663,18 @@ class BackendApi {
       },
       body: jsonEncode({
         'checkoutToken': checkoutToken,
-        'processorTransactionId': processorTransactionId,
+        'processorTransactionId':
+            processorTransactionId,
       }),
     );
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to verify payment.',
+        data['error']?.toString() ??
+            'Unable to verify payment.',
         statusCode: response.statusCode,
       );
     }
@@ -731,7 +696,8 @@ class BackendApi {
 
     final cleanPlan = plan.trim().toLowerCase();
 
-    if (cleanPlan != 'monthly' && cleanPlan != 'yearly') {
+    if (cleanPlan != 'monthly' &&
+        cleanPlan != 'yearly') {
       throw BackendApiException(
         'Subscription plan must be monthly or yearly.',
       );
@@ -811,7 +777,8 @@ class BackendApi {
       ),
       headers: _headers,
       body: jsonEncode({
-        'processorTransactionId': processorTransactionId,
+        'processorTransactionId':
+            processorTransactionId,
       }),
     );
 
@@ -1053,7 +1020,8 @@ class BackendApi {
   }
 
   /// Confirms the library ownership declaration.
-  Future<Map<String, dynamic>> confirmOwnershipDeclaration() async {
+  Future<Map<String, dynamic>>
+      confirmOwnershipDeclaration() async {
     _requireAuthentication();
 
     final response = await http.post(
@@ -1073,7 +1041,8 @@ class BackendApi {
   }
 
   /// Requests deletion of the home server library.
-  Future<Map<String, dynamic>> requestLibraryDeletion() async {
+  Future<Map<String, dynamic>>
+      requestLibraryDeletion() async {
     _requireAuthentication();
 
     final response = await http.post(
@@ -1168,7 +1137,8 @@ class BackendApi {
   }
 
   /// Retrieves in-app storage notifications.
-  Future<Map<String, dynamic>> getStorageNotifications() async {
+  Future<Map<String, dynamic>>
+      getStorageNotifications() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -1190,7 +1160,8 @@ class BackendApi {
   /// authenticated backend into Supabase.
   ///
   /// Physical media files are never included.
-  Future<Map<String, dynamic>> syncProfileCustomizationToSupabase({
+  Future<Map<String, dynamic>>
+      syncProfileCustomizationToSupabase({
     required String profileId,
     Map<String, dynamic>? home,
     Map<String, dynamic>? details,
@@ -1258,8 +1229,10 @@ class BackendApi {
       'limit': safeLimit.toString(),
     };
 
-    if (profileId != null && profileId.trim().isNotEmpty) {
-      queryParameters['profileId'] = profileId.trim();
+    if (profileId != null &&
+        profileId.trim().isNotEmpty) {
+      queryParameters['profileId'] =
+          profileId.trim();
     }
 
     final uri = Uri.parse(
@@ -1284,7 +1257,8 @@ class BackendApi {
   // ==========================================================
 
   /// Creates a group recommendation.
-  Future<Map<String, dynamic>> createGroupRecommendation({
+  Future<Map<String, dynamic>>
+      createGroupRecommendation({
     required String title,
     required String type,
     required String profileId,
@@ -1304,7 +1278,8 @@ class BackendApi {
       );
     }
 
-    if (cleanType != 'movie' && cleanType != 'tvShow') {
+    if (cleanType != 'movie' &&
+        cleanType != 'tvShow') {
       throw BackendApiException(
         'Recommendation type must be "movie" or "tvShow".',
       );
@@ -1318,11 +1293,13 @@ class BackendApi {
 
     String? cleanMediaId = mediaId?.trim();
 
-    if (cleanMediaId != null && cleanMediaId.isEmpty) {
+    if (cleanMediaId != null &&
+        cleanMediaId.isEmpty) {
       cleanMediaId = null;
     }
 
-    if (votingDurationHours != null && votingDurationHours <= 0) {
+    if (votingDurationHours != null &&
+        votingDurationHours <= 0) {
       throw BackendApiException(
         'Voting duration must be greater than zero.',
       );
@@ -1337,7 +1314,8 @@ class BackendApi {
       'title': cleanTitle,
       'type': cleanType,
       'profileId': cleanProfileId,
-      'activeParticipants': participants.toList(),
+      'activeParticipants':
+          participants.toList(),
     };
 
     if (cleanMediaId != null) {
@@ -1345,7 +1323,8 @@ class BackendApi {
     }
 
     if (votingDurationHours != null) {
-      body['votingDurationHours'] = votingDurationHours;
+      body['votingDurationHours'] =
+          votingDurationHours;
     }
 
     final response = await http.post(
@@ -1361,7 +1340,8 @@ class BackendApi {
   }
 
   /// Retrieves group recommendations.
-  Future<Map<String, dynamic>> getGroupRecommendations() async {
+  Future<Map<String, dynamic>>
+      getGroupRecommendations() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -1376,7 +1356,8 @@ class BackendApi {
   }
 
   /// Retrieves one group recommendation.
-  Future<Map<String, dynamic>> getGroupRecommendation({
+  Future<Map<String, dynamic>>
+      getGroupRecommendation({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -1402,7 +1383,8 @@ class BackendApi {
   }
 
   /// Records a yes/no vote on a group recommendation.
-  Future<Map<String, dynamic>> voteOnGroupRecommendation({
+  Future<Map<String, dynamic>>
+      voteOnGroupRecommendation({
     required String recommendationId,
     required String profileId,
     required String vote,
@@ -1423,7 +1405,8 @@ class BackendApi {
 
     final cleanVote = vote.trim().toLowerCase();
 
-    if (cleanVote != 'yes' && cleanVote != 'no') {
+    if (cleanVote != 'yes' &&
+        cleanVote != 'no') {
       throw BackendApiException(
         'Vote must be either "yes" or "no".',
       );
@@ -1448,7 +1431,8 @@ class BackendApi {
   }
 
   /// Closes group recommendation voting.
-  Future<Map<String, dynamic>> closeGroupRecommendationVoting({
+  Future<Map<String, dynamic>>
+      closeGroupRecommendationVoting({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -1474,7 +1458,8 @@ class BackendApi {
   }
 
   /// Deletes a group recommendation.
-  Future<Map<String, dynamic>> deleteGroupRecommendation({
+  Future<Map<String, dynamic>>
+      deleteGroupRecommendation({
     required String recommendationId,
   }) async {
     _requireAuthentication();
@@ -1504,7 +1489,8 @@ class BackendApi {
   // ==========================================================
 
   /// Retrieves the Group Wishlist.
-  Future<Map<String, dynamic>> getGroupWishlist() async {
+  Future<Map<String, dynamic>>
+      getGroupWishlist() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -1519,7 +1505,8 @@ class BackendApi {
   }
 
   /// Removes a media item from the Group Wishlist.
-  Future<Map<String, dynamic>> removeFromGroupWishlist({
+  Future<Map<String, dynamic>>
+      removeFromGroupWishlist({
     required String mediaId,
   }) async {
     _requireAuthentication();
@@ -1545,7 +1532,8 @@ class BackendApi {
   }
 
   /// Acquires a Group Wishlist item.
-  Future<Map<String, dynamic>> acquireGroupWishlistItem({
+  Future<Map<String, dynamic>>
+      acquireGroupWishlistItem({
     required String mediaId,
     required String profileId,
   }) async {
@@ -1589,7 +1577,8 @@ class BackendApi {
   ///
   /// Profiles may belong to different accounts when the backend
   /// confirms that they own the same media.
-  Future<Map<String, dynamic>> createGroupWatchSession({
+  Future<Map<String, dynamic>>
+      createGroupWatchSession({
     required String mediaId,
     required String title,
     required String type,
@@ -1616,7 +1605,8 @@ class BackendApi {
       );
     }
 
-    if (cleanType != 'movie' && cleanType != 'tvShow') {
+    if (cleanType != 'movie' &&
+        cleanType != 'tvShow') {
       throw BackendApiException(
         'Group Watch type must be "movie" or "tvShow".',
       );
@@ -1628,7 +1618,8 @@ class BackendApi {
       );
     }
 
-    if (invitationDurationHours != null && invitationDurationHours <= 0) {
+    if (invitationDurationHours != null &&
+        invitationDurationHours <= 0) {
       throw BackendApiException(
         'Invitation duration must be greater than zero.',
       );
@@ -1646,11 +1637,13 @@ class BackendApi {
       'title': cleanTitle,
       'type': cleanType,
       'profileId': cleanProfileId,
-      'invitedProfileIds': invitedProfiles.toList(),
+      'invitedProfileIds':
+          invitedProfiles.toList(),
     };
 
     if (invitationDurationHours != null) {
-      body['invitationDurationHours'] = invitationDurationHours;
+      body['invitationDurationHours'] =
+          invitationDurationHours;
     }
 
     final response = await http.post(
@@ -1666,7 +1659,8 @@ class BackendApi {
   }
 
   /// Retrieves Group Watch sessions.
-  Future<Map<String, dynamic>> getGroupWatchSessions() async {
+  Future<Map<String, dynamic>>
+      getGroupWatchSessions() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -1681,7 +1675,8 @@ class BackendApi {
   }
 
   /// Retrieves a Group Watch session.
-  Future<Map<String, dynamic>> getGroupWatchSession({
+  Future<Map<String, dynamic>>
+      getGroupWatchSession({
     required String sessionId,
   }) async {
     _requireAuthentication();
@@ -1709,7 +1704,8 @@ class BackendApi {
   }
 
   /// Accepts a Group Watch invitation.
-  Future<Map<String, dynamic>> acceptGroupWatchInvitation({
+  Future<Map<String, dynamic>>
+      acceptGroupWatchInvitation({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1748,7 +1744,8 @@ class BackendApi {
   }
 
   /// Declines a Group Watch invitation.
-  Future<Map<String, dynamic>> declineGroupWatchInvitation({
+  Future<Map<String, dynamic>>
+      declineGroupWatchInvitation({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1787,7 +1784,8 @@ class BackendApi {
   }
 
   /// Sets the selected Group Watch audio track.
-  Future<Map<String, dynamic>> setGroupWatchAudioTrack({
+  Future<Map<String, dynamic>>
+      setGroupWatchAudioTrack({
     required String sessionId,
     required String profileId,
     String? audioTrackId,
@@ -1819,7 +1817,9 @@ class BackendApi {
       body: jsonEncode({
         'profileId': cleanProfileId,
         'audioTrackId':
-            cleanAudioTrackId?.isEmpty == true ? null : cleanAudioTrackId,
+            cleanAudioTrackId?.isEmpty == true
+                ? null
+                : cleanAudioTrackId,
       }),
     );
 
@@ -1830,7 +1830,8 @@ class BackendApi {
   }
 
   /// Sets the selected Group Watch subtitle track.
-  Future<Map<String, dynamic>> setGroupWatchSubtitleTrack({
+  Future<Map<String, dynamic>>
+      setGroupWatchSubtitleTrack({
     required String sessionId,
     required String profileId,
     String? subtitleTrackId,
@@ -1839,7 +1840,8 @@ class BackendApi {
 
     final cleanSessionId = sessionId.trim();
     final cleanProfileId = profileId.trim();
-    final cleanSubtitleTrackId = subtitleTrackId?.trim();
+    final cleanSubtitleTrackId =
+        subtitleTrackId?.trim();
 
     if (cleanSessionId.isEmpty) {
       throw BackendApiException(
@@ -1862,7 +1864,9 @@ class BackendApi {
       body: jsonEncode({
         'profileId': cleanProfileId,
         'subtitleTrackId':
-            cleanSubtitleTrackId?.isEmpty == true ? null : cleanSubtitleTrackId,
+            cleanSubtitleTrackId?.isEmpty == true
+                ? null
+                : cleanSubtitleTrackId,
       }),
     );
 
@@ -1873,7 +1877,8 @@ class BackendApi {
   }
 
   /// Starts a Group Watch session.
-  Future<Map<String, dynamic>> startGroupWatchSession({
+  Future<Map<String, dynamic>>
+      startGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1912,7 +1917,8 @@ class BackendApi {
   }
 
   /// Resumes Group Watch playback.
-  Future<Map<String, dynamic>> playGroupWatchSession({
+  Future<Map<String, dynamic>>
+      playGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -1951,7 +1957,8 @@ class BackendApi {
   }
 
   /// Pauses Group Watch playback.
-  Future<Map<String, dynamic>> pauseGroupWatchSession({
+  Future<Map<String, dynamic>>
+      pauseGroupWatchSession({
     required String sessionId,
     required String profileId,
     required String reason,
@@ -1999,7 +2006,8 @@ class BackendApi {
   }
 
   /// Resumes a paused Group Watch session.
-  Future<Map<String, dynamic>> resumeGroupWatchSession({
+  Future<Map<String, dynamic>>
+      resumeGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -2041,7 +2049,8 @@ class BackendApi {
   ///
   /// The backend route expects `positionMilliseconds`.
   /// The Duration is therefore sent directly as milliseconds.
-  Future<Map<String, dynamic>> updateGroupWatchPosition({
+  Future<Map<String, dynamic>>
+      updateGroupWatchPosition({
     required String sessionId,
     required String profileId,
     required Duration position,
@@ -2069,7 +2078,8 @@ class BackendApi {
       );
     }
 
-    final int positionMilliseconds = position.inMilliseconds;
+    final int positionMilliseconds =
+        position.inMilliseconds;
 
     final response = await http.post(
       Uri.parse(
@@ -2079,7 +2089,8 @@ class BackendApi {
       headers: _headers,
       body: jsonEncode({
         'profileId': cleanProfileId,
-        'positionMilliseconds': positionMilliseconds,
+        'positionMilliseconds':
+            positionMilliseconds,
       }),
     );
 
@@ -2090,7 +2101,8 @@ class BackendApi {
   }
 
   /// Ends a Group Watch session.
-  Future<Map<String, dynamic>> endGroupWatchSession({
+  Future<Map<String, dynamic>>
+      endGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -2129,7 +2141,8 @@ class BackendApi {
   }
 
   /// Deletes a Group Watch session.
-  Future<Map<String, dynamic>> deleteGroupWatchSession({
+  Future<Map<String, dynamic>>
+      deleteGroupWatchSession({
     required String sessionId,
     required String profileId,
   }) async {
@@ -2172,7 +2185,8 @@ class BackendApi {
   // ==========================================================
 
   /// Creates a remote access code.
-  Future<Map<String, dynamic>> createRemoteAccessCode() async {
+  Future<Map<String, dynamic>>
+      createRemoteAccessCode() async {
     _requireAuthentication();
 
     final response = await http.post(
@@ -2415,7 +2429,9 @@ class BackendApi {
       'Unable to load sports.',
     );
 
-    return data['sports'] is List ? data['sports'] as List : <dynamic>[];
+    return data['sports'] is List
+        ? data['sports'] as List
+        : <dynamic>[];
   }
 
   /// Retrieves upcoming sports events.
@@ -2460,7 +2476,8 @@ class BackendApi {
   // ==========================================================
 
   /// Reads the home server storage dashboard.
-  Future<Map<String, dynamic>> getHomeServerStorage() async {
+  Future<Map<String, dynamic>>
+      getHomeServerStorage() async {
     _requireAuthentication();
 
     final response = await http.get(
@@ -2569,10 +2586,10 @@ class BackendApi {
   // RATINGS
   // ==========================================================
 
-  /// Loads provider ratings and the current profile's separate personal rating.
+  /// Loads provider ratings and the current profile's personal rating.
   Future<Map<String, dynamic>> getRatings({
     required String mediaId,
-    required String title,
+    String? title,
     int? year,
     String mediaType = 'movie',
     String? tmdbId,
@@ -2581,39 +2598,222 @@ class BackendApi {
     bool refresh = false,
   }) async {
     _requireAuthentication();
-    final params = <String, String>{
+    final query = <String, String>{
       'mediaId': mediaId,
-      'title': title,
-      'mediaType': mediaType,
+      if (title != null && title.isNotEmpty) 'title': title,
       if (year != null) 'year': year.toString(),
+      'mediaType': mediaType,
       if (tmdbId != null && tmdbId.isNotEmpty) 'tmdbId': tmdbId,
-      if (musicBrainzId != null && musicBrainzId.isNotEmpty)
-        'musicBrainzId': musicBrainzId,
+      if (musicBrainzId != null && musicBrainzId.isNotEmpty) 'musicBrainzId': musicBrainzId,
       if (profileId != null && profileId.isNotEmpty) 'profileId': profileId,
-      if (refresh) 'refresh': 'true',
+      'refresh': refresh.toString(),
     };
-    final uri = Uri.parse('$baseUrl/ratings').replace(queryParameters: params);
-    final response = await http.get(uri, headers: _headers);
-    return _requireSuccess(response, 'Unable to load ratings.');
+    final uri = Uri.parse('$baseUrl/ratings').replace(queryParameters: query);
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load media ratings.');
   }
 
-  /// Saves a separate profile-specific 0.5-5 star rating.
+  /// Saves a profile rating in half-star increments from 0.5 to 5.0.
   Future<Map<String, dynamic>> saveUserRating({
     required String mediaId,
     required String profileId,
     required double stars,
   }) async {
     _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/ratings/user'),
+        headers: _headers,
+        body: jsonEncode({'mediaId': mediaId, 'profileId': profileId, 'stars': stars}),
+      ),
+      'Unable to save your rating.',
+    );
+  }
+
+  // ==========================================================
+  // WORLDWIDE LOCATION
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getPostalCodes(
+    String countryCode,
+    String city,
+  ) async {
+    final cleanCountry = countryCode.trim();
+    final cleanCity = city.trim();
+    if (cleanCountry.isEmpty || cleanCity.isEmpty) {
+      throw BackendApiException('Country code and city are required.');
+    }
+    final uri = Uri.parse('$baseUrl/worldwide/postal-codes').replace(
+      queryParameters: {
+        'country': cleanCountry,
+        'city': cleanCity,
+      },
+    );
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to retrieve postal codes.',
+    );
+  }
+
+  // ==========================================================
+  // SHOP
+  // ==========================================================
+
+  Future<Map<String, dynamic>> searchShopEntities(
+    String query,
+    int limit,
+  ) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/shop/entities').replace(
+      queryParameters: {
+        'q': query.trim(),
+        'limit': limit.clamp(1, 100).toString(),
+      },
+    );
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to search shop entities.',
+    );
+  }
+
+  Future<Map<String, dynamic>> syncShopEntities(
+    List<Map<String, dynamic>> entities,
+  ) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/shop/entities/sync'),
+        headers: _headers,
+        body: jsonEncode({'entities': entities}),
+      ),
+      'Unable to synchronize shop entities.',
+    );
+  }
+
+  // ==========================================================
+  // SELF-HOSTING
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getSelfHostingStatus() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/self-hosting/status'),
+        headers: _headers,
+      ),
+      'Unable to retrieve self-hosting status.',
+    );
+  }
+
+  // ==========================================================
+  // SECURITY / MFA
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getSecurityStatus() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(Uri.parse('$baseUrl/security/status'), headers: _headers),
+      'Unable to retrieve security status.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getSecuritySessions() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(Uri.parse('$baseUrl/security/sessions'), headers: _headers),
+      'Unable to retrieve security sessions.',
+    );
+  }
+
+  Future<Map<String, dynamic>> revokeSecuritySession({
+    required String sessionId,
+  }) async {
+    _requireAuthentication();
+    final cleanId = sessionId.trim();
+    if (cleanId.isEmpty) throw BackendApiException('Session ID is required.');
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/security/sessions/revoke'),
+        headers: _headers,
+        body: jsonEncode({'sessionId': cleanId}),
+      ),
+      'Unable to revoke the security session.',
+    );
+  }
+
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    _requireAuthentication();
+    if (currentPassword.isEmpty || newPassword.isEmpty) {
+      throw BackendApiException('Current and new passwords are required.');
+    }
     final response = await http.post(
-      Uri.parse('$baseUrl/ratings/user'),
+      Uri.parse('$baseUrl/security/password'),
       headers: _headers,
       body: jsonEncode({
-        'mediaId': mediaId,
-        'profileId': profileId,
-        'stars': stars,
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
       }),
     );
-    return _requireSuccess(response, 'Unable to save your rating.');
+    final data = await _requireSuccess(response, 'Unable to change password.');
+    await clearToken();
+    return data;
+  }
+
+  Future<Map<String, dynamic>> startMfaEnrollment() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/security/mfa/enroll'), headers: _headers),
+      'Unable to start MFA enrollment.',
+    );
+  }
+
+  Future<Map<String, dynamic>> verifyMfaEnrollment({
+    required String code,
+  }) async {
+    _requireAuthentication();
+    final cleanCode = code.trim();
+    if (cleanCode.isEmpty) throw BackendApiException('MFA code is required.');
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/security/mfa/enroll/verify'),
+        headers: _headers,
+        body: jsonEncode({'code': cleanCode}),
+      ),
+      'Unable to verify MFA enrollment.',
+    );
+  }
+
+  Future<Map<String, dynamic>> disableMfa() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/security/mfa/disable'), headers: _headers),
+      'Unable to disable MFA.',
+    );
+  }
+
+  Future<Map<String, dynamic>> verifyMfaLogin({
+    required String email,
+    required String code,
+  }) async {
+    final cleanEmail = email.trim();
+    final cleanCode = code.trim();
+    if (cleanEmail.isEmpty || cleanCode.isEmpty) {
+      throw BackendApiException('Email and MFA code are required.');
+    }
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/mfa/verify'),
+      headers: _headers,
+      body: jsonEncode({'email': cleanEmail, 'code': cleanCode}),
+    );
+    final data = await _requireSuccess(response, 'Unable to verify MFA login.');
+    final token = data['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw BackendApiException('MFA verification succeeded but no authentication token was returned.');
+    }
+    await setToken(token);
+    return data;
   }
 
   // ==========================================================
@@ -2636,9 +2836,11 @@ class BackendApi {
   ) async {
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? fallbackError,
+        data['error']?.toString() ??
+            fallbackError,
         statusCode: response.statusCode,
       );
     }
@@ -2668,103 +2870,16 @@ class BackendApi {
 
     final data = _decodeResponse(response);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       throw BackendApiException(
-        data['error']?.toString() ?? 'Unable to verify security answer.',
+        data['error']?.toString() ??
+            'Unable to verify security answer.',
         statusCode: response.statusCode,
       );
     }
 
     return data['verified'] == true;
-  }
-
-  // ==========================================================
-  // SECURITY & PRIVACY
-  // ==========================================================
-
-  /// Loads application security status without exposing credentials.
-  Future<Map<String, dynamic>> getSecurityStatus() async {
-    _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/security/status'),
-        headers: _headers);
-    return _requireSuccess(response, 'Unable to load security status.');
-  }
-
-  /// Loads redacted active sessions for the signed-in account.
-  Future<List<Map<String, dynamic>>> getSecuritySessions() async {
-    _requireAuthentication();
-    final response = await http.get(Uri.parse('$baseUrl/security/sessions'),
-        headers: _headers);
-    final data =
-        await _requireSuccess(response, 'Unable to load active sessions.');
-    return (data['sessions'] as List?)
-            ?.whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList() ??
-        <Map<String, dynamic>>[];
-  }
-
-  /// Revokes one redacted session identifier. The bearer token itself is never sent as a session-management ID.
-  Future<void> revokeSecuritySession(String sessionId) async {
-    _requireAuthentication();
-    final response = await http.post(
-        Uri.parse('$baseUrl/security/sessions/revoke'),
-        headers: _headers,
-        body: jsonEncode({'sessionId': sessionId}));
-    await _requireSuccess(response, 'Unable to revoke session.');
-  }
-
-  /// Changes the account password and clears all existing backend sessions.
-  Future<void> changePassword(
-      {required String currentPassword, required String newPassword}) async {
-    _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/security/password'),
-        headers: _headers,
-        body: jsonEncode(
-            {'currentPassword': currentPassword, 'newPassword': newPassword}));
-    await _requireSuccess(response, 'Unable to change password.');
-    await clearToken();
-  }
-
-  /// Starts email-based MFA enrollment. Only a hashed challenge is persisted by the backend.
-  Future<void> startMfaEnrollment() async {
-    _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/security/mfa/start'),
-        headers: _headers);
-    await _requireSuccess(response, 'Unable to start MFA enrollment.');
-  }
-
-  /// Verifies the MFA enrollment code.
-  Future<void> verifyMfaEnrollment(String code) async {
-    _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/security/mfa/verify'),
-        headers: _headers, body: jsonEncode({'code': code}));
-    await _requireSuccess(response, 'Unable to verify MFA code.');
-  }
-
-  /// Disables MFA after the authenticated account requests it.
-  Future<void> disableMfa() async {
-    _requireAuthentication();
-    final response = await http.post(Uri.parse('$baseUrl/security/mfa/disable'),
-        headers: _headers);
-    await _requireSuccess(response, 'Unable to disable MFA.');
-  }
-
-  /// Completes a password-authenticated MFA challenge and stores the newly issued session token.
-  Future<Map<String, dynamic>> verifyMfaLogin(
-      {required String email, required String code}) async {
-    final response = await http.post(
-        Uri.parse('$baseUrl/auth/mfa/verify-login'),
-        headers: _headers,
-        body: jsonEncode({'email': email.trim(), 'code': code.trim()}));
-    final data = await _requireSuccess(response, 'Unable to verify MFA login.');
-    final token = data['token']?.toString();
-    if (token == null || token.isEmpty) {
-      throw BackendApiException(
-          'MFA verification succeeded but no session token was returned.');
-    }
-    await setToken(token);
-    return data;
   }
 
   // ==========================================================

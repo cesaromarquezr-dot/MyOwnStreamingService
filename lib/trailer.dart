@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'localization.dart';
 
 // Simple trailer model used by TrailerScreen.
@@ -23,6 +24,9 @@ class Trailer {
 }
 
 /// Opens a trailer on YouTube.
+///
+/// The trailer is intentionally opened outside the application because
+/// this screen does not embed or proxy YouTube playback.
 Future<void> openTrailer(
   BuildContext context,
   Trailer trailer,
@@ -32,37 +36,16 @@ Future<void> openTrailer(
   if (videoId.isEmpty) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(18),
-        backgroundColor: const Color(0xFF202020),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        content: const Row(
-          children: [
-            Icon(
-              Icons.info_outline_rounded,
-              color: Colors.white,
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: UniversalText('This trailer does not have a YouTube video ID.',
-                style: TextStyle(
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    _showTrailerMessage(
+      context,
+      message: 'This trailer does not have a YouTube video ID.',
+      icon: Icons.info_outline_rounded,
     );
 
     return;
   }
 
-  final Uri youtubeUri = Uri.https(
+  final youtubeUri = Uri.https(
     'www.youtube.com',
     '/watch',
     <String, String>{
@@ -77,37 +60,31 @@ Future<void> openTrailer(
     );
 
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(18),
-          backgroundColor: const Color(0xFF202020),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          content: const Row(
-            children: [
-              Icon(
-                Icons.error_outline_rounded,
-                color: Colors.white,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: UniversalText('Unable to open the trailer.',
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      _showTrailerMessage(
+        context,
+        message: 'Unable to open the trailer.',
+        icon: Icons.error_outline_rounded,
       );
     }
   } catch (_) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showTrailerMessage(
+      context,
+      message: 'Unable to open the trailer.',
+      icon: Icons.error_outline_rounded,
+    );
+  }
+}
+
+void _showTrailerMessage(
+  BuildContext context, {
+  required String message,
+  required IconData icon,
+}) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(18),
@@ -115,16 +92,17 @@ Future<void> openTrailer(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
-        content: const Row(
+        content: Row(
           children: [
             Icon(
-              Icons.error_outline_rounded,
+              icon,
               color: Colors.white,
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Expanded(
-              child: UniversalText('Unable to open the trailer.',
-                style: TextStyle(
+              child: UniversalText(
+                message,
+                style: const TextStyle(
                   color: Colors.white,
                 ),
               ),
@@ -133,7 +111,6 @@ Future<void> openTrailer(
         ),
       ),
     );
-  }
 }
 
 class TrailerScreen extends StatefulWidget {
@@ -151,31 +128,50 @@ class TrailerScreen extends StatefulWidget {
 class _TrailerScreenState extends State<TrailerScreen> {
   bool openingTrailer = false;
 
-  /// Performs `launchTrailer` for this feature. Update this documentation when its contract changes.
+  /// Opens the current trailer while preventing duplicate launch requests.
   Future<void> launchTrailer() async {
     if (openingTrailer) return;
+
+    final videoId = widget.trailer.youtubeVideoId.trim();
+
+    if (videoId.isEmpty) {
+      if (!mounted) return;
+
+      _showTrailerMessage(
+        context,
+        message: 'This trailer does not have a YouTube video ID.',
+        icon: Icons.info_outline_rounded,
+      );
+
+      return;
+    }
 
     setState(() {
       openingTrailer = true;
     });
 
-    await openTrailer(
-      context,
-      widget.trailer,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      openingTrailer = false;
-    });
+    try {
+      await openTrailer(
+        context,
+        widget.trailer,
+      );
+    } finally {
+      // Do not return from finally. The analyzer correctly flags that
+      // control-flow pattern because it can suppress an active exception.
+      if (mounted) {
+        setState(() {
+          openingTrailer = false;
+        });
+      }
+    }
   }
 
   @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  /// Builds the trailer screen.
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final size = MediaQuery.sizeOf(context);
     final compactLayout = size.width < 700;
+    final narrowLayout = size.width < 460;
 
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
@@ -198,6 +194,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
             ),
           ),
 
+          // Subtle background grid.
           Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
@@ -210,7 +207,6 @@ class _TrailerScreenState extends State<TrailerScreen> {
             child: Column(
               children: [
                 _buildTopBar(context),
-
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
@@ -253,6 +249,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
                           child: _buildContent(
                             context,
                             compactLayout,
+                            narrowLayout,
                           ),
                         ),
                       ),
@@ -267,7 +264,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
-  /// Performs `_buildGlow` for this feature. Update this documentation when its contract changes.
+  /// Builds the ambient background glow.
   Widget _buildGlow({
     required double size,
   }) {
@@ -289,7 +286,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
-  /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
+  /// Builds the trailer screen top bar.
   Widget _buildTopBar(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -307,61 +304,93 @@ class _TrailerScreenState extends State<TrailerScreen> {
               Navigator.of(context).maybePop();
             },
           ),
-
           const SizedBox(width: 15),
-
           Expanded(
-            child: UniversalText('TRAILER',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.45),
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2.2,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const UniversalText(
+                  'TRAILER',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _shortTitle(widget.trailer.title),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-
+          const SizedBox(width: 12),
           _buildGlassButton(
             icon: Icons.open_in_new_rounded,
             tooltip: tr('Open trailer'),
-            onPressed: openingTrailer
-                ? null
-                : launchTrailer,
+            onPressed: openingTrailer ? null : launchTrailer,
           ),
         ],
       ),
     );
   }
 
-  /// Performs `_buildGlassButton` for this feature. Update this documentation when its contract changes.
+  String _shortTitle(String value) {
+    final trimmed = value.trim();
+
+    if (trimmed.isEmpty) {
+      return 'YouTube trailer';
+    }
+
+    return trimmed;
+  }
+
+  /// Builds a translucent toolbar button.
   Widget _buildGlassButton({
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
   }) {
+    final enabled = onPressed != null;
+
     return Tooltip(
       message: tooltip,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 15,
-            sigmaY: 15,
-          ),
-          child: Material(
-            color: Colors.white.withValues(alpha: 0.055),
-            child: InkWell(
-              onTap: onPressed,
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                width: 45,
-                height: 45,
-                child: Icon(
-                  icon,
-                  color: Colors.white.withValues(
-                    alpha: onPressed == null ? 0.25 : 0.82,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: tooltip,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: 15,
+              sigmaY: 15,
+            ),
+            child: Material(
+              color: Colors.white.withValues(
+                alpha: enabled ? 0.055 : 0.025,
+              ),
+              child: InkWell(
+                onTap: onPressed,
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 45,
+                  height: 45,
+                  child: Icon(
+                    icon,
+                    color: Colors.white.withValues(
+                      alpha: enabled ? 0.82 : 0.25,
+                    ),
+                    size: 21,
                   ),
-                  size: 21,
                 ),
               ),
             ),
@@ -371,20 +400,26 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
-  /// Performs `_buildContent` for this feature. Update this documentation when its contract changes.
+  /// Builds the primary trailer content.
   Widget _buildContent(
     BuildContext context,
     bool compactLayout,
+    bool narrowLayout,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildTrailerPreview(compactLayout),
-
-        const SizedBox(height: 25),
-
+        _buildTrailerPreview(
+          compactLayout,
+          narrowLayout,
+        ),
+        SizedBox(
+          height: compactLayout ? 23 : 27,
+        ),
         Text(
-          widget.trailer.title,
+          widget.trailer.title.trim().isEmpty
+              ? 'Trailer'
+              : widget.trailer.title.trim(),
           textAlign: compactLayout
               ? TextAlign.center
               : TextAlign.left,
@@ -396,9 +431,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
             height: 1.12,
           ),
         ),
-
         const SizedBox(height: 12),
-
         Row(
           mainAxisAlignment: compactLayout
               ? MainAxisAlignment.center
@@ -413,9 +446,10 @@ class _TrailerScreenState extends State<TrailerScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            UniversalText('OFFICIAL TRAILER',
+            const UniversalText(
+              'OFFICIAL TRAILER',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.48),
+                color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.4,
@@ -423,21 +457,18 @@ class _TrailerScreenState extends State<TrailerScreen> {
             ),
           ],
         ),
-
         const SizedBox(height: 25),
-
-        _buildTrailerInfo(),
-
+        _buildTrailerInfo(
+          narrowLayout: narrowLayout,
+        ),
         const SizedBox(height: 25),
-
         _buildWatchButton(),
-
         const SizedBox(height: 18),
-
-        UniversalText('The trailer will open on YouTube.',
+        const UniversalText(
+          'The trailer will open on YouTube.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.32),
+            color: Colors.white38,
             fontSize: 12,
           ),
         ),
@@ -445,114 +476,120 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
-  /// Performs `_buildTrailerPreview` for this feature. Update this documentation when its contract changes.
+  /// Builds the visual trailer preview.
   Widget _buildTrailerPreview(
     bool compactLayout,
+    bool narrowLayout,
   ) {
-    final aspectRatio = compactLayout ? 16 / 10 : 16 / 8;
+    final aspectRatio = compactLayout
+        ? (narrowLayout ? 1.55 : 1.60)
+        : 2.0;
 
-    return AspectRatio(
-      aspectRatio: aspectRatio,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-          compactLayout ? 20 : 26,
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Cinematic background.
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF191919),
-                    Color(0xFF090909),
+    final radius = compactLayout ? 20.0 : 26.0;
+
+    return Semantics(
+      button: true,
+      label: 'Watch trailer',
+      child: AspectRatio(
+        aspectRatio: aspectRatio,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Cinematic background.
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF191919),
+                      Color(0xFF090909),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Soft center glow.
+              Center(
+                child: Container(
+                  width: compactLayout ? 180 : 260,
+                  height: compactLayout ? 180 : 260,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.10),
+                        Colors.white.withValues(alpha: 0.025),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Decorative film-strip lines.
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _FilmPatternPainter(),
+                ),
+              ),
+
+              // Gradient overlay.
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.10),
+                        Colors.black.withValues(alpha: 0.30),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Play button.
+              Center(
+                child: _buildPlayButton(),
+              ),
+
+              // Bottom metadata.
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 17,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.play_circle_outline_rounded,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    const UniversalText(
+                      'WATCH TRAILER',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.3,
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-
-            // Soft center glow.
-            Center(
-              child: Container(
-                width: compactLayout ? 180 : 260,
-                height: compactLayout ? 180 : 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.10),
-                      Colors.white.withValues(alpha: 0.025),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Decorative film-strip lines.
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _FilmPatternPainter(),
-              ),
-            ),
-
-            // Gradient overlay.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.10),
-                      Colors.black.withValues(alpha: 0.30),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Play button.
-            Center(
-              child: _buildPlayButton(),
-            ),
-
-            // Bottom metadata.
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 17,
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.play_circle_outline_rounded,
-                    color: Colors.white70,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  UniversalText('WATCH TRAILER',
-                    style: TextStyle(
-                      color: Colors.white.withValues(
-                        alpha: 0.62,
-                      ),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// Performs `_buildPlayButton` for this feature. Update this documentation when its contract changes.
+  /// Builds the central trailer play button.
   Widget _buildPlayButton() {
     return Material(
       color: Colors.transparent,
@@ -597,8 +634,12 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
-  /// Performs `_buildTrailerInfo` for this feature. Update this documentation when its contract changes.
-  Widget _buildTrailerInfo() {
+  /// Builds the trailer metadata card.
+  Widget _buildTrailerInfo({
+    required bool narrowLayout,
+  }) {
+    final videoId = widget.trailer.youtubeVideoId.trim();
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(17),
       child: BackdropFilter(
@@ -607,7 +648,9 @@ class _TrailerScreenState extends State<TrailerScreen> {
           sigmaY: 18,
         ),
         child: Container(
-          padding: const EdgeInsets.all(17),
+          padding: EdgeInsets.all(
+            narrowLayout ? 14 : 17,
+          ),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.045),
             borderRadius: BorderRadius.circular(17),
@@ -630,35 +673,35 @@ class _TrailerScreenState extends State<TrailerScreen> {
                   size: 21,
                 ),
               ),
-
               const SizedBox(width: 13),
-
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    UniversalText('YouTube trailer',
-                      style: const TextStyle(
+                    const UniversalText(
+                      'YouTube trailer',
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    UniversalText('Video ID: ${widget.trailer.youtubeVideoId}',
+                    UniversalText(
+                      videoId.isEmpty
+                          ? 'Video ID unavailable'
+                          : 'Video ID: $videoId',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(
-                          alpha: 0.38,
-                        ),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Colors.white38,
                         fontSize: 11.5,
                       ),
                     ),
                   ],
                 ),
               ),
-
+              const SizedBox(width: 10),
               Icon(
                 Icons.open_in_new_rounded,
                 color: Colors.white.withValues(alpha: 0.32),
@@ -671,66 +714,72 @@ class _TrailerScreenState extends State<TrailerScreen> {
     );
   }
 
-  /// Performs `_buildWatchButton` for this feature. Update this documentation when its contract changes.
+  /// Builds the primary watch button.
   Widget _buildWatchButton() {
     return SizedBox(
       height: 56,
-      child: FilledButton(
-        onPressed: openingTrailer ? null : launchTrailer,
-        style: FilledButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          disabledBackgroundColor:
-              Colors.white.withValues(alpha: 0.15),
-          disabledForegroundColor:
-              Colors.white.withValues(alpha: 0.50),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      child: Semantics(
+        button: true,
+        enabled: !openingTrailer,
+        label: 'Watch trailer',
+        child: FilledButton(
+          onPressed: openingTrailer ? null : launchTrailer,
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            disabledBackgroundColor:
+                Colors.white.withValues(alpha: 0.15),
+            disabledForegroundColor:
+                Colors.white.withValues(alpha: 0.50),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          transitionBuilder: (
-            child,
-            animation,
-          ) {
-            return FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: animation,
-                child: child,
-              ),
-            );
-          },
-          child: openingTrailer
-              ? const SizedBox(
-                  key: ValueKey('loading'),
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: Colors.black,
-                  ),
-                )
-              : const Row(
-                  key: ValueKey('watch'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.play_arrow_rounded,
-                      size: 23,
-                    ),
-                    SizedBox(width: 8),
-                    UniversalText('WATCH TRAILER',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (
+              child,
+              animation,
+            ) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: animation,
+                  child: child,
                 ),
+              );
+            },
+            child: openingTrailer
+                ? const SizedBox(
+                    key: ValueKey('loading'),
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.black,
+                    ),
+                  )
+                : const Row(
+                    key: ValueKey('watch'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.play_arrow_rounded,
+                        size: 23,
+                      ),
+                      SizedBox(width: 8),
+                      UniversalText(
+                        'WATCH TRAILER',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
@@ -739,7 +788,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
 
 class _TrailerBackgroundPainter extends CustomPainter {
   @override
-  /// Performs `paint` for this feature. Update this documentation when its contract changes.
+  /// Paints the subtle background grid.
   void paint(
     Canvas canvas,
     Size size,
@@ -768,7 +817,7 @@ class _TrailerBackgroundPainter extends CustomPainter {
   }
 
   @override
-  /// Performs `shouldRepaint` for this feature. Update this documentation when its contract changes.
+  /// Prevents repainting because the painter has no mutable state.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,
   ) {
@@ -778,7 +827,7 @@ class _TrailerBackgroundPainter extends CustomPainter {
 
 class _FilmPatternPainter extends CustomPainter {
   @override
-  /// Performs `paint` for this feature. Update this documentation when its contract changes.
+  /// Paints the decorative film-strip pattern.
   void paint(
     Canvas canvas,
     Size size,
@@ -846,7 +895,7 @@ class _FilmPatternPainter extends CustomPainter {
   }
 
   @override
-  /// Performs `shouldRepaint` for this feature. Update this documentation when its contract changes.
+  /// Prevents repainting because the painter has no mutable state.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,
   ) {

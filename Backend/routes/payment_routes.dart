@@ -1,6 +1,17 @@
 // FILE: `Backend/routes/payment_routes.dart`.
 // Purpose: Implements the payment routes portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
+//
+// Security notes:
+// - Checkout status/verification use a payment-specific checkout token and
+//   do not create an authentication session.
+// - Authenticated payment operations are scoped through PaymentService.
+// - Raw card/bank credentials are never accepted by this route.
+// - Processor transaction/reference IDs are treated as opaque values.
+// - Payment responses are explicitly marked no-store.
+// - Internal exceptions are logged server-side and are not returned to the
+//   client.
+// - Request bodies are bounded to prevent unnecessarily large JSON payloads.
 
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -13,6 +24,13 @@ import '../models/subscription.dart';
 import '../services/payment_service.dart';
 
 class PaymentRoutes {
+  static const String _paymentPrefix = '/api/v1/payment';
+
+  static const int _maxBodyBytes = 64 * 1024;
+  static const int _maxPaymentIdLength = 256;
+  static const int _maxTransactionIdLength = 512;
+  static const int _maxFailureReasonLength = 1000;
+
   final AuthenticationMiddleware authenticationMiddleware;
   final PaymentService paymentService;
   final Database database;
@@ -23,8 +41,15 @@ class PaymentRoutes {
     required this.database,
   });
 
-  /// Performs `handle` for this feature. Update this documentation when its contract changes.
+  /// Handles all payment routes.
   Future<void> handle(HttpRequest request) async {
+    _applyCors(request);
+
+    if (request.method == 'OPTIONS') {
+      await _empty(request, HttpStatus.noContent);
+      return;
+    }
+
     try {
       final path = request.uri.path;
 
@@ -33,26 +58,19 @@ class PaymentRoutes {
        * PRE-LOGIN CHECKOUT ROUTES
        * ---------------------------------------------------------
        *
-       * These routes are used immediately after signup.
-       *
-       * The user does NOT have a normal authentication token yet.
-       * Instead, the payment session has a temporary checkout token.
-       *
-       * The checkout token:
-       * - only grants access to that specific payment session
-       * - cannot be used as a normal login token
-       * - is never returned by normal payment status endpoints
-       * - is required to verify the payment before login is allowed
+       * These routes are intentionally available without a normal
+       * authentication token. Access is granted only through the
+       * checkout token associated with the specific payment session.
        */
 
       if (request.method == 'GET' &&
-          path.startsWith('/api/v1/payment/checkout/status/')) {
+          path.startsWith('$_paymentPrefix/checkout/status/')) {
         await _getCheckoutPaymentStatus(request);
         return;
       }
 
       if (request.method == 'POST' &&
-          path.startsWith('/api/v1/payment/checkout/verify/')) {
+          path.startsWith('$_paymentPrefix/checkout/verify/')) {
         await _verifyCheckoutPayment(request);
         return;
       }
@@ -61,11 +79,10 @@ class PaymentRoutes {
        * ---------------------------------------------------------
        * NORMAL AUTHENTICATED PAYMENT ROUTES
        * ---------------------------------------------------------
-       *
-       * These routes are used after the account is authenticated.
        */
 
-      final account = authenticationMiddleware.authenticate(request);
+      final account =
+          authenticationMiddleware.authenticate(request);
 
       if (account == null) {
         await _sendJson(
@@ -80,47 +97,32 @@ class PaymentRoutes {
       }
 
       if (request.method == 'POST' &&
-          path == '/api/v1/payment/create') {
-        await _createPayment(
-          request,
-          account,
-        );
+          path == '$_paymentPrefix/create') {
+        await _createPayment(request, account);
         return;
       }
 
       if (request.method == 'GET' &&
-          path.startsWith('/api/v1/payment/status/')) {
-        await _getPaymentStatus(
-          request,
-          account,
-        );
+          path.startsWith('$_paymentPrefix/status/')) {
+        await _getPaymentStatus(request, account);
         return;
       }
 
       if (request.method == 'POST' &&
-          path.startsWith('/api/v1/payment/verify/')) {
-        await _verifyPayment(
-          request,
-          account,
-        );
+          path.startsWith('$_paymentPrefix/verify/')) {
+        await _verifyPayment(request, account);
         return;
       }
 
       if (request.method == 'POST' &&
-          path.startsWith('/api/v1/payment/fail/')) {
-        await _failPayment(
-          request,
-          account,
-        );
+          path.startsWith('$_paymentPrefix/fail/')) {
+        await _failPayment(request, account);
         return;
       }
 
       if (request.method == 'POST' &&
-          path.startsWith('/api/v1/payment/cancel/')) {
-        await _cancelPayment(
-          request,
-          account,
-        );
+          path.startsWith('$_paymentPrefix/cancel/')) {
+        await _cancelPayment(request, account);
         return;
       }
 
@@ -132,21 +134,21 @@ class PaymentRoutes {
           'error': 'Payment endpoint not found.',
         },
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
       developer.log(
-        'Payment request error: $error',
+        'Payment request error.',
         name: 'PaymentRoutes',
+        error: error,
+        stackTrace: stackTrace,
       );
 
-      if (!request.response.headers.contentType
-          .toString()
-          .contains('json')) {
+      if (!_responseHasStarted(request.response)) {
         await _sendJson(
           request.response,
           HttpStatus.internalServerError,
           {
             'success': false,
-            'error': _cleanError(error),
+            'error': 'Payment request failed.',
           },
         );
       }
@@ -159,12 +161,12 @@ class PaymentRoutes {
    * ============================================================
    */
 
-  /// Performs `_getCheckoutPaymentStatus` for this feature. Update this documentation when its contract changes.
   Future<void> _getCheckoutPaymentStatus(
     HttpRequest request,
   ) async {
     final paymentId = _getIdFromPath(
       request.uri.path,
+      marker: 'checkout/status',
     );
 
     if (paymentId == null) {
@@ -190,19 +192,11 @@ class PaymentRoutes {
         HttpStatus.unauthorized,
         {
           'success': false,
-          'error':
-              'Checkout authorization is required.',
+          'error': 'Checkout authorization is required.',
         },
       );
       return;
     }
-
-    /*
-     * getPaymentForCheckout() already guarantees a valid
-     * PaymentSession or throws an exception.
-     *
-     * Therefore, there must NOT be a "payment == null" check here.
-     */
 
     final payment =
         paymentService.getPaymentForCheckout(
@@ -220,12 +214,12 @@ class PaymentRoutes {
     );
   }
 
-  /// Performs `_verifyCheckoutPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _verifyCheckoutPayment(
     HttpRequest request,
   ) async {
     final paymentId = _getIdFromPath(
       request.uri.path,
+      marker: 'checkout/verify',
     );
 
     if (paymentId == null) {
@@ -243,10 +237,7 @@ class PaymentRoutes {
     final body = await _readJson(request);
 
     final checkoutToken =
-        body['checkoutToken']
-                ?.toString()
-                .trim() ??
-            '';
+        _stringValue(body['checkoutToken']);
 
     if (checkoutToken.isEmpty) {
       await _sendJson(
@@ -254,18 +245,14 @@ class PaymentRoutes {
         HttpStatus.unauthorized,
         {
           'success': false,
-          'error':
-              'Checkout authorization is required.',
+          'error': 'Checkout authorization is required.',
         },
       );
       return;
     }
 
     final processorTransactionId =
-        body['processorTransactionId']
-                ?.toString()
-                .trim() ??
-            '';
+        _stringValue(body['processorTransactionId']);
 
     if (processorTransactionId.isEmpty) {
       await _sendJson(
@@ -280,28 +267,29 @@ class PaymentRoutes {
       return;
     }
 
+    if (processorTransactionId.length >
+        _maxTransactionIdLength) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': 'Payment transaction ID is too long.',
+        },
+      );
+      return;
+    }
+
     /*
-     * IMPORTANT:
+     * The route intentionally accepts only the processor reference.
      *
-     * The frontend must NEVER send raw financial credentials.
-     *
-     * Do NOT accept:
-     *
+     * Never accept:
      * - card number
      * - CVV
      * - expiration date
      * - PIN
      * - bank account number
      * - bank password
-     * - online banking credentials
-     *
-     * Only the payment processor's transaction/reference ID
-     * belongs in this request.
-     */
-
-    /*
-     * getPaymentForCheckout() returns a non-null PaymentSession.
-     * It throws if the checkout session is invalid or expired.
      */
 
     final payment =
@@ -310,17 +298,8 @@ class PaymentRoutes {
       checkoutToken: checkoutToken,
     );
 
-    /*
-     * Retrieve the account associated with this payment session.
-     *
-     * This is safe because the checkout token was already validated
-     * against the payment session.
-     */
-
     final account =
-        database.getAccountById(
-      payment.accountId,
-    );
+        database.getAccountById(payment.accountId);
 
     if (account == null) {
       await _sendJson(
@@ -336,7 +315,7 @@ class PaymentRoutes {
     }
 
     final verifiedPayment =
-        paymentService.verifyCheckoutPayment(
+        await paymentService.verifyCheckoutPayment(
       paymentId: paymentId,
       checkoutToken: checkoutToken,
       account: account,
@@ -345,13 +324,10 @@ class PaymentRoutes {
     );
 
     /*
-     * IMPORTANT:
-     *
      * No authentication token is created here.
      *
-     * The account is now activated, so the frontend can perform
-     * the normal login request using the user's username/email
-     * and password.
+     * Payment verification activates the subscription. The client
+     * must subsequently perform the normal login flow.
      */
 
     await _sendJson(
@@ -377,7 +353,6 @@ class PaymentRoutes {
    * ============================================================
    */
 
-  /// Performs `_createPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _createPayment(
     HttpRequest request,
     Account account,
@@ -385,11 +360,7 @@ class PaymentRoutes {
     final body = await _readJson(request);
 
     final planValue =
-        body['plan']
-                ?.toString()
-                .trim()
-                .toLowerCase() ??
-            '';
+        _stringValue(body['plan']).toLowerCase();
 
     if (planValue.isEmpty) {
       await _sendJson(
@@ -397,8 +368,7 @@ class PaymentRoutes {
         HttpStatus.badRequest,
         {
           'success': false,
-          'error':
-              'A subscription plan is required.',
+          'error': 'A subscription plan is required.',
         },
       );
       return;
@@ -443,13 +413,13 @@ class PaymentRoutes {
    * ============================================================
    */
 
-  /// Performs `_getPaymentStatus` for this feature. Update this documentation when its contract changes.
   Future<void> _getPaymentStatus(
     HttpRequest request,
     Account account,
   ) async {
     final paymentId = _getIdFromPath(
       request.uri.path,
+      marker: 'status',
     );
 
     if (paymentId == null) {
@@ -463,11 +433,6 @@ class PaymentRoutes {
       );
       return;
     }
-
-    /*
-     * getPayment() returns PaymentSession?, so this null check
-     * IS required here.
-     */
 
     final payment =
         paymentService.getPayment(paymentId);
@@ -488,13 +453,16 @@ class PaymentRoutes {
       payment,
       account,
     )) {
+      /*
+       * Do not expose whether a payment ID exists for another
+       * account through a different response.
+       */
       await _sendJson(
         request.response,
         HttpStatus.forbidden,
         {
           'success': false,
-          'error':
-              'You do not have access to this payment.',
+          'error': 'You do not have access to this payment.',
         },
       );
       return;
@@ -516,13 +484,13 @@ class PaymentRoutes {
    * ============================================================
    */
 
-  /// Performs `_verifyPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _verifyPayment(
     HttpRequest request,
     Account account,
   ) async {
     final paymentId = _getIdFromPath(
       request.uri.path,
+      marker: 'verify',
     );
 
     if (paymentId == null) {
@@ -531,8 +499,7 @@ class PaymentRoutes {
         HttpStatus.badRequest,
         {
           'success': false,
-          'error':
-              'Payment ID is required.',
+          'error': 'Payment ID is required.',
         },
       );
       return;
@@ -541,10 +508,7 @@ class PaymentRoutes {
     final body = await _readJson(request);
 
     final processorTransactionId =
-        body['processorTransactionId']
-                ?.toString()
-                .trim() ??
-            '';
+        _stringValue(body['processorTransactionId']);
 
     if (processorTransactionId.isEmpty) {
       await _sendJson(
@@ -559,20 +523,27 @@ class PaymentRoutes {
       return;
     }
 
+    if (processorTransactionId.length >
+        _maxTransactionIdLength) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': 'Payment transaction ID is too long.',
+        },
+      );
+      return;
+    }
+
     /*
-     * The client must NEVER send:
-     *
-     * - card number
-     * - CVV
-     * - PIN
-     * - bank account number
-     * - bank password
-     *
-     * Only the processor's transaction/reference ID belongs here.
+     * Only the payment processor's transaction/reference ID belongs
+     * in this request. Raw financial credentials must never reach
+     * this backend.
      */
 
     final payment =
-        paymentService.verifySuccessfulPayment(
+        await paymentService.verifySuccessfulPayment(
       paymentId: paymentId,
       account: account,
       processorTransactionId:
@@ -601,13 +572,13 @@ class PaymentRoutes {
    * ============================================================
    */
 
-  /// Performs `_failPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _failPayment(
     HttpRequest request,
     Account account,
   ) async {
     final paymentId = _getIdFromPath(
       request.uri.path,
+      marker: 'fail',
     );
 
     if (paymentId == null) {
@@ -616,8 +587,7 @@ class PaymentRoutes {
         HttpStatus.badRequest,
         {
           'success': false,
-          'error':
-              'Payment ID is required.',
+          'error': 'Payment ID is required.',
         },
       );
       return;
@@ -626,14 +596,19 @@ class PaymentRoutes {
     final body = await _readJson(request);
 
     final reason =
-        body['reason']
-                ?.toString()
-                .trim() ??
-            '';
+        _stringValue(body['reason']);
 
-    /*
-     * markFailed() returns a non-null PaymentSession.
-     */
+    if (reason.length > _maxFailureReasonLength) {
+      await _sendJson(
+        request.response,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'error': 'Payment failure reason is too long.',
+        },
+      );
+      return;
+    }
 
     final payment =
         paymentService.markFailed(
@@ -648,8 +623,7 @@ class PaymentRoutes {
       {
         'success': true,
         'payment': payment.toJson(),
-        'message':
-            'Payment marked as failed.',
+        'message': 'Payment marked as failed.',
       },
     );
   }
@@ -660,13 +634,13 @@ class PaymentRoutes {
    * ============================================================
    */
 
-  /// Performs `_cancelPayment` for this feature. Update this documentation when its contract changes.
   Future<void> _cancelPayment(
     HttpRequest request,
     Account account,
   ) async {
     final paymentId = _getIdFromPath(
       request.uri.path,
+      marker: 'cancel',
     );
 
     if (paymentId == null) {
@@ -675,16 +649,11 @@ class PaymentRoutes {
         HttpStatus.badRequest,
         {
           'success': false,
-          'error':
-              'Payment ID is required.',
+          'error': 'Payment ID is required.',
         },
       );
       return;
     }
-
-    /*
-     * cancelPayment() returns a non-null PaymentSession.
-     */
 
     final payment =
         paymentService.cancelPayment(
@@ -698,8 +667,7 @@ class PaymentRoutes {
       {
         'success': true,
         'payment': payment.toJson(),
-        'message':
-            'Payment cancelled.',
+        'message': 'Payment cancelled.',
       },
     );
   }
@@ -726,17 +694,40 @@ class PaymentRoutes {
   }
 
   String? _getIdFromPath(
-    String path,
-  ) {
-    final segments = path.split('/');
+    String path, {
+    required String marker,
+  }) {
+    final segments = path
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList();
 
-    if (segments.length < 5) {
+    final markerParts = marker.split('/');
+
+    if (segments.length < markerParts.length + 1) {
       return null;
     }
 
-    final id = segments.last.trim();
+    final markerStart =
+        segments.length - markerParts.length - 1;
 
-    if (id.isEmpty) {
+    for (var i = 0; i < markerParts.length; i++) {
+      if (segments[markerStart + i] != markerParts[i]) {
+        return null;
+      }
+    }
+
+    final id =
+        Uri.decodeComponent(segments.last).trim();
+
+    if (id.isEmpty ||
+        id.length > _maxPaymentIdLength) {
+      return null;
+    }
+
+    if (id.contains('/') ||
+        id.contains('\\') ||
+        id.contains('\u0000')) {
       return null;
     }
 
@@ -746,60 +737,135 @@ class PaymentRoutes {
   Future<Map<String, dynamic>> _readJson(
     HttpRequest request,
   ) async {
-    final contents =
-        await utf8.decoder
-            .bind(request)
-            .join();
-
-    if (contents.trim().isEmpty) {
-      return {};
+    if (request.contentLength > _maxBodyBytes) {
+      throw const FormatException(
+        'Request body is too large.',
+      );
     }
+
+    final bytes = <int>[];
+
+    await for (final chunk in request) {
+      if (bytes.length + chunk.length >
+          _maxBodyBytes) {
+        throw const FormatException(
+          'Request body is too large.',
+        );
+      }
+
+      bytes.addAll(chunk);
+    }
+
+    if (bytes.isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    final contents = utf8.decode(bytes);
 
     try {
       final decoded = jsonDecode(contents);
 
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
       }
 
-      return {};
-    } catch (_) {
-      throw Exception(
-        'Invalid JSON request body.',
+      throw const FormatException(
+        'JSON request body must be an object.',
+      );
+    } on FormatException {
+      rethrow;
+    } catch (error) {
+      throw FormatException(
+        'Invalid JSON request body: $error',
       );
     }
   }
 
-  /// Performs `_sendJson` for this feature. Update this documentation when its contract changes.
+  String _stringValue(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+
+    return value.toString().trim();
+  }
+
+  void _applyCors(HttpRequest request) {
+    final headers = request.response.headers;
+
+    headers.set(
+      'Access-Control-Allow-Origin',
+      '*',
+    );
+    headers.set(
+      'Access-Control-Allow-Methods',
+      'GET, POST, OPTIONS',
+    );
+    headers.set(
+      'Access-Control-Allow-Headers',
+      'Authorization, Content-Type',
+    );
+    headers.set(
+      'Access-Control-Expose-Headers',
+      'Content-Type',
+    );
+  }
+
   Future<void> _sendJson(
     HttpResponse response,
     int statusCode,
     Map<String, dynamic> data,
   ) async {
+    if (_responseHasStarted(response)) {
+      return;
+    }
+
     response.statusCode = statusCode;
+    response.headers.contentType = ContentType.json;
 
-    response.headers.contentType =
-        ContentType.json;
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate',
+    );
+    response.headers.set(
+      'Pragma',
+      'no-cache',
+    );
+    response.headers.set(
+      'X-Content-Type-Options',
+      'nosniff',
+    );
 
-    response.write(
-      jsonEncode(data),
+    response.write(jsonEncode(data));
+    await response.close();
+  }
+
+  Future<void> _empty(
+    HttpRequest request,
+    int statusCode,
+  ) async {
+    final response = request.response;
+
+    if (_responseHasStarted(response)) {
+      return;
+    }
+
+    response.statusCode = statusCode;
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate',
+    );
+    response.headers.set(
+      'Pragma',
+      'no-cache',
     );
 
     await response.close();
   }
 
-  /// Performs `_cleanError` for this feature. Update this documentation when its contract changes.
-  String _cleanError(
-    Object error,
+  bool _responseHasStarted(
+    HttpResponse response,
   ) {
-    final message = error.toString();
-
-    if (message.startsWith(
-      'Exception: ',
-    )) {
-      return message.substring(11);
-    }
-
-    return message;
+    return response.headers.contentType != null ||
+        response.statusCode != HttpStatus.ok;
   }
 }

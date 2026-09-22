@@ -1,12 +1,8 @@
 // FILE: `Backend/services/recommendations_service.dart`.
-// Purpose: Implements the recommendations service portion of the streaming service.
-// This file is part of the documented Flutter/home-server architecture.
-
-// backend/services/recommendations_service.dart
-
-// Recommendation engine.
+// Purpose: Implements the recommendations service portion of the streaming
+// service.
 //
-// This service intentionally does NOT know anything about HTTP,
+// This service intentionally does not know anything about HTTP,
 // authentication, or the database.
 //
 // The route/controller layer should load the user's data and available
@@ -49,7 +45,6 @@ class WatchOption {
     this.url,
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
@@ -77,7 +72,6 @@ class PurchaseOption {
     required this.format,
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'retailer': retailer,
@@ -111,15 +105,13 @@ class RecommendationReason {
     this.purchaseOptions = const [],
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'type': type.name,
       'title': title,
       'description': description,
-      'relatedMediaIds': relatedMediaIds,
-      'watchOptions':
-          watchOptions.map((item) => item.toJson()).toList(),
+      'relatedMediaIds': List<String>.unmodifiable(relatedMediaIds),
+      'watchOptions': watchOptions.map((item) => item.toJson()).toList(),
       'purchaseOptions':
           purchaseOptions.map((item) => item.toJson()).toList(),
     };
@@ -193,7 +185,6 @@ class RecommendationMedia {
     this.purchaseOptions = const [],
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -206,20 +197,19 @@ class RecommendationMedia {
       'language': language,
       'adaptationGroupId': adaptationGroupId,
       'adaptationGroupName': adaptationGroupName,
-      'relationshipTypes': relationshipTypes,
-      'actors': actors,
-      'characters': characters,
-      'franchises': franchises,
-      'genres': genres,
-      'subgenres': subgenres,
-      'themes': themes,
-      'tags': tags,
-      'directors': directors,
-      'writers': writers,
-      'music': music,
-      'references': references,
-      'watchOptions':
-          watchOptions.map((item) => item.toJson()).toList(),
+      'relationshipTypes': List<String>.unmodifiable(relationshipTypes),
+      'actors': List<String>.unmodifiable(actors),
+      'characters': List<String>.unmodifiable(characters),
+      'franchises': List<String>.unmodifiable(franchises),
+      'genres': List<String>.unmodifiable(genres),
+      'subgenres': List<String>.unmodifiable(subgenres),
+      'themes': List<String>.unmodifiable(themes),
+      'tags': List<String>.unmodifiable(tags),
+      'directors': List<String>.unmodifiable(directors),
+      'writers': List<String>.unmodifiable(writers),
+      'music': List<String>.unmodifiable(music),
+      'references': List<String>.unmodifiable(references),
+      'watchOptions': watchOptions.map((item) => item.toJson()).toList(),
       'purchaseOptions':
           purchaseOptions.map((item) => item.toJson()).toList(),
     };
@@ -267,25 +257,15 @@ class RecommendationWeights {
   final double franchise;
 
   final double character;
-
   final double multipleActors;
-
   final double actor;
-
   final double director;
-
   final double writer;
-
   final double music;
-
   final double genre;
-
   final double theme;
-
   final double tag;
-
   final double reference;
-
   final double similarity;
   final double internationalAdaptation;
   final double crossFormat;
@@ -324,6 +304,9 @@ class RecommendationResult {
   final double score;
 
   /// 0 - 100 normalized confidence-like score.
+  ///
+  /// This is an algorithmic match value, not a probability that the user
+  /// will like the title.
   final double matchPercentage;
 
   final List<RecommendationReason> reasons;
@@ -335,14 +318,12 @@ class RecommendationResult {
     required this.reasons,
   });
 
-  /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
       'media': media.toJson(),
       'score': score,
       'matchPercentage': matchPercentage,
-      'reasons':
-          reasons.map((reason) => reason.toJson()).toList(),
+      'reasons': reasons.map((reason) => reason.toJson()).toList(),
     };
   }
 }
@@ -366,14 +347,7 @@ class RecommendationsService {
     this.maxPerSeries = 3,
   });
 
-  /// Main recommendation method.
-  ///
-  /// This method is kept as a lightweight compatibility wrapper.
-  ///
-  /// For the actual backend recommendation flow, use
-  /// [getRecommendationsFromMedia] because that method has access
-  /// to the complete catalog and can compare the user's liked and
-  /// watched titles against candidates.
+  /// Compatibility wrapper around [getRecommendationsFromMedia].
   List<RecommendationResult> getRecommendations({
     required RecommendationProfile profile,
     required List<RecommendationMedia> availableMedia,
@@ -387,8 +361,6 @@ class RecommendationsService {
   }
 
   /// Full recommendation method.
-  ///
-  /// This is the method the backend route/service layer should use.
   ///
   /// It:
   ///
@@ -406,12 +378,10 @@ class RecommendationsService {
     required List<RecommendationMedia> catalog,
     int? limit,
   }) {
-    final targetLimit = _safeLimit(
-      limit ?? defaultLimit,
-    );
+    final targetLimit = _safeLimit(limit ?? defaultLimit);
 
     if (catalog.isEmpty || targetLimit <= 0) {
-      return [];
+      return const <RecommendationResult>[];
     }
 
     final mediaById = <String, RecommendationMedia>{};
@@ -426,25 +396,19 @@ class RecommendationsService {
       mediaById.putIfAbsent(id, () => media);
     }
 
-    final ownedIds = profile.ownedMediaIds
-        .map(_normalize)
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    if (mediaById.isEmpty) {
+      return const <RecommendationResult>[];
+    }
 
-    final dislikedIds = profile.dislikedMediaIds
-        .map(_normalize)
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    final ownedIds = _normalizedSet(profile.ownedMediaIds);
+    final dislikedIds = _normalizedSet(profile.dislikedMediaIds);
 
     final watchedIds = profile.history
         .map((item) => _normalize(item.mediaId))
         .where((id) => id.isNotEmpty)
         .toSet();
 
-    final likedIds = profile.likedMediaIds
-        .map(_normalize)
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    final likedIds = _normalizedSet(profile.likedMediaIds);
 
     final likedMedia = <RecommendationMedia>[];
 
@@ -478,20 +442,14 @@ class RecommendationsService {
     for (final candidate in mediaById.values) {
       final candidateId = _normalize(candidate.id);
 
-      if (candidateId.isEmpty) {
+      if (candidateId.isEmpty || !seenIds.add(candidateId)) {
         continue;
       }
 
-      if (!seenIds.add(candidateId)) {
-        continue;
-      }
-
-      // Never recommend something the user already owns.
       if (ownedIds.contains(candidateId)) {
         continue;
       }
 
-      // Explicit dislikes are completely excluded.
       if (dislikedIds.contains(candidateId)) {
         continue;
       }
@@ -511,17 +469,15 @@ class RecommendationsService {
       results.add(result);
     }
 
-    // Highest score first.
     results.sort(_compareRecommendationResults);
 
-    // Prevent the results from being overly repetitive.
     final diversified = _applyDiversity(results);
 
     if (diversified.length <= targetLimit) {
       return diversified;
     }
 
-    return diversified.take(targetLimit).toList();
+    return diversified.take(targetLimit).toList(growable: false);
   }
 
   RecommendationResult? _scoreAgainstUser({
@@ -532,12 +488,7 @@ class RecommendationsService {
     required Set<String> watchedIds,
   }) {
     double score = 0;
-
     final reasons = <RecommendationReason>[];
-
-    // ------------------------------------------------------------
-    // COMPARE AGAINST LIKES
-    // ------------------------------------------------------------
 
     for (final liked in likedMedia) {
       if (_normalize(liked.id) == _normalize(candidate.id)) {
@@ -553,10 +504,6 @@ class RecommendationsService {
       reasons.addAll(comparison.reasons);
     }
 
-    // ------------------------------------------------------------
-    // COMPARE AGAINST WATCH HISTORY
-    // ------------------------------------------------------------
-
     for (final watched in watchedMedia) {
       if (_normalize(watched.id) == _normalize(candidate.id)) {
         continue;
@@ -564,56 +511,40 @@ class RecommendationsService {
 
       final historyItems = history
           .where(
-            (item) =>
-                _normalize(item.mediaId) ==
-                _normalize(watched.id),
+            (item) => _normalize(item.mediaId) == _normalize(watched.id),
           )
-          .toList();
+          .toList(growable: false);
 
       if (historyItems.isEmpty) {
         continue;
       }
 
-      // Use the strongest/recent history entry for this title.
       final historyItem = _bestHistoryItem(historyItems);
 
       var historyMultiplier = 0.35;
 
-      // Completing a title is a stronger indication of interest.
-      if (historyItem.completion >= 0.90) {
+      if (_normalizedCompletion(historyItem.completion) >= 0.90) {
         historyMultiplier = 0.55;
       }
-
-      final recencyMultiplier =
-          _recencyMultiplier(historyItem.watchedAt);
 
       final comparison = _compare(
         candidate: candidate,
         source: watched,
       );
 
-      score +=
-          comparison.score *
+      score += comparison.score *
           historyMultiplier *
-          recencyMultiplier;
+          _recencyMultiplier(historyItem.watchedAt);
 
       reasons.addAll(comparison.reasons);
     }
 
-    // ------------------------------------------------------------
-    // RECENT INTEREST
-    // ------------------------------------------------------------
-
     final recentHistory = history
         .where((item) => item.watchedAt != null)
         .where(
-          (item) =>
-              DateTime.now()
-                  .difference(item.watchedAt!)
-                  .inDays <=
-              30,
+          (item) => _isRecentlyWatched(item.watchedAt!),
         )
-        .toList();
+        .toList(growable: false);
 
     if (recentHistory.isNotEmpty) {
       score += 2;
@@ -623,25 +554,17 @@ class RecommendationsService {
           type: RecommendationReasonType.recentInterest,
           title: 'Based on your recent watching',
           description:
-              'This recommendation matches patterns from '
-              'something you watched recently.',
+              'This recommendation matches patterns from something '
+              'you watched recently.',
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // RECENTLY WATCHED / ALREADY WATCHED
-    // ------------------------------------------------------------
 
     final candidateId = _normalize(candidate.id);
 
     if (watchedIds.contains(candidateId)) {
       score -= weights.alreadyWatchedPenalty;
     }
-
-    // ------------------------------------------------------------
-    // SERIES CONTINUATION BONUS
-    // ------------------------------------------------------------
 
     if (candidate.seriesId != null &&
         candidate.seriesId!.trim().isNotEmpty) {
@@ -653,7 +576,7 @@ class RecommendationsService {
                 media.seriesId != null &&
                 _normalize(media.seriesId!) == seriesId,
           )
-          .toList();
+          .toList(growable: false);
 
       if (sameSeriesMedia.isNotEmpty) {
         score += 45;
@@ -666,17 +589,13 @@ class RecommendationsService {
                 'You have watched another entry in this series.',
             relatedMediaIds: sameSeriesMedia
                 .map((media) => media.id)
-                .toList(),
+                .toList(growable: false),
           ),
         );
       }
     }
 
-    // ------------------------------------------------------------
-    // NO MATCH
-    // ------------------------------------------------------------
-
-    if (score <= 0) {
+    if (!score.isFinite || score <= 0) {
       return null;
     }
 
@@ -693,12 +612,7 @@ class RecommendationsService {
     required RecommendationMedia source,
   }) {
     double score = 0;
-
     final reasons = <RecommendationReason>[];
-
-    // ------------------------------------------------------------
-    // FRANCHISE
-    // ------------------------------------------------------------
 
     final sharedFranchises = _intersection(
       candidate.franchises,
@@ -713,65 +627,76 @@ class RecommendationsService {
           type: RecommendationReasonType.franchise,
           title: 'Same franchise',
           description:
-              'This is connected to "${source.title}" '
-              'through the same franchise.',
+              'This is connected to "${source.title}" through the '
+              'same franchise.',
           relatedMediaIds: [source.id],
         ),
       );
     }
 
-    // ------------------------------------------------------------
-    // INTERNATIONAL / LOCAL ADAPTATION
-    // ------------------------------------------------------------
+    final candidateAdaptation = _normalize(
+      candidate.adaptationGroupId ?? '',
+    );
+    final sourceAdaptation = _normalize(
+      source.adaptationGroupId ?? '',
+    );
 
-    final candidateAdaptation = _normalize(candidate.adaptationGroupId ?? '');
-    final sourceAdaptation = _normalize(source.adaptationGroupId ?? '');
     final hasAdaptationRelationship = candidateAdaptation.isNotEmpty &&
         candidateAdaptation == sourceAdaptation;
-    final explicitAdaptationRelationship = candidate.relationshipTypes.any(_isAdaptationRelationship) ||
-        source.relationshipTypes.any(_isAdaptationRelationship);
+
+    final explicitAdaptationRelationship =
+        candidate.relationshipTypes.any(_isAdaptationRelationship) ||
+            source.relationshipTypes.any(_isAdaptationRelationship);
 
     if (hasAdaptationRelationship || explicitAdaptationRelationship) {
       score += weights.internationalAdaptation;
+
       final countryText = candidate.countryOfOrigin?.trim();
       final countrySuffix = countryText == null || countryText.isEmpty
           ? ''
           : ' from $countryText';
+
       reasons.add(
         RecommendationReason(
           type: RecommendationReasonType.internationalAdaptation,
           title: 'International or local adaptation',
           description:
-              'Because you watched "${source.title}", this is a related production$countrySuffix of the same concept or adaptation family.',
+              'Because you watched "${source.title}", this is a '
+              'related production$countrySuffix of the same concept '
+              'or adaptation family.',
           relatedMediaIds: [source.id],
         ),
       );
     }
 
-    // Different formats can still be meaningfully related: live action,
-    // animation/anime, competition formats, music, specials, and other
-    // cataloged forms should not be excluded merely because the format differs.
-    final crossFormatSignal = candidate.mediaType != source.mediaType &&
+    final candidateFormat = _normalize(candidate.mediaType);
+    final sourceFormat = _normalize(source.mediaType);
+
+    final crossFormatSignal = candidateFormat.isNotEmpty &&
+        sourceFormat.isNotEmpty &&
+        candidateFormat != sourceFormat &&
         (_intersection(candidate.genres, source.genres).isNotEmpty ||
             _intersection(candidate.themes, source.themes).isNotEmpty ||
-            _intersection(candidate.references, source.references).isNotEmpty ||
-            candidate.relationshipTypes.any((type) => type.toLowerCase().contains('adapt')));
+            _intersection(candidate.references, source.references)
+                .isNotEmpty ||
+            candidate.relationshipTypes.any(
+              (type) => type.toLowerCase().contains('adapt'),
+            ));
+
     if (crossFormatSignal) {
       score += weights.crossFormat;
+
       reasons.add(
         RecommendationReason(
           type: RecommendationReasonType.crossFormat,
           title: 'Related across formats',
           description:
-              'This title is connected to "${source.title}" while using a different media format.',
+              'This title is connected to "${source.title}" while '
+              'using a different media format.',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // CHARACTER
-    // ------------------------------------------------------------
 
     final sharedCharacters = _intersection(
       candidate.characters,
@@ -786,16 +711,12 @@ class RecommendationsService {
           type: RecommendationReasonType.character,
           title: 'Same character',
           description:
-              'This recommendation shares a character '
-              'with "${source.title}".',
+              'This recommendation shares a character with '
+              '"${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // ACTORS
-    // ------------------------------------------------------------
 
     final sharedActors = _intersection(
       candidate.actors,
@@ -830,19 +751,17 @@ class RecommendationsService {
       );
     }
 
-    // ------------------------------------------------------------
-    // SEMANTIC MEDIA RELATIONSHIPS
-    // ------------------------------------------------------------
-
     if (_isAdultAnimation(source) && _isAdultAnimation(candidate)) {
       score += weights.similarity;
+
       reasons.add(
         RecommendationReason(
           type: RecommendationReasonType.similar,
           title: 'Similar adult animation',
           description:
-              'Because you watched "${source.title}", this is another '
-              'adult-animation title with a related comedy style.',
+              'Because you watched "${source.title}", this is '
+              'another adult-animation title with related comedy '
+              'characteristics.',
           relatedMediaIds: [source.id],
         ),
       );
@@ -850,21 +769,19 @@ class RecommendationsService {
 
     if (_isFriendGroupSitcom(source) && _isFriendGroupSitcom(candidate)) {
       score += weights.similarity;
+
       reasons.add(
         RecommendationReason(
           type: RecommendationReasonType.similar,
           title: 'Similar friend-group sitcom',
           description:
-              'Because you watched "${source.title}", this title has '
-              'similar friend-group and ensemble-sitcom relationships.',
+              'Because you watched "${source.title}", this title '
+              'has similar friend-group and ensemble-sitcom '
+              'relationships.',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // DIRECTOR
-    // ------------------------------------------------------------
 
     final sharedDirectors = _intersection(
       candidate.directors,
@@ -879,16 +796,12 @@ class RecommendationsService {
           type: RecommendationReasonType.director,
           title: 'Same director',
           description:
-              'This recommendation shares a director '
-              'with "${source.title}".',
+              'This recommendation shares a director with '
+              '"${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // WRITER
-    // ------------------------------------------------------------
 
     final sharedWriters = _intersection(
       candidate.writers,
@@ -903,16 +816,12 @@ class RecommendationsService {
           type: RecommendationReasonType.writer,
           title: 'Same writer',
           description:
-              'This recommendation shares a writer '
-              'with "${source.title}".',
+              'This recommendation shares a writer with '
+              '"${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // MUSIC
-    // ------------------------------------------------------------
 
     final sharedMusic = _intersection(
       candidate.music,
@@ -927,17 +836,12 @@ class RecommendationsService {
           type: RecommendationReasonType.music,
           title: 'Music connection',
           description:
-              'This recommendation shares a composer, '
-              'score, soundtrack or music connection '
-              'with "${source.title}".',
+              'This recommendation shares a composer, score, '
+              'soundtrack or music connection with "${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // GENRES
-    // ------------------------------------------------------------
 
     final sharedSubgenres = _intersection(
       candidate.subgenres,
@@ -946,26 +850,32 @@ class RecommendationsService {
 
     if (sharedSubgenres.isNotEmpty) {
       score += weights.genre * 2 * sharedSubgenres.length;
+
       reasons.add(
         RecommendationReason(
           type: RecommendationReasonType.subgenre,
           title: 'Same subgenre',
           description:
-              'Because you watched "${source.title}", this title shares ' +
-              'the ${sharedSubgenres.take(2).join(' and ')} subgenre.',
+              'Because you watched "${source.title}", this title '
+              'shares the ${sharedSubgenres.take(2).join(' and ')} '
+              'subgenre.',
           relatedMediaIds: [source.id],
         ),
       );
     }
 
     final hybridReason = _hybridGenreReason(source, candidate);
+
     if (hybridReason != null) {
       score += weights.similarity;
+
       reasons.add(
         RecommendationReason(
           type: RecommendationReasonType.hybridGenre,
           title: 'Related hybrid genre',
-          description: 'Because you watched "${source.title}", this title blends related genre conventions: $hybridReason.',
+          description:
+              'Because you watched "${source.title}", this title '
+              'blends related genre conventions: $hybridReason.',
           relatedMediaIds: [source.id],
         ),
       );
@@ -984,16 +894,12 @@ class RecommendationsService {
           type: RecommendationReasonType.genre,
           title: 'Similar genre',
           description:
-              'This recommendation shares genre '
-              'characteristics with "${source.title}".',
+              'This recommendation shares genre characteristics '
+              'with "${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // THEMES
-    // ------------------------------------------------------------
 
     final sharedThemes = _intersection(
       candidate.themes,
@@ -1008,16 +914,12 @@ class RecommendationsService {
           type: RecommendationReasonType.theme,
           title: 'Similar themes',
           description:
-              'This recommendation shares themes '
-              'with "${source.title}".',
+              'This recommendation shares themes with '
+              '"${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // TAGS
-    // ------------------------------------------------------------
 
     final sharedTags = _intersection(
       candidate.tags,
@@ -1032,16 +934,12 @@ class RecommendationsService {
           type: RecommendationReasonType.tag,
           title: 'Similar interests',
           description:
-              'This recommendation shares tags '
-              'with "${source.title}".',
+              'This recommendation shares tags with '
+              '"${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
-
-    // ------------------------------------------------------------
-    // REFERENCES
-    // ------------------------------------------------------------
 
     final sharedReferences = _intersection(
       candidate.references,
@@ -1056,24 +954,17 @@ class RecommendationsService {
           type: RecommendationReasonType.reference,
           title: 'Related reference',
           description:
-              'This recommendation has a reference or '
-              'connection to "${source.title}".',
+              'This recommendation has a reference or connection '
+              'to "${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
     }
 
-    // ------------------------------------------------------------
-    // TITLE / REFERENCE CONNECTION
-    // ------------------------------------------------------------
-
-    final titleReferenceConnection =
-        _hasReferenceConnection(
+    if (_hasReferenceConnection(
       candidate: candidate,
       source: source,
-    );
-
-    if (titleReferenceConnection) {
+    )) {
       score += weights.reference;
 
       reasons.add(
@@ -1081,19 +972,14 @@ class RecommendationsService {
           type: RecommendationReasonType.reference,
           title: 'Related title reference',
           description:
-              'This recommendation is connected to '
-              '"${source.title}" through its catalog references.',
+              'This recommendation is connected to "${source.title}" '
+              'through its catalog references.',
           relatedMediaIds: [source.id],
         ),
       );
     }
 
-    // ------------------------------------------------------------
-    // SIMILARITY BONUS
-    // ------------------------------------------------------------
-
-    final totalSignals =
-        sharedActors.length +
+    final totalSignals = sharedActors.length +
         sharedCharacters.length +
         sharedFranchises.length +
         sharedGenres.length +
@@ -1112,8 +998,8 @@ class RecommendationsService {
           type: RecommendationReasonType.similar,
           title: 'Very similar to something you like',
           description:
-              'This recommendation shares several '
-              'characteristics with "${source.title}".',
+              'This recommendation shares several characteristics '
+              'with "${source.title}".',
           relatedMediaIds: [source.id],
         ),
       );
@@ -1126,8 +1012,12 @@ class RecommendationsService {
   }
 
   bool _isAdaptationRelationship(String type) {
-    final value = type.toLowerCase();
-    return value.contains('adapt') || value.contains('remake') || value.contains('reboot') || value.contains('local version');
+    final value = _normalize(type);
+
+    return value.contains('adapt') ||
+        value.contains('remake') ||
+        value.contains('reboot') ||
+        value.contains('local version');
   }
 
   String? _hybridGenreReason(
@@ -1135,11 +1025,19 @@ class RecommendationsService {
     RecommendationMedia candidate,
   ) {
     final sourceText = _normalize(
-      '${source.title} ${source.genres.join(' ')} ${source.subgenres.join(' ')} ${source.tags.join(' ')}',
+      '${source.title} '
+      '${source.genres.join(' ')} '
+      '${source.subgenres.join(' ')} '
+      '${source.tags.join(' ')}',
     );
+
     final candidateText = _normalize(
-      '${candidate.title} ${candidate.genres.join(' ')} ${candidate.subgenres.join(' ')} ${candidate.tags.join(' ')}',
+      '${candidate.title} '
+      '${candidate.genres.join(' ')} '
+      '${candidate.subgenres.join(' ')} '
+      '${candidate.tags.join(' ')}',
     );
+
     const pairs = <List<String>>[
       ['action', 'comedy'],
       ['science fiction', 'horror'],
@@ -1150,23 +1048,31 @@ class RecommendationsService {
       ['fantasy', 'adventure'],
       ['science fiction', 'western'],
     ];
+
     for (final pair in pairs) {
-      if (_containsAny(sourceText, pair) && _containsAny(candidateText, pair)) {
+      if (_containsAll(sourceText, pair) &&
+          _containsAll(candidateText, pair)) {
         return '${pair[0]} + ${pair[1]}';
       }
     }
+
     return null;
   }
 
-  bool _containsAny(String value, List<String> terms) =>
-      terms.any(value.contains);
+  bool _containsAll(String value, List<String> terms) {
+    return terms.every(
+      (term) => value.contains(_normalize(term)),
+    );
+  }
 
   bool _isAdultAnimation(RecommendationMedia media) {
     final text = _normalize(
-      '${media.title} ${media.genres.join(' ')} ${media.tags.join(' ')}',
+      '${media.title} '
+      '${media.genres.join(' ')} '
+      '${media.tags.join(' ')}',
     );
 
-    final knownAdultAnimation = [
+    const knownAdultAnimation = [
       'south park',
       'rick and morty',
       'family guy',
@@ -1175,15 +1081,16 @@ class RecommendationsService {
       'futurama',
       'bojack horseman',
       'archer',
-    ].any(text.contains);
+    ];
 
-    if (knownAdultAnimation) {
+    if (knownAdultAnimation.any(text.contains)) {
       return true;
     }
 
     final animation = text.contains('animation') ||
         text.contains('animated') ||
         text.contains('cartoon');
+
     final adult = text.contains('adult') ||
         text.contains('mature') ||
         text.contains('satire');
@@ -1193,13 +1100,16 @@ class RecommendationsService {
 
   bool _isFriendGroupSitcom(RecommendationMedia media) {
     final text = _normalize(
-      '${media.title} ${media.genres.join(' ')} ${media.themes.join(' ')} '
+      '${media.title} '
+      '${media.genres.join(' ')} '
+      '${media.themes.join(' ')} '
       '${media.tags.join(' ')}',
     );
 
     final sitcom = text.contains('sitcom') ||
         text.contains('comedy series') ||
         text.contains('situation comedy');
+
     final ensemble = text.contains('friend') ||
         text.contains('friendship') ||
         text.contains('ensemble') ||
@@ -1209,25 +1119,18 @@ class RecommendationsService {
       return true;
     }
 
-    // Classification hints preserve the Friends examples already established
-    // by the project while still requiring the candidate to be in the catalog.
-    return [
+    const classificationHints = [
       'friends',
       'how i met your mother',
       'brooklyn nine-nine',
       'modern family',
       'abbott elementary',
-    ].any(text.contains);
+    ];
+
+    return classificationHints.any(text.contains);
   }
 
   /// Checks whether either title is referenced by the other.
-  ///
-  /// This is useful for cross-title relationships such as:
-  ///
-  /// - actors appearing in another title
-  /// - movies/shows referencing another title
-  /// - franchise or universe references
-  /// - Easter eggs and related works
   bool _hasReferenceConnection({
     required RecommendationMedia candidate,
     required RecommendationMedia source,
@@ -1267,23 +1170,21 @@ class RecommendationsService {
   ) {
     final franchiseCounts = <String, int>{};
     final seriesCounts = <String, int>{};
-
     final output = <RecommendationResult>[];
 
     for (final result in results) {
       final media = result.media;
 
-      final franchise = media.franchiseId != null
-          ? _normalize(media.franchiseId!)
-          : '';
+      final franchise = media.franchiseId == null
+          ? ''
+          : _normalize(media.franchiseId!);
 
-      final series = media.seriesId != null
-          ? _normalize(media.seriesId!)
-          : '';
+      final series = media.seriesId == null
+          ? ''
+          : _normalize(media.seriesId!);
 
       if (franchise.isNotEmpty) {
-        final count =
-            franchiseCounts[franchise] ?? 0;
+        final count = franchiseCounts[franchise] ?? 0;
 
         if (count >= maxPerFranchise) {
           continue;
@@ -1291,8 +1192,7 @@ class RecommendationsService {
       }
 
       if (series.isNotEmpty) {
-        final count =
-            seriesCounts[series] ?? 0;
+        final count = seriesCounts[series] ?? 0;
 
         if (count >= maxPerSeries) {
           continue;
@@ -1322,12 +1222,12 @@ class RecommendationsService {
     }
 
     final now = DateTime.now();
+    final timestamp = watchedAt.toLocal();
+    final difference = now.difference(timestamp);
 
-    final difference = now.difference(watchedAt);
-
-    // Future timestamps should not receive an exaggerated boost.
+    // Future timestamps do not receive a recency boost.
     if (difference.isNegative) {
-      return 1.00;
+      return 0.85;
     }
 
     final days = difference.inDays;
@@ -1351,6 +1251,12 @@ class RecommendationsService {
     return 0.70;
   }
 
+  bool _isRecentlyWatched(DateTime watchedAt) {
+    final difference = DateTime.now().difference(watchedAt.toLocal());
+
+    return !difference.isNegative && difference.inDays <= 30;
+  }
+
   /// Chooses the strongest history entry for a title.
   ///
   /// Completion is prioritized, then the most recent watch date.
@@ -1360,12 +1266,15 @@ class RecommendationsService {
     var best = items.first;
 
     for (final item in items.skip(1)) {
-      if (item.completion > best.completion) {
+      final itemCompletion = _normalizedCompletion(item.completion);
+      final bestCompletion = _normalizedCompletion(best.completion);
+
+      if (itemCompletion > bestCompletion) {
         best = item;
         continue;
       }
 
-      if (item.completion == best.completion) {
+      if (itemCompletion == bestCompletion) {
         final bestDate = best.watchedAt;
         final itemDate = item.watchedAt;
 
@@ -1385,17 +1294,33 @@ class RecommendationsService {
     return best;
   }
 
-  /// Converts a raw score into a 0-100 match percentage.
-  double _percentage(double score) {
-    // 150 is treated as an extremely strong recommendation.
-    final percentage =
-        (score / 150.0) * 100.0;
-
-    if (percentage < 0) {
+  double _normalizedCompletion(double value) {
+    if (!value.isFinite) {
       return 0;
     }
 
-    if (percentage > 100) {
+    if (value < 0) {
+      return 0;
+    }
+
+    if (value > 1) {
+      return 1;
+    }
+
+    return value;
+  }
+
+  /// Converts a raw score into a 0-100 match percentage.
+  double _percentage(double score) {
+    if (!score.isFinite || score <= 0) {
+      return 0;
+    }
+
+    const normalizationScore = 150.0;
+
+    final percentage = (score / normalizationScore) * 100.0;
+
+    if (percentage >= 100) {
       return 100;
     }
 
@@ -1417,22 +1342,18 @@ class RecommendationsService {
     return value;
   }
 
-  /// Performs `_compareRecommendationResults` for this feature. Update this documentation when its contract changes.
   int _compareRecommendationResults(
     RecommendationResult a,
     RecommendationResult b,
   ) {
-    final scoreComparison =
-        b.score.compareTo(a.score);
+    final scoreComparison = b.score.compareTo(a.score);
 
     if (scoreComparison != 0) {
       return scoreComparison;
     }
 
     final percentageComparison =
-        b.matchPercentage.compareTo(
-      a.matchPercentage,
-    );
+        b.matchPercentage.compareTo(a.matchPercentage);
 
     if (percentageComparison != 0) {
       return percentageComparison;
@@ -1441,21 +1362,25 @@ class RecommendationsService {
     final yearA = a.media.year ?? 0;
     final yearB = b.media.year ?? 0;
 
-    final yearComparison =
-        yearB.compareTo(yearA);
+    final yearComparison = yearB.compareTo(yearA);
 
     if (yearComparison != 0) {
       return yearComparison;
     }
 
-    return a.media.title
-        .toLowerCase()
-        .compareTo(
-          b.media.title.toLowerCase(),
-        );
+    final titleComparison = _normalize(a.media.title).compareTo(
+      _normalize(b.media.title),
+    );
+
+    if (titleComparison != 0) {
+      return titleComparison;
+    }
+
+    return _normalize(a.media.id).compareTo(
+      _normalize(b.media.id),
+    );
   }
 
-  /// Performs `_intersection` for this feature. Update this documentation when its contract changes.
   List<String> _intersection(
     List<String> first,
     List<String> second,
@@ -1470,15 +1395,23 @@ class RecommendationsService {
         .where((value) => value.isNotEmpty)
         .toSet();
 
-    return a.intersection(b).toList();
+    final result = a.intersection(b).toList();
+    result.sort();
+
+    return result;
   }
 
-  /// Performs `_normalize` for this feature. Update this documentation when its contract changes.
+  Set<String> _normalizedSet(Iterable<String> values) {
+    return values
+        .map(_normalize)
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
   String _normalize(String value) {
     return value.trim().toLowerCase();
   }
 
-  /// Performs `_deduplicateReasons` for this feature. Update this documentation when its contract changes.
   List<RecommendationReason> _deduplicateReasons(
     List<RecommendationReason> reasons,
   ) {
@@ -1493,15 +1426,12 @@ class RecommendationsService {
           .toList()
         ..sort();
 
-      final key =
-          '${reason.type.name}|'
+      final key = '${reason.type.name}|'
           '${_normalize(reason.title)}|'
           '${normalizedRelatedIds.join(",")}';
 
       if (seen.add(key)) {
-        output.add(
-          reason,
-        );
+        output.add(reason);
       }
     }
 

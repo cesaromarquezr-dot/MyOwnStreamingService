@@ -8,6 +8,7 @@
 // development gateway with provider-side tokenization/hosted checkout.
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,20 +16,71 @@ import 'app_core.dart';
 import 'localization.dart';
 import 'worldwide_location.dart';
 
+/// A globally searchable entity that a seller can associate with a product.
+///
+/// The same picker can represent movies, shows, artists, albums, songs,
+/// playlists, collections, genres, franchises, actors and directors.
+class ShopEntity {
+  final String type;
+  final String id;
+  final String name;
+  final String subtitle;
+  final String? accountExternalId;
+
+  const ShopEntity({
+    required this.type,
+    required this.id,
+    required this.name,
+    this.subtitle = '',
+    this.accountExternalId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'id': id,
+        'name': name,
+        'subtitle': subtitle,
+        'accountExternalId': accountExternalId,
+        'isPublic': true,
+      };
+
+  factory ShopEntity.fromJson(Map<String, dynamic> json) => ShopEntity(
+        type: json['type']?.toString() ?? 'other',
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        subtitle: json['subtitle']?.toString() ?? '',
+        accountExternalId: json['accountExternalId']?.toString(),
+      );
+}
+
 /// A media/entity relationship attached to a shop product.
 class ShopAssociation {
   final String type;
   final String id;
   final String name;
+  /// Identifies the source account for account-scoped entities such as a
+  /// user's collection or playlist. Global media can leave this null.
+  final String? sourceAccountId;
 
-  const ShopAssociation({required this.type, required this.id, required this.name});
+  const ShopAssociation({
+    required this.type,
+    required this.id,
+    required this.name,
+    this.sourceAccountId,
+  });
 
-  Map<String, dynamic> toJson() => {'type': type, 'id': id, 'name': name};
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'id': id,
+        'name': name,
+        'sourceAccountId': sourceAccountId,
+      };
 
   factory ShopAssociation.fromJson(Map<String, dynamic> json) => ShopAssociation(
         type: json['type']?.toString() ?? 'other',
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
+        sourceAccountId: json['sourceAccountId']?.toString(),
       );
 }
 
@@ -250,6 +302,7 @@ class ShopCatalog extends ChangeNotifier {
   final List<String> wishlistProductIds = <String>[];
   final List<ShopBagLine> bag = <ShopBagLine>[];
   final List<ShopOrder> orders = <ShopOrder>[];
+  final Map<String, ShopEntity> _externalEntities = <String, ShopEntity>{};
   bool _initialized = false;
   SharedPreferences? _prefs;
 
@@ -331,6 +384,121 @@ class ShopCatalog extends ChangeNotifier {
       if (store.id == id) return store;
     }
     return null;
+  }
+
+  /// Registers entities supplied by music, playlist and other feature modules.
+  /// The Shop association picker then treats them exactly like media entities.
+  void registerExternalEntities(Iterable<ShopEntity> entities) {
+    for (final entity in entities) {
+      if (entity.id.trim().isEmpty || entity.name.trim().isEmpty) continue;
+      _externalEntities['${entity.type}:${entity.id}'.toLowerCase()] = entity;
+    }
+    notifyListeners();
+  }
+
+  List<ShopEntity> get localShopEntities {
+    final controller = AppController.instance;
+    final result = <String, ShopEntity>{};
+
+    void add(ShopEntity entity) {
+      if (entity.id.trim().isEmpty || entity.name.trim().isEmpty) return;
+      result['${entity.type}:${entity.id}'.toLowerCase()] = entity;
+    }
+
+    for (final media in controller.library) {
+      final type = media.type.toLowerCase().contains('show') || media.type.toLowerCase().contains('series')
+          ? 'show'
+          : 'movie';
+      add(ShopEntity(type: type, id: media.id, name: media.title, subtitle: '${type == 'movie' ? 'Movie' : 'TV show'}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'));
+      if (media.franchiseId != null && media.franchiseName != null) {
+        add(ShopEntity(type: 'franchise', id: media.franchiseId!, name: media.franchiseName!, subtitle: 'Franchise'));
+      }
+      for (final value in media.genres) {
+        add(ShopEntity(type: 'genre', id: 'genre:${value.toLowerCase()}', name: value, subtitle: 'Genre'));
+      }
+      for (final value in media.tags) {
+        add(ShopEntity(type: 'tag', id: 'tag:${value.toLowerCase()}', name: value, subtitle: 'Tag'));
+      }
+      for (final value in media.actors) {
+        add(ShopEntity(type: 'actor', id: 'actor:${value.toLowerCase()}', name: value, subtitle: 'Actor'));
+      }
+      for (final value in media.directors) {
+        add(ShopEntity(type: 'director', id: 'director:${value.toLowerCase()}', name: value, subtitle: 'Director'));
+      }
+      for (final value in media.music) {
+        add(ShopEntity(type: 'artist', id: 'artist:${value.toLowerCase()}', name: value, subtitle: 'Artist / Music'));
+      }
+    }
+    for (final collection in controller.collections) {
+      add(ShopEntity(
+        type: 'collection',
+        id: collection.id,
+        name: collection.name,
+        subtitle: 'Collection',
+      ));
+    }
+    result.addAll({for (final e in _externalEntities.values) '${e.type}:${e.id}'.toLowerCase(): e});
+    return result.values.toList();
+  }
+
+  Future<List<ShopEntity>> searchAssociationEntities(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return <ShopEntity>[];
+    final merged = <String, ShopEntity>{};
+    for (final entity in localShopEntities) {
+      if ('${entity.name} ${entity.type} ${entity.subtitle}'.toLowerCase().contains(q)) {
+        merged['${entity.type}:${entity.id}'.toLowerCase()] = entity;
+      }
+    }
+    try {
+      if (AppController.instance.backendApi.isAuthenticated) {
+        final queries = <String>{query};
+        if (query.endsWith('s') && query.length > 3) queries.add(query.substring(0, query.length - 1));
+        for (final remoteQuery in queries) {
+          final remote = await AppController.instance.backendApi.searchShopEntities(
+            remoteQuery,
+            50,
+          );
+          final rawEntities = remote['entities'];
+          if (rawEntities is List) {
+            for (final raw in rawEntities) {
+              if (raw is! Map) continue;
+              final entity = ShopEntity.fromJson(
+                Map<String, dynamic>.from(raw),
+              );
+              if (entity.id.isNotEmpty && entity.name.isNotEmpty) {
+                merged['${entity.type}:${entity.id}'.toLowerCase()] = entity;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {
+      // Local entities remain usable when the global index is temporarily unavailable.
+    }
+    final values = merged.values.toList()
+      ..sort((a, b) {
+        final aa = a.name.toLowerCase();
+        final bb = b.name.toLowerCase();
+        final ar = aa == q ? 0 : aa.startsWith(q) ? 1 : 2;
+        final br = bb == q ? 0 : bb.startsWith(q) ? 1 : 2;
+        final rank = ar.compareTo(br);
+        return rank != 0 ? rank : aa.compareTo(bb);
+      });
+    return values.take(50).toList();
+  }
+
+  Future<void> syncShopEntityIndex() async {
+    if (!AppController.instance.backendApi.isAuthenticated) return;
+    final entities = localShopEntities;
+    if (entities.isEmpty) return;
+    try {
+      await AppController.instance.backendApi.syncShopEntities(
+        entities.map((e) => e.toJson()).toList(),
+      );
+    } catch (_) {
+      // Shop discovery must never block normal browsing.
+    }
   }
 
   /// Creates a seller store. The existence of the store is the seller source of truth.
@@ -439,7 +607,7 @@ class ShopCatalog extends ChangeNotifier {
     _save();
   }
 
-  /// Returns products related to an entertainment entity.
+  /// Returns products directly associated with an entertainment entity.
   List<ShopProduct> productsForAssociation(String type, String id, {String? name}) {
     final cleanId = id.trim().toLowerCase();
     final cleanName = name?.trim().toLowerCase();
@@ -450,6 +618,61 @@ class ShopCatalog extends ChangeNotifier {
           (a.id.trim().toLowerCase() == cleanId ||
               (cleanName != null && a.name.trim().toLowerCase() == cleanName)));
     }).toList();
+  }
+
+  /// Scores products against the current profile's library and media graph.
+  /// Direct title/artist associations outrank broader genre/tag relationships.
+  List<ShopProduct> personalizedProducts({int limit = 12}) {
+    final controller = AppController.instance;
+    final signals = <String, int>{};
+    void signal(String value, int weight) {
+      final clean = value.trim().toLowerCase();
+      if (clean.isEmpty) return;
+      signals[clean] = (signals[clean] ?? 0) + weight;
+    }
+    for (final media in controller.library) {
+      signal(media.id, 100);
+      signal(media.title, 100);
+      signal(media.canonicalTitle ?? '', 90);
+      signal(media.originalTitle ?? '', 70);
+      signal(media.franchiseId ?? '', 90);
+      signal(media.franchiseName ?? '', 90);
+      for (final value in media.genres) {
+        signal(value, 45);
+      }
+      for (final value in media.tags) {
+        signal(value, 30);
+      }
+      for (final value in media.actors) {
+        signal(value, 25);
+      }
+      for (final value in media.directors) {
+        signal(value, 20);
+      }
+      for (final value in media.music) {
+        signal(value, 35);
+      }
+    }
+    for (final collection in controller.collections) {
+      signal(collection.name, 60);
+      signal(collection.description, 15);
+    }
+    for (final entity in _externalEntities.values) {
+      signal(entity.name, 55);
+      signal(entity.type, 8);
+    }
+    final scored = <({ShopProduct product, int score})>[];
+    for (final product in products.where((p) => p.active)) {
+      var score = product.featured ? 5 : 0;
+      for (final association in product.associations) {
+        final direct = signals[association.id.toLowerCase()] ?? 0;
+        final named = signals[association.name.toLowerCase()] ?? 0;
+        score += direct > named ? direct : named;
+      }
+      if (score > 0) scored.add((product: product, score: score));
+    }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    return scored.take(limit).map((entry) => entry.product).toList();
   }
 
   /// Searches the global marketplace across products, stores, and media.
@@ -469,6 +692,15 @@ class ShopCatalog extends ChangeNotifier {
       ].join(' ').toLowerCase();
       return haystack.contains(q);
     }).toList();
+  }
+
+  Widget _productImageForDialog(ShopProduct product, BuildContext context) {
+    if (product.imageUrls.isEmpty) return const Icon(Icons.shopping_bag_outlined);
+    final source = product.imageUrls.first;
+    if (source.startsWith('data:image/')) {
+      return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(base64Decode(source.substring(source.indexOf(',') + 1)), width: 52, height: 52, fit: BoxFit.cover));
+    }
+    return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(source, width: 52, height: 52, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)));
   }
 
   bool isWishlisted(String productId) => wishlistProductIds.contains(productId);
@@ -589,18 +821,39 @@ class ShopScreen extends StatefulWidget {
 class _ShopScreenState extends State<ShopScreen> {
   final TextEditingController searchController = TextEditingController();
   String search = '';
+  String categoryFilter = 'All';
+  String sortMode = 'Relevance';
 
   ShopCatalog get catalog => ShopCatalog.instance;
 
+  @override
+  void initState() {
+    super.initState();
+    catalog.syncShopEntityIndex();
+  }
+
   List<ShopProduct> get visibleProducts {
+    List<ShopProduct> result;
     if (widget.contextAssociationType != null && widget.contextAssociationId != null) {
-      return catalog.productsForAssociation(
+      result = catalog.productsForAssociation(
         widget.contextAssociationType!,
         widget.contextAssociationId!,
         name: widget.contextAssociationName,
       );
+    } else {
+      result = catalog.searchProducts(search);
     }
-    return catalog.searchProducts(search);
+    if (categoryFilter != 'All') {
+      result = result.where((p) => p.category == categoryFilter).toList();
+    }
+    if (sortMode == 'Price: low to high') {
+      result.sort((a, b) => a.price.compareTo(b.price));
+    } else if (sortMode == 'Price: high to low') {
+      result.sort((a, b) => b.price.compareTo(a.price));
+    } else if (sortMode == 'Newest') {
+      result = result.reversed.toList();
+    }
+    return result;
   }
 
   @override
@@ -611,19 +864,7 @@ class _ShopScreenState extends State<ShopScreen> {
 
   List<ShopProduct> get featuredProducts => catalog.products.where((p) => p.active && p.featured).take(8).toList();
 
-  List<ShopProduct> get libraryRelatedProducts {
-    final media = AppController.instance.library;
-    if (media.isEmpty) return const <ShopProduct>[];
-    final ids = <String>{};
-    final names = <String>{};
-    for (final item in media) {
-      ids.add(item.id.toLowerCase());
-      names.add(item.title.toLowerCase());
-      if (item.franchiseId != null) ids.add(item.franchiseId!.toLowerCase());
-      if (item.franchiseName != null) names.add(item.franchiseName!.toLowerCase());
-    }
-    return catalog.products.where((p) => p.active && p.associations.any((a) => ids.contains(a.id.toLowerCase()) || names.contains(a.name.toLowerCase()))).take(8).toList();
-  }
+  List<ShopProduct> get libraryRelatedProducts => catalog.personalizedProducts(limit: 8);
 
   List<MediaItem> get mediaMatches {
     final q = search.trim().toLowerCase();
@@ -651,17 +892,7 @@ class _ShopScreenState extends State<ShopScreen> {
             (search.isEmpty || s.name.toLowerCase().contains(search.toLowerCase()) || s.description.toLowerCase().contains(search.toLowerCase()))).toList();
         return Scaffold(
           appBar: AppBar(
-            leading: IconButton(
-              tooltip: 'Home',
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () {
-                if (widget.onHome != null) {
-                  widget.onHome!();
-                } else if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
+            automaticallyImplyLeading: false,
             title: UniversalText(widget.contextAssociationName == null ? 'Shop' : 'Shop • ${widget.contextAssociationName}'),
             actions: [
               IconButton(
@@ -676,11 +907,18 @@ class _ShopScreenState extends State<ShopScreen> {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
             children: [
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
                 children: [
-                  Expanded(child: Text(widget.contextAssociationName == null ? 'Marketplace' : 'Related products', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900))),
+                  Text(widget.contextAssociationName == null ? 'Marketplace' : 'Related products', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
                   if (widget.contextAssociationName == null)
-                    FilledButton.icon(onPressed: _createStore, icon: const Icon(Icons.storefront_outlined), label: const UniversalText('Create Store')),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      FilledButton.icon(onPressed: () => showDialog<void>(context: context, builder: (_) => const _AskShopAssistantDialog()), icon: const Icon(Icons.auto_awesome), label: const UniversalText('Ask Shop')),
+                      OutlinedButton.icon(onPressed: _createStore, icon: const Icon(Icons.storefront_outlined), label: const UniversalText('Create Store')),
+                    ]),
                 ],
               ),
               const SizedBox(height: 8),
@@ -700,6 +938,8 @@ class _ShopScreenState extends State<ShopScreen> {
                   ),
                 ),
               if (widget.contextAssociationName == null) ...[
+                const SizedBox(height: 10),
+                _shopCategoryRow(),
                 if (search.isEmpty && featuredProducts.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   _sectionTitle('Featured Products', Icons.star_outline_rounded),
@@ -744,6 +984,47 @@ class _ShopScreenState extends State<ShopScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _shopCategoryRow() {
+    const categories = <String>[
+      'All', 'Movies', 'Shows', 'Music', 'Franchise', 'Clothing',
+      'Collectibles', 'Physical Media', 'Posters', 'Books', 'Toys', 'Accessories', 'Home',
+    ];
+    return Row(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final category in categories)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 7),
+                    child: ChoiceChip(
+                      label: Text(category),
+                      selected: categoryFilter == category,
+                      onSelected: (_) => setState(() => categoryFilter = category),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        DropdownButton<String>(
+          value: sortMode,
+          underline: const SizedBox.shrink(),
+          items: const [
+            DropdownMenuItem(value: 'Relevance', child: Text('Relevance')),
+            DropdownMenuItem(value: 'Newest', child: Text('Newest')),
+            DropdownMenuItem(value: 'Price: low to high', child: Text('Price ↑')),
+            DropdownMenuItem(value: 'Price: high to low', child: Text('Price ↓')),
+          ],
+          onChanged: (value) => setState(() => sortMode = value ?? 'Relevance'),
+        ),
+      ],
     );
   }
 
@@ -793,7 +1074,11 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Widget _productImage(ShopProduct product, {double size = 80}) {
     if (product.imageUrls.isEmpty) return Container(width: size, height: size, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Theme.of(context).colorScheme.surfaceContainerHighest), child: const Icon(Icons.shopping_bag_outlined));
-    return ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(product.imageUrls.first, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: size, height: size, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined))));
+    final source = product.imageUrls.first;
+    final image = source.startsWith('data:image/')
+        ? Image.memory(base64Decode(source.substring(source.indexOf(',') + 1)), width: size, height: size, fit: BoxFit.cover)
+        : Image.network(source, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: size, height: size, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)));
+    return ClipRRect(borderRadius: BorderRadius.circular(12), child: image);
   }
 
   Future<void> _createStore() async {
@@ -840,6 +1125,106 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   String _money(double value, String currency) => '${currency == 'USD' ? '\$' : currency} ${value.toStringAsFixed(2)}';
+}
+
+/// Target-inspired Shop assistant. It is deliberately transparent: the first
+/// version uses the marketplace search/index rather than inventing product facts.
+class _AskShopAssistantDialog extends StatefulWidget {
+  const _AskShopAssistantDialog();
+  @override
+  State<_AskShopAssistantDialog> createState() => _AskShopAssistantDialogState();
+}
+
+class _AskShopAssistantDialogState extends State<_AskShopAssistantDialog> {
+  final controller = TextEditingController();
+  bool loading = false;
+  List<ShopProduct> results = <ShopProduct>[];
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ask() async {
+    final question = controller.text.trim();
+    if (question.isEmpty) return;
+    setState(() => loading = true);
+    final catalog = ShopCatalog.instance;
+    final tokens = question
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((v) => v.length >= 2)
+        .toSet();
+    final budgetMatch = RegExp(r'(?:under|below|less than)\s*\$?\s*(\d+(?:\.\d+)?)').firstMatch(question.toLowerCase());
+    final budget = budgetMatch == null ? null : double.tryParse(budgetMatch.group(1)!);
+    final scored = <({ShopProduct product, int score})>[];
+    for (final product in catalog.products.where((p) => p.active)) {
+      if (budget != null && product.price > budget) continue;
+      final haystack = [
+        product.name,
+        product.description,
+        product.category,
+        product.productType,
+        ...product.associations.map((a) => '${a.name} ${a.type}'),
+      ].join(' ').toLowerCase();
+      var score = 0;
+      for (final token in tokens) {
+        if (haystack.contains(token)) score += 10;
+      }
+      if (score > 0) scored.add((product: product, score: score));
+    }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    if (!mounted) return;
+    setState(() {
+      results = scored.take(8).map((e) => e.product).toList();
+      loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Row(children: [Icon(Icons.auto_awesome), SizedBox(width: 8), UniversalText('Ask Shop')]),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const UniversalText('Ask naturally about products, media, artists, collections, genres or budgets.'),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                onSubmitted: (_) => _ask(),
+                decoration: const InputDecoration(
+                  labelText: 'What are you looking for?',
+                  hintText: 'KISS merchandise under 50 dollars',
+                  prefixIcon: Icon(Icons.search_rounded),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, children: [
+                for (final example in const ['KISS merchandise', 'Marvel posters', '80s music gifts', 'movies under 50'])
+                  ActionChip(label: Text(example), onPressed: () { controller.text = example; _ask(); }),
+              ]),
+              const SizedBox(height: 14),
+              if (loading) const Center(child: CircularProgressIndicator()),
+              if (!loading && controller.text.trim().isNotEmpty && results.isEmpty)
+                const UniversalText('No matching products were found. Try an artist, movie, collection, genre, or a broader description.'),
+              for (final product in results)
+                Card(
+                  child: ListTile(
+                    leading: ShopCatalog.instance._productImageForDialog(product, context),
+                    title: Text(product.name),
+                    subtitle: Text('${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency}'),
+                    trailing: FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () { ShopCatalog.instance.addToBag(product.id); Navigator.pop(context); }, child: const UniversalText('Add')),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Close')), FilledButton.icon(onPressed: loading ? null : _ask, icon: const Icon(Icons.auto_awesome), label: const UniversalText('Ask'))],
+      );
 }
 
 /// Seller's storefront page.
@@ -897,7 +1282,7 @@ class SellerDashboardScreen extends StatelessWidget {
     final stores = catalog.currentAccountStores;
     final activeStore = store ?? (stores.isEmpty ? null : stores.first);
     return Scaffold(
-      appBar: AppBar(title: const UniversalText('Seller Dashboard')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const UniversalText('Seller Dashboard')),
       body: activeStore == null
           ? const Center(child: UniversalText('Create a store to become a seller.'))
           : AnimatedBuilder(animation: catalog, builder: (_, __) {
@@ -978,14 +1363,202 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
 class AddShopProductScreen extends StatefulWidget {
   final ShopStore store;
   const AddShopProductScreen({super.key, required this.store});
+
   @override
   State<AddShopProductScreen> createState() => _AddShopProductScreenState();
 }
 
-class _AssociationDraft {
-  String type = 'movie';
-  final TextEditingController name = TextEditingController();
-  void dispose() => name.dispose();
+/// Global, multi-select association picker used by sellers.
+class _ShopAssociationPicker extends StatefulWidget {
+  final List<ShopAssociation> selected;
+  final ValueChanged<ShopAssociation> onSelected;
+  final ValueChanged<ShopAssociation> onRemoved;
+
+  const _ShopAssociationPicker({
+    required this.selected,
+    required this.onSelected,
+    required this.onRemoved,
+  });
+
+  @override
+  State<_ShopAssociationPicker> createState() => _ShopAssociationPickerState();
+}
+
+class _ShopAssociationPickerState extends State<_ShopAssociationPicker> {
+  final TextEditingController queryController = TextEditingController();
+  List<ShopEntity> options = <ShopEntity>[];
+  bool loading = false;
+  int _requestId = 0;
+
+  @override
+  void dispose() {
+    queryController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(String value) async {
+    final query = value.trim();
+    final requestId = ++_requestId;
+    if (query.length < 2) {
+      if (mounted) {
+        setState(() => options = <ShopEntity>[]);
+      }
+      return;
+    }
+
+    setState(() => loading = true);
+    final found = await ShopCatalog.instance.searchAssociationEntities(query);
+    if (!mounted || requestId != _requestId) return;
+
+    final selectedKeys = widget.selected
+        .map((association) =>
+            '${association.type}:${association.id}'.toLowerCase())
+        .toSet();
+
+    setState(() {
+      options = found
+          .where((entity) => !selectedKeys
+              .contains('${entity.type}:${entity.id}'.toLowerCase()))
+          .toList();
+      loading = false;
+    });
+  }
+
+  void _select(ShopEntity entity) {
+    widget.onSelected(
+      ShopAssociation(
+        type: entity.type,
+        id: entity.id,
+        name: entity.name,
+        sourceAccountId: entity.accountExternalId,
+      ),
+    );
+    queryController.clear();
+    setState(() => options = <ShopEntity>[]);
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: queryController,
+            onChanged: _search,
+            decoration: InputDecoration(
+              labelText:
+                  'Search movies, shows, songs, artists, albums, playlists, collections…',
+              hintText: 'Taylor Swift, Marvel, Pop, Heavy Metal…',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          if (options.isNotEmpty)
+            Card(
+              margin: const EdgeInsets.only(top: 6),
+              clipBehavior: Clip.antiAlias,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, index) {
+                    final entity = options[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        child: Icon(_associationIcon(entity.type)),
+                      ),
+                      title: Text(
+                        entity.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        entity.subtitle.isEmpty
+                            ? _associationLabel(entity.type)
+                            : entity.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: const Icon(Icons.add_circle_outline_rounded),
+                      onTap: () => _select(entity),
+                    );
+                  },
+                ),
+              ),
+            ),
+          if (widget.selected.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final association in widget.selected)
+                  InputChip(
+                    avatar: Icon(
+                      _associationIcon(association.type),
+                      size: 17,
+                    ),
+                    label: Text(
+                      '${association.name} • ${_associationLabel(association.type)}',
+                    ),
+                    onDeleted: () => widget.onRemoved(association),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      );
+
+  static IconData _associationIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'movie':
+        return Icons.movie_outlined;
+      case 'show':
+      case 'tv_show':
+        return Icons.tv_outlined;
+      case 'song':
+        return Icons.music_note_outlined;
+      case 'artist':
+        return Icons.person_outline_rounded;
+      case 'album':
+        return Icons.album_outlined;
+      case 'playlist':
+        return Icons.queue_music_rounded;
+      case 'collection':
+        return Icons.collections_bookmark_outlined;
+      case 'franchise':
+        return Icons.account_tree_outlined;
+      case 'actor':
+        return Icons.people_outline_rounded;
+      case 'director':
+        return Icons.videocam_outlined;
+      case 'genre':
+        return Icons.category_outlined;
+      default:
+        return Icons.sell_outlined;
+    }
+  }
+
+  static String _associationLabel(String type) => type
+      .replaceAll('_', ' ')
+      .split(' ')
+      .map(
+        (word) => word.isEmpty
+            ? word
+            : '${word[0].toUpperCase()}${word.substring(1)}',
+      )
+      .join(' ');
 }
 
 class _AddShopProductScreenState extends State<AddShopProductScreen> {
@@ -993,15 +1566,41 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
   final description = TextEditingController();
   final price = TextEditingController();
   final inventory = TextEditingController();
-  final imageUrls = TextEditingController();
-  final List<_AssociationDraft> associationDrafts = <_AssociationDraft>[_AssociationDraft()];
+  final List<String> imageDataUris = <String>[];
+  final List<ShopAssociation> associations = <ShopAssociation>[];
   String productType = 'Merchandise';
   String category = 'Other';
   bool featured = false;
+  bool importingImages = false;
 
-  static const productTypes = ['Merchandise', 'Collectible / Game', 'Physical Media', 'Poster', 'Book', 'Clothing', 'Toy', 'Accessory', 'Home Item', 'Other'];
-  static const categories = ['Movies', 'Shows', 'Music', 'Franchise', 'Clothing', 'Collectibles', 'Physical Media', 'Posters', 'Books', 'Toys', 'Accessories', 'Home', 'Other'];
-  static const associationTypes = ['movie', 'show', 'franchise', 'song', 'artist', 'album', 'playlist', 'collection'];
+  static const productTypes = [
+    'Merchandise',
+    'Collectible / Game',
+    'Physical Media',
+    'Poster',
+    'Book',
+    'Clothing',
+    'Toy',
+    'Accessory',
+    'Home Item',
+    'Other',
+  ];
+
+  static const categories = [
+    'Movies',
+    'Shows',
+    'Music',
+    'Franchise',
+    'Clothing',
+    'Collectibles',
+    'Physical Media',
+    'Posters',
+    'Books',
+    'Toys',
+    'Accessories',
+    'Home',
+    'Other',
+  ];
 
   @override
   void dispose() {
@@ -1009,76 +1608,267 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
     description.dispose();
     price.dispose();
     inventory.dispose();
-    imageUrls.dispose();
-    for (final draft in associationDrafts) {
-      draft.dispose();
-    }
     super.dispose();
+  }
+
+  Future<void> _importImages() async {
+    setState(() => importingImages = true);
+    try {
+      final picker = ImagePicker();
+      final files = await picker.pickMultiImage(
+        imageQuality: 88,
+        maxWidth: 1800,
+        maxHeight: 1800,
+      );
+      for (final file in files) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) continue;
+        final mime = file.mimeType ?? _mimeForName(file.name);
+        imageDataUris.add('data:$mime;base64,${base64Encode(bytes)}');
+      }
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to import product image: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => importingImages = false);
+    }
+  }
+
+  String _mimeForName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
+  }
+
+  void _removeAssociation(ShopAssociation association) {
+    setState(() {
+      associations.removeWhere(
+        (value) => value.type == association.type && value.id == association.id,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const UniversalText('Add Product')),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'Product name', border: OutlineInputBorder())), const SizedBox(height: 10),
-          TextField(controller: description, minLines: 3, maxLines: 6, decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder())), const SizedBox(height: 10),
-          DropdownButtonFormField<String>(initialValue: productType, decoration: const InputDecoration(labelText: 'Product type', border: OutlineInputBorder()), items: productTypes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => productType = v!)), const SizedBox(height: 10),
-          DropdownButtonFormField<String>(initialValue: category, decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()), items: categories.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => category = v!)), const SizedBox(height: 10),
-          TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price (USD)', border: OutlineInputBorder())), const SizedBox(height: 10),
-          TextField(controller: inventory, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Inventory', border: OutlineInputBorder())), const SizedBox(height: 10),
-          TextField(controller: imageUrls, decoration: const InputDecoration(labelText: 'Product image URLs (comma separated)', border: OutlineInputBorder())), const SizedBox(height: 10),
-          const Text('Media associations', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), const SizedBox(height: 6),
-          Text('Associate the product with every actual entertainment entity it belongs to. Example: a Puss in Boots: The Last Wish Blu-ray can be associated with the movie and the Shrek franchise.', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .7))), const SizedBox(height: 8),
-          for (var i = 0; i < associationDrafts.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(children: [
-                Expanded(child: DropdownButtonFormField<String>(initialValue: associationDrafts[i].type, decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()), items: associationTypes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) { if (v != null) setState(() => associationDrafts[i].type = v); })),
-                const SizedBox(width: 8),
-                Expanded(flex: 2, child: TextField(controller: associationDrafts[i].name, decoration: const InputDecoration(labelText: 'Entity name or ID', border: OutlineInputBorder()))),
-                IconButton(onPressed: associationDrafts.length == 1 ? null : () { final draft = associationDrafts.removeAt(i); draft.dispose(); setState(() {}); }, icon: const Icon(Icons.remove_circle_outline)),
-              ]),
+        body: ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(
+                labelText: 'Product name',
+                border: OutlineInputBorder(),
+              ),
             ),
-          Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => setState(() => associationDrafts.add(_AssociationDraft())), icon: const Icon(Icons.add), label: const UniversalText('Add another association'))),
-          SwitchListTile(value: featured, onChanged: (v) => setState(() => featured = v), title: const UniversalText('Featured product')),
-          const SizedBox(height: 12),
-          FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save_outlined), label: const UniversalText('Create Product')),
-        ]),
+            const SizedBox(height: 10),
+            TextField(
+              controller: description,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: productType,
+              decoration: const InputDecoration(
+                labelText: 'Product type',
+                border: OutlineInputBorder(),
+              ),
+              items: productTypes
+                  .map((value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => productType = value);
+              },
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: category,
+              decoration: const InputDecoration(
+                labelText: 'Category',
+                border: OutlineInputBorder(),
+              ),
+              items: categories
+                  .map((value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => category = value);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: price,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Price (USD)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: inventory,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Inventory',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const UniversalText(
+              'Product images',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            const UniversalText(
+              'Import images from the device instead of entering image URLs.',
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: importingImages ? null : _importImages,
+              icon: importingImages
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.file_upload_outlined),
+              label: UniversalText(
+                importingImages
+                    ? 'Importing…'
+                    : 'Import Product Image(s)',
+              ),
+            ),
+            if (imageDataUris.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 108,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: imageDataUris.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, index) => Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          base64Decode(
+                            imageDataUris[index].substring(
+                              imageDataUris[index].indexOf(',') + 1,
+                            ),
+                          ),
+                          width: 108,
+                          height: 108,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 3,
+                        right: 3,
+                        child: IconButton.filledTonal(
+                          onPressed: () =>
+                              setState(() => imageDataUris.removeAt(index)),
+                          icon: const Icon(Icons.close, size: 16),
+                          tooltip: 'Remove image',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            const UniversalText(
+              'Associated with',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 5),
+            const UniversalText(
+              'Search the global media/entity index. You can select as many movies, shows, songs, artists, albums, playlists, collections, franchises, genres, actors or directors as apply to the product.',
+            ),
+            const SizedBox(height: 10),
+            _ShopAssociationPicker(
+              selected: associations,
+              onSelected: (value) {
+                setState(() {
+                  if (!associations.any(
+                    (association) =>
+                        association.type == value.type &&
+                        association.id == value.id,
+                  )) {
+                    associations.add(value);
+                  }
+                });
+              },
+              onRemoved: _removeAssociation,
+            ),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              value: featured,
+              onChanged: (value) => setState(() => featured = value),
+              title: const UniversalText('Featured product'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.save_outlined),
+              label: const UniversalText('Create Product'),
+            ),
+          ],
+        ),
       );
 
   void _save() {
     final cleanName = name.text.trim();
-    final p = double.tryParse(price.text.trim());
-    final qty = int.tryParse(inventory.text.trim());
-    if (cleanName.isEmpty || p == null || p < 0 || qty == null || qty < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a product name, valid price, and inventory quantity.')));
+    final parsedPrice = double.tryParse(price.text.trim());
+    final quantity = int.tryParse(inventory.text.trim());
+    if (cleanName.isEmpty ||
+        parsedPrice == null ||
+        parsedPrice < 0 ||
+        quantity == null ||
+        quantity < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: UniversalText(
+            'Enter a product name, valid price, and inventory quantity.',
+          ),
+        ),
+      );
       return;
     }
-    final associations = associationDrafts
-        .map((draft) {
-          final value = draft.name.text.trim();
-          if (value.isEmpty) return null;
-          return ShopAssociation(type: draft.type, id: value, name: value);
-        })
-        .whereType<ShopAssociation>()
-        .toList();
+
     ShopCatalog.instance.createProduct(
       storeId: widget.store.id,
       name: cleanName,
       description: description.text,
       productType: productType,
       category: category,
-      price: p,
-      inventoryQuantity: qty,
+      price: parsedPrice,
+      inventoryQuantity: quantity,
       featured: featured,
-      imageUrls: imageUrls.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+      imageUrls: imageDataUris,
       associations: associations,
     );
     Navigator.pop(context);
   }
 }
 
-/// Global bag containing products from any number of stores.
 class ShopBagScreen extends StatelessWidget {
   const ShopBagScreen({super.key});
 

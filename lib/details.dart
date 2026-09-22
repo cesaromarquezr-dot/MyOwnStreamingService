@@ -1232,7 +1232,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (media.languages.isNotEmpty ||
+          if (media.language != null && media.language!.trim().isNotEmpty ||
               media.audioTracks.isNotEmpty ||
               media.subtitles.isNotEmpty ||
               media.extras.isNotEmpty)
@@ -1242,8 +1242,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (media.languages.isNotEmpty)
-                      Text('Languages: ${media.languages.join(', ')}'),
+                    if (media.language != null && media.language!.trim().isNotEmpty)
+                      Text('Language: ${media.language}'),
                     if (media.audioTracks.isNotEmpty)
                       Text('Audio: ${media.audioTracks.join(', ')}'),
                     if (media.subtitles.isNotEmpty)

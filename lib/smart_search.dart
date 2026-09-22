@@ -21,46 +21,161 @@ class SmartSearch {
       return [];
     }
 
-    return library.where((media) {
+    final normalizedQuery = _normalize(q);
+
+    final typeQueries = <String>{
+      'movie',
+      'movies',
+      'film',
+      'films',
+    };
+
+    final tvQueries = <String>{
+      'tv',
+      'tv show',
+      'tv shows',
+      'series',
+      'show',
+      'shows',
+      'television',
+    };
+
+    final isMovieQuery = typeQueries.contains(normalizedQuery);
+    final isTvQuery = tvQueries.contains(normalizedQuery);
+
+    final scored = <_SearchMatch>[];
+
+    for (final media in library) {
       final title = media.title.toLowerCase();
-      final description = (media.description ?? '').toLowerCase();
+      final normalizedTitle = _normalize(title);
+
+      final description =
+          (media.description ?? '').toLowerCase();
+
+      final normalizedDescription =
+          _normalize(description);
+
       final type = media.type.toLowerCase();
       final year = media.releaseYear.toString();
       final rating = media.rating.toString();
 
-      final matchesTitle = title.contains(q);
-      final matchesDescription = description.contains(q);
-      final matchesType = type.contains(q);
-      final matchesYear = year == q;
-      final matchesRating = rating == q;
+      var score = 0;
 
-      bool matchesFriendlyType = false;
+      final matchesExactTitle =
+          normalizedTitle == normalizedQuery;
 
-      if (q == 'movie' || q == 'movies') {
-        matchesFriendlyType =
-            type == 'movie' || type == 'movies';
+      final matchesTitle =
+          normalizedTitle.contains(normalizedQuery);
+
+      final matchesDescription =
+          normalizedDescription.contains(normalizedQuery);
+
+      final matchesType =
+          type.contains(normalizedQuery);
+
+      final matchesYear =
+          year == normalizedQuery;
+
+      final matchesRating =
+          rating == normalizedQuery;
+
+      if (matchesExactTitle) {
+        score += 100;
+      } else if (matchesTitle) {
+        score += 60;
       }
 
-      if (q == 'tv' ||
-          q == 'tv show' ||
-          q == 'tv shows' ||
-          q == 'series' ||
-          q == 'show' ||
-          q == 'shows') {
-        matchesFriendlyType =
-            type == 'tvshow' ||
-            type == 'tv_show' ||
-            type == 'tv show';
+      if (matchesDescription) {
+        score += 20;
       }
 
-      return matchesTitle ||
-          matchesDescription ||
-          matchesType ||
-          matchesYear ||
-          matchesRating ||
-          matchesFriendlyType;
-    }).toList();
+      if (matchesType) {
+        score += 15;
+      }
+
+      if (matchesYear) {
+        score += 45;
+      }
+
+      if (matchesRating) {
+        score += 25;
+      }
+
+      if (isMovieQuery && _isMovie(type)) {
+        score += 70;
+      }
+
+      if (isTvQuery && _isTvShow(type)) {
+        score += 70;
+      }
+
+      if (score > 0) {
+        scored.add(
+          _SearchMatch(
+            media: media,
+            score: score,
+          ),
+        );
+      }
+    }
+
+    scored.sort((a, b) {
+      final scoreCompare =
+          b.score.compareTo(a.score);
+
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+
+      return a.media.title
+          .toLowerCase()
+          .compareTo(
+            b.media.title.toLowerCase(),
+          );
+    });
+
+    return scored
+        .map((match) => match.media)
+        .toList();
   }
+
+  static String _normalize(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_\-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  static bool _isMovie(String type) {
+    final normalized = _normalize(type);
+
+    return normalized == 'movie' ||
+        normalized == 'movies' ||
+        normalized == 'film' ||
+        normalized == 'films';
+  }
+
+  static bool _isTvShow(String type) {
+    final normalized = _normalize(type);
+
+    return normalized == 'tvshow' ||
+        normalized == 'tv show' ||
+        normalized == 'tv shows' ||
+        normalized == 'series' ||
+        normalized == 'show' ||
+        normalized == 'shows';
+  }
+}
+
+class _SearchMatch {
+  final MediaItem media;
+  final int score;
+
+  const _SearchMatch({
+    required this.media,
+    required this.score,
+  });
 }
 
 class SmartSearchScreen extends StatefulWidget {
@@ -108,10 +223,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     controller.dispose();
+
     searchFocusNode
       ..removeListener(_focusChanged)
       ..dispose();
+
     animationController.dispose();
+
     super.dispose();
   }
 
@@ -160,9 +278,12 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   /// Performs `_typeLabel` for this feature. Update this documentation when its contract changes.
   String _typeLabel(MediaItem media) {
     final type = media.type.toLowerCase();
+
     if (type == 'tvshow' ||
         type == 'tv_show' ||
-        type == 'tv show') {
+        type == 'tv show' ||
+        type == 'series' ||
+        type == 'show') {
       return 'TV SHOW';
     }
 
@@ -262,7 +383,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
                   children: [
-                    UniversalText('Search',
+                    UniversalText(
+                      'Smart Search',
                       style:
                           theme.textTheme.headlineMedium
                               ?.copyWith(
@@ -272,7 +394,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                       ),
                     ),
                     const SizedBox(height: 3),
-                    UniversalText('Find something to watch',
+                    UniversalText(
+                      'Find something to watch',
                       style: TextStyle(
                         color: Colors.white
                             .withValues(alpha: 0.52),
@@ -335,7 +458,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
               onChanged: performSearch,
               onSubmitted: performSearch,
               decoration: InputDecoration(
-                hintText: tr('Search movies, shows, years...'),
+                hintText: tr(
+                  'Search movies, shows, years...',
+                ),
                 hintStyle: TextStyle(
                   color: Colors.white
                       .withValues(alpha: 0.38),
@@ -405,6 +530,12 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             onTap: () =>
                 useSuggestion('2024'),
           ),
+          _SuggestionChip(
+            label: '5.0',
+            icon: Icons.star_outline_rounded,
+            onTap: () =>
+                useSuggestion('5.0'),
+          ),
         ],
       ),
     );
@@ -437,7 +568,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           ),
           const Spacer(),
           if (results.isNotEmpty)
-            UniversalText('YOUR LIBRARY',
+            UniversalText(
+              'YOUR LIBRARY',
               style: TextStyle(
                 color: Colors.white
                     .withValues(alpha: 0.35),
@@ -465,7 +597,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           child: _EmptySearchState(
             icon: Icons.search_rounded,
             title: tr('Search your library'),
-            message: tr('Look through your ripped movies and TV shows by title, type, year, or rating.'),
+            message: tr(
+              'Look through your ripped movies and TV shows by title, type, year, or rating.',
+            ),
           ),
         ),
       );
@@ -483,7 +617,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           child: _EmptySearchState(
             icon: Icons.movie_filter_outlined,
             title: tr('Nothing found'),
-            message: tr('Try another title, year, rating, movie, or TV show.'),
+            message: tr(
+              'Try another title, year, rating, movie, or TV show.',
+            ),
           ),
         ),
       );
@@ -721,7 +857,8 @@ class _SearchResultCardState
                                       .toString(),
                                 ),
                                 _MetaPill(
-                                  label: '★ ${media.rating}',
+                                  label:
+                                      '★ ${media.rating}',
                                 ),
                               ],
                             ),
@@ -821,7 +958,6 @@ class _Poster extends StatelessWidget {
                 ),
               ),
             ),
-
             if (imageUrl.isNotEmpty)
               Image.network(
                 imageUrl,
@@ -874,7 +1010,6 @@ class _Poster extends StatelessWidget {
                   );
                 },
               ),
-
             Positioned(
               left: 0,
               right: 0,
