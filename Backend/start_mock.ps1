@@ -14,9 +14,11 @@ Write-Host ""
 
 $env:ARM_MOCK = "true"
 $env:ARM_MOCK_VERIFY_FAIL = "false"
+$env:PAYMENT_MOCK = "true"
 $env:ALLOWED_ORIGINS = "http://localhost,http://127.0.0.1"
 Write-Host "ARM mode: MOCK (Phase 1)" -ForegroundColor Yellow
 Write-Host "ARM verification: PASS" -ForegroundColor Yellow
+Write-Host "Payment processor: MOCK" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Starting backend..." -ForegroundColor Green
 Write-Host ""

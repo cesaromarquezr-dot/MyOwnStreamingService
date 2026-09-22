@@ -13,6 +13,7 @@
 //   client.
 // - Request bodies are bounded to prevent unnecessarily large JSON payloads.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -135,6 +136,13 @@ class PaymentRoutes {
         },
       );
     } catch (error, stackTrace) {
+      print('================================================');
+      print('[PaymentRoutes] PAYMENT REQUEST ERROR');
+      print('[PaymentRoutes] Error: $error');
+      print('[PaymentRoutes] StackTrace:');
+      print(stackTrace);
+      print('================================================');
+
       developer.log(
         'Payment request error.',
         name: 'PaymentRoutes',
@@ -142,7 +150,7 @@ class PaymentRoutes {
         stackTrace: stackTrace,
       );
 
-      if (!_responseHasStarted(request.response)) {
+      try {
         await _sendJson(
           request.response,
           HttpStatus.internalServerError,
@@ -150,6 +158,20 @@ class PaymentRoutes {
             'success': false,
             'error': 'Payment request failed.',
           },
+        );
+      } catch (responseError, responseStackTrace) {
+        print('================================================');
+        print('[PaymentRoutes] UNABLE TO SEND ERROR RESPONSE');
+        print('[PaymentRoutes] Error: $responseError');
+        print('[PaymentRoutes] StackTrace:');
+        print(responseStackTrace);
+        print('================================================');
+
+        developer.log(
+          'Unable to send payment error response.',
+          name: 'PaymentRoutes',
+          error: responseError,
+          stackTrace: responseStackTrace,
         );
       }
     }
@@ -702,36 +724,68 @@ class PaymentRoutes {
         .where((segment) => segment.isNotEmpty)
         .toList();
 
-    final markerParts = marker.split('/');
+    final markerSegments = marker
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList();
 
-    if (segments.length < markerParts.length + 1) {
+    if (markerSegments.isEmpty) {
       return null;
     }
 
-    final markerStart =
-        segments.length - markerParts.length - 1;
+    if (segments.length <
+        markerSegments.length + 1) {
+      return null;
+    }
 
-    for (var i = 0; i < markerParts.length; i++) {
-      if (segments[markerStart + i] != markerParts[i]) {
+    for (var index = 0;
+        index <=
+            segments.length -
+                markerSegments.length -
+                1;
+        index++) {
+      var matches = true;
+
+      for (var offset = 0;
+          offset < markerSegments.length;
+          offset++) {
+        if (segments[index + offset] !=
+            markerSegments[offset]) {
+          matches = false;
+          break;
+        }
+      }
+
+      if (!matches) {
+        continue;
+      }
+
+      final idIndex =
+          index + markerSegments.length;
+
+      if (idIndex >= segments.length) {
         return null;
       }
+
+      final id = Uri.decodeComponent(
+        segments[idIndex],
+      ).trim();
+
+      if (id.isEmpty ||
+          id.length > _maxPaymentIdLength) {
+        return null;
+      }
+
+      if (id.contains('/') ||
+          id.contains('\\') ||
+          id.contains('\u0000')) {
+        return null;
+      }
+
+      return id;
     }
 
-    final id =
-        Uri.decodeComponent(segments.last).trim();
-
-    if (id.isEmpty ||
-        id.length > _maxPaymentIdLength) {
-      return null;
-    }
-
-    if (id.contains('/') ||
-        id.contains('\\') ||
-        id.contains('\u0000')) {
-      return null;
-    }
-
-    return id;
+    return null;
   }
 
   Future<Map<String, dynamic>> _readJson(
@@ -743,17 +797,36 @@ class PaymentRoutes {
       );
     }
 
-    final bytes = <int>[];
+    List<int> bytes;
 
-    await for (final chunk in request) {
-      if (bytes.length + chunk.length >
-          _maxBodyBytes) {
-        throw const FormatException(
-          'Request body is too large.',
-        );
-      }
+    try {
+      bytes = await request
+          .fold<List<int>>(
+            <int>[],
+            (buffer, chunk) {
+              if (buffer.length + chunk.length >
+                  _maxBodyBytes) {
+                throw const FormatException(
+                  'Request body is too large.',
+                );
+              }
 
-      bytes.addAll(chunk);
+              buffer.addAll(chunk);
+              return buffer;
+            },
+          )
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw const FormatException(
+              'Request body could not be read completely.',
+            ),
+          );
+    } on FormatException {
+      rethrow;
+    } on TimeoutException {
+      throw const FormatException(
+        'Request body could not be read completely.',
+      );
     }
 
     if (bytes.isEmpty) {
@@ -815,11 +888,8 @@ class PaymentRoutes {
     int statusCode,
     Map<String, dynamic> data,
   ) async {
-    if (_responseHasStarted(response)) {
-      return;
-    }
-
     response.statusCode = statusCode;
+
     response.headers.contentType = ContentType.json;
 
     response.headers.set(
@@ -845,11 +915,8 @@ class PaymentRoutes {
   ) async {
     final response = request.response;
 
-    if (_responseHasStarted(response)) {
-      return;
-    }
-
     response.statusCode = statusCode;
+
     response.headers.set(
       'Cache-Control',
       'no-store, no-cache, must-revalidate',
@@ -860,12 +927,5 @@ class PaymentRoutes {
     );
 
     await response.close();
-  }
-
-  bool _responseHasStarted(
-    HttpResponse response,
-  ) {
-    return response.headers.contentType != null ||
-        response.statusCode != HttpStatus.ok;
   }
 }

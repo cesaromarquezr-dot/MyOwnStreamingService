@@ -578,6 +578,11 @@ class PaymentService {
     final verification = await verifier(
       payment,
       transactionId,
+    ).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw StateError(
+        'Payment processor verification timed out. Please try again.',
+      ),
     );
 
     _validateProcessorVerification(

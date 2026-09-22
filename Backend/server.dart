@@ -81,6 +81,7 @@ import 'services/recommendations_service.dart';
 import 'services/search_service.dart';
 import 'services/subscription_service.dart';
 import 'services/payment_service.dart';
+import 'services/mock_payment_processor.dart';
 import 'services/group_recommendation_service.dart';
 import 'services/group_watch_service.dart';
 import 'services/email_service.dart';
@@ -98,6 +99,27 @@ import 'services/shop_service.dart';
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
 import 'arm/mock_arm_service.dart';
+
+PaymentProcessorVerifier? _createPaymentProcessorVerifier() {
+  final mockEnabled =
+      (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() ==
+          'true';
+
+  if (!mockEnabled) {
+    developer.log(
+      'Payment processor: real provider verifier not configured.',
+      name: 'Payment',
+    );
+    return null;
+  }
+
+  developer.log(
+    'Payment processor: MOCK verifier enabled for local development.',
+    name: 'Payment',
+  );
+
+  return createMockPaymentProcessorVerifier();
+}
 
 Future<void> main() async {
 _validateStartupConfiguration();
@@ -139,6 +161,7 @@ database: database,
 final paymentService = PaymentService(
 database: database,
 subscriptionService: subscriptionService,
+processorVerifier: _createPaymentProcessorVerifier(),
 );
 
 // ------------------------------------------------------------

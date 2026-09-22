@@ -113,6 +113,12 @@ class _PaymentScreenState extends State<PaymentScreen>
         paymentId: widget.paymentId,
         checkoutToken: widget.checkoutToken,
         processorTransactionId: processorTransactionId,
+      )
+          .timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw StateError(
+          'Payment verification timed out. Check that the backend is running and try again.',
+        ),
       );
 
       if (!mounted) {
@@ -708,7 +714,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           ),
           cursorColor: Colors.white,
           decoration: InputDecoration(
-            hintText: tr('Enter your transaction ID'),
+            hintText: tr('Enter a 6+ digit test transaction ID'),
             hintStyle: TextStyle(
               color: Colors.white.withValues(alpha: 0.28),
               fontSize: 14,
@@ -748,6 +754,20 @@ class _PaymentScreenState extends State<PaymentScreen>
               borderSide: BorderSide(
                 color: Colors.white.withValues(alpha: 0.05),
               ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        Padding(
+          padding: const EdgeInsets.only(left: 3),
+          child: Text(
+            'Local mock checkout: enter any 6–32 digit number, for example 123456.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.34),
+              fontSize: 10.5,
+              height: 1.35,
             ),
           ),
         ),
