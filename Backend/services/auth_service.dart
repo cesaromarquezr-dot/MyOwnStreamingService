@@ -20,6 +20,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:password_guard/password_guard.dart';
+import 'package:supabase/supabase.dart';
 
 import '../database/database.dart';
 import '../models/account.dart';
@@ -220,13 +221,6 @@ class AuthService {
 
     if (cleanUsername.isEmpty) {
       cleanUsername = '${localPart}_account';
-
-      var suffix = 2;
-
-      while (database.getAccountByUsername(cleanUsername) != null) {
-        cleanUsername = '${localPart}_account_$suffix';
-        suffix++;
-      }
     }
 
     _validateUsername(cleanUsername);
@@ -244,124 +238,116 @@ class AuthService {
     }
 
     if (database.getAccountByUsername(cleanUsername) != null) {
-      throw Exception(
-        'That username is already in use.',
-      );
+      throw Exception('That username is already in use.');
     }
 
     if (database.getAccountByEmail(cleanEmail) != null) {
-      throw Exception(
-        'That email address is already in use.',
-      );
+      throw Exception('That email address is already in use.');
     }
 
-    final cleanSecurityQuestion =
-        securityQuestion.trim();
+    final cleanSecurityQuestion = securityQuestion.trim();
+    final cleanSecurityAnswer = securityAnswer.trim().toLowerCase();
 
-    final cleanSecurityAnswer =
-        securityAnswer.trim().toLowerCase();
-
-    if (cleanSecurityQuestion.isEmpty ||
-        cleanSecurityAnswer.isEmpty) {
-      throw Exception(
-        'A security question and answer are required.',
-      );
+    if (cleanSecurityQuestion.isEmpty || cleanSecurityAnswer.isEmpty) {
+      throw Exception('A security question and answer are required.');
     }
 
-    if (cleanSecurityQuestion.length >
-        maximumSecurityQuestionLength) {
-      throw Exception(
-        'Security question is too long.',
-      );
+    if (cleanSecurityQuestion.length > maximumSecurityQuestionLength) {
+      throw Exception('Security question is too long.');
     }
 
-    if (cleanSecurityAnswer.length >
-        maximumSecurityAnswerLength) {
-      throw Exception(
-        'Security answer is too long.',
-      );
+    if (cleanSecurityAnswer.length > maximumSecurityAnswerLength) {
+      throw Exception('Security answer is too long.');
     }
 
     final cleanTermsVersion = termsVersion.trim();
     final cleanPrivacyVersion = privacyVersion.trim();
-    final cleanAcceptableUseVersion =
-        acceptableUseVersion.trim();
+    final cleanAcceptableUseVersion = acceptableUseVersion.trim();
 
     if (cleanTermsVersion.isEmpty ||
         cleanPrivacyVersion.isEmpty ||
         cleanAcceptableUseVersion.isEmpty) {
-      throw Exception(
-        'Current legal policies must be accepted.',
-      );
+      throw Exception('Current legal policies must be accepted.');
     }
 
     if (firstProfileName.trim().isNotEmpty &&
-        firstProfileName.trim().length >
-            Account.maxProfiles) {
+        firstProfileName.trim().length > Account.maxProfiles) {
       // This check intentionally does not use the profile count as a name
       // limit. It is retained only as a defensive upper bound against
       // pathological input and is followed by normal profile validation below.
     }
 
-    final passwordHash =
-        await _hashPassword(password);
+    final passwordHash = await _hashPassword(password);
+    final securityAnswerHash = await _hashSecurityAnswer(cleanSecurityAnswer);
 
-    final securityAnswerHash =
-        await _hashSecurityAnswer(
-      cleanSecurityAnswer,
-    );
+    // The in-memory cache is not authoritative for username uniqueness. A
+    // username can already exist in Supabase even when this backend instance
+    // has not loaded that account into memory. Start with the requested/base
+    // username and let the durable store be the final authority.
+    final requestedUsername = cleanUsername;
 
-    final account = Account(
-      id: _generateId('account'),
-      username: cleanUsername,
-      email: cleanEmail,
-      passwordHash: passwordHash,
-      securityQuestion: cleanSecurityQuestion,
-      securityAnswerHash: securityAnswerHash,
-      termsVersionAccepted: cleanTermsVersion,
-      privacyVersionAccepted: cleanPrivacyVersion,
-      acceptableUseVersionAccepted:
-          cleanAcceptableUseVersion,
-      legalAcceptedAt: legalAcceptedAt.toUtc(),
-    );
+    for (var attempt = 0; attempt < 100; attempt++) {
+      if (attempt > 0 && (username ?? '').trim().isEmpty) {
+        cleanUsername = attempt == 1
+            ? '${localPart}_account_2'
+            : '${localPart}_account_${attempt + 1}';
+        _validateUsername(cleanUsername);
+      }
 
-    // New accounts intentionally start with zero profiles.
-    // The owner creates profiles after entering the account.
-
-    // Signup intentionally creates an inactive subscription.
-    // Payment must be completed before login is allowed.
-    subscriptionService.subscribe(
-      account,
-      plan,
-    );
-
-    database.saveAccount(account);
-    await database.persistAccountAndWait(account);
-
-    try {
-      await emailService.welcome(
-        account.email,
-        account.username,
+      final account = Account(
+        id: _generateId('account'),
+        username: cleanUsername,
+        email: cleanEmail,
+        passwordHash: passwordHash,
+        securityQuestion: cleanSecurityQuestion,
+        securityAnswerHash: securityAnswerHash,
+        termsVersionAccepted: cleanTermsVersion,
+        privacyVersionAccepted: cleanPrivacyVersion,
+        acceptableUseVersionAccepted: cleanAcceptableUseVersion,
+        legalAcceptedAt: legalAcceptedAt.toUtc(),
       );
-    } catch (e, stackTrace) {
-      // The account has already been durably created. Email delivery is a
-      // secondary operation and must not cause the client to retry account
-      // creation and potentially receive an "already exists" error.
-      stderr.writeln(
-        'Welcome email failed for account ${account.id}: $e',
-      );
-      stderr.writeln(stackTrace);
+
+      subscriptionService.subscribe(account, plan);
+
+      try {
+        // Persist first. This prevents a failed Supabase insert from leaving
+        // a misleading username in the backend's in-memory uniqueness cache.
+        await database.persistAccountAndWait(account);
+        database.saveAccount(account, persist: false);
+
+        try {
+          await emailService.welcome(account.email, account.username);
+        } catch (e, stackTrace) {
+          // The account has already been durably created. Email delivery is a
+          // secondary operation and must not cause the client to retry account
+          // creation and potentially receive an "already exists" error.
+          stderr.writeln(
+            '[AuthService] Welcome email failed: $e',
+          );
+          stderr.writeln(stackTrace);
+        }
+
+        return account;
+      } on PostgrestException catch (e) {
+        final isUsernameConflict =
+            e.code == '23505' &&
+            (e.message.contains('accounts_username_key') ||
+                e.details.toString().contains('accounts_username_key'));
+
+        if (!isUsernameConflict || (username ?? '').trim().isNotEmpty) {
+          rethrow;
+        }
+
+        // Another account already owns the generated username. Try the next
+        // deterministic suffix rather than surfacing a raw Postgres error.
+        cleanUsername = requestedUsername;
+        continue;
+      }
     }
 
-    await _audit(
-      'account_created',
-      accountId: account.id,
-      metadata: {
-        'subscriptionPlan': plan.toString(),
-      },
+    throw Exception(
+      'Unable to generate a unique username. Please try again.',
     );
-
-    return account;
   }
 
   // ---------------------------------------------------------------------------

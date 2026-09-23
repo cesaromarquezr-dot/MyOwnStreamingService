@@ -891,35 +891,23 @@ class _CollectionsPanelState
     );
   }
 
-  Widget _collectionCard(dynamic collection) {
+  Widget _collectionCard(MediaCollection collection) {
     final controller = AppController.instance;
 
-    final name =
-        collection.name?.toString() ?? 'Collection';
+    final name = collection.name;
+    final description = collection.description;
 
-    final description =
-        collection.description?.toString() ?? '';
+    // MediaCollection stores collection membership in mediaIds. The previous
+    // implementation referenced legacy/dynamic properties (titleIds, titles,
+    // and isPrivate) that do not exist on the current model and caused the
+    // Collections screen to throw NoSuchMethodError at runtime.
+    final count = collection.mediaIds.length;
 
-    final count =
-        collection.titleIds?.length ??
-            collection.titles?.length ??
-            0;
-
-    final automatic =
-        collection.isAutomatic == true;
-
-    final shared =
-        collection.isShared == true;
-
-    final privateCollection =
-        collection.isPrivate == true;
-
-    final editable =
-        collection.canCurrentProfileEdit() == true;
-
-    final canAdd =
-        !automatic &&
-        collection.canCurrentProfileAdd() == true;
+    final automatic = collection.isAutomatic;
+    final shared = collection.isShared;
+    final privateCollection = !collection.isShared;
+    final editable = collection.canCurrentProfileEdit();
+    final canAdd = !automatic && collection.canCurrentProfileAdd();
 
     return Card(
       clipBehavior: Clip.antiAlias,

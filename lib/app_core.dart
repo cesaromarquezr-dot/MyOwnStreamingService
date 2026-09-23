@@ -560,7 +560,11 @@ class MediaCollection {
     autoPlayNextEnabled: json['autoPlayNextEnabled'] != false,
     autoPlayVersionPreference: json['autoPlayVersionPreference']?.toString() ?? 'Preferred version',
     autoPlayNextTiming: json['autoPlayNextTiming']?.toString() ?? 'End credits',
-    mediaIds: (json['mediaIds'] as List?)?.map((e) => e.toString()).toList(),
+    // Accept the older titleIds field when loading existing collection data.
+    // The current MediaCollection model uses mediaIds.
+    mediaIds: ((json['mediaIds'] ?? json['titleIds']) as List?)
+        ?.map((e) => e.toString())
+        .toList(),
     episodeKeys: (json['episodeKeys'] as List?)?.map((e) => e.toString()).toList(),
     likedByProfileIds: (json['likedByProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
     contributorProfileIds: (json['contributorProfileIds'] as List?)?.map((e) => e.toString()).toSet(),

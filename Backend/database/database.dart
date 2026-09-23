@@ -910,8 +910,9 @@ class Database {
   /// Performs `saveAccount` for this feature. Update this documentation when
   /// its contract changes.
   void saveAccount(
-    Account account,
-  ) {
+    Account account, {
+    bool persist = true,
+  }) {
     final username = account.username.trim().toLowerCase();
     final email = account.email.trim().toLowerCase();
 
@@ -960,7 +961,9 @@ class Database {
       accountIdByEmail[email] = account.id;
     }
 
-    _persistAccount(account);
+    if (persist) {
+      _persistAccount(account);
+    }
   }
 
   /// Performs `deleteAccount` for this feature. Update this documentation when
