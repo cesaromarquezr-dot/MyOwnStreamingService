@@ -1470,6 +1470,25 @@ class SupabaseStore {
       );
     }
 
+    final incomingMetadata = metadata ?? const <String, dynamic>{};
+    if (incomingMetadata['source'] == 'home-server-scanner') {
+      final existing = await c
+          .from('server_media')
+          .select('id,metadata')
+          .eq('server_id', serverId)
+          .eq('server_media_id', cleanRelativeMediaId)
+          .maybeSingle();
+      final existingMetadata = existing?['metadata'];
+      if (existing != null && existingMetadata is Map &&
+          existingMetadata['source'] == 'approved-arm-import') {
+        await c.from('server_media').update({
+          'availability': 'available',
+          'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', existing['id']);
+        return;
+      }
+    }
+
     final normalizedType =
         cleanType.trim().toLowerCase();
 
@@ -2335,7 +2354,7 @@ class SupabaseStore {
       {
         'id': _requiredId(recordId, field: 'recordId'),
         'account_id': _requiredId(internalAccount['id']?.toString(), field: 'accounts.id'),
-        'profile_external_id': _nullable(profileExternalId),
+        'profile_external_id': _nullable(profileExternalId) ?? '',
         'record_type': _boundedText(recordType, field: 'recordType', maxLength: 120),
         'record_key': _boundedText(recordKey, field: 'recordKey', maxLength: 240),
         'data': safeData,

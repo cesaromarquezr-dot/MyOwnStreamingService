@@ -17,12 +17,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:math';
 
 import '../database/database.dart';
 import '../middleware/authentication.dart';
 import '../models/account.dart';
 import '../models/subscription.dart';
 import '../services/payment_service.dart';
+import '../services/payment_method_service.dart';
+import '../supabase_store.dart';
 
 class PaymentRoutes {
   static const String _paymentPrefix = '/api/v1/payment';
@@ -35,11 +38,14 @@ class PaymentRoutes {
   final AuthenticationMiddleware authenticationMiddleware;
   final PaymentService paymentService;
   final Database database;
+  final PaymentMethodService paymentMethods;
+  final Map<String, List<Map<String, dynamic>>> _memoryDestinations = {};
 
   PaymentRoutes({
     required this.authenticationMiddleware,
     required this.paymentService,
     required this.database,
+    required this.paymentMethods,
   });
 
   /// Handles all payment routes.
@@ -53,6 +59,12 @@ class PaymentRoutes {
 
     try {
       final path = request.uri.path;
+
+      if (path == '/api/v1/seller/payout-destinations' ||
+          path.startsWith('/api/v1/phase2/payment-methods')) {
+        await _handlePaymentAdministration(request, path);
+        return;
+      }
 
       /*
        * ---------------------------------------------------------
@@ -175,6 +187,115 @@ class PaymentRoutes {
         );
       }
     }
+  }
+
+  Future<void> _handlePaymentAdministration(HttpRequest request, String path) async {
+    if (request.method == 'OPTIONS') {
+      await _empty(request, HttpStatus.noContent);
+      return;
+    }
+    final account = authenticationMiddleware.authenticate(request);
+    if (account == null) {
+      await _sendJson(request.response, HttpStatus.unauthorized,
+          {'success': false, 'error': 'Authentication required.'});
+      return;
+    }
+    if (path == '/api/v1/phase2/payment-methods' && request.method == 'GET') {
+      await _sendJson(request.response, HttpStatus.ok,
+          {'success': true, ...paymentMethods.catalogJson()});
+      return;
+    }
+    if (path == '/api/v1/phase2/payment-methods/seller' && request.method == 'POST') {
+      final body = await _readJson(request);
+      final selection = paymentMethods.selectForSeller(
+        seller: account,
+        paymentMethodId: _bounded(body, 'paymentMethodId', 100),
+        countryCode: _bounded(body, 'countryCode', 3),
+        currencyCode: _bounded(body, 'currencyCode', 3),
+        providerAccountReference: _optionalBounded(body, 'providerAccountReference', 512),
+        verified: false,
+      );
+      await _sendJson(request.response, HttpStatus.ok,
+          {'success': true, 'selection': selection.toJson()});
+      return;
+    }
+    if (path == '/api/v1/phase2/payment-methods/filter' && request.method == 'POST') {
+      final body = await _readJson(request);
+      final methods = paymentMethods.methodsForBuyer(
+        sellerAccountId: _bounded(body, 'sellerAccountId', 256),
+        buyerCountryCode: _bounded(body, 'buyerCountryCode', 3),
+        currencyCode: _bounded(body, 'currencyCode', 3),
+      );
+      await _sendJson(request.response, HttpStatus.ok, {
+        'success': true,
+        'methods': methods.map((method) => method.toJson()).toList(),
+      });
+      return;
+    }
+    const payoutPath = '/api/v1/seller/payout-destinations';
+    if (path == payoutPath) {
+      if (request.method == 'GET') {
+        final rows = await SupabaseStore.instance.loadSellerPayoutDestinations(accountExternalId: account.id);
+        final merged = <String, Map<String, dynamic>>{
+          for (final row in rows) row['id']?.toString() ?? '': row,
+          for (final row in _memoryDestinations[account.id] ?? const []) row['id']?.toString() ?? '': row,
+        }..remove('');
+        await _sendJson(request.response, HttpStatus.ok, {'success': true, 'destinations': merged.values.toList()});
+        return;
+      }
+      if (request.method == 'POST') {
+        final body = await _readJson(request);
+        const forbidden = {'accountNumber', 'routingNumber', 'iban', 'swift', 'cardNumber', 'cvv', 'password', 'bankAccount'};
+        if (body.keys.any(forbidden.contains)) throw const FormatException('Raw financial credentials are not accepted by this endpoint.');
+        final destination = <String, dynamic>{
+          'id': _uuid(), 'sellerAccountId': account.id,
+          'providerKey': _bounded(body, 'providerKey', 100),
+          'methodType': _bounded(body, 'methodType', 100),
+          'displayName': _bounded(body, 'displayName', 240),
+          'providerAccountReference': _optionalBounded(body, 'providerAccountReference', 512),
+          'maskedIdentifier': _optionalBounded(body, 'maskedIdentifier', 80),
+          'enabled': body['enabled'] != false, 'verified': false,
+          'metadata': <String, dynamic>{}, 'createdAt': DateTime.now().toUtc().toIso8601String(),
+        };
+        await SupabaseStore.instance.upsertSellerPayoutDestination(accountExternalId: account.id, destination: destination);
+        _memoryDestinations.putIfAbsent(account.id, () => []).insert(0, destination);
+        await _sendJson(request.response, HttpStatus.ok, {'success': true, 'destination': destination});
+        return;
+      }
+      if (request.method == 'DELETE') {
+        final id = request.uri.queryParameters['id']?.trim() ?? '';
+        if (id.isEmpty || id.length > 256) throw const FormatException('A valid destination id is required.');
+        await SupabaseStore.instance.deleteSellerPayoutDestination(accountExternalId: account.id, destinationId: id);
+        _memoryDestinations[account.id]?.removeWhere((item) => item['id'] == id);
+        await _sendJson(request.response, HttpStatus.ok, {'success': true});
+        return;
+      }
+    }
+    await _sendJson(request.response, HttpStatus.notFound,
+        {'success': false, 'error': 'Payment endpoint not found.'});
+  }
+
+  String _bounded(Map<String, dynamic> body, String key, int max) {
+    final value = _stringValue(body[key]);
+    if (value.isEmpty || value.length > max || value.contains('\u0000')) {
+      throw FormatException('$key is required and must be at most $max characters.');
+    }
+    return value;
+  }
+
+  String? _optionalBounded(Map<String, dynamic> body, String key, int max) {
+    final value = _stringValue(body[key]);
+    if (value.isEmpty) return null;
+    if (value.length > max || value.contains('\u0000')) throw FormatException('$key must be at most $max characters.');
+    return value;
+  }
+
+  String _uuid() {
+    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
   /*
@@ -871,7 +992,7 @@ class PaymentRoutes {
     );
     headers.set(
       'Access-Control-Allow-Methods',
-      'GET, POST, OPTIONS',
+      'GET, POST, DELETE, OPTIONS',
     );
     headers.set(
       'Access-Control-Allow-Headers',

@@ -120,6 +120,8 @@ class MediaItem {
   final List<String> subtitles;
   final List<String> extras;
   final List<Map<String, dynamic>> xrayEvents;
+  /// Version/edition identity that anchors version-specific X-Ray offsets.
+  final String? mediaVersionId;
 
   MediaItem({
     this.trailerUrl,
@@ -161,6 +163,7 @@ class MediaItem {
     List<String>? subtitles,
     List<String>? extras,
     List<Map<String, dynamic>>? xrayEvents,
+    this.mediaVersionId,
     required this.id,
     required this.title,
     required this.type,
@@ -283,6 +286,8 @@ class MediaItem {
               .map((event) => Map<String, dynamic>.from(event))
               .toList()
           : <Map<String, dynamic>>[],
+      mediaVersionId:
+          (json['mediaVersionId'] ?? json['versionId'])?.toString(),
       seasons: (json['seasons'] is List)
           ? (json['seasons'] as List)
               .whereType<Map>()
@@ -353,6 +358,7 @@ class MediaItem {
       'subtitles': subtitles,
       'extras': extras,
       'xrayEvents': xrayEvents,
+      'mediaVersionId': mediaVersionId,
       'seasons': seasons,
     };
   }

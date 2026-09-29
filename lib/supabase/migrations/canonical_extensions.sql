@@ -3,7 +3,6 @@
 -- movie/music/TV likes, collection, or seller systems.
 --
 -- Media files remain on home servers. Supabase stores application metadata.
-
 -- ============================================================================
 -- MEDIA EDITIONS / VERSIONS / RELATIONSHIP GRAPH
 -- ============================================================================

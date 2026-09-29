@@ -25,6 +25,8 @@ import '../supabase_store.dart';
 class LibraryRoutes {
   static const String _streamPath = '/api/v1/library/stream';
   static const String _scanPath = '/api/v1/library/server-scan';
+  static const String _approvedImportPath =
+      '/api/v1/library/import-approved';
   static const String _mediaPrefix = '/api/v1/library/media/';
   static const String _privacyPath = '/api/v1/library/privacy';
   static const String _ownershipPath =
@@ -99,6 +101,121 @@ class LibraryRoutes {
           accountExternalId: account.id,
           request: request,
         );
+        return;
+      }
+
+      // Copy a reviewed ARM rip from the configured ARM output mount into
+      // MEDIA_ROOT when needed, then register it in the persistent library.
+      if (request.method == 'POST' && path == _approvedImportPath) {
+        final body = await _body(request);
+        final requestedPath = body['outputPath']?.toString().trim() ?? '';
+        if (requestedPath.isEmpty) {
+          await _json(request.response, HttpStatus.badRequest, {
+            'success': false,
+            'error': 'The rip output path is required.',
+          });
+          return;
+        }
+
+        final title = body['title']?.toString().trim() ?? '';
+        final type = body['type']?.toString().trim() ?? 'movie';
+        if (title.isEmpty) {
+          await _json(request.response, HttpStatus.badRequest, {
+            'success': false,
+            'error': 'A reviewed title is required.',
+          });
+          return;
+        }
+
+        final root = _mediaRoot();
+        final isMockOutput = requestedPath.startsWith('MOCK://');
+        final mockMode =
+            (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() ==
+                'true';
+        if (isMockOutput && !mockMode) {
+          await _json(request.response, HttpStatus.badRequest, {
+            'success': false,
+            'error': 'A mock ARM output can only be imported while ARM_MOCK=true.',
+          });
+          return;
+        }
+
+        final candidate = isMockOutput
+            ? await _createMockMediaFile(root, requestedPath, title)
+            : await _resolveImportedMediaFile(requestedPath);
+        if (candidate == null) {
+          await _json(request.response, HttpStatus.notFound, {
+            'success': false,
+            'error': 'The ripped output is not reachable from the home server. Mount the ARM output directory on the home server and set ARM_OUTPUT_ROOT, or configure ARM to rip directly into MEDIA_ROOT.',
+          });
+          return;
+        }
+
+        var relative = _relativePathFromRoot(root, candidate);
+        if (relative == null) {
+          final armOutputRoot =
+              Platform.environment['ARM_OUTPUT_ROOT']?.trim();
+          if (armOutputRoot == null || armOutputRoot.isEmpty ||
+              !_isPathInside(
+                Directory(armOutputRoot).resolveSymbolicLinksSync(),
+                candidate.resolveSymbolicLinksSync(),
+              )) {
+            await _json(request.response, HttpStatus.forbidden, {
+              'success': false,
+              'error': 'The ripped file is outside MEDIA_ROOT and the configured ARM_OUTPUT_ROOT.',
+            });
+            return;
+          }
+
+          final safeTitle = title
+              .replaceAll(RegExp(r'[^A-Za-z0-9._ -]+'), '_')
+              .replaceAll(RegExp(r'\s+'), '_')
+              .replaceAll(RegExp(r'_+'), '_');
+          final extension =
+              candidate.path.substring(candidate.path.lastIndexOf('.'));
+          final destinationRelative =
+              'arm_imports/${DateTime.now().microsecondsSinceEpoch}_$safeTitle$extension';
+          final destination = File(
+            '${root.path}${Platform.pathSeparator}'
+            '${destinationRelative.replaceAll('/', Platform.pathSeparator)}',
+          );
+          await destination.parent.create(recursive: true);
+          await candidate.copy(destination.path);
+          relative = destinationRelative;
+        }
+
+        if (!_isSafeRelativePath(relative) ||
+            !_supportedMediaExtension.hasMatch(relative)) {
+          await _json(request.response, HttpStatus.badRequest, {
+            'success': false,
+            'error': 'The rip output must be a supported media file.',
+          });
+          return;
+        }
+
+        final metadata = body['metadata'] is Map
+            ? Map<String, dynamic>.from(body['metadata'] as Map)
+            : <String, dynamic>{};
+        metadata['source'] = 'approved-arm-import';
+        metadata['relativeMediaId'] = relative;
+        if (isMockOutput) metadata['mockMedia'] = true;
+        await store.upsertServerMedia(
+          accountExternalId: account.id,
+          relativeMediaId: relative,
+          title: title,
+          type: type,
+          year: _optionalInt(body['year']),
+          description: _optionalString(body['description']),
+          posterUrl: _optionalString(body['posterUrl']),
+          trailerUrl: _optionalString(body['trailerUrl']),
+          metadata: metadata,
+          fileSizeBytes: candidate.lengthSync(),
+        );
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'mediaId': relative,
+          'message': 'Reviewed rip saved to the home server library.',
+        });
         return;
       }
 
@@ -780,6 +897,57 @@ class LibraryRoutes {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<File> _createMockMediaFile(
+    Directory root,
+    String mockPath,
+    String title,
+  ) async {
+    final extension = RegExp(
+      r'\.(mkv|mp4|m4v|avi|mov|webm|mp3|flac|m4a|aac|wav)$',
+      caseSensitive: false,
+    ).firstMatch(mockPath)?.group(0) ?? '.mkv';
+    final safeTitle = title
+        .replaceAll(RegExp(r'[^A-Za-z0-9._ -]+'), '_')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+    final relative =
+        'arm_mock/${DateTime.now().microsecondsSinceEpoch}_$safeTitle$extension';
+    final file = File(
+      '${root.path}${Platform.pathSeparator}'
+      '${relative.replaceAll('/', Platform.pathSeparator)}',
+    );
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      'Streaming service mock media artifact. '
+      'This placeholder is not playable content. Source: $mockPath\n',
+      flush: true,
+    );
+    return file;
+  }
+
+  Future<File?> _resolveImportedMediaFile(String path) async {
+    final entityType = FileSystemEntity.typeSync(path, followLinks: true);
+    if (entityType == FileSystemEntityType.file) {
+      final file = File(path).absolute;
+      return _supportedMediaExtension.hasMatch(file.path) ? file : null;
+    }
+    if (entityType != FileSystemEntityType.directory) return null;
+
+    File? largestMediaFile;
+    var largestSize = 0;
+    await for (final entity in Directory(path).list(recursive: true)) {
+      if (entity is! File || !_supportedMediaExtension.hasMatch(entity.path)) {
+        continue;
+      }
+      final size = await entity.length();
+      if (size > largestSize) {
+        largestMediaFile = entity;
+        largestSize = size;
+      }
+    }
+    return largestMediaFile;
   }
 
   // --------------------------------------------------------------------------

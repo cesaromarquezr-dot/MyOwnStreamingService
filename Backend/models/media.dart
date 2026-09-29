@@ -10,6 +10,8 @@
 // This model intentionally remains compatible with the existing JSON
 // contract. New physical-media fields are additive.
 
+import 'xray_event.dart';
+
 enum MediaType {
   movie,
   tvShow,
@@ -17,6 +19,9 @@ enum MediaType {
 
 class Media {
   final String id;
+  /// ID of the selected cut/edition/version used for playback offsets.
+  final String? mediaVersionId;
+  final List<XRayEvent> xrayEvents;
   final String title;
   final MediaType type;
 
@@ -113,6 +118,8 @@ class Media {
 
   Media({
     required this.id,
+    this.mediaVersionId,
+    this.xrayEvents = const [],
     required this.title,
     required this.type,
     this.year,
@@ -208,6 +215,8 @@ class Media {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'mediaVersionId': mediaVersionId,
+      'xrayEvents': xrayEvents.map((event) => event.toJson()).toList(),
       'title': title,
       'type': type.name,
       'year': year,
@@ -275,6 +284,8 @@ class Media {
   factory Media.fromJson(Map<String, dynamic> json) {
     return Media(
       id: _stringValue(json['id']),
+      mediaVersionId: _nullableString(json['mediaVersionId']),
+      xrayEvents: _xrayEvents(json['xrayEvents']),
       title: _stringValue(json['title']),
       type: _parseMediaType(json['type']),
 
@@ -351,6 +362,8 @@ class Media {
   /// Creates an immutable-style updated copy.
   Media copyWith({
     String? id,
+    String? mediaVersionId,
+    List<XRayEvent>? xrayEvents,
     String? title,
     MediaType? type,
     int? year,
@@ -417,6 +430,8 @@ class Media {
   }) {
     return Media(
       id: id ?? this.id,
+      mediaVersionId: mediaVersionId ?? this.mediaVersionId,
+      xrayEvents: xrayEvents ?? this.xrayEvents,
       title: title ?? this.title,
       type: type ?? this.type,
 
@@ -632,6 +647,20 @@ class Media {
         .map((item) => item?.toString().trim() ?? '')
         .where((item) => item.isNotEmpty)
         .toList();
+  }
+
+  static List<XRayEvent> _xrayEvents(dynamic value) {
+    if (value is! List) return const [];
+    final events = <XRayEvent>[];
+    for (final rawEvent in value.whereType<Map>()) {
+      try {
+        events.add(XRayEvent.fromJson(Map<String, dynamic>.from(rawEvent)));
+      } on FormatException {
+        // Older imported metadata may use unversioned, untyped event maps.
+        // The Flutter client retains and displays those legacy payloads.
+      }
+    }
+    return events;
   }
 
   static List<WatchOption> _watchOptions(

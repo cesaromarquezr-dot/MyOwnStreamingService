@@ -900,7 +900,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 icon: const Icon(Icons.favorite_border_rounded),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopWishlistScreen())),
               ),
-              _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopBagScreen()))),
+              _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopBagScreen(onHome: widget.onHome)))),
               const LanguagePicker(),
             ],
           ),
@@ -1038,7 +1038,7 @@ class _ShopScreenState extends State<ShopScreen> {
           title: Text(store.name),
           subtitle: Text('${catalog.productsForStore(store.id).length} active product(s)${store.description.isEmpty ? '' : ' • ${store.description}'}', maxLines: 2, overflow: TextOverflow.ellipsis),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: store))),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: store, onHome: widget.onHome))),
         ),
       );
 
@@ -1114,7 +1114,7 @@ class _ShopScreenState extends State<ShopScreen> {
             }
             final store = catalog.createStore(name: name.text, description: description.text, logoUrl: logo.text, bannerUrl: banner.text, address: address);
             Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (_) => SellerDashboardScreen(store: store)));
+            Navigator.push(context, MaterialPageRoute(builder: (_) => SellerDashboardScreen(store: store, onHome: widget.onHome)));
           } catch (error) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
           }
@@ -1230,7 +1230,8 @@ class _AskShopAssistantDialogState extends State<_AskShopAssistantDialog> {
 /// Seller's storefront page.
 class ShopStoreScreen extends StatelessWidget {
   final ShopStore store;
-  const ShopStoreScreen({super.key, required this.store});
+  final VoidCallback? onHome;
+  const ShopStoreScreen({super.key, required this.store, this.onHome});
 
   @override
   Widget build(BuildContext context) {
@@ -1240,14 +1241,14 @@ class ShopStoreScreen extends StatelessWidget {
       final lines = catalog.linesForStore(store.id);
       return Scaffold(
         appBar: AppBar(title: Text(store.name), actions: [
-          _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopBagScreen()))),
+          _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopBagScreen(onHome: onHome)))),
         ]),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           Container(height: 150, decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), image: store.bannerUrl?.isNotEmpty == true ? DecorationImage(image: NetworkImage(store.bannerUrl!), fit: BoxFit.cover) : null, color: Theme.of(context).colorScheme.surfaceContainerHighest)),
           const SizedBox(height: 14),
           Row(children: [CircleAvatar(radius: 30, backgroundImage: store.logoUrl?.isNotEmpty == true ? NetworkImage(store.logoUrl!) : null, child: store.logoUrl?.isNotEmpty == true ? null : Text(store.name.isEmpty ? '?' : store.name.substring(0, 1).toUpperCase())), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(store.name, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)), if (store.description.isNotEmpty) Text(store.description)]))]),
           const SizedBox(height: 18),
-          if (lines.isNotEmpty) FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: lines, title: 'Checkout • ${store.name}', storeSpecific: true))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout this Store')),
+          if (lines.isNotEmpty) FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: lines, title: 'Checkout • ${store.name}', storeSpecific: true, onHome: onHome))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout this Store')),
           const SizedBox(height: 16),
           const Text('Featured', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
@@ -1266,7 +1267,7 @@ class ShopStoreScreen extends StatelessWidget {
       leading: product.imageUrls.isEmpty ? const Icon(Icons.shopping_bag_outlined) : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(product.imageUrls.first, width: 52, height: 52, fit: BoxFit.cover)),
       title: Text(product.name),
       subtitle: Text('${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'),
-      trailing: Wrap(children: [IconButton(onPressed: () => catalog.toggleWishlist(product.id), icon: Icon(catalog.isWishlisted(product.id) ? Icons.favorite : Icons.favorite_border)), OutlinedButton(onPressed: product.inventoryQuantity <= 0 ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: [ShopBagLine(productId: product.id)], title: 'Checkout • ${store.name}', storeSpecific: true))), child: const UniversalText('Buy Now')), const SizedBox(width: 6), FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const UniversalText('Add'))]),
+      trailing: Wrap(children: [IconButton(onPressed: () => catalog.toggleWishlist(product.id), icon: Icon(catalog.isWishlisted(product.id) ? Icons.favorite : Icons.favorite_border)), OutlinedButton(onPressed: product.inventoryQuantity <= 0 ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: [ShopBagLine(productId: product.id)], title: 'Checkout • ${store.name}', storeSpecific: true, onHome: onHome))), child: const UniversalText('Buy Now')), const SizedBox(width: 6), FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const UniversalText('Add'))]),
     ));
   }
 }
@@ -1274,7 +1275,8 @@ class ShopStoreScreen extends StatelessWidget {
 /// Seller dashboard. It is surfaced in navigation only when a store exists.
 class SellerDashboardScreen extends StatelessWidget {
   final ShopStore? store;
-  const SellerDashboardScreen({super.key, this.store});
+  final VoidCallback? onHome;
+  const SellerDashboardScreen({super.key, this.store, this.onHome});
 
   @override
   Widget build(BuildContext context) {
@@ -1300,7 +1302,7 @@ class SellerDashboardScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddShopProductScreen(store: activeStore))), icon: const Icon(Icons.add_box_outlined), label: const UniversalText('Add Product')),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: activeStore))), icon: const Icon(Icons.storefront_outlined), label: const UniversalText('View Store')),
+                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: activeStore, onHome: onHome))), icon: const Icon(Icons.storefront_outlined), label: const UniversalText('View Store')),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreSettingsScreen(store: activeStore))), icon: const Icon(Icons.settings_outlined), label: const UniversalText('Store Settings & Appearance')),
                 const SizedBox(height: 14),
@@ -2071,7 +2073,8 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
 }
 
 class ShopBagScreen extends StatelessWidget {
-  const ShopBagScreen({super.key});
+  final VoidCallback? onHome;
+  const ShopBagScreen({super.key, this.onHome});
 
   @override
   Widget build(BuildContext context) {
@@ -2096,7 +2099,7 @@ class ShopBagScreen extends StatelessWidget {
                 ],
                 Card(child: ListTile(title: const UniversalText('Bag total'), trailing: Text(_money(catalog.subtotal(), 'USD'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)))),
                 const SizedBox(height: 10),
-                FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: List<ShopBagLine>.from(lines), title: 'Checkout • All Stores', storeSpecific: false))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout All Stores')),
+                FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: List<ShopBagLine>.from(lines), title: 'Checkout • All Stores', storeSpecific: false, onHome: onHome))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout All Stores')),
               ]),
       );
     });
@@ -2138,8 +2141,9 @@ class ShopCheckoutScreen extends StatefulWidget {
   final List<ShopBagLine> lines;
   final String title;
   final bool storeSpecific;
+  final VoidCallback? onHome;
 
-  const ShopCheckoutScreen({super.key, required this.lines, required this.title, required this.storeSpecific});
+  const ShopCheckoutScreen({super.key, required this.lines, required this.title, required this.storeSpecific, this.onHome});
 
   @override
   State<ShopCheckoutScreen> createState() => _ShopCheckoutScreenState();
@@ -2153,6 +2157,7 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
   final cvv = TextEditingController();
   final postal = TextEditingController();
   WorldwideAddress? shippingAddress;
+  bool addressConfirmed = false;
   bool processing = false;
   bool loadingPaymentMethods = false;
   List<Map<String, dynamic>> compatiblePaymentMethods = <Map<String, dynamic>>[];
@@ -2166,10 +2171,44 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final catalog = ShopCatalog.instance;
-    final total = catalog.subtotal(widget.lines);
+    final subtotal = catalog.subtotal(widget.lines);
+    final storeCount = widget.lines
+        .map((line) => catalog.productById(line.productId)?.storeId)
+        .whereType<String>()
+        .toSet()
+        .length;
+    final shippingFee = storeCount * 5.99;
+    final serviceFee = subtotal * 0.05;
+    final total = subtotal + shippingFee + serviceFee;
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: ListView(padding: const EdgeInsets.all(18), children: [
+        if (!addressConfirmed) ...[
+          Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Delivery address', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            const UniversalText('Enter where you want your order delivered. We’ll show the full order total and payment options next.'),
+          ]))),
+          const SizedBox(height: 14),
+          WorldwideAddressForm(
+            requireStreet: true,
+            onChanged: (value) {
+              setState(() => shippingAddress = value);
+              _refreshCompatiblePaymentMethods(value);
+            },
+          ),
+          const SizedBox(height: 14),
+          SizedBox(height: 52, child: FilledButton.icon(
+            onPressed: _continueToPayment,
+            icon: const Icon(Icons.arrow_forward),
+            label: const UniversalText('Continue to payment'),
+          )),
+        ] else ...[
+          Align(alignment: Alignment.centerLeft, child: TextButton.icon(
+            onPressed: processing ? null : () => setState(() => addressConfirmed = false),
+            icon: const Icon(Icons.arrow_back),
+            label: const UniversalText('Edit address'),
+          )),
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.storeSpecific ? 'Store Checkout' : 'All Stores Checkout', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
@@ -2177,18 +2216,14 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
           const SizedBox(height: 14),
           for (final line in widget.lines) _summaryLine(line),
           const Divider(),
+          _feeRow('Items subtotal', subtotal),
+          const SizedBox(height: 6),
+          _feeRow(r'Shipping ($5.99 per store estimate)', shippingFee),
+          const SizedBox(height: 6),
+          _feeRow('Service fee (5%)', serviceFee),
+          const Divider(height: 24),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const UniversalText('Total', style: TextStyle(fontWeight: FontWeight.w900)), Text(_money(total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))]),
         ]))),
-        const SizedBox(height: 14),
-        const Text('Shipping / billing address', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 8),
-        WorldwideAddressForm(
-          requireStreet: true,
-          onChanged: (value) {
-            setState(() => shippingAddress = value);
-            _refreshCompatiblePaymentMethods(value);
-          },
-        ),
         const SizedBox(height: 14),
         const Text('Payment method', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
         _paymentProviderOptions(),
@@ -2208,8 +2243,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
               ),
               RadioListTile<int>(
                 value: 1,
-                title: const UniversalText('Use a different card'),
-                subtitle: const UniversalText('Card details are used for this checkout and are not stored by this app.'),
+                title: const UniversalText('Choose another payment option'),
+                subtitle: const UniversalText('Select a card, wallet, or regional payment provider below.'),
               ),
             ],
           ),
@@ -2226,8 +2261,25 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
         Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Padding(padding: EdgeInsets.all(14), child: UniversalText('Security: the current development gateway does not charge a real card. It returns a test transaction token. For production, connect this screen to a PCI-compliant payment processor or hosted wallet/bank checkout that tokenizes or authorizes credentials before they reach your backend.'))),
         const SizedBox(height: 12),
         FilledButton.icon(onPressed: processing ? null : () => _pay(total), icon: processing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.credit_card), label: UniversalText(processing ? 'Processing…' : 'Place Order & Pay')),
+        ],
       ]),
     );
+  }
+
+  Widget _feeRow(String label, double amount) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [Text(label), Text(_money(amount))],
+      );
+
+  void _continueToPayment() {
+    final address = shippingAddress;
+    if (address == null || !address.isComplete || address.addressLine1.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: UniversalText('Enter a complete delivery address, including postal/ZIP code.'),
+      ));
+      return;
+    }
+    setState(() => addressConfirmed = true);
   }
 
   Widget _paymentProviderOptions() {
@@ -2255,30 +2307,58 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
             const SizedBox(height: 6),
             const UniversalText('Providers vary by country, currency, seller configuration, and provider eligibility. Unsupported regional methods are filtered out automatically.'),
             const SizedBox(height: 8),
-            RadioGroup<String>(
-              groupValue: selectedProviderMethodId,
-              onChanged: (value) {
-  if (processing) return;
-  setState(() => selectedProviderMethodId = value);
-},
-              child: Column(
-                children: compatiblePaymentMethods.map((method) {
-                  final id = method['id']?.toString() ?? '';
-                  final label = method['displayName']?.toString() ?? method['provider']?.toString() ?? id;
-                  return RadioListTile<String>(
-                    value: id,
-                    title: Text(label),
-                    subtitle: Text(method['methodType']?.toString() ?? 'payment'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  );
-                }).toList(),
-              ),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: compatiblePaymentMethods.map((method) {
+                final id = method['id']?.toString() ?? '';
+                final label = method['displayName']?.toString() ??
+                    method['provider']?.toString() ?? id;
+                final selected = selectedProviderMethodId == id;
+                return ChoiceChip(
+                  avatar: Icon(_paymentMethodIcon(id), size: 18),
+                  label: Text(label),
+                  selected: selected,
+                  onSelected: processing
+                      ? null
+                      : (value) {
+                          if (!value) return;
+                          setState(() {
+                            selectedProviderMethodId = id;
+                            paymentChoice = 1;
+                          });
+                        },
+                  labelStyle: TextStyle(
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                );
+              }).toList(),
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _paymentMethodIcon(String id) {
+    switch (id.toLowerCase()) {
+      case 'paypal':
+        return Icons.account_balance_wallet_outlined;
+      case 'apple_pay':
+      case 'google_pay':
+      case 'card':
+      case 'credit_card':
+        return Icons.credit_card_outlined;
+      case 'mercado_pago':
+        return Icons.shopping_bag_outlined;
+      case 'bank_transfer':
+      case 'pix':
+      case 'ideal':
+        return Icons.account_balance_outlined;
+      default:
+        return Icons.payments_outlined;
+    }
   }
 
   Future<void> _refreshCompatiblePaymentMethods(WorldwideAddress? address) async {
@@ -2380,7 +2460,18 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
       ShopCatalog.instance.recordOrder(lines: widget.lines, total: total, transactionId: result.transactionId);
       ShopCatalog.instance.completeCheckout(widget.lines);
       await showDialog<void>(context: context, builder: (_) => AlertDialog(title: const UniversalText('Order placed'), content: UniversalText('Payment approved in development mode. Transaction: ${result.transactionId}${result.last4 == null ? '' : ' • Card ending ${result.last4}'}'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Done'))]));
-      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+      if (mounted) {
+        final navigator = Navigator.of(context, rootNavigator: true);
+        final onHome = widget.onHome;
+        navigator.pop();
+        if (onHome != null) {
+          onHome();
+        } else {
+          navigator.popUntil(
+            (route) => route.settings.name == '/main' || route.isFirst,
+          );
+        }
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));

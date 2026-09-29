@@ -12,6 +12,7 @@ import 'group_watch.dart';
 import 'discovery_experience.dart';
 import 'localization.dart';
 import 'shop.dart';
+import 'media_actions.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -1336,18 +1337,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
-                  if (liked) {
-                    controller.clearReaction(
-                      media.id,
-                    );
-                  } else {
-                    controller.likeMedia(
-                      media,
-                    );
-                  }
-                });
+              onPressed: () async {
+                await UniversalMediaActions.perform(
+                  context: _actionContext(const {
+                    UniversalMediaAction.like,
+                    UniversalMediaAction.removeReaction,
+                  }),
+                  action: liked
+                      ? UniversalMediaAction.removeReaction
+                      : UniversalMediaAction.like,
+                  apply: () => setState(() {
+                    if (liked) {
+                      controller.clearReaction(media.id);
+                    } else {
+                      controller.likeMedia(media);
+                    }
+                  }),
+                );
               },
               icon: Icon(
                 liked
@@ -1360,18 +1366,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
-                  if (disliked) {
-                    controller.clearReaction(
-                      media.id,
-                    );
-                  } else {
-                    controller.dislikeMedia(
-                      media,
-                    );
-                  }
-                });
+              onPressed: () async {
+                await UniversalMediaActions.perform(
+                  context: _actionContext(const {
+                    UniversalMediaAction.dislike,
+                    UniversalMediaAction.removeReaction,
+                  }),
+                  action: disliked
+                      ? UniversalMediaAction.removeReaction
+                      : UniversalMediaAction.dislike,
+                  apply: () => setState(() {
+                    if (disliked) {
+                      controller.clearReaction(media.id);
+                    } else {
+                      controller.dislikeMedia(media);
+                    }
+                  }),
+                );
               },
               icon: Icon(
                 disliked
@@ -1385,6 +1396,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       ),
     );
   }
+
+  UniversalMediaActionContext _actionContext(
+    Set<UniversalMediaAction> availableActions,
+  ) =>
+      UniversalMediaActionContext(
+        contentType: media.type,
+        contentId: media.id,
+        mediaVersionId: media.mediaVersionId,
+        profileId: AppController.instance.currentProfile?.id ?? 'local-profile',
+        availableActions: availableActions,
+      );
 
   // ===========================================================================
   // INFORMATION
@@ -1679,12 +1701,27 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                           ? 'Shared collection'
                           : 'Private collection',
                 ),
-                enabled: !collection.mediaIds.contains(media.id),
-                onTap: () {
-                  controller.addToCollection(collection.id, media.id);
-                  Navigator.pop(context);
+                enabled: !collection.mediaIds.contains(media.id) &&
+                    collection.canCurrentProfileAdd(),
+                onTap: () async {
+                  final navigator = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final result = await UniversalMediaActions.perform(
+                    context: _actionContext(const {
+                      UniversalMediaAction.addToCollection,
+                    }),
+                    action: UniversalMediaAction.addToCollection,
+                    targetId: collection.id,
+                    apply: () => controller.addToCollection(
+                      collection.id,
+                      media.id,
+                    ),
+                  );
+                  if (!result.applied) return;
+                  if (!mounted) return;
+                  navigator.pop();
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(content: UniversalText('Added to ${collection.name}.')),
                   );
                 },

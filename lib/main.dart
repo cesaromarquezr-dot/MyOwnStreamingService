@@ -480,6 +480,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => const MainScreen(),
+                  settings: const RouteSettings(name: '/main'),
                 ),
               );
             },
@@ -1201,7 +1202,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       // The profile is now fully customized, so go directly to Home. Account
       // invitations remain available later from the More (three-dot) menu.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainScreen()),
+        MaterialPageRoute(
+          builder: (_) => const MainScreen(),
+          settings: const RouteSettings(name: '/main'),
+        ),
       );
       return;
     }
@@ -3517,6 +3521,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   String selectedDestination = 'Home';
 
+  void _returnToHome() {
+    Navigator.of(context).popUntil(
+      (route) => route.settings.name == '/main' || route.isFirst,
+    );
+    if (mounted) setState(() => selectedDestination = 'Home');
+  }
+
   @override
 
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -3570,8 +3581,14 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const ImportMediaScreen()),
-    ).then((_) {
-      if (mounted) setState(() {});
+    ).then((added) {
+      if (!mounted) return;
+      setState(() {});
+      if (added == true) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: UniversalText('Media added to your library.'),
+        ));
+      }
     });
   }
 
@@ -3734,10 +3751,10 @@ class _MainScreenState extends State<MainScreen> {
       'Film': const FilmExperienceScreen(),
       'Collections': const CollectionsPanel(),
       'Shop': ShopScreen(
-        onHome: () => setState(() => selectedDestination = 'Home'),
+        onHome: _returnToHome,
       ),
       if (ShopCatalog.instance.hasCurrentAccountStore)
-        'Seller Dashboard': SellerDashboardScreen(),
+        'Seller Dashboard': SellerDashboardScreen(onHome: _returnToHome),
     };
     final pages = navigationOrder.map((name) => pageByName[name]!).toList();
     final safeSelectedIndex = navigationOrder
@@ -5454,6 +5471,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   bool importing = false;
   bool verificationPassed = false;
   bool ownershipConfirmed = false;
+  bool addingToLibrary = false;
   double progress = 0;
   String statusMessage = 'ARM is always enabled for disc imports.';
   String? jobId;
@@ -5579,7 +5597,11 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       });
 
       final status = map['status']?.toString();
-      if (status == 'readyForReview') {
+      // ARM implementations report either readyForReview (the native
+      // service) or completed (remote workers). Treat both as a terminal
+      // rip result so the user can review and approve it instead of polling
+      // forever after the extraction has finished.
+      if (status == 'readyForReview' || status == 'completed') {
         _pollTimer?.cancel();
         _prepareReview(map);
       } else if (status == 'rejected' || status == 'failed') {
@@ -5694,6 +5716,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   /// Performs `_normalizeMediaType` for this feature. Update this documentation when its contract changes.
   String _normalizeMediaType(String? value) {
     final v = (value ?? '').toLowerCase();
+    if (v.contains('album') || v.contains('music') || v.contains('audio')) {
+      return 'album';
+    }
     if (v.contains('tv') || v.contains('series') || v.contains('show')) {
       return 'tvShow';
     }
@@ -5713,8 +5738,15 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     final featureLike = classification.isEmpty ||
         classification == 'feature' ||
         classification == 'feature_film' ||
-        classification == 'main_feature';
-    return movieLike && featureLike;
+        classification == 'main_feature' ||
+        classification == 'series' ||
+        classification == 'tv_show' ||
+        classification == 'tvshow';
+    final albumLike = type.contains('music') ||
+        type.contains('audio') ||
+        type.contains('album') ||
+        classification == 'album';
+    return (movieLike && featureLike) || (albumLike && classification == 'album');
   }
 
   /// Performs `_strings` for this feature. Update this documentation when its contract changes.
@@ -5726,9 +5758,23 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         .toList();
   }
 
+  List<Map<String, dynamic>> _maps(dynamic value) {
+    if (value is! List) return <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   /// Performs `_addVerifiedDiscToLibrary` for this feature. Update this documentation when its contract changes.
   Future<void> _addVerifiedDiscToLibrary() async {
-    if (!verificationPassed || reviewJob == null) return;
+    if (addingToLibrary) return;
+    if (!verificationPassed || reviewJob == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: UniversalText('Wait for the rip to finish and pass verification before adding it.'),
+      ));
+      return;
+    }
     if (!ownershipConfirmed) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -5737,10 +5783,18 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       );
       return;
     }
+    setState(() {
+      addingToLibrary = true;
+      statusMessage = 'Recording ownership confirmation…';
+    });
     try {
       await AppController.instance.backendApi.confirmOwnershipDeclaration();
     } catch (error) {
       if (!mounted) return;
+      setState(() {
+        addingToLibrary = false;
+        statusMessage = 'Could not record ownership confirmation.';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(error.toString().replaceFirst('Exception: ', ''))),
@@ -5752,10 +5806,12 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     final job = reviewJob!;
     final selectedTitles = detectedDiscTitles
         .where(
-            (title) => selectedDiscTitleIds.contains(title['id']?.toString()))
+            (title) => _isImportableDiscTitle(title) &&
+                selectedDiscTitleIds.contains(title['id']?.toString()))
         .toList();
 
     if (selectedTitles.isEmpty) {
+      setState(() => addingToLibrary = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: UniversalText(
@@ -5776,21 +5832,39 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     final discNumber = job['discNumber'] is num
         ? (job['discNumber'] as num).toInt()
         : int.tryParse(job['discNumber']?.toString() ?? '');
+    final discExtras = detectedDiscTitles
+        .where((title) => !_isImportableDiscTitle(title))
+        .map((title) => (title['canonicalTitle']?.toString().trim().isNotEmpty == true
+            ? title['canonicalTitle']?.toString().trim()
+            : title['title']?.toString().trim()) ?? '')
+        .where((title) => title.isNotEmpty)
+        .toList();
 
-    for (final titleData in selectedTitles) {
-      final title =
+    try {
+      for (final titleData in selectedTitles) {
+      final detectedTitle =
           (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true
                   ? titleData['canonicalTitle']?.toString().trim()
                   : titleData['title']?.toString().trim()) ??
               '';
+      final title = selectedTitles.length == 1 && titleController.text.trim().isNotEmpty
+          ? titleController.text.trim()
+          : detectedTitle;
       final discTitle =
           titleData['discTitle']?.toString() ?? titleData['title']?.toString();
       if (title.isEmpty) continue;
 
+      if (mounted) {
+        setState(() => statusMessage = 'Saving "$title" to the home server…');
+      }
+
       final metadata = titleData['metadata'] is Map
           ? Map<String, dynamic>.from(titleData['metadata'] as Map)
           : <String, dynamic>{};
-      final year = titleData['year'] is num
+      final editedYear = selectedTitles.length == 1
+          ? int.tryParse(yearController.text.trim())
+          : null;
+      final year = editedYear ?? (titleData['year'] is num
           ? (titleData['year'] as num).toInt()
           : int.tryParse(titleData['year']?.toString() ?? '') ??
               (metadata['year'] is num
@@ -5798,15 +5872,22 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                   : int.tryParse(metadata['year']?.toString() ?? '') ??
                       (job['year'] is num
                           ? (job['year'] as num).toInt()
-                          : int.tryParse(job['year']?.toString() ?? '')));
+                          : int.tryParse(job['year']?.toString() ?? ''))));
       final reviewerProfileId = AppController.instance.currentProfile?.id ?? '';
       final reviewerProfileName =
           AppController.instance.currentProfile?.name ?? '';
       final media = MediaItem(
         id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
+        mediaVersionId: (titleData['mediaVersionId'] ??
+                titleData['versionId'] ??
+                metadata['mediaVersionId'] ??
+                job['mediaVersionId'])
+            ?.toString(),
         title: title,
-        type: _normalizeMediaType(
-            titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
+        type: selectedTitles.length == 1
+            ? selectedType
+            : _normalizeMediaType(
+                titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
         addedByProfileId: reviewerProfileId.isEmpty ? null : reviewerProfileId,
         addedByProfileName:
             reviewerProfileName.isEmpty ? null : reviewerProfileName,
@@ -5884,16 +5965,13 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             : (metadata['audioTracks'] is List
                 ? _strings(metadata['audioTracks'])
                 : _strings(job['audioTracks'])),
-        xrayEvents: (titleData['xrayEvents'] is List
-                ? titleData['xrayEvents']
-                : metadata['xrayEvents'] is List
-                    ? metadata['xrayEvents']
-                    : job['xrayEvents'] is List
-                        ? job['xrayEvents']
-                        : const <dynamic>[])
-            .whereType<Map>()
-            .map((event) => Map<String, dynamic>.from(event))
-            .toList(),
+        xrayEvents: _maps(
+          titleData['xrayEvents'] is List
+              ? titleData['xrayEvents']
+              : metadata['xrayEvents'] is List
+                  ? metadata['xrayEvents']
+                  : job['xrayEvents'],
+        ),
         language: languagesController.text
             .split(',')
             .map((e) => e.trim())
@@ -5904,14 +5982,85 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
             .toList(),
-        extras: extrasController.text
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList(),
+        extras: <String>{
+          ...extrasController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty),
+          ...discExtras,
+        }.toList(),
       );
 
-      AppController.instance.addToLibrary(media);
+      final outputPath = (titleData['outputPath'] ??
+              metadata['outputPath'] ??
+              job['outputPath'] ??
+              metadata['path'] ??
+              job['path'])
+          ?.toString()
+          .trim();
+      if (outputPath == null || outputPath.isEmpty) {
+        if (mounted) {
+          setState(() => addingToLibrary = false);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: UniversalText(
+              'ARM did not provide the ripped file path, so the content could not be saved.',
+            ),
+          ));
+        }
+        return;
+      }
+
+      try {
+        final saved = await AppController.instance.backendApi
+            .importApprovedArmMedia(
+          outputPath: outputPath,
+          title: media.title,
+          type: media.type,
+          year: media.releaseYear,
+          description: media.description,
+          posterUrl: media.imageUrl,
+          trailerUrl: media.trailerUrl,
+          metadata: <String, dynamic>{
+            ...media.toJson(),
+            'armJobId': job['id'],
+            'verification': verification,
+            'ownershipConfirmed': true,
+          },
+        );
+        final mediaId = saved['mediaId']?.toString();
+        if (mediaId == null || mediaId.isEmpty) {
+          throw BackendApiException(
+            'The server did not return the saved media identifier.',
+          );
+        }
+        final persistedMedia = MediaItem.fromJson(
+          <String, dynamic>{...media.toJson(), 'id': mediaId},
+        );
+        AppController.instance.addToLibrary(persistedMedia);
+      } catch (error) {
+        if (mounted) {
+          setState(() {
+            addingToLibrary = false;
+            statusMessage = 'Save failed: ${error.toString().replaceFirst('Exception: ', '')}';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', '')),
+          ));
+        }
+        return;
+      }
+      }
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        addingToLibrary = false;
+        statusMessage = 'Save failed: $message';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      return;
     }
 
     if (!mounted) return;
@@ -6018,14 +6167,15 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     ),
                     const SizedBox(height: 6),
                     UniversalText(
-                      'ARM found ${detectedDiscTitles.length} separate title candidates on this physical disc. Each selected movie will become its own library item while remaining linked to the same disc.',
+                      'ARM found ${detectedDiscTitles.length} disc titles. The feature is added once; deleted scenes, trailers, and other bonus titles are listed under Extras.',
                       style:
                           const TextStyle(color: Colors.white70, height: 1.35),
                     ),
                     const SizedBox(height: 10),
                     ...detectedDiscTitles.map((title) {
                       final id = title['id']?.toString() ?? '';
-                      final selected = selectedDiscTitleIds.contains(id);
+                      final importable = _isImportableDiscTitle(title);
+                      final selected = importable && selectedDiscTitleIds.contains(id);
                       final confidence = title['confidence'];
                       final confidenceText = confidence is num && confidence > 0
                           ? ' • ${(confidence.toDouble() <= 1 ? confidence.toDouble() * 100 : confidence.toDouble()).round()}% match'
@@ -6033,7 +6183,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                       return CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         value: selected,
-                        onChanged: (value) {
+                        onChanged: importable ? (value) {
                           setState(() {
                             if (value == true) {
                               selectedDiscTitleIds.add(id);
@@ -6041,7 +6191,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                               selectedDiscTitleIds.remove(id);
                             }
                           });
-                        },
+                        } : null,
                         title: Text(title['canonicalTitle']?.toString() ??
                             title['title']?.toString() ??
                             'Unknown title'),
@@ -6120,6 +6270,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 DropdownMenuItem(value: 'movie', child: UniversalText('Movie')),
                 DropdownMenuItem(
                     value: 'tvShow', child: UniversalText('TV Show')),
+                DropdownMenuItem(value: 'album', child: UniversalText('Album')),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => selectedType = value);
@@ -6278,11 +6429,22 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               height: 54,
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _addVerifiedDiscToLibrary,
-                icon: const Icon(Icons.library_add),
-                label: const UniversalText('ADD TO LIBRARY'),
+                onPressed: addingToLibrary ? null : _addVerifiedDiscToLibrary,
+                icon: addingToLibrary
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.library_add),
+                label: UniversalText(
+                  addingToLibrary ? 'ADDING TO LIBRARY…' : 'ADD TO LIBRARY',
+                ),
               ),
             ),
+            if (addingToLibrary) ...[
+              const SizedBox(height: 8),
+              Text(statusMessage, textAlign: TextAlign.center),
+            ],
           ],
           const SizedBox(height: 30),
           UniversalText(

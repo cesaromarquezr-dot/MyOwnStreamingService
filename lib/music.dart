@@ -15,6 +15,7 @@ import 'details.dart';
 import 'localization.dart';
 import 'profile_content_safety.dart';
 import 'shop.dart';
+import 'media_actions.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -1023,6 +1024,12 @@ class _MusicScreenState extends State<MusicScreen> {
                                   ],
                                 ),
                               ),
+                              IconButton(
+                                tooltip: 'Add to playlist',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _selectPlaylistForTrack(track),
+                                icon: const Icon(Icons.playlist_add_rounded),
+                              ),
                             ],
                           ),
                         ),
@@ -1120,10 +1127,16 @@ class _MusicScreenState extends State<MusicScreen> {
           for (final entry in library.playlists.entries)
             Card(
               child: ListTile(
+                onTap: () => _editPlaylistSongs(entry.key),
                 title: Text(entry.key),
                 subtitle: UniversalText('${entry.value.length} songs'),
                 trailing: Wrap(
                   children: [
+                    IconButton(
+                      tooltip: 'Add or remove songs',
+                      icon: const Icon(Icons.playlist_add_rounded),
+                      onPressed: () => _editPlaylistSongs(entry.key),
+                    ),
                     if (ShopCatalog.instance.productsForAssociation('playlist', entry.key, name: entry.key).isNotEmpty)
                       IconButton(
                         tooltip: 'Shop related products',
@@ -1271,32 +1284,206 @@ class _MusicScreenState extends State<MusicScreen> {
     );
   }
 
+  Future<void> _selectPlaylistForTrack(MusicTrack track) async {
+    if (library.playlists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: UniversalText('Create a playlist first.'),
+      ));
+      return;
+    }
+    final playlistName = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(16),
+          children: [
+            UniversalText('Add “${track.title}” to playlist',
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            for (final entry in library.playlists.entries)
+              ListTile(
+                leading: Icon(entry.value.contains(track.id)
+                    ? Icons.check_circle_rounded
+                    : Icons.queue_music_rounded),
+                title: Text(entry.key),
+                subtitle: Text(entry.value.contains(track.id)
+                    ? 'Already added'
+                    : '${entry.value.length} songs'),
+                enabled: !entry.value.contains(track.id),
+                onTap: () => Navigator.pop(sheetContext, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (playlistName == null) return;
+    final profileId = AppController.instance.currentProfile?.id ??
+        'local-profile';
+    final result = await UniversalMediaActions.perform(
+      context: UniversalMediaActionContext(
+        contentType: 'music_track',
+        contentId: track.id,
+        profileId: profileId,
+        availableActions: const {UniversalMediaAction.addToPlaylist},
+      ),
+      action: UniversalMediaAction.addToPlaylist,
+      targetId: playlistName,
+      apply: () => library.toggleTrackInPlaylist(playlistName, track.id),
+    );
+    if (!result.applied || !mounted) return;
+    library.registerShopEntities();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added ${track.title} to $playlistName.')),
+    );
+  }
+
   Future<void> _createPlaylist() async {
     final controller = TextEditingController();
-    await showDialog<void>(
+    final selectedTrackIds = <String>{};
+    final created = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const UniversalText('New playlist'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: tr('Playlist name')),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const UniversalText('Cancel')),
-          FilledButton(
-            onPressed: () {
-              library.createPlaylist(controller.text);
-              Navigator.pop(context);
-            },
-            child: const UniversalText('Create'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const UniversalText('New playlist'),
+          content: SizedBox(
+            width: 420,
+            height: 420,
+            child: Column(
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(labelText: tr('Playlist name')),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Choose songs (${selectedTrackIds.length})'),
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: library.tracks.isEmpty
+                      ? const Center(
+                          child: UniversalText('No songs in your music library yet.'),
+                        )
+                      : ListView.builder(
+                          itemCount: library.tracks.length,
+                          itemBuilder: (context, index) {
+                            final track = library.tracks[index];
+                            final selected = selectedTrackIds.contains(track.id);
+                            return CheckboxListTile(
+                              value: selected,
+                              dense: true,
+                              secondary: _artwork(track, size: 40),
+                              title: Text(track.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              subtitle: Text(track.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              onChanged: (value) => setDialogState(() {
+                                if (value == true) {
+                                  selectedTrackIds.add(track.id);
+                                } else {
+                                  selectedTrackIds.remove(track.id);
+                                }
+                              }),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const UniversalText('Cancel')),
+            FilledButton(
+              onPressed: controller.text.trim().isEmpty
+                  ? null
+                  : () {
+                      library.createPlaylist(controller.text,
+                          trackIds: selectedTrackIds);
+                      Navigator.pop(dialogContext, true);
+                    },
+              child: const UniversalText('Create'),
+            ),
+          ],
+        ),
       ),
     );
     controller.dispose();
+    if (created == true && mounted) setState(() {});
+  }
+
+  Future<void> _editPlaylistSongs(String playlistName) async {
+    final playlist = library.playlists[playlistName];
+    if (playlist == null) return;
+    final selected = Set<String>.from(playlist);
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Songs in $playlistName'),
+          content: SizedBox(
+            width: 420,
+            height: 420,
+            child: library.tracks.isEmpty
+                ? const Center(
+                    child: UniversalText('No songs in your music library yet.'),
+                  )
+                : ListView.builder(
+                    itemCount: library.tracks.length,
+                    itemBuilder: (context, index) {
+                      final track = library.tracks[index];
+                      final isSelected = selected.contains(track.id);
+                      return CheckboxListTile(
+                        value: isSelected,
+                        dense: true,
+                        secondary: _artwork(track, size: 40),
+                        title: Text(track.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(track.artist,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onChanged: (value) => setDialogState(() {
+                          if (value == true) {
+                            selected.add(track.id);
+                          } else {
+                            selected.remove(track.id);
+                          }
+                        }),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const UniversalText('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, selected.toList()),
+              child: const UniversalText('Save songs'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    final current = List<String>.from(library.playlists[playlistName] ?? const []);
+    for (final id in current.where((id) => !result.contains(id))) {
+      library.toggleTrackInPlaylist(playlistName, id);
+    }
+    for (final id in result.where((id) => !current.contains(id))) {
+      library.toggleTrackInPlaylist(playlistName, id);
+    }
+    library.registerShopEntities();
+    if (mounted) setState(() {});
   }
 }
 

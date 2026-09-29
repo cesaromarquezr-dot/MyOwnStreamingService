@@ -48,8 +48,10 @@ The backend calculates the public price from configurable server hardware/storag
 
 ## Canonical roadmap and architecture
 
-The project now uses a consolidated architecture model for the larger roadmap. The historical roadmap contains 1,000 requirements, while the canonical implementation catalog contains 500 capabilities with one owner per capability. Contexts such as Stories, Live Shopping, Watch Party, Marketplace, Movies, TV and Music extend shared systems instead of creating duplicate implementations.
+The project now uses a consolidated architecture model for the larger roadmap. The historical roadmap contains 1,000 requirements, while the canonical implementation catalog contains 500 capabilities with one owner per capability. Contexts such as Stories, Live Shopping, Watch Party, Marketplace, Movies, TV and Music extend shared systems instead of creating duplicate implementations. The roadmap's breadth is set; the next phase deepens integration, intelligence, reliability, privacy, accessibility, and polish.
 
-See [`docs/CANONICAL_ARCHITECTURE.md`](docs/CANONICAL_ARCHITECTURE.md) for the canonical capability catalog, consolidation rules, examples, and Phase 3 architecture requirements.
+See [`docs/CANONICAL_ARCHITECTURE.md`](docs/CANONICAL_ARCHITECTURE.md) for the canonical shared capability architecture, Universal Media Actions, integration ownership, and delivery order.
 
-See [`docs/CANONICAL_FEATURE_MAP.md`](docs/CANONICAL_FEATURE_MAP.md) for the detailed mapping of the latest media-version, Likes, filtering, playlist/collection, relationship-graph, and seller-payout additions.
+The feature map for media versions, universal profile actions, dynamic collections, and relationship graph ownership is included in the canonical architecture document.
+
+See [`docs/XRAY_ARCHITECTURE.md`](docs/XRAY_ARCHITECTURE.md) for the canonical X-Ray capability, its version-specific timeline and spoiler model, and the implementation path from the current player overlay.

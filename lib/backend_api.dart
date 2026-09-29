@@ -1004,6 +1004,39 @@ class BackendApi {
     );
   }
 
+  /// Persists a reviewed ARM rip in the home server's indexed library.
+  /// The backend verifies that the output file exists inside MEDIA_ROOT.
+  Future<Map<String, dynamic>> importApprovedArmMedia({
+    required String outputPath,
+    required String title,
+    required String type,
+    int? year,
+    String? description,
+    String? posterUrl,
+    String? trailerUrl,
+    required Map<String, dynamic> metadata,
+  }) async {
+    _requireAuthentication();
+    final response = await http.post(
+      Uri.parse('$baseUrl/library/import-approved'),
+      headers: _headers,
+      body: jsonEncode({
+        'outputPath': outputPath,
+        'title': title,
+        'type': type,
+        'year': year,
+        'description': description,
+        'posterUrl': posterUrl,
+        'trailerUrl': trailerUrl,
+        'metadata': metadata,
+      }),
+    ).timeout(const Duration(seconds: 30));
+    return _requireSuccess(
+      response,
+      'Unable to save the approved rip to the home server library.',
+    );
+  }
+
   /// Retrieves library privacy settings.
   Future<Map<String, dynamic>> getLibraryPrivacy() async {
     _requireAuthentication();
@@ -1032,7 +1065,7 @@ class BackendApi {
       body: jsonEncode({
         'confirmed': true,
       }),
-    );
+    ).timeout(const Duration(seconds: 30));
 
     return _requireSuccess(
       response,
@@ -2868,6 +2901,37 @@ class BackendApi {
         }),
       ),
       'Unable to save the Phase 2 record.',
+    );
+  }
+
+  /// Records a completed action against a canonical media identity.
+  /// Domain state remains owned by its existing likes, playlist, and
+  /// collection services; this record provides an authenticated shared event.
+  Future<Map<String, dynamic>> recordUniversalMediaAction({
+    required String profileId,
+    required String action,
+    required String contentType,
+    required String contentId,
+    required String idempotencyKey,
+    String? mediaVersionId,
+    String? targetId,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/media-action'),
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'action': action,
+          'contentType': contentType,
+          'contentId': contentId,
+          'idempotencyKey': idempotencyKey,
+          'mediaVersionId': mediaVersionId,
+          'targetId': targetId,
+        }),
+      ),
+      'Unable to record the media action.',
     );
   }
 

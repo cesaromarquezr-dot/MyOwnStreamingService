@@ -73,6 +73,7 @@ ARM_USERNAME
 ARM_PASSWORD
 
 MEDIA_ROOT
+ARM_OUTPUT_ROOT
 
 TRUSTED_PROXY_CIDRS
 REQUIRE_TRUSTED_PROXY
@@ -85,6 +86,18 @@ RATE_LIMIT_PER_MINUTE
 TRANSCODE_MAX_CONCURRENT
 TRANSCODE_CACHE_ROOT
 ```
+
+`ARM_OUTPUT_ROOT` is optional when ARM writes directly into `MEDIA_ROOT`.
+For a separate ARM worker, mount its completed output directory into the home
+server and set `ARM_OUTPUT_ROOT` to that mounted path. Approved imports from
+that directory are copied into `MEDIA_ROOT/arm_imports` before they are
+indexed. ARM output paths must resolve to files visible to the backend process;
+an absolute path that exists only on the ARM machine cannot be copied by the
+home server.
+
+With `ARM_MOCK=true`, mock `MOCK://` outputs create a small non-playable
+placeholder under `MEDIA_ROOT/arm_mock`, allowing the approval and library
+indexing flow to be exercised without a real disc or rip file.
 
 Secrets must never be embedded in Flutter source code or returned through the public API.
 
