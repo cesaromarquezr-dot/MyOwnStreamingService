@@ -1340,12 +1340,213 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   late final TextEditingController description = TextEditingController(text: widget.store.description);
   late final TextEditingController logo = TextEditingController(text: widget.store.logoUrl ?? '');
   late final TextEditingController banner = TextEditingController(text: widget.store.bannerUrl ?? '');
+  late final TextEditingController paymentCountry = TextEditingController(text: widget.store.address?.countryCode ?? '');
+  late final TextEditingController paymentCurrency = TextEditingController(text: 'USD');
+
+  bool loadingPaymentRegistry = true;
+  bool savingPaymentMethods = false;
+  List<Map<String, dynamic>> paymentRegistry = <Map<String, dynamic>>[];
+  final Set<String> selectedPaymentMethodIds = <String>{};
+  List<Map<String, dynamic>> payoutDestinations = <Map<String, dynamic>>[];
+  bool loadingPayouts = true;
+  bool savingPayout = false;
 
   @override
-  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    _loadSellerPaymentMethods();
+    _loadPayoutDestinations();
+  }
 
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Store Settings & Appearance')), body: ListView(padding: const EdgeInsets.all(18), children: [TextField(controller: name, decoration: const InputDecoration(labelText: 'Store name', border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: description, minLines: 3, maxLines: 6, decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: logo, decoration: const InputDecoration(labelText: 'Logo URL', border: OutlineInputBorder())), const SizedBox(height: 10), TextField(controller: banner, decoration: const InputDecoration(labelText: 'Banner URL', border: OutlineInputBorder())), const SizedBox(height: 12), FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save_outlined), label: const UniversalText('Save Store Settings'))]));
+  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); paymentCountry.dispose(); paymentCurrency.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const UniversalText('Store Settings & Appearance')),
+    body: ListView(padding: const EdgeInsets.all(18), children: [
+      TextField(controller: name, decoration: const InputDecoration(labelText: 'Store name', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: description, minLines: 3, maxLines: 6, decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: logo, decoration: const InputDecoration(labelText: 'Logo URL', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: banner, decoration: const InputDecoration(labelText: 'Banner URL', border: OutlineInputBorder())),
+      const SizedBox(height: 18),
+      const UniversalText('Seller payment & payout methods', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 6),
+      const UniversalText('Choose any supported providers. The buyer checkout filters these methods by buyer country, currency, and provider eligibility. The registry is extensible; these entries are not the complete worldwide list.'),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: TextField(controller: paymentCountry, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Seller country', hintText: 'MX', border: OutlineInputBorder()))),
+        const SizedBox(width: 10),
+        Expanded(child: TextField(controller: paymentCurrency, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Settlement currency', hintText: 'USD', border: OutlineInputBorder()))),
+      ]),
+      const SizedBox(height: 10),
+      if (loadingPaymentRegistry) const LinearProgressIndicator() else ...paymentRegistry.map((method) {
+        final id = method['id']?.toString() ?? '';
+        return CheckboxListTile(
+          value: selectedPaymentMethodIds.contains(id),
+          onChanged: savingPaymentMethods
+              ? null
+              : (value) {
+                  setState(() {
+                    if (value == true) {
+                      selectedPaymentMethodIds.add(id);
+                    } else {
+                      selectedPaymentMethodIds.remove(id);
+                    }
+                  });
+                },
+          title: Text(method['displayName']?.toString() ?? id),
+          subtitle: Text(method['methodType']?.toString() ?? 'payment'),
+        );
+      }),
+      const SizedBox(height: 8),
+      FilledButton.icon(onPressed: savingPaymentMethods ? null : _savePaymentMethods, icon: savingPaymentMethods ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments_outlined), label: UniversalText(savingPaymentMethods ? 'Saving payment methods…' : 'Save Payment Methods')),
+      const SizedBox(height: 20),
+      const UniversalText('Seller payout destinations', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 6),
+      const UniversalText('Add where marketplace earnings should be paid. Use provider account references or masked identifiers; never enter bank passwords, card numbers, CVV, or equivalent secrets.'),
+      const SizedBox(height: 10),
+      if (loadingPayouts)
+        const LinearProgressIndicator()
+      else if (payoutDestinations.isEmpty)
+        const Card(child: ListTile(title: UniversalText('No payout destinations added yet.')))
+      else
+        for (final destination in payoutDestinations)
+          Card(child: ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: Text(destination['displayName']?.toString() ?? destination['providerKey']?.toString() ?? 'Payout destination'),
+            subtitle: Text('${destination['methodType'] ?? 'payout'}${destination['maskedIdentifier'] == null ? '' : ' • ${destination['maskedIdentifier']}'}${destination['verified'] == true ? ' • Verified' : ' • Pending verification'}'),
+            trailing: IconButton(
+              tooltip: 'Remove payout destination',
+              onPressed: savingPayout ? null : () => _deletePayoutDestination(destination['id']?.toString() ?? ''),
+              icon: const Icon(Icons.delete_outline),
+            ),
+          )),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: savingPayout ? null : _addPayoutDestination,
+        icon: savingPayout ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_card_outlined),
+        label: const UniversalText('Add Payout Method'),
+      ),
+      const SizedBox(height: 14),
+      FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save_outlined), label: const UniversalText('Save Store Settings')),
+    ]),
+  );
+
+  Future<void> _loadSellerPaymentMethods() async {
+    try {
+      final api = AppController.instance.backendApi;
+      final registry = await api.getPaymentMethodCatalog();
+      final selected = await api.getPhase2Records(recordType: 'seller_payment_method');
+      if (!mounted) return;
+      setState(() {
+        paymentRegistry = registry;
+        for (final record in selected) {
+          final data = record['data'];
+          if (data is Map && data['enabled'] != false) selectedPaymentMethodIds.add(data['paymentMethodId']?.toString() ?? '');
+        }
+        loadingPaymentRegistry = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => loadingPaymentRegistry = false);
+    }
+  }
+
+  Future<void> _loadPayoutDestinations() async {
+    try {
+      final values = await AppController.instance.backendApi.getSellerPayoutDestinations();
+      if (mounted) setState(() { payoutDestinations = values; loadingPayouts = false; });
+    } catch (_) {
+      if (mounted) setState(() => loadingPayouts = false);
+    }
+  }
+
+  Future<void> _addPayoutDestination() async {
+    final provider = TextEditingController();
+    final method = TextEditingController();
+    final display = TextEditingController();
+    final reference = TextEditingController();
+    final masked = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const UniversalText('Add Payout Method'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: provider, decoration: const InputDecoration(labelText: 'Provider key', hintText: 'paypal / mercado_pago / bank')),
+          TextField(controller: method, decoration: const InputDecoration(labelText: 'Method type', hintText: 'wallet / bank_account')),
+          TextField(controller: display, decoration: const InputDecoration(labelText: 'Display name', hintText: 'My PayPal')),
+          TextField(controller: reference, decoration: const InputDecoration(labelText: 'Provider account reference')),
+          TextField(controller: masked, decoration: const InputDecoration(labelText: 'Masked identifier', hintText: 'email or ••••4821')),
+          const SizedBox(height: 8),
+          const UniversalText('Provider references are stored instead of raw financial credentials.'),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Save')),
+        ],
+      ),
+    );
+    final values = [provider, method, display, reference, masked].map((c) => c.text.trim()).toList();
+    provider.dispose(); method.dispose(); display.dispose(); reference.dispose(); masked.dispose();
+    if (submitted != true || values[0].isEmpty || values[1].isEmpty || values[2].isEmpty) return;
+    setState(() => savingPayout = true);
+    try {
+      await AppController.instance.backendApi.saveSellerPayoutDestination(
+        providerKey: values[0],
+        methodType: values[1],
+        displayName: values[2],
+        providerAccountReference: values[3].isEmpty ? null : values[3],
+        maskedIdentifier: values[4].isEmpty ? null : values[4],
+      );
+      await _loadPayoutDestinations();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Payout destination saved.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to save payout destination: $e')));
+    } finally {
+      if (mounted) setState(() => savingPayout = false);
+    }
+  }
+
+  Future<void> _deletePayoutDestination(String id) async {
+    if (id.isEmpty) return;
+    setState(() => savingPayout = true);
+    try {
+      await AppController.instance.backendApi.deleteSellerPayoutDestination(id);
+      await _loadPayoutDestinations();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to remove payout destination: $e')));
+    } finally {
+      if (mounted) setState(() => savingPayout = false);
+    }
+  }
+
+  Future<void> _savePaymentMethods() async {
+    final country = paymentCountry.text.trim().toUpperCase();
+    final currency = paymentCurrency.text.trim().toUpperCase();
+    if (country.isEmpty || currency.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter the seller country and settlement currency first.')));
+      return;
+    }
+    setState(() => savingPaymentMethods = true);
+    try {
+      for (final methodId in selectedPaymentMethodIds.where((id) => id.trim().isNotEmpty)) {
+        await AppController.instance.backendApi.saveSellerPaymentMethod(
+          paymentMethodId: methodId,
+          countryCode: country,
+          currencyCode: currency,
+          verified: false,
+        );
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Seller payment methods saved. Provider verification still occurs server-side.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to save payment methods: $e')));
+    } finally {
+      if (mounted) setState(() => savingPaymentMethods = false);
+    }
+  }
 
   void _save() {
     ShopCatalog.instance.updateStore(
@@ -1953,6 +2154,9 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
   final postal = TextEditingController();
   WorldwideAddress? shippingAddress;
   bool processing = false;
+  bool loadingPaymentMethods = false;
+  List<Map<String, dynamic>> compatiblePaymentMethods = <Map<String, dynamic>>[];
+  String? selectedProviderMethodId;
 
   static const savedSubscriptionCard = ShopPaymentMethod(id: 'subscription_card', label: 'Card on file for your streaming subscription', subscriptionCard: true);
 
@@ -1980,10 +2184,15 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
         const SizedBox(height: 8),
         WorldwideAddressForm(
           requireStreet: true,
-          onChanged: (value) => shippingAddress = value,
+          onChanged: (value) {
+            setState(() => shippingAddress = value);
+            _refreshCompatiblePaymentMethods(value);
+          },
         ),
         const SizedBox(height: 14),
         const Text('Payment method', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+        _paymentProviderOptions(),
+        const SizedBox(height: 8),
         RadioGroup<int>(
           groupValue: paymentChoice,
           onChanged: (value) {
@@ -2005,13 +2214,125 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
             ],
           ),
         ),
-        if (paymentChoice == 1) _newCardForm(),
+        if (paymentChoice == 1 && (selectedProviderMethodId == null || selectedProviderMethodId == 'card_processor')) _newCardForm(),
+        if (paymentChoice == 1 && selectedProviderMethodId != null && selectedProviderMethodId != 'card_processor')
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: UniversalText('The selected provider will use its own secure checkout/authorization flow. Sensitive wallet or bank credentials are never collected into this app database.'),
+            ),
+          ),
         const SizedBox(height: 12),
-        Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Padding(padding: EdgeInsets.all(14), child: UniversalText('Security: the current development gateway does not charge a real card. It returns a test transaction token. For production, connect this screen to a PCI-compliant payment processor that tokenizes the card before it reaches your backend.'))),
+        Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Padding(padding: EdgeInsets.all(14), child: UniversalText('Security: the current development gateway does not charge a real card. It returns a test transaction token. For production, connect this screen to a PCI-compliant payment processor or hosted wallet/bank checkout that tokenizes or authorizes credentials before they reach your backend.'))),
         const SizedBox(height: 12),
         FilledButton.icon(onPressed: processing ? null : () => _pay(total), icon: processing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.credit_card), label: UniversalText(processing ? 'Processing…' : 'Place Order & Pay')),
       ]),
     );
+  }
+
+  Widget _paymentProviderOptions() {
+    if (loadingPaymentMethods) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 10),
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (compatiblePaymentMethods.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(14),
+          child: UniversalText('Enter your billing/shipping country to see payment providers compatible with both you and the seller(s).'),
+        ),
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const UniversalText('Available payment providers', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const UniversalText('Providers vary by country, currency, seller configuration, and provider eligibility. Unsupported regional methods are filtered out automatically.'),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: selectedProviderMethodId,
+              onChanged: (value) {
+  if (processing) return;
+  setState(() => selectedProviderMethodId = value);
+},
+              child: Column(
+                children: compatiblePaymentMethods.map((method) {
+                  final id = method['id']?.toString() ?? '';
+                  final label = method['displayName']?.toString() ?? method['provider']?.toString() ?? id;
+                  return RadioListTile<String>(
+                    value: id,
+                    title: Text(label),
+                    subtitle: Text(method['methodType']?.toString() ?? 'payment'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refreshCompatiblePaymentMethods(WorldwideAddress? address) async {
+    final country = address?.countryCode.trim().toUpperCase();
+    if (country == null || country.isEmpty) {
+      if (mounted) setState(() { compatiblePaymentMethods = <Map<String, dynamic>>[]; selectedProviderMethodId = null; });
+      return;
+    }
+    final sellerIds = widget.lines
+        .map((line) => ShopCatalog.instance.productById(line.productId))
+        .whereType<ShopProduct>()
+        .map((product) => ShopCatalog.instance.storeById(product.storeId)?.ownerAccountId ?? '')
+        .where((id) => id.trim().isNotEmpty)
+        .toSet();
+    if (sellerIds.isEmpty) return;
+    setState(() => loadingPaymentMethods = true);
+    try {
+      final currency = widget.lines
+          .map((line) => ShopCatalog.instance.productById(line.productId))
+          .whereType<ShopProduct>()
+          .map((p) => p.currency.trim().toUpperCase())
+          .where((c) => c.isNotEmpty)
+          .toSet();
+      final settlementCurrency = currency.length == 1 ? currency.first : 'USD';
+      List<Map<String, dynamic>>? intersection;
+      for (final sellerId in sellerIds) {
+        final methods = await AppController.instance.backendApi.filterPaymentMethodsForBuyer(
+          sellerAccountId: sellerId,
+          buyerCountryCode: country,
+          currencyCode: settlementCurrency,
+        );
+        if (intersection == null) {
+          intersection = methods;
+        } else {
+          final ids = methods.map((m) => m['id']?.toString()).whereType<String>().toSet();
+          intersection = intersection.where((m) => ids.contains(m['id']?.toString())).toList();
+        }
+      }
+      final values = intersection ?? <Map<String, dynamic>>[];
+      if (!mounted) return;
+      setState(() {
+        compatiblePaymentMethods = values;
+        if (selectedProviderMethodId == null || !values.any((m) => m['id']?.toString() == selectedProviderMethodId)) {
+          selectedProviderMethodId = values.isEmpty ? null : values.first['id']?.toString();
+        }
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to load compatible payment methods: $error')));
+        setState(() => compatiblePaymentMethods = <Map<String, dynamic>>[]);
+      }
+    } finally {
+      if (mounted) setState(() => loadingPaymentMethods = false);
+    }
   }
 
   Widget _summaryLine(ShopBagLine line) {
@@ -2033,7 +2354,7 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a complete shipping / billing address, including postal/ZIP code.')));
       return;
     }
-    if (paymentChoice == 1) {
+    if (paymentChoice == 1 && (selectedProviderMethodId == null || selectedProviderMethodId == 'card_processor')) {
       final digits = cardNumber.text.replaceAll(RegExp(r'\D'), '');
       if (cardholder.text.trim().isEmpty || digits.length < 12 || cvv.text.trim().length < 3 || expiry.text.trim().isEmpty || postal.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter the required card and billing information.')));
@@ -2044,8 +2365,16 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
     try {
       final result = await const ShopPaymentGateway().pay(
         amount: total,
-        method: paymentChoice == 0 ? savedSubscriptionCard : ShopPaymentMethod(id: 'one_time_card', label: 'New card'),
-        cardNumber: paymentChoice == 1 ? cardNumber.text : null,
+        method: paymentChoice == 0
+            ? savedSubscriptionCard
+            : ShopPaymentMethod(
+                id: selectedProviderMethodId ?? 'one_time_card',
+                label: compatiblePaymentMethods.firstWhere(
+                  (m) => m['id']?.toString() == selectedProviderMethodId,
+                  orElse: () => const <String, dynamic>{},
+                )['displayName']?.toString() ?? 'Selected payment method',
+              ),
+        cardNumber: paymentChoice == 1 && (selectedProviderMethodId == null || selectedProviderMethodId == 'card_processor') ? cardNumber.text : null,
       );
       if (!mounted) return;
       ShopCatalog.instance.recordOrder(lines: widget.lines, total: total, transactionId: result.transactionId);

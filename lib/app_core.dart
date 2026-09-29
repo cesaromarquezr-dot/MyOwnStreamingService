@@ -58,17 +58,23 @@ class MediaItem {
   final String? imageUrl;
   final String? description;
   final int? releaseYear;
+
   /// Official/provider/critic rating (IMDb, Rotten Tomatoes, etc.).
   final double? rating;
   final String? ratingReason;
+
   /// Optional explicit audience/community rating maintained separately from the official rating.
   final double? audienceRating;
   final int audienceReviewCount;
+
   /// Provider ratings are kept as separate source records; they are not combined.
   final List<Map<String, dynamic>> externalRatings;
   final double? userRatingStars;
   final String? trailerUrl;
   final DateTime addedAt;
+  final String? addedByProfileId;
+  final String? addedByProfileName;
+  final String addedSource;
   final List<Map<String, dynamic>> seasons;
 
   // Disc/archive metadata populated by the ARM import workflow.
@@ -113,10 +119,14 @@ class MediaItem {
   final List<String> audioTracks;
   final List<String> subtitles;
   final List<String> extras;
+  final List<Map<String, dynamic>> xrayEvents;
 
   MediaItem({
     this.trailerUrl,
     DateTime? addedAt,
+    this.addedByProfileId,
+    this.addedByProfileName,
+    this.addedSource = 'unknown',
     List<Map<String, dynamic>>? seasons,
     this.discType,
     this.discRegion,
@@ -150,6 +160,7 @@ class MediaItem {
     List<String>? audioTracks,
     List<String>? subtitles,
     List<String>? extras,
+    List<Map<String, dynamic>>? xrayEvents,
     required this.id,
     required this.title,
     required this.type,
@@ -162,22 +173,24 @@ class MediaItem {
     this.audienceReviewCount = 0,
     List<Map<String, dynamic>>? externalRatings,
     this.userRatingStars,
-  }) : externalRatings = externalRatings ?? const <Map<String, dynamic>>[],
-       addedAt = addedAt ?? DateTime.now(),
-       seasons = seasons ?? <Map<String, dynamic>>[],
-       actors = actors ?? <String>[],
-       directors = directors ?? <String>[],
-       writers = writers ?? <String>[],
-       music = music ?? <String>[],
-       genres = genres ?? <String>[],
-       tags = tags ?? <String>[],
-       chapters = chapters ?? <String>[],
-       audioTracks = audioTracks ?? <String>[],
-       subtitles = subtitles ?? <String>[],
-       extras = extras ?? <String>[],
-       relationshipTypes = relationshipTypes ?? <String>[],
-       accessibleProfileIds = accessibleProfileIds ?? <String>[],
-       eligibleMerchandiseProductIds = eligibleMerchandiseProductIds ?? <String>[];
+  })  : externalRatings = externalRatings ?? const <Map<String, dynamic>>[],
+        addedAt = addedAt ?? DateTime.now(),
+        seasons = seasons ?? <Map<String, dynamic>>[],
+        actors = actors ?? <String>[],
+        directors = directors ?? <String>[],
+        writers = writers ?? <String>[],
+        music = music ?? <String>[],
+        genres = genres ?? <String>[],
+        tags = tags ?? <String>[],
+        chapters = chapters ?? <String>[],
+        audioTracks = audioTracks ?? <String>[],
+        subtitles = subtitles ?? <String>[],
+        extras = extras ?? <String>[],
+        xrayEvents = xrayEvents ?? <Map<String, dynamic>>[],
+        relationshipTypes = relationshipTypes ?? <String>[],
+        accessibleProfileIds = accessibleProfileIds ?? <String>[],
+        eligibleMerchandiseProductIds =
+            eligibleMerchandiseProductIds ?? <String>[];
 
   /// Returns whether the current profile has explicit access to this library item.
   bool isAccessibleTo(Profile? profile) {
@@ -207,17 +220,33 @@ class MediaItem {
               json['rating']?.toString() ?? '',
             ),
       ratingReason: json['ratingReason']?.toString(),
-      audienceRating: json['audienceRating'] is num ? (json['audienceRating'] as num).toDouble() : double.tryParse(json['audienceRating']?.toString() ?? ''),
-      audienceReviewCount: json['audienceReviewCount'] is num ? (json['audienceReviewCount'] as num).toInt() : int.tryParse(json['audienceReviewCount']?.toString() ?? '') ?? 0,
-      externalRatings: json['externalRatings'] is List ? (json['externalRatings'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : const <Map<String, dynamic>>[],
-      userRatingStars: json['userRatingStars'] is num ? (json['userRatingStars'] as num).toDouble() : double.tryParse(json['userRatingStars']?.toString() ?? ''),
+      audienceRating: json['audienceRating'] is num
+          ? (json['audienceRating'] as num).toDouble()
+          : double.tryParse(json['audienceRating']?.toString() ?? ''),
+      audienceReviewCount: json['audienceReviewCount'] is num
+          ? (json['audienceReviewCount'] as num).toInt()
+          : int.tryParse(json['audienceReviewCount']?.toString() ?? '') ?? 0,
+      externalRatings: json['externalRatings'] is List
+          ? (json['externalRatings'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : const <Map<String, dynamic>>[],
+      userRatingStars: json['userRatingStars'] is num
+          ? (json['userRatingStars'] as num).toDouble()
+          : double.tryParse(json['userRatingStars']?.toString() ?? ''),
       trailerUrl: json['trailerUrl']?.toString(),
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
+      addedByProfileId: json['addedByProfileId']?.toString(),
+      addedByProfileName: json['addedByProfileName']?.toString(),
+      addedSource: json['addedSource']?.toString() ?? 'unknown',
       discType: json['discType']?.toString(),
       discRegion: json['discRegion']?.toString(),
       discCollectionId: json['discCollectionId']?.toString(),
       discCollectionTitle: json['discCollectionTitle']?.toString(),
-      discNumber: json['discNumber'] is num ? (json['discNumber'] as num).toInt() : int.tryParse(json['discNumber']?.toString() ?? ''),
+      discNumber: json['discNumber'] is num
+          ? (json['discNumber'] as num).toInt()
+          : int.tryParse(json['discNumber']?.toString() ?? ''),
       discTitleId: json['discTitleId']?.toString(),
       discTitle: json['discTitle']?.toString(),
       discMarketCountry: json['discMarketCountry']?.toString(),
@@ -230,11 +259,14 @@ class MediaItem {
       adaptationGroupName: json['adaptationGroupName']?.toString(),
       relationshipTypes: _stringList(json['relationshipTypes']),
       accessibleProfileIds: _stringList(json['accessibleProfileIds']),
-      eligibleMerchandiseProductIds: _stringList(json['eligibleMerchandiseProductIds']),
+      eligibleMerchandiseProductIds:
+          _stringList(json['eligibleMerchandiseProductIds']),
       franchiseId: json['franchiseId']?.toString(),
       franchiseName: json['franchiseName']?.toString(),
       franchiseType: json['franchiseType']?.toString(),
-      franchiseOrder: json['franchiseOrder'] is num ? (json['franchiseOrder'] as num).toInt() : int.tryParse(json['franchiseOrder']?.toString() ?? ''),
+      franchiseOrder: json['franchiseOrder'] is num
+          ? (json['franchiseOrder'] as num).toInt()
+          : int.tryParse(json['franchiseOrder']?.toString() ?? ''),
       actors: _stringList(json['actors']),
       directors: _stringList(json['directors']),
       writers: _stringList(json['writers']),
@@ -245,6 +277,12 @@ class MediaItem {
       audioTracks: _stringList(json['audioTracks']),
       subtitles: _stringList(json['subtitles']),
       extras: _stringList(json['extras']),
+      xrayEvents: json['xrayEvents'] is List
+          ? (json['xrayEvents'] as List)
+              .whereType<Map>()
+              .map((event) => Map<String, dynamic>.from(event))
+              .toList()
+          : <Map<String, dynamic>>[],
       seasons: (json['seasons'] is List)
           ? (json['seasons'] as List)
               .whereType<Map>()
@@ -254,7 +292,6 @@ class MediaItem {
     );
   }
 
-
   static List<String> _stringList(dynamic value) {
     if (value is! List) return <String>[];
     return value
@@ -262,6 +299,7 @@ class MediaItem {
         .where((e) => e.isNotEmpty)
         .toList();
   }
+
   /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
@@ -279,12 +317,27 @@ class MediaItem {
       'userRatingStars': userRatingStars,
       'trailerUrl': trailerUrl,
       'addedAt': addedAt.toIso8601String(),
+      'addedByProfileId': addedByProfileId,
+      'addedByProfileName': addedByProfileName,
+      'addedSource': addedSource,
       'discType': discType,
       'discRegion': discRegion,
       'discCollectionId': discCollectionId,
       'discCollectionTitle': discCollectionTitle,
       'discNumber': discNumber,
-      'discTitleId': discTitleId, 'discTitle': discTitle, 'discMarketCountry': discMarketCountry, 'originalTitle': originalTitle, 'originalLanguage': originalLanguage, 'countryOfOrigin': countryOfOrigin, 'canonicalTitle': canonicalTitle, 'language': language, 'adaptationGroupId': adaptationGroupId, 'adaptationGroupName': adaptationGroupName, 'relationshipTypes': relationshipTypes, 'accessibleProfileIds': accessibleProfileIds, 'eligibleMerchandiseProductIds': eligibleMerchandiseProductIds,
+      'discTitleId': discTitleId,
+      'discTitle': discTitle,
+      'discMarketCountry': discMarketCountry,
+      'originalTitle': originalTitle,
+      'originalLanguage': originalLanguage,
+      'countryOfOrigin': countryOfOrigin,
+      'canonicalTitle': canonicalTitle,
+      'language': language,
+      'adaptationGroupId': adaptationGroupId,
+      'adaptationGroupName': adaptationGroupName,
+      'relationshipTypes': relationshipTypes,
+      'accessibleProfileIds': accessibleProfileIds,
+      'eligibleMerchandiseProductIds': eligibleMerchandiseProductIds,
       'franchiseId': franchiseId,
       'franchiseName': franchiseName,
       'franchiseType': franchiseType,
@@ -299,12 +352,11 @@ class MediaItem {
       'audioTracks': audioTracks,
       'subtitles': subtitles,
       'extras': extras,
+      'xrayEvents': xrayEvents,
       'seasons': seasons,
     };
   }
 }
-
-
 
 /// Builds the conversational, streaming-service-style synopses used when a
 /// description is not supplied manually. Story notes can be entered during
@@ -434,8 +486,7 @@ class UserAccount {
   bool get hasActiveSubscription =>
       subscription.status == SubscriptionStatus.active;
 
-  Profile? get firstProfile =>
-      profiles.isEmpty ? null : profiles.first;
+  Profile? get firstProfile => profiles.isEmpty ? null : profiles.first;
 
   /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
@@ -458,7 +509,6 @@ class UserAccount {
     };
   }
 }
-
 
 /// Implements the `MediaCollection` class for this feature or UI component.
 class MediaCollection {
@@ -523,53 +573,81 @@ class MediaCollection {
   bool canCurrentProfileEdit() {
     final profileId = AppController.instance.currentProfile?.id;
     if (profileId == null) return false;
-    return profileId == createdByProfileId || contributorProfileIds.contains(profileId);
+    return profileId == createdByProfileId ||
+        contributorProfileIds.contains(profileId);
   }
 
   /// Performs `canCurrentProfileAdd` for this feature. Update this documentation when its contract changes.
   bool canCurrentProfileAdd() {
-    if (!isShared) return AppController.instance.currentProfile?.id == createdByProfileId;
+    if (!isShared) {
+      return AppController.instance.currentProfile?.id == createdByProfileId;
+    }
     return canCurrentProfileEdit();
   }
 
   /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() => {
-    'id': id, 'name': name, 'description': description,
-    'createdByProfileId': createdByProfileId, 'isShared': isShared,
-    'isOfficial': isOfficial, 'isAutomatic': isAutomatic, 'isFeatured': isFeatured,
-    'posterMode': posterMode, 'customPosterUrl': customPosterUrl,
-    'automaticFranchiseId': automaticFranchiseId,
-    'automaticFranchiseType': automaticFranchiseType,
-    'sortMode': sortMode, 'autoPlayEnabled': autoPlayEnabled,
-    'autoPlayNextEnabled': autoPlayNextEnabled,
-    'autoPlayVersionPreference': autoPlayVersionPreference,
-    'autoPlayNextTiming': autoPlayNextTiming,
-    'mediaIds': mediaIds, 'episodeKeys': episodeKeys, 'likedByProfileIds': likedByProfileIds.toList(),
-    'contributorProfileIds': contributorProfileIds.toList(),
-    'createdAt': createdAt.toIso8601String(),
-  };
+        'id': id,
+        'name': name,
+        'description': description,
+        'createdByProfileId': createdByProfileId,
+        'isShared': isShared,
+        'isOfficial': isOfficial,
+        'isAutomatic': isAutomatic,
+        'isFeatured': isFeatured,
+        'posterMode': posterMode,
+        'customPosterUrl': customPosterUrl,
+        'automaticFranchiseId': automaticFranchiseId,
+        'automaticFranchiseType': automaticFranchiseType,
+        'sortMode': sortMode,
+        'autoPlayEnabled': autoPlayEnabled,
+        'autoPlayNextEnabled': autoPlayNextEnabled,
+        'autoPlayVersionPreference': autoPlayVersionPreference,
+        'autoPlayNextTiming': autoPlayNextTiming,
+        'mediaIds': mediaIds,
+        'episodeKeys': episodeKeys,
+        'likedByProfileIds': likedByProfileIds.toList(),
+        'contributorProfileIds': contributorProfileIds.toList(),
+        'createdAt': createdAt.toIso8601String(),
+      };
 
-  factory MediaCollection.fromJson(Map<String, dynamic> json) => MediaCollection(
-    id: json['id']?.toString() ?? '', name: json['name']?.toString() ?? 'Collection',
-    description: json['description']?.toString() ?? '', createdByProfileId: json['createdByProfileId']?.toString(),
-    isShared: json['isShared'] != false, isOfficial: json['isOfficial'] == true,
-    isAutomatic: json['isAutomatic'] == true, isFeatured: json['isFeatured'] == true,
-    posterMode: json['posterMode']?.toString() ?? 'First 4 Posters', customPosterUrl: json['customPosterUrl']?.toString(),
-    automaticFranchiseId: json['automaticFranchiseId']?.toString(), automaticFranchiseType: json['automaticFranchiseType']?.toString(),
-    sortMode: json['sortMode']?.toString() ?? 'Collection order', autoPlayEnabled: json['autoPlayEnabled'] != false,
-    autoPlayNextEnabled: json['autoPlayNextEnabled'] != false,
-    autoPlayVersionPreference: json['autoPlayVersionPreference']?.toString() ?? 'Preferred version',
-    autoPlayNextTiming: json['autoPlayNextTiming']?.toString() ?? 'End credits',
-    // Accept the older titleIds field when loading existing collection data.
-    // The current MediaCollection model uses mediaIds.
-    mediaIds: ((json['mediaIds'] ?? json['titleIds']) as List?)
-        ?.map((e) => e.toString())
-        .toList(),
-    episodeKeys: (json['episodeKeys'] as List?)?.map((e) => e.toString()).toList(),
-    likedByProfileIds: (json['likedByProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
-    contributorProfileIds: (json['contributorProfileIds'] as List?)?.map((e) => e.toString()).toSet(),
-    createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
-  );
+  factory MediaCollection.fromJson(Map<String, dynamic> json) =>
+      MediaCollection(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? 'Collection',
+        description: json['description']?.toString() ?? '',
+        createdByProfileId: json['createdByProfileId']?.toString(),
+        isShared: json['isShared'] != false,
+        isOfficial: json['isOfficial'] == true,
+        isAutomatic: json['isAutomatic'] == true,
+        isFeatured: json['isFeatured'] == true,
+        posterMode: json['posterMode']?.toString() ?? 'First 4 Posters',
+        customPosterUrl: json['customPosterUrl']?.toString(),
+        automaticFranchiseId: json['automaticFranchiseId']?.toString(),
+        automaticFranchiseType: json['automaticFranchiseType']?.toString(),
+        sortMode: json['sortMode']?.toString() ?? 'Collection order',
+        autoPlayEnabled: json['autoPlayEnabled'] != false,
+        autoPlayNextEnabled: json['autoPlayNextEnabled'] != false,
+        autoPlayVersionPreference:
+            json['autoPlayVersionPreference']?.toString() ??
+                'Preferred version',
+        autoPlayNextTiming:
+            json['autoPlayNextTiming']?.toString() ?? 'End credits',
+        // Accept the older titleIds field when loading existing collection data.
+        // The current MediaCollection model uses mediaIds.
+        mediaIds: ((json['mediaIds'] ?? json['titleIds']) as List?)
+            ?.map((e) => e.toString())
+            .toList(),
+        episodeKeys:
+            (json['episodeKeys'] as List?)?.map((e) => e.toString()).toList(),
+        likedByProfileIds: (json['likedByProfileIds'] as List?)
+            ?.map((e) => e.toString())
+            .toSet(),
+        contributorProfileIds: (json['contributorProfileIds'] as List?)
+            ?.map((e) => e.toString())
+            .toSet(),
+        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      );
 }
 
 /// Implements the `CollectionPreferences` class for this feature or UI component.
@@ -591,9 +669,13 @@ class CollectionPreferences {
   });
 
   CollectionPreferences copy() => CollectionPreferences(
-    collectionOrder: collectionOrder, layout: layout, automaticPosition: automaticPosition,
-    customPosition: customPosition, itemLayout: itemLayout, itemSort: itemSort,
-  );
+        collectionOrder: collectionOrder,
+        layout: layout,
+        automaticPosition: automaticPosition,
+        customPosition: customPosition,
+        itemLayout: itemLayout,
+        itemSort: itemSort,
+      );
 }
 
 /// Implements the `ActivityItem` class for this feature or UI component.
@@ -620,12 +702,24 @@ class BackendGroupChatMessage {
   final DateTime timestamp;
   final String? badgeName;
 
-  BackendGroupChatMessage({required this.id, required this.profileId, required this.senderName, required this.message, required this.timestamp, this.badgeName});
+  BackendGroupChatMessage(
+      {required this.id,
+      required this.profileId,
+      required this.senderName,
+      required this.message,
+      required this.timestamp,
+      this.badgeName});
 
-  factory BackendGroupChatMessage.fromJson(Map<String, dynamic> json) => BackendGroupChatMessage(
-    id: json['id']?.toString() ?? '', profileId: json['profileId']?.toString() ?? '', senderName: json['senderName']?.toString() ?? 'Profile', message: json['message']?.toString() ?? '', timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ?? DateTime.now(),
-    badgeName: json['badgeName']?.toString(),
-  );
+  factory BackendGroupChatMessage.fromJson(Map<String, dynamic> json) =>
+      BackendGroupChatMessage(
+        id: json['id']?.toString() ?? '',
+        profileId: json['profileId']?.toString() ?? '',
+        senderName: json['senderName']?.toString() ?? 'Profile',
+        message: json['message']?.toString() ?? '',
+        timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ??
+            DateTime.now(),
+        badgeName: json['badgeName']?.toString(),
+      );
 }
 
 /// Implements the `BackendGroupChatRoom` class for this feature or UI component.
@@ -634,15 +728,31 @@ class BackendGroupChatRoom {
   final String name;
   final List<Map<String, dynamic>> members;
   final List<BackendGroupChatMessage> messages;
-  BackendGroupChatRoom({required this.id, required this.name, required this.members, required this.messages});
+  BackendGroupChatRoom(
+      {required this.id,
+      required this.name,
+      required this.members,
+      required this.messages});
 
   factory BackendGroupChatRoom.fromJson(Map<String, dynamic> json) {
     final rawMembers = json['members'];
     final rawMessages = json['messages'];
     return BackendGroupChatRoom(
-      id: json['id']?.toString() ?? '', name: json['name']?.toString() ?? 'Group Room',
-      members: rawMembers is List ? rawMembers.whereType<Map>().map((m) => Map<String,dynamic>.from(m)).toList() : <Map<String,dynamic>>[],
-      messages: rawMessages is List ? rawMessages.whereType<Map>().map((m) => BackendGroupChatMessage.fromJson(Map<String,dynamic>.from(m))).toList() : <BackendGroupChatMessage>[],
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Group Room',
+      members: rawMembers is List
+          ? rawMembers
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList()
+          : <Map<String, dynamic>>[],
+      messages: rawMessages is List
+          ? rawMessages
+              .whereType<Map>()
+              .map((m) => BackendGroupChatMessage.fromJson(
+                  Map<String, dynamic>.from(m)))
+              .toList()
+          : <BackendGroupChatMessage>[],
     );
   }
 }
@@ -697,38 +807,27 @@ class GroupWatchParticipant {
     this.joinedAt,
   });
 
-  bool get isAccepted =>
-      invitationStatus.toLowerCase() == 'accepted';
+  bool get isAccepted => invitationStatus.toLowerCase() == 'accepted';
 
-  bool get isPending =>
-      invitationStatus.toLowerCase() == 'pending';
+  bool get isPending => invitationStatus.toLowerCase() == 'pending';
 
-  bool get isDeclined =>
-      invitationStatus.toLowerCase() == 'declined';
+  bool get isDeclined => invitationStatus.toLowerCase() == 'declined';
 
-  bool get isExpired =>
-      invitationStatus.toLowerCase() == 'expired';
+  bool get isExpired => invitationStatus.toLowerCase() == 'expired';
 
   factory GroupWatchParticipant.fromJson(
     Map<String, dynamic> json, {
     String? fallbackProfileName,
   }) {
-    final profileId =
-        json['profileId']?.toString() ?? '';
+    final profileId = json['profileId']?.toString() ?? '';
 
     return GroupWatchParticipant(
       profileId: profileId,
       profileName:
-          json['profileName']?.toString() ??
-          fallbackProfileName ??
-          'Profile',
-      invitationStatus:
-          json['invitationStatus']?.toString() ??
-          'pending',
-      audioTrackId:
-          json['audioTrackId']?.toString(),
-      subtitleTrackId:
-          json['subtitleTrackId']?.toString(),
+          json['profileName']?.toString() ?? fallbackProfileName ?? 'Profile',
+      invitationStatus: json['invitationStatus']?.toString() ?? 'pending',
+      audioTrackId: json['audioTrackId']?.toString(),
+      subtitleTrackId: json['subtitleTrackId']?.toString(),
       joinedAt: _dateTimeFromJson(
         json['joinedAt'],
       ),
@@ -761,8 +860,7 @@ class GroupWatchSession {
 
   final List<String> participants;
 
-  final Map<String, GroupWatchParticipant>
-      participantStates;
+  final Map<String, GroupWatchParticipant> participantStates;
 
   String status;
   DateTime createdAt;
@@ -788,8 +886,7 @@ class GroupWatchSession {
     this.type = 'movie',
     this.hostProfileId = '',
     required this.participants,
-    Map<String, GroupWatchParticipant>?
-        participantStates,
+    Map<String, GroupWatchParticipant>? participantStates,
     this.status = 'waiting',
     DateTime? createdAt,
     this.invitationExpiresAt,
@@ -800,32 +897,24 @@ class GroupWatchSession {
     this.pausedByProfileId,
     this.pauseReason,
     this.synchronized = true,
-  }) : participantStates =
-            participantStates ??
-            <String, GroupWatchParticipant>{},
-       createdAt =
-            createdAt ?? DateTime.now();
+  })  : participantStates =
+            participantStates ?? <String, GroupWatchParticipant>{},
+        createdAt = createdAt ?? DateTime.now();
 
-  bool get isWaiting =>
-      status.toLowerCase() == 'waiting';
+  bool get isWaiting => status.toLowerCase() == 'waiting';
 
-  bool get isReady =>
-      status.toLowerCase() == 'ready';
+  bool get isReady => status.toLowerCase() == 'ready';
 
-  bool get isPlayingStatus =>
-      status.toLowerCase() == 'playing';
+  bool get isPlayingStatus => status.toLowerCase() == 'playing';
 
-  bool get isPaused =>
-      status.toLowerCase() == 'paused';
+  bool get isPaused => status.toLowerCase() == 'paused';
 
-  bool get isEnded =>
-      status.toLowerCase() == 'ended';
+  bool get isEnded => status.toLowerCase() == 'ended';
 
   bool get invitationsExpired {
     final currentStatus = status.toLowerCase();
 
-    if (currentStatus != 'waiting' &&
-        currentStatus != 'ready') {
+    if (currentStatus != 'waiting' && currentStatus != 'ready') {
       return true;
     }
 
@@ -851,14 +940,11 @@ class GroupWatchSession {
 
   factory GroupWatchSession.fromJson(
     Map<String, dynamic> json, {
-    List<Profile> knownProfiles =
-        const <Profile>[],
+    List<Profile> knownProfiles = const <Profile>[],
   }) {
-    final participantStates =
-        <String, GroupWatchParticipant>{};
+    final participantStates = <String, GroupWatchParticipant>{};
 
-    final participantData =
-        json['participants'];
+    final participantData = json['participants'];
 
     if (participantData is Map) {
       participantData.forEach(
@@ -867,31 +953,25 @@ class GroupWatchSession {
             return;
           }
 
-          final participantMap =
-              Map<String, dynamic>.from(
+          final participantMap = Map<String, dynamic>.from(
             value,
           );
 
           final profileId =
-              participantMap['profileId']
-                      ?.toString() ??
-                  key.toString();
+              participantMap['profileId']?.toString() ?? key.toString();
 
           if (profileId.isEmpty) {
             return;
           }
 
-          final knownProfile =
-              _profileFromList(
+          final knownProfile = _profileFromList(
             knownProfiles,
             profileId,
           );
 
-          participantStates[profileId] =
-              GroupWatchParticipant.fromJson(
+          participantStates[profileId] = GroupWatchParticipant.fromJson(
             participantMap,
-            fallbackProfileName:
-                knownProfile?.name,
+            fallbackProfileName: knownProfile?.name,
           );
         },
       );
@@ -901,47 +981,37 @@ class GroupWatchSession {
           continue;
         }
 
-        final participantMap =
-            Map<String, dynamic>.from(
+        final participantMap = Map<String, dynamic>.from(
           item,
         );
 
-        final profileId =
-            participantMap['profileId']
-                    ?.toString() ??
-                '';
+        final profileId = participantMap['profileId']?.toString() ?? '';
 
         if (profileId.isEmpty) {
           continue;
         }
 
-        final knownProfile =
-            _profileFromList(
+        final knownProfile = _profileFromList(
           knownProfiles,
           profileId,
         );
 
-        participantStates[profileId] =
-            GroupWatchParticipant.fromJson(
+        participantStates[profileId] = GroupWatchParticipant.fromJson(
           participantMap,
-          fallbackProfileName:
-              knownProfile?.name,
+          fallbackProfileName: knownProfile?.name,
         );
       }
     }
 
-    final participantNames =
-        <String>[];
+    final participantNames = <String>[];
 
-    for (final participant
-        in participantStates.values) {
+    for (final participant in participantStates.values) {
       participantNames.add(
         participant.profileName,
       );
     }
 
-    final positionSeconds =
-        _doubleFromJson(
+    final positionSeconds = _doubleFromJson(
       json['playbackPosition'],
     );
 
@@ -949,50 +1019,30 @@ class GroupWatchSession {
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       mediaId: json['mediaId']?.toString() ?? '',
-      type:
-          json['type']?.toString() ??
-          'movie',
-      hostProfileId:
-          json['hostProfileId']?.toString() ??
-          '',
-      participants:
-          participantNames,
-      participantStates:
-          participantStates,
-      status:
-          json['status']?.toString() ??
-          'waiting',
-      createdAt:
-          _dateTimeFromJson(
+      type: json['type']?.toString() ?? 'movie',
+      hostProfileId: json['hostProfileId']?.toString() ?? '',
+      participants: participantNames,
+      participantStates: participantStates,
+      status: json['status']?.toString() ?? 'waiting',
+      createdAt: _dateTimeFromJson(
             json['createdAt'],
           ) ??
           DateTime.now(),
-      invitationExpiresAt:
-          _dateTimeFromJson(
+      invitationExpiresAt: _dateTimeFromJson(
         json['invitationExpiresAt'],
       ),
-      startedAt:
-          _dateTimeFromJson(
+      startedAt: _dateTimeFromJson(
         json['startedAt'],
       ),
-      endedAt:
-          _dateTimeFromJson(
+      endedAt: _dateTimeFromJson(
         json['endedAt'],
       ),
-      playbackPosition:
-          Duration(
-        milliseconds:
-            (positionSeconds * 1000)
-                .round(),
+      playbackPosition: Duration(
+        milliseconds: (positionSeconds * 1000).round(),
       ),
-      isPlaying:
-          json['isPlaying'] == true,
-      pausedByProfileId:
-          json['pausedByProfileId']
-              ?.toString(),
-      pauseReason:
-          json['pauseReason']
-              ?.toString(),
+      isPlaying: json['isPlaying'] == true,
+      pausedByProfileId: json['pausedByProfileId']?.toString(),
+      pauseReason: json['pauseReason']?.toString(),
       synchronized: true,
     );
   }
@@ -1004,31 +1054,21 @@ class GroupWatchSession {
       'title': title,
       'mediaId': mediaId,
       'type': type,
-      'hostProfileId':
-          hostProfileId,
-      'participants':
-          participantStates.map(
+      'hostProfileId': hostProfileId,
+      'participants': participantStates.map(
         (key, value) => MapEntry(
           key,
           value.toJson(),
         ),
       ),
       'status': status,
-      'createdAt':
-          createdAt.toIso8601String(),
-      'invitationExpiresAt':
-          invitationExpiresAt
-              ?.toIso8601String(),
-      'startedAt':
-          startedAt?.toIso8601String(),
-      'endedAt':
-          endedAt?.toIso8601String(),
-      'playbackPosition':
-          playbackPosition.inMilliseconds /
-              1000.0,
+      'createdAt': createdAt.toIso8601String(),
+      'invitationExpiresAt': invitationExpiresAt?.toIso8601String(),
+      'startedAt': startedAt?.toIso8601String(),
+      'endedAt': endedAt?.toIso8601String(),
+      'playbackPosition': playbackPosition.inMilliseconds / 1000.0,
       'isPlaying': isPlaying,
-      'pausedByProfileId':
-          pausedByProfileId,
+      'pausedByProfileId': pausedByProfileId,
       'pauseReason': pauseReason,
     };
   }
@@ -1040,22 +1080,18 @@ class AppController extends ChangeNotifier {
 
   AppController._();
 
-  static final AppController instance =
-      AppController._();
+  static final AppController instance = AppController._();
 
   final BackendApi backendApi = BackendApi();
 
-  bool get isBackendAuthenticated =>
-      backendApi.isAuthenticated;
+  bool get isBackendAuthenticated => backendApi.isAuthenticated;
 
-  String? get backendToken =>
-      backendApi.token;
+  String? get backendToken => backendApi.token;
 
   UserAccount? currentAccount;
   Profile? currentProfile;
 
-  final List<MediaItem> library =
-      <MediaItem>[];
+  final List<MediaItem> library = <MediaItem>[];
 
   // Catalog sections populated when a confirmed ARM import is added.
   final List<String> actorsCatalog = <String>[];
@@ -1072,22 +1108,18 @@ class AppController extends ChangeNotifier {
     'Liked Collections',
   ];
   final List<String> featuredCollectionOrder = <String>[];
-  final Map<String, CollectionPreferences> collectionPreferencesByProfile = <String, CollectionPreferences>{};
+  final Map<String, CollectionPreferences> collectionPreferencesByProfile =
+      <String, CollectionPreferences>{};
 
-  final List<MediaItem> watched =
-      <MediaItem>[];
+  final List<MediaItem> watched = <MediaItem>[];
 
-  final List<MediaItem> liked =
-      <MediaItem>[];
+  final List<MediaItem> liked = <MediaItem>[];
 
-  final List<MediaItem> disliked =
-      <MediaItem>[];
+  final List<MediaItem> disliked = <MediaItem>[];
 
-  final List<ActivityItem> activity =
-      <ActivityItem>[];
+  final List<ActivityItem> activity = <ActivityItem>[];
 
-  final List<ChatMessage> groupMessages =
-      <ChatMessage>[];
+  final List<ChatMessage> groupMessages = <ChatMessage>[];
 
   // Monthly profile viewing activity used to award the profile's current badge.
   // Events are retained locally so the badge can change automatically when a
@@ -1101,27 +1133,17 @@ class AppController extends ChangeNotifier {
   bool groupChatLoading = false;
   String? groupChatError;
 
-  final List<WishlistItem> wishlist =
-      <WishlistItem>[];
+  final List<WishlistItem> wishlist = <WishlistItem>[];
 
-  final List<GroupWatchSession>
-      groupWatchSessions =
-      <GroupWatchSession>[];
+  final List<GroupWatchSession> groupWatchSessions = <GroupWatchSession>[];
 
-  final Map<String, double>
-      playbackProgress =
-      <String, double>{};
+  final Map<String, double> playbackProgress = <String, double>{};
 
-  final Map<String, String>
-      nextEpisodes =
-      <String, String>{};
+  final Map<String, String> nextEpisodes = <String, String>{};
 
-  final Set<String>
-      activeProfileIds =
-      <String>{};
+  final Set<String> activeProfileIds = <String>{};
 
-  List<MediaItem> recommendations =
-      <MediaItem>[];
+  List<MediaItem> recommendations = <MediaItem>[];
 
   bool recommendationsLoading = false;
 
@@ -1131,12 +1153,9 @@ class AppController extends ChangeNotifier {
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
 
-  List<Map<String, dynamic>>
-      groupRecommendations =
-      <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> groupRecommendations = <Map<String, dynamic>>[];
 
-  bool groupRecommendationsLoading =
-      false;
+  bool groupRecommendationsLoading = false;
 
   String? groupRecommendationsError;
 
@@ -1158,8 +1177,7 @@ class AppController extends ChangeNotifier {
 
   String? activeGroupWatchSessionId;
 
-  GroupWatchSession?
-      get activeGroupWatchSession {
+  GroupWatchSession? get activeGroupWatchSession {
     final id = activeGroupWatchSessionId;
 
     if (id == null || id.isEmpty) {
@@ -1196,7 +1214,8 @@ class AppController extends ChangeNotifier {
     _badgeDataLoaded = true;
   }
 
-  String _monthKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
+  String _monthKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
 
   Future<void> _saveMonthlyWatchEvents(String profileId) async {
     final prefs = _badgePrefs;
@@ -1211,11 +1230,14 @@ class AppController extends ChangeNotifier {
     final profileId = currentProfile?.id;
     if (profileId == null || profileId.isEmpty) return;
     final now = DateTime.now();
-    final events = _monthlyWatchEvents.putIfAbsent(profileId, () => <Map<String, dynamic>>[]);
+    final events = _monthlyWatchEvents.putIfAbsent(
+        profileId, () => <Map<String, dynamic>>[]);
     final month = _monthKey(now);
     // Watching the same title more than once in a month counts once toward the
     // monthly title badge, while the watched list still controls overall state.
-    if (events.any((e) => e['month'] == month && e['mediaId'] == media.id)) return;
+    if (events.any((e) => e['month'] == month && e['mediaId'] == media.id)) {
+      return;
+    }
     events.add({
       'month': month,
       'mediaId': media.id,
@@ -1238,16 +1260,23 @@ class AppController extends ChangeNotifier {
         .toList();
     if (events.isEmpty) return 'The Explorer';
 
-    final movieCount = events.where((e) => (e['type']?.toString().toLowerCase() ?? '') == 'movie').length;
+    final movieCount = events
+        .where((e) => (e['type']?.toString().toLowerCase() ?? '') == 'movie')
+        .length;
     final showCount = events.where((e) {
       final type = e['type']?.toString().toLowerCase() ?? '';
-      return type == 'tvshow' || type == 'tv_show' || type == 'tv show' || type == 'series';
+      return type == 'tvshow' ||
+          type == 'tv_show' ||
+          type == 'tv show' ||
+          type == 'series';
     }).length;
     final genres = <String>{};
     for (final event in events) {
       final rawGenres = event['genres'];
       if (rawGenres is List) {
-        genres.addAll(rawGenres.map((g) => g.toString().trim().toLowerCase()).where((g) => g.isNotEmpty));
+        genres.addAll(rawGenres
+            .map((g) => g.toString().trim().toLowerCase())
+            .where((g) => g.isNotEmpty));
       }
     }
 
@@ -1275,8 +1304,8 @@ class AppController extends ChangeNotifier {
     required String firstProfileName,
   }) {
     final cleanEmail = email.trim().toLowerCase();
-    // Internal username for compatibility. 
-    //// The user does not enter or choose this username. 
+    // Internal username for compatibility.
+    //// The user does not enter or choose this username.
     final username = cleanEmail.split('@').first;
     final account = UserAccount(
       id: 'local_${DateTime.now().microsecondsSinceEpoch}',
@@ -1309,8 +1338,7 @@ class AppController extends ChangeNotifier {
   // BACKEND SIGNUP
   // ---------------------------------------------------------------------------
 
-  Future<Map<String, dynamic>>
-      createAccountWithBackend({
+  Future<Map<String, dynamic>> createAccountWithBackend({
     required String email,
     required String password,
     required SubscriptionPlan plan,
@@ -1318,13 +1346,9 @@ class AppController extends ChangeNotifier {
     required String securityQuestion,
     required String securityAnswer,
   }) async {
-    final planValue =
-        plan == SubscriptionPlan.yearly
-            ? 'yearly'
-            : 'monthly';
+    final planValue = plan == SubscriptionPlan.yearly ? 'yearly' : 'monthly';
 
-    final response =
-        await backendApi.signup(
+    final response = await backendApi.signup(
       email: email.trim(),
       password: password,
       firstProfileName: firstProfileName.trim(),
@@ -1336,68 +1360,47 @@ class AppController extends ChangeNotifier {
       acceptableUseVersion: '2026-09-10',
     );
 
-    final accountData =
-        response['account'];
+    final accountData = response['account'];
 
-    final subscriptionData =
-        response['subscription'];
+    final subscriptionData = response['subscription'];
 
-    String accountUsername =
-        email.trim();
+    String accountUsername = email.trim();
 
-    String accountEmail =
-        email.trim();
+    String accountEmail = email.trim();
 
     if (accountData is Map) {
-      final backendUsername =
-          accountData['username']
-              ?.toString();
+      final backendUsername = accountData['username']?.toString();
 
-      final backendEmail =
-          accountData['email']
-              ?.toString();
+      final backendEmail = accountData['email']?.toString();
 
-      if (backendUsername != null &&
-          backendUsername.isNotEmpty) {
-        accountUsername =
-            backendUsername;
+      if (backendUsername != null && backendUsername.isNotEmpty) {
+        accountUsername = backendUsername;
       }
 
-      if (backendEmail != null &&
-          backendEmail.isNotEmpty) {
-        accountEmail =
-            backendEmail;
+      if (backendEmail != null && backendEmail.isNotEmpty) {
+        accountEmail = backendEmail;
       }
     }
 
-    SubscriptionStatus
-        subscriptionStatus =
-        SubscriptionStatus.expired;
+    SubscriptionStatus subscriptionStatus = SubscriptionStatus.expired;
 
     if (subscriptionData is Map) {
-      final statusValue =
-          subscriptionData['status']
-              ?.toString()
-              .toLowerCase();
+      final statusValue = subscriptionData['status']?.toString().toLowerCase();
 
       if (statusValue == 'active') {
-        subscriptionStatus =
-            SubscriptionStatus.active;
+        subscriptionStatus = SubscriptionStatus.active;
       }
     }
 
-    final localSubscription =
-        Subscription(
+    final localSubscription = Subscription(
       plan: plan,
       status: subscriptionStatus,
     );
 
-    final List<Profile> profiles =
-        <Profile>[];
+    final List<Profile> profiles = <Profile>[];
 
     if (accountData is Map) {
-      final profilesData =
-          accountData['profiles'];
+      final profilesData = accountData['profiles'];
 
       if (profilesData is List) {
         for (final item in profilesData) {
@@ -1416,27 +1419,42 @@ class AppController extends ChangeNotifier {
 
     // New backend accounts are allowed to have zero profiles.
 
-    final account =
-        UserAccount(
+    final account = UserAccount(
       username: accountUsername,
       email: accountEmail,
-      subscription:
-          localSubscription,
+      subscription: localSubscription,
       profiles: profiles,
-      storageLimitBytes: accountData is Map && accountData['storageLimitBytes'] is num ? (accountData['storageLimitBytes'] as num).toInt() : 1000000000000,
-      storageUsedBytes: accountData is Map && accountData['storageUsedBytes'] is num ? (accountData['storageUsedBytes'] as num).toInt() : 0,
-      storageRequestPending: accountData is Map && accountData['storageRequestPending'] == true,
-      storageRequestAt: accountData is Map && accountData['storageRequestAt'] != null ? DateTime.tryParse(accountData['storageRequestAt'].toString()) : null,
-      storageRequestedTerabytes: accountData is Map && accountData['storageRequestedTerabytes'] is num ? (accountData['storageRequestedTerabytes'] as num).toInt() : 0,
-      storageRequestFeeUsd: accountData is Map && accountData['storageRequestFeeUsd'] is num ? (accountData['storageRequestFeeUsd'] as num).toDouble() : 0,
-      storageRequestStatus: accountData is Map ? accountData['storageRequestStatus']?.toString() ?? 'none' : 'none',
+      storageLimitBytes:
+          accountData is Map && accountData['storageLimitBytes'] is num
+              ? (accountData['storageLimitBytes'] as num).toInt()
+              : 1000000000000,
+      storageUsedBytes:
+          accountData is Map && accountData['storageUsedBytes'] is num
+              ? (accountData['storageUsedBytes'] as num).toInt()
+              : 0,
+      storageRequestPending:
+          accountData is Map && accountData['storageRequestPending'] == true,
+      storageRequestAt:
+          accountData is Map && accountData['storageRequestAt'] != null
+              ? DateTime.tryParse(accountData['storageRequestAt'].toString())
+              : null,
+      storageRequestedTerabytes:
+          accountData is Map && accountData['storageRequestedTerabytes'] is num
+              ? (accountData['storageRequestedTerabytes'] as num).toInt()
+              : 0,
+      storageRequestFeeUsd:
+          accountData is Map && accountData['storageRequestFeeUsd'] is num
+              ? (accountData['storageRequestFeeUsd'] as num).toDouble()
+              : 0,
+      storageRequestStatus: accountData is Map
+          ? accountData['storageRequestStatus']?.toString() ?? 'none'
+          : 'none',
     );
 
     currentAccount = account;
     currentProfile = profiles.isEmpty ? null : profiles.first;
 
-    activeProfileIds
-      .clear();
+    activeProfileIds.clear();
     if (profiles.isNotEmpty) {
       activeProfileIds.add(profiles.first.id);
     }
@@ -1453,10 +1471,8 @@ class AppController extends ChangeNotifier {
     recommendationsError = null;
     recommendationsLoading = false;
 
-    groupRecommendationsError =
-        null;
-    groupRecommendationsLoading =
-        false;
+    groupRecommendationsError = null;
+    groupRecommendationsLoading = false;
 
     groupWishlistError = null;
     groupWishlistLoading = false;
@@ -1484,7 +1500,8 @@ class AppController extends ChangeNotifier {
       throw BackendApiException('No account is currently loaded.');
     }
     if (!backendApi.isAuthenticated) {
-      throw BackendApiException('You must be logged in before synchronizing account data.');
+      throw BackendApiException(
+          'You must be logged in before synchronizing account data.');
     }
 
     final snapshot = <String, dynamic>{
@@ -1520,7 +1537,10 @@ class AppController extends ChangeNotifier {
 
       final response = await backendApi.getCurrentAccount();
       final accountData = response['account'];
-      if (accountData is! Map) throw BackendApiException('The saved session returned an invalid account.');
+      if (accountData is! Map) {
+        throw BackendApiException(
+            'The saved session returned an invalid account.');
+      }
 
       _applyBackendAccount(Map<String, dynamic>.from(accountData));
       notifyListeners();
@@ -1538,16 +1558,19 @@ class AppController extends ChangeNotifier {
     final username = accountMap['username']?.toString() ?? '';
     final accountEmail = accountMap['email']?.toString() ?? '';
     if (username.isEmpty || accountEmail.isEmpty) {
-      throw BackendApiException('The server returned incomplete account information.');
+      throw BackendApiException(
+          'The server returned incomplete account information.');
     }
 
     final subscriptionData = accountMap['subscription'];
     var plan = SubscriptionPlan.monthly;
-    if (subscriptionData is Map && subscriptionData['plan']?.toString().toLowerCase() == 'yearly') {
+    if (subscriptionData is Map &&
+        subscriptionData['plan']?.toString().toLowerCase() == 'yearly') {
       plan = SubscriptionPlan.yearly;
     }
     var subscriptionStatus = SubscriptionStatus.expired;
-    if (subscriptionData is Map && subscriptionData['status']?.toString().toLowerCase() == 'active') {
+    if (subscriptionData is Map &&
+        subscriptionData['status']?.toString().toLowerCase() == 'active') {
       subscriptionStatus = SubscriptionStatus.active;
     }
 
@@ -1555,7 +1578,9 @@ class AppController extends ChangeNotifier {
     final profilesData = accountMap['profiles'];
     if (profilesData is List) {
       for (final item in profilesData) {
-        if (item is Map) profiles.add(Profile.fromJson(Map<String, dynamic>.from(item)));
+        if (item is Map) {
+          profiles.add(Profile.fromJson(Map<String, dynamic>.from(item)));
+        }
       }
     }
 
@@ -1565,18 +1590,30 @@ class AppController extends ChangeNotifier {
       email: accountEmail,
       subscription: Subscription(plan: plan, status: subscriptionStatus),
       profiles: profiles,
-      storageLimitBytes: accountMap['storageLimitBytes'] is num ? (accountMap['storageLimitBytes'] as num).toInt() : 1000000000000,
-      storageUsedBytes: accountMap['storageUsedBytes'] is num ? (accountMap['storageUsedBytes'] as num).toInt() : 0,
+      storageLimitBytes: accountMap['storageLimitBytes'] is num
+          ? (accountMap['storageLimitBytes'] as num).toInt()
+          : 1000000000000,
+      storageUsedBytes: accountMap['storageUsedBytes'] is num
+          ? (accountMap['storageUsedBytes'] as num).toInt()
+          : 0,
       storageRequestPending: accountMap['storageRequestPending'] == true,
-      storageRequestAt: accountMap['storageRequestAt'] != null ? DateTime.tryParse(accountMap['storageRequestAt'].toString()) : null,
-      storageRequestedTerabytes: accountMap['storageRequestedTerabytes'] is num ? (accountMap['storageRequestedTerabytes'] as num).toInt() : 0,
-      storageRequestFeeUsd: accountMap['storageRequestFeeUsd'] is num ? (accountMap['storageRequestFeeUsd'] as num).toDouble() : 0,
-      storageRequestStatus: accountMap['storageRequestStatus']?.toString() ?? 'none',
+      storageRequestAt: accountMap['storageRequestAt'] != null
+          ? DateTime.tryParse(accountMap['storageRequestAt'].toString())
+          : null,
+      storageRequestedTerabytes: accountMap['storageRequestedTerabytes'] is num
+          ? (accountMap['storageRequestedTerabytes'] as num).toInt()
+          : 0,
+      storageRequestFeeUsd: accountMap['storageRequestFeeUsd'] is num
+          ? (accountMap['storageRequestFeeUsd'] as num).toDouble()
+          : 0,
+      storageRequestStatus:
+          accountMap['storageRequestStatus']?.toString() ?? 'none',
     );
     currentProfile = profiles.isEmpty ? null : profiles.first;
     activeProfileIds
       ..clear()
-      ..addAll(currentProfile == null ? <String>[] : <String>[currentProfile!.id]);
+      ..addAll(
+          currentProfile == null ? <String>[] : <String>[currentProfile!.id]);
   }
 
   // ---------------------------------------------------------------------------
@@ -1588,10 +1625,8 @@ class AppController extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
-    final response =
-        await backendApi.login(
-      email:
-          email.trim().toLowerCase(),
+    final response = await backendApi.login(
+      email: email.trim().toLowerCase(),
       password: password,
     );
 
@@ -1605,7 +1640,8 @@ class AppController extends ChangeNotifier {
 
     final accountData = response['account'];
     if (accountData is! Map) {
-      throw BackendApiException('The server returned an invalid account response.');
+      throw BackendApiException(
+          'The server returned an invalid account response.');
     }
 
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
@@ -1620,10 +1656,8 @@ class AppController extends ChangeNotifier {
     recommendationsError = null;
     recommendationsLoading = false;
 
-    groupRecommendationsError =
-        null;
-    groupRecommendationsLoading =
-        false;
+    groupRecommendationsError = null;
+    groupRecommendationsLoading = false;
 
     groupWishlistError = null;
     groupWishlistLoading = false;
@@ -1655,14 +1689,14 @@ class AppController extends ChangeNotifier {
   void applyBackendAccountFromResponse(Map<String, dynamic> response) {
     final accountData = response['account'];
     if (accountData is! Map) {
-      throw BackendApiException('The server returned an invalid account response.');
+      throw BackendApiException(
+          'The server returned an invalid account response.');
     }
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>>
-      refreshBackendAccount() async {
+  Future<Map<String, dynamic>> refreshBackendAccount() async {
     if (!backendApi.isAuthenticated) {
       throw BackendApiException(
         'You are not logged in.',
@@ -1678,7 +1712,8 @@ class AppController extends ChangeNotifier {
     final response = await backendApi.getCurrentAccount();
     final accountData = response['account'];
     if (accountData is! Map) {
-      throw BackendApiException('The server returned an invalid account response.');
+      throw BackendApiException(
+          'The server returned an invalid account response.');
     }
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
     notifyListeners();
@@ -1696,7 +1731,7 @@ class AppController extends ChangeNotifier {
         await backendApi.logout();
       }
     } finally {
-    await backendApi.clearToken();
+      await backendApi.clearToken();
 
       currentAccount = null;
       currentProfile = null;
@@ -1737,37 +1772,22 @@ class AppController extends ChangeNotifier {
       return false;
     }
 
-    final matchesUsername =
-        currentAccount!.username
-                .toLowerCase() ==
-            usernameOrEmail
-                .trim()
-                .toLowerCase();
+    final matchesUsername = currentAccount!.username.toLowerCase() ==
+        usernameOrEmail.trim().toLowerCase();
 
-    final matchesEmail =
-        currentAccount!.email
-                .toLowerCase() ==
-            usernameOrEmail
-                .trim()
-                .toLowerCase();
+    final matchesEmail = currentAccount!.email.toLowerCase() ==
+        usernameOrEmail.trim().toLowerCase();
 
-    if (!matchesUsername &&
-        !matchesEmail) {
+    if (!matchesUsername && !matchesEmail) {
       return false;
     }
 
-    if (!currentAccount!
-        .hasActiveSubscription) {
+    if (!currentAccount!.hasActiveSubscription) {
       return false;
     }
 
-    if (currentAccount!
-        .profiles
-        .isNotEmpty) {
-      currentProfile =
-          currentAccount!
-              .profiles
-              .first;
+    if (currentAccount!.profiles.isNotEmpty) {
+      currentProfile = currentAccount!.profiles.first;
 
       activeProfileIds
         ..clear()
@@ -1816,17 +1836,12 @@ class AppController extends ChangeNotifier {
   // SUBSCRIPTION
   // ---------------------------------------------------------------------------
 
-  Subscription? get subscription =>
-      currentAccount?.subscription;
+  Subscription? get subscription => currentAccount?.subscription;
 
   bool get hasActiveSubscription =>
-      currentAccount
-          ?.hasActiveSubscription ??
-      false;
+      currentAccount?.hasActiveSubscription ?? false;
 
-  SubscriptionPlan? get subscriptionPlan =>
-      currentAccount
-          ?.subscription.plan;
+  SubscriptionPlan? get subscriptionPlan => currentAccount?.subscription.plan;
 
   /// Performs `subscribe` for this feature. Update this documentation when its contract changes.
   void subscribe(
@@ -1836,11 +1851,9 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    currentAccount!.subscription =
-        Subscription(
+    currentAccount!.subscription = Subscription(
       plan: plan,
-      status:
-          SubscriptionStatus.active,
+      status: SubscriptionStatus.active,
     );
 
     notifyListeners();
@@ -1852,10 +1865,7 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    currentAccount!
-        .subscription
-        .status =
-        SubscriptionStatus.expired;
+    currentAccount!.subscription.status = SubscriptionStatus.expired;
 
     notifyListeners();
   }
@@ -1874,10 +1884,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (currentAccount!
-            .profiles
-            .length >=
-        7) {
+    if (currentAccount!.profiles.length >= 7) {
       throw StateError(
         'You can have a maximum of 7 profiles.',
       );
@@ -1885,8 +1892,7 @@ class AppController extends ChangeNotifier {
 
     final cleanedName = name.trim();
 
-    final profile =
-        Profile(
+    final profile = Profile(
       id: _generateId('profile'),
       name: cleanedName.isEmpty
           ? 'Profile ${currentAccount!.profiles.length + 1}'
@@ -1894,9 +1900,7 @@ class AppController extends ChangeNotifier {
       avatarUrl: avatarUrl,
     );
 
-    currentAccount!
-        .profiles
-        .add(profile);
+    currentAccount!.profiles.add(profile);
 
     notifyListeners();
 
@@ -1937,8 +1941,7 @@ class AppController extends ChangeNotifier {
 
     Profile? profile;
 
-    for (final item
-        in currentAccount!.profiles) {
+    for (final item in currentAccount!.profiles) {
       if (item.id == profileId) {
         profile = item;
         break;
@@ -1962,16 +1965,13 @@ class AppController extends ChangeNotifier {
   // ARM DRIVES
   // ---------------------------------------------------------------------------
 
-  Future<List<Map<String, dynamic>>>
-      getArmDrives() async {
-    final drives =
-        await backendApi.getArmDrives();
+  Future<List<Map<String, dynamic>>> getArmDrives() async {
+    final drives = await backendApi.getArmDrives();
 
     return drives
         .whereType<Map>()
         .map(
-          (drive) =>
-              Map<String, dynamic>.from(
+          (drive) => Map<String, dynamic>.from(
             drive,
           ),
         )
@@ -2028,7 +2028,8 @@ class AppController extends ChangeNotifier {
   void _mergeCatalog(List<String> target, List<String> values) {
     for (final value in values) {
       final clean = value.trim();
-      if (clean.isNotEmpty && !target.any((item) => item.toLowerCase() == clean.toLowerCase())) {
+      if (clean.isNotEmpty &&
+          !target.any((item) => item.toLowerCase() == clean.toLowerCase())) {
         target.add(clean);
       }
     }
@@ -2068,11 +2069,9 @@ class AppController extends ChangeNotifier {
     String mediaId,
     double progress,
   ) {
-    final clamped =
-        progress.clamp(0.0, 1.0);
+    final clamped = progress.clamp(0.0, 1.0);
 
-    playbackProgress[mediaId] =
-        clamped.toDouble();
+    playbackProgress[mediaId] = clamped.toDouble();
 
     notifyListeners();
   }
@@ -2170,8 +2169,7 @@ class AppController extends ChangeNotifier {
   // RECOMMENDATIONS
   // ---------------------------------------------------------------------------
 
-  Future<void>
-      loadRecommendations() async {
+  Future<void> loadRecommendations() async {
     if (!backendApi.isAuthenticated) {
       recommendations.clear();
       recommendationsError = null;
@@ -2186,15 +2184,11 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response =
-          await backendApi
-              .getRecommendations();
+      final response = await backendApi.getRecommendations();
 
-      final List<MediaItem> loaded =
-          <MediaItem>[];
+      final List<MediaItem> loaded = <MediaItem>[];
 
-      final data =
-          response['recommendations'];
+      final data = response['recommendations'];
 
       if (data is List) {
         for (final item in data) {
@@ -2212,11 +2206,9 @@ class AppController extends ChangeNotifier {
 
       recommendations = loaded;
     } catch (error) {
-      recommendationsError =
-          error.toString();
+      recommendationsError = error.toString();
     } finally {
-      recommendationsLoading =
-          false;
+      recommendationsLoading = false;
 
       notifyListeners();
     }
@@ -2252,7 +2244,11 @@ class AppController extends ChangeNotifier {
   /// This is public so features outside AppController, such as Music, can
   /// create the same notification style without duplicating activity logic.
   void addNotification({required String action, String? profileName}) {
-    final name = (profileName ?? currentProfile?.name ?? currentAccount?.username ?? 'User').trim();
+    final name = (profileName ??
+            currentProfile?.name ??
+            currentAccount?.username ??
+            'User')
+        .trim();
     _addActivity(
       title: name.isEmpty ? 'User' : name,
       action: action.trim(),
@@ -2260,7 +2256,8 @@ class AppController extends ChangeNotifier {
   }
 
   String _mediaTypeLabel(MediaItem media) {
-    final type = media.type.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
+    final type =
+        media.type.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
     if (type == 'tvshow' || type == 'series') return 'TV show';
     if (type == 'album') return 'album';
     return 'movie';
@@ -2290,7 +2287,10 @@ class AppController extends ChangeNotifier {
         response = {'room': data.first};
       }
       final raw = response['room'];
-      if (raw is Map) activeGroupChatRoom = BackendGroupChatRoom.fromJson(Map<String,dynamic>.from(raw));
+      if (raw is Map) {
+        activeGroupChatRoom =
+            BackendGroupChatRoom.fromJson(Map<String, dynamic>.from(raw));
+      }
     } catch (error) {
       groupChatError = error.toString();
     } finally {
@@ -2300,17 +2300,32 @@ class AppController extends ChangeNotifier {
   }
 
   /// Performs `createCrossAccountGroupChat` for this feature. Update this documentation when its contract changes.
-  Future<void> createCrossAccountGroupChat({required String name, required String profileId, Set<String>? invitedProfiles}) async {
-    final response = await backendApi.createGroupChatRoom(name: name, profileId: profileId, invitedProfiles: invitedProfiles);
+  Future<void> createCrossAccountGroupChat(
+      {required String name,
+      required String profileId,
+      Set<String>? invitedProfiles}) async {
+    final response = await backendApi.createGroupChatRoom(
+        name: name, profileId: profileId, invitedProfiles: invitedProfiles);
     final raw = response['room'];
-    if (raw is Map) activeGroupChatRoom = BackendGroupChatRoom.fromJson(Map<String,dynamic>.from(raw));
+    if (raw is Map) {
+      activeGroupChatRoom =
+          BackendGroupChatRoom.fromJson(Map<String, dynamic>.from(raw));
+    }
     notifyListeners();
   }
 
   /// Performs `sendCrossAccountGroupMessage` for this feature. Update this documentation when its contract changes.
-  Future<void> sendCrossAccountGroupMessage({required String roomId, required String profileId, required String message}) async {
-    await backendApi.sendGroupChatMessage(roomId: roomId, profileId: profileId, message: message, badgeName: badgeForProfile(profileId));
-    addNotification(action: 'sent a message', profileName: _profileNameForId(profileId));
+  Future<void> sendCrossAccountGroupMessage(
+      {required String roomId,
+      required String profileId,
+      required String message}) async {
+    await backendApi.sendGroupChatMessage(
+        roomId: roomId,
+        profileId: profileId,
+        message: message,
+        badgeName: badgeForProfile(profileId));
+    addNotification(
+        action: 'sent a message', profileName: _profileNameForId(profileId));
     await loadGroupChatRoom(roomId: roomId);
   }
 
@@ -2322,8 +2337,7 @@ class AppController extends ChangeNotifier {
   void sendGroupMessage({
     required String message,
   }) {
-    final cleanedMessage =
-        message.trim();
+    final cleanedMessage = message.trim();
 
     if (cleanedMessage.isEmpty) {
       return;
@@ -2332,10 +2346,7 @@ class AppController extends ChangeNotifier {
     groupMessages.add(
       ChatMessage(
         id: _generateId('message'),
-        sender:
-            currentProfile?.name ??
-                currentAccount?.username ??
-                'You',
+        sender: currentProfile?.name ?? currentAccount?.username ?? 'You',
         message: cleanedMessage,
         timestamp: DateTime.now(),
       ),
@@ -2349,36 +2360,28 @@ class AppController extends ChangeNotifier {
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
 
-  Future<void>
-      loadGroupRecommendations() async {
+  Future<void> loadGroupRecommendations() async {
     if (!backendApi.isAuthenticated) {
       groupRecommendations.clear();
       groupRecommendationsError = null;
-      groupRecommendationsLoading =
-          false;
+      groupRecommendationsLoading = false;
 
       notifyListeners();
       return;
     }
 
-    groupRecommendationsLoading =
-        true;
+    groupRecommendationsLoading = true;
 
-    groupRecommendationsError =
-        null;
+    groupRecommendationsError = null;
 
     notifyListeners();
 
     try {
-      final response =
-          await backendApi
-              .getGroupRecommendations();
+      final response = await backendApi.getGroupRecommendations();
 
-      final data =
-          response['recommendations'];
+      final data = response['recommendations'];
 
-      final loaded =
-          <Map<String, dynamic>>[];
+      final loaded = <Map<String, dynamic>>[];
 
       if (data is List) {
         for (final item in data) {
@@ -2392,21 +2395,17 @@ class AppController extends ChangeNotifier {
         }
       }
 
-      groupRecommendations =
-          loaded;
+      groupRecommendations = loaded;
     } catch (error) {
-      groupRecommendationsError =
-          error.toString();
+      groupRecommendationsError = error.toString();
     } finally {
-      groupRecommendationsLoading =
-          false;
+      groupRecommendationsLoading = false;
 
       notifyListeners();
     }
   }
 
-  Future<Map<String, dynamic>?>
-      createGroupRecommendation({
+  Future<Map<String, dynamic>?> createGroupRecommendation({
     required String title,
     required String type,
     required String profileId,
@@ -2420,14 +2419,11 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final String cleanedTitle =
-        title.trim();
+    final String cleanedTitle = title.trim();
 
-    final String cleanedType =
-        type.trim();
+    final String cleanedType = type.trim();
 
-    final String cleanedProfileId =
-        profileId.trim();
+    final String cleanedProfileId = profileId.trim();
 
     if (cleanedTitle.isEmpty) {
       throw ArgumentError(
@@ -2435,8 +2431,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (cleanedType != 'movie' &&
-        cleanedType != 'tvShow') {
+    if (cleanedType != 'movie' && cleanedType != 'tvShow') {
       throw ArgumentError(
         'Recommendation type must be "movie" or "tvShow".',
       );
@@ -2448,18 +2443,15 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (votingDurationHours != null &&
-        votingDurationHours <= 0) {
+    if (votingDurationHours != null && votingDurationHours <= 0) {
       throw ArgumentError(
         'Voting duration must be greater than zero.',
       );
     }
 
-    String? cleanedMediaId =
-        mediaId?.trim();
+    String? cleanedMediaId = mediaId?.trim();
 
-    if (cleanedMediaId != null &&
-        cleanedMediaId.isEmpty) {
+    if (cleanedMediaId != null && cleanedMediaId.isEmpty) {
       cleanedMediaId = null;
     }
 
@@ -2475,33 +2467,24 @@ class AppController extends ChangeNotifier {
     participants.removeWhere((id) => id.trim().isEmpty);
     participants.add(cleanedProfileId);
 
-    final response =
-        await backendApi
-            .createGroupRecommendation(
+    final response = await backendApi.createGroupRecommendation(
       title: cleanedTitle,
       type: cleanedType,
       profileId: cleanedProfileId,
       mediaId: cleanedMediaId,
       activeParticipants: participants,
-      votingDurationHours:
-          votingDurationHours,
+      votingDurationHours: votingDurationHours,
     );
 
-    final recommendation =
-        response['recommendation'];
+    final recommendation = response['recommendation'];
 
     if (recommendation is Map) {
-      final recommendationMap =
-          Map<String, dynamic>.from(
+      final recommendationMap = Map<String, dynamic>.from(
         recommendation,
       );
 
-      groupRecommendations
-          .removeWhere(
-        (item) =>
-            item['id']?.toString() ==
-            recommendationMap['id']
-                ?.toString(),
+      groupRecommendations.removeWhere(
+        (item) => item['id']?.toString() == recommendationMap['id']?.toString(),
       );
 
       groupRecommendations.insert(
@@ -2510,23 +2493,15 @@ class AppController extends ChangeNotifier {
       );
 
       final String titleForMessage =
-          recommendationMap['title']
-                  ?.toString() ??
-              cleanedTitle;
+          recommendationMap['title']?.toString() ?? cleanedTitle;
 
-      final String icon =
-          cleanedType == 'tvShow'
-              ? '📺'
-              : '🎬';
+      final String icon = cleanedType == 'tvShow' ? '📺' : '🎬';
 
-      final String typeLabel =
-          cleanedType == 'tvShow'
-              ? 'TV show'
-              : 'movie';
+      final String typeLabel = cleanedType == 'tvShow' ? 'TV show' : 'movie';
 
       sendGroupMessage(
-        message:
-            tr("$icon ${currentProfile?.name ?? 'You'} recommended the $typeLabel \"$titleForMessage\""),
+        message: tr(
+            "$icon ${currentProfile?.name ?? 'You'} recommended the $typeLabel \"$titleForMessage\""),
       );
       addNotification(
         action: 'added a $typeLabel recommendation "$titleForMessage"',
@@ -2542,8 +2517,7 @@ class AppController extends ChangeNotifier {
     return null;
   }
 
-  Future<Map<String, dynamic>?>
-      getGroupRecommendation(
+  Future<Map<String, dynamic>?> getGroupRecommendation(
     String recommendationId,
   ) async {
     if (!backendApi.isAuthenticated) {
@@ -2552,8 +2526,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedId =
-        recommendationId.trim();
+    final cleanedId = recommendationId.trim();
 
     if (cleanedId.isEmpty) {
       throw ArgumentError(
@@ -2561,30 +2534,22 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .getGroupRecommendation(
-      recommendationId:
-          cleanedId,
+    final response = await backendApi.getGroupRecommendation(
+      recommendationId: cleanedId,
     );
 
-    final recommendation =
-        response['recommendation'];
+    final recommendation = response['recommendation'];
 
     if (recommendation is! Map) {
       return null;
     }
 
-    final recommendationMap =
-        Map<String, dynamic>.from(
+    final recommendationMap = Map<String, dynamic>.from(
       recommendation,
     );
 
-    groupRecommendations
-        .removeWhere(
-      (item) =>
-          item['id']?.toString() ==
-          cleanedId,
+    groupRecommendations.removeWhere(
+      (item) => item['id']?.toString() == cleanedId,
     );
 
     groupRecommendations.insert(
@@ -2597,8 +2562,7 @@ class AppController extends ChangeNotifier {
     return recommendationMap;
   }
 
-  Future<Map<String, dynamic>?>
-      voteOnGroupRecommendation({
+  Future<Map<String, dynamic>?> voteOnGroupRecommendation({
     required String recommendationId,
     required String profileId,
     required String vote,
@@ -2609,17 +2573,13 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedRecommendationId =
-        recommendationId.trim();
+    final cleanedRecommendationId = recommendationId.trim();
 
-    final cleanedProfileId =
-        profileId.trim();
+    final cleanedProfileId = profileId.trim();
 
-    final cleanedVote =
-        vote.trim().toLowerCase();
+    final cleanedVote = vote.trim().toLowerCase();
 
-    if (cleanedRecommendationId
-        .isEmpty) {
+    if (cleanedRecommendationId.isEmpty) {
       throw ArgumentError(
         'Recommendation ID cannot be empty.',
       );
@@ -2631,37 +2591,27 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (cleanedVote != 'yes' &&
-        cleanedVote != 'no') {
+    if (cleanedVote != 'yes' && cleanedVote != 'no') {
       throw ArgumentError(
         'Vote must be either "yes" or "no".',
       );
     }
 
-    final response =
-        await backendApi
-            .voteOnGroupRecommendation(
-      recommendationId:
-          cleanedRecommendationId,
-      profileId:
-          cleanedProfileId,
+    final response = await backendApi.voteOnGroupRecommendation(
+      recommendationId: cleanedRecommendationId,
+      profileId: cleanedProfileId,
       vote: cleanedVote,
     );
 
-    final recommendation =
-        response['recommendation'];
+    final recommendation = response['recommendation'];
 
     if (recommendation is Map) {
-      final recommendationMap =
-          Map<String, dynamic>.from(
+      final recommendationMap = Map<String, dynamic>.from(
         recommendation,
       );
 
-      groupRecommendations
-          .removeWhere(
-        (item) =>
-            item['id']?.toString() ==
-            cleanedRecommendationId,
+      groupRecommendations.removeWhere(
+        (item) => item['id']?.toString() == cleanedRecommendationId,
       );
 
       groupRecommendations.insert(
@@ -2670,56 +2620,43 @@ class AppController extends ChangeNotifier {
       );
 
       final String title =
-          recommendationMap['title']
-                  ?.toString() ??
-              'this recommendation';
+          recommendationMap['title']?.toString() ?? 'this recommendation';
 
-      final String voterName =
-          _profileNameForId(
+      final String voterName = _profileNameForId(
         cleanedProfileId,
       );
 
-      final int yesVotes =
-          _intFromValue(
+      final int yesVotes = _intFromValue(
         recommendationMap['yesVotes'],
       );
 
-      final int noVotes =
-          _intFromValue(
+      final int noVotes = _intFromValue(
         recommendationMap['noVotes'],
       );
 
-      final double yesPercentage =
-          _doubleFromValue(
+      final double yesPercentage = _doubleFromValue(
         recommendationMap['yesPercentage'],
-        fallback:
-            _percentage(
+        fallback: _percentage(
           yesVotes,
           yesVotes + noVotes,
         ),
       );
 
-      final double noPercentage =
-          _doubleFromValue(
+      final double noPercentage = _doubleFromValue(
         recommendationMap['noPercentage'],
-        fallback:
-            _percentage(
+        fallback: _percentage(
           noVotes,
           yesVotes + noVotes,
         ),
       );
 
       sendGroupMessage(
-        message:
-            '$voterName voted ${cleanedVote.toUpperCase()} on "$title" — '
+        message: '$voterName voted ${cleanedVote.toUpperCase()} on "$title" — '
             'YES ${_formatPercentage(yesPercentage)}% '
             'NO ${_formatPercentage(noPercentage)}%',
       );
 
-      final status =
-          recommendationMap['status']
-              ?.toString()
-              .toLowerCase();
+      final status = recommendationMap['status']?.toString().toLowerCase();
 
       if (status == 'approved') {
         await loadGroupWishlist();
@@ -2735,8 +2672,7 @@ class AppController extends ChangeNotifier {
     return null;
   }
 
-  Future<Map<String, dynamic>?>
-      closeGroupRecommendationVoting({
+  Future<Map<String, dynamic>?> closeGroupRecommendationVoting({
     required String recommendationId,
   }) async {
     if (!backendApi.isAuthenticated) {
@@ -2745,8 +2681,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedId =
-        recommendationId.trim();
+    final cleanedId = recommendationId.trim();
 
     if (cleanedId.isEmpty) {
       throw ArgumentError(
@@ -2754,27 +2689,19 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .closeGroupRecommendationVoting(
-      recommendationId:
-          cleanedId,
+    final response = await backendApi.closeGroupRecommendationVoting(
+      recommendationId: cleanedId,
     );
 
-    final recommendation =
-        response['recommendation'];
+    final recommendation = response['recommendation'];
 
     if (recommendation is Map) {
-      final recommendationMap =
-          Map<String, dynamic>.from(
+      final recommendationMap = Map<String, dynamic>.from(
         recommendation,
       );
 
-      groupRecommendations
-          .removeWhere(
-        (item) =>
-            item['id']?.toString() ==
-            cleanedId,
+      groupRecommendations.removeWhere(
+        (item) => item['id']?.toString() == cleanedId,
       );
 
       groupRecommendations.insert(
@@ -2782,10 +2709,7 @@ class AppController extends ChangeNotifier {
         recommendationMap,
       );
 
-      final status =
-          recommendationMap['status']
-              ?.toString()
-              .toLowerCase();
+      final status = recommendationMap['status']?.toString().toLowerCase();
 
       if (status == 'approved') {
         await loadGroupWishlist();
@@ -2801,8 +2725,7 @@ class AppController extends ChangeNotifier {
     return null;
   }
 
-  Future<void>
-      deleteGroupRecommendation(
+  Future<void> deleteGroupRecommendation(
     String recommendationId,
   ) async {
     if (!backendApi.isAuthenticated) {
@@ -2811,8 +2734,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedId =
-        recommendationId.trim();
+    final cleanedId = recommendationId.trim();
 
     if (cleanedId.isEmpty) {
       throw ArgumentError(
@@ -2820,17 +2742,12 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    await backendApi
-        .deleteGroupRecommendation(
-      recommendationId:
-          cleanedId,
+    await backendApi.deleteGroupRecommendation(
+      recommendationId: cleanedId,
     );
 
-    groupRecommendations
-        .removeWhere(
-      (item) =>
-          item['id']?.toString() ==
-          cleanedId,
+    groupRecommendations.removeWhere(
+      (item) => item['id']?.toString() == cleanedId,
     );
 
     notifyListeners();
@@ -2840,8 +2757,7 @@ class AppController extends ChangeNotifier {
   // GROUP WISHLIST
   // ---------------------------------------------------------------------------
 
-  Future<void>
-      loadGroupWishlist() async {
+  Future<void> loadGroupWishlist() async {
     if (!backendApi.isAuthenticated) {
       wishlist.clear();
       groupWishlistError = null;
@@ -2857,15 +2773,11 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response =
-          await backendApi
-              .getGroupWishlist();
+      final response = await backendApi.getGroupWishlist();
 
-      final data =
-          response['wishlist'];
+      final data = response['wishlist'];
 
-      final loaded =
-          <WishlistItem>[];
+      final loaded = <WishlistItem>[];
 
       if (data is List) {
         for (final item in data) {
@@ -2873,14 +2785,11 @@ class AppController extends ChangeNotifier {
             continue;
           }
 
-          final map =
-              Map<String, dynamic>.from(
+          final map = Map<String, dynamic>.from(
             item,
           );
 
-          final id =
-              map['id']?.toString() ??
-                  '';
+          final id = map['id']?.toString() ?? '';
 
           if (id.isEmpty) {
             continue;
@@ -2889,14 +2798,8 @@ class AppController extends ChangeNotifier {
           loaded.add(
             WishlistItem(
               id: id,
-              title:
-                  map['title']
-                          ?.toString() ??
-                      id,
-              type:
-                  map['type']
-                          ?.toString() ??
-                      'unknown',
+              title: map['title']?.toString() ?? id,
+              type: map['type']?.toString() ?? 'unknown',
             ),
           );
         }
@@ -2906,11 +2809,9 @@ class AppController extends ChangeNotifier {
         ..clear()
         ..addAll(loaded);
     } catch (error) {
-      groupWishlistError =
-          error.toString();
+      groupWishlistError = error.toString();
     } finally {
-      groupWishlistLoading =
-          false;
+      groupWishlistLoading = false;
 
       notifyListeners();
     }
@@ -2925,8 +2826,7 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  Future<void>
-      removeFromGroupWishlist(
+  Future<void> removeFromGroupWishlist(
     String mediaId,
   ) async {
     if (!backendApi.isAuthenticated) {
@@ -2935,8 +2835,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedId =
-        mediaId.trim();
+    final cleanedId = mediaId.trim();
 
     if (cleanedId.isEmpty) {
       throw ArgumentError(
@@ -2944,8 +2843,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    await backendApi
-        .removeFromGroupWishlist(
+    await backendApi.removeFromGroupWishlist(
       mediaId: cleanedId,
     );
 
@@ -2956,8 +2854,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void>
-      acquireGroupWishlistItem({
+  Future<void> acquireGroupWishlistItem({
     required String mediaId,
     required String profileId,
   }) async {
@@ -2967,11 +2864,9 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedMediaId =
-        mediaId.trim();
+    final cleanedMediaId = mediaId.trim();
 
-    final cleanedProfileId =
-        profileId.trim();
+    final cleanedProfileId = profileId.trim();
 
     if (cleanedMediaId.isEmpty) {
       throw ArgumentError(
@@ -2985,40 +2880,30 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .acquireGroupWishlistItem(
-      mediaId:
-          cleanedMediaId,
-      profileId:
-          cleanedProfileId,
+    final response = await backendApi.acquireGroupWishlistItem(
+      mediaId: cleanedMediaId,
+      profileId: cleanedProfileId,
     );
 
     wishlist.removeWhere(
-      (item) =>
-          item.id ==
-          cleanedMediaId,
+      (item) => item.id == cleanedMediaId,
     );
 
-    final mediaData =
-        response['media'];
+    final mediaData = response['media'];
 
     if (mediaData is Map) {
-      final media =
-          MediaItem.fromJson(
+      final media = MediaItem.fromJson(
         Map<String, dynamic>.from(
           mediaData,
         ),
       );
 
-      if (media.id.isNotEmpty &&
-          !isOwned(media.id)) {
+      if (media.id.isNotEmpty && !isOwned(media.id)) {
         library.add(media);
 
         _addActivity(
           title: media.title,
-          action:
-              'Added from group wishlist',
+          action: 'Added from group wishlist',
         );
       }
     }
@@ -3076,8 +2961,7 @@ class AppController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Loads every Group Watch session belonging to the authenticated account.
-  Future<void>
-      loadGroupWatchSessions() async {
+  Future<void> loadGroupWatchSessions() async {
     if (!backendApi.isAuthenticated) {
       groupWatchSessions.clear();
       activeGroupWatchSessionId = null;
@@ -3094,15 +2978,11 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response =
-          await backendApi
-              .getGroupWatchSessions();
+      final response = await backendApi.getGroupWatchSessions();
 
-      final data =
-          response['sessions'];
+      final data = response['sessions'];
 
-      final loaded =
-          <GroupWatchSession>[];
+      final loaded = <GroupWatchSession>[];
 
       if (data is List) {
         for (final item in data) {
@@ -3110,14 +2990,11 @@ class AppController extends ChangeNotifier {
             continue;
           }
 
-          final session =
-              GroupWatchSession.fromJson(
+          final session = GroupWatchSession.fromJson(
             Map<String, dynamic>.from(
               item,
             ),
-            knownProfiles:
-                currentAccount?.profiles ??
-                const <Profile>[],
+            knownProfiles: currentAccount?.profiles ?? const <Profile>[],
           );
 
           if (session.id.isNotEmpty) {
@@ -3130,19 +3007,16 @@ class AppController extends ChangeNotifier {
         ..clear()
         ..addAll(loaded);
 
-      final activeId =
-          activeGroupWatchSessionId;
+      final activeId = activeGroupWatchSessionId;
 
       if (activeId != null &&
           !groupWatchSessions.any(
-            (session) =>
-                session.id == activeId,
+            (session) => session.id == activeId,
           )) {
         activeGroupWatchSessionId = null;
       }
     } catch (error) {
-      groupWatchError =
-          error.toString();
+      groupWatchError = error.toString();
 
       debugPrint(
         'Failed to load Group Watch sessions: $error',
@@ -3155,19 +3029,16 @@ class AppController extends ChangeNotifier {
   }
 
   /// Returns a locally cached Group Watch session by ID.
-  GroupWatchSession?
-      getGroupWatchSession(
+  GroupWatchSession? getGroupWatchSession(
     String sessionId,
   ) {
-    final cleanedId =
-        sessionId.trim();
+    final cleanedId = sessionId.trim();
 
     if (cleanedId.isEmpty) {
       return null;
     }
 
-    for (final session
-        in groupWatchSessions) {
+    for (final session in groupWatchSessions) {
       if (session.id == cleanedId) {
         return session;
       }
@@ -3180,23 +3051,19 @@ class AppController extends ChangeNotifier {
   void setActiveGroupWatchSession(
     String? sessionId,
   ) {
-    final cleanedId =
-        sessionId?.trim();
+    final cleanedId = sessionId?.trim();
 
-    if (cleanedId == null ||
-        cleanedId.isEmpty) {
+    if (cleanedId == null || cleanedId.isEmpty) {
       activeGroupWatchSessionId = null;
     } else {
-      activeGroupWatchSessionId =
-          cleanedId;
+      activeGroupWatchSessionId = cleanedId;
     }
 
     notifyListeners();
   }
 
   /// Refreshes one Group Watch session from the backend.
-  Future<GroupWatchSession?>
-      refreshGroupWatchSession(
+  Future<GroupWatchSession?> refreshGroupWatchSession(
     String sessionId,
   ) async {
     if (!backendApi.isAuthenticated) {
@@ -3205,8 +3072,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedId =
-        sessionId.trim();
+    final cleanedId = sessionId.trim();
 
     if (cleanedId.isEmpty) {
       throw ArgumentError(
@@ -3214,27 +3080,21 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .getGroupWatchSession(
+    final response = await backendApi.getGroupWatchSession(
       sessionId: cleanedId,
     );
 
-    final sessionData =
-        response['session'];
+    final sessionData = response['session'];
 
     if (sessionData is! Map) {
       return null;
     }
 
-    final session =
-        GroupWatchSession.fromJson(
+    final session = GroupWatchSession.fromJson(
       Map<String, dynamic>.from(
         sessionData,
       ),
-      knownProfiles:
-          currentAccount?.profiles ??
-          const <Profile>[],
+      knownProfiles: currentAccount?.profiles ?? const <Profile>[],
     );
 
     _upsertGroupWatchSession(
@@ -3261,18 +3121,13 @@ class AppController extends ChangeNotifier {
     Set<String>? invitedProfileIds,
     int? invitationDurationHours,
   }) {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
-    final invited =
-        invitedProfileIds == null
-            ? <String>{}
-            : Set<String>.from(
-                invitedProfileIds,
-              );
+    final invited = invitedProfileIds == null
+        ? <String>{}
+        : Set<String>.from(
+            invitedProfileIds,
+          );
 
     invited.removeWhere(
       (id) => id.trim().isEmpty,
@@ -3280,96 +3135,72 @@ class AppController extends ChangeNotifier {
 
     invited.remove(selectedProfileId);
 
-    final sessionId =
-        _generateId('group-watch');
+    final sessionId = _generateId('group-watch');
 
-    final participantStates =
-        <String, GroupWatchParticipant>{};
+    final participantStates = <String, GroupWatchParticipant>{};
 
     if (selectedProfileId.isNotEmpty) {
-      participantStates[
-          selectedProfileId] =
-          GroupWatchParticipant(
-        profileId:
-            selectedProfileId,
-        profileName:
-            _profileNameForId(
+      participantStates[selectedProfileId] = GroupWatchParticipant(
+        profileId: selectedProfileId,
+        profileName: _profileNameForId(
           selectedProfileId,
         ),
-        invitationStatus:
-            'accepted',
-        joinedAt:
-            DateTime.now(),
+        invitationStatus: 'accepted',
+        joinedAt: DateTime.now(),
       );
     }
 
-    for (final invitedId
-        in invited) {
-      final cleanId =
-          invitedId.trim();
+    for (final invitedId in invited) {
+      final cleanId = invitedId.trim();
 
-      participantStates[cleanId] =
-          GroupWatchParticipant(
+      participantStates[cleanId] = GroupWatchParticipant(
         profileId: cleanId,
-        profileName:
-            _profileNameForId(
+        profileName: _profileNameForId(
           cleanId,
         ),
-        invitationStatus:
-            'pending',
+        invitationStatus: 'pending',
       );
     }
 
     DateTime? invitationExpiresAt;
 
-    if (invitationDurationHours != null &&
-        invitationDurationHours > 0) {
-      invitationExpiresAt =
-          DateTime.now().add(
+    if (invitationDurationHours != null && invitationDurationHours > 0) {
+      invitationExpiresAt = DateTime.now().add(
         Duration(
-          hours:
-              invitationDurationHours,
+          hours: invitationDurationHours,
         ),
       );
     } else if (invited.isNotEmpty) {
-      invitationExpiresAt =
-          DateTime.now().add(
+      invitationExpiresAt = DateTime.now().add(
         const Duration(
           hours: 24,
         ),
       );
     }
 
-    final session =
-        GroupWatchSession(
+    final session = GroupWatchSession(
       id: sessionId,
       title: media.title,
       mediaId: media.id,
       type: _backendMediaType(
         media.type,
       ),
-      hostProfileId:
-          selectedProfileId,
-      participants:
-          participantStates.values
-              .map(
-                (participant) =>
-                    participant.profileName,
-              )
-              .toList(),
-      participantStates:
-          participantStates,
+      hostProfileId: selectedProfileId,
+      participants: participantStates.values
+          .map(
+            (participant) => participant.profileName,
+          )
+          .toList(),
+      participantStates: participantStates,
       status: 'waiting',
-      invitationExpiresAt:
-          invitationExpiresAt,
+      invitationExpiresAt: invitationExpiresAt,
     );
 
     _upsertGroupWatchSession(
       session,
     );
 
-    activeGroupWatchSessionId =
-        session.id;
+    activeGroupWatchSessionId = session.id;
 
     notifyListeners();
 
@@ -3381,8 +3212,7 @@ class AppController extends ChangeNotifier {
   /// The selected profile becomes the host. Invited identifiers may belong to
   /// other accounts; the backend resolves and authorizes them against the
   /// participant's own account and server.
-  Future<GroupWatchSession>
-      createBackendGroupWatchSession(
+  Future<GroupWatchSession> createBackendGroupWatchSession(
     MediaItem media, {
     String? profileId,
     Set<String>? invitedProfileIds,
@@ -3394,11 +3224,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3414,8 +3240,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedMediaId =
-        media.id.trim();
+    final cleanedMediaId = media.id.trim();
 
     if (cleanedMediaId.isEmpty) {
       throw ArgumentError(
@@ -3423,8 +3248,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedTitle =
-        media.title.trim();
+    final cleanedTitle = media.title.trim();
 
     if (cleanedTitle.isEmpty) {
       throw ArgumentError(
@@ -3432,19 +3256,17 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    if (invitationDurationHours != null &&
-        invitationDurationHours <= 0) {
+    if (invitationDurationHours != null && invitationDurationHours <= 0) {
       throw ArgumentError(
         'Invitation duration must be greater than zero.',
       );
     }
 
-    final invited =
-        invitedProfileIds == null
-            ? <String>{}
-            : Set<String>.from(
-                invitedProfileIds,
-              );
+    final invited = invitedProfileIds == null
+        ? <String>{}
+        : Set<String>.from(
+            invitedProfileIds,
+          );
 
     invited.removeWhere(
       (id) => id.trim().isEmpty,
@@ -3462,9 +3284,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response =
-          await backendApi
-              .createGroupWatchSession(
+      final response = await backendApi.createGroupWatchSession(
         mediaId: cleanedMediaId,
         title: cleanedTitle,
         type: _backendMediaType(
@@ -3472,12 +3292,10 @@ class AppController extends ChangeNotifier {
         ),
         profileId: selectedProfileId,
         invitedProfileIds: invited,
-        invitationDurationHours:
-            invitationDurationHours,
+        invitationDurationHours: invitationDurationHours,
       );
 
-      final sessionData =
-          response['session'];
+      final sessionData = response['session'];
 
       if (sessionData is! Map) {
         throw BackendApiException(
@@ -3485,29 +3303,24 @@ class AppController extends ChangeNotifier {
         );
       }
 
-      final session =
-          GroupWatchSession.fromJson(
+      final session = GroupWatchSession.fromJson(
         Map<String, dynamic>.from(
           sessionData,
         ),
-        knownProfiles:
-            currentAccount?.profiles ??
-            const <Profile>[],
+        knownProfiles: currentAccount?.profiles ?? const <Profile>[],
       );
 
       _upsertGroupWatchSession(
         session,
       );
 
-      activeGroupWatchSessionId =
-          session.id;
+      activeGroupWatchSessionId = session.id;
 
       groupWatchError = null;
 
       return session;
     } catch (error) {
-      groupWatchError =
-          error.toString();
+      groupWatchError = error.toString();
       rethrow;
     } finally {
       groupWatchLoading = false;
@@ -3521,16 +3334,11 @@ class AppController extends ChangeNotifier {
   /// If the invitation has expired or the session has already started, the
   /// backend rejects the request. The UI can surface the backend's exact
   /// "This invite has expired" message.
-  Future<GroupWatchSession>
-      acceptGroupWatchInvitation({
+  Future<GroupWatchSession> acceptGroupWatchInvitation({
     required String sessionId,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3546,8 +3354,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3555,17 +3362,12 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .acceptGroupWatchInvitation(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    final response = await backendApi.acceptGroupWatchInvitation(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3584,16 +3386,11 @@ class AppController extends ChangeNotifier {
   }
 
   /// Declines an invitation for a profile.
-  Future<GroupWatchSession>
-      declineGroupWatchInvitation({
+  Future<GroupWatchSession> declineGroupWatchInvitation({
     required String sessionId,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3609,8 +3406,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3618,17 +3414,12 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .declineGroupWatchInvitation(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    final response = await backendApi.declineGroupWatchInvitation(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3644,17 +3435,12 @@ class AppController extends ChangeNotifier {
   /// Sets the current participant's audio track.
   ///
   /// This changes audio only for the specified participant.
-  Future<GroupWatchSession>
-      setGroupWatchAudioTrack({
+  Future<GroupWatchSession> setGroupWatchAudioTrack({
     required String sessionId,
     String? profileId,
     String? audioTrackId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3662,8 +3448,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3671,24 +3456,15 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedTrackId =
-        audioTrackId?.trim();
+    final cleanedTrackId = audioTrackId?.trim();
 
-    final response =
-        await backendApi
-            .setGroupWatchAudioTrack(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
-      audioTrackId:
-          cleanedTrackId?.isEmpty == true
-              ? null
-              : cleanedTrackId,
+    final response = await backendApi.setGroupWatchAudioTrack(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
+      audioTrackId: cleanedTrackId?.isEmpty == true ? null : cleanedTrackId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3704,17 +3480,12 @@ class AppController extends ChangeNotifier {
   /// Sets the current participant's subtitle track.
   ///
   /// This changes subtitles only for the specified participant.
-  Future<GroupWatchSession>
-      setGroupWatchSubtitleTrack({
+  Future<GroupWatchSession> setGroupWatchSubtitleTrack({
     required String sessionId,
     String? profileId,
     String? subtitleTrackId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3722,8 +3493,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3731,24 +3501,15 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedTrackId =
-        subtitleTrackId?.trim();
+    final cleanedTrackId = subtitleTrackId?.trim();
 
-    final response =
-        await backendApi
-            .setGroupWatchSubtitleTrack(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
-      subtitleTrackId:
-          cleanedTrackId?.isEmpty == true
-              ? null
-              : cleanedTrackId,
+    final response = await backendApi.setGroupWatchSubtitleTrack(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
+      subtitleTrackId: cleanedTrackId?.isEmpty == true ? null : cleanedTrackId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3762,16 +3523,11 @@ class AppController extends ChangeNotifier {
   }
 
   /// Starts Group Watch playback for everyone.
-  Future<GroupWatchSession>
-      startGroupWatchSession({
+  Future<GroupWatchSession> startGroupWatchSession({
     required String sessionId,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3779,8 +3535,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3788,17 +3543,12 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .startGroupWatchSession(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    final response = await backendApi.startGroupWatchSession(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3806,8 +3556,7 @@ class AppController extends ChangeNotifier {
       session,
     );
 
-    activeGroupWatchSessionId =
-        session.id;
+    activeGroupWatchSessionId = session.id;
 
     notifyListeners();
 
@@ -3815,16 +3564,11 @@ class AppController extends ChangeNotifier {
   }
 
   /// Starts global playback.
-  Future<GroupWatchSession>
-      playGroupWatchSession({
+  Future<GroupWatchSession> playGroupWatchSession({
     required String sessionId,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3832,8 +3576,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3841,17 +3584,12 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .playGroupWatchSession(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    final response = await backendApi.playGroupWatchSession(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3859,8 +3597,7 @@ class AppController extends ChangeNotifier {
       session,
     );
 
-    activeGroupWatchSessionId =
-        session.id;
+    activeGroupWatchSessionId = session.id;
 
     notifyListeners();
 
@@ -3871,20 +3608,14 @@ class AppController extends ChangeNotifier {
   ///
   /// The backend stores the pausing profile and reason. The same reason is
   /// posted to the local group chat.
-  Future<GroupWatchSession>
-      pauseGroupWatchSession({
+  Future<GroupWatchSession> pauseGroupWatchSession({
     required String sessionId,
     required String reason,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
-    final cleanedReason =
-        reason.trim();
+    final cleanedReason = reason.trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3898,8 +3629,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3907,19 +3637,13 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .pauseGroupWatchSession(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
-      reason:
-          cleanedReason,
+    final response = await backendApi.pauseGroupWatchSession(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
+      reason: cleanedReason,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -3927,14 +3651,13 @@ class AppController extends ChangeNotifier {
       session,
     );
 
-    final profileName =
-        _profileNameForId(
+    final profileName = _profileNameForId(
       selectedProfileId,
     );
 
     sendGroupMessage(
-      message:
-          tr('$profileName paused the Group Watch — ${_pauseReasonDisplay(cleanedReason)}'),
+      message: tr(
+          '$profileName paused the Group Watch — ${_pauseReasonDisplay(cleanedReason)}'),
     );
 
     notifyListeners();
@@ -3945,16 +3668,11 @@ class AppController extends ChangeNotifier {
   /// Resumes global playback.
   ///
   /// Only the profile that paused the session is permitted to resume.
-  Future<GroupWatchSession>
-      resumeGroupWatchSession({
+  Future<GroupWatchSession> resumeGroupWatchSession({
     required String sessionId,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -3962,8 +3680,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -3971,32 +3688,24 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final localSession =
-        getGroupWatchSession(
+    final localSession = getGroupWatchSession(
       cleanedSessionId,
     );
 
     if (localSession != null &&
-        localSession.pausedByProfileId !=
-            null &&
-        localSession.pausedByProfileId !=
-            selectedProfileId) {
+        localSession.pausedByProfileId != null &&
+        localSession.pausedByProfileId != selectedProfileId) {
       throw BackendApiException(
         'Only the person who paused the Group Watch can resume it.',
       );
     }
 
-    final response =
-        await backendApi
-            .resumeGroupWatchSession(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    final response = await backendApi.resumeGroupWatchSession(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -4010,17 +3719,12 @@ class AppController extends ChangeNotifier {
   }
 
   /// Updates the shared playback position.
-  Future<GroupWatchSession>
-      updateGroupWatchPosition({
+  Future<GroupWatchSession> updateGroupWatchPosition({
     required String sessionId,
     required Duration position,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -4034,8 +3738,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -4043,19 +3746,13 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .updateGroupWatchPosition(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
-      position:
-          position,
+    final response = await backendApi.updateGroupWatchPosition(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
+      position: position,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -4069,16 +3766,11 @@ class AppController extends ChangeNotifier {
   }
 
   /// Ends Group Watch for everyone.
-  Future<GroupWatchSession>
-      endGroupWatchSession({
+  Future<GroupWatchSession> endGroupWatchSession({
     required String sessionId,
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -4086,8 +3778,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -4095,17 +3786,12 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final response =
-        await backendApi
-            .endGroupWatchSession(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    final response = await backendApi.endGroupWatchSession(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    final session =
-        _sessionFromResponse(
+    final session = _sessionFromResponse(
       response,
     );
 
@@ -4113,8 +3799,7 @@ class AppController extends ChangeNotifier {
       session,
     );
 
-    if (activeGroupWatchSessionId ==
-        session.id) {
+    if (activeGroupWatchSessionId == session.id) {
       activeGroupWatchSessionId = null;
     }
 
@@ -4124,16 +3809,11 @@ class AppController extends ChangeNotifier {
   }
 
   /// Deletes a Group Watch session.
-  Future<void>
-      deleteGroupWatchSession(
+  Future<void> deleteGroupWatchSession(
     String sessionId, {
     String? profileId,
   }) async {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
     if (selectedProfileId.isEmpty) {
       throw ArgumentError(
@@ -4141,8 +3821,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final cleanedSessionId =
-        sessionId.trim();
+    final cleanedSessionId = sessionId.trim();
 
     if (cleanedSessionId.isEmpty) {
       throw ArgumentError(
@@ -4150,23 +3829,16 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    await backendApi
-        .deleteGroupWatchSession(
-      sessionId:
-          cleanedSessionId,
-      profileId:
-          selectedProfileId,
+    await backendApi.deleteGroupWatchSession(
+      sessionId: cleanedSessionId,
+      profileId: selectedProfileId,
     );
 
-    groupWatchSessions
-        .removeWhere(
-      (session) =>
-          session.id ==
-          cleanedSessionId,
+    groupWatchSessions.removeWhere(
+      (session) => session.id == cleanedSessionId,
     );
 
-    if (activeGroupWatchSessionId ==
-        cleanedSessionId) {
+    if (activeGroupWatchSessionId == cleanedSessionId) {
       activeGroupWatchSessionId = null;
     }
 
@@ -4178,14 +3850,9 @@ class AppController extends ChangeNotifier {
     String sessionId, {
     String? profileId,
   }) {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
-    final session =
-        getGroupWatchSession(
+    final session = getGroupWatchSession(
       sessionId,
     );
 
@@ -4199,19 +3866,13 @@ class AppController extends ChangeNotifier {
   }
 
   /// Returns the participant state for a profile.
-  GroupWatchParticipant?
-      getGroupWatchParticipant({
+  GroupWatchParticipant? getGroupWatchParticipant({
     required String sessionId,
     String? profileId,
   }) {
-    final selectedProfileId =
-        (profileId ??
-                currentProfile?.id ??
-                '')
-            .trim();
+    final selectedProfileId = (profileId ?? currentProfile?.id ?? '').trim();
 
-    final session =
-        getGroupWatchSession(
+    final session = getGroupWatchSession(
       sessionId,
     );
 
@@ -4267,13 +3928,11 @@ class AppController extends ChangeNotifier {
   bool isGroupWatchInvitationExpired(
     String sessionId,
   ) {
-    final session =
-        getGroupWatchSession(
+    final session = getGroupWatchSession(
       sessionId,
     );
 
-    return session?.invitationsExpired ??
-        true;
+    return session?.invitationsExpired ?? true;
   }
 
   /// Returns the exact UI message used when an invitation is no longer
@@ -4296,8 +3955,7 @@ class AppController extends ChangeNotifier {
   void toggleGroupWatchSync(
     String sessionId,
   ) {
-    final session =
-        getGroupWatchSession(
+    final session = getGroupWatchSession(
       sessionId,
     );
 
@@ -4305,8 +3963,7 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    session.synchronized =
-        !session.synchronized;
+    session.synchronized = !session.synchronized;
 
     notifyListeners();
   }
@@ -4342,8 +3999,7 @@ class AppController extends ChangeNotifier {
     String mediaId,
     String episodeTitle,
   ) {
-    nextEpisodes[mediaId] =
-        episodeTitle;
+    nextEpisodes[mediaId] = episodeTitle;
 
     notifyListeners();
   }
@@ -4378,8 +4034,7 @@ class AppController extends ChangeNotifier {
     recommendationsError = null;
 
     groupRecommendations.clear();
-    groupRecommendationsLoading =
-        false;
+    groupRecommendationsLoading = false;
     groupRecommendationsError = null;
 
     wishlist.clear();
@@ -4404,16 +4059,14 @@ class AppController extends ChangeNotifier {
     final account = currentAccount;
 
     if (account != null) {
-      for (final profile
-          in account.profiles) {
+      for (final profile in account.profiles) {
         if (profile.id == profileId) {
           return profile.name;
         }
       }
     }
 
-    if (currentProfile?.id ==
-        profileId) {
+    if (currentProfile?.id == profileId) {
       return currentProfile!.name;
     }
 
@@ -4431,8 +4084,7 @@ class AppController extends ChangeNotifier {
     }
 
     return account.profiles.any(
-      (profile) =>
-          profile.id == profileId,
+      (profile) => profile.id == profileId,
     );
   }
 
@@ -4463,8 +4115,7 @@ class AppController extends ChangeNotifier {
       return value.toDouble();
     }
 
-    final parsed =
-        double.tryParse(
+    final parsed = double.tryParse(
       value?.toString() ?? '',
     );
 
@@ -4498,12 +4149,10 @@ class AppController extends ChangeNotifier {
   // GROUP WATCH HELPERS
   // ---------------------------------------------------------------------------
 
-  GroupWatchSession
-      _sessionFromResponse(
+  GroupWatchSession _sessionFromResponse(
     Map<String, dynamic> response,
   ) {
-    final sessionData =
-        response['session'];
+    final sessionData = response['session'];
 
     if (sessionData is! Map) {
       throw BackendApiException(
@@ -4515,9 +4164,7 @@ class AppController extends ChangeNotifier {
       Map<String, dynamic>.from(
         sessionData,
       ),
-      knownProfiles:
-          currentAccount?.profiles ??
-          const <Profile>[],
+      knownProfiles: currentAccount?.profiles ?? const <Profile>[],
     );
   }
 
@@ -4529,8 +4176,7 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    final index =
-        groupWatchSessions.indexWhere(
+    final index = groupWatchSessions.indexWhere(
       (item) => item.id == session.id,
     );
 
@@ -4542,16 +4188,14 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    groupWatchSessions[index] =
-        session;
+    groupWatchSessions[index] = session;
   }
 
   /// Performs `_backendMediaType` for this feature. Update this documentation when its contract changes.
   String _backendMediaType(
     String type,
   ) {
-    final cleaned =
-        type.trim().toLowerCase();
+    final cleaned = type.trim().toLowerCase();
 
     if (cleaned == 'tvshow' ||
         cleaned == 'tv_show' ||
@@ -4568,8 +4212,7 @@ class AppController extends ChangeNotifier {
   String _pauseReasonDisplay(
     String reason,
   ) {
-    final cleaned =
-        reason.trim();
+    final cleaned = reason.trim();
 
     switch (cleaned.toLowerCase()) {
       case 'voy a cargar':
@@ -4586,14 +4229,14 @@ class AppController extends ChangeNotifier {
     }
   }
 
-
   // ---------------------------------------------------------------------------
   // COLLECTIONS
   // ---------------------------------------------------------------------------
 
   CollectionPreferences get currentCollectionPreferences {
     final profileId = currentProfile?.id ?? 'default';
-    return collectionPreferencesByProfile.putIfAbsent(profileId, () => CollectionPreferences());
+    return collectionPreferencesByProfile.putIfAbsent(
+        profileId, () => CollectionPreferences());
   }
 
   /// Performs `updateCollectionPreferences` for this feature. Update this documentation when its contract changes.
@@ -4609,17 +4252,34 @@ class AppController extends ChangeNotifier {
   }
 
   MediaCollection createCollection({
-    required String name, String description = '', bool shared = true, bool featured = false,
-    bool automatic = false, String posterMode = 'First 4 Posters', String? customPosterUrl,
+    required String name,
+    String description = '',
+    bool shared = true,
+    bool featured = false,
+    bool automatic = false,
+    String posterMode = 'First 4 Posters',
+    String? customPosterUrl,
+    Iterable<String> mediaIds = const <String>[],
   }) {
     final collection = MediaCollection(
-      id: _generateId('collection'), name: name.trim(), description: description.trim(),
-      createdByProfileId: currentProfile?.id, isShared: shared, isFeatured: featured,
-      isAutomatic: automatic, posterMode: posterMode, customPosterUrl: customPosterUrl,
-      contributorProfileIds: shared ? <String>{...?currentAccount?.profiles.map((p) => p.id)} : <String>{},
+      id: _generateId('collection'),
+      name: name.trim(),
+      description: description.trim(),
+      createdByProfileId: currentProfile?.id,
+      isShared: shared,
+      isFeatured: featured,
+      isAutomatic: automatic,
+      posterMode: posterMode,
+      customPosterUrl: customPosterUrl,
+      mediaIds: mediaIds.toSet().toList(),
+      contributorProfileIds: shared
+          ? <String>{...?currentAccount?.profiles.map((p) => p.id)}
+          : <String>{},
     );
     // The creator always has edit/add rights.
-    if (currentProfile?.id != null) collection.contributorProfileIds.add(currentProfile!.id);
+    if (currentProfile?.id != null) {
+      collection.contributorProfileIds.add(currentProfile!.id);
+    }
     collections.add(collection);
     if (featured) featuredCollectionOrder.add(collection.id);
     addNotification(action: 'created collection "${collection.name}"');
@@ -4629,7 +4289,8 @@ class AppController extends ChangeNotifier {
 
   /// Performs `deleteCollection` for this feature. Update this documentation when its contract changes.
   void deleteCollection(String id) {
-    collections.removeWhere((c) => c.id == id && !c.isOfficial && c.canCurrentProfileEdit());
+    collections.removeWhere(
+        (c) => c.id == id && !c.isOfficial && c.canCurrentProfileEdit());
     featuredCollectionOrder.remove(id);
     notifyListeners();
   }
@@ -4640,7 +4301,10 @@ class AppController extends ChangeNotifier {
     if (matches.isEmpty) return;
     final c = matches.first;
     if (!c.canCurrentProfileAdd()) return;
-    if (!c.mediaIds.contains(mediaId)) { c.mediaIds.add(mediaId); notifyListeners(); }
+    if (!c.mediaIds.contains(mediaId)) {
+      c.mediaIds.add(mediaId);
+      notifyListeners();
+    }
   }
 
   void addEpisodeToCollection(String collectionId, String episodeKey) {
@@ -4664,16 +4328,26 @@ class AppController extends ChangeNotifier {
 
   /// Performs `addCollectionContributor` for this feature. Update this documentation when its contract changes.
   void addCollectionContributor(String collectionId, String profileId) {
-    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
-    if (c == null || !c.canCurrentProfileEdit() || !c.isShared) return;
+    final c = collections.where((x) => x.id == collectionId).isEmpty
+        ? null
+        : collections.where((x) => x.id == collectionId).first;
+    if (c == null || !c.canCurrentProfileEdit() || !c.isShared) {
+      return;
+    }
     c.contributorProfileIds.add(profileId);
     notifyListeners();
   }
 
   /// Performs `removeCollectionContributor` for this feature. Update this documentation when its contract changes.
   void removeCollectionContributor(String collectionId, String profileId) {
-    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
-    if (c == null || !c.canCurrentProfileEdit() || profileId == c.createdByProfileId) return;
+    final c = collections.where((x) => x.id == collectionId).isEmpty
+        ? null
+        : collections.where((x) => x.id == collectionId).first;
+    if (c == null ||
+        !c.canCurrentProfileEdit() ||
+        profileId == c.createdByProfileId) {
+      return;
+    }
     c.contributorProfileIds.remove(profileId);
     notifyListeners();
   }
@@ -4681,47 +4355,99 @@ class AppController extends ChangeNotifier {
   /// Performs `toggleCollectionLike` for this feature. Update this documentation when its contract changes.
   void toggleCollectionLike(String collectionId) {
     final profileId = currentProfile?.id;
-    if (profileId == null) return;
-    final c = collections.where((x) => x.id == collectionId).isEmpty ? null : collections.where((x) => x.id == collectionId).first;
-    if (c == null) return;
-    if (!c.likedByProfileIds.add(profileId)) c.likedByProfileIds.remove(profileId);
+    if (profileId == null) {
+      return;
+    }
+    final c = collections.where((x) => x.id == collectionId).isEmpty
+        ? null
+        : collections.where((x) => x.id == collectionId).first;
+    if (c == null) {
+      return;
+    }
+    if (!c.likedByProfileIds.add(profileId)) {
+      c.likedByProfileIds.remove(profileId);
+    }
     notifyListeners();
   }
 
   /// Performs `reorderCollectionSections` for this feature. Update this documentation when its contract changes.
   void reorderCollectionSections(List<String> order) {
-    collectionSectionOrder..clear()..addAll(order);
+    collectionSectionOrder
+      ..clear()
+      ..addAll(order);
     notifyListeners();
   }
 
   /// Performs `reorderFeaturedCollections` for this feature. Update this documentation when its contract changes.
   void reorderFeaturedCollections(List<String> order) {
-    featuredCollectionOrder..clear()..addAll(order);
+    featuredCollectionOrder
+      ..clear()
+      ..addAll(order);
     notifyListeners();
   }
 
   /// Performs `_autoAssignFranchiseMetadata` for this feature. Update this documentation when its contract changes.
   void _autoAssignFranchiseMetadata(MediaItem media) {
     // Prefer authoritative metadata from an importer/provider when present.
-    if (media.franchiseId != null && media.franchiseName != null) return;
+    if (media.franchiseId != null && media.franchiseName != null) {
+      return;
+    }
     final detected = _knownFranchiseFor(media.title, media.releaseYear);
-    if (detected == null) return;
+    if (detected == null) {
+      return;
+    }
     // MediaItem is intentionally immutable; automatic collection matching therefore
     // uses title/year matching too. Future provider metadata can populate these fields.
   }
 
   Map<String, dynamic>? _knownFranchiseFor(String title, int? year) {
     final t = _normalizeCollectionTitle(title);
-    if (t.contains('back to the future')) return {'id':'back-to-the-future','name':'Back to the Future Trilogy','type':'Trilogy','expected':3};
-    if (t == 'ted' || t.startsWith('ted ')) return {'id':'ted','name':'Ted Collection','type':'Duology','expected':2};
-    if (RegExp(r'^harry potter').hasMatch(t)) return {'id':'harry-potter','name':'Harry Potter Collection','type':'Saga','expected':8};
-    if (t.contains('twilight')) return {'id':'twilight','name':'Twilight Saga Collection','type':'Saga','expected':5};
-    if (t.contains('jurassic park') || t.contains('jurassic world')) return {'id':'jurassic','name':'Jurassic Park / Jurassic World Collection','type':'Franchise','expected':7};
+    if (t.contains('back to the future')) {
+      return {
+        'id': 'back-to-the-future',
+        'name': 'Back to the Future Trilogy',
+        'type': 'Trilogy',
+        'expected': 3
+      };
+    }
+    if (t == 'ted' || t.startsWith('ted ')) {
+      return {
+        'id': 'ted',
+        'name': 'Ted Collection',
+        'type': 'Duology',
+        'expected': 2
+      };
+    }
+    if (RegExp(r'^harry potter').hasMatch(t)) {
+      return {
+        'id': 'harry-potter',
+        'name': 'Harry Potter Collection',
+        'type': 'Saga',
+        'expected': 8
+      };
+    }
+    if (t.contains('twilight')) {
+      return {
+        'id': 'twilight',
+        'name': 'Twilight Saga Collection',
+        'type': 'Saga',
+        'expected': 5
+      };
+    }
+    if (t.contains('jurassic park') || t.contains('jurassic world')) {
+      return {
+        'id': 'jurassic',
+        'name': 'Jurassic Park / Jurassic World Collection',
+        'type': 'Franchise',
+        'expected': 7
+      };
+    }
     return null;
   }
 
   /// Performs `_normalizeCollectionTitle` for this feature. Update this documentation when its contract changes.
-  String _normalizeCollectionTitle(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  String _normalizeCollectionTitle(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
 
   /// Performs `_refreshAutomaticCollections` for this feature. Update this documentation when its contract changes.
   ///
@@ -4735,31 +4461,38 @@ class AppController extends ChangeNotifier {
         'id': 'back-to-the-future',
         'name': 'Back to the Future Trilogy',
         'type': 'Trilogy',
-        'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('back to the future'),
+        'match': (MediaItem m) =>
+            _normalizeCollectionTitle(m.title).contains('back to the future'),
       },
       {
         'id': 'ted',
         'name': 'Ted Collection',
         'type': 'Duology',
-        'match': (MediaItem m) => _normalizeCollectionTitle(m.title) == 'ted' || _normalizeCollectionTitle(m.title).startsWith('ted '),
+        'match': (MediaItem m) =>
+            _normalizeCollectionTitle(m.title) == 'ted' ||
+            _normalizeCollectionTitle(m.title).startsWith('ted '),
       },
       {
         'id': 'harry-potter',
         'name': 'Harry Potter Collection',
         'type': 'Saga',
-        'match': (MediaItem m) => RegExp(r'^harry potter').hasMatch(_normalizeCollectionTitle(m.title)),
+        'match': (MediaItem m) => RegExp(r'^harry potter')
+            .hasMatch(_normalizeCollectionTitle(m.title)),
       },
       {
         'id': 'twilight',
         'name': 'Twilight Saga Collection',
         'type': 'Saga',
-        'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('twilight'),
+        'match': (MediaItem m) =>
+            _normalizeCollectionTitle(m.title).contains('twilight'),
       },
       {
         'id': 'jurassic',
         'name': 'Jurassic Park / Jurassic World Collection',
         'type': 'Franchise',
-        'match': (MediaItem m) => _normalizeCollectionTitle(m.title).contains('jurassic park') || _normalizeCollectionTitle(m.title).contains('jurassic world'),
+        'match': (MediaItem m) =>
+            _normalizeCollectionTitle(m.title).contains('jurassic park') ||
+            _normalizeCollectionTitle(m.title).contains('jurassic world'),
       },
     ];
 
@@ -4770,7 +4503,12 @@ class AppController extends ChangeNotifier {
     for (final media in library) {
       final franchiseId = media.franchiseId?.trim();
       final franchiseName = media.franchiseName?.trim();
-      if (franchiseId == null || franchiseId.isEmpty || franchiseName == null || franchiseName.isEmpty) continue;
+      if (franchiseId == null ||
+          franchiseId.isEmpty ||
+          franchiseName == null ||
+          franchiseName.isEmpty) {
+        continue;
+      }
       byFranchise.putIfAbsent(franchiseId, () => <MediaItem>[]).add(media);
     }
     for (final entry in byFranchise.entries) {
@@ -4811,8 +4549,8 @@ class AppController extends ChangeNotifier {
         collection.isAutomatic &&
         collection.automaticFranchiseId != null &&
         !automaticIds.contains(collection.automaticFranchiseId));
-    featuredCollectionOrder.removeWhere((id) =>
-        !collections.any((collection) => collection.id == id));
+    featuredCollectionOrder.removeWhere(
+        (id) => !collections.any((collection) => collection.id == id));
   }
 
   /// Creates or retrieves one authoritative automatic franchise collection.
@@ -4822,7 +4560,8 @@ class AppController extends ChangeNotifier {
     required String type,
   }) {
     final existing = collections.where(
-      (collection) => collection.isAutomatic && collection.automaticFranchiseId == id,
+      (collection) =>
+          collection.isAutomatic && collection.automaticFranchiseId == id,
     );
     if (existing.isNotEmpty) return existing.first;
 
@@ -4835,7 +4574,9 @@ class AppController extends ChangeNotifier {
       isShared: true,
       automaticFranchiseId: id,
       automaticFranchiseType: type,
-      contributorProfileIds: <String>{...?currentAccount?.profiles.map((p) => p.id)},
+      contributorProfileIds: <String>{
+        ...?currentAccount?.profiles.map((p) => p.id)
+      },
     );
     collections.add(collection);
     if (!featuredCollectionOrder.contains(collection.id)) {
@@ -4984,6 +4725,7 @@ class DetailsCustomization {
               'Trailer',
               'Group Watch',
               'Shop',
+              'Phase 2 Actions',
               'Reviews',
               'Recommendations',
               'Audio & Subtitles',
@@ -5086,33 +4828,71 @@ class DetailsCustomizationStore {
   }
 
   static Map<String, dynamic> _toJson(DetailsCustomization v) => {
-    'showPoster': v.showPoster, 'showTitle': v.showTitle, 'showMetadata': v.showMetadata,
-    'showOwnership': v.showOwnership, 'showDescription': v.showDescription, 'showSeasons': v.showSeasons,
-    'showPlay': v.showPlay, 'showTrailer': v.showTrailer, 'showGroupWatch': v.showGroupWatch,
-    'showAudioSubtitles': v.showAudioSubtitles, 'showReactions': v.showReactions, 'showInformation': v.showInformation,
-    'showLibrary': v.showLibrary, 'showRecommendations': v.showRecommendations, 'showShop': v.showShop, 'showReleaseYear': v.showReleaseYear, 'showRating': v.showRating,
-    'showContentRating': v.showContentRating, 'showRuntime': v.showRuntime, 'posterStyle': v.posterStyle,
-    'posterPosition': v.posterPosition, 'posterSize': v.posterSize, 'titleAlignment': v.titleAlignment,
-    'buttonAlignment': v.buttonAlignment, 'informationAlignment': v.informationAlignment, 'seasonPlacement': v.seasonPlacement,
-    'seasonOrder': v.seasonOrder, 'seasonSelectorStyle': v.seasonSelectorStyle, 'episodeNaming': v.episodeNaming,
-    'sectionOrder': v.sectionOrder,
-  };
+        'showPoster': v.showPoster,
+        'showTitle': v.showTitle,
+        'showMetadata': v.showMetadata,
+        'showOwnership': v.showOwnership,
+        'showDescription': v.showDescription,
+        'showSeasons': v.showSeasons,
+        'showPlay': v.showPlay,
+        'showTrailer': v.showTrailer,
+        'showGroupWatch': v.showGroupWatch,
+        'showAudioSubtitles': v.showAudioSubtitles,
+        'showReactions': v.showReactions,
+        'showInformation': v.showInformation,
+        'showLibrary': v.showLibrary,
+        'showRecommendations': v.showRecommendations,
+        'showShop': v.showShop,
+        'showReleaseYear': v.showReleaseYear,
+        'showRating': v.showRating,
+        'showContentRating': v.showContentRating,
+        'showRuntime': v.showRuntime,
+        'posterStyle': v.posterStyle,
+        'posterPosition': v.posterPosition,
+        'posterSize': v.posterSize,
+        'titleAlignment': v.titleAlignment,
+        'buttonAlignment': v.buttonAlignment,
+        'informationAlignment': v.informationAlignment,
+        'seasonPlacement': v.seasonPlacement,
+        'seasonOrder': v.seasonOrder,
+        'seasonSelectorStyle': v.seasonSelectorStyle,
+        'episodeNaming': v.episodeNaming,
+        'sectionOrder': v.sectionOrder,
+      };
 
-  static DetailsCustomization _fromJson(Map<String, dynamic> m) => DetailsCustomization(
-    showPoster: m['showPoster'] == false ? false : true, showTitle: m['showTitle'] == false ? false : true,
-    showMetadata: m['showMetadata'] == false ? false : true, showOwnership: m['showOwnership'] == false ? false : true,
-    showDescription: m['showDescription'] == false ? false : true, showSeasons: m['showSeasons'] == false ? false : true,
-    showPlay: m['showPlay'] == false ? false : true, showTrailer: m['showTrailer'] == false ? false : true,
-    showGroupWatch: m['showGroupWatch'] == false ? false : true, showAudioSubtitles: m['showAudioSubtitles'] == false ? false : true,
-    showReactions: m['showReactions'] == false ? false : true, showInformation: m['showInformation'] == false ? false : true,
-    showLibrary: m['showLibrary'] == false ? false : true, showRecommendations: m['showRecommendations'] == false ? false : true, showShop: m['showShop'] == false ? false : true, showReleaseYear: m['showReleaseYear'] == false ? false : true,
-    showRating: m['showRating'] == false ? false : true, showContentRating: m['showContentRating'] == false ? false : true,
-    showRuntime: m['showRuntime'] == false ? false : true, posterStyle: m['posterStyle']?.toString() ?? 'Standard',
-    posterPosition: m['posterPosition']?.toString() ?? 'Center', posterSize: m['posterSize']?.toString() ?? 'Medium',
-    titleAlignment: m['titleAlignment']?.toString() ?? 'Left', buttonAlignment: m['buttonAlignment']?.toString() ?? 'Left',
-    informationAlignment: m['informationAlignment']?.toString() ?? 'Left', seasonPlacement: m['seasonPlacement']?.toString() ?? 'Center',
-    seasonOrder: m['seasonOrder']?.toString() ?? 'Top to Bottom', seasonSelectorStyle: m['seasonSelectorStyle']?.toString() ?? 'Buttons',
-    episodeNaming: m['episodeNaming']?.toString() ?? 'Actual Title',
-    sectionOrder: (m['sectionOrder'] is List) ? List<String>.from(m['sectionOrder'] as List) : null,
-  );
+  static DetailsCustomization _fromJson(Map<String, dynamic> m) =>
+      DetailsCustomization(
+        showPoster: m['showPoster'] == false ? false : true,
+        showTitle: m['showTitle'] == false ? false : true,
+        showMetadata: m['showMetadata'] == false ? false : true,
+        showOwnership: m['showOwnership'] == false ? false : true,
+        showDescription: m['showDescription'] == false ? false : true,
+        showSeasons: m['showSeasons'] == false ? false : true,
+        showPlay: m['showPlay'] == false ? false : true,
+        showTrailer: m['showTrailer'] == false ? false : true,
+        showGroupWatch: m['showGroupWatch'] == false ? false : true,
+        showAudioSubtitles: m['showAudioSubtitles'] == false ? false : true,
+        showReactions: m['showReactions'] == false ? false : true,
+        showInformation: m['showInformation'] == false ? false : true,
+        showLibrary: m['showLibrary'] == false ? false : true,
+        showRecommendations: m['showRecommendations'] == false ? false : true,
+        showShop: m['showShop'] == false ? false : true,
+        showReleaseYear: m['showReleaseYear'] == false ? false : true,
+        showRating: m['showRating'] == false ? false : true,
+        showContentRating: m['showContentRating'] == false ? false : true,
+        showRuntime: m['showRuntime'] == false ? false : true,
+        posterStyle: m['posterStyle']?.toString() ?? 'Standard',
+        posterPosition: m['posterPosition']?.toString() ?? 'Center',
+        posterSize: m['posterSize']?.toString() ?? 'Medium',
+        titleAlignment: m['titleAlignment']?.toString() ?? 'Left',
+        buttonAlignment: m['buttonAlignment']?.toString() ?? 'Left',
+        informationAlignment: m['informationAlignment']?.toString() ?? 'Left',
+        seasonPlacement: m['seasonPlacement']?.toString() ?? 'Center',
+        seasonOrder: m['seasonOrder']?.toString() ?? 'Top to Bottom',
+        seasonSelectorStyle: m['seasonSelectorStyle']?.toString() ?? 'Buttons',
+        episodeNaming: m['episodeNaming']?.toString() ?? 'Actual Title',
+        sectionOrder: (m['sectionOrder'] is List)
+            ? List<String>.from(m['sectionOrder'] as List)
+            : null,
+      );
 }

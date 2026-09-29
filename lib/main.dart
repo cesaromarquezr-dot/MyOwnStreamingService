@@ -34,6 +34,7 @@ import 'discovery_experience.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
 import 'localization.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.instance.initialize();
@@ -45,9 +46,9 @@ Future<void> main() async {
   await ShopCatalog.instance.initialize();
   runApp(const MyStreamingService());
 }
+
 /// Implements the `MyStreamingService` class for this feature or UI component.
-final GlobalKey<NavigatorState> _appNavigatorKey =
-    GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Root application widget that owns the global navigator and language picker.
 class MyStreamingService extends StatefulWidget {
@@ -107,6 +108,7 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -198,6 +200,7 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
     );
   }
 }
+
 Widget _initialPage() {
   final token = Uri.base.queryParameters['token']?.trim() ?? '';
   if (token.isNotEmpty) {
@@ -214,9 +217,11 @@ class SplashScreen extends StatefulWidget {
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
+
 /// Implements the `_SplashScreenState` class for this feature or UI component.
 class _SplashScreenState extends State<SplashScreen> {
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -245,7 +250,9 @@ class _SplashScreenState extends State<SplashScreen> {
       ),
     );
   }
+
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -260,7 +267,8 @@ class _SplashScreenState extends State<SplashScreen> {
               color: Colors.red,
             ),
             SizedBox(height: 20),
-            UniversalText('MY STREAMING SERVICE',
+            UniversalText(
+              'MY STREAMING SERVICE',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -273,6 +281,7 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
+
 // ============================================================
 // LOGIN
 // ============================================================
@@ -281,6 +290,7 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+
 /// Implements the `_LoginScreenState` class for this feature or UI component.
 class _LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
@@ -288,12 +298,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool obscurePassword = true;
   bool loggingIn = false;
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
+
   /// Performs `login` for this feature. Update this documentation when its contract changes.
   Future<void> login() async {
     if (loggingIn) return;
@@ -302,7 +314,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Enter your email and password.',
+          content: UniversalText(
+            'Enter your email and password.',
           ),
         ),
       );
@@ -329,24 +342,40 @@ class _LoginScreenState extends State<LoginScreen> {
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
             title: const UniversalText('Multi-factor authentication'),
-            content: TextField(controller: codeController, autofocus: true, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Enter the 6-digit code sent to your email')),
+            content: TextField(
+                controller: codeController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                    labelText: 'Enter the 6-digit code sent to your email')),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('CANCEL')),
-              FilledButton(onPressed: () async {
-                try {
-                  await controller.backendApi.verifyMfaLogin(email: email, code: codeController.text);
-                  if (dialogContext.mounted) Navigator.pop(dialogContext, true);
-                } catch (_) {
-                  if (dialogContext.mounted) Navigator.pop(dialogContext, false);
-                }
-              }, child: const UniversalText('VERIFY')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const UniversalText('CANCEL')),
+              FilledButton(
+                  onPressed: () async {
+                    try {
+                      await controller.backendApi.verifyMfaLogin(
+                          email: email, code: codeController.text);
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, true);
+                      }
+                    } catch (_) {
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, false);
+                      }
+                    }
+                  },
+                  child: const UniversalText('VERIFY')),
             ],
           ),
         );
         codeController.dispose();
         if (verified != true) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('MFA verification was not completed.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: UniversalText('MFA verification was not completed.')));
           return;
         }
         final account = await controller.backendApi.getCurrentAccount();
@@ -358,7 +387,8 @@ class _LoginScreenState extends State<LoginScreen> {
         final question = security?['question']?.toString().trim();
         if (question == null || question.isEmpty) {
           await controller.logoutFromBackend();
-          throw Exception('This sign-in was flagged as suspicious, but no security question is configured.');
+          throw Exception(
+              'This sign-in was flagged as suspicious, but no security question is configured.');
         }
 
         if (!mounted) return;
@@ -372,25 +402,46 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const UniversalText('This sign-in looks different from a known device or follows recent failed attempts.'),
+                const UniversalText(
+                    'This sign-in looks different from a known device or follows recent failed attempts.'),
                 const SizedBox(height: 16),
-                const UniversalText('Security question', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w800)),
+                const UniversalText('Security question',
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
-                Text(question, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                Text(question,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 14),
-                TextField(controller: answerController, autofocus: true, obscureText: true, decoration: InputDecoration(labelText: tr('Enter your answer'))),
+                TextField(
+                    controller: answerController,
+                    autofocus: true,
+                    obscureText: true,
+                    decoration:
+                        InputDecoration(labelText: tr('Enter your answer'))),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('SIGN OUT')),
-              FilledButton(onPressed: () async {
-                try {
-                  final ok = await controller.backendApi.verifySecurityAnswer(answerController.text);
-                  if (dialogContext.mounted) Navigator.pop(dialogContext, ok);
-                } catch (_) {
-                  if (dialogContext.mounted) Navigator.pop(dialogContext, false);
-                }
-              }, child: const UniversalText('VERIFY')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const UniversalText('SIGN OUT')),
+              FilledButton(
+                  onPressed: () async {
+                    try {
+                      final ok = await controller.backendApi
+                          .verifySecurityAnswer(answerController.text);
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, ok);
+                      }
+                    } catch (_) {
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, false);
+                      }
+                    }
+                  },
+                  child: const UniversalText('VERIFY')),
             ],
           ),
         );
@@ -398,7 +449,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (verified != true) {
           await controller.logoutFromBackend();
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Access denied. The security answer was incorrect.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: UniversalText(
+                  'Access denied. The security answer was incorrect.')));
           return;
         }
       }
@@ -462,6 +515,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -480,7 +534,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.red,
                 ),
                 const SizedBox(height: 20),
-                const UniversalText('Welcome Back',
+                const UniversalText(
+                  'Welcome Back',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -515,8 +570,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? null
                           : () {
                               setState(() {
-                                obscurePassword =
-                                    !obscurePassword;
+                                obscurePassword = !obscurePassword;
                               });
                             },
                     ),
@@ -541,7 +595,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const UniversalText('LOGIN',
+                        : const UniversalText(
+                            'LOGIN',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
@@ -556,12 +611,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  const SignupScreen(),
+                              builder: (_) => const SignupScreen(),
                             ),
                           );
                         },
-                  child: const UniversalText('Create a new account',
+                  child: const UniversalText(
+                    'Create a new account',
                   ),
                 ),
               ],
@@ -654,29 +709,31 @@ class HomeCustomization {
     this.navbarRadius = 24,
     List<String>? sectionOrder,
     List<String>? navigationOrder,
-  }) : sectionOrder = sectionOrder ?? [
-          'Continue Watching',
-          'Recently Watched',
-          'Movies',
-          'TV Shows',
-          'New Additions',
-          'All Library',
-          'Recommendations',
-          'Music & Film',
-          'Seasonal Collections',
-        ],
-        navigationOrder = navigationOrder ?? [
-          'Profile',
-          'Home',
-          'Sports',
-          'Surprise Me',
-          'More',
-          'Music',
-          'Film',
-          'Collections',
-          'Shop',
-          'Group Chat',
-        ];
+  })  : sectionOrder = sectionOrder ??
+            [
+              'Continue Watching',
+              'Recently Watched',
+              'Movies',
+              'TV Shows',
+              'New Additions',
+              'All Library',
+              'Recommendations',
+              'Music & Film',
+              'Seasonal Collections',
+            ],
+        navigationOrder = navigationOrder ??
+            [
+              'Profile',
+              'Home',
+              'Sports',
+              'Surprise Me',
+              'More',
+              'Music',
+              'Film',
+              'Collections',
+              'Shop',
+              'Group Chat',
+            ];
 
   HomeCustomization copy() => HomeCustomization(
         showHero: showHero,
@@ -712,7 +769,8 @@ class HomeCustomization {
 class HomeCustomizationStore {
   HomeCustomizationStore._();
 
-  static final Map<String, HomeCustomization> _settings = <String, HomeCustomization>{};
+  static final Map<String, HomeCustomization> _settings =
+      <String, HomeCustomization>{};
   static final Set<String> _configuredProfiles = <String>{};
   static SharedPreferences? _prefs;
 
@@ -750,7 +808,8 @@ class HomeCustomizationStore {
   static String _key(Profile? profile) => profile?.id ?? 'default';
 
   static HomeCustomization settingsFor(Profile? profile) {
-    final value = _settings.putIfAbsent(_key(profile), () => HomeCustomization());
+    final value =
+        _settings.putIfAbsent(_key(profile), () => HomeCustomization());
     if (!value.navigationOrder.contains('Surprise Me')) {
       final moreIndex = value.navigationOrder.indexOf('More');
       if (moreIndex >= 0) {
@@ -762,14 +821,17 @@ class HomeCustomizationStore {
     return value.copy();
   }
 
-  static HomeCustomization get settings => settingsFor(AppController.instance.currentProfile);
+  static HomeCustomization get settings =>
+      settingsFor(AppController.instance.currentProfile);
 
   static Map<String, dynamic> snapshotFor(Profile? profile) {
     return _toJson(settingsFor(profile));
   }
 
-  static bool isConfigured(Profile? profile) => _configuredProfiles.contains(_key(profile));
-  static bool get hasConfigured => isConfigured(AppController.instance.currentProfile);
+  static bool isConfigured(Profile? profile) =>
+      _configuredProfiles.contains(_key(profile));
+  static bool get hasConfigured =>
+      isConfigured(AppController.instance.currentProfile);
 
   static void apply(HomeCustomization value, [Profile? profile]) {
     final key = _key(profile ?? AppController.instance.currentProfile);
@@ -809,14 +871,33 @@ class HomeCustomizationStore {
   }
 
   static Map<String, dynamic> _toJson(HomeCustomization v) => {
-    'showHero': v.showHero, 'showContinueWatching': v.showContinueWatching, 'showRecentlyWatched': v.showRecentlyWatched,
-    'showMovies': v.showMovies, 'showTvShows': v.showTvShows, 'showNewAdditions': v.showNewAdditions,
-    'showAllLibrary': v.showAllLibrary, 'showRecommendations': v.showRecommendations, 'showMusic': v.showMusic, 'showFilm': v.showFilm, 'showSeasonalCollections': v.showSeasonalCollections, 'homeMediaLayout': v.homeMediaLayout, 'heroStyle': v.heroStyle,
-    'cardSize': v.cardSize, 'navbarPosition': v.navbarPosition, 'storageBarPosition': v.storageBarPosition, 'storageBarThickness': v.storageBarThickness,
-    'homeBackgroundColor': v.homeBackgroundColor, 'navbarColor': v.navbarColor, 'navbarGlowColor': v.navbarGlowColor, 'navbarItemColor': v.navbarItemColor,
-    'navbarStyle': v.navbarStyle, 'navbarOpacity': v.navbarOpacity, 'navbarRadius': v.navbarRadius,
-    'sectionOrder': v.sectionOrder, 'navigationOrder': v.navigationOrder,
-  };
+        'showHero': v.showHero,
+        'showContinueWatching': v.showContinueWatching,
+        'showRecentlyWatched': v.showRecentlyWatched,
+        'showMovies': v.showMovies,
+        'showTvShows': v.showTvShows,
+        'showNewAdditions': v.showNewAdditions,
+        'showAllLibrary': v.showAllLibrary,
+        'showRecommendations': v.showRecommendations,
+        'showMusic': v.showMusic,
+        'showFilm': v.showFilm,
+        'showSeasonalCollections': v.showSeasonalCollections,
+        'homeMediaLayout': v.homeMediaLayout,
+        'heroStyle': v.heroStyle,
+        'cardSize': v.cardSize,
+        'navbarPosition': v.navbarPosition,
+        'storageBarPosition': v.storageBarPosition,
+        'storageBarThickness': v.storageBarThickness,
+        'homeBackgroundColor': v.homeBackgroundColor,
+        'navbarColor': v.navbarColor,
+        'navbarGlowColor': v.navbarGlowColor,
+        'navbarItemColor': v.navbarItemColor,
+        'navbarStyle': v.navbarStyle,
+        'navbarOpacity': v.navbarOpacity,
+        'navbarRadius': v.navbarRadius,
+        'sectionOrder': v.sectionOrder,
+        'navigationOrder': v.navigationOrder,
+      };
 
   static String _colorNameFromStored(dynamic value, String fallback) {
     final stored = value?.toString();
@@ -844,32 +925,58 @@ class HomeCustomizationStore {
     return legacy[stored] ?? fallback;
   }
 
-  static HomeCustomization _fromJson(Map<String, dynamic> m) => HomeCustomization(
-    showHero: m['showHero'] == false ? false : true, showContinueWatching: m['showContinueWatching'] == false ? false : true,
-    showRecentlyWatched: m['showRecentlyWatched'] == false ? false : true, showMovies: m['showMovies'] == false ? false : true,
-    showTvShows: m['showTvShows'] == false ? false : true, showNewAdditions: m['showNewAdditions'] == false ? false : true,
-    showAllLibrary: m['showAllLibrary'] == true, showRecommendations: m['showRecommendations'] == false ? false : true,
-    showMusic: m['showMusic'] == false ? false : true, showFilm: m['showFilm'] == false ? false : true, showSeasonalCollections: m['showSeasonalCollections'] == false ? false : true, homeMediaLayout: m['homeMediaLayout']?.toString() == 'Top & Bottom' ? 'Under Banner' : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
-    heroStyle: m['heroStyle']?.toString() ?? 'Cinematic', cardSize: m['cardSize']?.toString() ?? 'Medium',
-    navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom', storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom', storageBarThickness: (m['storageBarThickness'] is num ? (m['storageBarThickness'] as num).toDouble() : 12),
-    homeBackgroundColor: _colorNameFromStored(m['homeBackgroundColor'], 'Black'),
-    navbarColor: _colorNameFromStored(m['navbarColor'], 'Black'),
-    navbarGlowColor: _colorNameFromStored(m['navbarGlowColor'], 'Red'),
-    navbarItemColor: _colorNameFromStored(m['navbarItemColor'], 'Purple'),
-    navbarStyle: m['navbarStyle']?.toString() ?? 'Solid',
-    navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
-    navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
-    sectionOrder: m['sectionOrder'] is List
-        ? (List<String>.from(m['sectionOrder'] as List)
-            ..replaceRange(0, (m['sectionOrder'] as List).length, (m['sectionOrder'] as List)
-                .map((e) => e.toString() == 'Live Sports' ? 'Sports' : e.toString())
-                .where((e) => e != 'Sports')))
-        : null,
-    navigationOrder: m['navigationOrder'] is List
-        ? (List<String>.from(m['navigationOrder'] as List)
-            ..replaceRange(0, (m['navigationOrder'] as List).length, (m['navigationOrder'] as List).map((e) => e.toString() == 'Live Sports' ? 'Sports' : e.toString())))
-        : null,
-  );
+  static HomeCustomization _fromJson(Map<String, dynamic> m) =>
+      HomeCustomization(
+        showHero: m['showHero'] == false ? false : true,
+        showContinueWatching: m['showContinueWatching'] == false ? false : true,
+        showRecentlyWatched: m['showRecentlyWatched'] == false ? false : true,
+        showMovies: m['showMovies'] == false ? false : true,
+        showTvShows: m['showTvShows'] == false ? false : true,
+        showNewAdditions: m['showNewAdditions'] == false ? false : true,
+        showAllLibrary: m['showAllLibrary'] == true,
+        showRecommendations: m['showRecommendations'] == false ? false : true,
+        showMusic: m['showMusic'] == false ? false : true,
+        showFilm: m['showFilm'] == false ? false : true,
+        showSeasonalCollections:
+            m['showSeasonalCollections'] == false ? false : true,
+        homeMediaLayout: m['homeMediaLayout']?.toString() == 'Top & Bottom'
+            ? 'Under Banner'
+            : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
+        heroStyle: m['heroStyle']?.toString() ?? 'Cinematic',
+        cardSize: m['cardSize']?.toString() ?? 'Medium',
+        navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom',
+        storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom',
+        storageBarThickness: (m['storageBarThickness'] is num
+            ? (m['storageBarThickness'] as num).toDouble()
+            : 12),
+        homeBackgroundColor:
+            _colorNameFromStored(m['homeBackgroundColor'], 'Black'),
+        navbarColor: _colorNameFromStored(m['navbarColor'], 'Black'),
+        navbarGlowColor: _colorNameFromStored(m['navbarGlowColor'], 'Red'),
+        navbarItemColor: _colorNameFromStored(m['navbarItemColor'], 'Purple'),
+        navbarStyle: m['navbarStyle']?.toString() ?? 'Solid',
+        navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
+        navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
+        sectionOrder: m['sectionOrder'] is List
+            ? (List<String>.from(m['sectionOrder'] as List)
+              ..replaceRange(
+                  0,
+                  (m['sectionOrder'] as List).length,
+                  (m['sectionOrder'] as List)
+                      .map((e) => e.toString() == 'Live Sports'
+                          ? 'Sports'
+                          : e.toString())
+                      .where((e) => e != 'Sports')))
+            : null,
+        navigationOrder: m['navigationOrder'] is List
+            ? (List<String>.from(m['navigationOrder'] as List)
+              ..replaceRange(
+                  0,
+                  (m['navigationOrder'] as List).length,
+                  (m['navigationOrder'] as List).map((e) =>
+                      e.toString() == 'Live Sports' ? 'Sports' : e.toString())))
+            : null,
+      );
 }
 
 enum _CustomizationPage {
@@ -904,19 +1011,87 @@ class _PreviewDevicePreset {
 }
 
 const _previewDevices = <_PreviewDevicePreset>[
-  _PreviewDevicePreset(name: 'iPhone', category: _PreviewDeviceCategory.phone, width: 390, height: 844, icon: Icons.phone_iphone_rounded),
-  _PreviewDevicePreset(name: 'Samsung Galaxy', category: _PreviewDeviceCategory.phone, width: 412, height: 915, icon: Icons.phone_android_rounded),
-  _PreviewDevicePreset(name: 'Android Phone', category: _PreviewDeviceCategory.phone, width: 412, height: 892, icon: Icons.android_rounded),
-  _PreviewDevicePreset(name: 'LG Phone', category: _PreviewDeviceCategory.phone, width: 393, height: 873, icon: Icons.phone_android_rounded),
-  _PreviewDevicePreset(name: 'iPad', category: _PreviewDeviceCategory.tablet, width: 820, height: 1180, icon: Icons.tablet_mac_rounded),
-  _PreviewDevicePreset(name: 'iPad Pro', category: _PreviewDeviceCategory.tablet, width: 1024, height: 1366, icon: Icons.tablet_mac_rounded),
-  _PreviewDevicePreset(name: 'Android Tablet', category: _PreviewDeviceCategory.tablet, width: 800, height: 1280, icon: Icons.tablet_android_rounded),
-  _PreviewDevicePreset(name: 'Windows PC', category: _PreviewDeviceCategory.desktop, width: 1440, height: 900, icon: Icons.desktop_windows_rounded),
-  _PreviewDevicePreset(name: 'Mac', category: _PreviewDeviceCategory.desktop, width: 1440, height: 900, icon: Icons.desktop_mac_rounded),
-  _PreviewDevicePreset(name: 'Laptop', category: _PreviewDeviceCategory.desktop, width: 1366, height: 768, icon: Icons.laptop_mac_rounded),
-  _PreviewDevicePreset(name: 'Smart TV', category: _PreviewDeviceCategory.tv, width: 1920, height: 1080, icon: Icons.tv_rounded, landscape: true),
-  _PreviewDevicePreset(name: '4K TV', category: _PreviewDeviceCategory.tv, width: 3840, height: 2160, icon: Icons.tv_rounded, landscape: true),
-  _PreviewDevicePreset(name: 'TV / Large Display', category: _PreviewDeviceCategory.tv, width: 1280, height: 720, icon: Icons.connected_tv_rounded, landscape: true),
+  _PreviewDevicePreset(
+      name: 'iPhone',
+      category: _PreviewDeviceCategory.phone,
+      width: 390,
+      height: 844,
+      icon: Icons.phone_iphone_rounded),
+  _PreviewDevicePreset(
+      name: 'Samsung Galaxy',
+      category: _PreviewDeviceCategory.phone,
+      width: 412,
+      height: 915,
+      icon: Icons.phone_android_rounded),
+  _PreviewDevicePreset(
+      name: 'Android Phone',
+      category: _PreviewDeviceCategory.phone,
+      width: 412,
+      height: 892,
+      icon: Icons.android_rounded),
+  _PreviewDevicePreset(
+      name: 'LG Phone',
+      category: _PreviewDeviceCategory.phone,
+      width: 393,
+      height: 873,
+      icon: Icons.phone_android_rounded),
+  _PreviewDevicePreset(
+      name: 'iPad',
+      category: _PreviewDeviceCategory.tablet,
+      width: 820,
+      height: 1180,
+      icon: Icons.tablet_mac_rounded),
+  _PreviewDevicePreset(
+      name: 'iPad Pro',
+      category: _PreviewDeviceCategory.tablet,
+      width: 1024,
+      height: 1366,
+      icon: Icons.tablet_mac_rounded),
+  _PreviewDevicePreset(
+      name: 'Android Tablet',
+      category: _PreviewDeviceCategory.tablet,
+      width: 800,
+      height: 1280,
+      icon: Icons.tablet_android_rounded),
+  _PreviewDevicePreset(
+      name: 'Windows PC',
+      category: _PreviewDeviceCategory.desktop,
+      width: 1440,
+      height: 900,
+      icon: Icons.desktop_windows_rounded),
+  _PreviewDevicePreset(
+      name: 'Mac',
+      category: _PreviewDeviceCategory.desktop,
+      width: 1440,
+      height: 900,
+      icon: Icons.desktop_mac_rounded),
+  _PreviewDevicePreset(
+      name: 'Laptop',
+      category: _PreviewDeviceCategory.desktop,
+      width: 1366,
+      height: 768,
+      icon: Icons.laptop_mac_rounded),
+  _PreviewDevicePreset(
+      name: 'Smart TV',
+      category: _PreviewDeviceCategory.tv,
+      width: 1920,
+      height: 1080,
+      icon: Icons.tv_rounded,
+      landscape: true),
+  _PreviewDevicePreset(
+      name: '4K TV',
+      category: _PreviewDeviceCategory.tv,
+      width: 3840,
+      height: 2160,
+      icon: Icons.tv_rounded,
+      landscape: true),
+  _PreviewDevicePreset(
+      name: 'TV / Large Display',
+      category: _PreviewDeviceCategory.tv,
+      width: 1280,
+      height: 720,
+      icon: Icons.connected_tv_rounded,
+      landscape: true),
 ];
 
 /// Implements the `CustomizeHomeScreen` class for this feature or UI component.
@@ -948,17 +1123,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   // section always opens at its top.
   final ScrollController _customizationScrollController = ScrollController();
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    draft = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    draft = HomeCustomizationStore.settingsFor(
+        AppController.instance.currentProfile);
     detailsDraft = DetailsCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
     musicDraft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
-    draft.sectionOrder.removeWhere((section) => section == 'Sports' || section == 'Live Sports');
+    draft.sectionOrder.removeWhere(
+        (section) => section == 'Sports' || section == 'Live Sports');
     _normalizeHomePositions();
   }
 
@@ -967,10 +1145,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     // layout distributes 2 items as outer slots and 3 items as left/center/right
     // (or top/middle/bottom) slots, so do not move saved positions here.
     const positions = <String>{'Top', 'Bottom', 'Left', 'Right'};
-    if (!positions.contains(draft.navbarPosition) && draft.navbarPosition != 'Floating') {
+    if (!positions.contains(draft.navbarPosition) &&
+        draft.navbarPosition != 'Floating') {
       draft.navbarPosition = 'Bottom';
     }
-    if (!positions.contains(draft.storageBarPosition) && draft.storageBarPosition != 'Hidden') {
+    if (!positions.contains(draft.storageBarPosition) &&
+        draft.storageBarPosition != 'Hidden') {
       draft.storageBarPosition = 'Bottom';
     }
   }
@@ -1037,9 +1217,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   Future<void> _syncCustomization(Profile? profile) async {
-    if (profile == null || !AppController.instance.backendApi.isAuthenticated) return;
+    if (profile == null || !AppController.instance.backendApi.isAuthenticated) {
+      return;
+    }
     try {
-      await AppController.instance.backendApi.syncProfileCustomizationToSupabase(
+      await AppController.instance.backendApi
+          .syncProfileCustomizationToSupabase(
         profileId: profile.id,
         home: HomeCustomizationStore.snapshotFor(profile),
         details: DetailsCustomizationStore.snapshotFor(profile),
@@ -1077,7 +1260,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     super.dispose();
   }
 
-  List<String> _availableHomePositions(HomeCustomization value, {bool allowHidden = false, bool excludeNavbar = false}) {
+  List<String> _availableHomePositions(HomeCustomization value,
+      {bool allowHidden = false, bool excludeNavbar = false}) {
     final positions = <String>['Top', 'Bottom', 'Left', 'Right'];
     // Multiple controls are allowed on the same side. HomePositionedLayout
     // resolves those into separate edge slots.
@@ -1328,14 +1512,16 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           ),
           if (!isHome && !isMusic) ...[
             const SizedBox(height: 12),
-            UniversalText('Profile: ${AppController.instance.currentProfile?.name ?? 'No profile selected'}',
+            UniversalText(
+              'Profile: ${AppController.instance.currentProfile?.name ?? 'No profile selected'}',
               style: const TextStyle(
                 color: Colors.white70,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
-            const UniversalText('These Details settings belong only to the currently selected profile.',
+            const UniversalText(
+              'These Details settings belong only to the currently selected profile.',
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ],
@@ -1349,7 +1535,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const UniversalText('PRESENTATION',
+        const UniversalText(
+          'PRESENTATION',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1372,7 +1559,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.cardSize = value),
         ),
         const SizedBox(height: 24),
-        const UniversalText('NAVIGATION & STORAGE',
+        const UniversalText(
+          'NAVIGATION & STORAGE',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1385,33 +1573,58 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: 'Where do you want your navbar?',
           value: draft.navbarPosition,
           values: const ['Bottom', 'Top', 'Left', 'Right', 'Floating'],
-          onChanged: (value) => setState(() { draft.navbarPosition = value; _normalizeHomePositions(); }),
+          onChanged: (value) => setState(() {
+            draft.navbarPosition = value;
+            _normalizeHomePositions();
+          }),
         ),
         const SizedBox(height: 12),
         _sectionOrder(
           title: tr('NAVIGATION ORDER'),
-          subtitle: tr('Drag navbar items to change their order. More stays as the expandable menu.'),
+          subtitle: tr(
+              'Drag navbar items to change their order. More stays as the expandable menu.'),
           items: draft.navigationOrder,
-          onChanged: (newOrder) => setState(() => draft.navigationOrder = newOrder),
+          onChanged: (newOrder) =>
+              setState(() => draft.navigationOrder = newOrder),
         ),
         const SizedBox(height: 12),
         _dropdown(
           label: 'Where should the storage bar appear?',
           value: draft.storageBarPosition,
-          values: _availableHomePositions(draft, allowHidden: true, excludeNavbar: true),
-          onChanged: (value) => setState(() { draft.storageBarPosition = value; _normalizeHomePositions(); }),
+          values: _availableHomePositions(draft,
+              allowHidden: true, excludeNavbar: true),
+          onChanged: (value) => setState(() {
+            draft.storageBarPosition = value;
+            _normalizeHomePositions();
+          }),
         ),
         const SizedBox(height: 8),
-        UniversalText('Storage bar thickness: ${draft.storageBarThickness.round()} px', style: const TextStyle(color: Colors.white70)),
-        Slider(value: draft.storageBarThickness.clamp(4, 32), min: 4, max: 32, divisions: 14, onChanged: (value) => setState(() => draft.storageBarThickness = value)),
-        const UniversalText('A Home position is removed when it is already occupied by the navbar or storage bar.', style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
+        UniversalText(
+            'Storage bar thickness: ${draft.storageBarThickness.round()} px',
+            style: const TextStyle(color: Colors.white70)),
+        Slider(
+            value: draft.storageBarThickness.clamp(4, 32),
+            min: 4,
+            max: 32,
+            divisions: 14,
+            onChanged: (value) =>
+                setState(() => draft.storageBarThickness = value)),
+        const UniversalText(
+            'A Home position is removed when it is already occupied by the navbar or storage bar.',
+            style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
         const SizedBox(height: 24),
-        const UniversalText('COLORS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const UniversalText('COLORS',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.4,
+                color: Colors.white54)),
         const SizedBox(height: 10),
         _colorDropdown(
           label: 'Home background',
           value: draft.homeBackgroundColor,
-          onChanged: (value) => setState(() => draft.homeBackgroundColor = value),
+          onChanged: (value) =>
+              setState(() => draft.homeBackgroundColor = value),
         ),
         const SizedBox(height: 10),
         _colorDropdown(
@@ -1439,7 +1652,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.navbarStyle = value),
         ),
         const SizedBox(height: 10),
-        UniversalText('Navbar opacity: ${(draft.navbarOpacity * 100).round()}%', style: const TextStyle(color: Colors.white70)),
+        UniversalText('Navbar opacity: ${(draft.navbarOpacity * 100).round()}%',
+            style: const TextStyle(color: Colors.white70)),
         Slider(
           value: draft.navbarOpacity.clamp(.10, 1.0),
           min: .10,
@@ -1448,7 +1662,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: '${(draft.navbarOpacity * 100).round()}%',
           onChanged: (value) => setState(() => draft.navbarOpacity = value),
         ),
-        UniversalText('Navbar corner radius: ${draft.navbarRadius.round()} px', style: const TextStyle(color: Colors.white70)),
+        UniversalText('Navbar corner radius: ${draft.navbarRadius.round()} px',
+            style: const TextStyle(color: Colors.white70)),
         Slider(
           value: draft.navbarRadius.clamp(0, 42),
           min: 0,
@@ -1458,7 +1673,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.navbarRadius = value),
         ),
         const SizedBox(height: 24),
-        const UniversalText('HOME MEDIA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.4, color: Colors.white54)),
+        const UniversalText('HOME MEDIA',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.4,
+                color: Colors.white54)),
         const SizedBox(height: 10),
         _dropdown(
           label: 'Music & Film placement',
@@ -1466,16 +1686,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           values: const ['Left & Right', 'Under Banner'],
           onChanged: (value) => setState(() => draft.homeMediaLayout = value),
         ),
-        _toggle('Music', 'Show a Music destination on Home.', draft.showMusic, (v) => setState(() => draft.showMusic = v)),
-        _toggle('Film', 'Show the dedicated Film experience on Home.', draft.showFilm, (v) => setState(() => draft.showFilm = v)),
+        _toggle('Music', 'Show a Music destination on Home.', draft.showMusic,
+            (v) => setState(() => draft.showMusic = v)),
+        _toggle('Film', 'Show the dedicated Film experience on Home.',
+            draft.showFilm, (v) => setState(() => draft.showFilm = v)),
         const ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.collections_bookmark_outlined),
           title: Text('Collections'),
-          subtitle: Text('Collections is available directly from the navigation bar.'),
+          subtitle: Text(
+              'Collections is available directly from the navigation bar.'),
         ),
         const SizedBox(height: 24),
-        const UniversalText('SECTIONS',
+        const UniversalText(
+          'SECTIONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1526,7 +1750,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           draft.showAllLibrary,
           (v) => setState(() => draft.showAllLibrary = v),
         ),
-         _toggle('Seasonal Collections', 'Show the calendar-based collection for the current month.', draft.showSeasonalCollections, (v) => setState(() => draft.showSeasonalCollections = v)),
+        _toggle(
+            'Seasonal Collections',
+            'Show the calendar-based collection for the current month.',
+            draft.showSeasonalCollections,
+            (v) => setState(() => draft.showSeasonalCollections = v)),
         const SizedBox(height: 24),
         _sectionOrder(
           title: tr('SECTION ORDER'),
@@ -1543,7 +1771,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const UniversalText('MUSIC PRESENTATION',
+        const UniversalText(
+          'MUSIC PRESENTATION',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1566,7 +1795,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => musicDraft.playerStyle = value),
         ),
         const SizedBox(height: 22),
-        const UniversalText('DISCOVERY & PLAYER',
+        const UniversalText(
+          'DISCOVERY & PLAYER',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1577,30 +1807,41 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         const SizedBox(height: 10),
         _toggle('Search bar', 'Show Music search.', musicDraft.showSearch,
             (v) => setState(() => musicDraft.showSearch = v)),
-        _toggle('Player', 'Show the persistent player and queue.',
+        _toggle(
+            'Player',
+            'Show the persistent player and queue.',
             musicDraft.showPlayer,
             (v) => setState(() => musicDraft.showPlayer = v)),
-        _toggle('Weekly Discovery', 'Show the weekly discovery mix.',
+        _toggle(
+            'Weekly Discovery',
+            'Show the weekly discovery mix.',
             musicDraft.showWeeklyDiscovery,
             (v) => setState(() => musicDraft.showWeeklyDiscovery = v)),
-        _toggle('AI DJ', 'Show the AI DJ launcher.',
-            musicDraft.showAIDJ,
+        _toggle('AI DJ', 'Show the AI DJ launcher.', musicDraft.showAIDJ,
             (v) => setState(() => musicDraft.showAIDJ = v)),
-        _toggle('System-created playlists',
+        _toggle(
+            'System-created playlists',
             'Show Made For You, Discover Weekly and Daily Mix.',
             musicDraft.showSystemPlaylists,
             (v) => setState(() => musicDraft.showSystemPlaylists = v)),
-        _toggle('Liked Songs', 'Show saved favorites.',
+        _toggle(
+            'Liked Songs',
+            'Show saved favorites.',
             musicDraft.showLikedSongs,
             (v) => setState(() => musicDraft.showLikedSongs = v)),
-        _toggle('Recently Played', 'Show recent listening.',
+        _toggle(
+            'Recently Played',
+            'Show recent listening.',
             musicDraft.showRecentlyPlayed,
             (v) => setState(() => musicDraft.showRecentlyPlayed = v)),
-        _toggle('Mood & Genre Mixes', 'Show quick mixes from imported metadata.',
+        _toggle(
+            'Mood & Genre Mixes',
+            'Show quick mixes from imported metadata.',
             musicDraft.showMoodMixes,
             (v) => setState(() => musicDraft.showMoodMixes = v)),
         const SizedBox(height: 22),
-        const UniversalText('LIBRARY',
+        const UniversalText(
+          'LIBRARY',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1609,23 +1850,25 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        _toggle('Artists / Bands', 'Show singers and bands.',
+        _toggle(
+            'Artists / Bands',
+            'Show singers and bands.',
             musicDraft.showArtists,
             (v) => setState(() => musicDraft.showArtists = v)),
-        _toggle('Albums', 'Show ripped albums.',
-            musicDraft.showAlbums,
+        _toggle('Albums', 'Show ripped albums.', musicDraft.showAlbums,
             (v) => setState(() => musicDraft.showAlbums = v)),
-        _toggle('Playlists', 'Show custom playlists.',
-            musicDraft.showPlaylists,
+        _toggle('Playlists', 'Show custom playlists.', musicDraft.showPlaylists,
             (v) => setState(() => musicDraft.showPlaylists = v)),
-        _toggle('Soundtrack Universe',
+        _toggle(
+            'Soundtrack Universe',
             'Connect songs with the films and shows that use them.',
             musicDraft.showSoundtrackUniverse,
             (v) => setState(() => musicDraft.showSoundtrackUniverse = v)),
         const SizedBox(height: 20),
         _sectionOrder(
           title: tr('MUSIC SECTION ORDER'),
-          subtitle: tr('Drag discovery, library and soundtrack sections into your preferred order.'),
+          subtitle: tr(
+              'Drag discovery, library and soundtrack sections into your preferred order.'),
           items: musicDraft.sectionOrder,
           onChanged: (value) => setState(() => musicDraft.sectionOrder = value),
         ),
@@ -1638,7 +1881,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const UniversalText('DETAILS PRESENTATION',
+        const UniversalText(
+          'DETAILS PRESENTATION',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1651,25 +1895,45 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: 'Poster style',
           value: detailsDraft.posterStyle,
           values: const ['Standard', 'Full Screen', 'Compact', 'Side'],
-          onChanged: (value) => setState(() => detailsDraft.posterStyle = value),
+          onChanged: (value) =>
+              setState(() => detailsDraft.posterStyle = value),
         ),
         const SizedBox(height: 12),
         _dropdown(
           label: 'Title alignment',
           value: detailsDraft.titleAlignment,
           values: const ['Left', 'Center', 'Right'],
-          onChanged: (value) => setState(() => detailsDraft.titleAlignment = value),
+          onChanged: (value) =>
+              setState(() => detailsDraft.titleAlignment = value),
         ),
         const SizedBox(height: 12),
-        _dropdown(label: 'Poster position', value: detailsDraft.posterPosition, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.posterPosition = v)),
+        _dropdown(
+            label: 'Poster position',
+            value: detailsDraft.posterPosition,
+            values: const ['Left', 'Center', 'Right'],
+            onChanged: (v) => setState(() => detailsDraft.posterPosition = v)),
         const SizedBox(height: 12),
-        _dropdown(label: 'Poster size', value: detailsDraft.posterSize, values: const ['Small', 'Medium', 'Large'], onChanged: (v) => setState(() => detailsDraft.posterSize = v)),
+        _dropdown(
+            label: 'Poster size',
+            value: detailsDraft.posterSize,
+            values: const ['Small', 'Medium', 'Large'],
+            onChanged: (v) => setState(() => detailsDraft.posterSize = v)),
         const SizedBox(height: 12),
-        _dropdown(label: 'Button alignment', value: detailsDraft.buttonAlignment, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.buttonAlignment = v)),
+        _dropdown(
+            label: 'Button alignment',
+            value: detailsDraft.buttonAlignment,
+            values: const ['Left', 'Center', 'Right'],
+            onChanged: (v) => setState(() => detailsDraft.buttonAlignment = v)),
         const SizedBox(height: 12),
-        _dropdown(label: 'Information alignment', value: detailsDraft.informationAlignment, values: const ['Left', 'Center', 'Right'], onChanged: (v) => setState(() => detailsDraft.informationAlignment = v)),
+        _dropdown(
+            label: 'Information alignment',
+            value: detailsDraft.informationAlignment,
+            values: const ['Left', 'Center', 'Right'],
+            onChanged: (v) =>
+                setState(() => detailsDraft.informationAlignment = v)),
         const SizedBox(height: 24),
-        const UniversalText('DETAILS SECTIONS',
+        const UniversalText(
+          'DETAILS SECTIONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1763,7 +2027,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           (v) => setState(() => detailsDraft.showRecommendations = v),
         ),
         const SizedBox(height: 24),
-        const UniversalText('SEASONS',
+        const UniversalText(
+          'SEASONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1776,21 +2041,33 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: 'Season placement',
           value: detailsDraft.seasonPlacement,
           values: const ['Left', 'Center', 'Right'],
-          onChanged: (value) => setState(() => detailsDraft.seasonPlacement = value),
+          onChanged: (value) =>
+              setState(() => detailsDraft.seasonPlacement = value),
         ),
         const SizedBox(height: 12),
         _dropdown(
           label: 'Season order',
           value: detailsDraft.seasonOrder,
           values: const ['Top to Bottom', 'Bottom to Top'],
-          onChanged: (value) => setState(() => detailsDraft.seasonOrder = value),
+          onChanged: (value) =>
+              setState(() => detailsDraft.seasonOrder = value),
         ),
         const SizedBox(height: 12),
-        _dropdown(label: 'Season selector', value: detailsDraft.seasonSelectorStyle, values: const ['Buttons', 'Dropdown'], onChanged: (v) => setState(() => detailsDraft.seasonSelectorStyle = v)),
+        _dropdown(
+            label: 'Season selector',
+            value: detailsDraft.seasonSelectorStyle,
+            values: const ['Buttons', 'Dropdown'],
+            onChanged: (v) =>
+                setState(() => detailsDraft.seasonSelectorStyle = v)),
         const SizedBox(height: 12),
-        _dropdown(label: 'Episode naming', value: detailsDraft.episodeNaming, values: const ['Actual Title', 'Season X, Episode Y', 'Both'], onChanged: (v) => setState(() => detailsDraft.episodeNaming = v)),
+        _dropdown(
+            label: 'Episode naming',
+            value: detailsDraft.episodeNaming,
+            values: const ['Actual Title', 'Season X, Episode Y', 'Both'],
+            onChanged: (v) => setState(() => detailsDraft.episodeNaming = v)),
         const SizedBox(height: 24),
-        const UniversalText('METADATA',
+        const UniversalText(
+          'METADATA',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -1891,8 +2168,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               ),
               const SizedBox(width: 8),
               const Expanded(
-                child: UniversalText('LIVE DEVICE PREVIEW',
-                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                child: UniversalText(
+                  'LIVE DEVICE PREVIEW',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900, letterSpacing: 1.2),
                 ),
               ),
               Icon(
@@ -1932,12 +2211,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             const SizedBox(height: 10),
             SegmentedButton<bool>(
               segments: const [
-                ButtonSegment<bool>(value: false, icon: Icon(Icons.movie_outlined), label: UniversalText('Movie')),
-                ButtonSegment<bool>(value: true, icon: Icon(Icons.tv_outlined), label: UniversalText('TV Show')),
+                ButtonSegment<bool>(
+                    value: false,
+                    icon: Icon(Icons.movie_outlined),
+                    label: UniversalText('Movie')),
+                ButtonSegment<bool>(
+                    value: true,
+                    icon: Icon(Icons.tv_outlined),
+                    label: UniversalText('TV Show')),
               ],
               selected: <bool>{detailsPreviewTvShow},
               onSelectionChanged: (value) {
-                if (value.isNotEmpty) setState(() => detailsPreviewTvShow = value.first);
+                if (value.isNotEmpty) {
+                  setState(() => detailsPreviewTvShow = value.first);
+                }
               },
             ),
           ],
@@ -1959,12 +2246,17 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                     .toDouble();
                 return Center(
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(isPhone ? 28 : isTv ? 10 : 18),
+                    borderRadius: BorderRadius.circular(isPhone
+                        ? 28
+                        : isTv
+                            ? 10
+                            : 18),
                     child: SizedBox(
                       width: selectedDevice.width * scale,
                       height: selectedDevice.height * scale,
                       child: DecoratedBox(
-                        decoration: const BoxDecoration(color: Color(0xFF090909)),
+                        decoration:
+                            const BoxDecoration(color: Color(0xFF090909)),
                         child: Transform.scale(
                           scale: scale,
                           alignment: Alignment.topLeft,
@@ -1985,8 +2277,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          UniversalText('${selectedDevice.name} • ${selectedDevice.width.toInt()} × ${selectedDevice.height.toInt()} • ${isTv ? 'TV remote / focus layout' : 'touch / pointer layout'}',
-            style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w700),
+          UniversalText(
+            '${selectedDevice.name} • ${selectedDevice.width.toInt()} × ${selectedDevice.height.toInt()} • ${isTv ? 'TV remote / focus layout' : 'touch / pointer layout'}',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2007,10 +2303,14 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _previewCategoryButton(_PreviewDeviceCategory.phone, Icons.phone_iphone_rounded, '📱 Phone'),
-          _previewCategoryButton(_PreviewDeviceCategory.tablet, Icons.tablet_mac_rounded, '📱 Tablet'),
-          _previewCategoryButton(_PreviewDeviceCategory.desktop, Icons.desktop_windows_rounded, '🖥️ Desktop'),
-          _previewCategoryButton(_PreviewDeviceCategory.tv, Icons.tv_rounded, '📺 TV / Large'),
+          _previewCategoryButton(_PreviewDeviceCategory.phone,
+              Icons.phone_iphone_rounded, '📱 Phone'),
+          _previewCategoryButton(_PreviewDeviceCategory.tablet,
+              Icons.tablet_mac_rounded, '📱 Tablet'),
+          _previewCategoryButton(_PreviewDeviceCategory.desktop,
+              Icons.desktop_windows_rounded, '🖥️ Desktop'),
+          _previewCategoryButton(
+              _PreviewDeviceCategory.tv, Icons.tv_rounded, '📺 TV / Large'),
         ],
       ),
     );
@@ -2029,7 +2329,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         label: Text(label),
         selected: selected,
         onSelected: (_) {
-          final first = _previewDevices.firstWhere((device) => device.category == category);
+          final first = _previewDevices
+              .firstWhere((device) => device.category == category);
           setState(() {
             _previewCategory = category;
             _previewDeviceName = first.name;
@@ -2170,7 +2471,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         case 'Music & Film':
           break;
         case 'Seasonal Collections':
-          sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
+          sections.add(_homePreviewBar(
+              'SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
     }
 
@@ -2184,7 +2486,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               ? const [
                   Padding(
                     padding: EdgeInsets.all(40),
-                    child: UniversalText('No Home sections are currently enabled.',
+                    child: UniversalText(
+                      'No Home sections are currently enabled.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white54),
                     ),
@@ -2211,15 +2514,23 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            const Icon(Icons.movie_filter_outlined, size: 34, color: Colors.white38),
+            const Icon(Icons.movie_filter_outlined,
+                size: 34, color: Colors.white38),
             const SizedBox(height: 8),
             Text(
               draft.heroStyle.toUpperCase(),
-              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, letterSpacing: 1.1),
+              style: const TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1),
             ),
             const SizedBox(height: 4),
-            const UniversalText('FEATURED MOVIE / TV SHOW',
-              style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w800),
+            const UniversalText(
+              'FEATURED MOVIE / TV SHOW',
+              style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -2242,8 +2553,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         color: const Color(0xFF121212),
       ),
       child: draft.homeMediaLayout == 'Under Banner'
-          ? Column(children: [for (var i = 0; i < buttons.length; i++) ...[buttons[i], if (i != buttons.length - 1) const SizedBox(height: 8)]])
-          : Row(children: [for (var i = 0; i < buttons.length; i++) ...[Expanded(child: buttons[i]), if (i != buttons.length - 1) const SizedBox(width: 8)]]),
+          ? Column(children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                buttons[i],
+                if (i != buttons.length - 1) const SizedBox(height: 8)
+              ]
+            ])
+          : Row(children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                Expanded(child: buttons[i]),
+                if (i != buttons.length - 1) const SizedBox(width: 8)
+              ]
+            ]),
     );
   }
 
@@ -2256,7 +2577,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, size: 18, color: Colors.white54),
           const SizedBox(width: 7),
-          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white54)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white54)),
         ]),
       );
 
@@ -2283,9 +2608,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               Icon(icon, size: 18, color: colorFromName(draft.navbarGlowColor)),
               const SizedBox(width: 7),
               Expanded(
-                child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .8)),
+                child: Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, letterSpacing: .8)),
               ),
-              Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+              Text(subtitle,
+                  style: const TextStyle(color: Colors.white38, fontSize: 9)),
             ],
           ),
           const SizedBox(height: 9),
@@ -2296,9 +2624,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               itemCount: 5,
               separatorBuilder: (_, __) => const SizedBox(width: 9),
               itemBuilder: (context, index) {
-                final label = isTvShow
-                    ? 'SHOW ${index + 1}'
-                    : 'MOVIE ${index + 1}';
+                final label =
+                    isTvShow ? 'SHOW ${index + 1}' : 'MOVIE ${index + 1}';
                 return SizedBox(
                   width: cardWidth,
                   child: Column(
@@ -2309,14 +2636,24 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF151515),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white.withValues(alpha: .18)),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: .18)),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(isTvShow ? Icons.tv_outlined : Icons.movie_outlined, size: 25, color: Colors.white38),
+                              Icon(
+                                  isTvShow
+                                      ? Icons.tv_outlined
+                                      : Icons.movie_outlined,
+                                  size: 25,
+                                  color: Colors.white38),
                               const SizedBox(height: 5),
-                              Text(label, style: const TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.w800)),
+                              Text(label,
+                                  style: const TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),
@@ -2325,7 +2662,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                         const SizedBox(height: 5),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(value: .62, minHeight: 4),
+                          child:
+                              LinearProgressIndicator(value: .62, minHeight: 4),
                         ),
                       ],
                     ],
@@ -2352,7 +2690,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         children: [
           Icon(icon, color: colorFromName(draft.navbarGlowColor)),
           const SizedBox(width: 9),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .8)),
+          Text(label,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, letterSpacing: .8)),
           const Spacer(),
           const Icon(Icons.chevron_right_rounded, color: Colors.white38),
         ],
@@ -2430,7 +2770,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             if (sections.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(30),
-                child: UniversalText('No Music sections are currently enabled.',
+                child: UniversalText(
+                  'No Music sections are currently enabled.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
@@ -2526,7 +2867,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               ? const [
                   Padding(
                     padding: EdgeInsets.all(30),
-                    child: UniversalText('No Details sections are currently enabled.',
+                    child: UniversalText(
+                      'No Details sections are currently enabled.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white54),
                     ),
@@ -2565,14 +2907,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'Title' => _detailsOutlineTitle(),
       'Metadata' => _detailsOutlineMetadata(),
       'Ownership' => _detailsOutlineBar('LIBRARY OWNERSHIP'),
-      'Description' => _detailsOutlineText('Description / synopsis placeholder text'),
+      'Description' =>
+        _detailsOutlineText('Description / synopsis placeholder text'),
       'Seasons' => _detailsOutlineSeasons(),
       'Collection Items' => _detailsOutlineCard('COLLECTION ITEMS'),
       'Play' => _detailsOutlineButton(Icons.play_arrow_rounded, 'PLAY'),
-      'Trailer' => _detailsOutlineButton(Icons.play_circle_outline_rounded, 'WATCH TRAILER'),
-      'Group Watch' => _detailsOutlineButton(Icons.groups_outlined, 'GROUP WATCH / WATCH TOGETHER'),
+      'Trailer' => _detailsOutlineButton(
+          Icons.play_circle_outline_rounded, 'WATCH TRAILER'),
+      'Group Watch' => _detailsOutlineButton(
+          Icons.groups_outlined, 'GROUP WATCH / WATCH TOGETHER'),
       'Reviews' => _detailsOutlineButton(Icons.rate_review_outlined, 'REVIEWS'),
-      'Audio & Subtitles' => _detailsOutlineButton(Icons.closed_caption_outlined, 'AUDIO & SUBTITLES'),
+      'Audio & Subtitles' => _detailsOutlineButton(
+          Icons.closed_caption_outlined, 'AUDIO & SUBTITLES'),
       'Reactions' => _detailsOutlineReactions(),
       'Information' => _detailsOutlineInformation(),
       'Library' => _detailsOutlineLibrary(),
@@ -2651,7 +2997,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           children: [
             Icon(Icons.movie_outlined, size: 48, color: Colors.white38),
             SizedBox(height: 8),
-            UniversalText('POSTER', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w800)),
+            UniversalText('POSTER',
+                style: TextStyle(
+                    color: Colors.white38, fontWeight: FontWeight.w800)),
           ],
         ),
       ),
@@ -2692,7 +3040,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 border: Border.all(color: Colors.white.withValues(alpha: .16)),
                 color: Colors.white.withValues(alpha: .035),
               ),
-              child: Text(pill, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
+              child: Text(pill,
+                  style: const TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w700)),
             ),
         ],
       ),
@@ -2748,7 +3098,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: Colors.white.withValues(alpha: .14)),
             ),
-            child: const Center(child: Icon(Icons.image_outlined, color: Colors.white30)),
+            child: const Center(
+                child: Icon(Icons.image_outlined, color: Colors.white30)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2769,7 +3120,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       child: Column(
         children: [
           _detailsOutlineInfoRow('Directors', 'Director name • Director name'),
-          _detailsOutlineInfoRow('Actors', 'Actor name • Actor name • Actor name'),
+          _detailsOutlineInfoRow(
+              'Actors', 'Actor name • Actor name • Actor name'),
           _detailsOutlineInfoRow('Release Year', '2026'),
           _detailsOutlineInfoRow('Rating', '★ 8.7 / 10'),
           _detailsOutlineInfoRow('Runtime', '2h 10m'),
@@ -2787,13 +3139,15 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         children: [
           SizedBox(
             width: 105,
-            child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 13)),
+            child: Text(label,
+                style: const TextStyle(color: Colors.white38, fontSize: 13)),
           ),
           Expanded(
             child: _detailsTextLine(
               value,
               size: 13,
-              alignment: _detailsTextAlignment(detailsDraft.informationAlignment),
+              alignment:
+                  _detailsTextAlignment(detailsDraft.informationAlignment),
             ),
           ),
         ],
@@ -2808,7 +3162,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         children: [
           Expanded(child: _detailsMiniButton(Icons.thumb_up_outlined, 'LIKE')),
           const SizedBox(width: 8),
-          Expanded(child: _detailsMiniButton(Icons.thumb_down_outlined, 'DISLIKE')),
+          Expanded(
+              child: _detailsMiniButton(Icons.thumb_down_outlined, 'DISLIKE')),
         ],
       ),
     );
@@ -2822,7 +3177,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         children: [
           _detailsOutlineButton(Icons.add_to_queue_rounded, 'ADD TO LIBRARY'),
           const SizedBox(height: 8),
-          _detailsOutlineButton(Icons.collections_bookmark_outlined, 'ADD TO COLLECTION'),
+          _detailsOutlineButton(
+              Icons.collections_bookmark_outlined, 'ADD TO COLLECTION'),
         ],
       ),
     );
@@ -2895,7 +3251,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       ),
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Text(text, style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.w700)),
+      child: Text(text,
+          style: const TextStyle(
+              color: Colors.white38, fontWeight: FontWeight.w700)),
     );
   }
 
@@ -2912,17 +3270,22 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
 
   Widget _detailsOutlineStack(List<String> labels) {
     return Column(
-      crossAxisAlignment: _detailsCrossAxisAlignment(detailsDraft.informationAlignment),
+      crossAxisAlignment:
+          _detailsCrossAxisAlignment(detailsDraft.informationAlignment),
       children: [
         for (var i = 0; i < labels.length; i++) ...[
           if (i != 0) const SizedBox(height: 6),
-          _detailsTextLine(labels[i], size: i == 0 ? 15 : 12, alignment: _detailsTextAlignment(detailsDraft.informationAlignment)),
+          _detailsTextLine(labels[i],
+              size: i == 0 ? 15 : 12,
+              alignment:
+                  _detailsTextAlignment(detailsDraft.informationAlignment)),
         ],
       ],
     );
   }
 
-  Widget _detailsTextLine(String text, {double size = 14, TextAlign alignment = TextAlign.left}) {
+  Widget _detailsTextLine(String text,
+      {double size = 14, TextAlign alignment = TextAlign.left}) {
     return Text(
       text,
       textAlign: alignment,
@@ -3040,20 +3403,21 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                 clipBehavior: Clip.antiAlias,
                 child: ListTile(
                   tileColor: Colors.transparent,
-                leading: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.red.withValues(alpha: .12),
-                  child: UniversalText('${index + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  leading: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.red.withValues(alpha: .12),
+                    child: UniversalText(
+                      '${index + 1}',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
-                ),
-                title: Text(
-                  name,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                trailing: const Icon(
-                  Icons.drag_indicator_rounded,
-                  color: Colors.white38,
+                  title: Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: const Icon(
+                    Icons.drag_indicator_rounded,
+                    color: Colors.white38,
                   ),
                 ),
               );
@@ -3065,6 +3429,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final isHome = selectedPage == _CustomizationPage.home;
@@ -3090,7 +3455,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             : [
                 TextButton(
                   onPressed: _save,
-                  child: const UniversalText('SAVE',
+                  child: const UniversalText(
+                    'SAVE',
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -3152,6 +3518,7 @@ class _MainScreenState extends State<MainScreen> {
   String selectedDestination = 'Home';
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -3166,13 +3533,34 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _MoreActionsSheet(
-        onImport: () { Navigator.pop(context); _openImport(); },
-        onRemoteAccess: () { Navigator.pop(context); _openRemoteAccess(); },
-        onSettings: () { Navigator.pop(context); _openAccountSettings(); },
-        onDevices: () { Navigator.pop(context); _openDevices(); },
-        onHomeServer: () { Navigator.pop(context); _openHomeServer(); },
-        onMembers: () { Navigator.pop(context); _openMembers(); },
-        onCustomize: () { Navigator.pop(context); _openCustomize(); },
+        onImport: () {
+          Navigator.pop(context);
+          _openImport();
+        },
+        onRemoteAccess: () {
+          Navigator.pop(context);
+          _openRemoteAccess();
+        },
+        onSettings: () {
+          Navigator.pop(context);
+          _openAccountSettings();
+        },
+        onDevices: () {
+          Navigator.pop(context);
+          _openDevices();
+        },
+        onHomeServer: () {
+          Navigator.pop(context);
+          _openHomeServer();
+        },
+        onMembers: () {
+          Navigator.pop(context);
+          _openMembers();
+        },
+        onCustomize: () {
+          Navigator.pop(context);
+          _openCustomize();
+        },
       ),
     );
   }
@@ -3182,32 +3570,39 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const ImportMediaScreen()),
-    ).then((_) { if (mounted) setState(() {}); });
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   /// Opens the remote-access management page.
   void _openRemoteAccess() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const RemoteAccessScreen()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const RemoteAccessScreen()));
   }
 
   /// Opens application/account settings.
   void _openAccountSettings() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsScreen()));
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const AccountSettingsScreen()));
   }
 
   /// Opens the device center.
   void _openDevices() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()));
   }
 
   /// Opens the account home-server dashboard.
   void _openHomeServer() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const HomeServerScreen()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const HomeServerScreen()));
   }
 
   /// Opens account-member management without duplicating it in the server dashboard menu.
   void _openMembers() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountInviteScreen()));
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const AccountInviteScreen()));
   }
 
   /// Opens Customize App on demand after first-time setup has been completed.
@@ -3279,24 +3674,32 @@ class _MainScreenState extends State<MainScreen> {
     final library = List<MediaItem>.from(controller.library);
     if (library.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your library is empty. Add media before using Surprise Me.')),
+        const SnackBar(
+            content: Text(
+                'Your library is empty. Add media before using Surprise Me.')),
       );
       return;
     }
 
-    final eligible = library.where((item) => item.type.trim().isNotEmpty).toList();
+    final eligible =
+        library.where((item) => item.type.trim().isNotEmpty).toList();
     if (eligible.isEmpty) return;
     final item = (eligible..shuffle()).first;
     final type = item.type.toLowerCase();
 
-    if (type.contains('song') || type.contains('track') || type.contains('music')) {
+    if (type.contains('song') ||
+        type.contains('track') ||
+        type.contains('music')) {
       // The MediaItem catalog remains the source of truth for the app while
       // MusicLibraryStore handles actual audio playback when that track is loaded.
-      final music = MusicLibraryStore.instance.tracks.where((track) => track.id == item.id).toList();
+      final music = MusicLibraryStore.instance.tracks
+          .where((track) => track.id == item.id)
+          .toList();
       if (music.isNotEmpty) {
         MusicPlaybackController.instance.play(music.first);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Surprise Me is playing ${music.first.title}.')),
+          SnackBar(
+              content: Text('Surprise Me is playing ${music.first.title}.')),
         );
         return;
       }
@@ -3309,15 +3712,20 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film, Collections, Shop,
     // Seller Dashboard when available, and Group Chat. Music and Film expose secondary destinations on hover/tap. Music and Film expose secondary destinations on hover/tap.
-    final settings = HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
-    final navigationOrder = _normalizedNavigationOrder(settings.navigationOrder);
+    final settings = HomeCustomizationStore.settingsFor(
+        AppController.instance.currentProfile);
+    final navigationOrder =
+        _normalizedNavigationOrder(settings.navigationOrder);
     final pageByName = <String, Widget>{
       'Profile': const ProfileScreen(),
-      'Home': HomeScreen(onRefresh: () => setState(() {}), onNotifications: _openNotifications),
+      'Home': HomeScreen(
+          onRefresh: () => setState(() {}),
+          onNotifications: _openNotifications),
       'Sports': const ConnectedSportsHubScreen(),
       'Group Chat': const GroupChatScreen(),
       'More': const _MoreNavigationPlaceholder(),
@@ -3332,15 +3740,27 @@ class _MainScreenState extends State<MainScreen> {
         'Seller Dashboard': SellerDashboardScreen(),
     };
     final pages = navigationOrder.map((name) => pageByName[name]!).toList();
-    final safeSelectedIndex = navigationOrder.indexOf(selectedDestination).clamp(0, pages.length - 1).toInt();
+    final safeSelectedIndex = navigationOrder
+        .indexOf(selectedDestination)
+        .clamp(0, pages.length - 1)
+        .toInt();
     final selectedName = navigationOrder[safeSelectedIndex];
     final navbar = _StreamingNavigationBar(
       position: settings.navbarPosition,
       onSelect: (index) {
         final name = navigationOrder[index];
-        if (name == 'Profile') { _openProfiles(); return; }
-        if (name == 'More') { _openMore(); return; }
-        if (name == 'Surprise Me') { _surpriseMe(); return; }
+        if (name == 'Profile') {
+          _openProfiles();
+          return;
+        }
+        if (name == 'More') {
+          _openMore();
+          return;
+        }
+        if (name == 'Surprise Me') {
+          _surpriseMe();
+          return;
+        }
         final destination = navigationOrder[index];
         if (destination != selectedDestination) {
           setState(() => selectedDestination = destination);
@@ -3358,7 +3778,8 @@ class _MainScreenState extends State<MainScreen> {
     );
     final page = AnimatedSwitcher(
       duration: const Duration(milliseconds: 280),
-      child: KeyedSubtree(key: ValueKey(selectedName), child: pages[safeSelectedIndex]),
+      child: KeyedSubtree(
+          key: ValueKey(selectedName), child: pages[safeSelectedIndex]),
     );
 
     Widget content;
@@ -3384,7 +3805,11 @@ class _MainScreenState extends State<MainScreen> {
         case 'Floating':
           content = Stack(children: [
             Positioned.fill(child: page),
-            Positioned(left: 12, right: 12, bottom: 12, child: SafeArea(top: false, child: Center(child: navbar))),
+            Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: SafeArea(top: false, child: Center(child: navbar))),
           ]);
           break;
         case 'Bottom':
@@ -3394,7 +3819,9 @@ class _MainScreenState extends State<MainScreen> {
       }
     }
 
-    return Scaffold(backgroundColor: colorFromName(settings.homeBackgroundColor), body: content);
+    return Scaffold(
+        backgroundColor: colorFromName(settings.homeBackgroundColor),
+        body: content);
   }
 }
 
@@ -3434,68 +3861,179 @@ class _StreamingNavigationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final vertical = position == 'Left' || position == 'Right';
     final filmEntries = <_NavMenuEntry>[
-      _NavMenuEntry('Movies', Icons.movie_outlined, () => _open(context, const MoviesScreen())),
-      _NavMenuEntry('Series', Icons.tv_outlined, () => _open(context, const SeriesScreen())),
-      _NavMenuEntry('Trailers', Icons.play_circle_outline, () => _open(context, const TrailersScreen())),
-      _NavMenuEntry('Actors', Icons.people_outline, () => _open(context, const LibraryActorsScreen())),
-      _NavMenuEntry('Directors', Icons.videocam_outlined, () => _open(context, const LibraryDirectorsScreen())),
-      _NavMenuEntry('Franchises', Icons.account_tree_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Franchises'), icon: Icons.account_tree_outlined))),
-      _NavMenuEntry('Genres', Icons.category_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Genres'), icon: Icons.category_outlined))),
-      _NavMenuEntry('Wishlist', Icons.favorite_border_rounded, () => _open(context, const FavoritesScreen())),
-      _NavMenuEntry('Search', Icons.search_rounded, () => _open(context, const SmartSearchScreen())),
+      _NavMenuEntry('Movies', Icons.movie_outlined,
+          () => _open(context, const MoviesScreen())),
+      _NavMenuEntry('Series', Icons.tv_outlined,
+          () => _open(context, const SeriesScreen())),
+      _NavMenuEntry('Trailers', Icons.play_circle_outline,
+          () => _open(context, const TrailersScreen())),
+      _NavMenuEntry('Actors', Icons.people_outline,
+          () => _open(context, const LibraryActorsScreen())),
+      _NavMenuEntry('Directors', Icons.videocam_outlined,
+          () => _open(context, const LibraryDirectorsScreen())),
+      _NavMenuEntry(
+          'Franchises',
+          Icons.account_tree_outlined,
+          () => _open(
+              context,
+              _NavigationDirectoryScreen(
+                  title: tr('Franchises'), icon: Icons.account_tree_outlined))),
+      _NavMenuEntry(
+          'Genres',
+          Icons.category_outlined,
+          () => _open(
+              context,
+              _NavigationDirectoryScreen(
+                  title: tr('Genres'), icon: Icons.category_outlined))),
+      _NavMenuEntry('Wishlist', Icons.favorite_border_rounded,
+          () => _open(context, const FavoritesScreen())),
+      _NavMenuEntry('Search', Icons.search_rounded,
+          () => _open(context, const SmartSearchScreen())),
     ];
     final musicEntries = <_NavMenuEntry>[
-      _NavMenuEntry('Singers / Bands', Icons.person_outline_rounded, () => _open(context, _NavigationDirectoryScreen(title: tr('Singers / Bands'), icon: Icons.person_outline_rounded))),
-      _NavMenuEntry('Albums', Icons.album_outlined, () => _open(context, _NavigationDirectoryScreen(title: tr('Albums'), icon: Icons.album_outlined))),
-      _NavMenuEntry('Playlists', Icons.queue_music_rounded, () => _open(context, const MusicScreen())),
-      _NavMenuEntry('Soundtrack Universe', Icons.library_music_outlined, () => _open(context, const SoundtrackUniverseScreen())),
+      _NavMenuEntry(
+          'Singers / Bands',
+          Icons.person_outline_rounded,
+          () => _open(
+              context,
+              _NavigationDirectoryScreen(
+                  title: tr('Singers / Bands'),
+                  icon: Icons.person_outline_rounded))),
+      _NavMenuEntry(
+          'Albums',
+          Icons.album_outlined,
+          () => _open(
+              context,
+              _NavigationDirectoryScreen(
+                  title: tr('Albums'), icon: Icons.album_outlined))),
+      _NavMenuEntry('Playlists', Icons.queue_music_rounded,
+          () => _open(context, const MusicScreen())),
+      _NavMenuEntry('Soundtrack Universe', Icons.library_music_outlined,
+          () => _open(context, const SoundtrackUniverseScreen())),
     ];
 
     final dataByName = <String, _NavItemData>{
-      'Profile': const _NavItemData(Icons.account_circle_outlined, Icons.account_circle_rounded, 'Profile'),
-      'Home': const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
-      'Sports': const _NavItemData(Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Sports'),
-      'Surprise Me': const _NavItemData(Icons.shuffle_rounded, Icons.shuffle_rounded, 'Surprise Me'),
-      'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Group Chat'),
-      'More': const _NavItemData(Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
-      'Music': const _NavItemData(Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
-      'Film': const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
-      'Collections': const _NavItemData(Icons.collections_bookmark_outlined, Icons.collections_bookmark_rounded, 'Collections'),
-      'Shop': const _NavItemData(Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
-      'Seller Dashboard': const _NavItemData(Icons.storefront_outlined, Icons.storefront_rounded, 'Seller Dashboard'),
+      'Profile': const _NavItemData(Icons.account_circle_outlined,
+          Icons.account_circle_rounded, 'Profile'),
+      'Home':
+          const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
+      'Sports': const _NavItemData(
+          Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Sports'),
+      'Surprise Me': const _NavItemData(
+          Icons.shuffle_rounded, Icons.shuffle_rounded, 'Surprise Me'),
+      'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded,
+          Icons.chat_bubble_rounded, 'Group Chat'),
+      'More': const _NavItemData(
+          Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
+      'Music': const _NavItemData(
+          Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
+      'Film':
+          const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
+      'Collections': const _NavItemData(Icons.collections_bookmark_outlined,
+          Icons.collections_bookmark_rounded, 'Collections'),
+      'Shop': const _NavItemData(
+          Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
+      'Seller Dashboard': const _NavItemData(Icons.storefront_outlined,
+          Icons.storefront_rounded, 'Seller Dashboard'),
     };
     final actions = <Widget>[
       for (final name in navigationOrder)
         if (name == 'More')
-          _NavButton(data: dataByName[name]!, selected: false, vertical: vertical, onTap: onMore, color: itemColor)
+          _NavButton(
+              data: dataByName[name]!,
+              selected: false,
+              vertical: vertical,
+              onTap: onMore,
+              color: itemColor)
         else if (name == 'Surprise Me')
-          _NavButton(data: dataByName[name]!, selected: false, vertical: vertical, onTap: () => onSelect(navigationOrder.indexOf(name)), color: itemColor)
+          _NavButton(
+              data: dataByName[name]!,
+              selected: false,
+              vertical: vertical,
+              onTap: () => onSelect(navigationOrder.indexOf(name)),
+              color: itemColor)
         else if (name == 'Music')
-          _NavMenuButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, color: itemColor, entries: musicEntries, onTap: () => onSelect(navigationOrder.indexOf(name)), menuSide: position == 'Right' ? AxisDirection.left : AxisDirection.right, menuVerticalDirection: (position == 'Bottom' || position == 'Floating') ? AxisDirection.up : AxisDirection.down)
+          _NavMenuButton(
+              data: dataByName[name]!,
+              selected: selectedName == name,
+              vertical: vertical,
+              color: itemColor,
+              entries: musicEntries,
+              onTap: () => onSelect(navigationOrder.indexOf(name)),
+              menuSide: position == 'Right'
+                  ? AxisDirection.left
+                  : AxisDirection.right,
+              menuVerticalDirection:
+                  (position == 'Bottom' || position == 'Floating')
+                      ? AxisDirection.up
+                      : AxisDirection.down)
         else if (name == 'Film')
-          _NavMenuButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, color: itemColor, entries: filmEntries, onTap: () => onSelect(navigationOrder.indexOf(name)), menuSide: position == 'Right' ? AxisDirection.left : AxisDirection.right, menuVerticalDirection: (position == 'Bottom' || position == 'Floating') ? AxisDirection.up : AxisDirection.down)
+          _NavMenuButton(
+              data: dataByName[name]!,
+              selected: selectedName == name,
+              vertical: vertical,
+              color: itemColor,
+              entries: filmEntries,
+              onTap: () => onSelect(navigationOrder.indexOf(name)),
+              menuSide: position == 'Right'
+                  ? AxisDirection.left
+                  : AxisDirection.right,
+              menuVerticalDirection:
+                  (position == 'Bottom' || position == 'Floating')
+                      ? AxisDirection.up
+                      : AxisDirection.down)
         else
-          _NavButton(data: dataByName[name]!, selected: selectedName == name, vertical: vertical, onTap: () => onSelect(navigationOrder.indexOf(name)), color: itemColor),
+          _NavButton(
+              data: dataByName[name]!,
+              selected: selectedName == name,
+              vertical: vertical,
+              onTap: () => onSelect(navigationOrder.indexOf(name)),
+              color: itemColor),
     ];
 
-    final alpha = style == 'Transparent' ? .08 : style == 'Curved' ? opacity : style == 'Angled' ? opacity : opacity;
-    final effectiveColor = backgroundColor.withValues(alpha: alpha.clamp(.05, 1.0));
+    final alpha = style == 'Transparent'
+        ? .08
+        : style == 'Curved'
+            ? opacity
+            : style == 'Angled'
+                ? opacity
+                : opacity;
+    final effectiveColor =
+        backgroundColor.withValues(alpha: alpha.clamp(.05, 1.0));
     final decoration = BoxDecoration(
       color: effectiveColor,
       border: Border.all(color: glowColor.withValues(alpha: .35), width: 1.2),
-      borderRadius: BorderRadius.circular(style == 'Curved' ? radius.clamp(20, 44) : radius.clamp(0, 32)),
-      boxShadow: [BoxShadow(blurRadius: style == 'Transparent' ? 12 : 28, offset: const Offset(0, -8), color: glowColor.withValues(alpha: .16))],
+      borderRadius: BorderRadius.circular(
+          style == 'Curved' ? radius.clamp(20, 44) : radius.clamp(0, 32)),
+      boxShadow: [
+        BoxShadow(
+            blurRadius: style == 'Transparent' ? 12 : 28,
+            offset: const Offset(0, -8),
+            color: glowColor.withValues(alpha: .16))
+      ],
     );
     final inner = vertical
-        ? SingleChildScrollView(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: actions))
-        : SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Row(mainAxisSize: MainAxisSize.min, children: actions));
+        ? SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Column(mainAxisSize: MainAxisSize.min, children: actions))
+        : SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: actions));
     final child = style == 'Angled'
-        ? ClipPath(clipper: _AngledNavbarClipper(), child: DecoratedBox(decoration: decoration, child: inner))
+        ? ClipPath(
+            clipper: _AngledNavbarClipper(),
+            child: DecoratedBox(decoration: decoration, child: inner))
         : DecoratedBox(decoration: decoration, child: inner);
-    return SafeArea(top: false, child: ConstrainedBox(
-      constraints: vertical ? const BoxConstraints(minWidth: 104, maxWidth: 104, maxHeight: 620) : const BoxConstraints(minHeight: 76, maxHeight: 84),
-      child: child,
-    ));
+    return SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: vertical
+              ? const BoxConstraints(
+                  minWidth: 104, maxWidth: 104, maxHeight: 620)
+              : const BoxConstraints(minHeight: 76, maxHeight: 84),
+          child: child,
+        ));
   }
 }
 
@@ -3517,8 +4055,17 @@ class _NavMenuButton extends StatefulWidget {
   final VoidCallback onTap;
   final AxisDirection menuSide;
   final AxisDirection menuVerticalDirection;
-  const _NavMenuButton({required this.data, required this.selected, required this.vertical, required this.color, required this.entries, required this.onTap, required this.menuSide, required this.menuVerticalDirection});
-  @override State<_NavMenuButton> createState() => _NavMenuButtonState();
+  const _NavMenuButton(
+      {required this.data,
+      required this.selected,
+      required this.vertical,
+      required this.color,
+      required this.entries,
+      required this.onTap,
+      required this.menuSide,
+      required this.menuVerticalDirection});
+  @override
+  State<_NavMenuButton> createState() => _NavMenuButtonState();
 }
 
 /// Implements the `_NavMenuButtonState` class for this feature or UI component.
@@ -3531,13 +4078,18 @@ class _NavMenuButtonState extends State<_NavMenuButton> {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(milliseconds: 260), _hideMenu);
   }
-  void _hideMenu() { _overlay?.remove(); _overlay = null; }
+
+  void _hideMenu() {
+    _overlay?.remove();
+    _overlay = null;
+  }
 
   void _showMenu() {
     _cancelHide();
     if (_overlay != null) return;
     final box = context.findRenderObject() as RenderBox?;
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (box == null || overlay == null) return;
     final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
     final size = box.size;
@@ -3609,24 +4161,65 @@ class _NavMenuButtonState extends State<_NavMenuButton> {
   }
 
   @override
-  void dispose() { _hideTimer?.cancel(); _hideMenu(); super.dispose(); }
+  void dispose() {
+    _hideTimer?.cancel();
+    _hideMenu();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final active = widget.selected;
     final width = widget.vertical ? 94.0 : (active ? 92.0 : 76.0);
     return Padding(
-      padding: widget.vertical ? const EdgeInsets.symmetric(vertical: 2) : const EdgeInsets.symmetric(horizontal: 2),
+      padding: widget.vertical
+          ? const EdgeInsets.symmetric(vertical: 2)
+          : const EdgeInsets.symmetric(horizontal: 2),
       child: MouseRegion(
-        onEnter: (_) => _showMenu(), onExit: (_) => _scheduleHide(),
-        child: Material(color: active ? Colors.white.withValues(alpha: .10) : Colors.transparent, borderRadius: BorderRadius.circular(18), child: InkWell(
-          borderRadius: BorderRadius.circular(18), onTap: widget.onTap,
-          child: SizedBox(width: width, height: 60, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(active ? widget.data.selectedIcon : widget.data.icon, size: 22, color: active ? widget.color : widget.color.withValues(alpha: .72)),
-            const SizedBox(height: 3), Text(widget.data.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: active ? Colors.white : Colors.white54, fontSize: 9.5, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
-            const SizedBox(height: 2), Container(width: active ? 18 : 0, height: 2, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10))),
-          ])),
-        )),
+        onEnter: (_) => _showMenu(),
+        onExit: (_) => _scheduleHide(),
+        child: Material(
+            color: active
+                ? Colors.white.withValues(alpha: .10)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: widget.onTap,
+              child: SizedBox(
+                  width: width,
+                  height: 60,
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                            active
+                                ? widget.data.selectedIcon
+                                : widget.data.icon,
+                            size: 22,
+                            color: active
+                                ? widget.color
+                                : widget.color.withValues(alpha: .72)),
+                        const SizedBox(height: 3),
+                        Text(widget.data.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: active ? Colors.white : Colors.white54,
+                                fontSize: 9.5,
+                                fontWeight: active
+                                    ? FontWeight.w700
+                                    : FontWeight.w500)),
+                        const SizedBox(height: 2),
+                        Container(
+                            width: active ? 18 : 0,
+                            height: 2,
+                            decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(10))),
+                      ])),
+            )),
       ),
     );
   }
@@ -3635,14 +4228,25 @@ class _NavMenuButtonState extends State<_NavMenuButton> {
 /// Implements the `_AngledNavbarClipper` class for this feature or UI component.
 class _AngledNavbarClipper extends CustomClipper<Path> {
   @override
-  Path getClip(Size size) => Path()..moveTo(18, 0)..lineTo(size.width - 18, 0)..lineTo(size.width, 14)..lineTo(size.width, size.height - 14)..lineTo(size.width - 18, size.height)..lineTo(18, size.height)..lineTo(0, size.height - 14)..lineTo(0, 14)..close();
-  @override bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+  Path getClip(Size size) => Path()
+    ..moveTo(18, 0)
+    ..lineTo(size.width - 18, 0)
+    ..lineTo(size.width, 14)
+    ..lineTo(size.width, size.height - 14)
+    ..lineTo(size.width - 18, size.height)
+    ..lineTo(18, size.height)
+    ..lineTo(0, size.height - 14)
+    ..lineTo(0, 14)
+    ..close();
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
 /// Implements the `_MoreNavigationPlaceholder` class for this feature or UI component.
 class _MoreNavigationPlaceholder extends StatelessWidget {
   const _MoreNavigationPlaceholder();
-  @override Widget build(BuildContext context) => const SizedBox.shrink();
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 /// Implements the `_NavigationDirectoryScreen` class for this feature or UI component.
@@ -3667,7 +4271,8 @@ class _NavigationDirectoryScreen extends StatelessWidget {
             children: [
               Icon(icon, size: 58, color: Colors.white54),
               const SizedBox(height: 14),
-              UniversalText('$title will appear here as your library metadata grows.',
+              UniversalText(
+                '$title will appear here as your library metadata grows.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white60),
               ),
@@ -3694,42 +4299,75 @@ class _NavButton extends StatefulWidget {
   final bool vertical;
   final VoidCallback onTap;
   final Color color;
-  const _NavButton({required this.data, required this.selected, required this.onTap, this.vertical = false, this.color = Colors.white});
-  @override State<_NavButton> createState() => _NavButtonState();
+  const _NavButton(
+      {required this.data,
+      required this.selected,
+      required this.onTap,
+      this.vertical = false,
+      this.color = Colors.white});
+  @override
+  State<_NavButton> createState() => _NavButtonState();
 }
+
 /// Implements the `_NavButtonState` class for this feature or UI component.
 class _NavButtonState extends State<_NavButton> {
   bool pressed = false;
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final active = widget.selected;
     final width = widget.vertical ? 78.0 : (active ? 92.0 : 68.0);
     return Padding(
-      padding: widget.vertical ? const EdgeInsets.symmetric(vertical: 2) : const EdgeInsets.symmetric(horizontal: 2),
+      padding: widget.vertical
+          ? const EdgeInsets.symmetric(vertical: 2)
+          : const EdgeInsets.symmetric(horizontal: 2),
       child: Material(
-        color: active ? Colors.white.withValues(alpha: .10) : Colors.transparent,
+        color:
+            active ? Colors.white.withValues(alpha: .10) : Colors.transparent,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTapDown: (_) => setState(() => pressed = true),
           onTapCancel: () => setState(() => pressed = false),
-          onTap: () { setState(() => pressed = false); widget.onTap(); },
+          onTap: () {
+            setState(() => pressed = false);
+            widget.onTap();
+          },
           child: AnimatedScale(
             scale: pressed ? .94 : 1,
             duration: const Duration(milliseconds: 100),
             child: SizedBox(
               width: width,
               height: 60,
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Stack(clipBehavior: Clip.none, children: [
-                  Icon(active ? widget.data.selectedIcon : widget.data.icon, size: 22, color: active ? widget.color : widget.color.withValues(alpha: .72)),
-                ]),
-                const SizedBox(height: 3),
-                Text(widget.data.label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: active ? Colors.white : Colors.white54, fontSize: 9.5, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
-                const SizedBox(height: 2),
-                Container(width: active ? 18 : 0, height: 2, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10))),
-              ]),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Stack(clipBehavior: Clip.none, children: [
+                      Icon(active ? widget.data.selectedIcon : widget.data.icon,
+                          size: 22,
+                          color: active
+                              ? widget.color
+                              : widget.color.withValues(alpha: .72)),
+                    ]),
+                    const SizedBox(height: 3),
+                    Text(widget.data.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: active ? Colors.white : Colors.white54,
+                            fontSize: 9.5,
+                            fontWeight:
+                                active ? FontWeight.w700 : FontWeight.w500)),
+                    const SizedBox(height: 2),
+                    Container(
+                        width: active ? 18 : 0,
+                        height: 2,
+                        decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(10))),
+                  ]),
             ),
           ),
         ),
@@ -3759,6 +4397,7 @@ class _MoreActionsSheet extends StatelessWidget {
   });
 
   @override
+
   /// Builds the intentionally compact utility menu. Feature destinations live
   /// on their dedicated pages instead of being duplicated in this menu.
   Widget build(BuildContext context) {
@@ -3830,6 +4469,7 @@ class _SheetAction extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
@@ -3858,9 +4498,12 @@ class _SheetAction extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Text(title,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 3),
-                      Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text(subtitle,
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -3887,6 +4530,7 @@ class _PremiumSheet extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.sizeOf(context).height * .82;
@@ -3919,7 +4563,9 @@ class _PremiumSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 4),
                 Text(subtitle, style: const TextStyle(color: Colors.white54)),
                 const SizedBox(height: 16),
@@ -3943,6 +4589,7 @@ class _ActivitySheet extends StatelessWidget {
   const _ActivitySheet();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final activity = AppController.instance.activity;
@@ -3956,9 +4603,11 @@ class _ActivitySheet extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.notifications_none_rounded, size: 54, color: Colors.white38),
+                    Icon(Icons.notifications_none_rounded,
+                        size: 54, color: Colors.white38),
                     SizedBox(height: 12),
-                    UniversalText('No activity yet.', style: TextStyle(color: Colors.white60)),
+                    UniversalText('No activity yet.',
+                        style: TextStyle(color: Colors.white60)),
                   ],
                 ),
               )
@@ -3979,20 +4628,26 @@ class _ActivitySheet extends StatelessWidget {
                         const CircleAvatar(
                           radius: 20,
                           backgroundColor: Color(0x22FF0000),
-                          child: Icon(Icons.notifications_none_rounded, size: 20),
+                          child:
+                              Icon(Icons.notifications_none_rounded, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(event.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                              Text(event.title,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800)),
                               const SizedBox(height: 4),
-                              Text(event.action, style: const TextStyle(color: Colors.white60)),
+                              Text(event.action,
+                                  style:
+                                      const TextStyle(color: Colors.white60)),
                               const SizedBox(height: 5),
                               Text(
                                 event.timestamp.toString(),
-                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                style: const TextStyle(
+                                    color: Colors.white38, fontSize: 11),
                               ),
                             ],
                           ),
@@ -4033,6 +4688,7 @@ class _HomeScreenState extends State<HomeScreen>
   late final AnimationController _heroController;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -4043,6 +4699,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _heroController.dispose();
@@ -4062,6 +4719,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
@@ -4076,13 +4734,13 @@ class _HomeScreenState extends State<HomeScreen>
 
     final library = controller.library;
     final settings = widget.previewSettings ??
-        HomeCustomizationStore.settingsFor(AppController.instance.currentProfile);
+        HomeCustomizationStore.settingsFor(
+            AppController.instance.currentProfile);
     final homeBackground = colorFromName(settings.homeBackgroundColor);
 
     final watched = controller.watched;
-    final movies = library
-        .where((media) => media.type.toLowerCase() == 'movie')
-        .toList();
+    final movies =
+        library.where((media) => media.type.toLowerCase() == 'movie').toList();
     final tvShows = library.where((media) {
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
@@ -4090,15 +4748,17 @@ class _HomeScreenState extends State<HomeScreen>
     // The Home shell must remain renderable when the profile library is empty.
     // There is no valid hero item in that state, so keep it nullable instead of
     // calling library.first and throwing Bad state: No element.
-    final heroMedia = watched.isNotEmpty ? watched.first : (library.isNotEmpty ? library.first : null);
+    final heroMedia = watched.isNotEmpty
+        ? watched.first
+        : (library.isNotEmpty ? library.first : null);
 
     return Scaffold(
       backgroundColor: homeBackground,
       body: RefreshIndicator(
-          color: Colors.white,
-          backgroundColor: const Color(0xFF171717),
-          onRefresh: _refresh,
-          child: CustomScrollView(
+        color: Colors.white,
+        backgroundColor: const Color(0xFF171717),
+        onRefresh: _refresh,
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
@@ -4109,8 +4769,12 @@ class _HomeScreenState extends State<HomeScreen>
               backgroundColor: const Color(0xE6070707),
               surfaceTintColor: Colors.transparent,
               titleSpacing: 20,
-              title: const UniversalText('Home',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+              title: const UniversalText(
+                'Home',
+                style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1),
               ),
               actions: [
                 ActivityButton(onPressed: widget.onNotifications),
@@ -4120,11 +4784,16 @@ class _HomeScreenState extends State<HomeScreen>
             if (settings.showHero && library.isNotEmpty)
               SliverToBoxAdapter(
                 child: FadeTransition(
-                  opacity: CurvedAnimation(parent: _heroController, curve: Curves.easeOut),
+                  opacity: CurvedAnimation(
+                      parent: _heroController, curve: Curves.easeOut),
                   child: _HomeHero(
                     media: heroMedia!,
                     profileName: profile.name,
-                    onPlay: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: heroMedia))),
+                    onPlay: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                MediaDetailsScreen(media: heroMedia))),
                   ),
                 ),
               ),
@@ -4140,21 +4809,29 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        UniversalText('Your library is empty', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800)),
+                        UniversalText('Your library is empty',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 25, fontWeight: FontWeight.w800)),
                         SizedBox(height: 8),
-                        UniversalText('Please add using the 3 dots in the navbar.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 14)),
+                        UniversalText(
+                            'Please add using the 3 dots in the navbar.',
+                            textAlign: TextAlign.center,
+                            style:
+                                TextStyle(color: Colors.white54, fontSize: 14)),
                       ],
                     ),
                   ),
                 ),
               ),
             for (final section in settings.sectionOrder)
-              ..._buildHomeSectionSlivers(section, settings, watched, movies, tvShows, library, controller.recommendations),
+              ..._buildHomeSectionSlivers(section, settings, watched, movies,
+                  tvShows, library, controller.recommendations),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
-          ),
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -4171,26 +4848,55 @@ List<Widget> _buildHomeSectionSlivers(
   String subtitle;
   bool enabled;
   switch (section) {
-    case 'Continue Watching': items = watched; subtitle = 'Pick up where you left off'; enabled = settings.showContinueWatching; break;
-    case 'Recently Watched': items = watched; subtitle = 'What you watched recently'; enabled = settings.showRecentlyWatched; break;
-    case 'Movies': items = movies; subtitle = 'From your collection'; enabled = settings.showMovies; break;
-    case 'TV Shows': items = tvShows; subtitle = 'Your series collection'; enabled = settings.showTvShows; break;
+    case 'Continue Watching':
+      items = watched;
+      subtitle = 'Pick up where you left off';
+      enabled = settings.showContinueWatching;
+      break;
+    case 'Recently Watched':
+      items = watched;
+      subtitle = 'What you watched recently';
+      enabled = settings.showRecentlyWatched;
+      break;
+    case 'Movies':
+      items = movies;
+      subtitle = 'From your collection';
+      enabled = settings.showMovies;
+      break;
+    case 'TV Shows':
+      items = tvShows;
+      subtitle = 'Your series collection';
+      enabled = settings.showTvShows;
+      break;
     case 'New Additions':
-      items = List<MediaItem>.from(library)..sort((a,b) => b.addedAt.compareTo(a.addedAt));
-      subtitle = 'Recently added to your library'; enabled = settings.showNewAdditions; break;
-    case 'All Library': items = library; subtitle = 'Everything in your library'; enabled = settings.showAllLibrary; break;
-    case 'Recommendations': items = recommendations; subtitle = 'Picked for your profile'; enabled = settings.showRecommendations; break;
+      items = List<MediaItem>.from(library)
+        ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+      subtitle = 'Recently added to your library';
+      enabled = settings.showNewAdditions;
+      break;
+    case 'All Library':
+      items = library;
+      subtitle = 'Everything in your library';
+      enabled = settings.showAllLibrary;
+      break;
+    case 'Recommendations':
+      items = recommendations;
+      subtitle = 'Picked for your profile';
+      enabled = settings.showRecommendations;
+      break;
     case 'Music & Film':
       return const [];
     case 'Seasonal Collections':
       return settings.showSeasonalCollections
           ? [SliverToBoxAdapter(child: _HomeSeasonalCollections())]
           : const [];
-    default: return const [];
+    default:
+      return const [];
   }
   if (!enabled || items.isEmpty) return const [];
   return [
-    SliverToBoxAdapter(child: _PremiumSectionHeader(title: section, subtitle: subtitle)),
+    SliverToBoxAdapter(
+        child: _PremiumSectionHeader(title: section, subtitle: subtitle)),
     SliverToBoxAdapter(child: MediaHorizontalList(media: items)),
   ];
 }
@@ -4231,18 +4937,21 @@ class _HomeSeasonalCollections extends StatelessWidget {
                         fontSize: 19, fontWeight: FontWeight.w900),
                   ),
                 ),
-                UniversalText('$total items',
+                UniversalText(
+                  '$total items',
                   style: const TextStyle(color: Colors.white38, fontSize: 11),
                 ),
               ],
             ),
             const SizedBox(height: 5),
-            const UniversalText('Seasonal collection • movies, TV episodes/shows and songs • updates with the calendar',
+            const UniversalText(
+              'Seasonal collection • movies, TV episodes/shows and songs • updates with the calendar',
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             const SizedBox(height: 12),
             if (matches.isEmpty)
-              const UniversalText('No matching titles in your library yet.',
+              const UniversalText(
+                'No matching titles in your library yet.',
                 style: TextStyle(color: Colors.white38),
               )
             else
@@ -4260,7 +4969,9 @@ class _HomeSeasonalCollections extends StatelessWidget {
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: Text(
-                      index < matches.length ? matches[index].title : songs[index - matches.length].title,
+                      index < matches.length
+                          ? matches[index].title
+                          : songs[index - matches.length].title,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w800),
@@ -4291,17 +5002,20 @@ class _HomeMediaEntryButtons extends StatelessWidget {
   final HomeCustomization settings;
   const _HomeMediaEntryButtons({required this.settings});
 
-  Widget _button(BuildContext context, String title, String subtitle, IconData icon, Widget page) =>
+  Widget _button(BuildContext context, String title, String subtitle,
+          IconData icon, Widget page) =>
       Expanded(
         child: OutlinedButton.icon(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
+          onPressed: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
           icon: Icon(icon),
           label: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-              Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+              Text(subtitle,
+                  style: const TextStyle(fontSize: 10, color: Colors.white54)),
             ],
           ),
           style: OutlinedButton.styleFrom(
@@ -4314,14 +5028,28 @@ class _HomeMediaEntryButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final buttons = <Widget>[
-      if (settings.showMusic) _button(context, 'Music', 'Songs, albums & playlists', Icons.music_note_rounded, const MusicScreen()),
-      if (settings.showFilm) _button(context, 'Film', 'Movies, TV & franchises', Icons.movie_creation_outlined, const FilmExperienceScreen()),
+      if (settings.showMusic)
+        _button(context, 'Music', 'Songs, albums & playlists',
+            Icons.music_note_rounded, const MusicScreen()),
+      if (settings.showFilm)
+        _button(context, 'Film', 'Movies, TV & franchises',
+            Icons.movie_creation_outlined, const FilmExperienceScreen()),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
       child: settings.homeMediaLayout == 'Top & Bottom'
-          ? Column(children: [for (var i = 0; i < buttons.length; i++) ...[buttons[i], if (i != buttons.length - 1) const SizedBox(height: 8)]])
-          : Row(children: [for (var i = 0; i < buttons.length; i++) ...[buttons[i], if (i != buttons.length - 1) const SizedBox(width: 10)]]),
+          ? Column(children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                buttons[i],
+                if (i != buttons.length - 1) const SizedBox(height: 8)
+              ]
+            ])
+          : Row(children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                buttons[i],
+                if (i != buttons.length - 1) const SizedBox(width: 10)
+              ]
+            ]),
     );
   }
 }
@@ -4339,6 +5067,7 @@ class _HomeHero extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -4381,28 +5110,38 @@ class _HomeHero extends StatelessWidget {
               children: [
                 Text(
                   media.type.toUpperCase(),
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: Colors.white70),
+                  style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                      color: Colors.white70),
                 ),
                 const SizedBox(height: 9),
                 Text(
                   media.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 31, height: 1.05, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                      fontSize: 31, height: 1.05, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 7),
-                UniversalText('Welcome back, $profileName', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                UniversalText('Welcome back, $profileName',
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 17),
                 FilledButton.icon(
                   onPressed: onPlay,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   icon: const Icon(Icons.play_arrow_rounded),
-                  label: const UniversalText('Open', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const UniversalText('Open',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ],
             ),
@@ -4421,6 +5160,7 @@ class _PremiumSectionHeader extends StatelessWidget {
   const _PremiumSectionHeader({required this.title, required this.subtitle});
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
@@ -4428,9 +5168,12 @@ class _PremiumSectionHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 3),
-          Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(subtitle,
+              style: const TextStyle(color: Colors.white54, fontSize: 12)),
         ],
       ),
     );
@@ -4472,14 +5215,15 @@ class ActivityButton extends StatelessWidget {
               ),
           ],
         ),
-        onPressed: onPressed ?? () {
-          showModalBottomSheet<void>(
-            context: context,
-            backgroundColor: Colors.transparent,
-            isScrollControlled: true,
-            builder: (_) => const _ActivitySheet(),
-          );
-        },
+        onPressed: onPressed ??
+            () {
+              showModalBottomSheet<void>(
+                context: context,
+                backgroundColor: Colors.transparent,
+                isScrollControlled: true,
+                builder: (_) => const _ActivitySheet(),
+              );
+            },
       ),
     );
   }
@@ -4498,6 +5242,7 @@ class SectionTitle extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
@@ -4526,6 +5271,7 @@ class MediaHorizontalList extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return SizedBox(
@@ -4533,8 +5279,7 @@ class MediaHorizontalList extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: media.length,
-        separatorBuilder: (_, __) =>
-            const SizedBox(width: 12),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, index) {
           return MediaCard(
             media: media[index],
@@ -4558,6 +5303,7 @@ class MediaCard extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return SizedBox(
@@ -4575,13 +5321,11 @@ class MediaCard extends StatelessWidget {
           );
         },
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius:
-                    BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(10),
                 child: media.imageUrl == null
                     ? Container(
                         width: double.infinity,
@@ -4595,11 +5339,9 @@ class MediaCard extends StatelessWidget {
                         media.imageUrl!,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder:
-                            (_, __, ___) {
+                        errorBuilder: (_, __, ___) {
                           return Container(
-                            color:
-                                Colors.grey.shade900,
+                            color: Colors.grey.shade900,
                             child: const Icon(
                               Icons.broken_image,
                             ),
@@ -4642,6 +5384,7 @@ class ActorsFallbackScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -4649,7 +5392,8 @@ class ActorsFallbackScreen extends StatelessWidget {
         title: const UniversalText('Actors'),
       ),
       body: const Center(
-        child: UniversalText('Actors',
+        child: UniversalText(
+          'Actors',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -4723,6 +5467,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   Timer? _pollTimer;
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _pollTimer?.cancel();
@@ -4763,13 +5508,14 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       armConnected = true;
 
       final drives = await api.getArmDrives();
-      final drive = drives.whereType<Map>().cast<Map<String, dynamic>>().firstWhere(
-            (item) => item['available'] != false,
-            orElse: () => <String, dynamic>{
-              'id': 'arm-auto',
-              'name': 'ARM automatic drive monitor',
-            },
-          );
+      final drive =
+          drives.whereType<Map>().cast<Map<String, dynamic>>().firstWhere(
+                (item) => item['available'] != false,
+                orElse: () => <String, dynamic>{
+                  'id': 'arm-auto',
+                  'name': 'ARM automatic drive monitor',
+                },
+              );
 
       driveId = drive['id']?.toString() ?? 'arm-auto';
 
@@ -4859,7 +5605,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     final verificationData = job['verification'];
     final discType = job['discType']?.toString();
     final region = job['region']?.toString();
-    final source = (job['titles'] is List && (job['titles'] as List).isNotEmpty && (job['titles'] as List).first is Map)
+    final source = (job['titles'] is List &&
+            (job['titles'] as List).isNotEmpty &&
+            (job['titles'] as List).first is Map)
         ? Map<String, dynamic>.from((job['titles'] as List).first as Map)
         : job;
     final sourceMetadata = source['metadata'] is Map
@@ -4880,7 +5628,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       }
     }
 
-    if (titles.isEmpty && (job['title']?.toString().trim().isNotEmpty ?? false)) {
+    if (titles.isEmpty &&
+        (job['title']?.toString().trim().isNotEmpty ?? false)) {
       titles.add({
         'id': 'title_1',
         'title': job['title']?.toString(),
@@ -4918,8 +5667,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       );
       selectedDiscType =
           discTypes.contains(discType) ? discType! : selectedDiscType;
-      selectedRegion =
-          regions.contains(region) ? region! : selectedRegion;
+      selectedRegion = regions.contains(region) ? region! : selectedRegion;
       languagesController.text = _strings(source['languages']).isNotEmpty
           ? _strings(source['languages']).join(', ')
           : _strings(sourceMetadata['languages']).isNotEmpty
@@ -4955,7 +5703,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   /// Performs `_isImportableDiscTitle` for this feature. Update this documentation when its contract changes.
   bool _isImportableDiscTitle(Map<String, dynamic> title) {
     final type = (title['mediaType']?.toString() ?? 'movie').toLowerCase();
-    final classification = (title['classification']?.toString() ?? 'feature').toLowerCase();
+    final classification =
+        (title['classification']?.toString() ?? 'feature').toLowerCase();
     final movieLike = type.contains('movie') ||
         type.contains('film') ||
         type.contains('tv') ||
@@ -4982,7 +5731,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     if (!verificationPassed || reviewJob == null) return;
     if (!ownershipConfirmed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: UniversalText('Please confirm that you own or are legally authorized to use this media.')),
+        SnackBar(
+            content: UniversalText(
+                'Please confirm that you own or are legally authorized to use this media.')),
       );
       return;
     }
@@ -4991,7 +5742,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', ''))),
       );
       return;
     }
@@ -4999,12 +5751,15 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     if (!mounted) return;
     final job = reviewJob!;
     final selectedTitles = detectedDiscTitles
-        .where((title) => selectedDiscTitleIds.contains(title['id']?.toString()))
+        .where(
+            (title) => selectedDiscTitleIds.contains(title['id']?.toString()))
         .toList();
 
     if (selectedTitles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: UniversalText('Select at least one title from the disc before adding it.')),
+        SnackBar(
+            content: UniversalText(
+                'Select at least one title from the disc before adding it.')),
       );
       return;
     }
@@ -5023,8 +5778,13 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         : int.tryParse(job['discNumber']?.toString() ?? '');
 
     for (final titleData in selectedTitles) {
-      final title = (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true ? titleData['canonicalTitle']?.toString().trim() : titleData['title']?.toString().trim()) ?? '';
-      final discTitle = titleData['discTitle']?.toString() ?? titleData['title']?.toString();
+      final title =
+          (titleData['canonicalTitle']?.toString().trim().isNotEmpty == true
+                  ? titleData['canonicalTitle']?.toString().trim()
+                  : titleData['title']?.toString().trim()) ??
+              '';
+      final discTitle =
+          titleData['discTitle']?.toString() ?? titleData['title']?.toString();
       if (title.isEmpty) continue;
 
       final metadata = titleData['metadata'] is Map
@@ -5039,44 +5799,116 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                       (job['year'] is num
                           ? (job['year'] as num).toInt()
                           : int.tryParse(job['year']?.toString() ?? '')));
+      final reviewerProfileId = AppController.instance.currentProfile?.id ?? '';
+      final reviewerProfileName =
+          AppController.instance.currentProfile?.name ?? '';
       final media = MediaItem(
         id: 'arm_${DateTime.now().microsecondsSinceEpoch}_${titleData['id']}',
         title: title,
-        type: _normalizeMediaType(titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
+        type: _normalizeMediaType(
+            titleData['mediaType']?.toString() ?? job['mediaType']?.toString()),
+        addedByProfileId: reviewerProfileId.isEmpty ? null : reviewerProfileId,
+        addedByProfileName:
+            reviewerProfileName.isEmpty ? null : reviewerProfileName,
+        addedSource: 'import/rip',
         imageUrl: poster.isEmpty
-            ? (titleData['posterUrl']?.toString() ?? metadata['posterUrl']?.toString() ?? job['posterUrl']?.toString())
+            ? (titleData['posterUrl']?.toString() ??
+                metadata['posterUrl']?.toString() ??
+                job['posterUrl']?.toString())
             : poster,
         description: descriptionController.text.trim().isEmpty
-            ? titleData['description']?.toString() ?? metadata['description']?.toString() ?? job['description']?.toString() ?? DescriptionGenerator.movie(title: title, year: year)
+            ? titleData['description']?.toString() ??
+                metadata['description']?.toString() ??
+                job['description']?.toString() ??
+                DescriptionGenerator.movie(title: title, year: year)
             : descriptionController.text.trim(),
         releaseYear: year,
         trailerUrl: trailer.isEmpty
-            ? (titleData['trailerUrl']?.toString() ?? metadata['trailerUrl']?.toString() ?? job['trailerUrl']?.toString())
+            ? (titleData['trailerUrl']?.toString() ??
+                metadata['trailerUrl']?.toString() ??
+                job['trailerUrl']?.toString())
             : trailer,
         discType: selectedDiscType,
-        discRegion: titleData['detectedRegion']?.toString() ?? job['region']?.toString() ?? selectedRegion,
+        discRegion: titleData['detectedRegion']?.toString() ??
+            job['region']?.toString() ??
+            selectedRegion,
         discTitle: discTitle,
-        discMarketCountry: titleData['discMarketCountry']?.toString() ?? job['discMarketCountry']?.toString(),
-        originalTitle: titleData['originalTitle']?.toString() ?? titleData['canonicalTitle']?.toString(),
+        discMarketCountry: titleData['discMarketCountry']?.toString() ??
+            job['discMarketCountry']?.toString(),
+        originalTitle: titleData['originalTitle']?.toString() ??
+            titleData['canonicalTitle']?.toString(),
         originalLanguage: titleData['originalLanguage']?.toString(),
         countryOfOrigin: titleData['countryOfOrigin']?.toString(),
         canonicalTitle: titleData['canonicalTitle']?.toString() ?? title,
-
         discCollectionId: collectionId,
         discCollectionTitle: collectionTitle,
         discNumber: discNumber,
         discTitleId: titleData['id']?.toString(),
-        actors: _strings(titleData['actors']).isNotEmpty ? _strings(titleData['actors']) : (metadata['actors'] is List ? _strings(metadata['actors']) : _strings(job['actors'])),
-        directors: _strings(titleData['directors']).isNotEmpty ? _strings(titleData['directors']) : (metadata['directors'] is List ? _strings(metadata['directors']) : _strings(job['directors'])),
-        writers: _strings(titleData['writers']).isNotEmpty ? _strings(titleData['writers']) : (metadata['writers'] is List ? _strings(metadata['writers']) : _strings(job['writers'])),
-        music: _strings(titleData['music']).isNotEmpty ? _strings(titleData['music']) : (metadata['music'] is List ? _strings(metadata['music']) : _strings(job['music'])),
-        genres: _strings(titleData['genres']).isNotEmpty ? _strings(titleData['genres']) : (metadata['genres'] is List ? _strings(metadata['genres']) : _strings(job['genres'])),
-        tags: _strings(titleData['tags']).isNotEmpty ? _strings(titleData['tags']) : (metadata['tags'] is List ? _strings(metadata['tags']) : _strings(job['tags'])),
-        chapters: _strings(titleData['chapters']).isNotEmpty ? _strings(titleData['chapters']) : (metadata['chapters'] is List ? _strings(metadata['chapters']) : _strings(job['chapters'])),
-        audioTracks: _strings(titleData['audioTracks']).isNotEmpty ? _strings(titleData['audioTracks']) : (metadata['audioTracks'] is List ? _strings(metadata['audioTracks']) : _strings(job['audioTracks'])),
-        language: languagesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).join(', '),
-        subtitles: subtitlesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
-        extras: extrasController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+        actors: _strings(titleData['actors']).isNotEmpty
+            ? _strings(titleData['actors'])
+            : (metadata['actors'] is List
+                ? _strings(metadata['actors'])
+                : _strings(job['actors'])),
+        directors: _strings(titleData['directors']).isNotEmpty
+            ? _strings(titleData['directors'])
+            : (metadata['directors'] is List
+                ? _strings(metadata['directors'])
+                : _strings(job['directors'])),
+        writers: _strings(titleData['writers']).isNotEmpty
+            ? _strings(titleData['writers'])
+            : (metadata['writers'] is List
+                ? _strings(metadata['writers'])
+                : _strings(job['writers'])),
+        music: _strings(titleData['music']).isNotEmpty
+            ? _strings(titleData['music'])
+            : (metadata['music'] is List
+                ? _strings(metadata['music'])
+                : _strings(job['music'])),
+        genres: _strings(titleData['genres']).isNotEmpty
+            ? _strings(titleData['genres'])
+            : (metadata['genres'] is List
+                ? _strings(metadata['genres'])
+                : _strings(job['genres'])),
+        tags: _strings(titleData['tags']).isNotEmpty
+            ? _strings(titleData['tags'])
+            : (metadata['tags'] is List
+                ? _strings(metadata['tags'])
+                : _strings(job['tags'])),
+        chapters: _strings(titleData['chapters']).isNotEmpty
+            ? _strings(titleData['chapters'])
+            : (metadata['chapters'] is List
+                ? _strings(metadata['chapters'])
+                : _strings(job['chapters'])),
+        audioTracks: _strings(titleData['audioTracks']).isNotEmpty
+            ? _strings(titleData['audioTracks'])
+            : (metadata['audioTracks'] is List
+                ? _strings(metadata['audioTracks'])
+                : _strings(job['audioTracks'])),
+        xrayEvents: (titleData['xrayEvents'] is List
+                ? titleData['xrayEvents']
+                : metadata['xrayEvents'] is List
+                    ? metadata['xrayEvents']
+                    : job['xrayEvents'] is List
+                        ? job['xrayEvents']
+                        : const <dynamic>[])
+            .whereType<Map>()
+            .map((event) => Map<String, dynamic>.from(event))
+            .toList(),
+        language: languagesController.text
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .join(', '),
+        subtitles: subtitlesController.text
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
+        extras: extrasController.text
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
       );
 
       AppController.instance.addToLibrary(media);
@@ -5097,6 +5929,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
@@ -5114,14 +5947,16 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const UniversalText('ARM AUTOMATIC DISC IMPORT',
+                  const UniversalText(
+                    'ARM AUTOMATIC DISC IMPORT',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const UniversalText('ARM stays enabled. Insert a DVD, Blu-ray, or 4K Ultra HD disc and ARM will detect it and perform the extraction automatically.',
+                  const UniversalText(
+                    'ARM stays enabled. Insert a DVD, Blu-ray, or 4K Ultra HD disc and ARM will detect it and perform the extraction automatically.',
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -5149,7 +5984,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     const SizedBox(height: 8),
                     LinearProgressIndicator(value: progress),
                     const SizedBox(height: 8),
-                    UniversalText('${(progress * 100).round()}% • $statusMessage',
+                    UniversalText(
+                      '${(progress * 100).round()}% • $statusMessage',
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -5158,7 +5994,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     child: ElevatedButton.icon(
                       onPressed: importing ? null : _startArmImport,
                       icon: const Icon(Icons.play_circle_fill),
-                      label: const UniversalText('DETECT DISC / START ARM MONITOR'),
+                      label: const UniversalText(
+                          'DETECT DISC / START ARM MONITOR'),
                     ),
                   ),
                 ],
@@ -5166,7 +6003,6 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             ),
           ),
           const SizedBox(height: 20),
-
           if (detectedDiscTitles.length > 1) ...[
             const SizedBox(height: 20),
             Card(
@@ -5175,12 +6011,16 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const UniversalText('MULTI-TITLE DISC DETECTED',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                    const UniversalText(
+                      'MULTI-TITLE DISC DETECTED',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 6),
-                    UniversalText('ARM found ${detectedDiscTitles.length} separate title candidates on this physical disc. Each selected movie will become its own library item while remaining linked to the same disc.',
-                      style: const TextStyle(color: Colors.white70, height: 1.35),
+                    UniversalText(
+                      'ARM found ${detectedDiscTitles.length} separate title candidates on this physical disc. Each selected movie will become its own library item while remaining linked to the same disc.',
+                      style:
+                          const TextStyle(color: Colors.white70, height: 1.35),
                     ),
                     const SizedBox(height: 10),
                     ...detectedDiscTitles.map((title) {
@@ -5202,8 +6042,11 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                             }
                           });
                         },
-                        title: Text(title['canonicalTitle']?.toString() ?? title['title']?.toString() ?? 'Unknown title'),
-                        subtitle: UniversalText('${title['discTitle'] == null ? '' : 'Disc: ${title['discTitle']} • '}${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
+                        title: Text(title['canonicalTitle']?.toString() ??
+                            title['title']?.toString() ??
+                            'Unknown title'),
+                        subtitle: UniversalText(
+                          '${title['discTitle'] == null ? '' : 'Disc: ${title['discTitle']} • '}${title['mediaType']?.toString() ?? 'movie'} • ${title['classification']?.toString() ?? 'feature'}${title['year'] == null ? '' : ' • ${title['year']}'}$confidenceText',
                         ),
                         controlAffinity: ListTileControlAffinity.leading,
                       );
@@ -5213,7 +6056,6 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               ),
             ),
           ],
-
           if (verification != null)
             Card(
               child: Padding(
@@ -5240,16 +6082,19 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     ),
                     const SizedBox(height: 10),
                     if (verification?['durationSeconds'] != null)
-                      UniversalText('Ripped runtime: ${_formatSeconds(verification!['durationSeconds'])}',
+                      UniversalText(
+                        'Ripped runtime: ${_formatSeconds(verification!['durationSeconds'])}',
                       ),
                     if (verification?['chapterCount'] != null)
-                      UniversalText('Chapters detected: ${verification!['chapterCount']}',
+                      UniversalText(
+                        'Chapters detected: ${verification!['chapterCount']}',
                       ),
                     const SizedBox(height: 8),
                     ..._strings(verification?['failures']).map(
                       (failure) => Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: UniversalText('• $failure',
+                        child: UniversalText(
+                          '• $failure',
                           style: const TextStyle(color: Colors.redAccent),
                         ),
                       ),
@@ -5258,10 +6103,10 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 ),
               ),
             ),
-
           if (reviewJob != null && verificationPassed) ...[
             const SizedBox(height: 20),
-            const UniversalText('IMPORT REVIEW',
+            const UniversalText(
+              'IMPORT REVIEW',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -5273,7 +6118,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               ),
               items: const [
                 DropdownMenuItem(value: 'movie', child: UniversalText('Movie')),
-                DropdownMenuItem(value: 'tvShow', child: UniversalText('TV Show')),
+                DropdownMenuItem(
+                    value: 'tvShow', child: UniversalText('TV Show')),
               ],
               onChanged: (value) {
                 if (value != null) setState(() => selectedType = value);
@@ -5340,7 +6186,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               keyboardType: TextInputType.url,
               decoration: InputDecoration(
                 labelText: tr('Poster URL (optional fallback)'),
-                hintText: tr('Use this if the disc/metadata provider has no poster.'),
+                hintText:
+                    tr('Use this if the disc/metadata provider has no poster.'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -5350,7 +6197,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               keyboardType: TextInputType.url,
               decoration: InputDecoration(
                 labelText: tr('Trailer URL (optional fallback)'),
-                hintText: tr('Use this if the disc/metadata provider has no trailer.'),
+                hintText: tr(
+                    'Use this if the disc/metadata provider has no trailer.'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -5380,7 +6228,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               decoration: InputDecoration(
                 labelText: tr('Subtitles found'),
                 hintText: tr('English, Spanish, French'),
-                helperText: tr('Separate multiple subtitle languages with commas.'),
+                helperText:
+                    tr('Separate multiple subtitle languages with commas.'),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -5391,8 +6240,10 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               maxLines: 5,
               decoration: InputDecoration(
                 labelText: tr('Extras found'),
-                hintText: tr('Behind the scenes, deleted scenes, audio commentary, trailers from other movies'),
-                helperText: tr('Each extra can be entered as a comma-separated item.'),
+                hintText: tr(
+                    'Behind the scenes, deleted scenes, audio commentary, trailers from other movies'),
+                helperText:
+                    tr('Each extra can be entered as a comma-separated item.'),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -5402,9 +6253,12 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               child: CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: ownershipConfirmed,
-                onChanged: (value) => setState(() => ownershipConfirmed = value ?? false),
-                title: const UniversalText('I own or am legally authorized to use this media.'),
-                subtitle: const UniversalText('My Streaming Service provides storage and streaming infrastructure; applicable local law determines what copying and remote streaming are permitted.'),
+                onChanged: (value) =>
+                    setState(() => ownershipConfirmed = value ?? false),
+                title: const UniversalText(
+                    'I own or am legally authorized to use this media.'),
+                subtitle: const UniversalText(
+                    'My Streaming Service provides storage and streaming infrastructure; applicable local law determines what copying and remote streaming are permitted.'),
               ),
             ),
             const SizedBox(height: 8),
@@ -5414,7 +6268,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 color: Colors.white.withValues(alpha: .04),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: UniversalText('When you add this verified disc, its languages, audio tracks, subtitles, extras, actors, directors, writers, music, genres, tags, and chapters will be cataloged with the media.',
+              child: UniversalText(
+                'When you add this verified disc, its languages, audio tracks, subtitles, extras, actors, directors, writers, music, genres, tags, and chapters will be cataloged with the media.',
                 style: TextStyle(color: Colors.grey.shade300),
               ),
             ),
@@ -5429,9 +6284,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               ),
             ),
           ],
-
           const SizedBox(height: 30),
-          UniversalText('Current profile: ${controller.currentProfile?.name ?? 'None'}',
+          UniversalText(
+            'Current profile: ${controller.currentProfile?.name ?? 'None'}',
             style: TextStyle(color: Colors.grey.shade400),
           ),
         ],
@@ -5462,17 +6317,35 @@ class TrailersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trailers = AppController.instance.library.where((m) => m.trailerUrl?.trim().isNotEmpty == true).toList();
+    final trailers = AppController.instance.library
+        .where((m) => m.trailerUrl?.trim().isNotEmpty == true)
+        .toList();
     return Scaffold(
       appBar: AppBar(title: const UniversalText('Trailers')),
       body: trailers.isEmpty
-          ? const Center(child: UniversalText('No trailers have been added to your library yet. ARM review can add a YouTube link when a disc does not contain a trailer.'))
+          ? const Center(
+              child: UniversalText(
+                  'No trailers have been added to your library yet. ARM review can add a YouTube link when a disc does not contain a trailer.'))
           : ListView.builder(
               padding: const EdgeInsets.all(18),
               itemCount: trailers.length,
               itemBuilder: (_, index) {
                 final media = trailers[index];
-                return Card(child: ListTile(leading: const Icon(Icons.play_circle_fill_rounded), title: Text(media.title, style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text(media.type), trailing: const Icon(Icons.open_in_new_rounded), onTap: () async { final uri = Uri.tryParse(media.trailerUrl!); if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication); }));
+                return Card(
+                    child: ListTile(
+                        leading: const Icon(Icons.play_circle_fill_rounded),
+                        title: Text(media.title,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800)),
+                        subtitle: Text(media.type),
+                        trailing: const Icon(Icons.open_in_new_rounded),
+                        onTap: () async {
+                          final uri = Uri.tryParse(media.trailerUrl!);
+                          if (uri != null) {
+                            await launchUrl(uri,
+                                mode: LaunchMode.externalApplication);
+                          }
+                        }));
               },
             ),
     );
@@ -5495,27 +6368,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final controller = AppController.instance;
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final account = controller.currentAccount;
 
     if (account == null) {
-      return const Scaffold(body: Center(child: UniversalText('No account is logged in.')));
+      return const Scaffold(
+          body: Center(child: UniversalText('No account is logged in.')));
     }
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
       appBar: AppBar(
-        title: const UniversalText('Profiles', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const UniversalText('Profiles',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
         children: [
-          const UniversalText('Who is watching?', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const UniversalText('Who is watching?',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          UniversalText('${account.profiles.length}/7 profiles', style: const TextStyle(color: Colors.white54)),
+          UniversalText('${account.profiles.length}/7 profiles',
+              style: const TextStyle(color: Colors.white54)),
           const SizedBox(height: 24),
           ...account.profiles.map(
             (profile) => Padding(
@@ -5550,7 +6428,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: const UniversalText('CREATE PROFILE'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),
@@ -5570,14 +6449,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(account.subscription.plan.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Text(account.subscription.plan.name.toUpperCase(),
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 3),
-                      Text(account.subscription.status.name, style: const TextStyle(color: Colors.white54)),
+                      Text(account.subscription.status.name,
+                          style: const TextStyle(color: Colors.white54)),
                     ],
                   ),
                 ),
                 TextButton(
-                  onPressed: () => showDialog(context: context, builder: (_) => const SubscribeDialog()),
+                  onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => const SubscribeDialog()),
                   child: const UniversalText('Manage'),
                 ),
               ],
@@ -5600,7 +6483,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               foregroundColor: Colors.redAccent,
               side: BorderSide(color: Colors.red.withValues(alpha: .35)),
               padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ],
@@ -5624,10 +6508,13 @@ class _ProfileManagementCard extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
-      color: current ? Colors.white.withValues(alpha: .09) : Colors.white.withValues(alpha: .045),
+      color: current
+          ? Colors.white.withValues(alpha: .09)
+          : Colors.white.withValues(alpha: .045),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onSwitch,
@@ -5642,9 +6529,13 @@ class _ProfileManagementCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(profile.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                    Text(profile.name,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 4),
-                    Text(current ? 'Current profile' : 'Tap to switch', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text(current ? 'Current profile' : 'Tap to switch',
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               ),
@@ -5654,8 +6545,10 @@ class _ProfileManagementCard extends StatelessWidget {
                   if (value == 'delete') onDelete();
                 },
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'switch', child: UniversalText('Switch')), 
-                  PopupMenuItem(value: 'delete', child: UniversalText('Delete')),
+                  PopupMenuItem(
+                      value: 'switch', child: UniversalText('Switch')),
+                  PopupMenuItem(
+                      value: 'delete', child: UniversalText('Delete')),
                 ],
               ),
             ],
@@ -5674,6 +6567,7 @@ class _MainProfileAvatar extends StatelessWidget {
   const _MainProfileAvatar({required this.profile, required this.size});
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final avatar = profile.avatarUrl;
@@ -5694,16 +6588,23 @@ class _MainProfileAvatar extends StatelessWidget {
           shape: BoxShape.circle,
           color: Colors.white.withValues(alpha: .08),
         ),
-        child: Icon(icons[index % icons.length], size: size * .48, color: Colors.white70),
+        child: Icon(icons[index % icons.length],
+            size: size * .48, color: Colors.white70),
       );
     }
-    if (avatar != null && (avatar.startsWith('http://') || avatar.startsWith('https://'))) {
-      return CircleAvatar(radius: size / 2, backgroundImage: NetworkImage(avatar));
+    if (avatar != null &&
+        (avatar.startsWith('http://') || avatar.startsWith('https://'))) {
+      return CircleAvatar(
+          radius: size / 2, backgroundImage: NetworkImage(avatar));
     }
     if (avatar != null && avatar.isNotEmpty) {
-      return CircleAvatar(radius: size / 2, backgroundImage: FileImage(File(avatar)));
+      return CircleAvatar(
+          radius: size / 2, backgroundImage: FileImage(File(avatar)));
     }
-    return CircleAvatar(radius: size / 2, child: Text(profile.name.isEmpty ? '?' : profile.name[0].toUpperCase()));
+    return CircleAvatar(
+        radius: size / 2,
+        child:
+            Text(profile.name.isEmpty ? '?' : profile.name[0].toUpperCase()));
   }
 }
 
@@ -5720,6 +6621,7 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
   final nameController = TextEditingController();
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     nameController.dispose();
@@ -5727,6 +6629,7 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -5741,7 +6644,9 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('CANCEL')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const UniversalText('CANCEL')),
         FilledButton(
           onPressed: () {
             final name = nameController.text.trim();
@@ -5764,24 +6669,28 @@ class SubscribeDialog extends StatelessWidget {
   const SubscribeDialog({super.key});
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     return AlertDialog(
-      title: const UniversalText('Subscription',
+      title: const UniversalText(
+        'Subscription',
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const UniversalText('Choose your subscription.',
+          const UniversalText(
+            'Choose your subscription.',
           ),
           const SizedBox(height: 20),
           ListTile(
-            title: const UniversalText('\$54.99 USD / month',
+            title: const UniversalText(
+              '\$54.99 USD / month',
             ),
-            subtitle: const UniversalText('No free trial',
+            subtitle: const UniversalText(
+              'No free trial',
             ),
             onTap: () {
               controller.subscribe(
@@ -5791,9 +6700,11 @@ class SubscribeDialog extends StatelessWidget {
             },
           ),
           ListTile(
-            title: const UniversalText('\$599.99 USD / year',
+            title: const UniversalText(
+              '\$599.99 USD / year',
             ),
-            subtitle: const UniversalText('Save \$59.89 compared with 12 monthly payments',
+            subtitle: const UniversalText(
+              'Save \$59.89 compared with 12 monthly payments',
             ),
             onTap: () {
               controller.subscribe(
@@ -5825,6 +6736,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   bool loading = false;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -5832,6 +6744,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     messageController.dispose();
@@ -5858,7 +6771,8 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Performs `sendMessage` for this feature. Update this documentation when its contract changes.
@@ -5872,7 +6786,8 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
 
   /// Performs `openRecommendationDialog` for this feature. Update this documentation when its contract changes.
   Future<void> openRecommendationDialog() async {
-    await showDialog(context: context, builder: (_) => const AddGroupRecommendationDialog());
+    await showDialog(
+        context: context, builder: (_) => const AddGroupRecommendationDialog());
     if (mounted) setState(() {});
   }
 
@@ -5897,6 +6812,7 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
@@ -5905,8 +6821,14 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: const UniversalText('Group', style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [IconButton(tooltip: tr('Refresh'), onPressed: loading ? null : loadGroupData, icon: const Icon(Icons.refresh_rounded))],
+        title: const UniversalText('Group',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+        actions: [
+          IconButton(
+              tooltip: tr('Refresh'),
+              onPressed: loading ? null : loadGroupData,
+              icon: const Icon(Icons.refresh_rounded))
+        ],
       ),
       body: Column(
         children: [
@@ -5921,39 +6843,94 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(24),
-                      gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF242424), Color(0xFF101010)]),
-                      border: Border.all(color: Colors.white.withValues(alpha: .07)),
+                      gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF242424), Color(0xFF101010)]),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: .07)),
                     ),
                     child: Row(children: [
-                      Container(width: 54, height: 54, decoration: BoxDecoration(color: Colors.red.withValues(alpha: .14), borderRadius: BorderRadius.circular(17)), child: const Icon(Icons.groups_rounded, size: 28)),
+                      Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(17)),
+                          child: const Icon(Icons.groups_rounded, size: 28)),
                       const SizedBox(width: 14),
-                      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        UniversalText('Watch together', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                        SizedBox(height: 4),
-                        UniversalText('Chat, recommend titles, and build a shared watchlist.', style: TextStyle(color: Colors.white60, height: 1.35)),
-                      ])),
+                      const Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            UniversalText('Watch together',
+                                style: TextStyle(
+                                    fontSize: 22, fontWeight: FontWeight.w900)),
+                            SizedBox(height: 4),
+                            UniversalText(
+                                'Chat, recommend titles, and build a shared watchlist.',
+                                style: TextStyle(
+                                    color: Colors.white60, height: 1.35)),
+                          ])),
                     ]),
                   ),
                   const SizedBox(height: 20),
-                  _GroupSectionHeader(title: tr('Group Chat'), icon: Icons.chat_bubble_outline_rounded, action: _SmallHeaderButton(icon: Icons.movie_outlined, label: 'Recommend', onTap: openRecommendationDialog)),
+                  _GroupSectionHeader(
+                      title: tr('Group Chat'),
+                      icon: Icons.chat_bubble_outline_rounded,
+                      action: _SmallHeaderButton(
+                          icon: Icons.movie_outlined,
+                          label: 'Recommend',
+                          onTap: openRecommendationDialog)),
                   const SizedBox(height: 10),
                   if (controller.groupMessages.isEmpty)
-                    _GroupEmptyCard(icon: Icons.forum_outlined, title: tr('No messages yet'), subtitle: tr('Start the conversation below.'))
+                    _GroupEmptyCard(
+                        icon: Icons.forum_outlined,
+                        title: tr('No messages yet'),
+                        subtitle: tr('Start the conversation below.'))
                   else
-                    ...controller.groupMessages.map((message) => _GroupMessageBubble(sender: message.sender, message: message.message, time: _formatTime(message.timestamp), badgeName: controller.currentProfileBadge())),
+                    ...controller.groupMessages.map((message) =>
+                        _GroupMessageBubble(
+                            sender: message.sender,
+                            message: message.message,
+                            time: _formatTime(message.timestamp),
+                            badgeName: controller.currentProfileBadge())),
                   if (controller.groupRecommendations.isNotEmpty) ...[
                     const SizedBox(height: 22),
-                    _GroupSectionHeader(title: tr('Recommendations'), icon: Icons.auto_awesome_outlined, action: IconButton(onPressed: refreshRecommendations, icon: const Icon(Icons.refresh_rounded))),
+                    _GroupSectionHeader(
+                        title: tr('Recommendations'),
+                        icon: Icons.auto_awesome_outlined,
+                        action: IconButton(
+                            onPressed: refreshRecommendations,
+                            icon: const Icon(Icons.refresh_rounded))),
                     const SizedBox(height: 10),
-                    ...controller.groupRecommendations.map((recommendation) => GroupRecommendationCard(recommendation: recommendation, onChanged: () { if (mounted) setState(() {}); })),
+                    ...controller.groupRecommendations
+                        .map((recommendation) => GroupRecommendationCard(
+                            recommendation: recommendation,
+                            onChanged: () {
+                              if (mounted) setState(() {});
+                            })),
                   ],
                   const SizedBox(height: 22),
-                  _GroupSectionHeader(title: tr('Shared Wishlist'), icon: Icons.favorite_outline_rounded, action: IconButton(onPressed: refreshWishlist, icon: const Icon(Icons.refresh_rounded))),
+                  _GroupSectionHeader(
+                      title: tr('Shared Wishlist'),
+                      icon: Icons.favorite_outline_rounded,
+                      action: IconButton(
+                          onPressed: refreshWishlist,
+                          icon: const Icon(Icons.refresh_rounded))),
                   const SizedBox(height: 10),
                   if (controller.wishlist.isEmpty)
-                    _GroupEmptyCard(icon: Icons.favorite_border_rounded, title: tr('Your group wishlist is empty'), subtitle: tr('Approved recommendations will appear here.'))
+                    _GroupEmptyCard(
+                        icon: Icons.favorite_border_rounded,
+                        title: tr('Your group wishlist is empty'),
+                        subtitle:
+                            tr('Approved recommendations will appear here.'))
                   else
-                    ...controller.wishlist.map((item) => GroupWishlistCard(item: item, onChanged: () { if (mounted) setState(() {}); })),
+                    ...controller.wishlist.map((item) => GroupWishlistCard(
+                        item: item,
+                        onChanged: () {
+                          if (mounted) setState(() {});
+                        })),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -5963,11 +6940,37 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
             top: false,
             child: Container(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-              decoration: BoxDecoration(color: const Color(0xFF101010), border: Border(top: BorderSide(color: Colors.white.withValues(alpha: .07)))),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF101010),
+                  border: Border(
+                      top: BorderSide(
+                          color: Colors.white.withValues(alpha: .07)))),
               child: Row(children: [
-                Expanded(child: TextField(controller: messageController, onSubmitted: (_) => sendMessage(), textInputAction: TextInputAction.send, decoration: InputDecoration(hintText: tr('Message the group...'), filled: true, fillColor: Colors.white.withValues(alpha: .05), prefixIcon: const Icon(Icons.chat_bubble_outline_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none)))),
+                Expanded(
+                    child: TextField(
+                        controller: messageController,
+                        onSubmitted: (_) => sendMessage(),
+                        textInputAction: TextInputAction.send,
+                        decoration: InputDecoration(
+                            hintText: tr('Message the group...'),
+                            filled: true,
+                            fillColor: Colors.white.withValues(alpha: .05),
+                            prefixIcon:
+                                const Icon(Icons.chat_bubble_outline_rounded),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide.none)))),
                 const SizedBox(width: 8),
-                Material(color: Colors.red, borderRadius: BorderRadius.circular(17), child: InkWell(onTap: sendMessage, borderRadius: BorderRadius.circular(17), child: const SizedBox(width: 52, height: 52, child: Icon(Icons.send_rounded)))),
+                Material(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(17),
+                    child: InkWell(
+                        onTap: sendMessage,
+                        borderRadius: BorderRadius.circular(17),
+                        child: const SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: Icon(Icons.send_rounded)))),
               ]),
             ),
           ),
@@ -5977,37 +6980,70 @@ class _GroupHubScreenState extends State<GroupHubScreen> {
   }
 
   /// Performs `_formatTime` for this feature. Update this documentation when its contract changes.
-  String _formatTime(DateTime timestamp) => '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+  String _formatTime(DateTime timestamp) =>
+      '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
 }
 
 class _GroupSectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget? action;
-  const _GroupSectionHeader({required this.title, required this.icon, this.action});
+  const _GroupSectionHeader(
+      {required this.title, required this.icon, this.action});
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => Row(children: [Icon(icon, size: 20, color: Colors.white70), const SizedBox(width: 9), Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900))), if (action != null) action!]);
+  Widget build(BuildContext context) => Row(children: [
+        Icon(icon, size: 20, color: Colors.white70),
+        const SizedBox(width: 9),
+        Expanded(
+            child: Text(title,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w900))),
+        if (action != null) action!
+      ]);
 }
 
 class _SmallHeaderButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _SmallHeaderButton({required this.icon, required this.label, required this.onTap});
+  const _SmallHeaderButton(
+      {required this.icon, required this.label, required this.onTap});
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => TextButton.icon(onPressed: onTap, icon: Icon(icon, size: 17), label: Text(label), style: TextButton.styleFrom(foregroundColor: Colors.white));
+  Widget build(BuildContext context) => TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 17),
+      label: Text(label),
+      style: TextButton.styleFrom(foregroundColor: Colors.white));
 }
 
 class _GroupEmptyCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  const _GroupEmptyCard({required this.icon, required this.title, required this.subtitle});
+  const _GroupEmptyCard(
+      {required this.icon, required this.title, required this.subtitle});
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: .06))), child: Column(children: [Icon(icon, size: 42, color: Colors.white38), const SizedBox(height: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 12))]));
+  Widget build(BuildContext context) => Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .035),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: .06))),
+      child: Column(children: [
+        Icon(icon, size: 42, color: Colors.white38),
+        const SizedBox(height: 10),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text(subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white38, fontSize: 12))
+      ]));
 }
 
 class _GroupMessageBubble extends StatelessWidget {
@@ -6015,45 +7051,87 @@ class _GroupMessageBubble extends StatelessWidget {
   final String message;
   final String time;
   final String? badgeName;
-  const _GroupMessageBubble({required this.sender, required this.message, required this.time, this.badgeName});
+  const _GroupMessageBubble(
+      {required this.sender,
+      required this.message,
+      required this.time,
+      this.badgeName});
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(13), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const CircleAvatar(radius: 20, child: Icon(Icons.person_rounded, size: 20)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Row(children: [Flexible(child: Text(sender, style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis)), if (badgeName != null && badgeName!.isNotEmpty) ...[const SizedBox(width: 6), _InlineBadgeTag(label: badgeName!)] ])), Text(time, style: const TextStyle(color: Colors.white38, fontSize: 11))]), const SizedBox(height: 4), Text(message, style: const TextStyle(color: Colors.white70, height: 1.35))]))]));
+  Widget build(BuildContext context) => Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(17)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const CircleAvatar(
+            radius: 20, child: Icon(Icons.person_rounded, size: 20)),
+        const SizedBox(width: 11),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+                child: Row(children: [
+              Flexible(
+                  child: Text(sender,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      overflow: TextOverflow.ellipsis)),
+              if (badgeName != null && badgeName!.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _InlineBadgeTag(label: badgeName!)
+              ]
+            ])),
+            Text(time,
+                style: const TextStyle(color: Colors.white38, fontSize: 11))
+          ]),
+          const SizedBox(height: 4),
+          Text(message,
+              style: const TextStyle(color: Colors.white70, height: 1.35))
+        ]))
+      ]));
 }
 
 class _InlineBadgeTag extends StatelessWidget {
   final String label;
   const _InlineBadgeTag({required this.label});
   @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.amber.withValues(alpha: .13), borderRadius: BorderRadius.circular(999)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.emoji_events_rounded, size: 10, color: Colors.amber), const SizedBox(width: 3), Text(label, style: const TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.w800))]));
+  Widget build(BuildContext context) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+          color: Colors.amber.withValues(alpha: .13),
+          borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.emoji_events_rounded, size: 10, color: Colors.amber),
+        const SizedBox(width: 3),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.amber, fontSize: 8, fontWeight: FontWeight.w800))
+      ]));
 }
 
 // ============================================================
 // ADD GROUP RECOMMENDATION
 // ============================================================
 
-class AddGroupRecommendationDialog
-    extends StatefulWidget {
+class AddGroupRecommendationDialog extends StatefulWidget {
   const AddGroupRecommendationDialog({
     super.key,
   });
 
   @override
-  State<AddGroupRecommendationDialog>
-      createState() =>
-          _AddGroupRecommendationDialogState();
+  State<AddGroupRecommendationDialog> createState() =>
+      _AddGroupRecommendationDialogState();
 }
 
 /// Implements the `_AddGroupRecommendationDialogState` class for this feature or UI component.
 class _AddGroupRecommendationDialogState
-    extends State<
-        AddGroupRecommendationDialog> {
-  final TextEditingController
-      titleController =
-      TextEditingController();
+    extends State<AddGroupRecommendationDialog> {
+  final TextEditingController titleController = TextEditingController();
 
-  final TextEditingController
-      customDurationController =
+  final TextEditingController customDurationController =
       TextEditingController();
 
   String selectedType = 'movie';
@@ -6062,6 +7140,7 @@ class _AddGroupRecommendationDialogState
   bool submitting = false;
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     titleController.dispose();
@@ -6105,43 +7184,41 @@ class _AddGroupRecommendationDialogState
       return;
     }
 
-    final title =
-        titleController.text.trim();
+    final title = titleController.text.trim();
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Enter a movie or TV show title.',
+          content: UniversalText(
+            'Enter a movie or TV show title.',
           ),
         ),
       );
       return;
     }
 
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    final currentProfile =
-        controller.currentProfile;
+    final currentProfile = controller.currentProfile;
 
     if (currentProfile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('No profile is currently selected.',
+          content: UniversalText(
+            'No profile is currently selected.',
           ),
         ),
       );
       return;
     }
 
-    final durationHours =
-        selectedDurationHours;
+    final durationHours = selectedDurationHours;
 
-    if (durationHours == null ||
-        durationHours <= 0) {
+    if (durationHours == null || durationHours <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Enter a valid custom voting duration.',
+          content: UniversalText(
+            'Enter a valid custom voting duration.',
           ),
         ),
       );
@@ -6192,7 +7269,8 @@ class _AddGroupRecommendationDialogState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to create recommendation: $message',
+          content: UniversalText(
+            'Unable to create recommendation: $message',
           ),
         ),
       );
@@ -6210,72 +7288,59 @@ class _AddGroupRecommendationDialogState
     if (hours % 168 == 0) {
       final weeks = hours ~/ 168;
 
-      return weeks == 1
-          ? '1 week'
-          : '$weeks weeks';
+      return weeks == 1 ? '1 week' : '$weeks weeks';
     }
 
     if (hours % 24 == 0) {
       final days = hours ~/ 24;
 
-      return days == 1
-          ? '1 day'
-          : '$days days';
+      return days == 1 ? '1 day' : '$days days';
     }
 
-    return hours == 1
-        ? '1 hour'
-        : '$hours hours';
+    return hours == 1 ? '1 hour' : '$hours hours';
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const UniversalText('Recommend to the Group',
+      title: const UniversalText(
+        'Recommend to the Group',
       ),
       content: SizedBox(
         width: 500,
         child: SingleChildScrollView(
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const UniversalText('Recommend any movie or TV show to the group. '
+              const UniversalText(
+                'Recommend any movie or TV show to the group. '
                 'It does not have to already exist in your library.',
               ),
               const SizedBox(
                 height: 20,
               ),
               TextField(
-                controller:
-                    titleController,
-                enabled:
-                    !submitting,
+                controller: titleController,
+                enabled: !submitting,
                 autofocus: true,
-                decoration:
-                    InputDecoration(
+                decoration: InputDecoration(
                   labelText: tr('Movie or TV show title'),
                   hintText: tr('Enter a title...'),
-                  prefixIcon:
-                      Icon(Icons.search),
-                  border:
-                      OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(
                 height: 15,
               ),
               DropdownButtonFormField<String>(
-                initialValue:
-                    selectedType,
-                decoration:
-                    InputDecoration(
+                initialValue: selectedType,
+                decoration: InputDecoration(
                   labelText: tr('Type'),
-                  border:
-                      OutlineInputBorder(),
+                  border: OutlineInputBorder(),
                 ),
                 items: const [
                   DropdownMenuItem<String>(
@@ -6288,7 +7353,8 @@ class _AddGroupRecommendationDialogState
                         SizedBox(
                           width: 10,
                         ),
-                        UniversalText('Movie',
+                        UniversalText(
+                          'Movie',
                         ),
                       ],
                     ),
@@ -6303,93 +7369,84 @@ class _AddGroupRecommendationDialogState
                         SizedBox(
                           width: 10,
                         ),
-                        UniversalText('TV Show',
+                        UniversalText(
+                          'TV Show',
                         ),
                       ],
                     ),
                   ),
                 ],
-                onChanged:
-                    submitting
-                        ? null
-                        : (value) {
-                            if (value == null) {
-                              return;
-                            }
+                onChanged: submitting
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
 
-                            setState(() {
-                              selectedType =
-                                  value;
-                            });
-                          },
+                        setState(() {
+                          selectedType = value;
+                        });
+                      },
               ),
               const SizedBox(height: 15),
               DropdownButtonFormField<String>(
-                initialValue:
-                    selectedDuration,
-                decoration:
-                    InputDecoration(
+                initialValue: selectedDuration,
+                decoration: InputDecoration(
                   labelText: tr('Voting duration'),
-                  border:
-                      OutlineInputBorder(),
+                  border: OutlineInputBorder(),
                 ),
                 items: const [
                   DropdownMenuItem<String>(
                     value: '24h',
-                    child: UniversalText('24 hours',
+                    child: UniversalText(
+                      '24 hours',
                     ),
                   ),
                   DropdownMenuItem<String>(
                     value: '3d',
-                    child: UniversalText('3 days',
+                    child: UniversalText(
+                      '3 days',
                     ),
                   ),
                   DropdownMenuItem<String>(
                     value: '1w',
-                    child: UniversalText('1 week',
+                    child: UniversalText(
+                      '1 week',
                     ),
                   ),
                   DropdownMenuItem<String>(
                     value: 'custom',
-                    child: UniversalText('Custom',
+                    child: UniversalText(
+                      'Custom',
                     ),
                   ),
                 ],
-                onChanged:
-                    submitting
-                        ? null
-                        : (value) {
-                            if (value == null) {
-                              return;
-                            }
+                onChanged: submitting
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
 
-                            setState(() {
-                              selectedDuration =
-                                  value;
-                            });
-                          },
+                        setState(() {
+                          selectedDuration = value;
+                        });
+                      },
               ),
-              if (selectedDuration ==
-                  'custom') ...[
+              if (selectedDuration == 'custom') ...[
                 const SizedBox(height: 15),
                 Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: TextField(
-                        controller:
-                            customDurationController,
-                        enabled:
-                            !submitting,
-                        keyboardType:
-                            TextInputType.number,
-                        decoration:
-                            InputDecoration(
+                        controller: customDurationController,
+                        enabled: !submitting,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
                           labelText: tr('Amount'),
                           hintText: tr('Example: 12'),
-                          border:
-                              OutlineInputBorder(),
+                          border: OutlineInputBorder(),
                         ),
                         onChanged: (_) {
                           setState(() {});
@@ -6400,49 +7457,37 @@ class _AddGroupRecommendationDialogState
                       width: 10,
                     ),
                     Expanded(
-                      child:
-                          DropdownButtonFormField<
-                              String>(
-                        initialValue:
-                            customDurationUnit,
-                        decoration:
-                            InputDecoration(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: customDurationUnit,
+                        decoration: InputDecoration(
                           labelText: tr('Unit'),
-                          border:
-                              OutlineInputBorder(),
+                          border: OutlineInputBorder(),
                         ),
                         items: const [
-                          DropdownMenuItem<
-                              String>(
-                            value:
-                                'hours',
-                            child:
-                                UniversalText('Hours',
+                          DropdownMenuItem<String>(
+                            value: 'hours',
+                            child: UniversalText(
+                              'Hours',
                             ),
                           ),
-                          DropdownMenuItem<
-                              String>(
-                            value:
-                                'days',
-                            child:
-                                UniversalText('Days',
+                          DropdownMenuItem<String>(
+                            value: 'days',
+                            child: UniversalText(
+                              'Days',
                             ),
                           ),
                         ],
-                        onChanged:
-                            submitting
-                                ? null
-                                : (value) {
-                                    if (value ==
-                                        null) {
-                                      return;
-                                    }
+                        onChanged: submitting
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
 
-                                    setState(() {
-                                      customDurationUnit =
-                                          value;
-                                    });
-                                  },
+                                setState(() {
+                                  customDurationUnit = value;
+                                });
+                              },
                       ),
                     ),
                   ],
@@ -6450,10 +7495,8 @@ class _AddGroupRecommendationDialogState
               ],
               const SizedBox(height: 12),
               Text(
-                selectedDuration ==
-                        'custom'
-                    ? selectedDurationHours ==
-                            null
+                selectedDuration == 'custom'
+                    ? selectedDurationHours == null
                         ? 'Enter a duration greater than 0.'
                         : 'Voting will remain open for '
                             '${_formatDuration(selectedDurationHours!)}.'
@@ -6469,36 +7512,32 @@ class _AddGroupRecommendationDialogState
       ),
       actions: [
         TextButton(
-          onPressed:
-              submitting
-                  ? null
-                  : () {
-                      Navigator.of(
-                        context,
-                      ).pop();
-                    },
-          child: const UniversalText('CANCEL',
+          onPressed: submitting
+              ? null
+              : () {
+                  Navigator.of(
+                    context,
+                  ).pop();
+                },
+          child: const UniversalText(
+            'CANCEL',
           ),
         ),
         ElevatedButton.icon(
-          onPressed:
-              submitting
-                  ? null
-                  : submitRecommendation,
-          icon:
-              submitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child:
-                          CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.send,
-                    ),
-          label: const UniversalText('RECOMMEND',
+          onPressed: submitting ? null : submitRecommendation,
+          icon: submitting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(
+                  Icons.send,
+                ),
+          label: const UniversalText(
+            'RECOMMEND',
           ),
         ),
       ],
@@ -6510,8 +7549,7 @@ class _AddGroupRecommendationDialogState
 // GROUP RECOMMENDATION CARD
 // ============================================================
 
-class GroupRecommendationCard
-    extends StatefulWidget {
+class GroupRecommendationCard extends StatefulWidget {
   final Map<String, dynamic> recommendation;
   final VoidCallback onChanged;
 
@@ -6522,20 +7560,19 @@ class GroupRecommendationCard
   });
 
   @override
-  State<GroupRecommendationCard>
-      createState() =>
-          _GroupRecommendationCardState();
+  State<GroupRecommendationCard> createState() =>
+      _GroupRecommendationCardState();
 }
 
 /// Implements the `_GroupRecommendationCardState` class for this feature or UI component.
-class _GroupRecommendationCardState
-    extends State<GroupRecommendationCard> {
+class _GroupRecommendationCardState extends State<GroupRecommendationCard> {
   Timer? countdownTimer;
   Duration remaining = Duration.zero;
   bool voting = false;
   bool refreshingAfterDeadline = false;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -6544,6 +7581,7 @@ class _GroupRecommendationCardState
   }
 
   @override
+
   /// Performs `didUpdateWidget` for this feature. Update this documentation when its contract changes.
   void didUpdateWidget(
     covariant GroupRecommendationCard oldWidget,
@@ -6559,6 +7597,7 @@ class _GroupRecommendationCardState
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     countdownTimer?.cancel();
@@ -6569,8 +7608,7 @@ class _GroupRecommendationCardState
   void _startCountdown() {
     countdownTimer?.cancel();
 
-    final status =
-        _statusString(widget.recommendation);
+    final status = _statusString(widget.recommendation);
 
     if (status != 'voting') {
       return;
@@ -6587,8 +7625,7 @@ class _GroupRecommendationCardState
 
   /// Performs `_updateRemaining` for this feature. Update this documentation when its contract changes.
   void _updateRemaining() {
-    final endsAt =
-        _dateTimeValue(
+    final endsAt = _dateTimeValue(
       widget.recommendation['votingEndsAt'],
     );
 
@@ -6602,8 +7639,7 @@ class _GroupRecommendationCardState
       return;
     }
 
-    final difference =
-        endsAt.difference(DateTime.now());
+    final difference = endsAt.difference(DateTime.now());
 
     if (difference <= Duration.zero) {
       if (mounted) {
@@ -6629,8 +7665,7 @@ class _GroupRecommendationCardState
       return;
     }
 
-    final status =
-        _statusString(widget.recommendation);
+    final status = _statusString(widget.recommendation);
 
     if (status != 'voting') {
       return;
@@ -6640,8 +7675,7 @@ class _GroupRecommendationCardState
     countdownTimer?.cancel();
 
     try {
-      final controller =
-          AppController.instance;
+      final controller = AppController.instance;
 
       await controller.loadGroupRecommendations();
       await controller.loadGroupWishlist();
@@ -6661,11 +7695,9 @@ class _GroupRecommendationCardState
       return;
     }
 
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    final currentProfile =
-        controller.currentProfile;
+    final currentProfile = controller.currentProfile;
 
     if (currentProfile == null) {
       _showMessage(
@@ -6674,17 +7706,14 @@ class _GroupRecommendationCardState
       return;
     }
 
-    final status =
-        _statusString(widget.recommendation);
+    final status = _statusString(widget.recommendation);
 
-    if (status != 'voting' ||
-        remaining <= Duration.zero) {
+    if (status != 'voting' || remaining <= Duration.zero) {
       await _refreshAfterDeadline();
       return;
     }
 
-    final votes =
-        _votesMap(
+    final votes = _votesMap(
       widget.recommendation['votes'],
     );
 
@@ -6703,19 +7732,16 @@ class _GroupRecommendationCardState
 
     try {
       await controller.voteOnGroupRecommendation(
-        recommendationId:
-            _stringValue(
-              widget.recommendation['id'],
-            ),
-        profileId:
-            currentProfile.id,
+        recommendationId: _stringValue(
+          widget.recommendation['id'],
+        ),
+        profileId: currentProfile.id,
         vote: vote,
       );
 
       await controller.loadGroupRecommendations();
 
-      final updatedStatus =
-          _findUpdatedRecommendationStatus();
+      final updatedStatus = _findUpdatedRecommendationStatus();
 
       if (updatedStatus == 'approved') {
         await controller.loadGroupWishlist();
@@ -6758,16 +7784,13 @@ class _GroupRecommendationCardState
 
   /// Performs `_findUpdatedRecommendationStatus` for this feature. Update this documentation when its contract changes.
   String _findUpdatedRecommendationStatus() {
-    final id =
-        _stringValue(
-          widget.recommendation['id'],
-        );
+    final id = _stringValue(
+      widget.recommendation['id'],
+    );
 
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    for (final recommendation
-        in controller.groupRecommendations) {
+    for (final recommendation in controller.groupRecommendations) {
       if (_stringValue(
             recommendation['id'],
           ) ==
@@ -6795,31 +7818,26 @@ class _GroupRecommendationCardState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final recommendation =
-        widget.recommendation;
+    final recommendation = widget.recommendation;
 
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    final currentProfile =
-        controller.currentProfile;
+    final currentProfile = controller.currentProfile;
 
-    final title =
-        _stringValue(
+    final title = _stringValue(
       recommendation['title'],
       fallback: 'Untitled',
     );
 
-    final type =
-        _stringValue(
+    final type = _stringValue(
       recommendation['type'],
       fallback: 'movie',
     );
 
-    final status =
-        _statusString(recommendation);
+    final status = _statusString(recommendation);
 
     final recommender = _profileName(
       _stringValue(
@@ -6828,30 +7846,27 @@ class _GroupRecommendationCardState
       controller,
     );
 
-    final votes =
-        _votesMap(
+    final votes = _votesMap(
       recommendation['votes'],
     );
 
-    final yesVotes =
-        _intValue(
-          recommendation['yesVotes'],
-          fallback: votes.values
-              .where(
-                (vote) => vote == 'yes',
-              )
-              .length,
-        );
+    final yesVotes = _intValue(
+      recommendation['yesVotes'],
+      fallback: votes.values
+          .where(
+            (vote) => vote == 'yes',
+          )
+          .length,
+    );
 
-    final noVotes =
-        _intValue(
-          recommendation['noVotes'],
-          fallback: votes.values
-              .where(
-                (vote) => vote == 'no',
-              )
-              .length,
-        );
+    final noVotes = _intValue(
+      recommendation['noVotes'],
+      fallback: votes.values
+          .where(
+            (vote) => vote == 'no',
+          )
+          .length,
+    );
 
     final totalVotes = yesVotes + noVotes;
 
@@ -6861,42 +7876,32 @@ class _GroupRecommendationCardState
       totalVotes,
     );
 
-    final noPercentage =
-        _percentage(
+    final noPercentage = _percentage(
       recommendation['noPercentage'],
       noVotes,
       totalVotes,
     );
 
     final currentVote =
-        currentProfile == null
-            ? null
-            : votes[currentProfile.id];
+        currentProfile == null ? null : votes[currentProfile.id];
 
     // All profiles belonging to the account can vote. The only per-profile
     // restriction is one vote per recommendation.
-    final canVote =
-        status == 'voting' &&
+    final canVote = status == 'voting' &&
         remaining > Duration.zero &&
         currentProfile != null &&
         currentVote == null &&
         !voting;
 
-    final typeIsMovie =
-        type.toLowerCase() == 'movie';
+    final typeIsMovie = type.toLowerCase() == 'movie';
 
-    final icon =
-        typeIsMovie
-            ? Icons.movie_outlined
-            : Icons.tv_outlined;
+    final icon = typeIsMovie ? Icons.movie_outlined : Icons.tv_outlined;
 
-    final accentColor =
-        status == 'approved'
-            ? Colors.green
-            : status == 'rejected' ||
-                    status == 'expired'
-                ? Colors.red
-                : Colors.orange;
+    final accentColor = status == 'approved'
+        ? Colors.green
+        : status == 'rejected' || status == 'expired'
+            ? Colors.red
+            : Colors.orange;
 
     return Card(
       margin: const EdgeInsets.only(
@@ -6905,16 +7910,13 @@ class _GroupRecommendationCardState
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
-                  backgroundColor:
-                      accentColor.withValues(
+                  backgroundColor: accentColor.withValues(
                     alpha: .15,
                   ),
                   child: Icon(
@@ -6925,23 +7927,21 @@ class _GroupRecommendationCardState
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
                         style: const TextStyle(
                           fontSize: 19,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      UniversalText('${typeIsMovie ? 'Movie' : 'TV Show'} '
+                      UniversalText(
+                        '${typeIsMovie ? 'Movie' : 'TV Show'} '
                         'recommended by $recommender',
                         style: TextStyle(
-                          color:
-                              Colors.grey.shade400,
+                          color: Colors.grey.shade400,
                         ),
                       ),
                     ],
@@ -6965,8 +7965,7 @@ class _GroupRecommendationCardState
                           ? 'Voting ends in ${_formatRemaining(remaining)}'
                           : 'Voting ending...',
                       style: const TextStyle(
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -6981,10 +7980,10 @@ class _GroupRecommendationCardState
                     size: 18,
                   ),
                   SizedBox(width: 7),
-                  UniversalText('Voting ended',
+                  UniversalText(
+                    'Voting ended',
                     style: TextStyle(
-                      fontWeight:
-                          FontWeight.w600,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -6996,8 +7995,7 @@ class _GroupRecommendationCardState
                 Expanded(
                   child: _VotePercentage(
                     label: 'YES',
-                    percentage:
-                        yesPercentage,
+                    percentage: yesPercentage,
                     votes: yesVotes,
                     icon: Icons.check,
                   ),
@@ -7006,8 +8004,7 @@ class _GroupRecommendationCardState
                 Expanded(
                   child: _VotePercentage(
                     label: 'NO',
-                    percentage:
-                        noPercentage,
+                    percentage: noPercentage,
                     votes: noVotes,
                     icon: Icons.close,
                   ),
@@ -7016,8 +8013,7 @@ class _GroupRecommendationCardState
             ),
             const SizedBox(height: 12),
             ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(5),
               child: Row(
                 children: [
                   Expanded(
@@ -7046,13 +8042,10 @@ class _GroupRecommendationCardState
               if (currentVote != null)
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    borderRadius:
-                        BorderRadius.circular(8),
-                    color:
-                        Colors.blueGrey.shade900,
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.blueGrey.shade900,
                   ),
                   child: Row(
                     children: [
@@ -7060,19 +8053,15 @@ class _GroupRecommendationCardState
                         currentVote == 'yes'
                             ? Icons.check_circle
                             : Icons.cancel,
-                        color:
-                            currentVote == 'yes'
-                                ? Colors.green
-                                : Colors.red,
+                        color: currentVote == 'yes' ? Colors.green : Colors.red,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: UniversalText('You voted '
+                        child: UniversalText(
+                          'You voted '
                           '${currentVote.toUpperCase()}',
-                          style:
-                              const TextStyle(
-                            fontWeight:
-                                FontWeight.bold,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -7080,10 +8069,10 @@ class _GroupRecommendationCardState
                   ),
                 )
               else if (currentProfile == null)
-                UniversalText('Select a profile to vote.',
+                UniversalText(
+                  'Select a profile to vote.',
                   style: TextStyle(
-                    color:
-                        Colors.grey.shade400,
+                    color: Colors.grey.shade400,
                   ),
                 )
               else
@@ -7091,24 +8080,16 @@ class _GroupRecommendationCardState
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed:
-                            canVote
-                                ? () =>
-                                    _vote('yes')
-                                : null,
+                        onPressed: canVote ? () => _vote('yes') : null,
                         icon: const Icon(
                           Icons.check,
                         ),
-                        label: const UniversalText('YES',
+                        label: const UniversalText(
+                          'YES',
                         ),
-                        style:
-                            ElevatedButton
-                                .styleFrom(
-                          backgroundColor:
-                              Colors.green
-                                  .shade700,
-                          foregroundColor:
-                              Colors.white,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
                         ),
                       ),
                     ),
@@ -7117,24 +8098,16 @@ class _GroupRecommendationCardState
                     ),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed:
-                            canVote
-                                ? () =>
-                                    _vote('no')
-                                : null,
+                        onPressed: canVote ? () => _vote('no') : null,
                         icon: const Icon(
                           Icons.close,
                         ),
-                        label: const UniversalText('NO',
+                        label: const UniversalText(
+                          'NO',
                         ),
-                        style:
-                            ElevatedButton
-                                .styleFrom(
-                          backgroundColor:
-                              Colors.red
-                                  .shade700,
-                          foregroundColor:
-                              Colors.white,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade700,
+                          foregroundColor: Colors.white,
                         ),
                       ),
                     ),
@@ -7151,11 +8124,11 @@ class _GroupRecommendationCardState
                   ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: UniversalText('Added to Group Wishlist',
+                    child: UniversalText(
+                      'Added to Group Wishlist',
                       style: TextStyle(
                         color: Colors.green,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -7172,11 +8145,11 @@ class _GroupRecommendationCardState
                   ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: UniversalText('Recommendation rejected',
+                    child: UniversalText(
+                      'Recommendation rejected',
                       style: TextStyle(
                         color: Colors.red,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -7193,28 +8166,26 @@ class _GroupRecommendationCardState
                   ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: UniversalText('Recommendation expired',
+                    child: UniversalText(
+                      'Recommendation expired',
                       style: TextStyle(
                         color: Colors.red,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ],
               ),
             ],
-            if (totalVotes == 0 &&
-                status == 'voting')
+            if (totalVotes == 0 && status == 'voting')
               Padding(
-                padding:
-                    const EdgeInsets.only(
+                padding: const EdgeInsets.only(
                   top: 8,
                 ),
-                child: UniversalText('No votes yet.',
+                child: UniversalText(
+                  'No votes yet.',
                   style: TextStyle(
-                    color:
-                        Colors.grey.shade500,
+                    color: Colors.grey.shade500,
                     fontSize: 12,
                   ),
                 ),
@@ -7244,18 +8215,15 @@ class _VotePercentage extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final color =
-        label == 'YES'
-            ? Colors.green
-            : Colors.red;
+    final color = label == 'YES' ? Colors.green : Colors.red;
 
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: color.withValues(
             alpha: .4,
@@ -7272,29 +8240,27 @@ class _VotePercentage extends StatelessWidget {
           const SizedBox(width: 7),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
                   style: TextStyle(
                     color: color,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
                 ),
-                UniversalText('${_formatPercentageValue(percentage)}%',
+                UniversalText(
+                  '${_formatPercentageValue(percentage)}%',
                   style: const TextStyle(
                     fontSize: 20,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                UniversalText('$votes vote${votes == 1 ? '' : 's'}',
+                UniversalText(
+                  '$votes vote${votes == 1 ? '' : 's'}',
                   style: TextStyle(
-                    color:
-                        Colors.grey.shade500,
+                    color: Colors.grey.shade500,
                     fontSize: 11,
                   ),
                 ),
@@ -7321,8 +8287,7 @@ class _VotePercentage extends StatelessWidget {
 // GROUP WISHLIST CARD
 // ============================================================
 
-class GroupWishlistCard
-    extends StatelessWidget {
+class GroupWishlistCard extends StatelessWidget {
   final WishlistItem item;
   final VoidCallback onChanged;
 
@@ -7336,8 +8301,7 @@ class GroupWishlistCard
   Future<void> remove(
     BuildContext context,
   ) async {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     try {
       await controller.removeFromGroupWishlist(
@@ -7352,7 +8316,8 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('${item.title} removed from the group wishlist.',
+          content: UniversalText(
+            '${item.title} removed from the group wishlist.',
           ),
         ),
       );
@@ -7361,7 +8326,8 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to remove item: $error',
+          content: UniversalText(
+            'Unable to remove item: $error',
           ),
         ),
       );
@@ -7372,31 +8338,26 @@ class GroupWishlistCard
   Future<void> acquire(
     BuildContext context,
   ) async {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    final account =
-        controller.currentAccount;
+    final account = controller.currentAccount;
 
-    if (account == null ||
-        account.profiles.isEmpty) {
+    if (account == null || account.profiles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('No profiles are available.',
+          content: UniversalText(
+            'No profiles are available.',
           ),
         ),
       );
       return;
     }
 
-    final selectedProfile =
-        await showDialog<Profile>(
+    final selectedProfile = await showDialog<Profile>(
       context: context,
-      builder: (_) =>
-          SelectAcquisitionProfileDialog(
+      builder: (_) => SelectAcquisitionProfileDialog(
         profiles: account.profiles,
-        currentProfile:
-            controller.currentProfile,
+        currentProfile: controller.currentProfile,
       ),
     );
 
@@ -7418,7 +8379,8 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('${item.title} was acquired for ${selectedProfile.name}.',
+          content: UniversalText(
+            '${item.title} was acquired for ${selectedProfile.name}.',
           ),
         ),
       );
@@ -7427,7 +8389,8 @@ class GroupWishlistCard
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to acquire item: $error',
+          content: UniversalText(
+            'Unable to acquire item: $error',
           ),
         ),
       );
@@ -7435,16 +8398,15 @@ class GroupWishlistCard
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Card(
-      margin:
-          const EdgeInsets.only(
+      margin: const EdgeInsets.only(
         bottom: 10,
       ),
       child: ListTile(
-        leading:
-            const CircleAvatar(
+        leading: const CircleAvatar(
           child: Icon(
             Icons.movie_outlined,
           ),
@@ -7452,14 +8414,12 @@ class GroupWishlistCard
         title: Text(
           item.title,
           maxLines: 2,
-          overflow:
-              TextOverflow.ellipsis,
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           item.type,
         ),
-        trailing:
-            PopupMenuButton<String>(
+        trailing: PopupMenuButton<String>(
           onSelected: (value) {
             if (value == 'acquire') {
               acquire(context);
@@ -7472,12 +8432,14 @@ class GroupWishlistCard
           itemBuilder: (_) => const [
             PopupMenuItem<String>(
               value: 'acquire',
-              child: UniversalText('Acquire / Rip',
+              child: UniversalText(
+                'Acquire / Rip',
               ),
             ),
             PopupMenuItem<String>(
               value: 'remove',
-              child: UniversalText('Remove',
+              child: UniversalText(
+                'Remove',
               ),
             ),
           ],
@@ -7491,8 +8453,7 @@ class GroupWishlistCard
 // SELECT ACQUISITION PROFILE
 // ============================================================
 
-class SelectAcquisitionProfileDialog
-    extends StatelessWidget {
+class SelectAcquisitionProfileDialog extends StatelessWidget {
   final List<Profile> profiles;
   final Profile? currentProfile;
 
@@ -7503,54 +8464,45 @@ class SelectAcquisitionProfileDialog
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const UniversalText('Add to Which Profile?',
+      title: const UniversalText(
+        'Add to Which Profile?',
       ),
       content: SizedBox(
         width: 450,
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const UniversalText('Choose the profile whose personal library should receive this movie or show.',
+            const UniversalText(
+              'Choose the profile whose personal library should receive this movie or show.',
             ),
             const SizedBox(height: 15),
             ...profiles.map(
-              (profile) =>
-                  ListTile(
-                leading:
-                    CircleAvatar(
-                  backgroundImage:
-                      profile.avatarUrl ==
-                              null
-                          ? null
-                          : NetworkImage(
-                              profile
-                                  .avatarUrl!,
-                            ),
-                  child:
-                      profile.avatarUrl ==
-                              null
-                          ? const Icon(
-                              Icons.person,
-                            )
-                          : null,
+              (profile) => ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: profile.avatarUrl == null
+                      ? null
+                      : NetworkImage(
+                          profile.avatarUrl!,
+                        ),
+                  child: profile.avatarUrl == null
+                      ? const Icon(
+                          Icons.person,
+                        )
+                      : null,
                 ),
-                title:
-                    Text(
+                title: Text(
                   profile.name,
                 ),
-                subtitle:
-                    profile.id ==
-                            currentProfile
-                                ?.id
-                        ? const UniversalText('Current profile',
-                          )
-                        : null,
-                trailing:
-                    const Icon(
+                subtitle: profile.id == currentProfile?.id
+                    ? const UniversalText(
+                        'Current profile',
+                      )
+                    : null,
+                trailing: const Icon(
                   Icons.chevron_right,
                 ),
                 onTap: () {
@@ -7566,12 +8518,10 @@ class SelectAcquisitionProfileDialog
       ),
       actions: [
         TextButton(
-          onPressed: () =>
-              Navigator.pop(
+          onPressed: () => Navigator.pop(
             context,
           ),
-          child:
-              const UniversalText('CANCEL'),
+          child: const UniversalText('CANCEL'),
         ),
       ],
     );
@@ -7582,21 +8532,19 @@ class SelectAcquisitionProfileDialog
 // WISHLIST
 // ============================================================
 
-class WishlistDialog
-    extends StatefulWidget {
+class WishlistDialog extends StatefulWidget {
   const WishlistDialog({super.key});
 
   @override
-  State<WishlistDialog> createState() =>
-      _WishlistDialogState();
+  State<WishlistDialog> createState() => _WishlistDialogState();
 }
 
 /// Implements the `_WishlistDialogState` class for this feature or UI component.
-class _WishlistDialogState
-    extends State<WishlistDialog> {
+class _WishlistDialogState extends State<WishlistDialog> {
   bool loading = false;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -7605,8 +8553,7 @@ class _WishlistDialogState
 
   /// Performs `loadWishlist` for this feature. Update this documentation when its contract changes.
   Future<void> loadWishlist() async {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     if (!controller.backendApi.isAuthenticated) {
       return;
@@ -7625,7 +8572,8 @@ class _WishlistDialogState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to load group wishlist: $error',
+          content: UniversalText(
+            'Unable to load group wishlist: $error',
           ),
         ),
       );
@@ -7639,29 +8587,26 @@ class _WishlistDialogState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     return AlertDialog(
-      title: const UniversalText('Group Wishlist',
+      title: const UniversalText(
+        'Group Wishlist',
       ),
       content: SizedBox(
         width: 600,
         height: 500,
         child: loading
             ? const Center(
-                child:
-                    CircularProgressIndicator(),
+                child: CircularProgressIndicator(),
               )
-            : controller
-                    .wishlist
-                    .isEmpty
+            : controller.wishlist.isEmpty
                 ? const Center(
                     child: Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.favorite_border,
@@ -7670,32 +8615,27 @@ class _WishlistDialogState
                         SizedBox(
                           height: 15,
                         ),
-                        UniversalText('No group wishlist items.',
-                          style:
-                              TextStyle(
+                        UniversalText(
+                          'No group wishlist items.',
+                          style: TextStyle(
                             fontSize: 18,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                         SizedBox(
                           height: 8,
                         ),
-                        UniversalText('Shared items for the group will appear here.',
-                          textAlign:
-                              TextAlign.center,
+                        UniversalText(
+                          'Shared items for the group will appear here.',
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    itemCount:
-                        controller.wishlist.length,
-                    itemBuilder:
-                        (_, index) {
-                      final item =
-                          controller
-                              .wishlist[index];
+                    itemCount: controller.wishlist.length,
+                    itemBuilder: (_, index) {
+                      final item = controller.wishlist[index];
 
                       return GroupWishlistCard(
                         item: item,
@@ -7708,19 +8648,15 @@ class _WishlistDialogState
       ),
       actions: [
         TextButton(
-          onPressed: () =>
-              Navigator.pop(context),
-          child:
-              const UniversalText('CLOSE'),
+          onPressed: () => Navigator.pop(context),
+          child: const UniversalText('CLOSE'),
         ),
         ElevatedButton.icon(
-          onPressed:
-              loading ? null : loadWishlist,
+          onPressed: loading ? null : loadWishlist,
           icon: const Icon(
             Icons.refresh,
           ),
-          label:
-              const UniversalText('REFRESH'),
+          label: const UniversalText('REFRESH'),
         ),
       ],
     );
@@ -7743,56 +8679,111 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
   final Set<String> selectedProfiles = <String>{};
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final account = controller.currentAccount;
     final currentProfile = controller.currentProfile;
     if (account == null || currentProfile == null) {
-      return const Scaffold(body: Center(child: UniversalText('No account or profile selected.')));
+      return const Scaffold(
+          body:
+              Center(child: UniversalText('No account or profile selected.')));
     }
-    final invitees = account.profiles.where((profile) => profile.id != currentProfile.id).toList();
+    final invitees = account.profiles
+        .where((profile) => profile.id != currentProfile.id)
+        .toList();
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
-      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const UniversalText('Group Watch', style: TextStyle(fontWeight: FontWeight.w900))),
+      appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          title: const UniversalText('Group Watch',
+              style: TextStyle(fontWeight: FontWeight.w900))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
         children: [
           Container(
             height: 260,
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(25), color: const Color(0xFF151515)),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(25),
+                color: const Color(0xFF151515)),
             child: Stack(fit: StackFit.expand, children: [
-              if (widget.media.imageUrl != null) Image.network(widget.media.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-              DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withValues(alpha: .92)]))),
-              Positioned(left: 18, right: 18, bottom: 18, child: Text(widget.media.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900))),
+              if (widget.media.imageUrl != null)
+                Image.network(widget.media.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              DecoratedBox(
+                  decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: .92)
+                  ]))),
+              Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: 18,
+                  child: Text(widget.media.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 27, fontWeight: FontWeight.w900))),
             ]),
           ),
           const SizedBox(height: 22),
-          const UniversalText('Invite people', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          const UniversalText('Invite people',
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
-          const UniversalText('Select the profiles you want to watch with.', style: TextStyle(color: Colors.white54)),
+          const UniversalText('Select the profiles you want to watch with.',
+              style: TextStyle(color: Colors.white54)),
           const SizedBox(height: 12),
           if (invitees.isEmpty)
-            _GroupEmptyCard(icon: Icons.people_outline_rounded, title: tr('No other profiles'), subtitle: tr('Create another profile to invite someone.'))
+            _GroupEmptyCard(
+                icon: Icons.people_outline_rounded,
+                title: tr('No other profiles'),
+                subtitle: tr('Create another profile to invite someone.'))
           else
             ...invitees.map((profile) {
               final selected = selectedProfiles.contains(profile.id);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Material(
-                  color: selected ? Colors.red.withValues(alpha: .10) : Colors.white.withValues(alpha: .045),
+                  color: selected
+                      ? Colors.red.withValues(alpha: .10)
+                      : Colors.white.withValues(alpha: .045),
                   borderRadius: BorderRadius.circular(18),
                   child: InkWell(
-                    onTap: () => setState(() => selected ? selectedProfiles.remove(profile.id) : selectedProfiles.add(profile.id)),
+                    onTap: () => setState(() => selected
+                        ? selectedProfiles.remove(profile.id)
+                        : selectedProfiles.add(profile.id)),
                     borderRadius: BorderRadius.circular(18),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Row(children: [
                         _MainProfileAvatar(profile: profile, size: 48),
                         const SizedBox(width: 12),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(selected ? 'Selected' : 'Tap to invite', style: const TextStyle(color: Colors.white38, fontSize: 12))])),
-                        Icon(selected ? Icons.check_circle_rounded : Icons.circle_outlined, color: selected ? Colors.redAccent : Colors.white30),
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(profile.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 3),
+                              Text(selected ? 'Selected' : 'Tap to invite',
+                                  style: const TextStyle(
+                                      color: Colors.white38, fontSize: 12))
+                            ])),
+                        Icon(
+                            selected
+                                ? Icons.check_circle_rounded
+                                : Icons.circle_outlined,
+                            color:
+                                selected ? Colors.redAccent : Colors.white30),
                       ]),
                     ),
                   ),
@@ -7801,10 +8792,19 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
             }),
           const SizedBox(height: 18),
           FilledButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GroupWatchPreferencesScreen(media: widget.media))),
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) =>
+                        GroupWatchPreferencesScreen(media: widget.media))),
             icon: const Icon(Icons.tune_rounded),
-            label: Text(selectedProfiles.isEmpty ? 'CONTINUE' : 'CONTINUE WITH ${selectedProfiles.length} INVITE${selectedProfiles.length == 1 ? '' : 'S'}'),
-            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            label: Text(selectedProfiles.isEmpty
+                ? 'CONTINUE'
+                : 'CONTINUE WITH ${selectedProfiles.length} INVITE${selectedProfiles.length == 1 ? '' : 'S'}'),
+            style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
           ),
         ],
       ),
@@ -7817,51 +8817,93 @@ class GroupWatchPreferencesScreen extends StatefulWidget {
   final MediaItem media;
   const GroupWatchPreferencesScreen({super.key, required this.media});
   @override
-  State<GroupWatchPreferencesScreen> createState() => _GroupWatchPreferencesScreenState();
+  State<GroupWatchPreferencesScreen> createState() =>
+      _GroupWatchPreferencesScreenState();
 }
 
 /// Implements the `_GroupWatchPreferencesScreenState` class for this feature or UI component.
-class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScreen> {
+class _GroupWatchPreferencesScreenState
+    extends State<GroupWatchPreferencesScreen> {
   bool subtitlesEnabled = false;
   String audio = 'Original audio';
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
-      appBar: AppBar(backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent, title: const UniversalText('Your preferences', style: TextStyle(fontWeight: FontWeight.w900))),
+      appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          title: const UniversalText('Your preferences',
+              style: TextStyle(fontWeight: FontWeight.w900))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
         children: [
           Container(
             padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.white.withValues(alpha: .07))),
-            child: Row(children: [const Icon(Icons.groups_rounded, size: 30), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.media.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 3), const UniversalText('Choose your language settings before starting.', style: TextStyle(color: Colors.white54, fontSize: 12))]))]),
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .045),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withValues(alpha: .07))),
+            child: Row(children: [
+              const Icon(Icons.groups_rounded, size: 30),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(widget.media.title,
+                        style: const TextStyle(
+                            fontSize: 19, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 3),
+                    const UniversalText(
+                        'Choose your language settings before starting.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12))
+                  ]))
+            ]),
           ),
           const SizedBox(height: 22),
-          const UniversalText('Audio', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const UniversalText('Audio',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Container(
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .045),
+                borderRadius: BorderRadius.circular(17)),
             child: DropdownButtonFormField<String>(
               initialValue: audio,
-              decoration: InputDecoration(prefixIcon: Icon(Icons.language_rounded), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-              items: const [DropdownMenuItem(value: 'Original audio', child: UniversalText('Original audio'))],
-              onChanged: (value) { if (value != null) setState(() => audio = value); },
+              decoration: InputDecoration(
+                  prefixIcon: Icon(Icons.language_rounded),
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+              items: const [
+                DropdownMenuItem(
+                    value: 'Original audio',
+                    child: UniversalText('Original audio'))
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => audio = value);
+              },
             ),
           ),
           const SizedBox(height: 18),
           Container(
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .045), borderRadius: BorderRadius.circular(17)),
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .045),
+                borderRadius: BorderRadius.circular(17)),
             child: Material(
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(17),
               clipBehavior: Clip.antiAlias,
               child: SwitchListTile.adaptive(
                 tileColor: Colors.transparent,
-                title: const UniversalText('Subtitles', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const UniversalText('Use subtitles for this session', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                title: const UniversalText('Subtitles',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const UniversalText('Use subtitles for this session',
+                    style: TextStyle(color: Colors.white38, fontSize: 12)),
                 value: subtitlesEnabled,
                 onChanged: (value) => setState(() => subtitlesEnabled = value),
               ),
@@ -7875,7 +8917,10 @@ class _GroupWatchPreferencesScreenState extends State<GroupWatchPreferencesScree
             },
             icon: const Icon(Icons.play_arrow_rounded),
             label: const UniversalText('START GROUP WATCH'),
-            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
           ),
         ],
       ),
@@ -7897,9 +8942,7 @@ String _stringValue(
 
   final result = value.toString().trim();
 
-  return result.isEmpty
-      ? fallback
-      : result;
+  return result.isEmpty ? fallback : result;
 }
 
 String _statusString(
@@ -7954,21 +8997,16 @@ Map<String, String> _votesMap(
     return <String, String>{};
   }
 
-  final result =
-      <String, String>{};
+  final result = <String, String>{};
 
   value.forEach(
     (key, vote) {
-      final profileId =
-          key.toString();
+      final profileId = key.toString();
 
-      final voteString =
-          vote.toString().toLowerCase();
+      final voteString = vote.toString().toLowerCase();
 
-      if (voteString == 'yes' ||
-          voteString == 'no') {
-        result[profileId] =
-            voteString;
+      if (voteString == 'yes' || voteString == 'no') {
+        result[profileId] = voteString;
       }
     },
   );
@@ -7996,21 +9034,17 @@ String _profileName(
   String profileId,
   AppController controller,
 ) {
-  final account =
-      controller.currentAccount;
+  final account = controller.currentAccount;
 
   if (account != null) {
-    for (final profile
-        in account.profiles) {
+    for (final profile in account.profiles) {
       if (profile.id == profileId) {
         return profile.name;
       }
     }
   }
 
-  return profileId.isEmpty
-      ? 'Unknown profile'
-      : profileId;
+  return profileId.isEmpty ? 'Unknown profile' : profileId;
 }
 
 String _formatRemaining(
@@ -8022,14 +9056,11 @@ String _formatRemaining(
 
   final days = duration.inDays;
 
-  final hours =
-      duration.inHours.remainder(24);
+  final hours = duration.inHours.remainder(24);
 
-  final minutes =
-      duration.inMinutes.remainder(60);
+  final minutes = duration.inMinutes.remainder(60);
 
-  final seconds =
-      duration.inSeconds.remainder(60);
+  final seconds = duration.inSeconds.remainder(60);
 
   if (days > 0) {
     if (hours > 0) {
@@ -8061,8 +9092,7 @@ String _formatRemaining(
 int _percentageFlex(
   double percentage,
 ) {
-  final rounded =
-      percentage.round();
+  final rounded = percentage.round();
 
   if (rounded <= 0) {
     return 1;

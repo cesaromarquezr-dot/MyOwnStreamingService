@@ -39,6 +39,8 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   double position = 0.0;
+  final ValueNotifier<Duration> xrayPlaybackPosition =
+      ValueNotifier<Duration>(Duration.zero);
 
   bool videoFinished = false;
   bool creditsStarted = false;
@@ -71,14 +73,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool youtubeUrlInvalid = false;
   bool musicWasPlayingBeforeVideo = false;
 
-  StreamSubscription<YoutubeVideoState>?
-      youtubeVideoStateSubscription;
+  StreamSubscription<YoutubeVideoState>? youtubeVideoStateSubscription;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
-    musicWasPlayingBeforeVideo = MusicPlaybackController.instance.pauseForVideo();
+    musicWasPlayingBeforeVideo =
+        MusicPlaybackController.instance.pauseForVideo();
 
     position = AppController.instance
         .getPlaybackProgress(widget.media.id)
@@ -124,8 +127,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _onYoutubePlayerChanged,
     );
 
-    youtubeVideoStateSubscription =
-        youtubeController!.videoStateStream.listen(
+    youtubeVideoStateSubscription = youtubeController!.videoStateStream.listen(
       _onYoutubeVideoStateChanged,
     );
   }
@@ -137,11 +139,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return null;
     }
 
-    if (uri.host == 'youtu.be' ||
-        uri.host == 'www.youtu.be') {
-      final id = uri.pathSegments.isNotEmpty
-          ? uri.pathSegments.first
-          : null;
+    if (uri.host == 'youtu.be' || uri.host == 'www.youtu.be') {
+      final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
 
       return _cleanYoutubeVideoId(id);
     }
@@ -155,15 +154,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         );
       }
 
-      if (uri.pathSegments.length >= 2 &&
-          uri.pathSegments.first == 'shorts') {
+      if (uri.pathSegments.length >= 2 && uri.pathSegments.first == 'shorts') {
         return _cleanYoutubeVideoId(
           uri.pathSegments[1],
         );
       }
 
-      if (uri.pathSegments.length >= 2 &&
-          uri.pathSegments.first == 'embed') {
+      if (uri.pathSegments.length >= 2 && uri.pathSegments.first == 'embed') {
         return _cleanYoutubeVideoId(
           uri.pathSegments[1],
         );
@@ -201,8 +198,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final ready =
-        value.playerState != PlayerState.unknown;
+    final ready = value.playerState != PlayerState.unknown;
 
     if (ready && !youtubePlayerReady) {
       setState(() {
@@ -218,8 +214,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _startControlsTimer();
     }
 
-    if (value.playerState == PlayerState.ended &&
-        !videoFinished) {
+    if (value.playerState == PlayerState.ended && !videoFinished) {
       finishVideo();
     }
   }
@@ -232,18 +227,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final duration =
-        await youtubeController!.duration;
+    final duration = await youtubeController!.duration;
 
     if (duration <= 0) {
       return;
     }
 
     final normalizedPosition =
-        (state.position.inMilliseconds /
-                (duration * 1000))
+        (state.position.inMilliseconds / (duration * 1000))
             .clamp(0.0, 1.0)
             .toDouble();
+
+    xrayPlaybackPosition.value = state.position;
 
     if ((position - normalizedPosition).abs() > 0.005) {
       position = normalizedPosition;
@@ -266,6 +261,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     autoplayTimer?.cancel();
@@ -275,6 +271,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     youtubeVideoStateSubscription?.cancel();
     youtubeController?.close();
+    xrayPlaybackPosition.dispose();
     if (musicWasPlayingBeforeVideo) {
       MusicPlaybackController.instance.resumeAfterVideo();
     }
@@ -304,8 +301,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final controller = youtubeController;
 
         if (controller != null &&
-            controller.value.playerState ==
-                PlayerState.playing) {
+            controller.value.playerState == PlayerState.playing) {
           setState(() {
             controlsVisible = false;
           });
@@ -378,9 +374,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final seconds =
-        (duration * normalizedPosition)
-            .clamp(0.0, duration);
+    final seconds = (duration * normalizedPosition).clamp(0.0, duration);
 
     _lastLocalPlaybackAction = DateTime.now();
 
@@ -399,10 +393,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final current =
-        await controller.currentTime;
-    final duration =
-        await controller.duration;
+    final current = await controller.currentTime;
+    final duration = await controller.duration;
 
     var target = current + seconds;
 
@@ -455,19 +447,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _initializeGroupWatch() {
     final controller = AppController.instance;
 
-    String? sessionId =
-        widget.groupWatchSessionId;
+    String? sessionId = widget.groupWatchSessionId;
 
-    sessionId ??=
-        controller.activeGroupWatchSession?.id;
+    sessionId ??= controller.activeGroupWatchSession?.id;
 
-    if (sessionId == null ||
-        sessionId.trim().isEmpty) {
+    if (sessionId == null || sessionId.trim().isEmpty) {
       return;
     }
 
-    final activeSession =
-        controller.getGroupWatchSession(
+    final activeSession = controller.getGroupWatchSession(
       sessionId,
     );
 
@@ -479,8 +467,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    groupWatchSessionId =
-        activeSession.id;
+    groupWatchSessionId = activeSession.id;
 
     _loadInitialGroupWatchState(
       activeSession,
@@ -495,9 +482,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ) {
     final controller = AppController.instance;
 
-    final sharedSeconds =
-        session.playbackPosition.inMilliseconds /
-            1000.0;
+    final sharedSeconds = session.playbackPosition.inMilliseconds / 1000.0;
 
     if (sharedSeconds > 0) {
       _applyGroupWatchPosition(
@@ -506,25 +491,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
     }
 
-    final profile =
-        controller.currentProfile;
+    final profile = controller.currentProfile;
 
     if (profile != null) {
-      final participant =
-          session.participantForProfile(
+      final participant = session.participantForProfile(
         profile.id,
       );
 
       if (participant != null) {
         setState(() {
-          selectedAudio =
-              participant.audioTrackId ?? '';
+          selectedAudio = participant.audioTrackId ?? '';
 
-          selectedSubtitle =
-              participant.subtitleTrackId;
+          selectedSubtitle = participant.subtitleTrackId;
 
-          subtitlesEnabled =
-              participant.subtitleTrackId != null;
+          subtitlesEnabled = participant.subtitleTrackId != null;
         });
       }
     }
@@ -542,8 +522,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       },
     );
 
-    groupWatchPositionTimer =
-        Timer.periodic(
+    groupWatchPositionTimer = Timer.periodic(
       const Duration(seconds: 2),
       (_) {
         _syncCurrentPositionToGroupWatch();
@@ -555,20 +534,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_refreshGroupWatchState` for this feature. Update this documentation when its contract changes.
   Future<void> _refreshGroupWatchState() async {
-    if (!mounted ||
-        groupWatchSessionId == null ||
-        groupWatchSyncing) {
+    if (!mounted || groupWatchSessionId == null || groupWatchSyncing) {
       return;
     }
 
     groupWatchSyncing = true;
 
     try {
-      final controller =
-          AppController.instance;
+      final controller = AppController.instance;
 
-      final session =
-          await controller.refreshGroupWatchSession(
+      final session = await controller.refreshGroupWatchSession(
         groupWatchSessionId!,
       );
 
@@ -612,32 +587,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final sharedSeconds =
-        session.playbackPosition.inMilliseconds /
-            1000.0;
+    final sharedSeconds = session.playbackPosition.inMilliseconds / 1000.0;
 
-    final currentSeconds =
-        await youtube.currentTime;
+    final currentSeconds = await youtube.currentTime;
 
     // Synchronize position only when the difference is meaningful.
     //
     // Small differences are ignored so normal playback does not
     // constantly seek back and forth.
-    if ((currentSeconds - sharedSeconds).abs() >
-        1.25) {
+    if ((currentSeconds - sharedSeconds).abs() > 1.25) {
       await _seekYoutubeByAbsoluteSeconds(
         sharedSeconds,
       );
     }
 
     if (session.isPlaying) {
-      if (youtube.value.playerState !=
-          PlayerState.playing) {
+      if (youtube.value.playerState != PlayerState.playing) {
         youtube.playVideo();
       }
     } else if (session.isPaused) {
-      if (youtube.value.playerState ==
-          PlayerState.playing) {
+      if (youtube.value.playerState == PlayerState.playing) {
         youtube.pauseVideo();
       }
     }
@@ -668,15 +637,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final duration =
-        await controller.duration;
+    final duration = await controller.duration;
 
     if (duration <= 0) {
       return;
     }
 
-    final target =
-        seconds.clamp(0.0, duration);
+    final target = seconds.clamp(0.0, duration);
 
     _lastLocalPlaybackAction = DateTime.now();
 
@@ -733,16 +700,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return position;
     }
 
-    final duration =
-        await controller.duration;
+    final duration = await controller.duration;
 
     if (duration <= 0) {
       return position;
     }
 
-    return (seconds / duration)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    return (seconds / duration).clamp(0.0, 1.0).toDouble();
   }
 
   // ============================================================
@@ -774,27 +738,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_syncCurrentPositionToGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _syncCurrentPositionToGroupWatch() async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
     final youtube = youtubeController;
 
-    if (sessionId == null ||
-        youtube == null ||
-        !mounted) {
+    if (sessionId == null || youtube == null || !mounted) {
       return;
     }
 
-    final state =
-        youtube.value.playerState;
+    final state = youtube.value.playerState;
 
     if (state != PlayerState.playing) {
       return;
     }
 
     try {
-      final current =
-          await youtube.currentTime;
+      final current = await youtube.currentTime;
 
       await _sendGroupWatchActualPosition(
         current,
@@ -808,14 +767,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _sendGroupWatchActualPosition(
     double seconds,
   ) async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
@@ -832,8 +788,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _lastGroupWatchPositionSent = now;
 
     try {
-      await AppController.instance
-          .updateGroupWatchPosition(
+      await AppController.instance.updateGroupWatchPosition(
         sessionId: sessionId,
         profileId: profile.id,
         position: Duration(
@@ -851,15 +806,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `updatePosition` for this feature. Update this documentation when its contract changes.
   void updatePosition(double value) {
-    final newPosition =
-        value.clamp(0.0, 1.0).toDouble();
+    final newPosition = value.clamp(0.0, 1.0).toDouble();
 
     setState(() {
       position = newPosition;
     });
 
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     controller.updatePlaybackProgress(
       widget.media.id,
@@ -885,30 +838,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _sendNormalizedGroupWatchPosition(
     double normalizedPosition,
   ) async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
     final youtube = youtubeController;
 
-    if (sessionId == null ||
-        profile == null ||
-        youtube == null) {
+    if (sessionId == null || profile == null || youtube == null) {
       return;
     }
 
     try {
-      final duration =
-          await youtube.duration;
+      final duration = await youtube.duration;
 
       if (duration <= 0) {
         return;
       }
 
-      final seconds =
-          duration * normalizedPosition;
+      final seconds = duration * normalizedPosition;
 
       await _sendGroupWatchActualPosition(
         seconds,
@@ -937,8 +884,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       controlsVisible = true;
     });
 
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
     controller.updatePlaybackProgress(
       widget.media.id,
@@ -957,8 +903,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       widget.media,
     );
 
-    final nextEpisodeTitle =
-        controller.getNextEpisode(
+    final nextEpisodeTitle = controller.getNextEpisode(
       widget.media.id,
     );
 
@@ -975,14 +920,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_sendGroupWatchFinishedPosition` for this feature. Update this documentation when its contract changes.
   Future<void> _sendGroupWatchFinishedPosition() async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
@@ -993,20 +935,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     try {
-      final duration =
-          await youtube.duration;
+      final duration = await youtube.duration;
 
       if (duration <= 0) {
         return;
       }
 
-      await AppController.instance
-          .updateGroupWatchPosition(
+      await AppController.instance.updateGroupWatchPosition(
         sessionId: sessionId,
         profileId: profile.id,
         position: Duration(
-          milliseconds:
-              (duration * 1000).round(),
+          milliseconds: (duration * 1000).round(),
         ),
       );
     } catch (_) {
@@ -1106,13 +1045,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       vertical: 14,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                 ),
@@ -1122,7 +1059,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 onPressed: () {
                   Navigator.pop(context);
                 },
-                child: const UniversalText('CLOSE',
+                child: const UniversalText(
+                  'CLOSE',
                   style: TextStyle(
                     color: Colors.white70,
                   ),
@@ -1147,15 +1085,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       isScrollControlled: true,
       builder: (_) {
         return AudioSubtitleOptions(
+          audioOptions: widget.media.audioTracks,
+          subtitleOptions: widget.media.subtitles,
           selectedAudio: selectedAudio,
-          subtitlesEnabled:
-              subtitlesEnabled,
-          selectedSubtitle:
-              selectedSubtitle,
-          onAudioChanged:
-              _changeAudioTrack,
-          onSubtitleChanged:
-              _changeSubtitleTrack,
+          subtitlesEnabled: subtitlesEnabled,
+          selectedSubtitle: selectedSubtitle,
+          onAudioChanged: _changeAudioTrack,
+          onSubtitleChanged: _changeSubtitleTrack,
         );
       },
     );
@@ -1169,20 +1105,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
       selectedAudio = value;
     });
 
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
     try {
-      await AppController.instance
-          .setGroupWatchAudioTrack(
+      await AppController.instance.setGroupWatchAudioTrack(
         sessionId: sessionId,
         profileId: profile.id,
         audioTrackId: value,
@@ -1204,24 +1136,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ) async {
     setState(() {
       selectedSubtitle = value;
-      subtitlesEnabled =
-          value != null;
+      subtitlesEnabled = value != null;
     });
 
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
     try {
-      await AppController.instance
-          .setGroupWatchSubtitleTrack(
+      await AppController.instance.setGroupWatchSubtitleTrack(
         sessionId: sessionId,
         profileId: profile.id,
         subtitleTrackId: value,
@@ -1243,14 +1170,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          behavior:
-              SnackBarBehavior.floating,
-          backgroundColor:
-              const Color(0xFF242424),
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(14),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF242424),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
           content: Text(message),
         ),
@@ -1263,31 +1186,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `showGroupShare` for this feature. Update this documentation when its contract changes.
   Future<void> showGroupShare() async {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    final currentProfile =
-        controller.currentProfile;
+    final currentProfile = controller.currentProfile;
 
-    final account =
-        controller.currentAccount;
+    final account = controller.currentAccount;
 
-    if (currentProfile == null ||
-        account == null) {
+    if (currentProfile == null || account == null) {
       _showSnackBar(
         'No account or profile is selected.',
       );
       return;
     }
 
-    final availableProfiles =
-        account.profiles
-            .where(
-              (profile) =>
-                  profile.id !=
-                  currentProfile.id,
-            )
-            .toList();
+    final availableProfiles = account.profiles
+        .where(
+          (profile) => profile.id != currentProfile.id,
+        )
+        .toList();
 
     if (availableProfiles.isEmpty) {
       _showSnackBar(
@@ -1296,37 +1212,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final selectedProfileIds =
-        await showDialog<Set<String>>(
+    final selectedProfileIds = await showDialog<Set<String>>(
       context: context,
       builder: (_) {
         return GroupWatchInviteDialog(
-          profiles:
-              availableProfiles,
+          profiles: availableProfiles,
         );
       },
     );
 
-    if (!mounted ||
-        selectedProfileIds == null ||
-        selectedProfileIds.isEmpty) {
+    if (!mounted || selectedProfileIds == null || selectedProfileIds.isEmpty) {
       return;
     }
 
     setState(() {
-      groupWatchActionInProgress =
-          true;
+      groupWatchActionInProgress = true;
     });
 
     try {
-      final session =
-          await controller
-              .createBackendGroupWatchSession(
+      final session = await controller.createBackendGroupWatchSession(
         widget.media,
-        profileId:
-            currentProfile.id,
-        invitedProfileIds:
-            selectedProfileIds,
+        profileId: currentProfile.id,
+        invitedProfileIds: selectedProfileIds,
       );
 
       if (!mounted) {
@@ -1334,8 +1241,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
 
       setState(() {
-        groupWatchSessionId =
-            session.id;
+        groupWatchSessionId = session.id;
       });
 
       _startGroupWatchPolling();
@@ -1354,8 +1260,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress =
-              false;
+          groupWatchActionInProgress = false;
         });
       }
     }
@@ -1367,14 +1272,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_playGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _playGroupWatch() async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
@@ -1383,16 +1285,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     setState(() {
-      groupWatchActionInProgress =
-          true;
+      groupWatchActionInProgress = true;
     });
 
     try {
-      final controller =
-          AppController.instance;
+      final controller = AppController.instance;
 
-      final session =
-          controller.getGroupWatchSession(
+      final session = controller.getGroupWatchSession(
         sessionId,
       );
 
@@ -1400,43 +1299,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
         return;
       }
 
-      if (session.invitationsExpired &&
-          session.isWaiting) {
+      if (session.invitationsExpired && session.isWaiting) {
         _showSnackBar(
           'This invitation link is expired.',
         );
         return;
       }
 
-      final currentYoutube =
-          youtubeController;
+      final currentYoutube = youtubeController;
 
       if (currentYoutube != null) {
-        final currentSeconds =
-            await currentYoutube.currentTime;
+        final currentSeconds = await currentYoutube.currentTime;
 
-        await controller
-            .updateGroupWatchPosition(
+        await controller.updateGroupWatchPosition(
           sessionId: sessionId,
           profileId: profile.id,
           position: Duration(
-            milliseconds:
-                (currentSeconds * 1000)
-                    .round(),
+            milliseconds: (currentSeconds * 1000).round(),
           ),
         );
       }
 
-      if (session.isWaiting ||
-          session.isReady) {
-        await controller
-            .startGroupWatchSession(
+      if (session.isWaiting || session.isReady) {
+        await controller.startGroupWatchSession(
           sessionId: sessionId,
           profileId: profile.id,
         );
       } else {
-        await controller
-            .playGroupWatchSession(
+        await controller.playGroupWatchSession(
           sessionId: sessionId,
           profileId: profile.id,
         );
@@ -1456,8 +1346,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress =
-              false;
+          groupWatchActionInProgress = false;
         });
       }
     }
@@ -1469,14 +1358,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_pauseGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _pauseGroupWatch() async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
@@ -1484,47 +1370,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    final reason =
-        await showDialog<String>(
+    final reason = await showDialog<String>(
       context: context,
       builder: (_) {
         return const GroupWatchPauseReasonDialog();
       },
     );
 
-    if (!mounted ||
-        reason == null ||
-        reason.trim().isEmpty) {
+    if (!mounted || reason == null || reason.trim().isEmpty) {
       return;
     }
 
     setState(() {
-      groupWatchActionInProgress =
-          true;
+      groupWatchActionInProgress = true;
     });
 
     try {
-      final youtube =
-          youtubeController;
+      final youtube = youtubeController;
 
       if (youtube != null) {
-        final currentSeconds =
-            await youtube.currentTime;
+        final currentSeconds = await youtube.currentTime;
 
-        await AppController.instance
-            .updateGroupWatchPosition(
+        await AppController.instance.updateGroupWatchPosition(
           sessionId: sessionId,
           profileId: profile.id,
           position: Duration(
-            milliseconds:
-                (currentSeconds * 1000)
-                    .round(),
+            milliseconds: (currentSeconds * 1000).round(),
           ),
         );
       }
 
-      await AppController.instance
-          .pauseGroupWatchSession(
+      await AppController.instance.pauseGroupWatchSession(
         sessionId: sessionId,
         profileId: profile.id,
         reason: reason,
@@ -1544,8 +1420,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress =
-              false;
+          groupWatchActionInProgress = false;
         });
       }
     }
@@ -1557,19 +1432,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_resumeGroupWatch` for this feature. Update this documentation when its contract changes.
   Future<void> _resumeGroupWatch() async {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    if (sessionId == null ||
-        profile == null) {
+    if (sessionId == null || profile == null) {
       return;
     }
 
-    if (!AppController.instance
-        .canResumeGroupWatchSession(
+    if (!AppController.instance.canResumeGroupWatchSession(
       sessionId,
       profileId: profile.id,
     )) {
@@ -1584,13 +1455,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     setState(() {
-      groupWatchActionInProgress =
-          true;
+      groupWatchActionInProgress = true;
     });
 
     try {
-      await AppController.instance
-          .resumeGroupWatchSession(
+      await AppController.instance.resumeGroupWatchSession(
         sessionId: sessionId,
         profileId: profile.id,
       );
@@ -1609,8 +1478,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          groupWatchActionInProgress =
-              false;
+          groupWatchActionInProgress = false;
         });
       }
     }
@@ -1620,7 +1488,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void showXRay() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => XRayScreen(media: widget.media),
+        builder: (_) => XRayScreen(
+          media: widget.media,
+          playbackPosition: xrayPlaybackPosition,
+        ),
       ),
     );
   }
@@ -1633,24 +1504,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void showExtras() {
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          Colors.transparent,
+      backgroundColor: Colors.transparent,
       builder: (_) {
         return SafeArea(
           child: _PremiumBottomSheet(
-            icon:
-                Icons.movie_filter_rounded,
+            icon: Icons.movie_filter_rounded,
             title: tr('Extras'),
             child: Padding(
-              padding:
-                  EdgeInsets.only(
+              padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
                 bottom: 25,
               ),
-              child: UniversalText('No extras are available for this media item.',
-                textAlign:
-                    TextAlign.center,
+              child: UniversalText(
+                'No extras are available for this media item.',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white60,
                   fontSize: 15,
@@ -1671,8 +1539,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildVideoArea(
     GroupWatchSession? groupSession,
   ) {
-    final controller =
-        youtubeController;
+    final controller = youtubeController;
 
     if (youtubeUrlInvalid) {
       return _PlayerMessage(
@@ -1691,18 +1558,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return Container(
       width: double.infinity,
       color: Colors.black,
-      child: widget.media.imageUrl !=
-                  null &&
-              widget.media.imageUrl!
-                  .isNotEmpty
+      child: widget.media.imageUrl != null && widget.media.imageUrl!.isNotEmpty
           ? Image.network(
               widget.media.imageUrl!,
               fit: BoxFit.contain,
-              errorBuilder:
-                  (_, __, ___) {
+              errorBuilder: (_, __, ___) {
                 return _PlayerMessage(
-                  icon:
-                      Icons.movie_rounded,
+                  icon: Icons.movie_rounded,
                   message: tr('No preview available.'),
                 );
               },
@@ -1715,18 +1577,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final controller =
-        AppController.instance;
+    final controller = AppController.instance;
 
-    final groupSession =
-        groupWatchSessionId == null
-            ? null
-            : controller
-                .getGroupWatchSession(
-                groupWatchSessionId!,
-              );
+    final groupSession = groupWatchSessionId == null
+        ? null
+        : controller.getGroupWatchSession(
+            groupWatchSessionId!,
+          );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -1742,71 +1602,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 children: [
                   Positioned.fill(
                     child: GestureDetector(
-                      behavior:
-                          HitTestBehavior
-                              .opaque,
-                      onTap:
-                          _toggleControls,
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _toggleControls,
                       child: Container(
                         color: Colors.black,
-                        alignment:
-                            Alignment.center,
-                        child:
-                            _buildVideoArea(
+                        alignment: Alignment.center,
+                        child: _buildVideoArea(
                           groupSession,
                         ),
                       ),
                     ),
                   ),
-
                   _buildTopBar(
                     groupSession,
                   ),
-
                   if (groupSession == null &&
-                      youtubeController !=
-                          null &&
+                      youtubeController != null &&
                       !videoFinished)
                     _buildCenterPlayerControl(),
-
-                  if (groupSession?.isPaused ==
-                      true)
+                  if (groupSession?.isPaused == true)
                     _buildGroupWatchPausedOverlay(
                       groupSession!,
                     ),
-
-                  if (videoFinished &&
-                      creditsStarted)
-                    _buildCreditsOverlay(),
-
-                  if (videoFinished &&
-                      creditsStarted &&
-                      !autoplayCancelled)
+                  if (videoFinished && creditsStarted) _buildCreditsOverlay(),
+                  if (videoFinished && creditsStarted && !autoplayCancelled)
                     Positioned(
                       right: 20,
                       bottom: 20,
-                      child:
-                          NextEpisodeCountdown(
-                        seconds:
-                            autoplaySeconds,
-                        nextEpisodeTitle:
-                            controller
-                                .getNextEpisode(
+                      child: NextEpisodeCountdown(
+                        seconds: autoplaySeconds,
+                        nextEpisodeTitle: controller.getNextEpisode(
                           widget.media.id,
                         ),
-                        onCancel:
-                            cancelAutoplay,
+                        onCancel: cancelAutoplay,
                         onPlayNow: () {
-                          final next =
-                              controller
-                                  .getNextEpisode(
+                          final next = controller.getNextEpisode(
                             widget.media.id,
                           );
 
-                          if (next == null ||
-                              next
-                                  .trim()
-                                  .isEmpty) {
+                          if (next == null || next.trim().isEmpty) {
                             return;
                           }
 
@@ -1841,28 +1675,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
       right: 0,
       top: 0,
       child: AnimatedOpacity(
-        opacity:
-            controlsVisible ? 1 : 0,
-        duration:
-            const Duration(
+        opacity: controlsVisible ? 1 : 0,
+        duration: const Duration(
           milliseconds: 200,
         ),
         child: Container(
-          padding:
-              const EdgeInsets.fromLTRB(
+          padding: const EdgeInsets.fromLTRB(
             12,
             10,
             12,
             30,
           ),
-          decoration:
-              BoxDecoration(
-            gradient:
-                LinearGradient(
-              begin:
-                  Alignment.topCenter,
-              end:
-                  Alignment.bottomCenter,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
                 Colors.black.withValues(
                   alpha: 0.78,
@@ -1874,8 +1701,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Row(
             children: [
               _PlayerIconButton(
-                icon:
-                    Icons.arrow_back_rounded,
+                icon: Icons.arrow_back_rounded,
                 onPressed: () {
                   Navigator.of(
                     context,
@@ -1887,42 +1713,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       widget.media.title,
                       maxLines: 1,
-                      overflow:
-                          TextOverflow
-                              .ellipsis,
-                      style:
-                          const TextStyle(
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 17,
-                        fontWeight:
-                            FontWeight.w800,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    if (groupSession !=
-                        null)
+                    if (groupSession != null)
                       const Padding(
-                        padding:
-                            EdgeInsets.only(
+                        padding: EdgeInsets.only(
                           top: 2,
                         ),
-                        child: UniversalText('GROUP WATCH',
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white60,
+                        child: UniversalText(
+                          'GROUP WATCH',
+                          style: TextStyle(
+                            color: Colors.white60,
                             fontSize: 10,
-                            fontWeight:
-                                FontWeight
-                                    .w700,
-                            letterSpacing:
-                                1.2,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
                           ),
                         ),
                       ),
@@ -1957,78 +1771,55 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_buildCenterPlayerControl` for this feature. Update this documentation when its contract changes.
   Widget _buildCenterPlayerControl() {
-    final playing =
-        youtubeController?.value
-                .playerState ==
-            PlayerState.playing;
+    final playing = youtubeController?.value.playerState == PlayerState.playing;
 
     return Positioned.fill(
       child: IgnorePointer(
-        ignoring:
-            !controlsVisible,
+        ignoring: !controlsVisible,
         child: AnimatedOpacity(
-          opacity:
-              controlsVisible ? 1 : 0,
-          duration:
-              const Duration(
+          opacity: controlsVisible ? 1 : 0,
+          duration: const Duration(
             milliseconds: 180,
           ),
           child: Center(
             child: Row(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 _SeekButton(
-                  icon:
-                      Icons.replay_10_rounded,
-                  onPressed:
-                      youtubePlayerReady
-                          ? () {
-                              _seekYoutubeBySeconds(
-                                -10,
-                              );
-                            }
-                          : null,
+                  icon: Icons.replay_10_rounded,
+                  onPressed: youtubePlayerReady
+                      ? () {
+                          _seekYoutubeBySeconds(
+                            -10,
+                          );
+                        }
+                      : null,
                 ),
                 const SizedBox(
                   width: 18,
                 ),
                 GestureDetector(
-                  onTap:
-                      youtubePlayerReady
-                          ? _handleMainPlayPause
-                          : null,
-                  child:
-                      AnimatedContainer(
-                    duration:
-                        const Duration(
+                  onTap: youtubePlayerReady ? _handleMainPlayPause : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(
                       milliseconds: 180,
                     ),
                     width: 72,
                     height: 72,
-                    decoration:
-                        BoxDecoration(
-                      color: Colors.black
-                          .withValues(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(
                         alpha: 0.58,
                       ),
-                      shape:
-                          BoxShape.circle,
+                      shape: BoxShape.circle,
                       border: Border.all(
-                        color: Colors.white
-                            .withValues(
+                        color: Colors.white.withValues(
                           alpha: 0.25,
                         ),
                       ),
                     ),
                     child: Icon(
-                      playing
-                          ? Icons
-                              .pause_rounded
-                          : Icons
-                              .play_arrow_rounded,
-                      color:
-                          Colors.white,
+                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      color: Colors.white,
                       size: 42,
                     ),
                   ),
@@ -2037,16 +1828,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   width: 18,
                 ),
                 _SeekButton(
-                  icon:
-                      Icons.forward_10_rounded,
-                  onPressed:
-                      youtubePlayerReady
-                          ? () {
-                              _seekYoutubeBySeconds(
-                                10,
-                              );
-                            }
-                          : null,
+                  icon: Icons.forward_10_rounded,
+                  onPressed: youtubePlayerReady
+                      ? () {
+                          _seekYoutubeBySeconds(
+                            10,
+                          );
+                        }
+                      : null,
                 ),
               ],
             ),
@@ -2061,16 +1850,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
-          alignment:
-              Alignment.center,
-          decoration:
-              BoxDecoration(
-            gradient:
-                LinearGradient(
-              begin:
-                  Alignment.topCenter,
-              end:
-                  Alignment.bottomCenter,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
                 Colors.black.withValues(
                   alpha: 0.15,
@@ -2082,16 +1866,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
           ),
           child: const Padding(
-            padding:
-                EdgeInsets.only(
+            padding: EdgeInsets.only(
               bottom: 100,
             ),
-            child: UniversalText('Credits',
+            child: UniversalText(
+              'Credits',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 24,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -2108,62 +1891,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildGroupWatchBanner(
     GroupWatchSession session,
   ) {
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    final isPaused =
-        session.isPaused;
+    final isPaused = session.isPaused;
 
-    final canResume =
-        profile != null &&
-            session.canResume(
-              profile.id,
-            );
+    final canResume = profile != null &&
+        session.canResume(
+          profile.id,
+        );
 
     String text;
 
-    if (session.invitationsExpired &&
-        session.isWaiting) {
-      text =
-          'This invitation link is expired.';
+    if (session.invitationsExpired && session.isWaiting) {
+      text = 'This invitation link is expired.';
     } else if (isPaused) {
       if (session.pauseReason != null &&
-          session.pauseReason!
-              .trim()
-              .isNotEmpty) {
-        text =
-            'Paused — ${session.pauseReason}';
+          session.pauseReason!.trim().isNotEmpty) {
+        text = 'Paused — ${session.pauseReason}';
       } else {
-        text =
-            'Group Watch paused';
+        text = 'Group Watch paused';
       }
     } else if (session.isPlaying) {
-      text =
-          'Group Watch is playing';
+      text = 'Group Watch is playing';
     } else if (session.isReady) {
-      text =
-          'Everyone is ready';
+      text = 'Everyone is ready';
     } else {
-      text =
-          'Group Watch lobby';
+      text = 'Group Watch lobby';
     }
 
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 14,
         vertical: 9,
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            const Color(0xFF151515),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151515),
         border: Border(
-          bottom:
-              BorderSide(
-            color: Colors.white
-                .withValues(
+          bottom: BorderSide(
+            color: Colors.white.withValues(
               alpha: 0.06,
             ),
           ),
@@ -2174,20 +1940,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
           Container(
             width: 32,
             height: 32,
-            decoration:
-                BoxDecoration(
-              color: Colors.white
-                  .withValues(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(
                 alpha: 0.08,
               ),
-              shape:
-                  BoxShape.circle,
+              shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons
-                  .people_alt_rounded,
-              color:
-                  Colors.white70,
+              Icons.people_alt_rounded,
+              color: Colors.white70,
               size: 17,
             ),
           ),
@@ -2198,35 +1959,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: Text(
               text,
               maxLines: 1,
-              overflow:
-                  TextOverflow.ellipsis,
-              style:
-                  const TextStyle(
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
-                fontWeight:
-                    FontWeight.w600,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          if (isPaused &&
-              canResume)
+          if (isPaused && canResume)
             TextButton(
-              onPressed:
-                  groupWatchActionInProgress
-                      ? null
-                      : _resumeGroupWatch,
-              child:
-                  const UniversalText('RESUME',
+              onPressed: groupWatchActionInProgress ? null : _resumeGroupWatch,
+              child: const UniversalText(
+                'RESUME',
               ),
             ),
-          if (isPaused &&
-              !canResume)
-            const UniversalText('Waiting...',
-              style:
-                  TextStyle(
-                color:
-                    Colors.white54,
+          if (isPaused && !canResume)
+            const UniversalText(
+              'Waiting...',
+              style: TextStyle(
+                color: Colors.white54,
                 fontSize: 12,
               ),
             ),
@@ -2243,58 +1995,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildGroupWatchPausedOverlay(
     GroupWatchSession session,
   ) {
-    final profile =
-        AppController.instance.currentProfile;
+    final profile = AppController.instance.currentProfile;
 
-    final canResume =
-        profile != null &&
-            session.canResume(
-              profile.id,
-            );
+    final canResume = profile != null &&
+        session.canResume(
+          profile.id,
+        );
 
     return Positioned.fill(
       child: Container(
-        color: Colors.black
-            .withValues(
+        color: Colors.black.withValues(
           alpha: 0.58,
         ),
         child: Center(
           child: Container(
-            constraints:
-                const BoxConstraints(
+            constraints: const BoxConstraints(
               maxWidth: 390,
             ),
-            margin:
-                const EdgeInsets.all(
+            margin: const EdgeInsets.all(
               24,
             ),
-            padding:
-                const EdgeInsets.all(
+            padding: const EdgeInsets.all(
               24,
             ),
-            decoration:
-                BoxDecoration(
-              color:
-                  const Color(0xFF171717),
-              borderRadius:
-                  BorderRadius.circular(
+            decoration: BoxDecoration(
+              color: const Color(0xFF171717),
+              borderRadius: BorderRadius.circular(
                 22,
               ),
               border: Border.all(
-                color: Colors.white
-                    .withValues(
+                color: Colors.white.withValues(
                   alpha: 0.10,
                 ),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black
-                      .withValues(
+                  color: Colors.black.withValues(
                     alpha: 0.5,
                   ),
                   blurRadius: 35,
-                  offset:
-                      const Offset(
+                  offset: const Offset(
                     0,
                     15,
                   ),
@@ -2302,63 +2042,44 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ],
             ),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 68,
                   height: 68,
-                  decoration:
-                      BoxDecoration(
-                    color: Colors.white
-                        .withValues(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(
                       alpha: 0.08,
                     ),
-                    shape:
-                        BoxShape.circle,
+                    shape: BoxShape.circle,
                   ),
-                  child:
-                      const Icon(
-                    Icons
-                        .pause_rounded,
-                    color:
-                        Colors.white,
+                  child: const Icon(
+                    Icons.pause_rounded,
+                    color: Colors.white,
                     size: 36,
                   ),
                 ),
                 const SizedBox(
                   height: 16,
                 ),
-                const UniversalText('Group Watch Paused',
-                  style:
-                      TextStyle(
-                    color:
-                        Colors.white,
+                const UniversalText(
+                  'Group Watch Paused',
+                  style: TextStyle(
+                    color: Colors.white,
                     fontSize: 22,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (session
-                            .pauseReason !=
-                        null &&
-                    session
-                        .pauseReason!
-                        .trim()
-                        .isNotEmpty) ...[
+                if (session.pauseReason != null &&
+                    session.pauseReason!.trim().isNotEmpty) ...[
                   const SizedBox(
                     height: 9,
                   ),
                   Text(
-                    session
-                        .pauseReason!,
-                    textAlign:
-                        TextAlign
-                            .center,
-                    style:
-                        const TextStyle(
-                      color:
-                          Colors.white60,
+                    session.pauseReason!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white60,
                       fontSize: 14,
                     ),
                   ),
@@ -2368,54 +2089,36 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
                 if (canResume)
                   SizedBox(
-                    width:
-                        double.infinity,
-                    child:
-                        ElevatedButton(
+                    width: double.infinity,
+                    child: ElevatedButton(
                       onPressed:
-                          groupWatchActionInProgress
-                              ? null
-                              : _resumeGroupWatch,
-                      style:
-                          ElevatedButton
-                              .styleFrom(
-                        backgroundColor:
-                            Colors.white,
-                        foregroundColor:
-                            Colors.black,
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
+                          groupWatchActionInProgress ? null : _resumeGroupWatch,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(
                           vertical: 14,
                         ),
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
                             14,
                           ),
                         ),
                       ),
-                      child:
-                          const UniversalText('RESUME',
-                        style:
-                            TextStyle(
-                          fontWeight:
-                              FontWeight
-                                  .w800,
+                      child: const UniversalText(
+                        'RESUME',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                   )
                 else
-                  const UniversalText('Waiting for the person who paused to resume.',
-                    textAlign:
-                        TextAlign.center,
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.white54,
+                  const UniversalText(
+                    'Waiting for the person who paused to resume.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white54,
                       fontSize: 14,
                     ),
                   ),
@@ -2435,27 +2138,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildControls(
     GroupWatchSession? groupSession,
   ) {
-    final isGroupPaused =
-        groupSession?.isPaused ==
-            true;
+    final isGroupPaused = groupSession?.isPaused == true;
 
-    final hasYoutube =
-        youtubeController != null;
+    final hasYoutube = youtubeController != null;
 
-    final playing =
-        youtubeController?.value
-                .playerState ==
-            PlayerState.playing;
+    final playing = youtubeController?.value.playerState == PlayerState.playing;
 
     return AnimatedContainer(
-      duration:
-          const Duration(
+      duration: const Duration(
         milliseconds: 200,
       ),
-      color:
-          const Color(0xFF0A0A0A),
-      padding:
-          const EdgeInsets.fromLTRB(
+      color: const Color(0xFF0A0A0A),
+      padding: const EdgeInsets.fromLTRB(
         12,
         6,
         12,
@@ -2464,31 +2158,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: Column(
         children: [
           SliderTheme(
-            data:
-                SliderTheme.of(
+            data: SliderTheme.of(
               context,
             ).copyWith(
               trackHeight: 3,
-              thumbShape:
-                  const RoundSliderThumbShape(
+              thumbShape: const RoundSliderThumbShape(
                 enabledThumbRadius: 6,
               ),
-              overlayShape:
-                  const RoundSliderOverlayShape(
+              overlayShape: const RoundSliderOverlayShape(
                 overlayRadius: 15,
               ),
-              activeTrackColor:
-                  Colors.white,
-              inactiveTrackColor:
-                  Colors.white
-                      .withValues(
+              activeTrackColor: Colors.white,
+              inactiveTrackColor: Colors.white.withValues(
                 alpha: 0.18,
               ),
-              thumbColor:
-                  Colors.white,
-              overlayColor:
-                  Colors.white
-                      .withValues(
+              thumbColor: Colors.white,
+              overlayColor: Colors.white.withValues(
                 alpha: 0.10,
               ),
             ),
@@ -2496,102 +2181,72 @@ class _PlayerScreenState extends State<PlayerScreen> {
               value: position,
               min: 0,
               max: 1,
-              onChanged:
-                  videoFinished ||
-                          isGroupPaused ||
-                          !hasYoutube
-                      ? null
-                      : updatePosition,
+              onChanged: videoFinished || isGroupPaused || !hasYoutube
+                  ? null
+                  : updatePosition,
             ),
           ),
           Row(
             children: [
               _BottomControlButton(
-                icon:
-                    Icons.replay_10_rounded,
-                onPressed:
-                    videoFinished ||
-                            isGroupPaused ||
-                            !hasYoutube
-                        ? null
-                        : () {
-                            _seekYoutubeBySeconds(
-                              -10,
-                            );
-                          },
+                icon: Icons.replay_10_rounded,
+                onPressed: videoFinished || isGroupPaused || !hasYoutube
+                    ? null
+                    : () {
+                        _seekYoutubeBySeconds(
+                          -10,
+                        );
+                      },
               ),
-              if (groupSession !=
-                  null)
+              if (groupSession != null)
                 _BottomControlButton(
-                  icon:
-                      groupSession.isPlaying
-                          ? Icons
-                              .pause_rounded
-                          : Icons
-                              .play_arrow_rounded,
-                  onPressed:
-                      groupWatchActionInProgress
+                  icon: groupSession.isPlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  onPressed: groupWatchActionInProgress
+                      ? null
+                      : groupSession.isPaused
                           ? null
-                          : groupSession
-                                  .isPaused
-                              ? null
-                              : groupSession
-                                      .isPlaying
-                                  ? _pauseGroupWatch
-                                  : _playGroupWatch,
+                          : groupSession.isPlaying
+                              ? _pauseGroupWatch
+                              : _playGroupWatch,
                   large: true,
                 )
               else
                 _BottomControlButton(
-                  icon: playing
-                      ? Icons.pause_rounded
-                      : Icons
-                          .play_arrow_rounded,
-                  onPressed:
-                      videoFinished
-                          ? null
-                          : hasYoutube
-                              ? _handleMainPlayPause
-                              : finishVideo,
+                  icon:
+                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  onPressed: videoFinished
+                      ? null
+                      : hasYoutube
+                          ? _handleMainPlayPause
+                          : finishVideo,
                   large: true,
                 ),
               _BottomControlButton(
-                icon:
-                    Icons.forward_10_rounded,
-                onPressed:
-                    videoFinished ||
-                            isGroupPaused ||
-                            !hasYoutube
-                        ? null
-                        : () {
-                            _seekYoutubeBySeconds(
-                              10,
-                            );
-                          },
+                icon: Icons.forward_10_rounded,
+                onPressed: videoFinished || isGroupPaused || !hasYoutube
+                    ? null
+                    : () {
+                        _seekYoutubeBySeconds(
+                          10,
+                        );
+                      },
               ),
               const Spacer(),
               _BottomControlButton(
-                icon:
-                    Icons.subtitles_rounded,
-                onPressed:
-                    openAudioSubtitleOptions,
+                icon: Icons.subtitles_rounded,
+                onPressed: openAudioSubtitleOptions,
               ),
-              if (groupSession ==
-                  null)
+              if (groupSession == null)
                 _BottomControlButton(
-                  icon: Icons
-                      .people_alt_rounded,
-                  onPressed:
-                      groupWatchActionInProgress
-                          ? null
-                          : showGroupShare,
+                  icon: Icons.people_alt_rounded,
+                  onPressed: groupWatchActionInProgress ? null : showGroupShare,
                 )
               else
                 _BottomControlButton(
-                  icon: Icons
-                      .people_alt_rounded,
-                  onPressed:
-                      _showGroupWatchSessionInfo,
+                  icon: Icons.people_alt_rounded,
+                  onPressed: _showGroupWatchSessionInfo,
                 ),
               _BottomControlButton(
                 icon: Icons.people_alt_outlined,
@@ -2614,16 +2269,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `_showGroupWatchSessionInfo` for this feature. Update this documentation when its contract changes.
   void _showGroupWatchSessionInfo() {
-    final sessionId =
-        groupWatchSessionId;
+    final sessionId = groupWatchSessionId;
 
     if (sessionId == null) {
       return;
     }
 
-    final session =
-        AppController.instance
-            .getGroupWatchSession(
+    final session = AppController.instance.getGroupWatchSession(
       sessionId,
     );
 
@@ -2633,32 +2285,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          Colors.transparent,
+      backgroundColor: Colors.transparent,
       builder: (_) {
         return _PremiumBottomSheet(
-          icon:
-              Icons.people_alt_rounded,
+          icon: Icons.people_alt_rounded,
           title: tr('Group Watch'),
           child: Padding(
-            padding:
-                const EdgeInsets.fromLTRB(
+            padding: const EdgeInsets.fromLTRB(
               20,
               0,
               20,
               25,
             ),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment
-                      .start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   session.title,
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white70,
+                  style: const TextStyle(
+                    color: Colors.white70,
                     fontSize: 15,
                   ),
                 ),
@@ -2667,8 +2312,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
                 _InfoRow(
                   label: 'Status',
-                  value:
-                      _groupWatchStatusLabel(
+                  value: _groupWatchStatusLabel(
                     session,
                   ),
                 ),
@@ -2677,40 +2321,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
                 _InfoRow(
                   label: 'Participants',
-                  value:
-                      '${session.participants.length}',
+                  value: '${session.participants.length}',
                 ),
-                if (session
-                            .pauseReason !=
-                        null &&
-                    session
-                        .pauseReason!
-                        .trim()
-                        .isNotEmpty) ...[
+                if (session.pauseReason != null &&
+                    session.pauseReason!.trim().isNotEmpty) ...[
                   const SizedBox(
                     height: 10,
                   ),
                   _InfoRow(
                     label: 'Reason',
-                    value:
-                        session.pauseReason!,
+                    value: session.pauseReason!,
                   ),
                 ],
                 const SizedBox(
                   height: 20,
                 ),
                 SizedBox(
-                  width:
-                      double.infinity,
-                  child:
-                      TextButton(
+                  width: double.infinity,
+                  child: TextButton(
                     onPressed: () {
                       Navigator.pop(
                         context,
                       );
                     },
-                    child:
-                        const UniversalText('CLOSE',
+                    child: const UniversalText(
+                      'CLOSE',
                     ),
                   ),
                 ),
@@ -2754,8 +2389,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 // REUSABLE PLAYER UI
 // ============================================================
 
-class _PlayerIconButton
-    extends StatelessWidget {
+class _PlayerIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
 
@@ -2765,32 +2399,28 @@ class _PlayerIconButton
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius:
-            BorderRadius.circular(
+        borderRadius: BorderRadius.circular(
           13,
         ),
         child: Container(
           width: 44,
           height: 44,
-          decoration:
-              BoxDecoration(
-            color: Colors.black
-                .withValues(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(
               alpha: 0.42,
             ),
-            borderRadius:
-                BorderRadius.circular(
+            borderRadius: BorderRadius.circular(
               13,
             ),
             border: Border.all(
-              color: Colors.white
-                  .withValues(
+              color: Colors.white.withValues(
                 alpha: 0.10,
               ),
             ),
@@ -2806,8 +2436,7 @@ class _PlayerIconButton
   }
 }
 
-class _SeekButton
-    extends StatelessWidget {
+class _SeekButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
 
@@ -2817,19 +2446,17 @@ class _SeekButton
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black
-          .withValues(
+      color: Colors.black.withValues(
         alpha: 0.45,
       ),
-      shape:
-          const CircleBorder(),
+      shape: const CircleBorder(),
       child: InkWell(
         onTap: onPressed,
-        customBorder:
-            const CircleBorder(),
+        customBorder: const CircleBorder(),
         child: SizedBox(
           width: 52,
           height: 52,
@@ -2844,8 +2471,7 @@ class _SeekButton
   }
 }
 
-class _BottomControlButton
-    extends StatelessWidget {
+class _BottomControlButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
   final bool large;
@@ -2857,6 +2483,7 @@ class _BottomControlButton
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IconButton(
@@ -2866,15 +2493,13 @@ class _BottomControlButton
         size: large ? 28 : 23,
       ),
       color: Colors.white,
-      disabledColor:
-          Colors.white24,
+      disabledColor: Colors.white24,
       tooltip: null,
     );
   }
 }
 
-class _PlayerMessage
-    extends StatelessWidget {
+class _PlayerMessage extends StatelessWidget {
   final IconData icon;
   final String message;
 
@@ -2884,12 +2509,12 @@ class _PlayerMessage
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Center(
       child: Column(
-        mainAxisSize:
-            MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             icon,
@@ -2901,12 +2526,9 @@ class _PlayerMessage
           ),
           Text(
             message,
-            textAlign:
-                TextAlign.center,
-            style:
-                const TextStyle(
-              color:
-                  Colors.white60,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white60,
               fontSize: 15,
             ),
           ),
@@ -2916,8 +2538,7 @@ class _PlayerMessage
   }
 }
 
-class _PremiumDialog
-    extends StatelessWidget {
+class _PremiumDialog extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
@@ -2929,61 +2550,49 @@ class _PremiumDialog
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor:
-          Colors.transparent,
-      insetPadding:
-          const EdgeInsets.all(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(
         24,
       ),
       child: Container(
-        padding:
-            const EdgeInsets.all(
+        padding: const EdgeInsets.all(
           24,
         ),
-        decoration:
-            BoxDecoration(
-          color:
-              const Color(0xFF171717),
-          borderRadius:
-              BorderRadius.circular(
+        decoration: BoxDecoration(
+          color: const Color(0xFF171717),
+          borderRadius: BorderRadius.circular(
             24,
           ),
           border: Border.all(
-            color: Colors.white
-                .withValues(
+            color: Colors.white.withValues(
               alpha: 0.09,
             ),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black
-                  .withValues(
+              color: Colors.black.withValues(
                 alpha: 0.55,
               ),
               blurRadius: 35,
-              offset:
-                  const Offset(0, 16),
+              offset: const Offset(0, 16),
             ),
           ],
         ),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 58,
               height: 58,
-              decoration:
-                  BoxDecoration(
-                color: Colors.white
-                    .withValues(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(
                   alpha: 0.07,
                 ),
-                shape:
-                    BoxShape.circle,
+                shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
@@ -2996,12 +2605,10 @@ class _PremiumDialog
             ),
             Text(
               title,
-              style:
-                  const TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(
@@ -3015,8 +2622,7 @@ class _PremiumDialog
   }
 }
 
-class _PremiumBottomSheet
-    extends StatelessWidget {
+class _PremiumBottomSheet extends StatelessWidget {
   final IconData icon;
   final String title;
   final Widget child;
@@ -3028,15 +2634,13 @@ class _PremiumBottomSheet
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
-      decoration:
-          const BoxDecoration(
-        color:
-            Color(0xFF111111),
-        borderRadius:
-            BorderRadius.vertical(
+      decoration: const BoxDecoration(
+        color: Color(0xFF111111),
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(
             28,
           ),
@@ -3044,8 +2648,7 @@ class _PremiumBottomSheet
       ),
       child: SafeArea(
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(
               height: 10,
@@ -3053,12 +2656,9 @@ class _PremiumBottomSheet
             Container(
               width: 42,
               height: 4,
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white24,
-                borderRadius:
-                    BorderRadius.circular(
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(
                   10,
                 ),
               ),
@@ -3074,19 +2674,15 @@ class _PremiumBottomSheet
                 Container(
                   width: 42,
                   height: 42,
-                  decoration:
-                      BoxDecoration(
-                    color: Colors.white
-                        .withValues(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(
                       alpha: 0.07,
                     ),
-                    shape:
-                        BoxShape.circle,
+                    shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
-                    color:
-                        Colors.white,
+                    color: Colors.white,
                     size: 21,
                   ),
                 ),
@@ -3095,13 +2691,10 @@ class _PremiumBottomSheet
                 ),
                 Text(
                   title,
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white,
+                  style: const TextStyle(
+                    color: Colors.white,
                     fontSize: 21,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -3117,8 +2710,7 @@ class _PremiumBottomSheet
   }
 }
 
-class _InfoRow
-    extends StatelessWidget {
+class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
 
@@ -3128,22 +2720,19 @@ class _InfoRow
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 14,
         vertical: 12,
       ),
-      decoration:
-          BoxDecoration(
-        color: Colors.white
-            .withValues(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(
           alpha: 0.045,
         ),
-        borderRadius:
-            BorderRadius.circular(
+        borderRadius: BorderRadius.circular(
           13,
         ),
       ),
@@ -3151,10 +2740,8 @@ class _InfoRow
         children: [
           Text(
             label,
-            style:
-                const TextStyle(
-              color:
-                  Colors.white54,
+            style: const TextStyle(
+              color: Colors.white54,
               fontSize: 13,
             ),
           ),
@@ -3162,17 +2749,12 @@ class _InfoRow
           Flexible(
             child: Text(
               value,
-              textAlign:
-                  TextAlign.right,
-              overflow:
-                  TextOverflow.ellipsis,
-              style:
-                  const TextStyle(
-                color:
-                    Colors.white,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
                 fontSize: 13,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -3186,8 +2768,7 @@ class _InfoRow
 // GROUP WATCH INVITE DIALOG
 // ============================================================
 
-class GroupWatchInviteDialog
-    extends StatefulWidget {
+class GroupWatchInviteDialog extends StatefulWidget {
   final List<Profile> profiles;
 
   const GroupWatchInviteDialog({
@@ -3196,55 +2777,42 @@ class GroupWatchInviteDialog
   });
 
   @override
-  State<GroupWatchInviteDialog>
-      createState() =>
-          _GroupWatchInviteDialogState();
+  State<GroupWatchInviteDialog> createState() => _GroupWatchInviteDialogState();
 }
 
-class _GroupWatchInviteDialogState
-    extends State<GroupWatchInviteDialog> {
-  final Set<String>
-      selectedProfileIds =
-      <String>{};
+class _GroupWatchInviteDialogState extends State<GroupWatchInviteDialog> {
+  final Set<String> selectedProfileIds = <String>{};
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor:
-          Colors.transparent,
-      insetPadding:
-          const EdgeInsets.all(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(
         20,
       ),
       child: Container(
-        constraints:
-            const BoxConstraints(
+        constraints: const BoxConstraints(
           maxWidth: 440,
           maxHeight: 600,
         ),
-        padding:
-            const EdgeInsets.all(
+        padding: const EdgeInsets.all(
           22,
         ),
-        decoration:
-            BoxDecoration(
-          color:
-              const Color(0xFF171717),
-          borderRadius:
-              BorderRadius.circular(
+        decoration: BoxDecoration(
+          color: const Color(0xFF171717),
+          borderRadius: BorderRadius.circular(
             24,
           ),
           border: Border.all(
-            color: Colors.white
-                .withValues(
+            color: Colors.white.withValues(
               alpha: 0.09,
             ),
           ),
         ),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
               Icons.people_alt_rounded,
@@ -3254,25 +2822,22 @@ class _GroupWatchInviteDialogState
             const SizedBox(
               height: 12,
             ),
-            const UniversalText('Start Group Watch',
-              style:
-                  TextStyle(
+            const UniversalText(
+              'Start Group Watch',
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 23,
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(
               height: 7,
             ),
-            const UniversalText('Choose who you want to invite.',
-              textAlign:
-                  TextAlign.center,
-              style:
-                  TextStyle(
-                color:
-                    Colors.white54,
+            const UniversalText(
+              'Choose who you want to invite.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white54,
                 fontSize: 14,
               ),
             ),
@@ -3282,105 +2847,67 @@ class _GroupWatchInviteDialogState
             Flexible(
               child: ListView(
                 shrinkWrap: true,
-                children: widget.profiles
-                    .map(
-                      (profile) {
-                        final selected =
-                            selectedProfileIds
-                                .contains(
-                          profile.id,
-                        );
+                children: widget.profiles.map(
+                  (profile) {
+                    final selected = selectedProfileIds.contains(
+                      profile.id,
+                    );
 
-                        return AnimatedContainer(
-                          duration:
-                              const Duration(
-                            milliseconds:
-                                160,
-                          ),
-                          margin:
-                              const EdgeInsets
-                                  .only(
-                            bottom: 8,
-                          ),
-                          decoration:
-                              BoxDecoration(
-                            color: selected
-                                ? Colors.white
-                                    .withValues(
-                                    alpha:
-                                        0.10,
-                                  )
-                                : Colors.white
-                                    .withValues(
-                                    alpha:
-                                        0.035,
-                                  ),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(
-                              14,
-                            ),
-                            border:
-                                Border.all(
-                              color: selected
-                                  ? Colors
-                                      .white
-                                      .withValues(
-                                      alpha:
-                                          0.20,
-                                    )
-                                  : Colors
-                                      .transparent,
-                            ),
-                          ),
-                          child:
-                              CheckboxListTile(
-                            value:
-                                selected,
-                            onChanged:
-                                (value) {
-                              setState(() {
-                                if (value ==
-                                    true) {
-                                  selectedProfileIds
-                                      .add(
-                                    profile.id,
-                                  );
-                                } else {
-                                  selectedProfileIds
-                                      .remove(
-                                    profile.id,
-                                  );
-                                }
-                              });
-                            },
-                            activeColor:
-                                Colors
-                                    .white,
-                            checkColor:
-                                Colors
-                                    .black,
-                            controlAffinity:
-                                ListTileControlAffinity
-                                    .trailing,
-                            title: Text(
-                              profile
-                                  .name,
-                              style:
-                                  const TextStyle(
-                                color:
-                                    Colors
-                                        .white,
-                                fontWeight:
-                                    FontWeight
-                                        .w600,
+                    return AnimatedContainer(
+                      duration: const Duration(
+                        milliseconds: 160,
+                      ),
+                      margin: const EdgeInsets.only(
+                        bottom: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Colors.white.withValues(
+                                alpha: 0.10,
+                              )
+                            : Colors.white.withValues(
+                                alpha: 0.035,
                               ),
-                            ),
+                        borderRadius: BorderRadius.circular(
+                          14,
+                        ),
+                        border: Border.all(
+                          color: selected
+                              ? Colors.white.withValues(
+                                  alpha: 0.20,
+                                )
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: CheckboxListTile(
+                        value: selected,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == true) {
+                              selectedProfileIds.add(
+                                profile.id,
+                              );
+                            } else {
+                              selectedProfileIds.remove(
+                                profile.id,
+                              );
+                            }
+                          });
+                        },
+                        activeColor: Colors.white,
+                        checkColor: Colors.black,
+                        controlAffinity: ListTileControlAffinity.trailing,
+                        title: Text(
+                          profile.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
                           ),
-                        );
-                      },
-                    )
-                    .toList(),
+                        ),
+                      ),
+                    );
+                  },
+                ).toList(),
               ),
             ),
             const SizedBox(
@@ -3389,19 +2916,16 @@ class _GroupWatchInviteDialogState
             Row(
               children: [
                 Expanded(
-                  child:
-                      TextButton(
+                  child: TextButton(
                     onPressed: () {
                       Navigator.pop(
                         context,
                       );
                     },
-                    child:
-                        const UniversalText('CANCEL',
-                      style:
-                          TextStyle(
-                        color:
-                            Colors.white60,
+                    child: const UniversalText(
+                      'CANCEL',
+                      style: TextStyle(
+                        color: Colors.white60,
                       ),
                     ),
                   ),
@@ -3410,47 +2934,33 @@ class _GroupWatchInviteDialogState
                   width: 10,
                 ),
                 Expanded(
-                  child:
-                      ElevatedButton(
-                    onPressed:
-                        selectedProfileIds
-                                .isEmpty
-                            ? null
-                            : () {
-                                Navigator.pop(
-                                  context,
-                                  Set<String>.from(
-                                    selectedProfileIds,
-                                  ),
-                                );
-                              },
-                    style:
-                        ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Colors.white,
-                      foregroundColor:
-                          Colors.black,
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
+                  child: ElevatedButton(
+                    onPressed: selectedProfileIds.isEmpty
+                        ? null
+                        : () {
+                            Navigator.pop(
+                              context,
+                              Set<String>.from(
+                                selectedProfileIds,
+                              ),
+                            );
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
                         vertical: 14,
                       ),
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius
-                                .circular(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
                           13,
                         ),
                       ),
                     ),
-                    child:
-                        const UniversalText('INVITE',
-                      style:
-                          TextStyle(
-                        fontWeight:
-                            FontWeight
-                                .w800,
+                    child: const UniversalText(
+                      'INVITE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -3468,62 +2978,52 @@ class _GroupWatchInviteDialogState
 // GROUP WATCH PAUSE REASON DIALOG
 // ============================================================
 
-class GroupWatchPauseReasonDialog
-    extends StatelessWidget {
+class GroupWatchPauseReasonDialog extends StatelessWidget {
   const GroupWatchPauseReasonDialog({
     super.key,
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor:
-          Colors.transparent,
-      insetPadding:
-          const EdgeInsets.all(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(
         24,
       ),
       child: Container(
-        padding:
-            const EdgeInsets.all(
+        padding: const EdgeInsets.all(
           22,
         ),
-        decoration:
-            BoxDecoration(
-          color:
-              const Color(0xFF171717),
-          borderRadius:
-              BorderRadius.circular(
+        decoration: BoxDecoration(
+          color: const Color(0xFF171717),
+          borderRadius: BorderRadius.circular(
             24,
           ),
           border: Border.all(
-            color: Colors.white
-                .withValues(
+            color: Colors.white.withValues(
               alpha: 0.09,
             ),
           ),
         ),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Icons
-                  .pause_circle_outline_rounded,
+              Icons.pause_circle_outline_rounded,
               color: Colors.white,
               size: 38,
             ),
             const SizedBox(
               height: 12,
             ),
-            const UniversalText('Why did you pause?',
-              style:
-                  TextStyle(
+            const UniversalText(
+              'Why did you pause?',
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 22,
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(
@@ -3553,9 +3053,7 @@ class GroupWatchPauseReasonDialog
               emoji: '💬',
               title: tr('Otro'),
               onTap: () async {
-                final reason =
-                    await showDialog<
-                        String>(
+                final reason = await showDialog<String>(
                   context: context,
                   builder: (_) {
                     return const GroupWatchCustomPauseReasonDialog();
@@ -3564,9 +3062,7 @@ class GroupWatchPauseReasonDialog
 
                 if (!context.mounted ||
                     reason == null ||
-                    reason
-                        .trim()
-                        .isEmpty) {
+                    reason.trim().isEmpty) {
                   return;
                 }
 
@@ -3586,12 +3082,10 @@ class GroupWatchPauseReasonDialog
                   context,
                 );
               },
-              child:
-                  const UniversalText('CANCEL',
-                style:
-                    TextStyle(
-                  color:
-                      Colors.white54,
+              child: const UniversalText(
+                'CANCEL',
+                style: TextStyle(
+                  color: Colors.white54,
                 ),
               ),
             ),
@@ -3602,8 +3096,7 @@ class GroupWatchPauseReasonDialog
   }
 }
 
-class _PauseReasonTile
-    extends StatelessWidget {
+class _PauseReasonTile extends StatelessWidget {
   final String emoji;
   final String title;
   final VoidCallback onTap;
@@ -3615,32 +3108,27 @@ class _PauseReasonTile
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          const EdgeInsets.only(
+      padding: const EdgeInsets.only(
         bottom: 8,
       ),
       child: Material(
-        color: Colors.white
-            .withValues(
+        color: Colors.white.withValues(
           alpha: 0.045,
         ),
-        borderRadius:
-            BorderRadius.circular(
+        borderRadius: BorderRadius.circular(
           14,
         ),
         child: InkWell(
           onTap: onTap,
-          borderRadius:
-              BorderRadius.circular(
+          borderRadius: BorderRadius.circular(
             14,
           ),
           child: Padding(
-            padding:
-                const EdgeInsets
-                    .symmetric(
+            padding: const EdgeInsets.symmetric(
               horizontal: 15,
               vertical: 13,
             ),
@@ -3648,8 +3136,7 @@ class _PauseReasonTile
               children: [
                 Text(
                   emoji,
-                  style:
-                      const TextStyle(
+                  style: const TextStyle(
                     fontSize: 23,
                   ),
                 ),
@@ -3658,21 +3145,16 @@ class _PauseReasonTile
                 ),
                 Text(
                   title,
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white,
+                  style: const TextStyle(
+                    color: Colors.white,
                     fontSize: 15,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const Spacer(),
                 const Icon(
-                  Icons
-                      .chevron_right_rounded,
-                  color:
-                      Colors.white38,
+                  Icons.chevron_right_rounded,
+                  color: Colors.white38,
                 ),
               ],
             ),
@@ -3683,26 +3165,22 @@ class _PauseReasonTile
   }
 }
 
-class GroupWatchCustomPauseReasonDialog
-    extends StatefulWidget {
+class GroupWatchCustomPauseReasonDialog extends StatefulWidget {
   const GroupWatchCustomPauseReasonDialog({
     super.key,
   });
 
   @override
-  State<GroupWatchCustomPauseReasonDialog>
-      createState() =>
-          _GroupWatchCustomPauseReasonDialogState();
+  State<GroupWatchCustomPauseReasonDialog> createState() =>
+      _GroupWatchCustomPauseReasonDialogState();
 }
 
 class _GroupWatchCustomPauseReasonDialogState
-    extends State<
-        GroupWatchCustomPauseReasonDialog> {
-  final TextEditingController
-      controller =
-      TextEditingController();
+    extends State<GroupWatchCustomPauseReasonDialog> {
+  final TextEditingController controller = TextEditingController();
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     controller.dispose();
@@ -3710,73 +3188,56 @@ class _GroupWatchCustomPauseReasonDialogState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor:
-          Colors.transparent,
+      backgroundColor: Colors.transparent,
       child: Container(
-        padding:
-            const EdgeInsets.all(
+        padding: const EdgeInsets.all(
           22,
         ),
-        decoration:
-            BoxDecoration(
-          color:
-              const Color(0xFF171717),
-          borderRadius:
-              BorderRadius.circular(
+        decoration: BoxDecoration(
+          color: const Color(0xFF171717),
+          borderRadius: BorderRadius.circular(
             22,
           ),
         ),
         child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const UniversalText('Why did you pause?',
-              style:
-                  TextStyle(
+            const UniversalText(
+              'Why did you pause?',
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 21,
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(
               height: 18,
             ),
             TextField(
-              controller:
-                  controller,
+              controller: controller,
               autofocus: true,
               maxLines: 3,
-              style:
-                  const TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
               ),
-              decoration:
-                  InputDecoration(
+              decoration: InputDecoration(
                 hintText: tr('Enter a reason'),
-                hintStyle:
-                    const TextStyle(
-                  color:
-                      Colors.white38,
+                hintStyle: const TextStyle(
+                  color: Colors.white38,
                 ),
                 filled: true,
-                fillColor:
-                    Colors.white
-                        .withValues(
+                fillColor: Colors.white.withValues(
                   alpha: 0.05,
                 ),
-                border:
-                    OutlineInputBorder(
-                  borderRadius:
-                      BorderRadius
-                          .circular(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(
                     14,
                   ),
-                  borderSide:
-                      BorderSide.none,
+                  borderSide: BorderSide.none,
                 ),
               ),
             ),
@@ -3786,29 +3247,23 @@ class _GroupWatchCustomPauseReasonDialogState
             Row(
               children: [
                 Expanded(
-                  child:
-                      TextButton(
+                  child: TextButton(
                     onPressed: () {
                       Navigator.pop(
                         context,
                       );
                     },
-                    child:
-                        const UniversalText('CANCEL',
+                    child: const UniversalText(
+                      'CANCEL',
                     ),
                   ),
                 ),
                 Expanded(
-                  child:
-                      ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: () {
-                      final value =
-                          controller
-                              .text
-                              .trim();
+                      final value = controller.text.trim();
 
-                      if (value
-                          .isEmpty) {
+                      if (value.isEmpty) {
                         return;
                       }
 
@@ -3817,16 +3272,12 @@ class _GroupWatchCustomPauseReasonDialogState
                         value,
                       );
                     },
-                    style:
-                        ElevatedButton
-                            .styleFrom(
-                      backgroundColor:
-                          Colors.white,
-                      foregroundColor:
-                          Colors.black,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
                     ),
-                    child:
-                        const UniversalText('DONE',
+                    child: const UniversalText(
+                      'DONE',
                     ),
                   ),
                 ),
@@ -3843,8 +3294,7 @@ class _GroupWatchCustomPauseReasonDialogState
 // NEXT EPISODE COUNTDOWN
 // ============================================================
 
-class NextEpisodeCountdown
-    extends StatelessWidget {
+class NextEpisodeCountdown extends StatelessWidget {
   final int seconds;
   final String? nextEpisodeTitle;
   final VoidCallback onCancel;
@@ -3859,76 +3309,59 @@ class NextEpisodeCountdown
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    if (nextEpisodeTitle == null ||
-        nextEpisodeTitle!
-            .trim()
-            .isEmpty) {
+    if (nextEpisodeTitle == null || nextEpisodeTitle!.trim().isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Container(
-      constraints:
-          const BoxConstraints(
+      constraints: const BoxConstraints(
         maxWidth: 330,
       ),
-      padding:
-          const EdgeInsets.all(
+      padding: const EdgeInsets.all(
         16,
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            const Color(0xFF171717)
-                .withValues(
+      decoration: BoxDecoration(
+        color: const Color(0xFF171717).withValues(
           alpha: 0.96,
         ),
-        borderRadius:
-            BorderRadius.circular(
+        borderRadius: BorderRadius.circular(
           20,
         ),
         border: Border.all(
-          color: Colors.white
-              .withValues(
+          color: Colors.white.withValues(
             alpha: 0.10,
           ),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black
-                .withValues(
+            color: Colors.black.withValues(
               alpha: 0.5,
             ),
             blurRadius: 25,
-            offset:
-                const Offset(0, 10),
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Column(
-        mainAxisSize:
-            MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
               Container(
                 width: 38,
                 height: 38,
-                decoration:
-                    BoxDecoration(
-                  color: Colors.white
-                      .withValues(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(
                     alpha: 0.08,
                   ),
-                  shape:
-                      BoxShape.circle,
+                  shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons
-                      .play_arrow_rounded,
-                  color:
-                      Colors.white,
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
                   size: 21,
                 ),
               ),
@@ -3936,25 +3369,21 @@ class NextEpisodeCountdown
                 width: 10,
               ),
               const Expanded(
-                child: UniversalText('Up Next',
-                  style:
-                      TextStyle(
-                    color:
-                        Colors.white,
+                child: UniversalText(
+                  'Up Next',
+                  style: TextStyle(
+                    color: Colors.white,
                     fontSize: 17,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              UniversalText('$seconds',
-                style:
-                    const TextStyle(
-                  color:
-                      Colors.white70,
+              UniversalText(
+                '$seconds',
+                style: const TextStyle(
+                  color: Colors.white70,
                   fontSize: 15,
-                  fontWeight:
-                      FontWeight.w700,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -3965,14 +3394,10 @@ class NextEpisodeCountdown
           Text(
             nextEpisodeTitle!,
             maxLines: 2,
-            overflow:
-                TextOverflow.ellipsis,
-            textAlign:
-                TextAlign.center,
-            style:
-                const TextStyle(
-              color:
-                  Colors.white70,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white70,
               fontSize: 14,
             ),
           ),
@@ -3982,34 +3407,23 @@ class NextEpisodeCountdown
           Row(
             children: [
               Expanded(
-                child:
-                    OutlinedButton(
-                  onPressed:
-                      onCancel,
-                  style:
-                      OutlinedButton
-                          .styleFrom(
-                    foregroundColor:
-                        Colors.white70,
-                    side:
-                        BorderSide(
-                      color: Colors
-                          .white
-                          .withValues(
+                child: OutlinedButton(
+                  onPressed: onCancel,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: BorderSide(
+                      color: Colors.white.withValues(
                         alpha: 0.15,
                       ),
                     ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius
-                              .circular(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
                         12,
                       ),
                     ),
                   ),
-                  child:
-                      const UniversalText('CANCEL',
+                  child: const UniversalText(
+                    'CANCEL',
                   ),
                 ),
               ),
@@ -4017,33 +3431,21 @@ class NextEpisodeCountdown
                 width: 8,
               ),
               Expanded(
-                child:
-                    ElevatedButton(
-                  onPressed:
-                      onPlayNow,
-                  style:
-                      ElevatedButton
-                          .styleFrom(
-                    backgroundColor:
-                        Colors.white,
-                    foregroundColor:
-                        Colors.black,
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius
-                              .circular(
+                child: ElevatedButton(
+                  onPressed: onPlayNow,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
                         12,
                       ),
                     ),
                   ),
-                  child:
-                      const UniversalText('PLAY NOW',
-                    style:
-                        TextStyle(
-                      fontWeight:
-                          FontWeight
-                              .w800,
+                  child: const UniversalText(
+                    'PLAY NOW',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -4060,20 +3462,21 @@ class NextEpisodeCountdown
 // AUDIO / SUBTITLE OPTIONS
 // ============================================================
 
-class AudioSubtitleOptions
-    extends StatefulWidget {
+class AudioSubtitleOptions extends StatefulWidget {
+  final List<String> audioOptions;
+  final List<String> subtitleOptions;
   final String selectedAudio;
   final bool subtitlesEnabled;
   final String? selectedSubtitle;
 
-  final ValueChanged<String>
-      onAudioChanged;
+  final ValueChanged<String> onAudioChanged;
 
-  final ValueChanged<String?>
-      onSubtitleChanged;
+  final ValueChanged<String?> onSubtitleChanged;
 
   const AudioSubtitleOptions({
     super.key,
+    required this.audioOptions,
+    required this.subtitleOptions,
     required this.selectedAudio,
     required this.subtitlesEnabled,
     required this.selectedSubtitle,
@@ -4082,197 +3485,173 @@ class AudioSubtitleOptions
   });
 
   @override
-  State<AudioSubtitleOptions>
-      createState() =>
-          _AudioSubtitleOptionsState();
+  State<AudioSubtitleOptions> createState() => _AudioSubtitleOptionsState();
 }
 
-class _AudioSubtitleOptionsState
-    extends State<
-        AudioSubtitleOptions> {
+class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
   late String selectedAudio;
   late bool subtitlesEnabled;
   late String? selectedSubtitle;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
-    selectedAudio =
-        widget.selectedAudio;
+    selectedAudio = widget.selectedAudio;
 
-    subtitlesEnabled =
-        widget.subtitlesEnabled;
+    subtitlesEnabled = widget.subtitlesEnabled;
 
-    selectedSubtitle =
-        widget.selectedSubtitle;
+    selectedSubtitle = widget.selectedSubtitle;
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
+    final audioOptions =
+        widget.audioOptions.where((track) => track.trim().isNotEmpty).toList();
+
+    final subtitleOptions = widget.subtitleOptions
+        .where((track) => track.trim().isNotEmpty)
+        .toList();
+
+    final hasAudio = audioOptions.isNotEmpty;
+    final hasSubtitles = subtitleOptions.isNotEmpty;
+
     return Container(
-      decoration:
-          const BoxDecoration(
-        color:
-            Color(0xFF111111),
-        borderRadius:
-            BorderRadius.vertical(
-          top: Radius.circular(
-            28,
-          ),
-        ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF111111),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         child: Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
-            20,
-            10,
-            20,
-            24,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
                   width: 42,
                   height: 4,
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.white24,
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                      10,
-                    ),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
-              const SizedBox(
-                height: 20,
-              ),
+              const SizedBox(height: 20),
               const Row(
                 children: [
-                  Icon(
-                    Icons.tune_rounded,
-                    color:
-                        Colors.white,
-                    size: 25,
-                  ),
-                  SizedBox(
-                    width: 10,
-                  ),
-                  UniversalText('Audio & Subtitles',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.white,
+                  Icon(Icons.tune_rounded, color: Colors.white, size: 25),
+                  SizedBox(width: 10),
+                  UniversalText(
+                    'Playback options',
+                    style: TextStyle(
+                      color: Colors.white,
                       fontSize: 23,
-                      fontWeight:
-                          FontWeight.w800,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(
-                height: 24,
-              ),
-              const UniversalText('AUDIO',
-                style:
-                    TextStyle(
-                  color:
-                      Colors.white54,
-                  fontSize: 11,
-                  fontWeight:
-                      FontWeight.w800,
-                  letterSpacing:
-                      1.2,
-                ),
-              ),
-              const SizedBox(
-                height: 9,
-              ),
-              _OptionInfoCard(
-                icon:
-                    Icons.audiotrack_rounded,
-                title: tr('Audio track metadata is not available'),
-                subtitle:
-                    tr('No track choices will be invented.'),
-              ),
-              const SizedBox(
-                height: 22,
-              ),
-              const UniversalText('SUBTITLES',
-                style:
-                    TextStyle(
-                  color:
-                      Colors.white54,
-                  fontSize: 11,
-                  fontWeight:
-                      FontWeight.w800,
-                  letterSpacing:
-                      1.2,
-                ),
-              ),
-              const SizedBox(
-                height: 9,
-              ),
-              _OptionInfoCard(
-                icon:
-                    Icons.subtitles_rounded,
-                title: tr('Subtitle track metadata is not available'),
-                subtitle:
-                    tr('No subtitle choices will be invented.'),
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-              Container(
-                decoration:
-                    BoxDecoration(
-                  color: Colors.white
-                      .withValues(
-                    alpha: 0.035,
+              const SizedBox(height: 18),
+              if (hasAudio)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  borderRadius:
-                      BorderRadius
-                          .circular(
-                    14,
-                  ),
-                ),
-                child:
-                    SwitchListTile(
-                  value:
-                      subtitlesEnabled,
-                  onChanged: null,
-                  title:
-                      const UniversalText('Subtitles',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.white54,
-                      fontWeight:
-                          FontWeight
-                              .w600,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    child: DropdownButtonFormField<String>(
+                      initialValue: audioOptions.contains(selectedAudio)
+                          ? selectedAudio
+                          : audioOptions.first,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF1B1B1B),
+                      decoration: const InputDecoration(
+                        labelText: 'Audio',
+                        border: InputBorder.none,
+                        floatingLabelStyle: TextStyle(color: Colors.white70),
+                      ),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      items: audioOptions
+                          .map((option) => DropdownMenuItem(
+                              value: option, child: Text(option)))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => selectedAudio = value);
+                        widget.onAudioChanged(value);
+                      },
                     ),
                   ),
+                )
+              else
+                const _MediaOptionPlaceholder(
+                  icon: Icons.audiotrack_rounded,
+                  title: 'No audio tracks available',
                   subtitle:
-                      const UniversalText('Unavailable until subtitle metadata is provided.',
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.white38,
-                      fontSize: 12,
+                      'This imported disc does not include audio metadata yet.',
+                ),
+              if (hasAudio) const SizedBox(height: 14),
+              if (hasSubtitles)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: subtitleOptions.contains(selectedSubtitle)
+                          ? selectedSubtitle
+                          : null,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF1B1B1B),
+                      decoration: const InputDecoration(
+                        labelText: 'Subtitles',
+                        border: InputBorder.none,
+                        floatingLabelStyle: TextStyle(color: Colors.white70),
+                      ),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Off')),
+                        ...subtitleOptions.map(
+                          (option) => DropdownMenuItem<String?>(
+                              value: option, child: Text(option)),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedSubtitle = value;
+                          subtitlesEnabled = value != null;
+                        });
+                        widget.onSubtitleChanged(value);
+                      },
                     ),
                   ),
+                )
+              else
+                const _MediaOptionPlaceholder(
+                  icon: Icons.subtitles_rounded,
+                  title: 'No subtitle tracks available',
+                  subtitle:
+                      'This import does not include subtitle metadata yet.',
+                ),
+              const SizedBox(height: 18),
+              const UniversalText(
+                'X-Ray is separate and stays in the cast panel.',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -4283,90 +3662,55 @@ class _AudioSubtitleOptionsState
   }
 }
 
-class _OptionInfoCard
-    extends StatelessWidget {
+class _MediaOptionPlaceholder extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
 
-  const _OptionInfoCard({
+  const _MediaOptionPlaceholder({
     required this.icon,
     required this.title,
     required this.subtitle,
   });
 
   @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.all(
-        14,
-      ),
-      decoration:
-          BoxDecoration(
-        color: Colors.white
-            .withValues(
-          alpha: 0.045,
-        ),
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment
-                .start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 40,
             height: 40,
-            decoration:
-                BoxDecoration(
-              color: Colors.white
-                  .withValues(
-                alpha: 0.07,
-              ),
-              shape:
-                  BoxShape.circle,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.07),
+              shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color:
-                  Colors.white60,
-              size: 20,
-            ),
+            child: Icon(icon, color: Colors.white60, size: 20),
           ),
-          const SizedBox(
-            width: 12,
-          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment
-                      .start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white,
+                  style: const TextStyle(
+                    color: Colors.white,
                     fontSize: 13,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(
-                  height: 4,
-                ),
+                const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white38,
+                  style: const TextStyle(
+                    color: Colors.white38,
                     fontSize: 12,
                   ),
                 ),

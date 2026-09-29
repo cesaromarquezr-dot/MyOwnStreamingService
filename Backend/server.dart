@@ -75,6 +75,8 @@ import 'routes/media_intelligence_routes.dart';
 import 'routes/location_routes.dart';
 import 'routes/self_hosting_routes.dart';
 import 'routes/shop_routes.dart';
+import 'routes/phase2_routes.dart';
+import 'routes/seller_payout_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -95,6 +97,8 @@ import 'services/transcode_cache_service.dart';
 import 'services/transcoding_service.dart';
 import 'services/storage_manager_service.dart';
 import 'services/shop_service.dart';
+import 'services/phase2_service.dart';
+import 'services/payment_method_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -153,6 +157,12 @@ database: database,
 final shopService = ShopService(
 database: database,
 );
+
+final phase2Service = Phase2Service(
+  database: database,
+);
+
+final paymentMethodService = PaymentMethodService();
 
 // ------------------------------------------------------------
 // PAYMENT SERVICE
@@ -225,6 +235,21 @@ searchService: searchService,
 final shopRoutes = ShopRoutes(
 authenticationMiddleware: authentication,
 shopService: shopService,
+);
+
+// ------------------------------------------------------------
+// PHASE 2 ROUTES
+// ------------------------------------------------------------
+
+final sellerPayoutRoutes = SellerPayoutRoutes(
+  authentication: authentication,
+  database: database,
+);
+
+final phase2Routes = Phase2Routes(
+  authentication: authentication,
+  service: phase2Service,
+  payments: paymentMethodService,
 );
 
 // ------------------------------------------------------------
@@ -400,6 +425,8 @@ authRoutes,
 recommendationsRoutes,
 searchRoutes,
 shopRoutes,
+phase2Routes,
+sellerPayoutRoutes,
 paymentRoutes,
 groupRoutes,
 armRoutes,
@@ -440,6 +467,8 @@ AuthRoutes authRoutes,
 RecommendationsRoutes recommendationsRoutes,
 SearchRoutes searchRoutes,
 ShopRoutes shopRoutes,
+Phase2Routes phase2Routes,
+SellerPayoutRoutes sellerPayoutRoutes,
 PaymentRoutes paymentRoutes,
 GroupRoutes groupRoutes,
 ArmRoutes armRoutes,
@@ -635,6 +664,22 @@ if (path == '/api/v1/shop/entities' ||
   await shopRoutes.handle(
     request,
   );
+  responseStarted = true;
+  return;
+}
+
+// ----------------------------------------------------------
+// PHASE 2
+// ----------------------------------------------------------
+
+if (path == '/api/v1/seller/payout-destinations') {
+  await sellerPayoutRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
+
+if (path.startsWith('/api/v1/phase2/')) {
+  await phase2Routes.handle(request);
   responseStarted = true;
   return;
 }

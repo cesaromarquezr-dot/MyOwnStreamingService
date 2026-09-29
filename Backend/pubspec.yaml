@@ -12,3 +12,5 @@ dependencies:
   mailer: ^6.1.2
   supabase: ^2.9.0
   crypto: ^3.0.6
+dev_dependencies:
+  test: ^1.25.15

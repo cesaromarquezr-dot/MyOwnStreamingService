@@ -4,6 +4,9 @@ import 'app_core.dart';
 import 'details.dart';
 import 'feature_center.dart';
 import 'music_favorites.dart';
+import 'music.dart';
+import 'widgets/category_filter_chips.dart';
+import 'widgets/like_toggle_button.dart';
 import 'localization.dart';
 
 class LibraryCollectionsScreen extends StatelessWidget {
@@ -109,35 +112,179 @@ class _PersonMediaScreen extends StatelessWidget {
   }
 }
 
-class FavoritesScreen extends StatelessWidget {
+class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
+
+  @override
+  State<FavoritesScreen> createState() => _FavoritesScreenState();
+}
+
+class _FavoritesScreenState extends State<FavoritesScreen> {
+  String _songCategory = 'All';
+  String _mediaCategory = 'All';
+
+  List<String> _categories(Iterable<String> values) {
+    final result = <String>{'All'};
+    for (final value in values) {
+      if (value.trim().isNotEmpty) result.add(value.trim());
+    }
+    return result.toList();
+  }
+
+  bool _matches(List<String> values, String selected) {
+    if (selected == 'All') return true;
+    return values.any((value) => value.toLowerCase() == selected.toLowerCase());
+  }
+
+  Future<void> _createSongPlaylist(List<MusicTrack> tracks) async {
+    if (tracks.isEmpty) return;
+    final name = TextEditingController(text: '$_songCategory Favorites');
+    final shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const UniversalText('Create New Playlist'),
+        content: TextField(
+          controller: name,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Playlist name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Create')),
+        ],
+      ),
+    );
+    final playlistName = name.text.trim();
+    name.dispose();
+    if (shouldCreate != true || playlistName.isEmpty) return;
+    final store = MusicLibraryStore.instance;
+    store.createPlaylist(
+      playlistName,
+      trackIds: tracks.map((track) => track.id),
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Created "$playlistName".')));
+  }
+
+  Future<void> _createMediaCollection(List<MediaItem> media) async {
+    if (media.isEmpty) return;
+    final name = TextEditingController(text: '$_mediaCategory Movies & Shows');
+    final shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const UniversalText('Create New Collection'),
+        content: TextField(
+          controller: name,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Collection name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Create')),
+        ],
+      ),
+    );
+    final collectionName = name.text.trim();
+    name.dispose();
+    if (shouldCreate != true || collectionName.isEmpty) return;
+    AppController.instance.createCollection(
+      name: collectionName,
+      automatic: false,
+      mediaIds: media.map((item) => item.id),
+    );
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Created "$collectionName".')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final likedMedia = controller.liked;
-    final music = MusicFavoritesBridge.likedTracks();
-    final playlists = MusicFavoritesBridge.likedPlaylists();
+    final musicLibrary = MusicLibraryStore.instance;
+    final likedSongTitles = MusicFavoritesBridge.likedTracks().toSet();
+    final likedTracks = musicLibrary.tracks.where((track) => likedSongTitles.contains(track.title)).toList();
+    final songCategories = _categories(
+      likedTracks.expand((track) => [...track.genres, ...track.subgenres]),
+    );
+    final mediaCategories = _categories(
+      likedMedia.expand((media) => [...media.genres, ...media.tags]),
+    );
+    final filteredSongs = likedTracks.where((track) => _matches([...track.genres, ...track.subgenres], _songCategory)).toList();
+    final filteredMedia = likedMedia.where((media) => _matches([...media.genres, ...media.tags], _mediaCategory)).toList();
+
     return Scaffold(
       appBar: AppBar(title: const UniversalText('Favorites')),
-      body: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          const UniversalText('Film & TV', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          if (likedMedia.isEmpty) const Card(child: ListTile(title: UniversalText('No liked movies or shows yet.'))),
-          for (final media in likedMedia) Card(child: ListTile(title: Text(media.title), subtitle: Text(media.type), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))))),
-          const SizedBox(height: 18),
-          const UniversalText('Liked songs', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          if (music.isEmpty) const Card(child: ListTile(title: UniversalText('No liked songs yet.'))),
-          for (final title in music) Card(child: ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(title))),
-          const SizedBox(height: 18),
-          const UniversalText('Liked albums', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          if (MusicFavoritesBridge.likedAlbums().isEmpty) const Card(child: ListTile(title: UniversalText('No liked albums yet.'))),
-          for (final album in MusicFavoritesBridge.likedAlbums()) Card(child: ListTile(leading: const Icon(Icons.album_rounded), title: Text(album))),
-          const SizedBox(height: 18),
-          const UniversalText('Liked playlists', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          if (playlists.isEmpty) const Card(child: ListTile(title: UniversalText('No liked playlists yet.'))),
-          for (final playlist in playlists) Card(child: ListTile(leading: const Icon(Icons.queue_music_rounded), title: Text(playlist))),
-        ],
+      body: AnimatedBuilder(
+        animation: musicLibrary,
+        builder: (_, __) => ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            const UniversalText('Liked Movies & TV Shows', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            CategoryFilterChips(
+              categories: mediaCategories,
+              selectedCategory: _mediaCategory,
+              onSelected: (value) => setState(() => _mediaCategory = value),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: filteredMedia.isEmpty ? null : () => _createMediaCollection(filteredMedia),
+                icon: const Icon(Icons.create_new_folder_outlined),
+                label: const UniversalText('Create New Collection'),
+              ),
+            ),
+            if (filteredMedia.isEmpty) const Card(child: ListTile(title: UniversalText('No liked movies or shows in this category yet.'))),
+            for (final media in filteredMedia)
+              Card(child: ListTile(
+                leading: const Icon(Icons.movie_outlined),
+                title: Text(media.title),
+                subtitle: Text(media.type),
+                trailing: LikeToggleButton(
+                  liked: controller.isLiked(media.id),
+                  onPressed: () {
+                    controller.clearReaction(media.id);
+                    setState(() {});
+                  },
+                ),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
+              )),
+            const SizedBox(height: 22),
+            const UniversalText('Liked Songs', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            CategoryFilterChips(
+              categories: songCategories,
+              selectedCategory: _songCategory,
+              onSelected: (value) => setState(() => _songCategory = value),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: filteredSongs.isEmpty ? null : () => _createSongPlaylist(filteredSongs),
+                icon: const Icon(Icons.queue_music_outlined),
+                label: const UniversalText('Create New Playlist'),
+              ),
+            ),
+            if (filteredSongs.isEmpty) const Card(child: ListTile(title: UniversalText('No liked songs in this category yet.'))),
+            for (final track in filteredSongs)
+              Card(child: ListTile(
+                leading: const Icon(Icons.music_note_rounded),
+                title: Text(track.title),
+                subtitle: Text(track.artist),
+                trailing: LikeToggleButton(
+                  liked: true,
+                  onPressed: () {
+                    MusicFavoritesBridge.toggleTrack(track.title);
+                    setState(() {});
+                  },
+                ),
+              )),
+            const SizedBox(height: 18),
+            const UniversalText('Liked Albums', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            if (MusicFavoritesBridge.likedAlbums().isEmpty) const Card(child: ListTile(title: UniversalText('No liked albums yet.'))),
+            for (final album in MusicFavoritesBridge.likedAlbums()) Card(child: ListTile(leading: const Icon(Icons.album_rounded), title: Text(album))),
+            const SizedBox(height: 18),
+            const UniversalText('Liked Playlists', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            if (MusicFavoritesBridge.likedPlaylists().isEmpty) const Card(child: ListTile(title: UniversalText('No liked playlists yet.'))),
+            for (final playlist in MusicFavoritesBridge.likedPlaylists()) Card(child: ListTile(leading: const Icon(Icons.queue_music_rounded), title: Text(playlist))),
+          ],
+        ),
       ),
     );
   }

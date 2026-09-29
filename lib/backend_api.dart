@@ -2817,6 +2817,285 @@ class BackendApi {
   }
 
   // ==========================================================
+  // PHASE 2
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getPhase2FeatureStatus() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/phase2/features'),
+        headers: _headers,
+      ),
+      'Unable to load Phase 2 status.',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPhase2Records({
+    String? profileId,
+    String? recordType,
+  }) async {
+    _requireAuthentication();
+    final query = <String, String>{};
+    if (profileId?.trim().isNotEmpty == true) query['profileId'] = profileId!.trim();
+    if (recordType?.trim().isNotEmpty == true) query['recordType'] = recordType!.trim();
+    final uri = Uri.parse('$baseUrl/phase2/records').replace(queryParameters: query);
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load Phase 2 records.',
+    );
+    return (data['records'] is List)
+        ? (data['records'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> savePhase2Record({
+    String? profileId,
+    required String recordType,
+    required String recordKey,
+    Map<String, dynamic> data = const <String, dynamic>{},
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/records'),
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'recordType': recordType,
+          'recordKey': recordKey,
+          'data': data,
+        }),
+      ),
+      'Unable to save the Phase 2 record.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getCollaborativeQueue({required String queueId}) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}'),
+        headers: _headers,
+      ),
+      'Unable to load collaborative queue.',
+    );
+  }
+
+  Future<Map<String, dynamic>> updateCollaborativeQueueItem({
+    required String queueId,
+    required String recordKey,
+    int? position,
+    bool? skipped,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.patch(
+        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
+        headers: _headers,
+        body: jsonEncode({'position': position, 'skipped': skipped}),
+      ),
+      'Unable to update collaborative queue item.',
+    );
+  }
+
+  Future<void> deleteCollaborativeQueueItem({required String queueId, required String recordKey}) async {
+    _requireAuthentication();
+    await _requireSuccess(
+      await http.delete(
+        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
+        headers: _headers,
+      ),
+      'Unable to remove collaborative queue item.',
+    );
+  }
+
+  Future<Map<String, dynamic>> createCollaborativeQueue({
+    required String profileId,
+    String name = 'Shared Queue',
+    String mode = 'party',
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/queue'),
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'name': name,
+          'mode': mode,
+        }),
+      ),
+      'Unable to create collaborative queue.',
+    );
+  }
+
+  Future<Map<String, dynamic>> addCollaborativeQueueItem({
+    required String queueId,
+    required String profileId,
+    required String mediaId,
+    required String mediaType,
+    required String title,
+    String? sourceVersionKey,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}/items'),
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'mediaId': mediaId,
+          'mediaType': mediaType,
+          'title': title,
+          'sourceVersionKey': sourceVersionKey,
+        }),
+      ),
+      'Unable to add the item to the collaborative queue.',
+    );
+  }
+
+  Future<Map<String, dynamic>> createPhase2ShareCard({
+    String? profileId,
+    required String contentType,
+    required String contentId,
+    required String title,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/share-card'),
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'contentType': contentType,
+          'contentId': contentId,
+          'title': title,
+          'metadata': metadata,
+        }),
+      ),
+      'Unable to create a share card.',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPaymentMethodCatalog() async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/phase2/payment-methods'),
+        headers: _headers,
+      ),
+      'Unable to load payment methods.',
+    );
+    return (data['methods'] is List)
+        ? (data['methods'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> saveSellerPaymentMethod({
+    required String paymentMethodId,
+    required String countryCode,
+    required String currencyCode,
+    String? providerAccountReference,
+    bool verified = false,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/payment-methods/seller'),
+        headers: _headers,
+        body: jsonEncode({
+          'paymentMethodId': paymentMethodId,
+          'countryCode': countryCode,
+          'currencyCode': currencyCode,
+          'providerAccountReference': providerAccountReference,
+          'verified': verified,
+        }),
+      ),
+      'Unable to save seller payment method.',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getSellerPayoutDestinations() async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/seller/payout-destinations'),
+        headers: _headers,
+      ),
+      'Unable to load seller payout destinations.',
+    );
+    return (data['destinations'] is List)
+        ? (data['destinations'] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> saveSellerPayoutDestination({
+    required String providerKey,
+    required String methodType,
+    required String displayName,
+    String? providerAccountReference,
+    String? maskedIdentifier,
+    bool enabled = true,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/seller/payout-destinations'),
+        headers: _headers,
+        body: jsonEncode({
+          'providerKey': providerKey,
+          'methodType': methodType,
+          'displayName': displayName,
+          'providerAccountReference': providerAccountReference,
+          'maskedIdentifier': maskedIdentifier,
+          'enabled': enabled,
+        }),
+      ),
+      'Unable to save seller payout destination.',
+    );
+  }
+
+  Future<void> deleteSellerPayoutDestination(String id) async {
+    _requireAuthentication();
+    await _requireSuccess(
+      await http.delete(
+        Uri.parse('$baseUrl/seller/payout-destinations')
+            .replace(queryParameters: {'id': id}),
+        headers: _headers,
+      ),
+      'Unable to delete seller payout destination.',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> filterPaymentMethodsForBuyer({
+    required String sellerAccountId,
+    required String buyerCountryCode,
+    required String currencyCode,
+  }) async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/phase2/payment-methods/filter'),
+        headers: _headers,
+        body: jsonEncode({
+          'sellerAccountId': sellerAccountId,
+          'buyerCountryCode': buyerCountryCode,
+          'currencyCode': currencyCode,
+        }),
+      ),
+      'Unable to filter payment methods.',
+    );
+    return (data['methods'] is List)
+        ? (data['methods'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  // ==========================================================
   // INTERNAL HELPERS
   // ==========================================================
 

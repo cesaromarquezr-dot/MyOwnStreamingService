@@ -1033,14 +1033,27 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                owned
-                    ? 'This title is in your library.'
-                    : 'This title is not in your library.',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    owned
+                        ? 'This title is in your library.'
+                        : 'This title is not in your library.',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (media.addedByProfileName?.trim().isNotEmpty ?? false)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Added by ${media.addedByProfileName}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -1285,6 +1298,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       isScrollControlled: true,
       builder: (_) {
         return AudioSubtitleOptions(
+          audioOptions: media.audioTracks,
+          subtitleOptions: media.subtitles,
           selectedAudio: selectedAudio,
           subtitlesEnabled: subtitlesEnabled,
           selectedSubtitle: selectedSubtitle,

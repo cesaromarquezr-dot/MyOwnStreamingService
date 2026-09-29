@@ -2298,6 +2298,243 @@ class SupabaseStore {
   }
 
   // ---------------------------------------------------------------------------
+  // PHASE 2 GENERIC RECORDS
+  // ---------------------------------------------------------------------------
+
+  /// Stores a non-financial Phase 2 record in the extensible Phase 2 table.
+  ///
+  /// Financial credentials are explicitly out of scope for this method. Use
+  /// the dedicated payment-provider token tables for tokenized payment data.
+  Future<void> upsertPhase2Record({
+    required String accountExternalId,
+    String? profileExternalId,
+    required String recordType,
+    required String recordKey,
+    required String recordId,
+    required Map<String, dynamic> data,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+
+    final internalAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+
+    if (internalAccount == null) {
+      throw StateError('Account not found in Supabase.');
+    }
+
+    final safeData = _sanitizeJsonMap(
+      data,
+      maxBytes: _maxSnapshotBytes,
+    );
+
+    await c.from('phase2_records').upsert(
+      {
+        'id': _requiredId(recordId, field: 'recordId'),
+        'account_id': _requiredId(internalAccount['id']?.toString(), field: 'accounts.id'),
+        'profile_external_id': _nullable(profileExternalId),
+        'record_type': _boundedText(recordType, field: 'recordType', maxLength: 120),
+        'record_key': _boundedText(recordKey, field: 'recordKey', maxLength: 240),
+        'data': safeData,
+      },
+      onConflict: 'account_id,profile_external_id,record_type,record_key',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadPhase2Records({
+    required String accountExternalId,
+    String? profileExternalId,
+    String? recordType,
+  }) async {
+    final c = _db;
+    if (c == null) return const <Map<String, dynamic>>[];
+
+    final internalAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+
+    if (internalAccount == null) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    dynamic query = c
+        .from('phase2_records')
+        .select()
+        .eq('account_id', internalAccount['id'])
+        .order('updated_at', ascending: false);
+
+    final cleanProfile = _nullable(profileExternalId);
+    final cleanType = _nullable(recordType);
+
+    if (cleanProfile != null) {
+      query = query.eq('profile_external_id', cleanProfile);
+    }
+    if (cleanType != null) {
+      query = query.eq('record_type', cleanType);
+    }
+
+    final rows = await query;
+    final result = <Map<String, dynamic>>[];
+
+    for (final raw in rows) {
+      final row = Map<String, dynamic>.from(raw);
+      result.add({
+        'id': row['id']?.toString() ?? '',
+        'accountId': accountExternalId,
+        'profileId': _nullable(row['profile_external_id']),
+        'recordType': row['record_type']?.toString() ?? '',
+        'recordKey': row['record_key']?.toString() ?? '',
+        'data': row['data'] is Map
+            ? Map<String, dynamic>.from(row['data'] as Map)
+            : <String, dynamic>{},
+        'createdAt': row['created_at']?.toString(),
+        'updatedAt': row['updated_at']?.toString(),
+      });
+    }
+
+    return result;
+  }
+
+  Future<void> deletePhase2Record({
+    required String accountExternalId,
+    String? profileExternalId,
+    required String recordType,
+    required String recordKey,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+
+    final internalAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+
+    if (internalAccount == null) return;
+
+    dynamic query = c
+        .from('phase2_records')
+        .delete()
+        .eq('account_id', internalAccount['id'])
+        .eq('record_type', _boundedText(recordType, field: 'recordType', maxLength: 120))
+        .eq('record_key', _boundedText(recordKey, field: 'recordKey', maxLength: 240));
+
+    final cleanProfile = _nullable(profileExternalId);
+    if (cleanProfile == null) {
+      query = query.eq('profile_external_id', '');
+    } else {
+      query = query.eq('profile_external_id', cleanProfile);
+    }
+
+    await query;
+  }
+
+  // ---------------------------------------------------------------------------
+  // SELLER PAYOUT DESTINATIONS
+  // ---------------------------------------------------------------------------
+
+  Future<void> upsertSellerPayoutDestination({
+    required String accountExternalId,
+    required Map<String, dynamic> destination,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+
+    final internalAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+    if (internalAccount == null) throw StateError('Account not found in Supabase.');
+
+    final safeMetadata = _sanitizeJsonMap(
+      destination['metadata'] is Map
+          ? Map<String, dynamic>.from(destination['metadata'] as Map)
+          : const <String, dynamic>{},
+      maxBytes: _maxSecurityMetadataBytes,
+    );
+
+    await c.from('seller_payout_destinations').upsert({
+      'id': _requiredId(destination['id']?.toString(), field: 'destination.id'),
+      'seller_account_id': _requiredId(internalAccount['id']?.toString(), field: 'accounts.id'),
+      'provider_key': _boundedText(destination['providerKey']?.toString() ?? '', field: 'providerKey', maxLength: 100),
+      'method_type': _boundedText(destination['methodType']?.toString() ?? '', field: 'methodType', maxLength: 100),
+      'display_name': _boundedText(destination['displayName']?.toString() ?? '', field: 'displayName', maxLength: 240),
+      'provider_account_reference': _nullable(destination['providerAccountReference']?.toString()),
+      'masked_identifier': _nullable(destination['maskedIdentifier']?.toString()),
+      'enabled': destination['enabled'] != false,
+      'verified': destination['verified'] == true,
+      'metadata': safeMetadata,
+    }, onConflict: 'id');
+  }
+
+  Future<List<Map<String, dynamic>>> loadSellerPayoutDestinations({
+    required String accountExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) return const <Map<String, dynamic>>[];
+
+    final internalAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+    if (internalAccount == null) return const <Map<String, dynamic>>[];
+
+    final rows = await c
+        .from('seller_payout_destinations')
+        .select()
+        .eq('seller_account_id', internalAccount['id'])
+        .order('created_at', ascending: false);
+
+    return rows.map<Map<String, dynamic>>((raw) {
+      final row = Map<String, dynamic>.from(raw);
+      return {
+        'id': row['id']?.toString() ?? '',
+        'sellerAccountId': accountExternalId,
+        'providerKey': row['provider_key']?.toString() ?? '',
+        'methodType': row['method_type']?.toString() ?? '',
+        'displayName': row['display_name']?.toString() ?? '',
+        'providerAccountReference': _nullable(row['provider_account_reference']?.toString()),
+        'maskedIdentifier': _nullable(row['masked_identifier']?.toString()),
+        'enabled': row['enabled'] == true,
+        'verified': row['verified'] == true,
+        'metadata': row['metadata'] is Map
+            ? Map<String, dynamic>.from(row['metadata'] as Map)
+            : <String, dynamic>{},
+        'createdAt': row['created_at']?.toString(),
+        'updatedAt': row['updated_at']?.toString(),
+      };
+    }).toList();
+  }
+
+  Future<void> deleteSellerPayoutDestination({
+    required String accountExternalId,
+    required String destinationId,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+
+    final internalAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+    if (internalAccount == null) return;
+
+    await c
+        .from('seller_payout_destinations')
+        .delete()
+        .eq('id', _requiredId(destinationId, field: 'destinationId'))
+        .eq('seller_account_id', internalAccount['id']);
+  }
+
+  // ---------------------------------------------------------------------------
   // VALIDATION / SANITIZATION HELPERS
   // ---------------------------------------------------------------------------
 

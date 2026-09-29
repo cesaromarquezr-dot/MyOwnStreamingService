@@ -45,3 +45,11 @@ The current implementation does not assume a particular physical drive or UHD fi
 ## Managed-server subscription pricing
 
 The backend calculates the public price from configurable server hardware/storage amortization, estimated electricity, bandwidth/operations, support reserve, payment processing and target gross margin. The default retail price is **$54.99 USD/month** or **$599.99 USD/year** for one managed server. Operators can change the assumptions with environment variables; the client never controls the amount charged.
+
+## Canonical roadmap and architecture
+
+The project now uses a consolidated architecture model for the larger roadmap. The historical roadmap contains 1,000 requirements, while the canonical implementation catalog contains 500 capabilities with one owner per capability. Contexts such as Stories, Live Shopping, Watch Party, Marketplace, Movies, TV and Music extend shared systems instead of creating duplicate implementations.
+
+See [`docs/CANONICAL_ARCHITECTURE.md`](docs/CANONICAL_ARCHITECTURE.md) for the canonical capability catalog, consolidation rules, examples, and Phase 3 architecture requirements.
+
+See [`docs/CANONICAL_FEATURE_MAP.md`](docs/CANONICAL_FEATURE_MAP.md) for the detailed mapping of the latest media-version, Likes, filtering, playlist/collection, relationship-graph, and seller-payout additions.
