@@ -240,14 +240,34 @@ class StorefrontDesign extends PagePresentation {
 
 int _designInt(dynamic value, int fallback) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '') ?? fallback;
 double _designDouble(dynamic value, double fallback) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? fallback;
-String _designHex(int color) => '#${(color & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
-int? _parseDesignColor(String value) {
-  var hex = value.trim().replaceFirst('#', '');
-  if (hex.length == 6) hex = 'FF$hex';
-  if (hex.length != 8) return null;
-  final parsed = int.tryParse(hex, radix: 16);
-  return parsed;
-}
+const _storefrontColorChoices = <String, int>{
+  'Indigo blue': 0xFF536DFE,
+  'Blue': 0xFF1565C0,
+  'Sky blue': 0xFF42A5F5,
+  'Cyan': 0xFF00BCD4,
+  'Teal': 0xFF00897B,
+  'Green': 0xFF2E7D32,
+  'Lime': 0xFF9E9D24,
+  'Yellow': 0xFFFBC02D,
+  'Gold': 0xFFD4AF37,
+  'Amber': 0xFFFFB74D,
+  'Orange': 0xFFEF6C00,
+  'Red': 0xFFD32F2F,
+  'Wine': 0xFF722F37,
+  'Pink': 0xFFEC407A,
+  'Fuchsia': 0xFFD000C5,
+  'Purple': 0xFF7B1FA2,
+  'Indigo': 0xFF3949AB,
+  'Navy': 0xFF172554,
+  'Beige': 0xFFD7C4A3,
+  'Brown': 0xFF795548,
+  'Silver': 0xFF9E9E9E,
+  'Gray': 0xFF616161,
+  'Black': 0xFF111111,
+  'White': 0xFFF9FAFB,
+  'Soft white': 0xFFF6F7FB,
+  'Lavender mist': 0xFFE8EAF6,
+};
 
 ThemeData _storefrontTheme(BuildContext context, PagePresentation design) {
   final brightness = design.brightnessMode == 'dark'
@@ -1585,10 +1605,6 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   late final TextEditingController heroTitle = TextEditingController(text: widget.store.design.heroTitle);
   late final TextEditingController heroSubtitle = TextEditingController(text: widget.store.design.heroSubtitle);
   late final TextEditingController heroCta = TextEditingController(text: widget.store.design.heroCtaLabel);
-  late final TextEditingController primaryHex = TextEditingController(text: _designHex(widget.store.design.primaryColor));
-  late final TextEditingController secondaryHex = TextEditingController(text: _designHex(widget.store.design.secondaryColor));
-  late final TextEditingController backgroundHex = TextEditingController(text: _designHex(widget.store.design.backgroundColor));
-  late final TextEditingController gradientHex = TextEditingController(text: _designHex(widget.store.design.gradientEndColor));
 
   bool loadingPaymentRegistry = true;
   bool savingPaymentMethods = false;
@@ -1608,7 +1624,7 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   }
 
   @override
-  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); paymentCountry.dispose(); paymentCurrency.dispose(); backgroundUrl.dispose(); mobileBanner.dispose(); heroTitle.dispose(); heroSubtitle.dispose(); heroCta.dispose(); primaryHex.dispose(); secondaryHex.dispose(); backgroundHex.dispose(); gradientHex.dispose(); super.dispose(); }
+  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); paymentCountry.dispose(); paymentCurrency.dispose(); backgroundUrl.dispose(); mobileBanner.dispose(); heroTitle.dispose(); heroSubtitle.dispose(); heroCta.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -1631,16 +1647,20 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
       const SizedBox(height: 10),
       DropdownButtonFormField<String>(initialValue: designDraft.brightnessMode, decoration: const InputDecoration(labelText: 'Light / dark appearance', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'system', child: Text('Auto (follow device)')), DropdownMenuItem(value: 'light', child: Text('Light')), DropdownMenuItem(value: 'dark', child: Text('Dark'))], onChanged: (value) { if (value != null) setState(() => designDraft.brightnessMode = value); }),
       const SizedBox(height: 10),
-      Row(children: [Expanded(child: TextField(controller: primaryHex, decoration: const InputDecoration(labelText: 'Brand primary color', hintText: '#536DFE'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.primaryColor = color))), const SizedBox(width: 8), Expanded(child: TextField(controller: secondaryHex, decoration: const InputDecoration(labelText: 'Brand accent color', hintText: '#FFB74D'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.secondaryColor = color)))]),
+      Row(children: [
+        Expanded(child: _colorPicker('Brand primary color', designDraft.primaryColor, (color) => designDraft.primaryColor = color)),
+        const SizedBox(width: 8),
+        Expanded(child: _colorPicker('Brand accent color', designDraft.secondaryColor, (color) => designDraft.secondaryColor = color)),
+      ]),
       const SizedBox(height: 10),
       DropdownButtonFormField<String>(initialValue: designDraft.backgroundType, decoration: const InputDecoration(labelText: 'Store background', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'solid', child: Text('Solid color')), DropdownMenuItem(value: 'gradient', child: Text('Gradient')), DropdownMenuItem(value: 'image', child: Text('Image'))], onChanged: (value) { if (value != null) setState(() => designDraft.backgroundType = value); }),
       if (designDraft.backgroundType == 'solid' || designDraft.backgroundType == 'gradient') ...[
         const SizedBox(height: 10),
         Row(children: [
-          Expanded(child: TextField(controller: backgroundHex, decoration: const InputDecoration(labelText: 'Background color', hintText: '#F6F7FB'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.backgroundColor = color))),
+          Expanded(child: _colorPicker('Background color', designDraft.backgroundColor, (color) => designDraft.backgroundColor = color)),
           if (designDraft.backgroundType == 'gradient') ...[
             const SizedBox(width: 8),
-            Expanded(child: TextField(controller: gradientHex, decoration: const InputDecoration(labelText: 'Gradient end', hintText: '#E8EAF6'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.gradientEndColor = color))),
+            Expanded(child: _colorPicker('Gradient end', designDraft.gradientEndColor, (color) => designDraft.gradientEndColor = color)),
           ],
         ]),
       ],
@@ -1740,7 +1760,7 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
     try {
       final api = AppController.instance.backendApi;
       final registry = await api.getPaymentMethodCatalog();
-      final selected = await api.getPhase2Records(recordType: 'seller_payment_method');
+      final selected = await api.getAppRecords(recordType: 'seller_payment_method');
       if (!mounted) return;
       setState(() {
         paymentRegistry = registry;
@@ -1862,19 +1882,43 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
       if (colors != null) {
         designDraft.primaryColor = colors.$1;
         designDraft.secondaryColor = colors.$2;
-        primaryHex.text = _designHex(colors.$1);
-        secondaryHex.text = _designHex(colors.$2);
       }
     });
   }
 
-  void _updateDesignColor(String value, void Function(int) apply) {
-    final parsed = _parseDesignColor(value);
-    if (parsed == null) return;
-    setState(() {
-      designDraft.presetTheme = 'Custom';
-      apply(parsed);
-    });
+  Widget _colorPicker(String label, int selectedColor, void Function(int) apply) {
+    Widget swatch(int color) => Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: Color(color),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.black26),
+          ),
+        );
+
+    return DropdownButtonFormField<int>(
+      initialValue: selectedColor,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      items: [
+        if (!_storefrontColorChoices.values.contains(selectedColor))
+          DropdownMenuItem<int>(
+            value: selectedColor,
+            child: Row(children: [swatch(selectedColor), const SizedBox(width: 10), const Text('Saved custom color')]),
+          ),
+        ..._storefrontColorChoices.entries.map((entry) => DropdownMenuItem<int>(
+              value: entry.value,
+              child: Row(children: [swatch(entry.value), const SizedBox(width: 10), Text(entry.key)]),
+            )),
+      ],
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          designDraft.presetTheme = 'Custom';
+          apply(value);
+        });
+      },
+    );
   }
 
   void _moveSection(int from, int to) {

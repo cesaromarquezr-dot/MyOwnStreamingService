@@ -18,6 +18,111 @@ class MediaContinuityPanel extends StatefulWidget {
   State<MediaContinuityPanel> createState() => _MediaContinuityPanelState();
 }
 
+/// Shows canonical production links without combining season numbering.
+/// A continuation appears as its own production and owns its own seasons.
+class MediaFranchiseConnectionsPanel extends StatefulWidget {
+  final String mediaId;
+  final bool hasSeasons;
+
+  const MediaFranchiseConnectionsPanel({super.key, required this.mediaId, this.hasSeasons = false});
+
+  @override
+  State<MediaFranchiseConnectionsPanel> createState() => _MediaFranchiseConnectionsPanelState();
+}
+
+class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectionsPanel> {
+  late Future<List<Map<String, dynamic>>> _connections;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant MediaFranchiseConnectionsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mediaId != widget.mediaId) _load();
+  }
+
+  void _load() {
+    final api = AppController.instance.backendApi;
+    if (!api.isAuthenticated) {
+      _connections = Future.value(const <Map<String, dynamic>>[]);
+      return;
+    }
+    _connections = Future.wait([
+      api.getMediaConnections(mediaId: widget.mediaId),
+      api.getMediaWorks(),
+    ]).then((results) {
+      final works = {for (final work in results[1]) work['id']?.toString(): work};
+      return results[0].where((edge) {
+        final kind = (edge['relationshipType'] ?? '').toString().toLowerCase();
+        return kind.contains('sequel') || kind.contains('prequel') ||
+            kind.contains('continu') || kind.contains('revival') ||
+            kind.contains('spin') || kind.contains('reboot') ||
+            kind.contains('remake') || kind.contains('alternate') ||
+            kind.contains('samecontinuity') || kind.contains('same_continuity') ||
+            kind.contains('anthology');
+      }).map((edge) {
+        final from = edge['fromId']?.toString();
+        final otherId = from == widget.mediaId ? edge['toId']?.toString() : from;
+        final related = works[otherId];
+        return <String, dynamic>{
+          ...edge,
+          'otherTitle': related?['title'] ?? otherId ?? 'Related production',
+          'otherYear': related?['releaseYear'],
+        };
+      }).toList(growable: false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Franchise connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(widget.hasSeasons
+                ? 'Related productions keep their own season numbering and identity.'
+                : 'Related titles remain separate works and can belong to different continuity branches.',
+                style: const TextStyle(color: Colors.white60)),
+            if (!AppController.instance.backendApi.isAuthenticated)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text('Sign in to view linked productions.', style: TextStyle(color: Colors.white60)),
+              )
+            else
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _connections,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(padding: EdgeInsets.only(top: 14), child: LinearProgressIndicator());
+                  }
+                  final links = snapshot.data ?? const <Map<String, dynamic>>[];
+                  if (links.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text('No franchise relationships are recorded for this title.', style: TextStyle(color: Colors.white60)),
+                    );
+                  }
+                  return Column(children: [
+                    for (final link in links)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.account_tree_outlined),
+                        title: Text(link['otherTitle'].toString()),
+                        subtitle: Text('${link['relationshipType']}${link['otherYear'] == null ? '' : ' · ${link['otherYear']}'}${widget.hasSeasons ? ' · separate production' : ''}'),
+                      ),
+                  ]);
+                },
+              ),
+          ]),
+        ),
+      );
+}
+
 class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
   static const _recordType = 'media_continuity';
   late Future<Map<String, dynamic>?> _record;
@@ -40,7 +145,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
   void _reload() {
     final api = AppController.instance.backendApi;
     _record = api.isAuthenticated
-        ? api.getPhase2Records(recordType: _recordType).then((records) {
+        ? api.getAppRecords(recordType: _recordType).then((records) {
             for (final record in records) {
               if (record['recordKey'] == _recordKey && record['data'] is Map) {
                 return Map<String, dynamic>.from(record['data'] as Map);
@@ -54,7 +159,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
   Future<void> _save(Map<String, dynamic> data) async {
     setState(() => _saving = true);
     try {
-      await AppController.instance.backendApi.savePhase2Record(
+      await AppController.instance.backendApi.saveAppRecord(
         recordType: _recordType,
         recordKey: _recordKey,
         data: {

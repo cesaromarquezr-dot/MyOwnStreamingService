@@ -42,6 +42,9 @@ class ReviewService {
     required String label,
     required String text,
     required String globalUsername,
+    String reviewType = 'written',
+    String? videoUrl,
+    bool spoiler = false,
   }) {
     final normalizedAccountId = _requiredId(
       accountId,
@@ -101,6 +104,9 @@ class ReviewService {
       globalUsername: normalizedGlobalUsername.isEmpty
           ? 'AnonymousViewer'
           : normalizedGlobalUsername,
+      reviewType: reviewType == 'video' ? 'video' : 'written',
+      videoUrl: videoUrl?.trim().isEmpty == true ? null : videoUrl?.trim(),
+      spoiler: spoiler,
     );
 
     database.reviewsById[review.id] = review;

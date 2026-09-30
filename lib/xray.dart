@@ -97,7 +97,7 @@ class _XRayScreenState extends State<XRayScreen> {
     final profileId = app.currentProfile?.id;
     if (!app.backendApi.isAuthenticated || profileId == null) return;
     try {
-      final records = await app.backendApi.getPhase2Records(
+      final records = await app.backendApi.getAppRecords(
         profileId: profileId,
         recordType: 'xray_profile_settings',
       );
@@ -129,7 +129,7 @@ class _XRayScreenState extends State<XRayScreen> {
           }
         });
       }
-      final noteRecords = await app.backendApi.getPhase2Records(
+      final noteRecords = await app.backendApi.getAppRecords(
         profileId: profileId,
         recordType: 'xray_private_note',
       );
@@ -160,7 +160,7 @@ class _XRayScreenState extends State<XRayScreen> {
     final profileId = app.currentProfile?.id;
     if (!app.backendApi.isAuthenticated || profileId == null) return;
     try {
-      await app.backendApi.savePhase2Record(
+      await app.backendApi.saveAppRecord(
         profileId: profileId,
         recordType: 'xray_profile_settings',
         recordKey: 'settings',
@@ -229,7 +229,7 @@ class _XRayScreenState extends State<XRayScreen> {
     final profileId = app.currentProfile?.id;
     if (app.backendApi.isAuthenticated && profileId != null) {
       try {
-        await app.backendApi.savePhase2Record(
+        await app.backendApi.saveAppRecord(
           profileId: profileId,
           recordType: 'xray_private_note',
           recordKey: note['id']! as String,

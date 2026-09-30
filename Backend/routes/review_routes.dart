@@ -16,14 +16,17 @@ import 'dart:io';
 
 import '../middleware/authentication.dart';
 import '../services/review_service.dart';
+import '../services/review_publication_service.dart';
 
 class ReviewRoutes {
   final AuthenticationMiddleware authentication;
   final ReviewService service;
+  final ReviewPublicationService publicationService;
 
   ReviewRoutes({
     required this.authentication,
     required this.service,
+    required this.publicationService,
   });
 
   static const String _globalPath = '/api/v1/reviews/global';
@@ -178,6 +181,9 @@ class ReviewRoutes {
           field: 'globalUsername',
           maxLength: _maxGlobalUsernameLength,
         );
+        final reviewType = body['reviewType']?.toString() == 'video' ? 'video' : 'written';
+        final videoUrl = body['videoUrl']?.toString().trim();
+        final spoiler = body['spoiler'] == true;
 
         final profileName = _readProfileName(profile.name);
 
@@ -190,6 +196,9 @@ class ReviewRoutes {
           label: label,
           text: text,
           globalUsername: globalUsername,
+          reviewType: reviewType,
+          videoUrl: videoUrl,
+          spoiler: spoiler,
         );
 
         responseStarted = true;
@@ -201,6 +210,55 @@ class ReviewRoutes {
             'review': review.toJson(),
           },
         );
+        return;
+      }
+
+      if (request.method == 'POST' && path == '$_reviewsPath/publish') {
+        final body = await _body(request);
+        final profileId = _readRequiredString(body['profileId'], field: 'profileId', maxLength: _maxProfileIdLength);
+        final profile = _findProfile(auth.profiles, profileId);
+        if (profile == null) throw const FormatException('Profile not found.');
+        final reviewId = _readRequiredString(body['reviewId'], field: 'reviewId', maxLength: 500);
+        final review = service.accountReviews(auth.id, body['mediaId']?.toString() ?? '').firstWhere((item) => item.id == reviewId, orElse: () => throw const FormatException('Review not found.'));
+        final destination = _readRequiredString(body['destination'], field: 'destination', maxLength: 30);
+        final publication = publicationService.publish(
+          reviewId: review.id,
+          mediaId: review.mediaId,
+          accountId: auth.id,
+          profileId: profile.id,
+          destination: destination,
+          destinationId: body['destinationId']?.toString(),
+          spoiler: body['spoiler'] == true,
+        );
+        responseStarted = true;
+        await _json(request.response, HttpStatus.created, {'success': true, 'publication': publication.toJson()});
+        return;
+      }
+
+      if (request.method == 'GET' && path == '$_reviewsPath/publications') {
+        final reviewId = _readRequiredString(request.uri.queryParameters['reviewId'], field: 'reviewId', maxLength: 500);
+        responseStarted = true;
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'publications': publicationService.forReview(reviewId).map((item) => item.toJson()).toList(),
+        });
+        return;
+      }
+
+      if (request.method == 'POST' && path == '$_reviewsPath/interactions') {
+        final body = await _body(request);
+        final profileId = _readRequiredString(body['profileId'], field: 'profileId', maxLength: _maxProfileIdLength);
+        if (_findProfile(auth.profiles, profileId) == null) throw const FormatException('Profile not found.');
+        final interaction = publicationService.addInteraction(
+          publicationId: _readRequiredString(body['publicationId'], field: 'publicationId', maxLength: 500),
+          accountId: auth.id,
+          profileId: profileId,
+          type: _readRequiredString(body['type'], field: 'type', maxLength: 30),
+          body: body['body']?.toString() ?? '',
+          reaction: body['reaction']?.toString(),
+        );
+        responseStarted = true;
+        await _json(request.response, HttpStatus.created, {'success': true, 'interaction': interaction.toJson()});
         return;
       }
 

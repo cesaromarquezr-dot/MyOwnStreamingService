@@ -2879,29 +2879,30 @@ class _GroupWatchInviteDialogState extends State<GroupWatchInviteDialog> {
                               : Colors.transparent,
                         ),
                       ),
-                      child: CheckboxListTile(
-                        value: selected,
-                        onChanged: (value) {
-                          setState(() {
-                            if (value == true) {
-                              selectedProfileIds.add(
-                                profile.id,
-                              );
-                            } else {
-                              selectedProfileIds.remove(
-                                profile.id,
-                              );
-                            }
-                          });
-                        },
-                        activeColor: Colors.white,
-                        checkColor: Colors.black,
-                        controlAffinity: ListTileControlAffinity.trailing,
-                        title: Text(
-                          profile.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                        clipBehavior: Clip.antiAlias,
+                        child: CheckboxListTile(
+                          value: selected,
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                selectedProfileIds.add(profile.id);
+                              } else {
+                                selectedProfileIds.remove(profile.id);
+                              }
+                            });
+                          },
+                          activeColor: Colors.white,
+                          checkColor: Colors.black,
+                          controlAffinity: ListTileControlAffinity.trailing,
+                          title: Text(
+                            profile.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),

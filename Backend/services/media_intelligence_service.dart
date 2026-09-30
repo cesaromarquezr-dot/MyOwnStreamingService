@@ -14,6 +14,8 @@ import '../models/media_artwork.dart';
 import '../models/media_relationship.dart';
 import '../models/media_session.dart';
 import '../models/media_work.dart';
+import '../models/media_season.dart';
+import '../models/media_person.dart';
 
 class MediaIntelligenceService {
   static const String serviceVersion = '1';
@@ -23,6 +25,9 @@ class MediaIntelligenceService {
 
   final Map<String, MediaWork> works = <String, MediaWork>{};
   final List<MediaRelationship> relationships = <MediaRelationship>[];
+  final Map<String, MediaSeason> seasons = <String, MediaSeason>{};
+  final Map<String, MediaPerson> people = <String, MediaPerson>{};
+  final Map<String, PersonCareerCredit> careerCredits = <String, PersonCareerCredit>{};
   final Map<String, MediaDevice> devices = <String, MediaDevice>{};
   final Map<String, PlaybackSession> sessions = <String, PlaybackSession>{};
   final Map<String, MediaArtwork> artwork = <String, MediaArtwork>{};
@@ -35,6 +40,10 @@ class MediaIntelligenceService {
         'serviceVersion': serviceVersion,
 
         'mediaGraph': true,
+        'productionScopedSeasons': true,
+        'franchiseContinuityBranches': true,
+        'separateProductionIdentity': true,
+        'unifiedPeopleCareerTimeline': true,
         'multiSession': true,
         'profileArtworkFromDisc': true,
         'musicVideos': true,
@@ -121,6 +130,51 @@ class MediaIntelligenceService {
       'MediaRelationshipAdded',
       relationship.toJson(),
     );
+  }
+
+  /// Adds a season scoped to its own series identity.
+  void upsertSeason(MediaSeason season) {
+    _requireId(season.id, 'MediaSeason');
+    _requireId(season.seriesId, 'Series');
+    if (season.seasonNumber < 0) {
+      throw ArgumentError.value(season.seasonNumber, 'seasonNumber', 'Season number cannot be negative.');
+    }
+    final duplicate = seasons.values.any((item) => item.seriesId == season.seriesId &&
+        item.seasonNumber == season.seasonNumber && item.id != season.id);
+    if (duplicate) throw ArgumentError('A season with this number already exists for the series.');
+    seasons[season.id] = season;
+    recordEvent('MediaSeasonUpserted', season.toJson());
+  }
+
+  List<MediaSeason> seasonsForSeries(String seriesId) => seasons.values
+      .where((season) => season.seriesId == seriesId)
+      .toList()..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
+
+  void upsertPerson(MediaPerson person) {
+    _requireId(person.id, 'MediaPerson');
+    if (person.name.trim().isEmpty) throw ArgumentError.value(person.name, 'name', 'Person name cannot be empty.');
+    people[person.id] = person;
+  }
+
+  void upsertCareerCredit(PersonCareerCredit credit) {
+    _requireId(credit.id, 'PersonCareerCredit');
+    if (!people.containsKey(credit.personId)) throw ArgumentError('Person does not exist.');
+    if (!works.containsKey(credit.mediaId)) throw ArgumentError('Credit media work does not exist.');
+    if (credit.category.trim().isEmpty) throw ArgumentError.value(credit.category, 'category', 'Credit category cannot be empty.');
+    final duplicate = careerCredits.values.any((item) => item.id != credit.id &&
+        item.personId == credit.personId && item.mediaId == credit.mediaId &&
+        item.category == credit.category && item.role == credit.role &&
+        item.characterName == credit.characterName);
+    if (duplicate) return;
+    careerCredits[credit.id] = credit;
+  }
+
+  List<PersonCareerCredit> timelineForPerson(String personId, {String? category}) {
+    final normalized = category?.trim().toLowerCase();
+    final result = careerCredits.values.where((credit) => credit.personId == personId &&
+        (normalized == null || normalized.isEmpty || credit.category.toLowerCase() == normalized)).toList();
+    result.sort((a, b) => (a.startYear ?? 9999).compareTo(b.startYear ?? 9999));
+    return result;
   }
 
   /// Returns graph edges attached to a work/person/franchise node.
@@ -227,6 +281,7 @@ class MediaIntelligenceService {
       'serviceVersion': serviceVersion,
       'works': works.length,
       'relationships': relationships.length,
+      'seriesSeasons': seasons.length,
       'devices': devices.length,
       'activeSessions': activeSessions,
       'artwork': artwork.length,

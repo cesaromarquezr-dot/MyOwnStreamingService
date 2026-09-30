@@ -22,14 +22,16 @@ class MediaReview {
   /// Profile-local display name.
   final String profileName;
 
-  /// Review score. The application may use a 0-5 scale; this model does not
-  /// silently convert it to another rating system.
+  /// Review score on the app-wide 0-10 review scale.
   final double score;
 
   /// Human-readable score label, for example "Excellent" or "Mixed".
   final String label;
 
   final String text;
+  final String reviewType;
+  final String? videoUrl;
+  final bool spoiler;
 
   /// Public/global username associated with the author.
   final String globalUsername;
@@ -46,6 +48,9 @@ class MediaReview {
     required this.label,
     required this.text,
     required this.globalUsername,
+    this.reviewType = 'written',
+    this.videoUrl,
+    this.spoiler = false,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -60,7 +65,7 @@ class MediaReview {
       text.trim().isNotEmpty &&
       score.isFinite &&
       score >= 0 &&
-      score <= 5;
+      score <= 10;
 
   bool get hasText => text.trim().isNotEmpty;
 
@@ -68,13 +73,13 @@ class MediaReview {
 
   bool get hasLabel => label.trim().isNotEmpty;
 
-  /// Returns the score normalized to a percentage of the model's 0-5 scale.
+  /// Returns the score normalized to a percentage of the app-wide 0-10 scale.
   double get normalizedPercent {
     if (!score.isFinite) {
       return 0;
     }
 
-    return (score / 5.0 * 100.0).clamp(0.0, 100.0).toDouble();
+    return (score / 10.0 * 100.0).clamp(0.0, 100.0).toDouble();
   }
 
   /// Creates a modified copy without changing the original review.
@@ -88,6 +93,9 @@ class MediaReview {
     String? label,
     String? text,
     String? globalUsername,
+    String? reviewType,
+    String? videoUrl,
+    bool? spoiler,
     DateTime? createdAt,
   }) {
     return MediaReview(
@@ -100,6 +108,9 @@ class MediaReview {
       label: label ?? this.label,
       text: text ?? this.text,
       globalUsername: globalUsername ?? this.globalUsername,
+      reviewType: reviewType ?? this.reviewType,
+      videoUrl: videoUrl ?? this.videoUrl,
+      spoiler: spoiler ?? this.spoiler,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -125,6 +136,9 @@ class MediaReview {
       globalUsername: _stringValue(
         json['globalUsername'] ?? json['username'],
       ),
+      reviewType: _stringValue(json['reviewType'], fallback: 'written'),
+      videoUrl: _nullableString(json['videoUrl']),
+      spoiler: json['spoiler'] == true,
       createdAt: createdAt,
     );
   }
@@ -143,6 +157,9 @@ class MediaReview {
         'score': score,
         'label': label,
         'text': text,
+        'reviewType': reviewType,
+        'videoUrl': videoUrl,
+        'spoiler': spoiler,
         'username': global ? globalUsername : profileName,
         'createdAt': createdAt.toIso8601String(),
       };
@@ -161,6 +178,9 @@ class MediaReview {
         'label': label,
         'text': text,
         'globalUsername': globalUsername,
+        'reviewType': reviewType,
+        'videoUrl': videoUrl,
+        'spoiler': spoiler,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -218,4 +238,8 @@ DateTime? _dateTimeValue(dynamic value) {
   }
 
   return null;
+}
+String? _nullableString(dynamic value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }

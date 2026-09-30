@@ -54,9 +54,17 @@ class SupabaseSyncRoutes {
       final isProfileSync =
           path.startsWith(profilePrefix);
 
-      final isMediaGraph = path.startsWith('/api/v1/phase2/');
+      final isPlatformData =
+          path == '/api/v1/features/status' ||
+          path.startsWith('/api/v1/social/') ||
+          path == '/api/v1/media-action' ||
+          path == '/api/v1/activity' ||
+          path == '/api/v1/records' ||
+          path == '/api/v1/share-card' ||
+          path == '/api/v1/queue' ||
+          path.startsWith('/api/v1/queue/');
 
-      if (!isMediaGraph &&
+      if (!isPlatformData &&
           (request.method != 'POST' || (!isAccountSync && !isProfileSync))) {
         return await _json(
           request.response,
@@ -81,7 +89,7 @@ class SupabaseSyncRoutes {
         );
       }
 
-      if (isMediaGraph) {
+      if (isPlatformData) {
         return await _handleMediaGraph(request, account);
       }
 
@@ -216,13 +224,45 @@ class SupabaseSyncRoutes {
 
   Future<void> _handleMediaGraph(HttpRequest request, Account account) async {
     final path = request.uri.path;
-    if (request.method == 'GET' && path == '/api/v1/phase2/features') {
+    if (path.startsWith('/api/v1/social/')) {
+      if (!store.enabled) return _json(request.response, HttpStatus.serviceUnavailable, {'success': false, 'error': 'Social persistence is not configured.'});
+      final body = request.method == 'GET' ? <String,dynamic>{} : await _body(request);
+      final profileId = request.method == 'GET' ? request.uri.queryParameters['profileId'] : body['profileId']?.toString();
+      final profile = _ownedProfile(account, profileId);
+      if (profile == null) throw const FormatException('A profile ID is required.');
+      final bits = path.substring('/api/v1/social/'.length).split('/').map(Uri.decodeComponent).toList();
+      if (bits.length == 1 && bits[0] == 'home' && request.method == 'GET') {
+        return _json(request.response, HttpStatus.ok, {'success': true, ...await store.loadSocialHome(accountExternalId: account.id, profileExternalId: profile)});
+      }
+      if (bits.length == 1 && bits[0] == 'friend-request' && request.method == 'POST') {
+        final friendship = await store.sendSocialFriendRequest(accountExternalId: account.id, profileExternalId: profile, username: _requiredText(body, 'username', 80));
+        return _json(request.response, HttpStatus.created, {'success': true, 'friendship': friendship});
+      }
+      if (bits.length == 2 && bits[0] == 'friend-request' && request.method == 'PATCH') {
+        final friendship = await store.answerSocialFriendRequest(accountExternalId: account.id, profileExternalId: profile, friendshipId: bits[1], action: _requiredText(body, 'action', 20));
+        return _json(request.response, HttpStatus.ok, {'success': true, 'friendship': friendship});
+      }
+      if (bits.length == 1 && bits[0] == 'posts' && request.method == 'POST') {
+        final profileName = account.profiles.firstWhere((item) => item.id == profile).name;
+        final post = await store.createSocialPost(accountExternalId: account.id, profileExternalId: profile, profileName: profileName, body: _requiredText(body, 'body', 4000), communityId: _optionalText(body, 'communityId', 80));
+        return _json(request.response, HttpStatus.created, {'success': true, 'post': post});
+      }
+      if (bits.length == 1 && bits[0] == 'communities' && request.method == 'POST') {
+        final community = await store.createSocialCommunity(accountExternalId: account.id, profileExternalId: profile, name: _requiredText(body, 'name', 80), description: _optionalText(body, 'description', 500) ?? '');
+        return _json(request.response, HttpStatus.created, {'success': true, 'community': community});
+      }
+      if (bits.length == 2 && bits[0] == 'communities' && bits[1] == 'join' && request.method == 'POST') {
+        await store.joinSocialCommunity(accountExternalId: account.id, profileExternalId: profile, communityId: _requiredText(body, 'communityId', 80));
+        return _json(request.response, HttpStatus.ok, {'success': true});
+      }
+    }
+    if (request.method == 'GET' && path == '/api/v1/features/status') {
       return _json(request.response, HttpStatus.ok, {
         'success': true,
-        'features': ['records', 'media_actions', 'activity_timeline', 'collaborative_queues', 'share_cards', 'payment_methods', 'seller_payout_destinations'],
+        'features': ['records', 'media_actions', 'activity_timeline', 'collaborative_queues', 'share_cards', 'payment_methods', 'seller_payout_destinations', 'social_home'],
       });
     }
-    if (path == '/api/v1/phase2/media-action' && request.method == 'POST') {
+    if (path == '/api/v1/media-action' && request.method == 'POST') {
       final body = await _body(request);
       final profile = _ownedProfile(
         account,
@@ -280,7 +320,7 @@ class SupabaseSyncRoutes {
       });
     }
 
-      if (path == '/api/v1/phase2/activity' && request.method == 'GET') {
+      if (path == '/api/v1/activity' && request.method == 'GET') {
         final profile = _ownedProfile(
           account,
           request.uri.queryParameters['profileId'],
@@ -306,7 +346,7 @@ class SupabaseSyncRoutes {
         });
       }
 
-      if (path == '/api/v1/phase2/records') {
+      if (path == '/api/v1/records') {
       if (request.method == 'GET') {
         final profile = _ownedProfile(account, request.uri.queryParameters['profileId']);
         final type = request.uri.queryParameters['recordType'];
@@ -332,12 +372,12 @@ class SupabaseSyncRoutes {
         final type = request.uri.queryParameters['recordType']?.trim() ?? '';
         final key = request.uri.queryParameters['recordKey']?.trim() ?? '';
         if (type.isEmpty || key.isEmpty) throw const FormatException('recordType and recordKey are required.');
-        await store.deletePhase2Record(accountExternalId: account.id, profileExternalId: profile, recordType: type, recordKey: key);
+        await store.deleteAppRecord(accountExternalId: account.id, profileExternalId: profile, recordType: type, recordKey: key);
         _memoryRecords.remove(_recordId(account.id, profile, type, key));
         return _json(request.response, HttpStatus.ok, {'success': true});
       }
     }
-    if (path == '/api/v1/phase2/share-card' && request.method == 'POST') {
+    if (path == '/api/v1/share-card' && request.method == 'POST') {
       final body = await _body(request);
       final profile = _ownedProfile(account, body['profileId']?.toString());
       final metadata = body['metadata'] is Map ? Map<String, dynamic>.from(body['metadata'] as Map) : <String, dynamic>{};
@@ -349,7 +389,7 @@ class SupabaseSyncRoutes {
       });
       return _json(request.response, HttpStatus.created, {'success': true, 'shareCard': record});
     }
-    if (path == '/api/v1/phase2/queue' && request.method == 'POST') {
+    if (path == '/api/v1/queue' && request.method == 'POST') {
       final body = await _body(request);
       final profile = _ownedProfile(account, body['profileId']?.toString());
       final id = 'queue_${DateTime.now().microsecondsSinceEpoch}';
@@ -360,14 +400,14 @@ class SupabaseSyncRoutes {
       });
       return _json(request.response, HttpStatus.created, {'success': true, 'queue': record['data']});
     }
-    if (path.startsWith('/api/v1/phase2/queue/')) {
+    if (path.startsWith('/api/v1/queue/')) {
       return _handleQueue(request, account);
     }
     return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Route not found.'});
   }
 
   Future<List<Map<String, dynamic>>> _records(String accountId, String? profileId, String? type) async {
-    final saved = await store.loadPhase2Records(accountExternalId: accountId, profileExternalId: profileId, recordType: type);
+    final saved = await store.loadAppRecords(accountExternalId: accountId, profileExternalId: profileId, recordType: type);
     final prefix = profileId == null ? '$accountId|' : '$accountId|$profileId|';
     final combined = <String, Map<String, dynamic>>{
       for (final record in saved) '${record['recordType']}|${record['recordKey']}': record,
@@ -386,13 +426,13 @@ class SupabaseSyncRoutes {
       'createdAt': previous?['createdAt'] ?? DateTime.now().toUtc().toIso8601String(),
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
     };
-    await store.upsertPhase2Record(accountExternalId: accountId, profileExternalId: profileId, recordType: type, recordKey: key, recordId: record['id'] as String, data: record['data'] as Map<String, dynamic>);
+    await store.upsertAppRecord(accountExternalId: accountId, profileExternalId: profileId, recordType: type, recordKey: key, recordId: record['id'] as String, data: record['data'] as Map<String, dynamic>);
     _memoryRecords[id] = record;
     return record;
   }
 
   Future<void> _handleQueue(HttpRequest request, dynamic account) async {
-    const prefix = '/api/v1/phase2/queue/';
+    const prefix = '/api/v1/queue/';
     final parts = request.uri.path.substring(prefix.length).split('/').map(Uri.decodeComponent).toList();
     if (parts.isEmpty || parts.first.isEmpty) return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Queue not found.'});
     final id = parts.first;

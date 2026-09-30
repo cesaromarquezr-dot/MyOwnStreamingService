@@ -21,7 +21,10 @@ import '../models/media_artwork.dart';
 import '../models/media_relationship.dart';
 import '../models/media_session.dart';
 import '../models/media_work.dart';
+import '../models/media_season.dart';
+import '../models/media_person.dart';
 import '../services/media_intelligence_service.dart';
+import '../supabase_store.dart';
 
 class MediaIntelligenceRoutes {
   static const String _prefix = '/api/v1/media-intelligence';
@@ -33,10 +36,12 @@ class MediaIntelligenceRoutes {
 
   final AuthenticationMiddleware authentication;
   final MediaIntelligenceService service;
+  final SupabaseStore store;
 
   MediaIntelligenceRoutes({
     required this.authentication,
     required this.service,
+    required this.store,
   });
 
   /// Handles all `/api/v1/media-intelligence/*` requests.
@@ -85,9 +90,76 @@ class MediaIntelligenceRoutes {
         return;
       }
 
+      if (request.method == 'GET' && path == '$_prefix/knowledge') {
+        final mediaWorkId = _requiredId(
+          request.uri.queryParameters['mediaWorkId'],
+          field: 'mediaWorkId',
+        );
+        final facts = await store.loadPublishedKnowledgeFacts(mediaWorkId: mediaWorkId);
+        await _json(request.response, 200, {
+          'success': true,
+          'facts': facts,
+        });
+        return;
+      }
+
+      if (request.method == 'GET' && path == '$_prefix/knowledge/stories') {
+        final mediaWorkId = _requiredId(
+          request.uri.queryParameters['mediaWorkId'],
+          field: 'mediaWorkId',
+        );
+        final stories = await store.loadPublishedKnowledgeStories(mediaWorkId: mediaWorkId);
+        await _json(request.response, 200, {
+          'success': true,
+          'stories': stories,
+        });
+        return;
+      }
+
+      if (request.method == 'GET' && path == '$_prefix/people') {
+        final query = request.uri.queryParameters['q']?.trim().toLowerCase() ?? '';
+        final people = service.people.values
+            .where((person) => query.isEmpty || person.name.toLowerCase().contains(query))
+            .map((person) => person.toJson()).toList(growable: false);
+        await _json(request.response, 200, {'success': true, 'people': people});
+        return;
+      }
+
+      if (request.method == 'GET' && path == '$_prefix/people/timeline') {
+        final personId = _requiredId(request.uri.queryParameters['personId'], field: 'personId');
+        final person = service.people[personId];
+        if (person == null) {
+          await _json(request.response, 404, {'success': false, 'error': 'Person not found.'});
+          return;
+        }
+        final category = _optionalString(request.uri.queryParameters['category'], maxLength: 80);
+        final credits = service.timelineForPerson(personId, category: category).map((credit) => {
+          'credit': credit.toJson(),
+          'work': service.works[credit.mediaId]?.toJson(),
+        }).toList(growable: false);
+        final categories = service.timelineForPerson(personId).map((credit) => credit.category).toSet().toList()..sort();
+        await _json(request.response, 200, {
+          'success': true,
+          'person': person.toJson(),
+          'credits': credits,
+          'categories': categories,
+        });
+        return;
+      }
+
       if (request.method == 'GET' &&
           path == '$_prefix/connections') {
         await _getConnections(request);
+        return;
+      }
+
+      if (request.method == 'GET' && path == '$_prefix/seasons') {
+        final seriesId = _requiredId(request.uri.queryParameters['seriesId'], field: 'seriesId');
+        await _json(request.response, 200, {
+          'success': true,
+          'seriesId': seriesId,
+          'seasons': service.seasonsForSeries(seriesId).map((season) => season.toJson()).toList(),
+        });
         return;
       }
 
@@ -109,9 +181,24 @@ class MediaIntelligenceRoutes {
         return;
       }
 
+      if (request.method == 'POST' && path == '$_prefix/person') {
+        await _createPerson(request);
+        return;
+      }
+
+      if (request.method == 'POST' && path == '$_prefix/person-credit') {
+        await _createPersonCredit(request);
+        return;
+      }
+
       if (request.method == 'POST' &&
           path == '$_prefix/relationship') {
         await _createRelationship(request);
+        return;
+      }
+
+      if (request.method == 'POST' && path == '$_prefix/season') {
+        await _createSeason(request);
         return;
       }
 
@@ -337,6 +424,59 @@ class MediaIntelligenceRoutes {
       'success': true,
       'relationship': relationship.toJson(),
     });
+  }
+
+  Future<void> _createSeason(HttpRequest request) async {
+    final body = await _body(request);
+    final seriesId = _requiredString(body['seriesId'], field: 'seriesId', maxLength: _maxIdLength);
+    final parent = service.works[seriesId];
+    if (parent == null || !{'series', 'tv', 'tv_show', 'television_series'}.contains(parent.type.toLowerCase())) {
+      throw const FormatException('seriesId must refer to an existing television series.');
+    }
+    final seasonNumber = _int(body['seasonNumber']);
+    if (seasonNumber == null || seasonNumber < 0) throw const FormatException('seasonNumber must be zero or greater.');
+    final season = MediaSeason(
+      id: _optionalId(body['id']) ?? 'season_${DateTime.now().microsecondsSinceEpoch}',
+      seriesId: seriesId,
+      seasonNumber: seasonNumber,
+      title: _optionalString(body['title'], maxLength: _maxNameLength),
+      startYear: _int(body['startYear']),
+      endYear: _int(body['endYear']),
+      episodeCount: _int(body['episodeCount']),
+    );
+    service.upsertSeason(season);
+    await _json(request.response, 201, {'success': true, 'season': season.toJson()});
+  }
+
+  Future<void> _createPerson(HttpRequest request) async {
+    final body = await _body(request);
+    final person = MediaPerson(
+      id: _requiredString(body['id'], field: 'id', maxLength: _maxIdLength),
+      name: _requiredString(body['name'], field: 'name', maxLength: _maxNameLength),
+      sortName: _optionalString(body['sortName'], maxLength: _maxNameLength),
+      biography: _optionalString(body['biography'], maxLength: 4000),
+      birthYear: _int(body['birthYear']),
+    );
+    service.upsertPerson(person);
+    await _json(request.response, 200, {'success': true, 'person': person.toJson()});
+  }
+
+  Future<void> _createPersonCredit(HttpRequest request) async {
+    final body = await _body(request);
+    final credit = PersonCareerCredit(
+      id: _optionalId(body['id']) ?? 'credit_${DateTime.now().microsecondsSinceEpoch}',
+      personId: _requiredString(body['personId'], field: 'personId', maxLength: _maxIdLength),
+      mediaId: _requiredString(body['mediaId'], field: 'mediaId', maxLength: _maxIdLength),
+      category: _requiredString(body['category'], field: 'category', maxLength: 80),
+      role: _optionalString(body['role'], maxLength: _maxNameLength) ?? '',
+      characterName: _optionalString(body['characterName'], maxLength: _maxNameLength),
+      creditGroup: _optionalString(body['creditGroup'], maxLength: _maxNameLength),
+      startYear: _int(body['startYear']),
+      endYear: _int(body['endYear']),
+      source: _optionalString(body['source'], maxLength: 1000),
+    );
+    service.upsertCareerCredit(credit);
+    await _json(request.response, 201, {'success': true, 'credit': credit.toJson()});
   }
 
   Future<void> _createDevice(

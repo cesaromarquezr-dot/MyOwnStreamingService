@@ -15,7 +15,6 @@ The core owned-library invariant is that only media acquired and imported/ripped
 - Smart-home/security-related functionality and comics/manga support.
 - Marketplace, marketplace search, stores, checkout/payment foundation, shipping/fulfillment foundation, seller commission controls, digital listings/purchases/fulfillment, product/store reviews, and seller workflows.
 - Backend API, Supabase application-state architecture, account/device/session infrastructure, backend-to-Supabase synchronization, email-service foundation, MOCK ARM, and Phase 1 payment verification.
-- Phase 2 backend functionality.
 
 ## Numbered Phase 3 additions
 

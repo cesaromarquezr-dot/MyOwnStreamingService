@@ -78,6 +78,7 @@ import 'routes/self_hosting_routes.dart';
 import 'routes/shop_routes.dart';
 import 'routes/live_shopping_routes.dart';
 import 'routes/physical_item_routes.dart';
+import 'routes/radio_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -91,6 +92,7 @@ import 'services/email_service.dart';
 import 'services/remote_access_service.dart';
 import 'services/sports_service.dart';
 import 'services/review_service.dart';
+import 'services/review_publication_service.dart';
 import 'services/rating_service.dart';
 import 'services/home_server_service.dart';
 import 'services/media_intelligence_service.dart';
@@ -363,6 +365,7 @@ service: const SportsService(),
 final reviewRoutes = ReviewRoutes(
 authentication: authentication,
 service: ReviewService(database),
+publicationService: ReviewPublicationService(),
 );
 
 final homeServerRoutes = HomeServerRoutes(
@@ -376,6 +379,10 @@ authentication: authentication,
 
 final locationRoutes = LocationRoutes();
 
+final radioRoutes = RadioRoutes(
+  authentication: authentication,
+);
+
 final selfHostingSecurity = SelfHostingSecurity();
 
 final selfHostingRoutes = SelfHostingRoutes(
@@ -386,6 +393,7 @@ security: selfHostingSecurity,
 final mediaIntelligenceRoutes = MediaIntelligenceRoutes(
 authentication: authentication,
 service: mediaIntelligenceService,
+store: SupabaseStore.instance,
 );
 
 final remoteAccessRoutes = RemoteAccessRoutes(
@@ -443,6 +451,7 @@ homeServerRoutes,
 supabaseSyncRoutes,
 mediaIntelligenceRoutes,
 locationRoutes,
+radioRoutes,
 selfHostingRoutes,
 selfHostingSecurity,
 physicalItemRoutes,
@@ -486,6 +495,7 @@ HomeServerRoutes homeServerRoutes,
 SupabaseSyncRoutes supabaseSyncRoutes,
 MediaIntelligenceRoutes mediaIntelligenceRoutes,
 LocationRoutes locationRoutes,
+RadioRoutes radioRoutes,
 SelfHostingRoutes selfHostingRoutes,
 SelfHostingSecurity selfHostingSecurity,
 PhysicalItemRoutes physicalItemRoutes,
@@ -621,6 +631,16 @@ if (path.startsWith(
 }
 
 // ----------------------------------------------------------
+// RADIO
+// ----------------------------------------------------------
+
+if (path == '/api/v1/radio/stations') {
+  await radioRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
+
+// ----------------------------------------------------------
 // LOCATION / POSTAL CODE
 // ----------------------------------------------------------
 
@@ -694,7 +714,7 @@ if (path == '/api/v1/shop/entities' ||
 
 if (path.startsWith('/api/v1/payment/') ||
     path == '/api/v1/seller/payout-destinations' ||
-    path.startsWith('/api/v1/phase2/payment-methods')) {
+    path.startsWith('/api/v1/payment-methods')) {
   await paymentRoutes.handle(
     request,
   );
@@ -736,7 +756,14 @@ if (path.startsWith(
 
 if (path == '/api/v1/supabase/sync/account' ||
     path.startsWith('/api/v1/supabase/sync/profile/') ||
-    path.startsWith('/api/v1/phase2/')) {
+    path == '/api/v1/features/status' ||
+    path.startsWith('/api/v1/social/') ||
+    path == '/api/v1/media-action' ||
+    path == '/api/v1/activity' ||
+    path == '/api/v1/records' ||
+    path == '/api/v1/share-card' ||
+    path == '/api/v1/queue' ||
+    path.startsWith('/api/v1/queue/')) {
   await supabaseSyncRoutes.handle(
     request,
   );

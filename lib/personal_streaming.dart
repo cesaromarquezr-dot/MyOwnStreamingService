@@ -1,4 +1,4 @@
-// FILE: `lib/next_gen_features.dart`.
+// FILE: `lib/personal_streaming.dart`.
 // Purpose: Implements the next gen features portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
@@ -9,11 +9,10 @@ import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
 
-// Phase 2 features are intentionally kept in one module so the existing
-// 34-feature implementation remains stable while the app gains a richer
-// personal streaming layer.
-class Phase2Store {
-  Phase2Store._();
+// Personal streaming features are kept together as a cohesive layer for discovery,
+// library management, playback preferences, privacy, downloads, and personal analytics.
+class PersonalStreamingStore {
+  PersonalStreamingStore._();
   static final Set<String> downloads = <String>{};
   static final Map<String, List<String>> playlists = <String, List<String>>{};
   static final Map<String, bool> toggles = <String, bool>{
@@ -35,13 +34,13 @@ class Phase2Store {
   static void setBool(String key, bool value) => toggles[key] = value;
 }
 
-class NextGenFeaturesScreen extends StatefulWidget {
-  const NextGenFeaturesScreen({super.key});
+class PersonalStreamingScreen extends StatefulWidget {
+  const PersonalStreamingScreen({super.key});
   @override
-  State<NextGenFeaturesScreen> createState() => _NextGenFeaturesScreenState();
+  State<PersonalStreamingScreen> createState() => _PersonalStreamingScreenState();
 }
 
-class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
+class _PersonalStreamingScreenState extends State<PersonalStreamingScreen> {
   int tab = 0;
   final tabs = const ['Discover', 'My Stuff', 'Stats', 'Settings'];
 
@@ -50,7 +49,7 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const UniversalText('Next-Gen Streaming'),
+        title: const UniversalText('Personal Streaming'),
         actions: [
           IconButton(
             tooltip: tr('What is new'),
@@ -87,7 +86,7 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
                 SmartDiscoverPanel(),
                 MyStuffPanel(),
                 WatchStatsPanel(),
-                Phase2SettingsPanel(),
+                PersonalSettingsPanel(),
               ],
             ),
           ),
@@ -108,7 +107,7 @@ class _NextGenFeaturesScreenState extends State<NextGenFeaturesScreen> {
           child: ListView(
             shrinkWrap: true,
             children: const [
-              UniversalText('Phase 2', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+              UniversalText('Personal Streaming', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
               SizedBox(height: 8),
               UniversalText('The new layer adds smarter discovery, personal collections, playlists, downloads, viewing analytics, playback controls, privacy, kids mode, data saving, sync controls and an AI-style watch assistant.', style: TextStyle(color: Colors.white70, height: 1.45)),
               SizedBox(height: 18),
@@ -253,7 +252,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
       case 'Liked': return c.liked;
       case 'Watched': return c.watched;
       case 'Continue': return c.library.where((m) { final p = c.getPlaybackProgress(m.id); return p > 0 && p < 1; }).toList();
-      case 'Downloads': return c.library.where((m) => Phase2Store.downloads.contains(m.id)).toList();
+      case 'Downloads': return c.library.where((m) => PersonalStreamingStore.downloads.contains(m.id)).toList();
       default: return c.library;
     }
   }
@@ -274,7 +273,7 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
               Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(f), selected: filter == f, onSelected: (_) => setState(() => filter = f))),
           ])),
           const SizedBox(height: 16),
-          _StatStrip(items: c.library.length, watched: c.watched.length, liked: c.liked.length, downloads: Phase2Store.downloads.length),
+          _StatStrip(items: c.library.length, watched: c.watched.length, liked: c.liked.length, downloads: PersonalStreamingStore.downloads.length),
           const SizedBox(height: 18),
           _SectionTitle('Playlists', Icons.queue_music_rounded),
           const SizedBox(height: 8),
@@ -283,9 +282,9 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
             const SizedBox(width: 8),
             IconButton.filled(onPressed: _createPlaylist, icon: const Icon(Icons.add)),
           ]),
-          if (Phase2Store.playlists.isNotEmpty) ...[
+          if (PersonalStreamingStore.playlists.isNotEmpty) ...[
             const SizedBox(height: 10),
-            for (final entry in Phase2Store.playlists.entries)
+            for (final entry in PersonalStreamingStore.playlists.entries)
               Card(child: ListTile(leading: const Icon(Icons.playlist_play), title: Text(entry.key), subtitle: UniversalText('${entry.value.length} item(s)'), trailing: const Icon(Icons.chevron_right), onTap: () => _showPlaylist(context, entry.key))),
           ],
           const SizedBox(height: 18),
@@ -302,14 +301,14 @@ class _MyStuffPanelState extends State<MyStuffPanel> {
   void _createPlaylist() {
     final name = playlistController.text.trim();
     if (name.isEmpty) return;
-    Phase2Store.playlists.putIfAbsent(name, () => <String>[]);
+    PersonalStreamingStore.playlists.putIfAbsent(name, () => <String>[]);
     playlistController.clear();
     setState(() {});
   }
 
   /// Performs `_showPlaylist` for this feature. Update this documentation when its contract changes.
   void _showPlaylist(BuildContext context, String name) {
-    final ids = Phase2Store.playlists[name] ?? <String>[];
+    final ids = PersonalStreamingStore.playlists[name] ?? <String>[];
     final media = AppController.instance.library.where((m) => ids.contains(m.id)).toList();
     showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), isScrollControlled: true, builder: (_) => SafeArea(child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(16), children: [Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 12), if (media.isEmpty) _EmptyCard(title: tr('Playlist is empty'), subtitle: tr('Use the playlist button on a title to add it.')) else ...media.map((m) => _MediaRow(media: m))])));
   }
@@ -359,13 +358,13 @@ class WatchStatsPanel extends StatelessWidget {
   }
 }
 
-class Phase2SettingsPanel extends StatefulWidget {
-  const Phase2SettingsPanel({super.key});
+class PersonalSettingsPanel extends StatefulWidget {
+  const PersonalSettingsPanel({super.key});
   @override
-  State<Phase2SettingsPanel> createState() => _Phase2SettingsPanelState();
+  State<PersonalSettingsPanel> createState() => _PersonalSettingsPanelState();
 }
 
-class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
+class _PersonalSettingsPanelState extends State<PersonalSettingsPanel> {
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
@@ -393,7 +392,7 @@ class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
           _settings('haptic', Icons.vibration_rounded, 'Haptic feedback', 'Use subtle feedback for controls.'),
         ]),
         const SizedBox(height: 10),
-        Card(child: ListTile(leading: const Icon(Icons.download_rounded), title: const UniversalText('Download manager'), subtitle: UniversalText('${Phase2Store.downloads.length} title(s) queued or saved'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DownloadManagerScreen())))),
+        Card(child: ListTile(leading: const Icon(Icons.download_rounded), title: const UniversalText('Download manager'), subtitle: UniversalText('${PersonalStreamingStore.downloads.length} title(s) queued or saved'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DownloadManagerScreen())))),
         Card(child: ListTile(leading: const Icon(Icons.security_rounded), title: const UniversalText('Privacy & security center'), subtitle: const UniversalText('Sessions, data export, sign-in protection'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyCenterScreen())))),
       ],
     );
@@ -402,8 +401,8 @@ class _Phase2SettingsPanelState extends State<Phase2SettingsPanel> {
   /// Performs `_settings` for this feature. Update this documentation when its contract changes.
   Widget _settings(String key, IconData icon, String title, String subtitle) {
     return SwitchListTile.adaptive(
-      value: Phase2Store.getBool(key),
-      onChanged: (v) => setState(() => Phase2Store.setBool(key, v)),
+      value: PersonalStreamingStore.getBool(key),
+      onChanged: (v) => setState(() => PersonalStreamingStore.setBool(key, v)),
       secondary: Icon(icon), title: Text(title), subtitle: Text(subtitle),
     );
   }
@@ -427,11 +426,11 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen> {
       const SizedBox(height: 14),
       if (c.library.isEmpty) _EmptyCard(title: tr('No titles available'), subtitle: tr('Import a movie or show first.'))
       else ...c.library.map((m) {
-        final saved = Phase2Store.downloads.contains(m.id);
+        final saved = PersonalStreamingStore.downloads.contains(m.id);
         return Card(child: ListTile(leading: _Poster(media: m, width: 48, height: 64), title: Text(m.title, maxLines: 1, overflow: TextOverflow.ellipsis), subtitle: Text(saved ? 'Available offline' : 'Not downloaded'), trailing: IconButton(icon: Icon(saved ? Icons.delete_outline : Icons.download_outlined), onPressed: () { setState(() { if (saved) {
-          Phase2Store.downloads.remove(m.id);
+          PersonalStreamingStore.downloads.remove(m.id);
         } else {
-          Phase2Store.downloads.add(m.id);
+          PersonalStreamingStore.downloads.add(m.id);
         } }); })));
       }),
     ]));
@@ -456,8 +455,8 @@ class _PrivacyCenterScreenState extends State<PrivacyCenterScreen> {
         const Divider(height: 1),
         ListTile(leading: const Icon(Icons.devices_rounded), title: const UniversalText('Backend session'), subtitle: Text(c.isBackendAuthenticated ? 'Authenticated' : 'Local/offline session')),
         const Divider(height: 1),
-        SwitchListTile.adaptive(value: Phase2Store.getBool('sync'), onChanged: (v) => setState(() => Phase2Store.setBool('sync', v)), title: const UniversalText('Cloud synchronization'), subtitle: const UniversalText('Sync progress and preferences when backend access is available.')),
-        SwitchListTile.adaptive(value: Phase2Store.getBool('pinProtection'), onChanged: (v) => setState(() => Phase2Store.setBool('pinProtection', v)), title: const UniversalText('Protected areas'), subtitle: const UniversalText('Use your account/profile security flow before protected features.')),
+        SwitchListTile.adaptive(value: PersonalStreamingStore.getBool('sync'), onChanged: (v) => setState(() => PersonalStreamingStore.setBool('sync', v)), title: const UniversalText('Cloud synchronization'), subtitle: const UniversalText('Sync progress and preferences when backend access is available.')),
+        SwitchListTile.adaptive(value: PersonalStreamingStore.getBool('pinProtection'), onChanged: (v) => setState(() => PersonalStreamingStore.setBool('pinProtection', v)), title: const UniversalText('Protected areas'), subtitle: const UniversalText('Use your account/profile security flow before protected features.')),
       ])),
       const SizedBox(height: 14),
       FilledButton.icon(onPressed: () => _confirmClearHistory(context), icon: const Icon(Icons.delete_sweep_rounded), label: const UniversalText('CLEAR LOCAL WATCH HISTORY')),
@@ -497,10 +496,10 @@ class _MediaRow extends StatelessWidget {
   /// Performs `_action` for this feature. Update this documentation when its contract changes.
   void _action(BuildContext context, String action) {
     if (action == 'play') { Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: media))); return; }
-    if (action == 'download') { Phase2Store.downloads.add(media.id); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('${media.title} added to downloads.'))); return; }
+    if (action == 'download') { PersonalStreamingStore.downloads.add(media.id); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('${media.title} added to downloads.'))); return; }
     if (action == 'playlist') {
-      if (Phase2Store.playlists.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Create a playlist in My Stuff first.'))); return; }
-      showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), builder: (_) => SafeArea(child: ListView(shrinkWrap: true, children: Phase2Store.playlists.keys.map((name) => ListTile(title: Text(name), leading: const Icon(Icons.playlist_add), onTap: () { Phase2Store.playlists[name]!.add(media.id); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Added ${media.title} to $name.'))); })).toList())));
+      if (PersonalStreamingStore.playlists.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Create a playlist in My Stuff first.'))); return; }
+      showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xFF151515), builder: (_) => SafeArea(child: ListView(shrinkWrap: true, children: PersonalStreamingStore.playlists.keys.map((name) => ListTile(title: Text(name), leading: const Icon(Icons.playlist_add), onTap: () { PersonalStreamingStore.playlists[name]!.add(media.id); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Added ${media.title} to $name.'))); })).toList())));
     }
   }
 }

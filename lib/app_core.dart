@@ -4742,7 +4742,7 @@ class DetailsCustomization {
               'Trailer',
               'Group Watch',
               'Shop',
-              'Phase 2 Actions',
+              'Platform Actions',
               'Reviews',
               'Recommendations',
               'Audio & Subtitles',

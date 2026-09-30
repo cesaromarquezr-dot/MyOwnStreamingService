@@ -61,7 +61,7 @@ class PaymentRoutes {
       final path = request.uri.path;
 
       if (path == '/api/v1/seller/payout-destinations' ||
-          path.startsWith('/api/v1/phase2/payment-methods')) {
+          path.startsWith('/api/v1/payment-methods')) {
         await _handlePaymentAdministration(request, path);
         return;
       }
@@ -200,12 +200,12 @@ class PaymentRoutes {
           {'success': false, 'error': 'Authentication required.'});
       return;
     }
-    if (path == '/api/v1/phase2/payment-methods' && request.method == 'GET') {
+    if (path == '/api/v1/payment-methods' && request.method == 'GET') {
       await _sendJson(request.response, HttpStatus.ok,
           {'success': true, ...paymentMethods.catalogJson()});
       return;
     }
-    if (path == '/api/v1/phase2/payment-methods/seller' && request.method == 'POST') {
+    if (path == '/api/v1/payment-methods/seller' && request.method == 'POST') {
       final body = await _readJson(request);
       final selection = paymentMethods.selectForSeller(
         seller: account,
@@ -219,7 +219,7 @@ class PaymentRoutes {
           {'success': true, 'selection': selection.toJson()});
       return;
     }
-    if (path == '/api/v1/phase2/payment-methods/filter' && request.method == 'POST') {
+    if (path == '/api/v1/payment-methods/filter' && request.method == 'POST') {
       final body = await _readJson(request);
       final methods = paymentMethods.methodsForBuyer(
         sellerAccountId: _bounded(body, 'sellerAccountId', 256),

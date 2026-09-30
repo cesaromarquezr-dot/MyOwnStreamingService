@@ -2676,6 +2676,9 @@ class BackendApi {
     required String label,
     required String text,
     required String globalUsername,
+    String reviewType = 'written',
+    String? videoUrl,
+    bool spoiler = false,
   }) async {
     _requireAuthentication();
 
@@ -2689,12 +2692,71 @@ class BackendApi {
         'label': label,
         'text': text,
         'globalUsername': globalUsername,
+        'reviewType': reviewType,
+        'videoUrl': videoUrl,
+        'spoiler': spoiler,
       }),
     );
 
     return _requireSuccess(
       response,
       'Unable to submit review.',
+    );
+  }
+
+  Future<Map<String, dynamic>> publishReview({
+    required String reviewId,
+    required String mediaId,
+    required String profileId,
+    required String destination,
+    String? destinationId,
+    bool spoiler = false,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/reviews/publish'),
+        headers: _headers,
+        body: jsonEncode({
+          'reviewId': reviewId,
+          'mediaId': mediaId,
+          'profileId': profileId,
+          'destination': destination,
+          'destinationId': destinationId,
+          'spoiler': spoiler,
+        }),
+      ),
+      'Unable to publish review.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getReviewPublications({required String reviewId}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/reviews/publications').replace(queryParameters: {'reviewId': reviewId});
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load review publications.');
+  }
+
+  Future<Map<String, dynamic>> addReviewInteraction({
+    required String publicationId,
+    required String profileId,
+    required String type,
+    String body = '',
+    String? reaction,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/reviews/interactions'),
+        headers: _headers,
+        body: jsonEncode({
+          'publicationId': publicationId,
+          'profileId': profileId,
+          'type': type,
+          'body': body,
+          'reaction': reaction,
+        }),
+      ),
+      'Unable to add review interaction.',
     );
   }
 
@@ -2935,21 +2997,203 @@ class BackendApi {
   }
 
   // ==========================================================
-  // PHASE 2
+  // PLATFORM SERVICES
   // ==========================================================
 
-  Future<Map<String, dynamic>> getPhase2FeatureStatus() async {
+  Future<Map<String, dynamic>> getPlatformFeatureStatus() async {
     _requireAuthentication();
     return _requireSuccess(
       await http.get(
-        Uri.parse('$baseUrl/phase2/features'),
+        Uri.parse('$baseUrl/features/status'),
         headers: _headers,
       ),
-      'Unable to load Phase 2 status.',
+      'Unable to load platform feature status.',
     );
   }
 
-  Future<List<Map<String, dynamic>>> getPhase2Records({
+  /// Loads canonical seasons scoped to one television production.
+  Future<List<Map<String, dynamic>>> getKnowledgeFacts({required String mediaWorkId}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/media-intelligence/knowledge')
+        .replace(queryParameters: {'mediaWorkId': mediaWorkId});
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load media knowledge.',
+    );
+    return data['facts'] is List
+        ? (data['facts'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> getKnowledgeStories({required String mediaWorkId}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/media-intelligence/knowledge/stories')
+        .replace(queryParameters: {'mediaWorkId': mediaWorkId});
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load media deep dives.',
+    );
+    return data['stories'] is List
+        ? (data['stories'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> getRadioStations({
+    String? countryCode,
+    String? state,
+    String? city,
+    String? query,
+    String? tag,
+    String? band,
+    int limit = 40,
+  }) async {
+    _requireAuthentication();
+    final queryParameters = <String, String>{
+      if (countryCode?.trim().isNotEmpty == true) 'countryCode': countryCode!.trim(),
+      if (state?.trim().isNotEmpty == true) 'state': state!.trim(),
+      if (city?.trim().isNotEmpty == true) 'city': city!.trim(),
+      if (query?.trim().isNotEmpty == true) 'q': query!.trim(),
+      if (tag?.trim().isNotEmpty == true) 'tag': tag!.trim(),
+      if (band?.trim().isNotEmpty == true) 'band': band!.trim(),
+      'limit': '${limit.clamp(1, 100)}',
+    };
+    final uri = Uri.parse('$baseUrl/radio/stations').replace(queryParameters: queryParameters);
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load radio stations.',
+    );
+    return data['stations'] is List
+        ? (data['stations'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> getMediaSeasons({required String seriesId}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/media-intelligence/seasons')
+        .replace(queryParameters: {'seriesId': seriesId});
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load this series seasons.',
+    );
+    return data['seasons'] is List
+        ? (data['seasons'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> getMediaConnections({required String mediaId}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/media-intelligence/connections')
+        .replace(queryParameters: {'id': mediaId});
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load related productions.',
+    );
+    return data['connections'] is List
+        ? (data['connections'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> getMediaWorks() async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.get(Uri.parse('$baseUrl/media-intelligence/works'), headers: _headers),
+      'Unable to load related production titles.',
+    );
+    return data['works'] is List
+        ? (data['works'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> searchMediaPeople({String query = ''}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/media-intelligence/people')
+        .replace(queryParameters: query.trim().isEmpty ? null : {'q': query.trim()});
+    final data = await _requireSuccess(await http.get(uri, headers: _headers), 'Unable to search people.');
+    return data['people'] is List
+        ? (data['people'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> createMediaPerson({required String id, required String name}) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/media-intelligence/person'), headers: _headers,
+          body: jsonEncode({'id': id, 'name': name})),
+      'Unable to create this person.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getPersonCareerTimeline({required String personId, String? category}) async {
+    _requireAuthentication();
+    final query = <String, String>{'personId': personId};
+    if (category?.trim().isNotEmpty == true && category != 'All') query['category'] = category!.trim();
+    final uri = Uri.parse('$baseUrl/media-intelligence/people/timeline').replace(queryParameters: query);
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load this career timeline.');
+  }
+
+  Future<Map<String, dynamic>> savePersonCareerCredit({
+    required String personId,
+    required String mediaId,
+    required String category,
+    String role = '',
+    String? characterName,
+    String? creditGroup,
+    int? startYear,
+    int? endYear,
+    String? source,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/media-intelligence/person-credit'), headers: _headers,
+          body: jsonEncode({
+            'personId': personId, 'mediaId': mediaId, 'category': category, 'role': role,
+            if (characterName != null) 'characterName': characterName,
+            if (creditGroup != null) 'creditGroup': creditGroup,
+            if (startYear != null) 'startYear': startYear,
+            if (endYear != null) 'endYear': endYear,
+            if (source != null) 'source': source,
+          })),
+      'Unable to save this career credit.',
+    );
+  }
+
+  /// Stores a season under its own series identity.
+  Future<Map<String, dynamic>> saveMediaSeason({
+    required String seriesId,
+    required int seasonNumber,
+    String? title,
+    int? startYear,
+    int? endYear,
+    int? episodeCount,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/media-intelligence/season'),
+        headers: _headers,
+        body: jsonEncode({
+          'seriesId': seriesId,
+          'seasonNumber': seasonNumber,
+          if (title?.trim().isNotEmpty == true) 'title': title!.trim(),
+          if (startYear != null) 'startYear': startYear,
+          if (endYear != null) 'endYear': endYear,
+          if (episodeCount != null) 'episodeCount': episodeCount,
+        }),
+      ),
+      'Unable to save this season.',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getAppRecords({
     String? profileId,
     String? recordType,
   }) async {
@@ -2957,17 +3201,45 @@ class BackendApi {
     final query = <String, String>{};
     if (profileId?.trim().isNotEmpty == true) query['profileId'] = profileId!.trim();
     if (recordType?.trim().isNotEmpty == true) query['recordType'] = recordType!.trim();
-    final uri = Uri.parse('$baseUrl/phase2/records').replace(queryParameters: query);
+    final uri = Uri.parse('$baseUrl/records').replace(queryParameters: query);
     final data = await _requireSuccess(
       await http.get(uri, headers: _headers),
-      'Unable to load Phase 2 records.',
+      'Unable to load application records.',
     );
     return (data['records'] is List)
         ? (data['records'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
         : <Map<String, dynamic>>[];
   }
 
-  Future<Map<String, dynamic>> savePhase2Record({
+  Future<Map<String, dynamic>> getSocialHome({required String profileId}) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/social/home').replace(queryParameters: {'profileId': profileId});
+    return _requireSuccess(await http.get(uri, headers: _headers), 'Unable to load friends and communities.');
+  }
+
+  Future<Map<String, dynamic>> _socialPost(String path, Map<String, dynamic> body, String error) async {
+    _requireAuthentication();
+    return _requireSuccess(await http.post(Uri.parse('$baseUrl/social/$path'), headers: _headers, body: jsonEncode(body)), error);
+  }
+
+  Future<Map<String, dynamic>> sendFriendRequest({required String profileId, required String username}) =>
+      _socialPost('friend-request', {'profileId': profileId, 'username': username}, 'Unable to send friend request.');
+
+  Future<Map<String, dynamic>> respondFriendRequest({required String profileId, required String friendshipId, required String action}) async {
+    _requireAuthentication();
+    return _requireSuccess(await http.patch(Uri.parse('$baseUrl/social/friend-request/${Uri.encodeComponent(friendshipId)}'), headers: _headers, body: jsonEncode({'profileId':profileId,'action':action})), 'Unable to update friend request.');
+  }
+
+  Future<Map<String, dynamic>> createSocialPost({required String profileId, required String body, String? communityId}) =>
+      _socialPost('posts', {'profileId':profileId,'body':body, if (communityId != null) 'communityId':communityId}, 'Unable to publish post.');
+
+  Future<Map<String, dynamic>> createSocialCommunity({required String profileId, required String name, required String description}) =>
+      _socialPost('communities', {'profileId':profileId,'name':name,'description':description}, 'Unable to create community.');
+
+  Future<Map<String, dynamic>> joinSocialCommunity({required String profileId, required String communityId}) =>
+      _socialPost('communities/join', {'profileId':profileId,'communityId':communityId}, 'Unable to join community.');
+
+  Future<Map<String, dynamic>> saveAppRecord({
     String? profileId,
     required String recordType,
     required String recordKey,
@@ -2976,7 +3248,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/records'),
+        Uri.parse('$baseUrl/records'),
         headers: _headers,
         body: jsonEncode({
           'profileId': profileId,
@@ -2985,7 +3257,7 @@ class BackendApi {
           'data': data,
         }),
       ),
-      'Unable to save the Phase 2 record.',
+      'Unable to save the application record.',
     );
   }
 
@@ -3004,7 +3276,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/media-action'),
+        Uri.parse('$baseUrl/media-action'),
         headers: _headers,
         body: jsonEncode({
           'profileId': profileId,
@@ -3025,7 +3297,7 @@ class BackendApi {
     int limit = 50,
   }) async {
     _requireAuthentication();
-    final uri = Uri.parse('$baseUrl/phase2/activity').replace(
+    final uri = Uri.parse('$baseUrl/activity').replace(
       queryParameters: {
         'profileId': profileId,
         'limit': limit.toString(),
@@ -3047,7 +3319,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.get(
-        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}'),
+        Uri.parse('$baseUrl/queue/${Uri.encodeComponent(queueId)}'),
         headers: _headers,
       ),
       'Unable to load collaborative queue.',
@@ -3063,7 +3335,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.patch(
-        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
+        Uri.parse('$baseUrl/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
         headers: _headers,
         body: jsonEncode({'position': position, 'skipped': skipped}),
       ),
@@ -3075,7 +3347,7 @@ class BackendApi {
     _requireAuthentication();
     await _requireSuccess(
       await http.delete(
-        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
+        Uri.parse('$baseUrl/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
         headers: _headers,
       ),
       'Unable to remove collaborative queue item.',
@@ -3090,7 +3362,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/queue'),
+        Uri.parse('$baseUrl/queue'),
         headers: _headers,
         body: jsonEncode({
           'profileId': profileId,
@@ -3113,7 +3385,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/queue/${Uri.encodeComponent(queueId)}/items'),
+        Uri.parse('$baseUrl/queue/${Uri.encodeComponent(queueId)}/items'),
         headers: _headers,
         body: jsonEncode({
           'profileId': profileId,
@@ -3127,7 +3399,7 @@ class BackendApi {
     );
   }
 
-  Future<Map<String, dynamic>> createPhase2ShareCard({
+  Future<Map<String, dynamic>> createShareCard({
     String? profileId,
     required String contentType,
     required String contentId,
@@ -3137,7 +3409,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/share-card'),
+        Uri.parse('$baseUrl/share-card'),
         headers: _headers,
         body: jsonEncode({
           'profileId': profileId,
@@ -3155,7 +3427,7 @@ class BackendApi {
     _requireAuthentication();
     final data = await _requireSuccess(
       await http.get(
-        Uri.parse('$baseUrl/phase2/payment-methods'),
+        Uri.parse('$baseUrl/payment-methods'),
         headers: _headers,
       ),
       'Unable to load payment methods.',
@@ -3175,7 +3447,7 @@ class BackendApi {
     _requireAuthentication();
     return _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/payment-methods/seller'),
+        Uri.parse('$baseUrl/payment-methods/seller'),
         headers: _headers,
         body: jsonEncode({
           'paymentMethodId': paymentMethodId,
@@ -3330,7 +3602,7 @@ class BackendApi {
     _requireAuthentication();
     final data = await _requireSuccess(
       await http.post(
-        Uri.parse('$baseUrl/phase2/payment-methods/filter'),
+        Uri.parse('$baseUrl/payment-methods/filter'),
         headers: _headers,
         body: jsonEncode({
           'sellerAccountId': sellerAccountId,

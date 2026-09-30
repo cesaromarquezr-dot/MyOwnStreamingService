@@ -11,6 +11,7 @@ import 'widgets/category_filter_chips.dart';
 import 'widgets/like_toggle_button.dart';
 import 'localization.dart';
 import 'media_actions.dart';
+import 'people_timeline.dart';
 
 class LibraryCollectionsScreen extends StatelessWidget {
   const LibraryCollectionsScreen({super.key});
@@ -97,9 +98,33 @@ class _PersonMediaScreen extends StatelessWidget {
           ? const Center(child: UniversalText('No movies or shows found.'))
           : ListView.builder(
               padding: const EdgeInsets.all(18),
-              itemCount: library.length,
+              itemCount: library.length + 1,
               itemBuilder: (_, index) {
-                final media = library[index];
+                if (index == 0) {
+                  final localCredits = library.map((media) {
+                    return {
+                      'title': media.title,
+                      'type': media.type,
+                      'category': kind == 'Actors' ? 'Acting' : 'Directing',
+                      'role': kind == 'Actors' ? 'Cast credit' : 'Director',
+                      'year': media.releaseYear,
+                      'mediaId': media.id,
+                    };
+                  }).where((credit) => library.any((media) => media.id == credit['mediaId'] &&
+                      (kind == 'Actors' ? media.actors : media.directors).any((name) => name.toLowerCase() == person.toLowerCase()))).toList();
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.timeline_rounded),
+                      title: const Text('Career timeline', style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: const Text('Combine acting and other career credits'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PeopleCareerTimelineScreen(personName: person, localCredits: localCredits),
+                      )),
+                    ),
+                  );
+                }
+                final media = library[index - 1];
                 return Card(
                   child: ListTile(
                     leading: media.imageUrl == null ? const Icon(Icons.movie_rounded) : Image.network(media.imageUrl!, width: 52, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_rounded)),

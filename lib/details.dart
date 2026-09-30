@@ -14,6 +14,7 @@ import 'localization.dart';
 import 'shop.dart';
 import 'media_actions.dart';
 import 'media_continuity.dart';
+import 'media_knowledge.dart';
 import 'widgets/like_toggle_button.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
@@ -122,6 +123,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           for (final section in customization.sectionOrder)
             _buildSection(section),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
+          MediaFranchiseConnectionsPanel(mediaId: media.id, hasSeasons: isTvShow),
+          const SizedBox(height: 12),
+          MediaKnowledgePanel(mediaWorkId: media.id, mediaTitle: media.title),
         ],
       ),
     );

@@ -114,7 +114,15 @@ Sports and platform expansion
 
 sports.dart — sports browsing and sports-related experiences.
 
-next_gen_features.dart — next-generation platform functionality.
+personal_streaming.dart — personal streaming, discovery, library tools, downloads, and playback preferences.
+
+radio.dart — location-aware AM/FM and internet radio discovery, playback, favorites, and listening history.
+
+media_knowledge.dart — sourced, spoiler-aware media facts and knowledge deep dives.
+
+people_timeline.dart — unified acting/music/creative career timelines for person identities.
+
+social_home.dart — friend activity, public communities, requests, and profile-scoped social discovery.
 
 platform_expansion.dart — expanded platform capabilities and integrations.
 

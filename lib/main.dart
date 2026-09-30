@@ -36,6 +36,9 @@ import 'responsive.dart';
 import 'localization.dart';
 import 'activity_timeline.dart';
 import 'my_tv.dart';
+import 'social_home.dart';
+import 'radio.dart';
+import 'personal_streaming.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -669,6 +672,7 @@ class HomeCustomization {
   bool showMusic;
   bool showFilm;
   bool showSeasonalCollections;
+  bool showFriendsCommunity;
   String homeMediaLayout;
   String heroStyle;
   String cardSize;
@@ -697,6 +701,7 @@ class HomeCustomization {
     this.showMusic = true,
     this.showFilm = true,
     this.showSeasonalCollections = true,
+    this.showFriendsCommunity = true,
     this.homeMediaLayout = 'Left & Right',
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
@@ -714,6 +719,7 @@ class HomeCustomization {
     List<String>? navigationOrder,
   })  : sectionOrder = sectionOrder ??
             [
+              'Friends & Communities',
               'Continue Watching',
               'Recently Watched',
               'Movies',
@@ -732,6 +738,7 @@ class HomeCustomization {
               'Surprise Me',
               'More',
               'Music',
+              'Radio',
               'Film',
               'Collections',
               'My TV',
@@ -751,6 +758,7 @@ class HomeCustomization {
         showMusic: showMusic,
         showFilm: showFilm,
         showSeasonalCollections: showSeasonalCollections,
+        showFriendsCommunity: showFriendsCommunity,
         homeMediaLayout: homeMediaLayout,
         heroStyle: heroStyle,
         cardSize: cardSize,
@@ -792,6 +800,9 @@ class HomeCustomizationStore {
           );
           if (!settings.sectionOrder.contains('Music & Film')) {
             settings.sectionOrder.add('Music & Film');
+          }
+          if (!settings.sectionOrder.contains('Friends & Communities')) {
+            settings.sectionOrder.insert(0, 'Friends & Communities');
           }
           if (!settings.navigationOrder.contains('Surprise Me')) {
             final moreIndex = settings.navigationOrder.indexOf('More');
@@ -886,6 +897,7 @@ class HomeCustomizationStore {
         'showMusic': v.showMusic,
         'showFilm': v.showFilm,
         'showSeasonalCollections': v.showSeasonalCollections,
+        'showFriendsCommunity': v.showFriendsCommunity,
         'homeMediaLayout': v.homeMediaLayout,
         'heroStyle': v.heroStyle,
         'cardSize': v.cardSize,
@@ -943,6 +955,7 @@ class HomeCustomizationStore {
         showFilm: m['showFilm'] == false ? false : true,
         showSeasonalCollections:
             m['showSeasonalCollections'] == false ? false : true,
+        showFriendsCommunity: m['showFriendsCommunity'] == false ? false : true,
         homeMediaLayout: m['homeMediaLayout']?.toString() == 'Top & Bottom'
             ? 'Under Banner'
             : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
@@ -1740,6 +1753,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           (v) => setState(() => draft.showMovies = v),
         ),
         _toggle(
+          'Friends & Communities',
+          'Show your friend feed, suggestions, and communities.',
+          draft.showFriendsCommunity,
+          (v) => setState(() => draft.showFriendsCommunity = v),
+        ),
+        _toggle(
           'TV Shows',
           'Show your TV collection.',
           draft.showTvShows,
@@ -2356,6 +2375,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'Surprise Me',
       'More',
       'Music',
+      'Radio',
       'Film',
       'Collections',
       'My TV',
@@ -3576,6 +3596,10 @@ class _MainScreenState extends State<MainScreen> {
           Navigator.pop(context);
           _openCustomize();
         },
+        onPersonalStreaming: () {
+          Navigator.pop(context);
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalStreamingScreen()));
+        },
       ),
     );
   }
@@ -3666,6 +3690,7 @@ class _MainScreenState extends State<MainScreen> {
       'Surprise Me',
       'More',
       'Music',
+      'Radio',
       'Film',
       'Collections',
       'My TV',
@@ -3737,7 +3762,7 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Film, Collections, Shop,
+    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Radio, Film, Collections, Shop,
     // Seller Dashboard when available, and Group Chat. Music and Film expose secondary destinations on hover/tap. Music and Film expose secondary destinations on hover/tap.
     final settings = HomeCustomizationStore.settingsFor(
         AppController.instance.currentProfile);
@@ -3753,6 +3778,7 @@ class _MainScreenState extends State<MainScreen> {
       'More': const _MoreNavigationPlaceholder(),
       'Surprise Me': const _MoreNavigationPlaceholder(),
       'Music': const MusicScreen(),
+      'Radio': const RadioScreen(),
       'Film': const FilmExperienceScreen(),
       'Collections': const CollectionsPanel(),
       'My TV': const MyTvScreen(),
@@ -3950,6 +3976,8 @@ class _StreamingNavigationBar extends StatelessWidget {
           Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
       'Music': const _NavItemData(
           Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
+      'Radio': const _NavItemData(
+          Icons.radio_outlined, Icons.radio_rounded, 'Radio'),
       'Film':
           const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
       'Collections': const _NavItemData(Icons.collections_bookmark_outlined,
@@ -4410,6 +4438,7 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onHomeServer;
   final VoidCallback onMembers;
   final VoidCallback onCustomize;
+  final VoidCallback onPersonalStreaming;
 
   const _MoreActionsSheet({
     required this.onImport,
@@ -4419,6 +4448,7 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onHomeServer,
     required this.onMembers,
     required this.onCustomize,
+    required this.onPersonalStreaming,
   });
 
   @override
@@ -4473,6 +4503,12 @@ class _MoreActionsSheet extends StatelessWidget {
             title: tr('Customize App'),
             subtitle: tr('Change your Home, Details and Music page layout'),
             onTap: onCustomize,
+          ),
+          _SheetAction(
+            icon: Icons.auto_awesome_rounded,
+            title: tr('Personal Streaming'),
+            subtitle: tr('Discovery, My Stuff, stats, downloads and playback preferences'),
+            onTap: onPersonalStreaming,
           ),
         ],
       ),
@@ -4873,6 +4909,16 @@ List<Widget> _buildHomeSectionSlivers(
   String subtitle;
   bool enabled;
   switch (section) {
+    case 'Friends & Communities':
+      return settings.showFriendsCommunity
+          ? [
+              SliverToBoxAdapter(
+                child: SocialHomeSection(
+                  key: ValueKey(AppController.instance.currentProfile?.id),
+                ),
+              ),
+            ]
+          : const [];
     case 'Continue Watching':
       items = watched;
       subtitle = 'Pick up where you left off';

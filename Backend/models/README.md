@@ -126,6 +126,22 @@ hard-coded list.
 The persistence layer is responsible for enforcing identity,
 deduplication, and relationship integrity.
 
+## `knowledge_fact.dart`
+
+`KnowledgeFact` represents a sourced editorial claim attached to a canonical
+`MediaWork`, optionally scoped to an exact `media_versions` record. Facts carry
+claim framing, spoiler scope, difficulty, typed related-entity references, and
+one or more source citations. Each citation records whether it directly
+supports, corroborates, contextualizes, or contradicts the claim, and can
+identify a page, chapter, timestamp, or section within the source. A fact
+without a valid source is invalid. This model does not own reviews, graph
+edges, or provider metadata.
+
+The initial persistence contract is in
+`lib/supabase/migrations/media_knowledge_layer.sql`. Published catalog facts
+and their sources are readable by authenticated clients; catalog mutations
+remain backend/editorial operations.
+
 ---
 
 ## `media_artwork.dart`

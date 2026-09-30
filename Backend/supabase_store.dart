@@ -86,6 +86,125 @@ class SupabaseStore {
 
   SupabaseClient? get _db => _client;
 
+  Future<Map<String, dynamic>> loadSocialHome({
+    required String accountExternalId,
+    required String profileExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final current = await c.from('accounts').select('id,username,display_name').eq('external_account_id', accountExternalId).maybeSingle();
+    if (current == null) throw StateError('Account not found.');
+    final accountId = current['id'].toString();
+    final outgoing = await c.from('social_friendships').select().eq('requester_account_id', accountId).eq('requester_profile_id', profileExternalId).eq('status', 'accepted');
+    final incoming = await c.from('social_friendships').select().eq('recipient_account_id', accountId).eq('recipient_profile_id', profileExternalId).eq('status', 'accepted');
+    final friends = <Map<String, dynamic>>[];
+    final friendKeys = <String>{};
+    for (final row in [...outgoing, ...incoming]) {
+      final otherId = (row['requester_account_id'] == accountId ? row['recipient_account_id'] : row['requester_account_id']).toString();
+      final otherProfile = (row['requester_account_id'] == accountId ? row['recipient_profile_id'] : row['requester_profile_id']).toString();
+      final key = '$otherId:$otherProfile';
+      if (!friendKeys.add(key)) continue;
+      final other = await c.from('accounts').select('id,username,display_name,avatar_url').eq('id', otherId).maybeSingle();
+      if (other != null) friends.add({...other, 'profileId': otherProfile});
+    }
+    final pendingRows = await c.from('social_friendships').select().eq('recipient_account_id', accountId).eq('recipient_profile_id', profileExternalId).eq('status', 'pending').order('created_at', ascending: false).limit(20);
+    final requests = <Map<String, dynamic>>[];
+    for (final row in pendingRows) {
+      final sender = await c.from('accounts').select('username,display_name,avatar_url').eq('id', row['requester_account_id'].toString()).maybeSingle();
+      if (sender != null) requests.add({...row, 'sender': sender});
+    }
+    final candidates = await c.from('accounts').select('id,username,display_name,avatar_url').eq('status', 'active').eq('social_discoverable', true).neq('id', accountId).limit(50);
+    final excluded = {...friendKeys, for (final row in pendingRows) '${row['requester_account_id']}:${row['requester_profile_id']}'};
+    final suggestions = <Map<String, dynamic>>[];
+    for (final person in candidates) {
+      if (suggestions.length >= 10) break;
+      final otherProfiles = await c.from('profiles').select('external_profile_id,name').eq('account_id', person['id'].toString()).eq('is_active', true).not('external_profile_id', 'is', null).limit(1);
+      if (otherProfiles.isEmpty) continue;
+      final profile = otherProfiles.first;
+      final key = '${person['id']}:${profile['external_profile_id']}';
+      if (excluded.contains(key)) continue;
+      suggestions.add({...person, 'profileId': profile['external_profile_id'], 'profileName': profile['name']});
+    }
+    final posts = <Map<String, dynamic>>[];
+    for (final friend in friends) {
+      final items = await c.from('social_posts').select().eq('author_account_id', friend['id'].toString()).eq('author_profile_id', friend['profileId'].toString()).eq('visibility', 'friends').order('created_at', ascending: false).limit(20);
+      posts.addAll(items.map((row) => {...row, 'author': friend}));
+    }
+    posts.sort((a,b) => (b['created_at']?.toString() ?? '').compareTo(a['created_at']?.toString() ?? ''));
+    final communities = await c.from('social_communities').select('id,name,slug,description,visibility,created_at').eq('visibility', 'public').order('name').limit(100);
+    final memberships = await c.from('social_community_memberships').select('community_id').eq('account_id', accountId).eq('profile_id', profileExternalId);
+    final joined = memberships.map((m) => m['community_id'].toString()).toSet();
+    return {
+      'friendCount': friends.length, 'friends': friends, 'requests': requests,
+      'suggestions': suggestions, 'posts': posts.take(30).toList(),
+      'communities': communities.map((community) => {...community, 'joined': joined.contains(community['id'].toString())}).toList(),
+    };
+  }
+
+  Future<Map<String, dynamic>> sendSocialFriendRequest({required String accountExternalId, required String profileExternalId, required String username}) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c.from('accounts').select('id').eq('external_account_id', accountExternalId).maybeSingle();
+    final target = await c.from('accounts').select('id').ilike('username', username.trim()).maybeSingle();
+    if (me == null || target == null) throw StateError('Account or user not found.');
+    final targetProfiles = await c.from('profiles').select('external_profile_id').eq('account_id', target['id'].toString()).eq('is_active', true).not('external_profile_id', 'is', null).limit(1);
+    if (targetProfiles.isEmpty) throw StateError('That user has no active profile.');
+    final targetProfile = targetProfiles.first['external_profile_id'].toString();
+    if (me['id'].toString() == target['id'].toString() && profileExternalId == targetProfile) throw StateError('You cannot add yourself.');
+    final rows = await c.from('social_friendships').select().eq('requester_account_id', me['id'].toString()).eq('requester_profile_id', profileExternalId).eq('recipient_account_id', target['id'].toString()).eq('recipient_profile_id', targetProfile).limit(1);
+    if (rows.isNotEmpty && ['pending','accepted'].contains(rows.first['status'])) throw StateError('A request or friendship already exists.');
+    final data = {'requester_account_id': me['id'], 'requester_profile_id': profileExternalId, 'recipient_account_id': target['id'], 'recipient_profile_id': targetProfile, 'status': 'pending', 'updated_at': DateTime.now().toUtc().toIso8601String()};
+    if (rows.isNotEmpty) return Map<String,dynamic>.from(await c.from('social_friendships').update(data).eq('id', rows.first['id'].toString()).select().single());
+    return Map<String,dynamic>.from(await c.from('social_friendships').insert(data).select().single());
+  }
+
+  Future<Map<String, dynamic>> answerSocialFriendRequest({required String accountExternalId, required String profileExternalId, required String friendshipId, required String action}) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    if (!{'accept','decline','remove'}.contains(action)) throw ArgumentError('Unsupported friendship action.');
+    final me = await c.from('accounts').select('id').eq('external_account_id', accountExternalId).single();
+    final query = c.from('social_friendships').select().eq('id', friendshipId);
+    final row = await query.maybeSingle();
+    if (row == null) throw StateError('Friend request not found.');
+    final isRecipient = row['recipient_account_id'].toString() == me['id'].toString() && row['recipient_profile_id'] == profileExternalId;
+    final isRequester = row['requester_account_id'].toString() == me['id'].toString() && row['requester_profile_id'] == profileExternalId;
+    if (!isRecipient && !isRequester) throw StateError('Friend request does not belong to this profile.');
+    if ((action == 'accept' || action == 'decline') && (!isRecipient || row['status'] != 'pending')) throw StateError('This request is no longer pending.');
+    if (action == 'remove' && row['status'] != 'accepted') throw StateError('This friendship is no longer active.');
+    final status = action == 'accept' ? 'accepted' : action == 'decline' ? 'declined' : 'removed';
+    return Map<String,dynamic>.from(await c.from('social_friendships').update({'status':status,'updated_at':DateTime.now().toUtc().toIso8601String()}).eq('id',friendshipId).select().single());
+  }
+
+  Future<Map<String, dynamic>> createSocialPost({required String accountExternalId, required String profileExternalId, required String profileName, required String body, String? communityId}) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c.from('accounts').select('id').eq('external_account_id',accountExternalId).single();
+    if (communityId != null) {
+      final membership = await c.from('social_community_memberships').select('community_id').eq('community_id',communityId).eq('account_id',me['id'].toString()).eq('profile_id',profileExternalId).maybeSingle();
+      if (membership == null) throw StateError('Join this community before posting.');
+    }
+    return Map<String,dynamic>.from(await c.from('social_posts').insert({'author_account_id':me['id'],'author_profile_id':profileExternalId,'author_profile_name':profileName,'body':body.trim(),'visibility':communityId == null ? 'friends':'community','community_id':communityId}).select().single());
+  }
+
+  Future<Map<String, dynamic>> createSocialCommunity({required String accountExternalId, required String profileExternalId, required String name, required String description}) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c.from('accounts').select('id').eq('external_account_id',accountExternalId).single();
+    final slugBase = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'(^-+|-+$)'), '');
+    final row = await c.from('social_communities').insert({'name':name.trim(),'slug':'$slugBase-${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}','description':description.trim(),'created_by_account_id':me['id']}).select().single();
+    await c.from('social_community_memberships').insert({'community_id':row['id'],'account_id':me['id'],'profile_id':profileExternalId,'role':'owner'});
+    return Map<String,dynamic>.from(row);
+  }
+
+  Future<void> joinSocialCommunity({required String accountExternalId, required String profileExternalId, required String communityId}) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c.from('accounts').select('id').eq('external_account_id',accountExternalId).single();
+    final community = await c.from('social_communities').select('visibility').eq('id',communityId).maybeSingle();
+    if (community == null || community['visibility'] != 'public') throw StateError('This community cannot be joined.');
+    await c.from('social_community_memberships').upsert({'community_id':communityId,'account_id':me['id'],'profile_id':profileExternalId},onConflict:'community_id,account_id,profile_id');
+  }
+
   // ---------------------------------------------------------------------------
   // ACCOUNT LOOKUP
   // ---------------------------------------------------------------------------
@@ -2454,14 +2573,14 @@ class SupabaseStore {
   }
 
   // ---------------------------------------------------------------------------
-  // PHASE 2 GENERIC RECORDS
+  // GENERIC APP RECORDS
   // ---------------------------------------------------------------------------
 
-  /// Stores a non-financial Phase 2 record in the extensible Phase 2 table.
+  /// Stores an application record in the extensible application records table.
   ///
   /// Financial credentials are explicitly out of scope for this method. Use
   /// the dedicated payment-provider token tables for tokenized payment data.
-  Future<void> upsertPhase2Record({
+  Future<void> upsertAppRecord({
     required String accountExternalId,
     String? profileExternalId,
     required String recordType,
@@ -2487,7 +2606,7 @@ class SupabaseStore {
       maxBytes: _maxSnapshotBytes,
     );
 
-    await c.from('phase2_records').upsert(
+    await c.from('app_records').upsert(
       {
         'id': _requiredId(recordId, field: 'recordId'),
         'account_id': _requiredId(internalAccount['id']?.toString(), field: 'accounts.id'),
@@ -2500,7 +2619,7 @@ class SupabaseStore {
     );
   }
 
-  Future<List<Map<String, dynamic>>> loadPhase2Records({
+  Future<List<Map<String, dynamic>>> loadAppRecords({
     required String accountExternalId,
     String? profileExternalId,
     String? recordType,
@@ -2519,7 +2638,7 @@ class SupabaseStore {
     }
 
     dynamic query = c
-        .from('phase2_records')
+        .from('app_records')
         .select()
         .eq('account_id', internalAccount['id'])
         .order('updated_at', ascending: false);
@@ -2556,7 +2675,7 @@ class SupabaseStore {
     return result;
   }
 
-  Future<void> deletePhase2Record({
+  Future<void> deleteAppRecord({
     required String accountExternalId,
     String? profileExternalId,
     required String recordType,
@@ -2574,7 +2693,7 @@ class SupabaseStore {
     if (internalAccount == null) return;
 
     dynamic query = c
-        .from('phase2_records')
+        .from('app_records')
         .delete()
         .eq('account_id', internalAccount['id'])
         .eq('record_type', _boundedText(recordType, field: 'recordType', maxLength: 120))
@@ -2588,6 +2707,98 @@ class SupabaseStore {
     }
 
     await query;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MEDIA KNOWLEDGE
+  // ---------------------------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> loadPublishedKnowledgeFacts({
+    required String mediaWorkId,
+  }) async {
+    final c = _db;
+    if (c == null) return const <Map<String, dynamic>>[];
+    final cleanId = _boundedText(mediaWorkId, field: 'mediaWorkId', maxLength: 256);
+    final rows = await c
+        .from('media_knowledge_facts')
+        .select('*, media_knowledge_fact_sources(*)')
+        .eq('media_work_id', cleanId)
+        .eq('editorial_status', 'published')
+        .order('created_at', ascending: false);
+    return rows
+        .whereType<Map>()
+        .map((raw) {
+          final row = Map<String, dynamic>.from(raw);
+          return {
+            'id': row['id']?.toString() ?? '',
+            'mediaWorkId': row['media_work_id']?.toString() ?? cleanId,
+            'mediaVersionId': row['media_version_id']?.toString(),
+            'category': row['category']?.toString() ?? '',
+            'title': row['title']?.toString() ?? '',
+            'body': row['body']?.toString() ?? '',
+            'claimStatus': row['claim_status']?.toString() ?? 'established',
+            'spoilerScope': row['spoiler_scope']?.toString() ?? 'none',
+            'difficulty': row['difficulty']?.toString() ?? 'casual',
+            'relatedEntities': row['related_entities'] is List
+                ? row['related_entities']
+                : const <dynamic>[],
+            'reviewedAt': row['reviewed_at']?.toString(),
+            'sources': (row['media_knowledge_fact_sources'] is List)
+                ? (row['media_knowledge_fact_sources'] as List)
+                    .whereType<Map>()
+                    .map((source) => {
+                          'id': source['id']?.toString() ?? '',
+                          'title': source['title']?.toString() ?? '',
+                          'url': source['url']?.toString() ?? '',
+                          'sourceType': source['source_type']?.toString() ?? '',
+                          'publisher': source['publisher']?.toString(),
+                          'publishedAt': source['published_at']?.toString(),
+                          'accessedAt': source['accessed_at']?.toString(),
+                          'evidenceRelation': source['evidence_relation']?.toString() ?? 'direct_support',
+                          'locator': source['locator']?.toString(),
+                          'supportingNote': source['supporting_note']?.toString(),
+                        })
+                    .toList()
+                : const <dynamic>[],
+          };
+        })
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> loadPublishedKnowledgeStories({
+    required String mediaWorkId,
+  }) async {
+    final c = _db;
+    if (c == null) return const <Map<String, dynamic>>[];
+    final cleanId = _boundedText(mediaWorkId, field: 'mediaWorkId', maxLength: 256);
+    final rows = await c
+        .from('media_knowledge_stories')
+        .select('*, media_knowledge_story_steps(*, media_knowledge_facts(*))')
+        .eq('anchor_media_work_id', cleanId)
+        .eq('editorial_status', 'published')
+        .order('created_at', ascending: false);
+    return rows
+        .whereType<Map>()
+        .map((raw) {
+          final row = Map<String, dynamic>.from(raw);
+          final rawSteps = row['media_knowledge_story_steps'];
+          final steps = rawSteps is List
+              ? rawSteps.whereType<Map>().map((step) => {
+                    'stepNumber': step['step_number'],
+                    'factId': step['fact_id']?.toString() ?? '',
+                    'transitionNote': step['transition_note']?.toString(),
+                  }).toList()
+              : <dynamic>[];
+          return {
+            'id': row['id']?.toString() ?? '',
+            'anchorMediaWorkId': row['anchor_media_work_id']?.toString() ?? cleanId,
+            'title': row['title']?.toString() ?? '',
+            'summary': row['summary']?.toString(),
+            'spoilerScope': row['spoiler_scope']?.toString() ?? 'none',
+            'steps': steps,
+          };
+        })
+        .toList(growable: false);
   }
 
   // ---------------------------------------------------------------------------

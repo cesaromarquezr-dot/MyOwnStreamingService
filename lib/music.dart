@@ -17,6 +17,7 @@ import 'localization.dart';
 import 'profile_content_safety.dart';
 import 'shop.dart';
 import 'media_actions.dart';
+import 'people_timeline.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -711,6 +712,25 @@ class _MusicScreenState extends State<MusicScreen> {
               .toSet()
               .toList(),
           Icons.person_rounded,
+          onItemTap: (artist) {
+            final normalizedArtist = artist.trim().toLowerCase();
+            final seenAlbums = <String>{};
+            final credits = <Map<String, dynamic>>[];
+            for (final track in library.tracks) {
+              if (track.artist.trim().toLowerCase() == normalizedArtist && track.album.trim().isNotEmpty) {
+                final key = track.album.trim().toLowerCase();
+                if (seenAlbums.add(key)) {
+                  credits.add({'title': track.album, 'type': 'Album', 'category': 'Music', 'role': 'Artist'});
+                }
+              }
+              if (track.featuredArtists.any((name) => name.trim().toLowerCase() == normalizedArtist)) {
+                credits.add({'title': track.title, 'type': 'Track', 'category': 'Music', 'role': 'Featured artist', 'creditGroup': track.artist});
+              }
+            }
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => PeopleCareerTimelineScreen(personName: artist, localCredits: credits),
+            ));
+          },
         ));
       } else if (section == 'Albums' && settings.showAlbums) {
         output.add(_nameSection(
@@ -1109,6 +1129,7 @@ class _MusicScreenState extends State<MusicScreen> {
     String subtitle,
     List<String> values,
     IconData icon,
+    {ValueChanged<String>? onItemTap}
   ) {
     return SliverToBoxAdapter(
       child: Padding(
@@ -1128,24 +1149,25 @@ class _MusicScreenState extends State<MusicScreen> {
                 scrollDirection: Axis.horizontal,
                 itemCount: values.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (_, index) => Container(
-                  width: 155,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .05),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(icon),
-                      const Spacer(),
-                      Text(values[index],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ],
+                itemBuilder: (_, index) => InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: onItemTap == null ? null : () => onItemTap(values[index]),
+                  child: Container(
+                    width: 155,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(icon),
+                        const Spacer(),
+                        Text(values[index], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                   ),
                 ),
               ),
