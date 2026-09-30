@@ -69,12 +69,15 @@ import 'routes/playback_routes.dart';
 import 'routes/legal_routes.dart';
 import 'routes/sports_routes.dart';
 import 'routes/review_routes.dart';
+import 'routes/rating_routes.dart';
 import 'routes/home_server_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/media_intelligence_routes.dart';
 import 'routes/location_routes.dart';
 import 'routes/self_hosting_routes.dart';
 import 'routes/shop_routes.dart';
+import 'routes/live_shopping_routes.dart';
+import 'routes/physical_item_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -88,6 +91,7 @@ import 'services/email_service.dart';
 import 'services/remote_access_service.dart';
 import 'services/sports_service.dart';
 import 'services/review_service.dart';
+import 'services/rating_service.dart';
 import 'services/home_server_service.dart';
 import 'services/media_intelligence_service.dart';
 import 'services/media_analyzer_service.dart';
@@ -151,6 +155,8 @@ final searchService = SearchService(
 database: database,
 );
 
+final ratingService = RatingService();
+
 final shopService = ShopService(
 database: database,
 );
@@ -191,6 +197,12 @@ final authentication = AuthenticationMiddleware(
 authService: authService,
 );
 
+final physicalItemRoutes = PhysicalItemRoutes(
+  authentication: authentication,
+  database: database,
+  store: SupabaseStore.instance,
+);
+
 // ------------------------------------------------------------
 // AUTH ROUTES
 // ------------------------------------------------------------
@@ -228,6 +240,15 @@ searchService: searchService,
 final shopRoutes = ShopRoutes(
 authenticationMiddleware: authentication,
 shopService: shopService,
+);
+
+final ratingRoutes = RatingRoutes(
+  authentication: authentication,
+  service: ratingService,
+);
+
+final liveShoppingRoutes = LiveShoppingRoutes(
+  authentication: authentication,
 );
 
 // ------------------------------------------------------------
@@ -404,7 +425,9 @@ request,
 authRoutes,
 recommendationsRoutes,
 searchRoutes,
+ratingRoutes,
 shopRoutes,
+liveShoppingRoutes,
 paymentRoutes,
 groupRoutes,
 armRoutes,
@@ -422,6 +445,7 @@ mediaIntelligenceRoutes,
 locationRoutes,
 selfHostingRoutes,
 selfHostingSecurity,
+physicalItemRoutes,
 ).catchError(
 (Object error, StackTrace stackTrace) {
 developer.log(
@@ -444,7 +468,9 @@ HttpRequest request,
 AuthRoutes authRoutes,
 RecommendationsRoutes recommendationsRoutes,
 SearchRoutes searchRoutes,
+RatingRoutes ratingRoutes,
 ShopRoutes shopRoutes,
+LiveShoppingRoutes liveShoppingRoutes,
 PaymentRoutes paymentRoutes,
 GroupRoutes groupRoutes,
 ArmRoutes armRoutes,
@@ -462,6 +488,7 @@ MediaIntelligenceRoutes mediaIntelligenceRoutes,
 LocationRoutes locationRoutes,
 SelfHostingRoutes selfHostingRoutes,
 SelfHostingSecurity selfHostingSecurity,
+PhysicalItemRoutes physicalItemRoutes,
 ) async {
 var responseStarted = false;
 
@@ -632,8 +659,24 @@ if (path == '/api/v1/search') {
 }
 
 // ----------------------------------------------------------
+// RATINGS / EXTERNAL PROVIDER AGGREGATION
+// ----------------------------------------------------------
+
+if (path == '/api/v1/ratings' || path == '/api/v1/ratings/user') {
+  await ratingRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
+
+// ----------------------------------------------------------
 // SHOP ASSOCIATIONS
 // ----------------------------------------------------------
+
+if (path.startsWith('/api/v1/shop/live-events')) {
+  await liveShoppingRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
 
 if (path == '/api/v1/shop/entities' ||
     path == '/api/v1/shop/entities/sync') {
@@ -816,6 +859,12 @@ if (path.startsWith(
 // ----------------------------------------------------------
 // ARM
 // ----------------------------------------------------------
+
+if (path.startsWith('/api/v1/physical-items')) {
+  await physicalItemRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
 
 if (path.startsWith(
   '/api/v1/arm/',

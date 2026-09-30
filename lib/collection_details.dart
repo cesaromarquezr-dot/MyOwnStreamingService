@@ -9,6 +9,7 @@ import 'app_core.dart';
 import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
+import 'media_actions.dart';
 
 /// Full-screen collection details view.
 ///
@@ -941,16 +942,27 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                                 trailing: const Icon(
                                   Icons.add_rounded,
                                 ),
-                                onTap: () {
-                                  controller
-                                      .addToCollection(
-                                    collection.id,
-                                    media.id,
+                                onTap: () async {
+                                  final result = await UniversalMediaActions.perform(
+                                    context: UniversalMediaActionContext(
+                                      contentType: media.type,
+                                      contentId: media.id,
+                                      mediaVersionId: media.mediaVersionId,
+                                      profileId: AppController.instance.currentProfile?.id ??
+                                          'local-profile',
+                                      availableActions: const {
+                                        UniversalMediaAction.addToCollection,
+                                      },
+                                    ),
+                                    action: UniversalMediaAction.addToCollection,
+                                    targetId: collection.id,
+                                    apply: () => controller.addToCollection(
+                                      collection.id,
+                                      media.id,
+                                    ),
                                   );
-
-                                  Navigator.pop(
-                                    sheetContext,
-                                  );
+                                  if (!result.applied || !sheetContext.mounted) return;
+                                  Navigator.pop(sheetContext);
                                 },
                               ),
                             );

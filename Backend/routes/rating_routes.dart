@@ -207,6 +207,11 @@ class RatingRoutes {
       _maxProviderIdLength,
     );
 
+    final imdbId = _optionalBoundedValue(
+      query['imdbId'],
+      _maxProviderIdLength,
+    );
+
     final musicBrainzId = _optionalBoundedValue(
       query['musicBrainzId'],
       _maxProviderIdLength,
@@ -220,6 +225,7 @@ class RatingRoutes {
       year: _parseYear(query['year']),
       mediaType: mediaType,
       tmdbId: tmdbId,
+      imdbId: imdbId,
       musicBrainzId: musicBrainzId,
       refresh: refresh,
     );

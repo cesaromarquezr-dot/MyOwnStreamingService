@@ -46,6 +46,12 @@ Models should generally **not**:
 
 # Core media models
 
+## Owned-library boundary
+
+The library-facing `Media` model is the account's acquired/imported collection, not a mirror of external provider catalogs. Provider metadata can enrich a known entity but cannot create an owned library entry. Library creation belongs to a validated ownership/import flow that links an account physical item, edition/version, selected disc content, imported file, and home server. Search/discovery catalog results remain separate until the account acquires and imports the corresponding physical media.
+
+The current ARM model family already represents physical releases, discs, disc contents, rip jobs, and import review. It does not by itself establish that every media insertion path enforces this owned-library boundary; backend persistence must validate ownership and successful server registration before creating a playable library record.
+
 ## `media.dart`
 
 `Media` represents a library-facing media item such as a movie or TV

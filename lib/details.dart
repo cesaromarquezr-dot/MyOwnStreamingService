@@ -13,6 +13,8 @@ import 'discovery_experience.dart';
 import 'localization.dart';
 import 'shop.dart';
 import 'media_actions.dart';
+import 'media_continuity.dart';
+import 'widgets/like_toggle_button.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -119,6 +121,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         children: [
           for (final section in customization.sectionOrder)
             _buildSection(section),
+          MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
         ],
       ),
     );
@@ -1336,9 +1339,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: Row(
         children: [
           Expanded(
-            child: OutlinedButton.icon(
+            child: LikeToggleButton(
+              liked: liked,
+              showLabel: true,
               onPressed: () async {
-                await UniversalMediaActions.perform(
+                final result = await UniversalMediaActions.perform(
                   context: _actionContext(const {
                     UniversalMediaAction.like,
                     UniversalMediaAction.removeReaction,
@@ -1354,13 +1359,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                     }
                   }),
                 );
+                if (result.applied && mounted) setState(() {});
               },
-              icon: Icon(
-                liked
-                    ? Icons.thumb_up_rounded
-                    : Icons.thumb_up_outlined,
-              ),
-              label: const UniversalText('Like'),
             ),
           ),
           const SizedBox(width: 10),

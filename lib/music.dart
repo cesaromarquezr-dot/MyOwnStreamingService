@@ -3,6 +3,7 @@
 // features, playlists and per-profile music customization.
 // Physical audio files remain on the account's home server.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -225,6 +226,42 @@ class MusicLibraryStore extends ChangeNotifier {
   final List<MusicTrack> tracks = <MusicTrack>[];
   final Map<String, List<String>> playlists = <String, List<String>>{};
   final Map<String, int> listenCounts = <String, int>{};
+  SharedPreferences? _playlistPreferences;
+  String _playlistProfileKey = 'default';
+
+  Future<void> initializeForProfile(String? profileId) async {
+    _playlistPreferences ??= await SharedPreferences.getInstance();
+    _playlistProfileKey = profileId?.trim().isNotEmpty == true
+        ? profileId!.trim()
+        : 'default';
+    playlists
+      ..clear()
+      ..addAll(_decodePlaylists(
+        _playlistPreferences!.getString('music_playlists_$_playlistProfileKey'),
+      ));
+    notifyListeners();
+  }
+
+  Map<String, List<String>> _decodePlaylists(String? encoded) {
+    if (encoded == null || encoded.isEmpty) return <String, List<String>>{};
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map) return <String, List<String>>{};
+      return decoded.map((key, value) => MapEntry(
+            key.toString(),
+            value is List ? value.map((id) => id.toString()).toList() : <String>[],
+          ));
+    } catch (_) {
+      return <String, List<String>>{};
+    }
+  }
+
+  void _persistPlaylists() {
+    _playlistPreferences?.setString(
+      'music_playlists_$_playlistProfileKey',
+      jsonEncode(playlists),
+    );
+  }
 
   String? activePlaylist;
   String? currentTrackId;
@@ -335,6 +372,7 @@ class MusicLibraryStore extends ChangeNotifier {
     final clean = name.trim();
     if (clean.isEmpty || playlists.containsKey(clean)) return;
     playlists[clean] = trackIds.toList();
+    _persistPlaylists();
     AppController.instance.addNotification(action: 'created playlist "$clean"');
     notifyListeners();
   }
@@ -347,6 +385,7 @@ class MusicLibraryStore extends ChangeNotifier {
       return;
     }
     playlists.remove(name);
+    _persistPlaylists();
     if (activePlaylist == name) activePlaylist = null;
     notifyListeners();
   }
@@ -360,6 +399,7 @@ class MusicLibraryStore extends ChangeNotifier {
     } else {
       list.add(trackId);
     }
+    _persistPlaylists();
     notifyListeners();
   }
 
@@ -529,6 +569,12 @@ class _MusicScreenState extends State<MusicScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(library.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
+    unawaited(MusicFavoritesBridge.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
     library.registerShopEntities();
     ShopCatalog.instance.syncShopEntityIndex();
   }
@@ -543,7 +589,7 @@ class _MusicScreenState extends State<MusicScreen> {
     final settings = customization;
 
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[library, playback]),
+      animation: Listenable.merge(<Listenable>[library, playback, MusicFavoritesBridge.changes]),
       builder: (context, _) {
         return Scaffold(
           backgroundColor: Color(int.parse(library.homeBackground)),
@@ -912,7 +958,7 @@ class _MusicScreenState extends State<MusicScreen> {
   Widget _likedSongsSection() {
     final liked = MusicFavoritesBridge.likedTracks();
     final tracks =
-        library.tracks.where((track) => liked.contains(track.title)).toList();
+        library.tracks.where((track) => liked.contains(track.id)).toList();
     return SliverToBoxAdapter(
       child: _trackSectionBody(
         'Liked Songs',
@@ -994,7 +1040,7 @@ class _MusicScreenState extends State<MusicScreen> {
                 itemBuilder: (_, index) {
                   final track = tracks[index];
                   return SizedBox(
-                    width: 190,
+                    width: 225,
                     child: Card(
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
@@ -1022,6 +1068,20 @@ class _MusicScreenState extends State<MusicScreen> {
                                             color: Colors.white54,
                                             fontSize: 12)),
                                   ],
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: MusicFavoritesBridge.likedTracks().contains(track.id) ? 'Liked' : 'Like',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _toggleTrackLike(track),
+                                icon: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  child: Icon(
+                                    MusicFavoritesBridge.likedTracks().contains(track.id)
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    key: ValueKey(MusicFavoritesBridge.likedTracks().contains(track.id)),
+                                  ),
                                 ),
                               ),
                               IconButton(
@@ -1094,6 +1154,24 @@ class _MusicScreenState extends State<MusicScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _toggleTrackLike(MusicTrack track) async {
+    final liked = MusicFavoritesBridge.likedTracks().contains(track.id);
+    final result = await UniversalMediaActions.perform(
+      context: UniversalMediaActionContext(
+        contentType: 'music_track',
+        contentId: track.id,
+        profileId: AppController.instance.currentProfile?.id ?? 'local-profile',
+        availableActions: const {
+          UniversalMediaAction.like,
+          UniversalMediaAction.removeReaction,
+        },
+      ),
+      action: liked ? UniversalMediaAction.removeReaction : UniversalMediaAction.like,
+      apply: () => MusicFavoritesBridge.toggleTrack(track.id),
+    );
+    if (result.applied && mounted) setState(() {});
   }
 
   Widget _playlistSliver() {

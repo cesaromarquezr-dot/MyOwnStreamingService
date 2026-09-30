@@ -1,4 +1,5 @@
 // FILE: `Backend/services/rating_service.dart`.
+import 'external_rating_service.dart';
 // Purpose: Stores profile-specific 0.5-5 star ratings and returns provider
 // ratings without combining provider scores with personal ratings.
 
@@ -64,8 +65,12 @@ class UserMediaRating {
 }
 
 class RatingService {
+  final ExternalRatingService externalRatings;
   final Map<String, UserMediaRating> _ratings =
       <String, UserMediaRating>{};
+
+  RatingService({ExternalRatingService? externalRatings})
+      : externalRatings = externalRatings ?? ExternalRatingService();
 
   static bool isValidStars(double stars) {
     if (!stars.isFinite) {
@@ -85,15 +90,16 @@ class RatingService {
   ///
   /// Provider scores are deliberately not generated, averaged, or combined
   /// with profile-specific ratings by this service.
-  List<Map<String, dynamic>> providerRatings({
+  Future<List<Map<String, dynamic>>> providerRatings({
     required String mediaId,
     required String title,
     int? year,
     required String mediaType,
     String? tmdbId,
+    String? imdbId,
     String? musicBrainzId,
     bool refresh = false,
-  }) {
+  }) async {
     final normalizedMediaId = mediaId.trim();
 
     if (normalizedMediaId.isEmpty) {
@@ -112,9 +118,17 @@ class RatingService {
       throw Exception('Year must be between 1800 and 3000.');
     }
 
-    // Provider integrations can populate this result in a future
-    // implementation. This service must never fabricate provider scores.
-    return <Map<String, dynamic>>[];
+    final ratings = await externalRatings.getRatings(
+      title: title,
+      year: year,
+      imdbId: imdbId,
+      mediaType: mediaType,
+      refresh: refresh,
+    );
+
+    // Provider scores remain independent. No cross-provider master score is
+    // calculated here.
+    return ratings.map((rating) => rating.toJson()).toList(growable: false);
   }
 
   /// Returns the current profile's private rating for a media item.

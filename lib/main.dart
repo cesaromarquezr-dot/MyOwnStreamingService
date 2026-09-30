@@ -34,6 +34,8 @@ import 'discovery_experience.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
 import 'localization.dart';
+import 'activity_timeline.dart';
+import 'my_tv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -732,6 +734,7 @@ class HomeCustomization {
               'Music',
               'Film',
               'Collections',
+              'My TV',
               'Shop',
               'Group Chat',
             ];
@@ -2355,6 +2358,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       'Music',
       'Film',
       'Collections',
+      'My TV',
       'Shop',
       if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
       'Group Chat',
@@ -3664,6 +3668,7 @@ class _MainScreenState extends State<MainScreen> {
       'Music',
       'Film',
       'Collections',
+      'My TV',
       'Shop',
       if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
       'Group Chat',
@@ -3750,6 +3755,7 @@ class _MainScreenState extends State<MainScreen> {
       'Music': const MusicScreen(),
       'Film': const FilmExperienceScreen(),
       'Collections': const CollectionsPanel(),
+      'My TV': const MyTvScreen(),
       'Shop': ShopScreen(
         onHome: _returnToHome,
       ),
@@ -3948,6 +3954,8 @@ class _StreamingNavigationBar extends StatelessWidget {
           const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
       'Collections': const _NavItemData(Icons.collections_bookmark_outlined,
           Icons.collections_bookmark_rounded, 'Collections'),
+      'My TV': const _NavItemData(Icons.live_tv_outlined,
+          Icons.live_tv_rounded, 'My TV'),
       'Shop': const _NavItemData(
           Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
       'Seller Dashboard': const _NavItemData(Icons.storefront_outlined,
@@ -6595,6 +6603,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
+          if (controller.currentProfile != null) ...[
+            const SizedBox(height: 24),
+            const UniversalText('Recent media activity',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 300,
+              child: ActivityTimeline(
+                profileId: controller.currentProfile!.id,
+                limit: 10,
+              ),
+            ),
+          ],
           const SizedBox(height: 30),
           Container(
             padding: const EdgeInsets.all(16),

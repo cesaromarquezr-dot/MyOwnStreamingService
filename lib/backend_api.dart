@@ -2396,6 +2396,89 @@ class BackendApi {
   }
 
   // ==========================================================
+  // PHYSICAL OWNERSHIP
+  // ==========================================================
+
+  Future<List<Map<String, dynamic>>> getPhysicalItems() async {
+    _requireAuthentication();
+    final result = await _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/physical-items'),
+        headers: _headers,
+      ),
+      'Unable to load physical media ownership.',
+    );
+    final rows = result['items'];
+    if (rows is! List) return const [];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> addPhysicalItem({
+    required String title,
+    required String format,
+    required DateTime acquiredAt,
+    String? region,
+    String? edition,
+    String? editionId,
+    String? physicalReleaseId,
+    DateTime? releaseDate,
+    String? barcode,
+    String? catalogNumber,
+    int discCount = 1,
+    String? condition,
+    String? notes,
+    String? artworkUrl,
+    List<String> includedExtras = const [],
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/physical-items'),
+        headers: _headers,
+        body: jsonEncode({
+          'title': title,
+          'format': format,
+          'acquiredAt': acquiredAt.toUtc().toIso8601String(),
+          'region': region,
+          'edition': edition,
+          'editionId': editionId,
+          'physicalReleaseId': physicalReleaseId,
+          'releaseDate': releaseDate?.toUtc().toIso8601String(),
+          'barcode': barcode,
+          'catalogNumber': catalogNumber,
+          'discCount': discCount,
+          'condition': condition,
+          'notes': notes,
+          'artworkUrl': artworkUrl,
+          'includedExtras': includedExtras,
+        }),
+      ),
+      'Unable to register physical media ownership.',
+    );
+  }
+
+  Future<Map<String, dynamic>> updatePhysicalOwnershipStatus({
+    required String itemId,
+    required String status,
+    String? note,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse(
+          '$baseUrl/physical-items/${Uri.encodeComponent(itemId)}/ownership-status',
+        ),
+        headers: _headers,
+        body: jsonEncode({'status': status, 'note': note}),
+      ),
+      'Unable to update physical media ownership.',
+    );
+  }
+
+  // ==========================================================
   // LIVE SPORTS
   // ==========================================================
 
@@ -2626,6 +2709,7 @@ class BackendApi {
     int? year,
     String mediaType = 'movie',
     String? tmdbId,
+    String? imdbId,
     String? musicBrainzId,
     String? profileId,
     bool refresh = false,
@@ -2637,6 +2721,7 @@ class BackendApi {
       if (year != null) 'year': year.toString(),
       'mediaType': mediaType,
       if (tmdbId != null && tmdbId.isNotEmpty) 'tmdbId': tmdbId,
+      if (imdbId != null && imdbId.isNotEmpty) 'imdbId': imdbId,
       if (musicBrainzId != null && musicBrainzId.isNotEmpty) 'musicBrainzId': musicBrainzId,
       if (profileId != null && profileId.isNotEmpty) 'profileId': profileId,
       'refresh': refresh.toString(),
@@ -2935,6 +3020,29 @@ class BackendApi {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getMediaActivity({
+    required String profileId,
+    int limit = 50,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/phase2/activity').replace(
+      queryParameters: {
+        'profileId': profileId,
+        'limit': limit.toString(),
+      },
+    );
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load profile activity.',
+    );
+    return data['activities'] is List
+        ? (data['activities'] as List)
+            .whereType<Map>()
+            .map((entry) => Map<String, dynamic>.from(entry))
+            .toList(growable: false)
+        : <Map<String, dynamic>>[];
+  }
+
   Future<Map<String, dynamic>> getCollaborativeQueue({required String queueId}) async {
     _requireAuthentication();
     return _requireSuccess(
@@ -3134,6 +3242,84 @@ class BackendApi {
       ),
       'Unable to delete seller payout destination.',
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getShopLiveEvents() async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.get(Uri.parse('$baseUrl/shop/live-events'), headers: _headers),
+      'Unable to load live shopping events.',
+    );
+    return (data['events'] is List)
+        ? (data['events'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> createShopLiveEvent({
+    required String storeId,
+    required String storeName,
+    required String title,
+    required String description,
+    required List<String> productIds,
+    String? streamUrl,
+    String? pinnedProductId,
+    DateTime? scheduledAt,
+    bool randomizedRewardsEnabled = false,
+  }) async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/shop/live-events'), headers: _headers, body: jsonEncode({
+        'storeId': storeId, 'storeName': storeName, 'title': title,
+        'description': description, 'productIds': productIds,
+        'streamUrl': streamUrl, 'pinnedProductId': pinnedProductId,
+        'scheduledAt': scheduledAt?.toUtc().toIso8601String(),
+        'randomizedRewardsEnabled': randomizedRewardsEnabled,
+      })),
+      'Unable to create the live shopping event.',
+    );
+    return Map<String, dynamic>.from(data['event'] as Map);
+  }
+
+  Future<Map<String, dynamic>> updateShopLiveEvent({
+    required String eventId,
+    String? status,
+    String? streamUrl,
+    String? replayUrl,
+    String? pinnedProductId,
+    Map<String, dynamic>? poll,
+    bool? randomizedRewardsEnabled,
+  }) async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.patch(Uri.parse('$baseUrl/shop/live-events/${Uri.encodeComponent(eventId)}'), headers: _headers, body: jsonEncode({
+        if (status != null) 'status': status,
+        if (streamUrl != null) 'streamUrl': streamUrl,
+        if (replayUrl != null) 'replayUrl': replayUrl,
+        if (pinnedProductId != null) 'pinnedProductId': pinnedProductId,
+        if (poll != null) 'poll': poll,
+        if (randomizedRewardsEnabled != null) 'randomizedRewardsEnabled': randomizedRewardsEnabled,
+      })),
+      'Unable to update the live shopping event.',
+    );
+    return Map<String, dynamic>.from(data['event'] as Map);
+  }
+
+  Future<Map<String, dynamic>> askShopLiveQuestion({required String eventId, required String profileId, required String text}) async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/shop/live-events/${Uri.encodeComponent(eventId)}/questions'), headers: _headers, body: jsonEncode({'profileId': profileId, 'question': text})),
+      'Unable to send your question.',
+    );
+    return Map<String, dynamic>.from(data['event'] as Map);
+  }
+
+  Future<Map<String, dynamic>> voteShopLivePoll({required String eventId, required String profileId, required int optionIndex}) async {
+    _requireAuthentication();
+    final data = await _requireSuccess(
+      await http.post(Uri.parse('$baseUrl/shop/live-events/${Uri.encodeComponent(eventId)}/vote'), headers: _headers, body: jsonEncode({'profileId': profileId, 'optionIndex': optionIndex})),
+      'Unable to submit your poll vote.',
+    );
+    return Map<String, dynamic>.from(data['event'] as Map);
   }
 
   Future<List<Map<String, dynamic>>> filterPaymentMethodsForBuyer({

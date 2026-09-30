@@ -15,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'worldwide_location.dart';
+import 'live_shopping.dart';
+import 'page_presentation.dart';
 
 /// A globally searchable entity that a seller can associate with a product.
 ///
@@ -150,6 +152,143 @@ class ShopProduct {
       );
 }
 
+/// Theme and storefront presentation settings shared by the seller editor and
+/// public store renderer. Values are serialized with the existing store record.
+class StorefrontDesign extends PagePresentation {
+  String sectionBackgrounds;
+  String productLayout;
+  int mobileColumns;
+  int desktopColumns;
+  String imageRatio;
+  String heroTitle;
+  String heroSubtitle;
+  String heroCtaLabel;
+  String heroCtaTarget;
+  String mobileBannerUrl;
+  String bannerPosition;
+  double bannerOverlay;
+  List<String> sectionOrder;
+
+  StorefrontDesign({
+    super.presetTheme = 'Indigo',
+    super.brightnessMode = 'system',
+    super.primaryColor = 0xFF536DFE,
+    super.secondaryColor = 0xFFFFB74D,
+    super.backgroundColor = 0xFFF6F7FB,
+    super.gradientEndColor = 0xFFE8EAF6,
+    super.backgroundType = 'solid',
+    super.backgroundImageUrl = '',
+    this.sectionBackgrounds = '',
+    super.fontFamily = 'Default',
+    super.fontScale = 1,
+    super.buttonRadius = 14,
+    super.cardRadius = 18,
+    this.productLayout = 'list',
+    this.mobileColumns = 1,
+    this.desktopColumns = 3,
+    this.imageRatio = 'Square',
+    this.heroTitle = '',
+    this.heroSubtitle = '',
+    this.heroCtaLabel = '',
+    this.heroCtaTarget = 'products',
+    this.mobileBannerUrl = '',
+    this.bannerPosition = 'center',
+    this.bannerOverlay = 0.25,
+    List<String>? sectionOrder,
+  }) : sectionOrder = sectionOrder ?? <String>['About', 'Featured', 'Products'];
+
+  @override
+  Map<String, dynamic> toJson() => {
+    ...super.toJson(),
+    'sectionBackgrounds': sectionBackgrounds,
+    'productLayout': productLayout, 'mobileColumns': mobileColumns,
+    'desktopColumns': desktopColumns, 'imageRatio': imageRatio,
+    'heroTitle': heroTitle, 'heroSubtitle': heroSubtitle,
+    'heroCtaLabel': heroCtaLabel, 'heroCtaTarget': heroCtaTarget,
+    'mobileBannerUrl': mobileBannerUrl, 'bannerPosition': bannerPosition,
+    'bannerOverlay': bannerOverlay, 'sectionOrder': sectionOrder,
+  };
+
+  factory StorefrontDesign.fromJson(Map<String, dynamic> json) => StorefrontDesign(
+    presetTheme: json['presetTheme']?.toString() ?? 'Indigo',
+    brightnessMode: json['brightnessMode']?.toString() ?? 'system',
+    primaryColor: _designInt(json['primaryColor'], 0xFF536DFE),
+    secondaryColor: _designInt(json['secondaryColor'], 0xFFFFB74D),
+    backgroundColor: _designInt(json['backgroundColor'], 0xFFF6F7FB),
+    gradientEndColor: _designInt(json['gradientEndColor'], 0xFFE8EAF6),
+    backgroundType: json['backgroundType']?.toString() ?? 'solid',
+    backgroundImageUrl: json['backgroundImageUrl']?.toString() ?? '',
+    sectionBackgrounds: json['sectionBackgrounds']?.toString() ?? '',
+    fontFamily: json['fontFamily']?.toString() ?? 'Default',
+    fontScale: _designDouble(json['fontScale'], 1).clamp(0.8, 1.4).toDouble(),
+    buttonRadius: _designDouble(json['buttonRadius'], 14).clamp(0, 32).toDouble(),
+    cardRadius: _designDouble(json['cardRadius'], 18).clamp(0, 36).toDouble(),
+    productLayout: json['productLayout']?.toString() ?? 'list',
+    mobileColumns: _designInt(json['mobileColumns'], 1).clamp(1, 2),
+    desktopColumns: _designInt(json['desktopColumns'], 3).clamp(2, 5),
+    imageRatio: json['imageRatio']?.toString() ?? 'Square',
+    heroTitle: json['heroTitle']?.toString() ?? '',
+    heroSubtitle: json['heroSubtitle']?.toString() ?? '',
+    heroCtaLabel: json['heroCtaLabel']?.toString() ?? '',
+    heroCtaTarget: json['heroCtaTarget']?.toString() ?? 'products',
+    mobileBannerUrl: json['mobileBannerUrl']?.toString() ?? '',
+    bannerPosition: json['bannerPosition']?.toString() ?? 'center',
+    bannerOverlay: _designDouble(json['bannerOverlay'], 0.25).clamp(0, 0.8).toDouble(),
+    sectionOrder: (json['sectionOrder'] as List?)?.map((e) => e.toString()).toList(),
+  );
+}
+
+int _designInt(dynamic value, int fallback) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '') ?? fallback;
+double _designDouble(dynamic value, double fallback) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? fallback;
+String _designHex(int color) => '#${(color & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+int? _parseDesignColor(String value) {
+  var hex = value.trim().replaceFirst('#', '');
+  if (hex.length == 6) hex = 'FF$hex';
+  if (hex.length != 8) return null;
+  final parsed = int.tryParse(hex, radix: 16);
+  return parsed;
+}
+
+ThemeData _storefrontTheme(BuildContext context, PagePresentation design) {
+  final brightness = design.brightnessMode == 'dark'
+      ? Brightness.dark
+      : design.brightnessMode == 'light'
+          ? Brightness.light
+          : Theme.of(context).brightness;
+  final scheme = ColorScheme.fromSeed(seedColor: Color(design.primaryColor), brightness: brightness).copyWith(
+    secondary: Color(design.secondaryColor),
+    surface: brightness == Brightness.dark ? const Color(0xFF17191F) : Color(design.backgroundColor),
+  );
+  final family = design.fontFamily == 'Default' ? null : design.fontFamily;
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: Color(design.backgroundColor),
+    fontFamily: family,
+    textTheme: Theme.of(context).textTheme.apply(fontFamily: family, fontSizeFactor: design.fontScale),
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(design.buttonRadius)))),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(design.buttonRadius)))),
+    inputDecorationTheme: InputDecorationTheme(border: OutlineInputBorder(borderRadius: BorderRadius.circular(design.buttonRadius))),
+  );
+}
+
+Decoration _storefrontBackground(PagePresentation design) {
+  if (design.backgroundType == 'image' && design.backgroundImageUrl.startsWith('https://')) {
+    return BoxDecoration(color: Color(design.backgroundColor), image: DecorationImage(image: NetworkImage(design.backgroundImageUrl), fit: BoxFit.cover));
+  }
+  if (design.backgroundType == 'gradient') {
+    return BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(design.backgroundColor), Color(design.gradientEndColor)]));
+  }
+  return BoxDecoration(color: Color(design.backgroundColor));
+}
+
+Alignment _bannerAlignment(String position) => switch (position) {
+  'left' => Alignment.centerLeft,
+  'right' => Alignment.centerRight,
+  _ => Alignment.center,
+};
+
 /// A marketplace store owned by an account.
 class ShopStore {
   final String id;
@@ -160,6 +299,7 @@ class ShopStore {
   String? bannerUrl;
   bool active;
   WorldwideAddress? address;
+  StorefrontDesign design;
 
   ShopStore({
     required this.id,
@@ -170,7 +310,8 @@ class ShopStore {
     this.bannerUrl,
     this.active = true,
     this.address,
-  });
+    StorefrontDesign? design,
+  }) : design = design ?? StorefrontDesign();
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -181,6 +322,7 @@ class ShopStore {
         'bannerUrl': bannerUrl,
         'active': active,
         'address': address?.toJson(),
+        'design': design.toJson(),
       };
 
   factory ShopStore.fromJson(Map<String, dynamic> json) => ShopStore(
@@ -194,6 +336,7 @@ class ShopStore {
         address: json['address'] is Map
             ? WorldwideAddress.fromJson(Map<String, dynamic>.from(json['address'] as Map))
             : null,
+        design: json['design'] is Map ? StorefrontDesign.fromJson(Map<String, dynamic>.from(json['design'] as Map)) : null,
       );
 }
 
@@ -300,6 +443,8 @@ class ShopCatalog extends ChangeNotifier {
   final List<ShopStore> stores = <ShopStore>[];
   final List<ShopProduct> products = <ShopProduct>[];
   final List<String> wishlistProductIds = <String>[];
+  final List<String> savedForLaterProductIds = <String>[];
+  final Set<String> compareProductIds = <String>{};
   final List<ShopBagLine> bag = <ShopBagLine>[];
   final List<ShopOrder> orders = <ShopOrder>[];
   final Map<String, ShopEntity> _externalEntities = <String, ShopEntity>{};
@@ -318,6 +463,7 @@ class ShopCatalog extends ChangeNotifier {
       final rawWishlist = _prefs!.getString('shop_wishlist');
       final rawBag = _prefs!.getString('shop_bag');
       final rawOrders = _prefs!.getString('shop_orders');
+      final rawSavedForLater = _prefs!.getString('shop_saved_for_later');
       if (rawStores != null) {
         final decoded = jsonDecode(rawStores);
         if (decoded is List) stores.addAll(decoded.whereType<Map>().map((e) => ShopStore.fromJson(Map<String, dynamic>.from(e))));
@@ -329,6 +475,10 @@ class ShopCatalog extends ChangeNotifier {
       if (rawWishlist != null) {
         final decoded = jsonDecode(rawWishlist);
         if (decoded is List) wishlistProductIds.addAll(decoded.map((e) => e.toString()));
+      }
+      if (rawSavedForLater != null) {
+        final decoded = jsonDecode(rawSavedForLater);
+        if (decoded is List) savedForLaterProductIds.addAll(decoded.map((e) => e.toString()));
       }
       if (rawOrders != null) {
         final decoded = jsonDecode(rawOrders);
@@ -355,6 +505,7 @@ class ShopCatalog extends ChangeNotifier {
     await prefs.setString('shop_stores', jsonEncode(stores.map((s) => s.toJson()).toList()));
     await prefs.setString('shop_products', jsonEncode(products.map((p) => p.toJson()).toList()));
     await prefs.setString('shop_wishlist', jsonEncode(wishlistProductIds));
+    await prefs.setString('shop_saved_for_later', jsonEncode(savedForLaterProductIds));
     await prefs.setString('shop_bag', jsonEncode(bag.map((line) => {'productId': line.productId, 'quantity': line.quantity}).toList()));
     await prefs.setString('shop_orders', jsonEncode(orders.map((order) => order.toJson()).toList()));
   }
@@ -531,13 +682,14 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   /// Updates a seller-owned store's public profile and appearance.
-  void updateStore(ShopStore store, {String? name, String? description, String? logoUrl, String? bannerUrl}) {
+  void updateStore(ShopStore store, {String? name, String? description, String? logoUrl, String? bannerUrl, StorefrontDesign? design}) {
     final accountId = AppController.instance.currentAccount?.id;
     if (store.ownerAccountId != accountId) return;
     if (name != null && name.trim().isNotEmpty) store.name = name.trim();
     if (description != null) store.description = description.trim();
     store.logoUrl = logoUrl?.trim().isEmpty == true ? null : logoUrl?.trim();
     store.bannerUrl = bannerUrl?.trim().isEmpty == true ? null : bannerUrl?.trim();
+    if (design != null) store.design = design;
     notifyListeners();
     _save();
   }
@@ -704,6 +856,28 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   bool isWishlisted(String productId) => wishlistProductIds.contains(productId);
+
+  void toggleCompare(String productId) {
+    if (compareProductIds.contains(productId)) {
+      compareProductIds.remove(productId);
+    } else if (compareProductIds.length < 4) {
+      compareProductIds.add(productId);
+    }
+    notifyListeners();
+  }
+
+  void saveForLater(String productId) {
+    if (!savedForLaterProductIds.contains(productId)) savedForLaterProductIds.add(productId);
+    bag.removeWhere((line) => line.productId == productId);
+    notifyListeners();
+    _save();
+  }
+
+  void moveSavedToBag(String productId) {
+    savedForLaterProductIds.remove(productId);
+    addToBag(productId);
+    _save();
+  }
 
   void toggleWishlist(String productId) {
     if (wishlistProductIds.contains(productId)) {
@@ -900,6 +1074,11 @@ class _ShopScreenState extends State<ShopScreen> {
                 icon: const Icon(Icons.favorite_border_rounded),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopWishlistScreen())),
               ),
+              IconButton(
+                tooltip: 'Compare selected products',
+                onPressed: catalog.compareProductIds.isEmpty ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopProductComparisonScreen())),
+                icon: Badge(label: Text('${catalog.compareProductIds.length}'), child: const Icon(Icons.compare_arrows)),
+              ),
               _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopBagScreen(onHome: widget.onHome)))),
               const LanguagePicker(),
             ],
@@ -918,6 +1097,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       FilledButton.icon(onPressed: () => showDialog<void>(context: context, builder: (_) => const _AskShopAssistantDialog()), icon: const Icon(Icons.auto_awesome), label: const UniversalText('Ask Shop')),
                       OutlinedButton.icon(onPressed: _createStore, icon: const Icon(Icons.storefront_outlined), label: const UniversalText('Create Store')),
+                      OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveShoppingScreen())), icon: const Icon(Icons.live_tv_outlined), label: const UniversalText('Live Shopping')),
                     ]),
                 ],
               ),
@@ -1064,6 +1244,7 @@ class _ShopScreenState extends State<ShopScreen> {
             ])),
             Column(children: [
               IconButton(onPressed: () => catalog.toggleWishlist(product.id), icon: Icon(catalog.isWishlisted(product.id) ? Icons.favorite : Icons.favorite_border)),
+              IconButton(tooltip: catalog.compareProductIds.contains(product.id) ? 'Remove from comparison' : 'Compare', onPressed: () => catalog.toggleCompare(product.id), icon: Icon(catalog.compareProductIds.contains(product.id) ? Icons.check_box : Icons.compare_arrows)),
               FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const UniversalText('Add to Bag')),
             ]),
           ],
@@ -1231,7 +1412,8 @@ class _AskShopAssistantDialogState extends State<_AskShopAssistantDialog> {
 class ShopStoreScreen extends StatelessWidget {
   final ShopStore store;
   final VoidCallback? onHome;
-  const ShopStoreScreen({super.key, required this.store, this.onHome});
+  final GlobalKey _productsSectionKey = GlobalKey();
+  ShopStoreScreen({super.key, required this.store, this.onHome});
 
   @override
   Widget build(BuildContext context) {
@@ -1239,31 +1421,43 @@ class ShopStoreScreen extends StatelessWidget {
     return AnimatedBuilder(animation: catalog, builder: (_, __) {
       final products = catalog.productsForStore(store.id);
       final lines = catalog.linesForStore(store.id);
-      return Scaffold(
+      final design = store.design;
+      final sections = <String, Widget>{
+        if (store.description.isNotEmpty) 'About': Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(store.description, style: Theme.of(context).textTheme.bodyLarge)),
+        if (products.any((p) => p.featured)) 'Featured': Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Featured', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), const SizedBox(height: 8), for (final product in products.where((p) => p.featured)) _productRow(context, product)]),
+        'Products': Column(key: _productsSectionKey, crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('All Products', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), const SizedBox(height: 8), if (design.productLayout == 'grid') _productGrid(context, products, design) else for (final product in products) _productRow(context, product)]),
+      };
+      final heroImageUrl = MediaQuery.sizeOf(context).width < 600 && design.mobileBannerUrl.isNotEmpty ? design.mobileBannerUrl : store.bannerUrl;
+      return Theme(
+        data: _storefrontTheme(context, design),
+        child: Scaffold(
         appBar: AppBar(title: Text(store.name), actions: [
           _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopBagScreen(onHome: onHome)))),
         ]),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-          Container(height: 150, decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), image: store.bannerUrl?.isNotEmpty == true ? DecorationImage(image: NetworkImage(store.bannerUrl!), fit: BoxFit.cover) : null, color: Theme.of(context).colorScheme.surfaceContainerHighest)),
+        body: Container(decoration: _storefrontBackground(design), child: ListView(padding: const EdgeInsets.all(18), children: [
+          Container(height: 190, decoration: BoxDecoration(borderRadius: BorderRadius.circular(design.cardRadius), color: Color(design.backgroundColor), gradient: design.backgroundType == 'gradient' ? LinearGradient(colors: [Color(design.backgroundColor), Color(design.gradientEndColor)]) : null, image: heroImageUrl?.isNotEmpty == true ? DecorationImage(image: NetworkImage(heroImageUrl!), fit: BoxFit.cover, alignment: _bannerAlignment(design.bannerPosition), colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: design.bannerOverlay), BlendMode.darken)) : null), child: Padding(padding: const EdgeInsets.all(22), child: Align(alignment: Alignment.bottomLeft, child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [if (design.heroTitle.isNotEmpty) Text(design.heroTitle, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)), if (design.heroSubtitle.isNotEmpty) Text(design.heroSubtitle, style: const TextStyle(color: Colors.white, fontSize: 16)), if (design.heroCtaLabel.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: FilledButton(onPressed: () { final target = _productsSectionKey.currentContext; if (target != null) Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 350), alignment: 0.08); }, child: Text(design.heroCtaLabel)))])))),
           const SizedBox(height: 14),
           Row(children: [CircleAvatar(radius: 30, backgroundImage: store.logoUrl?.isNotEmpty == true ? NetworkImage(store.logoUrl!) : null, child: store.logoUrl?.isNotEmpty == true ? null : Text(store.name.isEmpty ? '?' : store.name.substring(0, 1).toUpperCase())), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(store.name, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)), if (store.description.isNotEmpty) Text(store.description)]))]),
           const SizedBox(height: 18),
           if (lines.isNotEmpty) FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: lines, title: 'Checkout • ${store.name}', storeSpecific: true, onHome: onHome))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout this Store')),
           const SizedBox(height: 16),
-          const Text('Featured', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          for (final product in products.where((p) => p.featured)) _productRow(context, product),
-          const SizedBox(height: 14),
-          const Text('All Products', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-          for (final product in products) _productRow(context, product),
-        ]),
-      );
+          for (final section in design.sectionOrder) if (sections[section] != null) Padding(padding: const EdgeInsets.only(bottom: 16), child: sections[section]!),
+        ])),
+      ));
     });
+  }
+
+  Widget _productGrid(BuildContext context, List<ShopProduct> products, StorefrontDesign design) {
+    final width = MediaQuery.sizeOf(context).width;
+    final count = width < 600 ? design.mobileColumns : design.desktopColumns;
+    return GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: count, childAspectRatio: design.imageRatio == 'Portrait' ? 0.72 : design.imageRatio == 'Landscape' ? 1.35 : 0.92, children: [
+      for (final product in products) Card(clipBehavior: Clip.antiAlias, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(design.cardRadius)), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: product.imageUrls.isEmpty ? const Center(child: Icon(Icons.shopping_bag_outlined)) : Image.network(product.imageUrls.first, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))), Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)), Text('${product.price.toStringAsFixed(2)} ${product.currency}'), SizedBox(width: double.infinity, child: FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => ShopCatalog.instance.addToBag(product.id), child: const Text('Add')))]))])),
+    ]);
   }
 
   Widget _productRow(BuildContext context, ShopProduct product) {
     final catalog = ShopCatalog.instance;
-    return Card(child: ListTile(
+    return Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(store.design.cardRadius)), child: ListTile(
       leading: product.imageUrls.isEmpty ? const Icon(Icons.shopping_bag_outlined) : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(product.imageUrls.first, width: 52, height: 52, fit: BoxFit.cover)),
       title: Text(product.name),
       subtitle: Text('${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'),
@@ -1291,23 +1485,63 @@ class SellerDashboardScreen extends StatelessWidget {
               final products = catalog.productsForStore(activeStore.id);
               final featured = products.where((p) => p.featured).length;
               final inventory = products.fold<int>(0, (sum, p) => sum + p.inventoryQuantity);
+              final storeOrders = catalog.orders.where((o) => o.lines.any((line) => catalog.productById(line.productId)?.storeId == activeStore.id)).toList();
+              final salesByCurrency = <String, double>{};
+              for (final order in storeOrders) {
+                for (final line in order.lines) {
+                  final product = catalog.productById(line.productId);
+                  if (product != null && product.storeId == activeStore.id) {
+                    salesByCurrency[product.currency] = (salesByCurrency[product.currency] ?? 0) + product.price * line.quantity;
+                  }
+                }
+              }
+              final salesLabel = salesByCurrency.isEmpty
+                  ? '0'
+                  : salesByCurrency.length == 1
+                      ? '${salesByCurrency.values.single.toStringAsFixed(2)} ${salesByCurrency.keys.single}'
+                      : '${salesByCurrency.length} currencies';
               return ListView(padding: const EdgeInsets.all(18), children: [
                 Card(child: ListTile(leading: const Icon(Icons.storefront), title: Text(activeStore.name, style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: UniversalText(activeStore.address?.summary ?? 'Store settings, appearance and featured products'))),
                 GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: MediaQuery.sizeOf(context).width > 800 ? 4 : 2, childAspectRatio: 1.8, children: [
                   _metric('Products', '${products.length}', Icons.inventory_2_outlined),
                   _metric('Featured', '$featured', Icons.star_outline),
                   _metric('Inventory', '$inventory', Icons.warehouse_outlined),
-                  _metric('Orders', '${catalog.orders.where((o) => o.lines.any((line) => catalog.productById(line.productId)?.storeId == activeStore.id)).length}', Icons.receipt_long_outlined),
+                  _metric('Recorded sales', salesLabel, Icons.payments_outlined),
+                  _metric('Orders', '${storeOrders.length}', Icons.receipt_long_outlined),
                 ]),
                 const SizedBox(height: 14),
                 FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddShopProductScreen(store: activeStore))), icon: const Icon(Icons.add_box_outlined), label: const UniversalText('Add Product')),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: activeStore, onHome: onHome))), icon: const Icon(Icons.storefront_outlined), label: const UniversalText('View Store')),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreSettingsScreen(store: activeStore))), icon: const Icon(Icons.settings_outlined), label: const UniversalText('Store Settings & Appearance')),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.account_balance_wallet_outlined),
+                    title: const UniversalText('Seller payment & payout methods'),
+                    subtitle: const UniversalText('Manage accepted payment methods and where your seller earnings are paid.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ShopStoreSettingsScreen(store: activeStore),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(child: ListTile(
+                  leading: const Icon(Icons.live_tv_outlined),
+                  title: const UniversalText('Live shopping & product videos'),
+                  subtitle: const UniversalText('Schedule demonstrations, manage live events, feature products, polls, and replay links.'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerLiveShoppingScreen(store: activeStore))),
+                )),
+                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreSettingsScreen(store: activeStore, designerOnly: true))), icon: const Icon(Icons.palette_outlined), label: const UniversalText('Storefront Designer')),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreSettingsScreen(store: activeStore))), icon: const Icon(Icons.settings_outlined), label: const UniversalText('Store Settings & Payouts')),
                 const SizedBox(height: 14),
                 const Text('Orders', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                for (final order in catalog.orders.where((o) => o.lines.any((line) => catalog.productById(line.productId)?.storeId == activeStore.id)).take(20))
+                for (final order in storeOrders.take(20))
                   Card(child: ListTile(title: Text(order.id), subtitle: Text('${order.createdAt} • ${order.total.toStringAsFixed(2)} USD'), trailing: const Icon(Icons.receipt_long_outlined))),
                 const SizedBox(height: 14),
                 const Text('Products', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
@@ -1332,7 +1566,8 @@ class SellerDashboardScreen extends StatelessWidget {
 /// Seller store settings and appearance editor.
 class ShopStoreSettingsScreen extends StatefulWidget {
   final ShopStore store;
-  const ShopStoreSettingsScreen({super.key, required this.store});
+  final bool designerOnly;
+  const ShopStoreSettingsScreen({super.key, required this.store, this.designerOnly = false});
   @override
   State<ShopStoreSettingsScreen> createState() => _ShopStoreSettingsScreenState();
 }
@@ -1344,6 +1579,16 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   late final TextEditingController banner = TextEditingController(text: widget.store.bannerUrl ?? '');
   late final TextEditingController paymentCountry = TextEditingController(text: widget.store.address?.countryCode ?? '');
   late final TextEditingController paymentCurrency = TextEditingController(text: 'USD');
+  late final StorefrontDesign designDraft = StorefrontDesign.fromJson(widget.store.design.toJson());
+  late final TextEditingController backgroundUrl = TextEditingController(text: widget.store.design.backgroundImageUrl);
+  late final TextEditingController mobileBanner = TextEditingController(text: widget.store.design.mobileBannerUrl);
+  late final TextEditingController heroTitle = TextEditingController(text: widget.store.design.heroTitle);
+  late final TextEditingController heroSubtitle = TextEditingController(text: widget.store.design.heroSubtitle);
+  late final TextEditingController heroCta = TextEditingController(text: widget.store.design.heroCtaLabel);
+  late final TextEditingController primaryHex = TextEditingController(text: _designHex(widget.store.design.primaryColor));
+  late final TextEditingController secondaryHex = TextEditingController(text: _designHex(widget.store.design.secondaryColor));
+  late final TextEditingController backgroundHex = TextEditingController(text: _designHex(widget.store.design.backgroundColor));
+  late final TextEditingController gradientHex = TextEditingController(text: _designHex(widget.store.design.gradientEndColor));
 
   bool loadingPaymentRegistry = true;
   bool savingPaymentMethods = false;
@@ -1356,25 +1601,77 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSellerPaymentMethods();
-    _loadPayoutDestinations();
+    if (!widget.designerOnly) {
+      _loadSellerPaymentMethods();
+      _loadPayoutDestinations();
+    }
   }
 
   @override
-  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); paymentCountry.dispose(); paymentCurrency.dispose(); super.dispose(); }
+  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); paymentCountry.dispose(); paymentCurrency.dispose(); backgroundUrl.dispose(); mobileBanner.dispose(); heroTitle.dispose(); heroSubtitle.dispose(); heroCta.dispose(); primaryHex.dispose(); secondaryHex.dispose(); backgroundHex.dispose(); gradientHex.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const UniversalText('Store Settings & Appearance')),
+    appBar: AppBar(title: UniversalText(widget.designerOnly ? 'Storefront Designer' : 'Store Settings & Appearance')),
     body: ListView(padding: const EdgeInsets.all(18), children: [
+      if (!widget.designerOnly) ...[
       TextField(controller: name, decoration: const InputDecoration(labelText: 'Store name', border: OutlineInputBorder())),
       const SizedBox(height: 10),
       TextField(controller: description, minLines: 3, maxLines: 6, decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder())),
       const SizedBox(height: 10),
-      TextField(controller: logo, decoration: const InputDecoration(labelText: 'Logo URL', border: OutlineInputBorder())),
+      ],
+      const SizedBox(height: 22),
+      const Text('Storefront Designer', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+      const Text('Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
+      const SizedBox(height: 12),
+      TextField(controller: logo, decoration: const InputDecoration(labelText: 'Store logo URL', border: OutlineInputBorder())),
       const SizedBox(height: 10),
-      TextField(controller: banner, decoration: const InputDecoration(labelText: 'Banner URL', border: OutlineInputBorder())),
+      TextField(controller: banner, decoration: const InputDecoration(labelText: 'Desktop hero/banner image URL', border: OutlineInputBorder())),
+      DropdownButtonFormField<String>(initialValue: designDraft.presetTheme, decoration: const InputDecoration(labelText: 'Theme preset', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'Indigo', child: Text('Indigo')), DropdownMenuItem(value: 'Ocean', child: Text('Ocean')), DropdownMenuItem(value: 'Forest', child: Text('Forest')), DropdownMenuItem(value: 'Sunset', child: Text('Sunset')), DropdownMenuItem(value: 'Custom', child: Text('Custom'))], onChanged: (value) => _applyThemePreset(value)),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(initialValue: designDraft.brightnessMode, decoration: const InputDecoration(labelText: 'Light / dark appearance', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'system', child: Text('Auto (follow device)')), DropdownMenuItem(value: 'light', child: Text('Light')), DropdownMenuItem(value: 'dark', child: Text('Dark'))], onChanged: (value) { if (value != null) setState(() => designDraft.brightnessMode = value); }),
+      const SizedBox(height: 10),
+      Row(children: [Expanded(child: TextField(controller: primaryHex, decoration: const InputDecoration(labelText: 'Brand primary color', hintText: '#536DFE'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.primaryColor = color))), const SizedBox(width: 8), Expanded(child: TextField(controller: secondaryHex, decoration: const InputDecoration(labelText: 'Brand accent color', hintText: '#FFB74D'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.secondaryColor = color)))]),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(initialValue: designDraft.backgroundType, decoration: const InputDecoration(labelText: 'Store background', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'solid', child: Text('Solid color')), DropdownMenuItem(value: 'gradient', child: Text('Gradient')), DropdownMenuItem(value: 'image', child: Text('Image'))], onChanged: (value) { if (value != null) setState(() => designDraft.backgroundType = value); }),
+      if (designDraft.backgroundType == 'solid' || designDraft.backgroundType == 'gradient') ...[
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: TextField(controller: backgroundHex, decoration: const InputDecoration(labelText: 'Background color', hintText: '#F6F7FB'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.backgroundColor = color))),
+          if (designDraft.backgroundType == 'gradient') ...[
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: gradientHex, decoration: const InputDecoration(labelText: 'Gradient end', hintText: '#E8EAF6'), onChanged: (value) => _updateDesignColor(value, (color) => designDraft.gradientEndColor = color))),
+          ],
+        ]),
+      ],
+      if (designDraft.backgroundType == 'image') ...[const SizedBox(height: 10), TextField(controller: backgroundUrl, decoration: const InputDecoration(labelText: 'Background image URL'))],
+      const SizedBox(height: 10),
+      Row(children: [Expanded(child: TextField(controller: mobileBanner, decoration: const InputDecoration(labelText: 'Mobile hero image URL'))), const SizedBox(width: 8), Expanded(child: DropdownButtonFormField<String>(initialValue: designDraft.bannerPosition, decoration: const InputDecoration(labelText: 'Hero image position'), items: const [DropdownMenuItem(value: 'left', child: Text('Left')), DropdownMenuItem(value: 'center', child: Text('Center')), DropdownMenuItem(value: 'right', child: Text('Right'))], onChanged: (value) { if (value != null) setState(() => designDraft.bannerPosition = value); }))]),
+      const SizedBox(height: 10),
+      TextField(controller: heroTitle, decoration: const InputDecoration(labelText: 'Hero headline')),
+      TextField(controller: heroSubtitle, decoration: const InputDecoration(labelText: 'Hero supporting text')),
+      TextField(controller: heroCta, decoration: const InputDecoration(labelText: 'Hero call-to-action label')),
+      const SizedBox(height: 8),
+      Text('Hero overlay strength: ${designDraft.bannerOverlay.toStringAsFixed(2)}'),
+      Slider(value: designDraft.bannerOverlay, min: 0, max: 0.8, onChanged: (value) => setState(() => designDraft.bannerOverlay = value)),
+      DropdownButtonFormField<String>(initialValue: designDraft.fontFamily, decoration: const InputDecoration(labelText: 'Typography'), items: const [DropdownMenuItem(value: 'Default', child: Text('System')), DropdownMenuItem(value: 'Serif', child: Text('Serif')), DropdownMenuItem(value: 'Monospace', child: Text('Monospace'))], onChanged: (value) { if (value != null) setState(() => designDraft.fontFamily = value); }),
+      Text('Text size: ${(designDraft.fontScale * 100).round()}%'),
+      Slider(value: designDraft.fontScale, min: 0.8, max: 1.4, onChanged: (value) => setState(() => designDraft.fontScale = value)),
+      Text('Button corner radius: ${designDraft.buttonRadius.round()}'),
+      Slider(value: designDraft.buttonRadius, min: 0, max: 32, onChanged: (value) => setState(() => designDraft.buttonRadius = value)),
+      Text('Card corner radius: ${designDraft.cardRadius.round()}'),
+      Slider(value: designDraft.cardRadius, min: 0, max: 36, onChanged: (value) => setState(() => designDraft.cardRadius = value)),
+      DropdownButtonFormField<String>(initialValue: designDraft.productLayout, decoration: const InputDecoration(labelText: 'Product presentation'), items: const [DropdownMenuItem(value: 'list', child: Text('Compact list')), DropdownMenuItem(value: 'grid', child: Text('Product grid'))], onChanged: (value) { if (value != null) setState(() => designDraft.productLayout = value); }),
+      if (designDraft.productLayout == 'grid') ...[
+        DropdownButtonFormField<int>(initialValue: designDraft.mobileColumns, decoration: const InputDecoration(labelText: 'Mobile grid columns'), items: const [DropdownMenuItem(value: 1, child: Text('1 column')), DropdownMenuItem(value: 2, child: Text('2 columns'))], onChanged: (value) { if (value != null) setState(() => designDraft.mobileColumns = value); }),
+        DropdownButtonFormField<int>(initialValue: designDraft.desktopColumns, decoration: const InputDecoration(labelText: 'Desktop grid columns'), items: [for (var i = 2; i <= 5; i++) DropdownMenuItem(value: i, child: Text('$i columns'))], onChanged: (value) { if (value != null) setState(() => designDraft.desktopColumns = value); }),
+      ],
+      DropdownButtonFormField<String>(initialValue: designDraft.imageRatio, decoration: const InputDecoration(labelText: 'Product image ratio'), items: const [DropdownMenuItem(value: 'Square', child: Text('Square')), DropdownMenuItem(value: 'Portrait', child: Text('Portrait')), DropdownMenuItem(value: 'Landscape', child: Text('Landscape'))], onChanged: (value) { if (value != null) setState(() => designDraft.imageRatio = value); }),
+      const SizedBox(height: 10),
+      const Text('Store section order', style: TextStyle(fontWeight: FontWeight.bold)),
+      for (var index = 0; index < designDraft.sectionOrder.length; index++) ListTile(dense: true, title: Text(designDraft.sectionOrder[index]), trailing: Wrap(children: [IconButton(onPressed: index == 0 ? null : () => _moveSection(index, index - 1), icon: const Icon(Icons.arrow_upward)), IconButton(onPressed: index == designDraft.sectionOrder.length - 1 ? null : () => _moveSection(index, index + 1), icon: const Icon(Icons.arrow_downward))])),
       const SizedBox(height: 18),
+      if (!widget.designerOnly) ...[
       const UniversalText('Seller payment & payout methods', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
       const SizedBox(height: 6),
       const UniversalText('Choose any supported providers. The buyer checkout filters these methods by buyer country, currency, and provider eligibility. The registry is extensible; these entries are not the complete worldwide list.'),
@@ -1433,8 +1730,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
         icon: savingPayout ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_card_outlined),
         label: const UniversalText('Add Payout Method'),
       ),
+      ],
       const SizedBox(height: 14),
-      FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save_outlined), label: const UniversalText('Save Store Settings')),
+      FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save_outlined), label: UniversalText(widget.designerOnly ? 'Save Storefront Design' : 'Save Store Settings')),
     ]),
   );
 
@@ -1550,13 +1848,55 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
     }
   }
 
+  void _applyThemePreset(String? value) {
+    if (value == null) return;
+    const presets = <String, (int, int)>{
+      'Indigo': (0xFF536DFE, 0xFFFFB74D),
+      'Ocean': (0xFF007C91, 0xFF80CBC4),
+      'Forest': (0xFF2E7D32, 0xFFAED581),
+      'Sunset': (0xFFE65100, 0xFFFFCA28),
+    };
+    setState(() {
+      designDraft.presetTheme = value;
+      final colors = presets[value];
+      if (colors != null) {
+        designDraft.primaryColor = colors.$1;
+        designDraft.secondaryColor = colors.$2;
+        primaryHex.text = _designHex(colors.$1);
+        secondaryHex.text = _designHex(colors.$2);
+      }
+    });
+  }
+
+  void _updateDesignColor(String value, void Function(int) apply) {
+    final parsed = _parseDesignColor(value);
+    if (parsed == null) return;
+    setState(() {
+      designDraft.presetTheme = 'Custom';
+      apply(parsed);
+    });
+  }
+
+  void _moveSection(int from, int to) {
+    setState(() {
+      final moved = designDraft.sectionOrder.removeAt(from);
+      designDraft.sectionOrder.insert(to, moved);
+    });
+  }
+
   void _save() {
+    designDraft.backgroundImageUrl = backgroundUrl.text.trim();
+    designDraft.mobileBannerUrl = mobileBanner.text.trim();
+    designDraft.heroTitle = heroTitle.text.trim();
+    designDraft.heroSubtitle = heroSubtitle.text.trim();
+    designDraft.heroCtaLabel = heroCta.text.trim();
     ShopCatalog.instance.updateStore(
       widget.store,
       name: name.text,
       description: description.text,
       logoUrl: logo.text,
       bannerUrl: banner.text,
+      design: designDraft,
     );
     Navigator.pop(context);
   }
@@ -2089,9 +2429,9 @@ class ShopBagScreen extends StatelessWidget {
       }
       return Scaffold(
         appBar: AppBar(title: const UniversalText('Shopping Bag')),
-        body: lines.isEmpty
-            ? const Center(child: UniversalText('Your bag is empty.'))
-            : ListView(padding: const EdgeInsets.all(18), children: [
+        body: ListView(padding: const EdgeInsets.all(18), children: [
+                if (lines.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 26), child: Center(child: UniversalText('Your bag is empty.'))),
+                if (lines.isNotEmpty) ...[
                 for (final entry in byStore.entries) ...[
                   Text(catalog.storeById(entry.key)?.name ?? 'Store', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   for (final line in entry.value) _bagLine(context, line),
@@ -2100,6 +2440,12 @@ class ShopBagScreen extends StatelessWidget {
                 Card(child: ListTile(title: const UniversalText('Bag total'), trailing: Text(_money(catalog.subtotal(), 'USD'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)))),
                 const SizedBox(height: 10),
                 FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: List<ShopBagLine>.from(lines), title: 'Checkout • All Stores', storeSpecific: false, onHome: onHome))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout All Stores')),
+                ],
+                if (catalog.savedForLaterProductIds.isNotEmpty) ...[
+                  const SizedBox(height: 22), const Text('Saved for later', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  for (final product in catalog.savedForLaterProductIds.map(catalog.productById).whereType<ShopProduct>())
+                    Card(child: ListTile(title: Text(product.name), subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency}'), trailing: TextButton(onPressed: () => catalog.moveSavedToBag(product.id), child: const Text('Move to bag')))),
+                ],
               ]),
       );
     });
@@ -2116,12 +2462,42 @@ class ShopBagScreen extends StatelessWidget {
         IconButton(onPressed: () => catalog.changeQuantity(product.id, -1), icon: const Icon(Icons.remove_circle_outline)),
         Text('${line.quantity}', style: const TextStyle(fontWeight: FontWeight.w800)),
         IconButton(onPressed: () => catalog.changeQuantity(product.id, 1), icon: const Icon(Icons.add_circle_outline)),
+        IconButton(tooltip: 'Save for later', onPressed: () => catalog.saveForLater(product.id), icon: const Icon(Icons.bookmark_add_outlined)),
         IconButton(onPressed: () => catalog.removeFromBag(product.id), icon: const Icon(Icons.delete_outline)),
       ]),
     ));
   }
 
   static String _money(double value, String currency) => '${currency == 'USD' ? '\$' : currency} ${value.toStringAsFixed(2)}';
+}
+
+/// Side-by-side view of up to four products selected from marketplace cards.
+class ShopProductComparisonScreen extends StatelessWidget {
+  const ShopProductComparisonScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: ShopCatalog.instance,
+    builder: (context, _) {
+      final catalog = ShopCatalog.instance;
+      final products = catalog.compareProductIds.map(catalog.productById).whereType<ShopProduct>().toList();
+      return Scaffold(appBar: AppBar(title: const Text('Compare products')), body: products.isEmpty
+        ? const Center(child: Text('Select products from the marketplace to compare them.'))
+        : ListView(padding: const EdgeInsets.all(16), children: [
+            for (final product in products) Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Expanded(child: Text(product.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))), IconButton(onPressed: () => catalog.toggleCompare(product.id), icon: const Icon(Icons.close))]),
+              Text('${product.price.toStringAsFixed(2)} ${product.currency}'),
+              Text('Category: ${product.category}'),
+              Text('Type: ${product.productType}'),
+              Text('Availability: ${product.inventoryQuantity > 0 ? '${product.inventoryQuantity} in stock' : 'Out of stock'}'),
+              Text('Store: ${catalog.storeById(product.storeId)?.name ?? 'Store'}'),
+              if (product.description.isNotEmpty) Text(product.description),
+              if (product.associations.isNotEmpty) Text('Related: ${product.associations.map((a) => a.name).join(', ')}'),
+              Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const Text('Add to bag'))),
+            ]))),
+          ]));
+    },
+  );
 }
 
 /// Wishlist page.

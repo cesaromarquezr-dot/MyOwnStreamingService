@@ -1,6 +1,6 @@
 # Supabase database
 
-This project uses Supabase for persistent **application state**, not for the physical media library.
+This project uses Supabase for persistent application metadata and ownership/provenance records, not for physical media files.
 
 ## Storage architecture
 
@@ -8,6 +8,8 @@ This project uses Supabase for persistent **application state**, not for the phy
 * `media_catalog` describes canonical media identity only.
 * `server_media` is the per-server index of what the server owns.
 * `media_versions` identifies the exact edition, cut, or version.
+* `physical_items` records account-owned physical copies; `physical_item_imports` links those copies and disc contents to server media and exact versions.
+* Provider catalog entries never create physical ownership or owned-library records.
 * `relative_media_key` is server-private and must never be exposed to normal clients.
 * Group Watch checks every participant's server for the exact same `version_key` before allowing a session.
 
@@ -40,6 +42,10 @@ supabase/migrations/202609120001_streaming_service.sql
 in the Supabase SQL editor or through the Supabase CLI.
 
 The migration creates the account/profile/server hierarchy, server media indexes, exact-version Group Watch procedures, reviews, recommendations/votes, UI settings, security, remote jobs, backups, sports, legal tables, triggers, RLS, and scheduled jobs.
+
+Apply `supabase/migrations/physical_media_ownership.sql` after the base streaming and canonical extension migrations to add the physical ownership ledger, ownership history, and imported-file provenance links.
+
+The backend exposes account-scoped physical item records at `GET/POST /api/v1/physical-items` and ownership transitions at `POST /api/v1/physical-items/{id}/ownership-status`. Records cannot be deleted; state changes retain history. The import association schema is in place, while ARM import completion is not yet wired to create those associations or enforce physical ownership on every existing library-write path.
 
 ## Flutter → Supabase synchronization
 

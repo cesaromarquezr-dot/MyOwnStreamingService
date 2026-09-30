@@ -14,6 +14,7 @@ enum RatingProvider {
   tmdb,
   imdb,
   rottenTomatoes,
+  metacritic,
   musicBrainz,
   user,
 }

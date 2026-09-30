@@ -829,3 +829,12 @@ Environment variables determine deployment-specific details such as:
 * marketplace integrations.
 
 This keeps deployment-specific secrets and infrastructure details out of the Flutter application and source-controlled application logic.
+
+### External media-rating providers
+
+Provider credentials remain backend-only. Configure only providers for which the deployment has the required rights and API access:
+
+- `TMDB_API_TOKEN` — TMDB application access token.
+- `OMDB_API_KEY` — OMDb API key for provider fields available through OMDb.
+
+The Flutter client never receives these credentials. Provider ratings are stored and displayed independently; the backend does not calculate a single cross-provider master score.

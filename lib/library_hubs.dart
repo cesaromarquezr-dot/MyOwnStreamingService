@@ -1,4 +1,6 @@
 // Library directories shared by the Film navigation menu and Home shortcuts.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
@@ -8,6 +10,7 @@ import 'music.dart';
 import 'widgets/category_filter_chips.dart';
 import 'widgets/like_toggle_button.dart';
 import 'localization.dart';
+import 'media_actions.dart';
 
 class LibraryCollectionsScreen extends StatelessWidget {
   const LibraryCollectionsScreen({super.key});
@@ -121,10 +124,42 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   String _songCategory = 'All';
-  String _mediaCategory = 'All';
+  String _movieCategory = 'All';
+  String _showCategory = 'All';
 
-  List<String> _categories(Iterable<String> values) {
+  Future<void> _unlikeMedia(MediaItem media) async {
+    final controller = AppController.instance;
+    final result = await UniversalMediaActions.perform(
+      context: UniversalMediaActionContext(
+        contentType: media.type,
+        contentId: media.id,
+        mediaVersionId: media.mediaVersionId,
+        profileId: controller.currentProfile?.id ?? 'local-profile',
+        availableActions: const {
+          UniversalMediaAction.like,
+          UniversalMediaAction.removeReaction,
+        },
+      ),
+      action: UniversalMediaAction.removeReaction,
+      apply: () => controller.clearReaction(media.id),
+    );
+    if (result.applied && mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(MusicLibraryStore.instance.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
+    unawaited(MusicFavoritesBridge.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
+  }
+
+  List<String> _categories(Iterable<String> values, {List<String> presets = const []}) {
     final result = <String>{'All'};
+    result.addAll(presets);
     for (final value in values) {
       if (value.trim().isNotEmpty) result.add(value.trim());
     }
@@ -133,7 +168,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   bool _matches(List<String> values, String selected) {
     if (selected == 'All') return true;
-    return values.any((value) => value.toLowerCase() == selected.toLowerCase());
+    final key = selected.trim().toLowerCase();
+    final aliases = switch (key) {
+      'sci-fi' => const {'sci-fi', 'science fiction', 'science-fiction'},
+      'reggaeton' => const {'reggaeton', 'reggaetón'},
+      'nostalgic' => const {'nostalgic', 'nostalgia'},
+      'party dance' => const {'party dance', 'dance', 'dance-pop', 'party'},
+      _ => {key},
+    };
+    return values.any((value) => aliases.contains(value.trim().toLowerCase()));
   }
 
   Future<void> _createSongPlaylist(List<MusicTrack> tracks) async {
@@ -165,9 +208,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Created "$playlistName".')));
   }
 
-  Future<void> _createMediaCollection(List<MediaItem> media) async {
+  Future<void> _createMediaCollection(List<MediaItem> media, {required String defaultName}) async {
     if (media.isEmpty) return;
-    final name = TextEditingController(text: '$_mediaCategory Movies & Shows');
+    final name = TextEditingController(text: defaultName);
     final shouldCreate = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -198,51 +241,89 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final likedMedia = controller.liked;
+    bool isShow(MediaItem media) {
+      final type = media.type.toLowerCase();
+      return type.contains('tv') || type.contains('show') ||
+          type.contains('series') || type.contains('episode');
+    }
+    final likedMovies = likedMedia.where((media) => !isShow(media)).toList();
+    final likedShows = likedMedia.where(isShow).toList();
     final musicLibrary = MusicLibraryStore.instance;
-    final likedSongTitles = MusicFavoritesBridge.likedTracks().toSet();
-    final likedTracks = musicLibrary.tracks.where((track) => likedSongTitles.contains(track.title)).toList();
+    final likedSongIds = MusicFavoritesBridge.likedTracks().toSet();
+    final likedTracks = musicLibrary.tracks.where((track) => likedSongIds.contains(track.id)).toList();
     final songCategories = _categories(
       likedTracks.expand((track) => [...track.genres, ...track.subgenres]),
+      presets: const ['Country', 'Rap', 'Pop', 'Reggaeton', 'Corridos Tumbados', 'Party Dance', 'Nostalgic'],
     );
-    final mediaCategories = _categories(
-      likedMedia.expand((media) => [...media.genres, ...media.tags]),
+    final movieCategories = _categories(
+      likedMovies.expand((media) => [...media.genres, ...media.tags]),
+      presets: const ['Action', 'Comedy', 'Sci-Fi', 'Drama', 'Documentary', 'Mockumentary'],
+    );
+    final showCategories = _categories(
+      likedShows.expand((media) => [...media.genres, ...media.tags]),
+      presets: const ['Action', 'Comedy', 'Sci-Fi', 'Drama', 'Documentary', 'Mockumentary'],
     );
     final filteredSongs = likedTracks.where((track) => _matches([...track.genres, ...track.subgenres], _songCategory)).toList();
-    final filteredMedia = likedMedia.where((media) => _matches([...media.genres, ...media.tags], _mediaCategory)).toList();
+    final filteredMovies = likedMovies.where((media) => _matches([...media.genres, ...media.tags], _movieCategory)).toList();
+    final filteredShows = likedShows.where((media) => _matches([...media.genres, ...media.tags], _showCategory)).toList();
 
     return Scaffold(
       appBar: AppBar(title: const UniversalText('Favorites')),
       body: AnimatedBuilder(
-        animation: musicLibrary,
+        animation: Listenable.merge([musicLibrary, MusicFavoritesBridge.changes]),
         builder: (_, __) => ListView(
           padding: const EdgeInsets.all(18),
           children: [
-            const UniversalText('Liked Movies & TV Shows', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const UniversalText('Liked Movies', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             CategoryFilterChips(
-              categories: mediaCategories,
-              selectedCategory: _mediaCategory,
-              onSelected: (value) => setState(() => _mediaCategory = value),
+              categories: movieCategories,
+              selectedCategory: _movieCategory,
+              onSelected: (value) => setState(() => _movieCategory = value),
             ),
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
-                onPressed: filteredMedia.isEmpty ? null : () => _createMediaCollection(filteredMedia),
+                onPressed: filteredMovies.isEmpty ? null : () => _createMediaCollection(filteredMovies, defaultName: '$_movieCategory Movies'),
                 icon: const Icon(Icons.create_new_folder_outlined),
                 label: const UniversalText('Create New Collection'),
               ),
             ),
-            if (filteredMedia.isEmpty) const Card(child: ListTile(title: UniversalText('No liked movies or shows in this category yet.'))),
-            for (final media in filteredMedia)
+            if (filteredMovies.isEmpty) const Card(child: ListTile(title: UniversalText('No liked movies in this category yet.'))),
+            for (final media in filteredMovies)
               Card(child: ListTile(
                 leading: const Icon(Icons.movie_outlined),
                 title: Text(media.title),
                 subtitle: Text(media.type),
                 trailing: LikeToggleButton(
                   liked: controller.isLiked(media.id),
-                  onPressed: () {
-                    controller.clearReaction(media.id);
-                    setState(() {});
-                  },
+                  onPressed: () => _unlikeMedia(media),
+                ),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
+              )),
+            const SizedBox(height: 18),
+            const UniversalText('Liked TV Shows', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            CategoryFilterChips(
+              categories: showCategories,
+              selectedCategory: _showCategory,
+              onSelected: (value) => setState(() => _showCategory = value),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: filteredShows.isEmpty ? null : () => _createMediaCollection(filteredShows, defaultName: '$_showCategory Shows'),
+                icon: const Icon(Icons.create_new_folder_outlined),
+                label: const UniversalText('Create New Collection'),
+              ),
+            ),
+            if (filteredShows.isEmpty) const Card(child: ListTile(title: UniversalText('No liked shows in this category yet.'))),
+            for (final media in filteredShows)
+              Card(child: ListTile(
+                leading: const Icon(Icons.tv_outlined),
+                title: Text(media.title),
+                subtitle: Text(media.type),
+                trailing: LikeToggleButton(
+                  liked: controller.isLiked(media.id),
+                  onPressed: () => _unlikeMedia(media),
                 ),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
               )),
@@ -269,9 +350,24 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 subtitle: Text(track.artist),
                 trailing: LikeToggleButton(
                   liked: true,
-                  onPressed: () {
-                    MusicFavoritesBridge.toggleTrack(track.title);
-                    setState(() {});
+                  onPressed: () async {
+                    final liked = MusicFavoritesBridge.likedTracks().contains(track.id);
+                    final result = await UniversalMediaActions.perform(
+                      context: UniversalMediaActionContext(
+                        contentType: 'music_track',
+                        contentId: track.id,
+                        profileId: controller.currentProfile?.id ?? 'local-profile',
+                        availableActions: const {
+                          UniversalMediaAction.like,
+                          UniversalMediaAction.removeReaction,
+                        },
+                      ),
+                      action: liked
+                          ? UniversalMediaAction.removeReaction
+                          : UniversalMediaAction.like,
+                      apply: () => MusicFavoritesBridge.toggleTrack(track.id),
+                    );
+                    if (result.applied && mounted) setState(() {});
                   },
                 ),
               )),

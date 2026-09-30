@@ -19,6 +19,7 @@ import 'models/account.dart';
 import 'models/account_member.dart';
 import 'models/payment_session.dart';
 import 'models/profile.dart';
+import 'models/physical_item.dart';
 import 'models/shop_entity.dart';
 import 'models/subscription.dart';
 
@@ -88,6 +89,142 @@ class SupabaseStore {
   // ---------------------------------------------------------------------------
   // ACCOUNT LOOKUP
   // ---------------------------------------------------------------------------
+
+  /// Persists an account-owned physical copy. A provider catalog result is
+  /// never accepted as a substitute for this ownership record.
+  Future<void> upsertPhysicalItem(PhysicalItem item) async {
+    final c = _db;
+    if (c == null) return;
+
+    final externalAccountId = _requiredId(item.accountId, field: 'accountId');
+    final existingAccount = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', externalAccountId)
+        .maybeSingle();
+    if (existingAccount == null) {
+      throw StateError('The physical item account does not exist.');
+    }
+    final internalAccountId = _requiredId(
+      existingAccount['id']?.toString(),
+      field: 'accounts.id',
+    );
+
+    final existingItem = await c
+        .from('physical_items')
+        .select('id,ownership_status,ownership_history')
+        .eq('account_id', internalAccountId)
+        .eq('external_item_id', item.id.trim())
+        .maybeSingle();
+    if (existingItem != null) {
+      final oldHistory = existingItem['ownership_history'];
+      final oldHistoryCount = oldHistory is List ? oldHistory.length : 0;
+      if (item.ownershipHistory.length < oldHistoryCount) {
+        throw StateError('Physical ownership history cannot be removed.');
+      }
+      final oldStatus = existingItem['ownership_status']?.toString();
+      if (oldStatus != item.ownershipStatus.name &&
+          (item.ownershipHistory.length <= oldHistoryCount ||
+              item.ownershipHistory.last.status != item.ownershipStatus)) {
+        throw StateError('Ownership status changes require a history record.');
+      }
+    }
+
+    await c.from('physical_items').upsert({
+      'external_item_id': _requiredId(item.id, field: 'physicalItem.id'),
+      'account_id': internalAccountId,
+      'title': _boundedText(item.title, field: 'physicalItem.title', maxLength: 500),
+      'format': item.format.name,
+      'region': _safeNullableText(item.region, maxLength: 100),
+      'edition': _safeNullableText(item.edition, maxLength: 500),
+      'media_edition_id': item.editionId,
+      'physical_release_ref': _safeNullableText(item.physicalReleaseId, maxLength: 200),
+      'release_date': item.releaseDate?.toUtc().toIso8601String().substring(0, 10),
+      'barcode': _safeNullableText(item.barcode, maxLength: 100),
+      'catalog_number': _safeNullableText(item.catalogNumber, maxLength: 200),
+      'disc_count': item.discCount,
+      'acquired_at': item.acquiredAt.toUtc().toIso8601String(),
+      'item_condition': _safeNullableText(item.condition, maxLength: 200),
+      'ownership_status': item.ownershipStatus.name,
+      'notes': _safeNullableText(item.notes, maxLength: 4000),
+      'artwork_url': _safeNullableText(item.artworkUrl, maxLength: 2048),
+      'included_extras': item.includedExtras,
+      'ownership_history': item.ownershipHistory.map((change) => change.toJson()).toList(),
+    }, onConflict: 'account_id,external_item_id');
+
+    final persistedItem = existingItem ?? await c
+        .from('physical_items')
+        .select('id')
+        .eq('account_id', internalAccountId)
+        .eq('external_item_id', item.id.trim())
+        .single();
+    final physicalItemId = _requiredId(
+      persistedItem['id']?.toString(),
+      field: 'physical_items.id',
+    );
+    final oldHistory = existingItem?['ownership_history'];
+    final oldHistoryCount = oldHistory is List ? oldHistory.length : 0;
+    for (var index = oldHistoryCount; index < item.ownershipHistory.length; index++) {
+      final change = item.ownershipHistory[index];
+      final eventKey = '${index}_${change.changedAt.toUtc().toIso8601String()}_${change.status.name}';
+      await c.from('physical_ownership_events').upsert({
+        'physical_item_id': physicalItemId,
+        'event_key': eventKey,
+        'new_status': change.status.name,
+        'actor_ref': change.actorId,
+        'note': _safeNullableText(change.note, maxLength: 1000),
+        'changed_at': change.changedAt.toUtc().toIso8601String(),
+      }, onConflict: 'physical_item_id,event_key', ignoreDuplicates: true);
+    }
+  }
+
+  /// Loads physical ownership records for one external account ID.
+  Future<List<PhysicalItem>> loadPhysicalItems(String accountId) async {
+    final c = _db;
+    if (c == null) return const <PhysicalItem>[];
+
+    final externalAccountId = _requiredId(accountId, field: 'accountId');
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', externalAccountId)
+        .maybeSingle();
+    if (account == null) return const <PhysicalItem>[];
+    final internalAccountId = _requiredId(account['id']?.toString(), field: 'accounts.id');
+
+    final rows = await c
+        .from('physical_items')
+        .select()
+        .eq('account_id', internalAccountId)
+        .order('acquired_at', ascending: false);
+
+    return rows.map((raw) {
+      final row = Map<String, dynamic>.from(raw);
+      return PhysicalItem.fromJson({
+        'id': row['external_item_id'],
+        'accountId': externalAccountId,
+        'title': row['title'],
+        'format': row['format'],
+        'region': row['region'],
+        'edition': row['edition'],
+        'editionId': row['media_edition_id'],
+        'physicalReleaseId': row['physical_release_ref'],
+        'releaseDate': row['release_date'],
+        'barcode': row['barcode'],
+        'catalogNumber': row['catalog_number'],
+        'discCount': row['disc_count'],
+        'acquiredAt': row['acquired_at'],
+        'condition': row['item_condition'],
+        'ownershipStatus': row['ownership_status'],
+        'notes': row['notes'],
+        'artworkUrl': row['artwork_url'],
+        'includedExtras': row['included_extras'],
+        'ownershipHistory': row['ownership_history'],
+        'createdAt': row['created_at'],
+        'updatedAt': row['updated_at'],
+      });
+    }).toList(growable: false);
+  }
 
   Future<Map<String, dynamic>?> accountByAuthUserId(
     String authUserId,
@@ -2550,7 +2687,92 @@ class SupabaseStore {
         .from('seller_payout_destinations')
         .delete()
         .eq('id', _requiredId(destinationId, field: 'destinationId'))
-        .eq('seller_account_id', internalAccount['id']);
+      .eq('seller_account_id', internalAccount['id']);
+  }
+
+  Future<void> saveShopLiveEvent({
+    required String accountExternalId,
+    required Map<String, dynamic> event,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+    final accountRow = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+    if (accountRow == null) throw StateError('Account not found in Supabase.');
+    final id = _requiredId(event['id']?.toString(), field: 'event.id');
+    final questions = event['questions'] is List
+        ? (event['questions'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : const <Map<String, dynamic>>[];
+    final poll = event['poll'] is Map
+        ? Map<String, dynamic>.from(event['poll'] as Map)
+        : null;
+    await c.from('shop_live_events').upsert({
+      'id': id,
+      'seller_account_id': accountRow['id'],
+      'seller_external_id': accountExternalId,
+      'store_id': _boundedText(event['storeId']?.toString() ?? '', field: 'event.storeId', maxLength: 200),
+      'store_name': _boundedText(event['storeName']?.toString() ?? '', field: 'event.storeName', maxLength: 240),
+      'title': _boundedText(event['title']?.toString() ?? '', field: 'event.title', maxLength: 240),
+      'description': _boundedText(event['description']?.toString() ?? '', field: 'event.description', maxLength: 4000),
+      'status': event['status']?.toString() ?? 'scheduled',
+      'scheduled_at': event['scheduledAt'],
+      'started_at': event['startedAt'],
+      'ended_at': event['endedAt'],
+      'stream_url': _nullable(event['streamUrl']?.toString()),
+      'replay_url': _nullable(event['replayUrl']?.toString()),
+      'product_ids': (event['productIds'] as List? ?? const []).map((item) => item.toString()).toList(),
+      'pinned_product_id': _nullable(event['pinnedProductId']?.toString()),
+      'questions': questions,
+      'poll': poll,
+      'randomized_rewards_enabled': event['randomizedRewardsEnabled'] == true,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'id');
+  }
+
+  Future<List<Map<String, dynamic>>> loadShopLiveEvents() async {
+    final c = _db;
+    if (c == null) return const <Map<String, dynamic>>[];
+    final rows = await c
+        .from('shop_live_events')
+        .select()
+        .order('scheduled_at', ascending: true)
+        .limit(100);
+    return rows.map<Map<String, dynamic>>(_shopLiveEventFromRow).toList();
+  }
+
+  Future<Map<String, dynamic>?> loadShopLiveEvent(String id) async {
+    final c = _db;
+    if (c == null) return null;
+    final row = await c.from('shop_live_events').select().eq('id', id).maybeSingle();
+    return row == null ? null : _shopLiveEventFromRow(row);
+  }
+
+  Map<String, dynamic> _shopLiveEventFromRow(dynamic raw) {
+    final row = Map<String, dynamic>.from(raw as Map);
+    return <String, dynamic>{
+      'id': row['id']?.toString() ?? '',
+      'sellerAccountId': row['seller_external_id']?.toString() ?? '',
+      'storeId': row['store_id']?.toString() ?? '',
+      'storeName': row['store_name']?.toString() ?? '',
+      'title': row['title']?.toString() ?? '',
+      'description': row['description']?.toString() ?? '',
+      'status': row['status']?.toString() ?? 'scheduled',
+      'scheduledAt': row['scheduled_at']?.toString(),
+      'startedAt': row['started_at']?.toString(),
+      'endedAt': row['ended_at']?.toString(),
+      'streamUrl': row['stream_url']?.toString(),
+      'replayUrl': row['replay_url']?.toString(),
+      'productIds': row['product_ids'] is List ? (row['product_ids'] as List).map((value) => value.toString()).toList() : <String>[],
+      'pinnedProductId': row['pinned_product_id']?.toString(),
+      'questions': row['questions'] is List ? (row['questions'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList() : <Map<String, dynamic>>[],
+      'poll': row['poll'] is Map ? Map<String, dynamic>.from(row['poll'] as Map) : null,
+      'randomizedRewardsEnabled': row['randomized_rewards_enabled'] == true,
+      'createdAt': row['created_at']?.toString(),
+      'updatedAt': row['updated_at']?.toString(),
+    };
   }
 
   // ---------------------------------------------------------------------------

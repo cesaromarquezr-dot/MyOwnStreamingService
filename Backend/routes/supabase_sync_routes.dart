@@ -17,6 +17,7 @@ import 'dart:typed_data';
 
 import '../middleware/authentication.dart';
 import '../models/account.dart';
+import '../services/activity_service.dart';
 import '../supabase_store.dart';
 
 /// Implements authenticated synchronization from the Flutter client to
@@ -28,6 +29,7 @@ class SupabaseSyncRoutes {
   static const int _maxBodyBytes = 512 * 1024;
   static const int _maxProfileIdLength = 256;
   final Map<String, Map<String, dynamic>> _memoryRecords = {};
+  final ActivityService _activityService = const ActivityService();
 
   SupabaseSyncRoutes({
     required this.authentication,
@@ -217,7 +219,7 @@ class SupabaseSyncRoutes {
     if (request.method == 'GET' && path == '/api/v1/phase2/features') {
       return _json(request.response, HttpStatus.ok, {
         'success': true,
-        'features': ['records', 'media_actions', 'collaborative_queues', 'share_cards', 'payment_methods', 'seller_payout_destinations'],
+        'features': ['records', 'media_actions', 'activity_timeline', 'collaborative_queues', 'share_cards', 'payment_methods', 'seller_payout_destinations'],
       });
     }
     if (path == '/api/v1/phase2/media-action' && request.method == 'POST') {
@@ -277,6 +279,32 @@ class SupabaseSyncRoutes {
         'action': record,
       });
     }
+
+      if (path == '/api/v1/phase2/activity' && request.method == 'GET') {
+        final profile = _ownedProfile(
+          account,
+          request.uri.queryParameters['profileId'],
+        );
+        if (profile == null) {
+          throw const FormatException('A profile ID is required.');
+        }
+        final requestedLimit = int.tryParse(
+          request.uri.queryParameters['limit'] ?? '',
+        ) ?? 50;
+        final records = await _records(
+          account.id,
+          profile,
+          'universal_media_action',
+        );
+        final activities = _activityService.projectMediaActions(
+          records,
+          limit: requestedLimit,
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'activities': activities,
+        });
+      }
 
       if (path == '/api/v1/phase2/records') {
       if (request.method == 'GET') {

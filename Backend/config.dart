@@ -8,6 +8,15 @@
 import 'dart:io';
 
 class AppConfig {
+
+/// Backend-only token for The Movie Database API.
+static String get tmdbApiToken =>
+    Platform.environment['TMDB_API_TOKEN']?.trim() ?? '';
+
+/// Backend-only OMDb API key. OMDb can expose provider rating fields such as
+/// IMDb, Rotten Tomatoes, and Metacritic when those fields are available.
+static String get omdbApiKey =>
+    Platform.environment['OMDB_API_KEY']?.trim() ?? '';
 // ============================================================
 // SERVER
 // ============================================================

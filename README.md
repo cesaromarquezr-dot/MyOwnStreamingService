@@ -52,6 +52,8 @@ The project now uses a consolidated architecture model for the larger roadmap. T
 
 See [`docs/CANONICAL_ARCHITECTURE.md`](docs/CANONICAL_ARCHITECTURE.md) for the canonical shared capability architecture, Universal Media Actions, integration ownership, and delivery order.
 
+See [`docs/MASTER_CAPABILITY_ROADMAP.md`](docs/MASTER_CAPABILITY_ROADMAP.md) for the carried-forward Phase 1/2 foundation, the numbered Phase 3 additions through #116, and the separate productionization track.
+
 The feature map for media versions, universal profile actions, dynamic collections, and relationship graph ownership is included in the canonical architecture document.
 
 See [`docs/XRAY_ARCHITECTURE.md`](docs/XRAY_ARCHITECTURE.md) for the canonical X-Ray capability, its version-specific timeline and spoiler model, and the implementation path from the current player overlay.

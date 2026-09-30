@@ -26,6 +26,7 @@ import '../models/group_chat_room.dart';
 import '../models/payment_session.dart';
 import '../models/subscription.dart';
 import '../models/profile.dart';
+import '../models/physical_item.dart';
 import '../models/remote_worker.dart';
 import '../models/review.dart';
 import '../supabase_store.dart';
@@ -343,6 +344,47 @@ class Database {
 
   final Map<String, ArmMusicRecording> armMusicRecordingsById =
       <String, ArmMusicRecording>{};
+
+  /// Account-owned physical copies are retained as provenance records even
+  /// after the item is sold, lost, damaged, or archived.
+  final Map<String, PhysicalItem> physicalItemsById = <String, PhysicalItem>{};
+
+  void savePhysicalItem(PhysicalItem item) {
+    final id = item.id.trim();
+    final accountId = item.accountId.trim();
+    if (id.isEmpty || accountId.isEmpty || item.title.trim().isEmpty) {
+      throw ArgumentError('Physical item ID, account ID, and title are required.');
+    }
+
+    final existing = physicalItemsById[id];
+    if (existing != null && existing.accountId != accountId) {
+      throw StateError('A physical item cannot be reassigned to another account.');
+    }
+    if (existing != null &&
+        item.ownershipHistory.length < existing.ownershipHistory.length) {
+      throw StateError('Physical ownership history cannot be removed.');
+    }
+    if (existing != null &&
+        existing.ownershipStatus != item.ownershipStatus &&
+        (item.ownershipHistory.length <= existing.ownershipHistory.length ||
+            item.ownershipHistory.last.status != item.ownershipStatus)) {
+      throw StateError('Ownership status changes require a history record.');
+    }
+    physicalItemsById[id] = item;
+  }
+
+  PhysicalItem? getPhysicalItem(String accountId, String itemId) {
+    final item = physicalItemsById[itemId.trim()];
+    return item != null && item.accountId == accountId.trim() ? item : null;
+  }
+
+  List<PhysicalItem> getPhysicalItemsForAccount(String accountId) {
+    final items = physicalItemsById.values
+        .where((item) => item.accountId == accountId.trim())
+        .toList();
+    items.sort((a, b) => b.acquiredAt.compareTo(a.acquiredAt));
+    return List<PhysicalItem>.unmodifiable(items);
+  }
 
   /// Returns all ARM rip jobs currently known to this backend process.
   List<ArmRipJob> getArmRipJobs() {

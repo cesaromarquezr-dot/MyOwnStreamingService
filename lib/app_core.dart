@@ -120,6 +120,8 @@ class MediaItem {
   final List<String> subtitles;
   final List<String> extras;
   final List<Map<String, dynamic>> xrayEvents;
+  /// Indexed TV opening sequences; offsets are bound to the exact media version.
+  final List<Map<String, dynamic>> tvIntros;
   /// Version/edition identity that anchors version-specific X-Ray offsets.
   final String? mediaVersionId;
 
@@ -163,6 +165,7 @@ class MediaItem {
     List<String>? subtitles,
     List<String>? extras,
     List<Map<String, dynamic>>? xrayEvents,
+    List<Map<String, dynamic>>? tvIntros,
     this.mediaVersionId,
     required this.id,
     required this.title,
@@ -190,6 +193,7 @@ class MediaItem {
         subtitles = subtitles ?? <String>[],
         extras = extras ?? <String>[],
         xrayEvents = xrayEvents ?? <Map<String, dynamic>>[],
+        tvIntros = tvIntros ?? <Map<String, dynamic>>[],
         relationshipTypes = relationshipTypes ?? <String>[],
         accessibleProfileIds = accessibleProfileIds ?? <String>[],
         eligibleMerchandiseProductIds =
@@ -280,6 +284,12 @@ class MediaItem {
       audioTracks: _stringList(json['audioTracks']),
       subtitles: _stringList(json['subtitles']),
       extras: _stringList(json['extras']),
+      tvIntros: json['tvIntros'] is List
+          ? (json['tvIntros'] as List)
+              .whereType<Map>()
+              .map((event) => Map<String, dynamic>.from(event))
+              .toList()
+          : <Map<String, dynamic>>[],
       xrayEvents: json['xrayEvents'] is List
           ? (json['xrayEvents'] as List)
               .whereType<Map>()
@@ -358,6 +368,7 @@ class MediaItem {
       'subtitles': subtitles,
       'extras': extras,
       'xrayEvents': xrayEvents,
+      'tvIntros': tvIntros,
       'mediaVersionId': mediaVersionId,
       'seasons': seasons,
     };
