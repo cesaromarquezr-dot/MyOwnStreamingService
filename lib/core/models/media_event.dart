@@ -3,7 +3,6 @@
 /// A media item can belong to multiple occasions at the same time. For
 /// example, The Nightmare Before Christmas can be associated with both
 /// Halloween and Christmas without creating duplicate media records.
-library;
 
 enum MediaEventType {
   season,

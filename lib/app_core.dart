@@ -11,6 +11,7 @@ import 'backend_api.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
 import 'core/models/profile_governance.dart';
+
 enum SubscriptionPlan {
   monthly,
   yearly,
@@ -1368,6 +1369,7 @@ class AppController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> createAccountWithBackend({
     required String email,
+    required String username,
     required String password,
     required SubscriptionPlan plan,
     required String firstProfileName,
@@ -1378,6 +1380,7 @@ class AppController extends ChangeNotifier {
 
     final response = await backendApi.signup(
       email: email.trim(),
+      username: username.trim(),
       password: password,
       firstProfileName: firstProfileName.trim(),
       plan: planValue,

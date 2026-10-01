@@ -1690,6 +1690,8 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
       const SizedBox(height: 10),
       const Text('Store section order', style: TextStyle(fontWeight: FontWeight.bold)),
       for (var index = 0; index < designDraft.sectionOrder.length; index++) ListTile(dense: true, title: Text(designDraft.sectionOrder[index]), trailing: Wrap(children: [IconButton(onPressed: index == 0 ? null : () => _moveSection(index, index - 1), icon: const Icon(Icons.arrow_upward)), IconButton(onPressed: index == designDraft.sectionOrder.length - 1 ? null : () => _moveSection(index, index + 1), icon: const Icon(Icons.arrow_downward))])),
+      const SizedBox(height: 14),
+      StorefrontDevicePreview(design: designDraft, storeName: name.text, products: ShopCatalog.instance.productsForStore(widget.store.id)),
       const SizedBox(height: 18),
       if (!widget.designerOnly) ...[
       const UniversalText('Seller payment & payout methods', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
@@ -2937,4 +2939,197 @@ class ContextualShopButton extends StatelessWidget {
 
   /// Convenience helper for collections.
   static Widget forCollection(MediaCollection collection) => ContextualShopButton(associationType: 'collection', associationId: collection.id, associationName: collection.name);
+}
+
+/// Reusable storefront device preview used by Storefront Designer.
+class StorefrontDevicePreview extends StatefulWidget {
+  final StorefrontDesign design;
+  final String storeName;
+  final List<ShopProduct> products;
+
+  const StorefrontDevicePreview({
+    super.key,
+    required this.design,
+    required this.storeName,
+    required this.products,
+  });
+
+  @override
+  State<StorefrontDevicePreview> createState() => _StorefrontDevicePreviewState();
+}
+
+class _StorefrontDevicePreviewState extends State<StorefrontDevicePreview> {
+  String device = 'Phone';
+  bool landscape = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = switch (device) {
+      'Phone' => landscape ? const Size(844, 390) : const Size(390, 844),
+      'Tablet' => landscape ? const Size(1024, 768) : const Size(768, 1024),
+      'Desktop' => const Size(1100, 680),
+      _ => const Size(1280, 720),
+    };
+
+    final previewWidth = size.width.clamp(260.0, 1100.0).toDouble();
+    final previewHeight = size.height.clamp(300.0, 620.0).toDouble();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Live Preview',
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final value in const ['Phone', 'Tablet', 'Desktop', 'TV'])
+                  ChoiceChip(
+                    label: Text(value),
+                    selected: device == value,
+                    onSelected: (_) => setState(() => device = value),
+                  ),
+                if (device == 'Phone' || device == 'Tablet')
+                  FilterChip(
+                    label: const Text('Landscape'),
+                    selected: landscape,
+                    onSelected: (value) => setState(() => landscape = value),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: previewWidth,
+                height: previewHeight,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(width: 4),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: _preview(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Preview frame: $device${(device == 'Phone' || device == 'Tablet') && landscape ? ' • Landscape' : ''}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _preview() {
+    final isPhone = device == 'Phone';
+    final int columns = isPhone
+        ? widget.design.mobileColumns.clamp(1, 3).toInt()
+        : widget.design.desktopColumns.clamp(2, 5).toInt();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(widget.design.backgroundColor),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          Text(
+            widget.storeName.isEmpty ? 'Store' : widget.storeName,
+            style: TextStyle(
+              fontSize: isPhone ? 22 : 30,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: isPhone ? 100 : 150,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget.design.cardRadius),
+              color: Color(widget.design.primaryColor),
+            ),
+            padding: const EdgeInsets.all(14),
+            alignment: Alignment.bottomLeft,
+            child: Text(
+              widget.design.heroTitle.isEmpty
+                  ? 'Storefront Preview'
+                  : widget.design.heroTitle,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (widget.design.heroSubtitle.isNotEmpty)
+            Text(widget.design.heroSubtitle, maxLines: 2),
+          const SizedBox(height: 14),
+          if (widget.design.productLayout == 'grid')
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: columns,
+              childAspectRatio: .85,
+              children: [
+                for (final product in widget.products.take(6))
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: product.imageUrls.isEmpty
+                                ? const Center(
+                                    child: Icon(Icons.shopping_bag_outlined),
+                                  )
+                                : Image.network(
+                                    product.imageUrls.first,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(Icons.broken_image_outlined),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            product.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${product.price.toStringAsFixed(2)} ${product.currency}',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                for (final product in widget.products.take(4))
+                  ListTile(
+                    title: Text(product.name),
+                    subtitle: Text(
+                      '${product.price.toStringAsFixed(2)} ${product.currency}',
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
 }

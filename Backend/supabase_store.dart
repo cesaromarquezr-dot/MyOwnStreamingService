@@ -18,6 +18,7 @@ import 'package:supabase/supabase.dart';
 import 'models/account.dart';
 import 'models/account_member.dart';
 import 'models/payment_session.dart';
+import 'models/library_addition.dart';
 import 'models/profile.dart';
 import 'models/profile_governance.dart';
 import 'models/physical_item.dart';
@@ -903,6 +904,67 @@ class SupabaseStore {
   }
 
   // ---------------------------------------------------------------------------
+  // SCHEDULED LIBRARY PUBLICATION
+  // ---------------------------------------------------------------------------
+
+  Future<void> upsertLibraryAddition(LibraryAddition item) async {
+    final c = _db;
+    if (c == null) return;
+    final account = await c.from('accounts').select('id').eq('external_account_id', item.accountId).maybeSingle();
+    if (account == null) throw StateError('Account not found for library addition.');
+    final internalAccountId = _requiredId(account['id']?.toString(), field: 'accounts.id');
+    await c.from('library_additions').upsert({
+      'id': item.id,
+      'account_id': internalAccountId,
+      'server_media_id': item.mediaId,
+      'title': _boundedText(item.title, field: 'title', maxLength: _maxNameLength),
+      'media_type': _boundedText(item.mediaType, field: 'mediaType', maxLength: 64),
+      'scheduled_for': item.scheduledFor.toUtc().toIso8601String(),
+      'scheduled_timezone': _boundedText(item.timeZone, field: 'scheduledTimezone', maxLength: 128),
+      'status': item.status.name,
+      'created_at': item.createdAt.toUtc().toIso8601String(),
+      'published_at': item.publishedAt?.toUtc().toIso8601String(),
+      'cancelled_at': item.cancelledAt?.toUtc().toIso8601String(),
+    }, onConflict: 'id');
+  }
+
+  Future<List<LibraryAddition>> loadLibraryAdditions() async {
+    final c = _db;
+    if (c == null) return const <LibraryAddition>[];
+    final accounts = await c.from('accounts').select('id,external_account_id');
+    final ids = <String, String>{};
+    for (final raw in accounts) {
+      final row = Map<String, dynamic>.from(raw);
+      final internal = row['id']?.toString().trim() ?? '';
+      final external = row['external_account_id']?.toString().trim() ?? '';
+      if (internal.isNotEmpty && external.isNotEmpty) ids[internal] = external;
+    }
+    final rows = await c.from('library_additions').select().order('scheduled_for');
+    final result = <LibraryAddition>[];
+    for (final raw in rows) {
+      final row = Map<String, dynamic>.from(raw);
+      final accountId = ids[row['account_id']?.toString() ?? ''];
+      if (accountId == null) continue;
+      final scheduled = DateTime.tryParse(row['scheduled_for']?.toString() ?? '');
+      if (scheduled == null) continue;
+      final status = LibraryAdditionStatus.values.firstWhere(
+        (s) => s.name == row['status']?.toString(),
+        orElse: () => LibraryAdditionStatus.scheduled,
+      );
+      result.add(LibraryAddition(
+        id: row['id']?.toString() ?? '', accountId: accountId,
+        mediaId: row['server_media_id']?.toString() ?? '',
+        title: row['title']?.toString() ?? '', mediaType: row['media_type']?.toString() ?? 'movie',
+        scheduledFor: scheduled, timeZone: row['scheduled_timezone']?.toString() ?? 'UTC', status: status,
+        createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now().toUtc(),
+        publishedAt: DateTime.tryParse(row['published_at']?.toString() ?? ''),
+        cancelledAt: DateTime.tryParse(row['cancelled_at']?.toString() ?? ''),
+      ));
+    }
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
   // ACCOUNT RESTORATION
   // ---------------------------------------------------------------------------
 
@@ -1534,8 +1596,7 @@ class SupabaseStore {
           internalAccountId,
         );
 
-    final identities =
-        await c.from('member_identities').select(
+    final identities = await c.from('member_identities').select(
       'id,email',
     );
 
@@ -1581,6 +1642,15 @@ class SupabaseStore {
       }
     }
 
+    final accountRows = await c.from('accounts').select('id,username,email');
+    final usernameByEmail = <String, String>{};
+    for (final rawAccount in accountRows) {
+      final row = Map<String, dynamic>.from(rawAccount);
+      final email = row['email']?.toString().trim().toLowerCase() ?? '';
+      final username = row['username']?.toString().trim() ?? '';
+      if (email.isNotEmpty && username.isNotEmpty) usernameByEmail[email] = username;
+    }
+
     final result = <Map<String, dynamic>>[];
 
     for (final raw in members) {
@@ -1602,9 +1672,11 @@ class SupabaseStore {
         if (member['profile_id']?.toString().trim().isNotEmpty == true) member['profile_id'].toString(),
       ].toSet().toList();
 
+      final memberEmail = identity['email']?.toString().trim().toLowerCase() ?? '';
       result.add({
         'id': member['id'],
         'email': identity['email'],
+        'username': usernameByEmail[memberEmail],
         'role': member['role'],
         'status': member['status'],
         'displayName': member['display_name'],
@@ -1614,6 +1686,76 @@ class SupabaseStore {
     }
 
     return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // ADD EXISTING ACCOUNT USER AS MEMBER
+  // ---------------------------------------------------------------------------
+
+  Future<Map<String, dynamic>> addExistingAccountMemberByUsername({
+    required String accountExternalId,
+    required String username,
+    String role = 'member',
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+
+    final cleanAccountId = _requiredId(accountExternalId, field: 'accountExternalId');
+    final cleanUsername = _boundedText(username.trim(), field: 'username', maxLength: _maxNameLength);
+    final normalizedRole = role.trim().toLowerCase() == 'admin' ? 'admin' : 'member';
+
+    final current = await c.from('accounts').select('id').eq('external_account_id', cleanAccountId).maybeSingle();
+    if (current == null) throw StateError('Account not found in Supabase.');
+    final currentId = _requiredId(current['id']?.toString(), field: 'accounts.id');
+
+    final target = await c
+        .from('accounts')
+        .select('id,username,email,display_name')
+        .ilike('username', cleanUsername)
+        .maybeSingle();
+    if (target == null) throw StateError('No account user was found with @$cleanUsername.');
+
+    final targetId = _requiredId(target['id']?.toString(), field: 'target accounts.id');
+    if (targetId == currentId) throw StateError('That username already belongs to this account.');
+
+    final ownerMembership = await c
+        .from('account_members')
+        .select('identity_id')
+        .eq('account_id', targetId)
+        .eq('role', 'owner')
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (ownerMembership == null) throw StateError('That user does not have an active login identity yet.');
+
+    final identityId = _requiredId(ownerMembership['identity_id']?.toString(), field: 'member identity');
+
+    final existing = await c
+        .from('account_members')
+        .select('id,status')
+        .eq('account_id', currentId)
+        .eq('identity_id', identityId)
+        .maybeSingle();
+
+    final row = await c.from('account_members').upsert({
+      'account_id': currentId,
+      'identity_id': identityId,
+      'role': normalizedRole,
+      'status': 'active',
+      'display_name': target['display_name'] ?? target['username'],
+      'accepted_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'account_id,identity_id').select('id,account_id,role,status,display_name').single();
+
+    return {
+      'id': row['id'],
+      'accountId': cleanAccountId,
+      'username': target['username'],
+      'email': target['email'],
+      'displayName': row['display_name'],
+      'role': row['role'],
+      'status': row['status'],
+      'alreadyMember': existing != null && existing['status']?.toString() == 'active',
+    };
   }
 
   // ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final emailController = TextEditingController();
+  final usernameController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
   final securityAnswerController = TextEditingController();
@@ -71,6 +72,7 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   void dispose() {
     emailController.dispose();
+    usernameController.dispose();
     passwordController.dispose();
     confirmController.dispose();
     securityAnswerController.dispose();
@@ -123,6 +125,7 @@ class _SignupScreenState extends State<SignupScreen> {
     if (creatingAccount) return;
 
     final email = emailController.text.trim();
+    final username = usernameController.text.trim();
     final password = passwordController.text;
     final confirm = confirmController.text;
 
@@ -133,10 +136,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
     final securityAnswer = securityAnswerController.text.trim();
 
-    if (email.isEmpty ||
-        password.isEmpty ||
-        confirm.isEmpty) {
-      _showMessage('Please complete all fields.');
+    if (email.isEmpty || username.isEmpty || password.isEmpty || confirm.isEmpty) {
+      _showMessage('Please enter an email, unique username, and password.');
+      return;
+    }
+
+    if (!RegExp(r'^[A-Za-z0-9_]{3,32}$').hasMatch(username)) {
+      _showMessage('Username must be 3–32 characters using letters, numbers, and underscores.');
       return;
     }
 
@@ -171,6 +177,7 @@ class _SignupScreenState extends State<SignupScreen> {
       final signupData =
           await AppController.instance.createAccountWithBackend(
         email: email,
+        username: username,
         password: password,
         plan: selectedPlan,
         firstProfileName: '',
@@ -720,6 +727,20 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
 
                             const SizedBox(height: 30),
+
+                            TextField(
+                              controller: usernameController,
+                              textInputAction: TextInputAction.next,
+                              autocorrect: false,
+                              decoration: _inputDecoration(
+                                label: 'Username',
+                                icon: Icons.alternate_email_rounded,
+                              ).copyWith(
+                                helperText: 'Your unique @username for friends and discovery.',
+                              ),
+                            ),
+
+                            const SizedBox(height: 14),
 
                             TextField(
                               controller: emailController,

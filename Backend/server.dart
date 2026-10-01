@@ -65,6 +65,7 @@ import 'routes/remote_access_routes.dart';
 import 'routes/storage_routes.dart';
 import 'routes/platform_routes.dart';
 import 'routes/library_routes.dart';
+import 'routes/library_release_routes.dart';
 import 'routes/playback_routes.dart';
 import 'routes/legal_routes.dart';
 import 'routes/sports_routes.dart';
@@ -106,6 +107,10 @@ import 'services/shop_service.dart';
 import 'services/payment_method_service.dart';
 import 'services/profile_governance_service.dart';
 import 'services/media_server_agent_service.dart';
+import 'services/event_bus_service.dart';
+import 'services/job_service.dart';
+import 'services/library_release_service.dart';
+import 'services/payment_provider_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -168,6 +173,8 @@ database: database,
 );
 
 final paymentMethodService = PaymentMethodService();
+final libraryReleaseService = LibraryReleaseService(database: database);
+final paymentProviderService = PaymentProviderService();
 
 // ------------------------------------------------------------
 // PAYMENT SERVICE
@@ -211,6 +218,9 @@ final physicalItemRoutes = PhysicalItemRoutes(
 
 final profileGovernanceService = ProfileGovernanceService(database);
 final mediaServerAgentService = MediaServerAgentService();
+final eventBusService = EventBusService();
+final jobService = JobService();
+
 final profileGovernanceRoutes = ProfileGovernanceRoutes(
   authentication: authentication,
   service: profileGovernanceService,
@@ -261,6 +271,11 @@ authenticationMiddleware: authentication,
 shopService: shopService,
 );
 
+final libraryReleaseRoutes = LibraryReleaseRoutes(
+  authentication: authentication,
+  service: libraryReleaseService,
+);
+
 final ratingRoutes = RatingRoutes(
   authentication: authentication,
   service: ratingService,
@@ -280,6 +295,7 @@ authenticationMiddleware: authentication,
 paymentService: paymentService,
 database: database,
 paymentMethods: paymentMethodService,
+  providerService: paymentProviderService,
 );
 
 // ------------------------------------------------------------
@@ -358,6 +374,7 @@ paymentService: paymentService,
 
 final libraryRoutes = LibraryRoutes(
 authentication: authentication,
+  releaseService: libraryReleaseService,
 );
 
 final transcodingService = TranscodingService(
@@ -857,6 +874,12 @@ if (path.startsWith(
 // ----------------------------------------------------------
 // LIBRARY
 // ----------------------------------------------------------
+
+if (path.startsWith('/api/v1/library/releases')) {
+  await libraryReleaseRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
 
 if (path.startsWith(
   '/api/v1/library/',

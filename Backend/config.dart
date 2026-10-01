@@ -17,6 +17,14 @@ static String get tmdbApiToken =>
 /// IMDb, Rotten Tomatoes, and Metacritic when those fields are available.
 static String get omdbApiKey =>
     Platform.environment['OMDB_API_KEY']?.trim() ?? '';
+
+static String get lastFmApiKey => Platform.environment['LASTFM_API_KEY']?.trim() ?? '';
+static String get musicMetadataUserAgent => Platform.environment['MUSIC_METADATA_USER_AGENT']?.trim() ?? 'StreamingService/1.0 (self-hosted)';
+static String get paypalClientId => Platform.environment['PAYPAL_CLIENT_ID']?.trim() ?? '';
+static String get paypalClientSecret => Platform.environment['PAYPAL_CLIENT_SECRET']?.trim() ?? '';
+static String get paypalBaseUrl => Platform.environment['PAYPAL_BASE_URL']?.trim() ?? 'https://api-m.sandbox.paypal.com';
+static String get mercadoPagoAccessToken => Platform.environment['MERCADO_PAGO_ACCESS_TOKEN']?.trim() ?? '';
+static String get applePayMerchantId => Platform.environment['APPLE_PAY_MERCHANT_ID']?.trim() ?? '';
 // ============================================================
 // SERVER
 // ============================================================
@@ -381,3 +389,7 @@ return normalized;
 
 }
 }
+// ============================================================
+// EXTERNAL MEDIA / PAYMENT PROVIDERS
+// ============================================================
+

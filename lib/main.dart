@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
+import 'library_release.dart';
+
 import 'signup.dart';
 import 'movies.dart';
 import 'series.dart';
@@ -37,6 +39,9 @@ import 'localization.dart';
 import 'activity_timeline.dart';
 import 'my_tv.dart';
 import 'social_home.dart';
+import 'navigation_hubs.dart';
+import 'hey_media.dart';
+import 'media_universe.dart';
 import 'radio.dart';
 import 'personal_streaming.dart';
 
@@ -468,20 +473,9 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(
           builder: (_) => ProfileSelectionScreen(
             onProfileSelected: (context) {
-              // First-time profile setup opens Customize App before the normal
-              // home screen. Completion is persisted per profile, so logout
-              // and login do not show first-time setup again.
-              if (!HomeCustomizationStore.isConfigured(
-                AppController.instance.currentProfile,
-              )) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CustomizeHomeScreen(firstSetup: true),
-                  ),
-                );
-                return;
-              }
-
+              // Profile selection is complete. Enter the normal application
+              // shell immediately; customization is contextual and is opened
+              // from the Customize button on each major page.
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => const MainScreen(),
@@ -1280,15 +1274,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     super.dispose();
   }
 
-  List<String> _availableHomePositions(HomeCustomization value,
-      {bool allowHidden = false, bool excludeNavbar = false}) {
-    final positions = <String>['Top', 'Bottom', 'Left', 'Right'];
-    // Multiple controls are allowed on the same side. HomePositionedLayout
-    // resolves those into separate edge slots.
-    if (allowHidden) positions.add('Hidden');
-    return positions;
-  }
-
   /// Performs `_toggle` for this feature. Update this documentation when its contract changes.
   Widget _toggle(
     String title,
@@ -1521,7 +1506,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           const SizedBox(height: 8),
           Text(
             isHome
-                ? 'Choose what appears, change the presentation, position your navigation, and drag Home sections into the order you want.'
+                ? 'Choose what appears, change the presentation, and drag Home sections into the order you want.'
                 : isMusic
                     ? 'Choose discovery sections, the persistent player, Spotify-inspired mixes, and the order of your Music page.'
                     : 'Choose which Details sections appear, control metadata and poster presentation, and drag sections into the order you want.',
@@ -1579,60 +1564,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           onChanged: (value) => setState(() => draft.cardSize = value),
         ),
         const SizedBox(height: 24),
-        const UniversalText(
-          'NAVIGATION & STORAGE',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.4,
-            color: Colors.white54,
-          ),
-        ),
-        const SizedBox(height: 10),
-        _dropdown(
-          label: 'Where do you want your navbar?',
-          value: draft.navbarPosition,
-          values: const ['Bottom', 'Top', 'Left', 'Right', 'Floating'],
-          onChanged: (value) => setState(() {
-            draft.navbarPosition = value;
-            _normalizeHomePositions();
-          }),
-        ),
-        const SizedBox(height: 12),
-        _sectionOrder(
-          title: tr('NAVIGATION ORDER'),
-          subtitle: tr(
-              'Drag navbar items to change their order. More stays as the expandable menu.'),
-          items: draft.navigationOrder,
-          onChanged: (newOrder) =>
-              setState(() => draft.navigationOrder = newOrder),
-        ),
-        const SizedBox(height: 12),
-        _dropdown(
-          label: 'Where should the storage bar appear?',
-          value: draft.storageBarPosition,
-          values: _availableHomePositions(draft,
-              allowHidden: true, excludeNavbar: true),
-          onChanged: (value) => setState(() {
-            draft.storageBarPosition = value;
-            _normalizeHomePositions();
-          }),
-        ),
-        const SizedBox(height: 8),
-        UniversalText(
-            'Storage bar thickness: ${draft.storageBarThickness.round()} px',
-            style: const TextStyle(color: Colors.white70)),
-        Slider(
-            value: draft.storageBarThickness.clamp(4, 32),
-            min: 4,
-            max: 32,
-            divisions: 14,
-            onChanged: (value) =>
-                setState(() => draft.storageBarThickness = value)),
-        const UniversalText(
-            'A Home position is removed when it is already occupied by the navbar or storage bar.',
-            style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4)),
-        const SizedBox(height: 24),
         const UniversalText('COLORS',
             style: TextStyle(
                 fontSize: 12,
@@ -1645,52 +1576,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           value: draft.homeBackgroundColor,
           onChanged: (value) =>
               setState(() => draft.homeBackgroundColor = value),
-        ),
-        const SizedBox(height: 10),
-        _colorDropdown(
-          label: 'Navbar color',
-          value: draft.navbarColor,
-          onChanged: (value) => setState(() => draft.navbarColor = value),
-        ),
-        const SizedBox(height: 10),
-        _colorDropdown(
-          label: 'Navbar glow outline',
-          value: draft.navbarGlowColor,
-          onChanged: (value) => setState(() => draft.navbarGlowColor = value),
-        ),
-        const SizedBox(height: 10),
-        _colorDropdown(
-          label: 'Navbar item color',
-          value: draft.navbarItemColor,
-          onChanged: (value) => setState(() => draft.navbarItemColor = value),
-        ),
-        const SizedBox(height: 10),
-        _dropdown(
-          label: 'Navbar shape',
-          value: draft.navbarStyle,
-          values: const ['Solid', 'Transparent', 'Curved', 'Angled'],
-          onChanged: (value) => setState(() => draft.navbarStyle = value),
-        ),
-        const SizedBox(height: 10),
-        UniversalText('Navbar opacity: ${(draft.navbarOpacity * 100).round()}%',
-            style: const TextStyle(color: Colors.white70)),
-        Slider(
-          value: draft.navbarOpacity.clamp(.10, 1.0),
-          min: .10,
-          max: 1.0,
-          divisions: 18,
-          label: '${(draft.navbarOpacity * 100).round()}%',
-          onChanged: (value) => setState(() => draft.navbarOpacity = value),
-        ),
-        UniversalText('Navbar corner radius: ${draft.navbarRadius.round()} px',
-            style: const TextStyle(color: Colors.white70)),
-        Slider(
-          value: draft.navbarRadius.clamp(0, 42),
-          min: 0,
-          max: 42,
-          divisions: 21,
-          label: '${draft.navbarRadius.round()} px',
-          onChanged: (value) => setState(() => draft.navbarRadius = value),
         ),
         const SizedBox(height: 24),
         const UniversalText('HOME MEDIA',
@@ -1715,7 +1600,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           leading: Icon(Icons.collections_bookmark_outlined),
           title: Text('Collections'),
           subtitle: Text(
-              'Collections is available directly from the navigation bar.'),
+              'Collections is available from the Library hub.'),
         ),
         const SizedBox(height: 24),
         const UniversalText(
@@ -1792,7 +1677,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   /// Builds the Music customization controls. This page is available from
-  /// Customize App after onboarding and never interrupts the Home → Details → Invite flow.
+  /// Contextual customization is opened from the current page rather than forced during sign-in.
   Widget _buildMusicPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2367,55 +2252,36 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   }
 
   Widget _buildHomeCustomizationPreview() {
-    final navigationOrder = <String>[];
-    final defaults = <String>[
-      'Profile',
-      'Home',
-      'Sports',
-      'Surprise Me',
-      'More',
-      'Music',
-      'Radio',
-      'Film',
-      'Collections',
-      'My TV',
-      'Shop',
-      if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
-      'Group Chat',
-    ];
-
-    for (final name in draft.navigationOrder) {
-      if (defaults.contains(name) && !navigationOrder.contains(name)) {
-        navigationOrder.add(name);
-      }
-    }
-    for (final name in defaults) {
-      if (!navigationOrder.contains(name)) navigationOrder.add(name);
-    }
-
-    final previewNavbar = _StreamingNavigationBar(
-      position: draft.navbarPosition,
-      onSelect: (_) {},
-      onMore: () {},
-      navigationOrder: navigationOrder,
-      selectedName: 'Home',
-      backgroundColor: colorFromName(draft.navbarColor),
-      glowColor: colorFromName(draft.navbarGlowColor),
-      itemColor: colorFromName(draft.navbarItemColor),
-      style: draft.navbarStyle,
-      opacity: draft.navbarOpacity,
-      radius: draft.navbarRadius,
+    // The live product uses one fixed primary navbar. Keep the preview aligned
+    // with that shell instead of previewing the removed configurable mega-bar.
+    final previewNavbar = Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: colorFromName(draft.navbarColor).withValues(alpha: .95),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colorFromName(draft.navbarGlowColor).withValues(alpha: .35),
+        ),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _PreviewNavItem(Icons.home_rounded, 'Home', true),
+            _PreviewNavItem(Icons.video_library_rounded, 'Library', false),
+            _PreviewNavItem(Icons.explore_rounded, 'Discover', false),
+            _PreviewNavItem(Icons.people_rounded, 'Friends', false),
+            _PreviewNavItem(Icons.more_horiz_rounded, 'More', false),
+          ],
+        ),
+      ),
     );
 
-    // The Home preview intentionally uses representative movie/show outlines
-    // instead of the user's real library. This makes the customization screen
-    // useful even before media has been imported and avoids changing library
-    // data just to preview a layout.
     final page = _homeCustomizationOutline();
-
     return HomePositionedLayout(
-      navbarPosition: draft.navbarPosition,
-      storagePosition: draft.storageBarPosition,
+      navbarPosition: 'Bottom',
+      storagePosition: 'Bottom',
       storageThickness: draft.storageBarThickness,
       navbar: previewNavbar,
       child: page,
@@ -3475,7 +3341,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
                   : selectedPage == _CustomizationPage.details
                       ? 'Customize Details'
                       : 'Customize Music')
-              : 'Customize App',
+              : 'Customize Home',
         ),
         automaticallyImplyLeading: !widget.firstSetup,
         actions: widget.firstSetup
@@ -3531,80 +3397,153 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
   }
 }
+class _PreviewNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+
+  const _PreviewNavItem(this.icon, this.label, this.selected);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: selected ? Colors.white : Colors.white54),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+            color: selected ? Colors.white : Colors.white54,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ============================================================
-// MAIN SCREEN
+// MAIN APPLICATION SHELL
 // ============================================================
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
-/// Implements the `_MainScreenState` class for this feature or UI component.
+enum PrimaryDestination {
+  home,
+  library,
+  discover,
+  friends,
+}
+
 class _MainScreenState extends State<MainScreen> {
-  String selectedDestination = 'Home';
+  PrimaryDestination selected = PrimaryDestination.home;
 
-  void _returnToHome() {
-    Navigator.of(context).popUntil(
-      (route) => route.settings.name == '/main' || route.isFirst,
-    );
-    if (mounted) setState(() => selectedDestination = 'Home');
+  String get _pageTitle => switch (selected) {
+        PrimaryDestination.home => 'Home',
+        PrimaryDestination.library => 'Library',
+        PrimaryDestination.discover => 'Discover',
+        PrimaryDestination.friends => 'Friends',
+      };
+
+  void _openProfiles() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
-  @override
-
-  /// Performs `initState` for this feature. Update this documentation when its contract changes.
-  void initState() {
-    super.initState();
-    // Restore the selected language after the profile has been selected.
-    LanguageController.instance.loadForCurrentProfile();
+  void _openCustomize() {
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const CustomizeHomeScreen()),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
-  /// Performs `_openMore` for this feature. Update this documentation when its contract changes.
   void _openMore() {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _MoreActionsSheet(
+      builder: (sheetContext) => _MoreActionsSheet(
         onImport: () {
-          Navigator.pop(context);
+          Navigator.of(sheetContext).pop();
           _openImport();
         },
         onRemoteAccess: () {
-          Navigator.pop(context);
-          _openRemoteAccess();
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RemoteAccessScreen()),
+          );
         },
         onSettings: () {
-          Navigator.pop(context);
-          _openAccountSettings();
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+          );
         },
         onDevices: () {
-          Navigator.pop(context);
-          _openDevices();
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DeviceCenterScreen()),
+          );
         },
         onHomeServer: () {
-          Navigator.pop(context);
-          _openHomeServer();
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeServerScreen()),
+          );
         },
         onMembers: () {
-          Navigator.pop(context);
-          _openMembers();
-        },
-        onCustomize: () {
-          Navigator.pop(context);
-          _openCustomize();
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AccountInviteScreen()),
+          );
         },
         onPersonalStreaming: () {
-          Navigator.pop(context);
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalStreamingScreen()));
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PersonalStreamingScreen()),
+          );
+        },
+        onGroupWatch: () {
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const GroupChatScreen()),
+          );
+        },
+        onShop: () {
+          Navigator.of(sheetContext).pop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (shopContext) => ShopScreen(
+                onHome: () => Navigator.of(shopContext).pop(),
+              ),
+            ),
+          );
         },
       ),
     );
   }
 
-  /// Opens the media import/rip workflow.
   void _openImport() {
     Navigator.push<bool>(
       context,
@@ -3620,816 +3559,279 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  /// Opens the remote-access management page.
-  void _openRemoteAccess() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const RemoteAccessScreen()));
+  Widget _pageFor(PrimaryDestination destination) {
+    switch (destination) {
+      case PrimaryDestination.home:
+        return HomeScreen(
+          showAppBar: false,
+          onRefresh: () => setState(() {}),
+          onNotifications: () {},
+        );
+      case PrimaryDestination.library:
+        return const LibraryHubScreen();
+      case PrimaryDestination.discover:
+        return const DiscoverHubScreen();
+      case PrimaryDestination.friends:
+        return const FriendsAndCommunitiesScreen();
+    }
   }
 
-  /// Opens application/account settings.
-  void _openAccountSettings() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const AccountSettingsScreen()));
-  }
-
-  /// Opens the device center.
-  void _openDevices() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()));
-  }
-
-  /// Opens the account home-server dashboard.
-  void _openHomeServer() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const HomeServerScreen()));
-  }
-
-  /// Opens account-member management without duplicating it in the server dashboard menu.
-  void _openMembers() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const AccountInviteScreen()));
-  }
-
-  /// Opens Customize App on demand after first-time setup has been completed.
-  void _openCustomize() {
-    Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const CustomizeHomeScreen()),
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  /// Opens profile selection, which is the central place for switching and managing profiles.
-  void _openProfiles() {
+  void _showSurpriseMe() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  /// Opens the notifications activity sheet from the Home bell.
-  void _openNotifications() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const _ActivitySheet(),
+      MaterialPageRoute(builder: (_) => const SurpriseMeScreen()),
     );
   }
 
-  /// Normalizes saved navigation names while preserving the current navbar architecture.
-  /// Legacy `Connected Sports` and `Live Sports` values are migrated to `Sports`.
-  List<String> _normalizedNavigationOrder(List<String> value) {
-    final defaults = <String>[
-      'Profile',
-      'Home',
-      'Sports',
-      'Surprise Me',
-      'More',
-      'Music',
-      'Radio',
-      'Film',
-      'Collections',
-      'My TV',
-      'Shop',
-      if (ShopCatalog.instance.hasCurrentAccountStore) 'Seller Dashboard',
-      'Group Chat',
-    ];
-
-    final result = <String>[];
-    for (final rawName in value) {
-      final name = rawName == 'Connected Sports' || rawName == 'Live Sports'
-          ? 'Sports'
-          : rawName;
-      if (defaults.contains(name) && !result.contains(name)) {
-        result.add(name);
-      }
-    }
-
-    for (final name in defaults) {
-      if (!result.contains(name)) result.add(name);
-    }
-
-    return result;
-  }
-
-  void _surpriseMe() {
-    final controller = AppController.instance;
-    final library = List<MediaItem>.from(controller.library);
-    if (library.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Your library is empty. Add media before using Surprise Me.')),
-      );
-      return;
-    }
-
-    final eligible =
-        library.where((item) => item.type.trim().isNotEmpty).toList();
-    if (eligible.isEmpty) return;
-    final item = (eligible..shuffle()).first;
-    final type = item.type.toLowerCase();
-
-    if (type.contains('song') ||
-        type.contains('track') ||
-        type.contains('music')) {
-      // The MediaItem catalog remains the source of truth for the app while
-      // MusicLibraryStore handles actual audio playback when that track is loaded.
-      final music = MusicLibraryStore.instance.tracks
-          .where((track) => track.id == item.id)
-          .toList();
-      if (music.isNotEmpty) {
-        MusicPlaybackController.instance.play(music.first);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Surprise Me is playing ${music.first.title}.')),
-        );
-        return;
-      }
-    }
-
+  void _showHeyMedia() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)),
+      MaterialPageRoute(builder: (_) => const HeyMediaScreen()),
     );
   }
 
   @override
+  void initState() {
+    super.initState();
+    LanguageController.instance.loadForCurrentProfile();
+  }
 
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  @override
   Widget build(BuildContext context) {
-    // Primary navigation includes Profile, Home, Sports, Surprise Me, More, Music, Radio, Film, Collections, Shop,
-    // Seller Dashboard when available, and Group Chat. Music and Film expose secondary destinations on hover/tap. Music and Film expose secondary destinations on hover/tap.
-    final settings = HomeCustomizationStore.settingsFor(
-        AppController.instance.currentProfile);
-    final navigationOrder =
-        _normalizedNavigationOrder(settings.navigationOrder);
-    final pageByName = <String, Widget>{
-      'Profile': const ProfileScreen(),
-      'Home': HomeScreen(
-          onRefresh: () => setState(() {}),
-          onNotifications: _openNotifications),
-      'Sports': const ConnectedSportsHubScreen(),
-      'Group Chat': const GroupChatScreen(),
-      'More': const _MoreNavigationPlaceholder(),
-      'Surprise Me': const _MoreNavigationPlaceholder(),
-      'Music': const MusicScreen(),
-      'Radio': const RadioScreen(),
-      'Film': const FilmExperienceScreen(),
-      'Collections': const CollectionsPanel(),
-      'My TV': const MyTvScreen(),
-      'Shop': ShopScreen(
-        onHome: _returnToHome,
-      ),
-      if (ShopCatalog.instance.hasCurrentAccountStore)
-        'Seller Dashboard': SellerDashboardScreen(onHome: _returnToHome),
-    };
-    final pages = navigationOrder.map((name) => pageByName[name]!).toList();
-    final safeSelectedIndex = navigationOrder
-        .indexOf(selectedDestination)
-        .clamp(0, pages.length - 1)
-        .toInt();
-    final selectedName = navigationOrder[safeSelectedIndex];
-    final navbar = _StreamingNavigationBar(
-      position: settings.navbarPosition,
-      onSelect: (index) {
-        final name = navigationOrder[index];
-        if (name == 'Profile') {
-          _openProfiles();
-          return;
-        }
-        if (name == 'More') {
-          _openMore();
-          return;
-        }
-        if (name == 'Surprise Me') {
-          _surpriseMe();
-          return;
-        }
-        final destination = navigationOrder[index];
-        if (destination != selectedDestination) {
-          setState(() => selectedDestination = destination);
-        }
-      },
-      onMore: _openMore,
-      navigationOrder: navigationOrder,
-      selectedName: selectedName,
-      backgroundColor: colorFromName(settings.navbarColor),
-      glowColor: colorFromName(settings.navbarGlowColor),
-      itemColor: colorFromName(settings.navbarItemColor),
-      style: settings.navbarStyle,
-      opacity: settings.navbarOpacity,
-      radius: settings.navbarRadius,
+    final background = colorFromName(
+      HomeCustomizationStore.settingsFor(
+        AppController.instance.currentProfile,
+      ).homeBackgroundColor,
     );
-    final page = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      child: KeyedSubtree(
-          key: ValueKey(selectedName), child: pages[safeSelectedIndex]),
-    );
-
-    Widget content;
-    if (selectedName == 'Home') {
-      content = HomePositionedLayout(
-        navbarPosition: settings.navbarPosition,
-        storagePosition: settings.storageBarPosition,
-        storageThickness: settings.storageBarThickness,
-        navbar: navbar,
-        child: page,
-      );
-    } else {
-      switch (settings.navbarPosition) {
-        case 'Top':
-          content = Column(children: [navbar, Expanded(child: page)]);
-          break;
-        case 'Left':
-          content = Row(children: [navbar, Expanded(child: page)]);
-          break;
-        case 'Right':
-          content = Row(children: [Expanded(child: page), navbar]);
-          break;
-        case 'Floating':
-          content = Stack(children: [
-            Positioned.fill(child: page),
-            Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: SafeArea(top: false, child: Center(child: navbar))),
-          ]);
-          break;
-        case 'Bottom':
-        default:
-          content = Column(children: [Expanded(child: page), navbar]);
-          break;
-      }
-    }
 
     return Scaffold(
-        backgroundColor: colorFromName(settings.homeBackgroundColor),
-        body: content);
+      backgroundColor: background,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            AppShellHeader(
+              title: _pageTitle,
+              onSearch: (query) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SmartSearchScreen(initialQuery: query),
+                  ),
+                );
+              },
+              onSurpriseMe: _showSurpriseMe,
+              onHeyMedia: _showHeyMedia,
+              onCustomize: _openCustomize,
+              onProfile: _openProfiles,
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: KeyedSubtree(
+                  key: ValueKey(selected),
+                  child: _pageFor(selected),
+                ),
+              ),
+            ),
+            SimplePrimaryNavigationBar(
+              selected: selected,
+              onSelected: (value) {
+                if (value == null) return;
+                setState(() => selected = value);
+              },
+              onMore: _openMore,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-/// Implements the `_StreamingNavigationBar` class for this feature or UI component.
-class _StreamingNavigationBar extends StatelessWidget {
-  final String position;
-  final ValueChanged<int> onSelect;
+/// Fixed primary navigation. Secondary features belong behind More or within
+/// the Library / Discover / Friends hubs rather than occupying the navbar.
+class SimplePrimaryNavigationBar extends StatelessWidget {
+  final PrimaryDestination? selected;
+  final ValueChanged<PrimaryDestination?> onSelected;
   final VoidCallback onMore;
-  final Color backgroundColor;
-  final Color glowColor;
-  final Color itemColor;
-  final String style;
-  final double opacity;
-  final double radius;
-  final List<String> navigationOrder;
-  final String selectedName;
 
-  const _StreamingNavigationBar({
-    required this.position,
-    required this.onSelect,
+  const SimplePrimaryNavigationBar({
+    super.key,
+    required this.selected,
+    required this.onSelected,
     required this.onMore,
-    required this.backgroundColor,
-    required this.glowColor,
-    required this.itemColor,
-    required this.style,
-    required this.opacity,
-    required this.radius,
-    required this.navigationOrder,
-    required this.selectedName,
   });
-
-  void _open(BuildContext context, Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-  }
 
   @override
   Widget build(BuildContext context) {
-    final vertical = position == 'Left' || position == 'Right';
-    final filmEntries = <_NavMenuEntry>[
-      _NavMenuEntry('Movies', Icons.movie_outlined,
-          () => _open(context, const MoviesScreen())),
-      _NavMenuEntry('Series', Icons.tv_outlined,
-          () => _open(context, const SeriesScreen())),
-      _NavMenuEntry('Trailers', Icons.play_circle_outline,
-          () => _open(context, const TrailersScreen())),
-      _NavMenuEntry('Actors', Icons.people_outline,
-          () => _open(context, const LibraryActorsScreen())),
-      _NavMenuEntry('Directors', Icons.videocam_outlined,
-          () => _open(context, const LibraryDirectorsScreen())),
-      _NavMenuEntry(
-          'Franchises',
-          Icons.account_tree_outlined,
-          () => _open(
-              context,
-              _NavigationDirectoryScreen(
-                  title: tr('Franchises'), icon: Icons.account_tree_outlined))),
-      _NavMenuEntry(
-          'Genres',
-          Icons.category_outlined,
-          () => _open(
-              context,
-              _NavigationDirectoryScreen(
-                  title: tr('Genres'), icon: Icons.category_outlined))),
-      _NavMenuEntry('Wishlist', Icons.favorite_border_rounded,
-          () => _open(context, const FavoritesScreen())),
-      _NavMenuEntry('Search', Icons.search_rounded,
-          () => _open(context, const SmartSearchScreen())),
-    ];
-    final musicEntries = <_NavMenuEntry>[
-      _NavMenuEntry(
-          'Singers / Bands',
-          Icons.person_outline_rounded,
-          () => _open(
-              context,
-              _NavigationDirectoryScreen(
-                  title: tr('Singers / Bands'),
-                  icon: Icons.person_outline_rounded))),
-      _NavMenuEntry(
-          'Albums',
-          Icons.album_outlined,
-          () => _open(
-              context,
-              _NavigationDirectoryScreen(
-                  title: tr('Albums'), icon: Icons.album_outlined))),
-      _NavMenuEntry('Playlists', Icons.queue_music_rounded,
-          () => _open(context, const MusicScreen())),
-      _NavMenuEntry('Soundtrack Universe', Icons.library_music_outlined,
-          () => _open(context, const SoundtrackUniverseScreen())),
+    final items = <NavigationDestination>[
+      const NavigationDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home_rounded),
+        label: 'Home',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.video_library_outlined),
+        selectedIcon: Icon(Icons.video_library_rounded),
+        label: 'Library',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.explore_outlined),
+        selectedIcon: Icon(Icons.explore_rounded),
+        label: 'Discover',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.people_outline_rounded),
+        selectedIcon: Icon(Icons.people_rounded),
+        label: 'Friends',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.more_horiz_rounded),
+        selectedIcon: Icon(Icons.more_horiz_rounded),
+        label: 'More',
+      ),
     ];
 
-    final dataByName = <String, _NavItemData>{
-      'Profile': const _NavItemData(Icons.account_circle_outlined,
-          Icons.account_circle_rounded, 'Profile'),
-      'Home':
-          const _NavItemData(Icons.home_outlined, Icons.home_rounded, 'Home'),
-      'Sports': const _NavItemData(
-          Icons.sports_soccer_outlined, Icons.sports_soccer_rounded, 'Sports'),
-      'Surprise Me': const _NavItemData(
-          Icons.shuffle_rounded, Icons.shuffle_rounded, 'Surprise Me'),
-      'Group Chat': const _NavItemData(Icons.chat_bubble_outline_rounded,
-          Icons.chat_bubble_rounded, 'Group Chat'),
-      'More': const _NavItemData(
-          Icons.more_horiz_rounded, Icons.more_horiz_rounded, 'More'),
-      'Music': const _NavItemData(
-          Icons.music_note_outlined, Icons.music_note_rounded, 'Music'),
-      'Radio': const _NavItemData(
-          Icons.radio_outlined, Icons.radio_rounded, 'Radio'),
-      'Film':
-          const _NavItemData(Icons.movie_outlined, Icons.movie_rounded, 'Film'),
-      'Collections': const _NavItemData(Icons.collections_bookmark_outlined,
-          Icons.collections_bookmark_rounded, 'Collections'),
-      'My TV': const _NavItemData(Icons.live_tv_outlined,
-          Icons.live_tv_rounded, 'My TV'),
-      'Shop': const _NavItemData(
-          Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Shop'),
-      'Seller Dashboard': const _NavItemData(Icons.storefront_outlined,
-          Icons.storefront_rounded, 'Seller Dashboard'),
+    final index = switch (selected) {
+      PrimaryDestination.home => 0,
+      PrimaryDestination.library => 1,
+      PrimaryDestination.discover => 2,
+      PrimaryDestination.friends => 3,
+      null => 0,
     };
-    final actions = <Widget>[
-      for (final name in navigationOrder)
-        if (name == 'More')
-          _NavButton(
-              data: dataByName[name]!,
-              selected: false,
-              vertical: vertical,
-              onTap: onMore,
-              color: itemColor)
-        else if (name == 'Surprise Me')
-          _NavButton(
-              data: dataByName[name]!,
-              selected: false,
-              vertical: vertical,
-              onTap: () => onSelect(navigationOrder.indexOf(name)),
-              color: itemColor)
-        else if (name == 'Music')
-          _NavMenuButton(
-              data: dataByName[name]!,
-              selected: selectedName == name,
-              vertical: vertical,
-              color: itemColor,
-              entries: musicEntries,
-              onTap: () => onSelect(navigationOrder.indexOf(name)),
-              menuSide: position == 'Right'
-                  ? AxisDirection.left
-                  : AxisDirection.right,
-              menuVerticalDirection:
-                  (position == 'Bottom' || position == 'Floating')
-                      ? AxisDirection.up
-                      : AxisDirection.down)
-        else if (name == 'Film')
-          _NavMenuButton(
-              data: dataByName[name]!,
-              selected: selectedName == name,
-              vertical: vertical,
-              color: itemColor,
-              entries: filmEntries,
-              onTap: () => onSelect(navigationOrder.indexOf(name)),
-              menuSide: position == 'Right'
-                  ? AxisDirection.left
-                  : AxisDirection.right,
-              menuVerticalDirection:
-                  (position == 'Bottom' || position == 'Floating')
-                      ? AxisDirection.up
-                      : AxisDirection.down)
-        else
-          _NavButton(
-              data: dataByName[name]!,
-              selected: selectedName == name,
-              vertical: vertical,
-              onTap: () => onSelect(navigationOrder.indexOf(name)),
-              color: itemColor),
-    ];
 
-    final alpha = style == 'Transparent'
-        ? .08
-        : style == 'Curved'
-            ? opacity
-            : style == 'Angled'
-                ? opacity
-                : opacity;
-    final effectiveColor =
-        backgroundColor.withValues(alpha: alpha.clamp(.05, 1.0));
-    final decoration = BoxDecoration(
-      color: effectiveColor,
-      border: Border.all(color: glowColor.withValues(alpha: .35), width: 1.2),
-      borderRadius: BorderRadius.circular(
-          style == 'Curved' ? radius.clamp(20, 44) : radius.clamp(0, 32)),
-      boxShadow: [
-        BoxShadow(
-            blurRadius: style == 'Transparent' ? 12 : 28,
-            offset: const Offset(0, -8),
-            color: glowColor.withValues(alpha: .16))
-      ],
-    );
-    final inner = vertical
-        ? SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Column(mainAxisSize: MainAxisSize.min, children: actions))
-        : SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(mainAxisSize: MainAxisSize.min, children: actions));
-    final child = style == 'Angled'
-        ? ClipPath(
-            clipper: _AngledNavbarClipper(),
-            child: DecoratedBox(decoration: decoration, child: inner))
-        : DecoratedBox(decoration: decoration, child: inner);
-    return SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: vertical
-              ? const BoxConstraints(
-                  minWidth: 104, maxWidth: 104, maxHeight: 620)
-              : const BoxConstraints(minHeight: 76, maxHeight: 84),
-          child: child,
-        ));
-  }
-}
-
-/// Implements the `_NavMenuEntry` class for this feature or UI component.
-class _NavMenuEntry {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _NavMenuEntry(this.label, this.icon, this.onTap);
-}
-
-/// Implements the `_NavMenuButton` class for this feature or UI component.
-class _NavMenuButton extends StatefulWidget {
-  final _NavItemData data;
-  final bool selected;
-  final bool vertical;
-  final Color color;
-  final List<_NavMenuEntry> entries;
-  final VoidCallback onTap;
-  final AxisDirection menuSide;
-  final AxisDirection menuVerticalDirection;
-  const _NavMenuButton(
-      {required this.data,
-      required this.selected,
-      required this.vertical,
-      required this.color,
-      required this.entries,
-      required this.onTap,
-      required this.menuSide,
-      required this.menuVerticalDirection});
-  @override
-  State<_NavMenuButton> createState() => _NavMenuButtonState();
-}
-
-/// Implements the `_NavMenuButtonState` class for this feature or UI component.
-class _NavMenuButtonState extends State<_NavMenuButton> {
-  OverlayEntry? _overlay;
-  Timer? _hideTimer;
-
-  void _cancelHide() => _hideTimer?.cancel();
-  void _scheduleHide() {
-    _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(milliseconds: 260), _hideMenu);
-  }
-
-  void _hideMenu() {
-    _overlay?.remove();
-    _overlay = null;
-  }
-
-  void _showMenu() {
-    _cancelHide();
-    if (_overlay != null) return;
-    final box = context.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (box == null || overlay == null) return;
-    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final size = box.size;
-    const menuWidth = 220.0;
-    final left = widget.vertical
-        ? (widget.menuSide == AxisDirection.left
-            ? origin.dx - menuWidth - 8
-            : origin.dx + size.width + 8)
-        : origin.dx;
-
-    Widget menu() => MouseRegion(
-          onEnter: (_) => _cancelHide(),
-          onExit: (_) => _scheduleHide(),
-          child: Material(
-            color: const Color(0xF51A1A1A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: const BorderSide(color: Colors.white12),
-            ),
-            elevation: 12,
-            shadowColor: const Color(0x55000000),
-            clipBehavior: Clip.antiAlias,
-            child: Container(
-              width: menuWidth,
-              constraints: const BoxConstraints(maxHeight: 520),
-              padding: const EdgeInsets.all(8),
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final entry in widget.entries)
-                    ListTile(
-                      dense: true,
-                      leading: Icon(entry.icon, size: 20),
-                      title: Text(entry.label),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      onTap: () {
-                        _hideMenu();
-                        entry.onTap();
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-
-    _overlay = OverlayEntry(
-      builder: (_) {
-        if (widget.vertical) {
-          return Positioned(left: left, top: origin.dy, child: menu());
+    return NavigationBar(
+      selectedIndex: index,
+      onDestinationSelected: (value) {
+        if (value == 4) {
+          onMore();
+        } else {
+          onSelected(PrimaryDestination.values[value]);
         }
-        if (widget.menuVerticalDirection == AxisDirection.up) {
-          return Positioned(
-            left: left,
-            bottom: overlay.size.height - origin.dy + 8,
-            child: menu(),
-          );
-        }
-        return Positioned(
-          left: left,
-          top: origin.dy + size.height + 8,
-          child: menu(),
-        );
       },
+      destinations: items,
     );
-    Overlay.of(context).insert(_overlay!);
   }
+}
+
+/// Compact contextual utility/header bar shared by every major page.
+class AppShellHeader extends StatefulWidget {
+  final String title;
+  final ValueChanged<String> onSearch;
+  final VoidCallback onSurpriseMe;
+  final VoidCallback onHeyMedia;
+  final VoidCallback onCustomize;
+  final VoidCallback onProfile;
+
+  const AppShellHeader({
+    super.key,
+    required this.title,
+    required this.onSearch,
+    required this.onSurpriseMe,
+    required this.onHeyMedia,
+    required this.onCustomize,
+    required this.onProfile,
+  });
+
+  @override
+  State<AppShellHeader> createState() => _AppShellHeaderState();
+}
+
+class _AppShellHeaderState extends State<AppShellHeader> {
+  final controller = TextEditingController();
 
   @override
   void dispose() {
-    _hideTimer?.cancel();
-    _hideMenu();
+    controller.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final active = widget.selected;
-    final width = widget.vertical ? 94.0 : (active ? 92.0 : 76.0);
-    return Padding(
-      padding: widget.vertical
-          ? const EdgeInsets.symmetric(vertical: 2)
-          : const EdgeInsets.symmetric(horizontal: 2),
-      child: MouseRegion(
-        onEnter: (_) => _showMenu(),
-        onExit: (_) => _scheduleHide(),
-        child: Material(
-            color: active
-                ? Colors.white.withValues(alpha: .10)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: widget.onTap,
-              child: SizedBox(
-                  width: width,
-                  height: 60,
-                  child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                            active
-                                ? widget.data.selectedIcon
-                                : widget.data.icon,
-                            size: 22,
-                            color: active
-                                ? widget.color
-                                : widget.color.withValues(alpha: .72)),
-                        const SizedBox(height: 3),
-                        Text(widget.data.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: active ? Colors.white : Colors.white54,
-                                fontSize: 9.5,
-                                fontWeight: active
-                                    ? FontWeight.w700
-                                    : FontWeight.w500)),
-                        const SizedBox(height: 2),
-                        Container(
-                            width: active ? 18 : 0,
-                            height: 2,
-                            decoration: BoxDecoration(
-                                color: Colors.redAccent,
-                                borderRadius: BorderRadius.circular(10))),
-                      ])),
-            )),
-      ),
-    );
+  void _submit() {
+    final query = controller.text.trim();
+    if (query.isEmpty) return;
+    widget.onSearch(query);
   }
-}
 
-/// Implements the `_AngledNavbarClipper` class for this feature or UI component.
-class _AngledNavbarClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) => Path()
-    ..moveTo(18, 0)
-    ..lineTo(size.width - 18, 0)
-    ..lineTo(size.width, 14)
-    ..lineTo(size.width, size.height - 14)
-    ..lineTo(size.width - 18, size.height)
-    ..lineTo(18, size.height)
-    ..lineTo(0, size.height - 14)
-    ..lineTo(0, 14)
-    ..close();
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-/// Implements the `_MoreNavigationPlaceholder` class for this feature or UI component.
-class _MoreNavigationPlaceholder extends StatelessWidget {
-  const _MoreNavigationPlaceholder();
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
-}
-
-/// Implements the `_NavigationDirectoryScreen` class for this feature or UI component.
-class _NavigationDirectoryScreen extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  const _NavigationDirectoryScreen({required this.title, required this.icon});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF070707),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        title: Text(title),
+    final compact = MediaQuery.sizeOf(context).width < 760;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 20, 10, compact ? 12 : 20, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xEE090909),
+        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: .07))),
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 58, color: Colors.white54),
-              const SizedBox(height: 14),
-              UniversalText(
-                '$title will appear here as your library metadata grows.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white60),
+      child: Row(
+        children: [
+          if (!compact) ...[
+            Text(widget.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const SizedBox(width: 18),
+          ],
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onSubmitted: (_) => _submit(),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: compact
+                    ? 'Search everything…'
+                    : 'Search movies, TV, music, people, communities…',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: IconButton(
+                  tooltip: 'Search',
+                  onPressed: _submit,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                ),
+                isDense: true,
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Implements the `_NavItemData` class for this feature or UI component.
-class _NavItemData {
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
-  const _NavItemData(this.icon, this.selectedIcon, this.label);
-}
-
-/// Implements the `_NavButton` class for this feature or UI component.
-class _NavButton extends StatefulWidget {
-  final _NavItemData data;
-  final bool selected;
-  final bool vertical;
-  final VoidCallback onTap;
-  final Color color;
-  const _NavButton(
-      {required this.data,
-      required this.selected,
-      required this.onTap,
-      this.vertical = false,
-      this.color = Colors.white});
-  @override
-  State<_NavButton> createState() => _NavButtonState();
-}
-
-/// Implements the `_NavButtonState` class for this feature or UI component.
-class _NavButtonState extends State<_NavButton> {
-  bool pressed = false;
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final active = widget.selected;
-    final width = widget.vertical ? 78.0 : (active ? 92.0 : 68.0);
-    return Padding(
-      padding: widget.vertical
-          ? const EdgeInsets.symmetric(vertical: 2)
-          : const EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color:
-            active ? Colors.white.withValues(alpha: .10) : Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTapDown: (_) => setState(() => pressed = true),
-          onTapCancel: () => setState(() => pressed = false),
-          onTap: () {
-            setState(() => pressed = false);
-            widget.onTap();
-          },
-          child: AnimatedScale(
-            scale: pressed ? .94 : 1,
-            duration: const Duration(milliseconds: 100),
-            child: SizedBox(
-              width: width,
-              height: 60,
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Stack(clipBehavior: Clip.none, children: [
-                      Icon(active ? widget.data.selectedIcon : widget.data.icon,
-                          size: 22,
-                          color: active
-                              ? widget.color
-                              : widget.color.withValues(alpha: .72)),
-                    ]),
-                    const SizedBox(height: 3),
-                    Text(widget.data.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: active ? Colors.white : Colors.white54,
-                            fontSize: 9.5,
-                            fontWeight:
-                                active ? FontWeight.w700 : FontWeight.w500)),
-                    const SizedBox(height: 2),
-                    Container(
-                        width: active ? 18 : 0,
-                        height: 2,
-                        decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            borderRadius: BorderRadius.circular(10))),
-                  ]),
             ),
           ),
-        ),
+          const SizedBox(width: 8),
+          if (!compact)
+            FilledButton.tonalIcon(
+              onPressed: widget.onSurpriseMe,
+              icon: const Icon(Icons.shuffle_rounded, size: 19),
+              label: const Text('Surprise Me'),
+            )
+          else
+            IconButton(
+              tooltip: 'Surprise Me',
+              onPressed: widget.onSurpriseMe,
+              icon: const Icon(Icons.shuffle_rounded),
+            ),
+          const SizedBox(width: 4),
+          if (!compact)
+            FilledButton.tonalIcon(
+              onPressed: widget.onHeyMedia,
+              icon: const Icon(Icons.auto_awesome_rounded, size: 19),
+              label: const Text('Hey Media'),
+            )
+          else
+            IconButton(
+              tooltip: 'Hey Media',
+              onPressed: widget.onHeyMedia,
+              icon: const Icon(Icons.auto_awesome_rounded),
+            ),
+          IconButton(
+            tooltip: 'Customize ${widget.title}',
+            onPressed: widget.onCustomize,
+            icon: const Icon(Icons.tune_rounded),
+          ),
+          IconButton(
+            tooltip: 'Profiles',
+            onPressed: widget.onProfile,
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Implements the `_MoreActionsSheet` class for this feature or UI component.
+/// The More sheet keeps secondary destinations available without expanding the
+/// primary navigation bar again.
 class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onImport;
   final VoidCallback onRemoteAccess;
@@ -4437,8 +3839,9 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onDevices;
   final VoidCallback onHomeServer;
   final VoidCallback onMembers;
-  final VoidCallback onCustomize;
   final VoidCallback onPersonalStreaming;
+  final VoidCallback onGroupWatch;
+  final VoidCallback onShop;
 
   const _MoreActionsSheet({
     required this.onImport,
@@ -4447,277 +3850,58 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onDevices,
     required this.onHomeServer,
     required this.onMembers,
-    required this.onCustomize,
     required this.onPersonalStreaming,
+    required this.onGroupWatch,
+    required this.onShop,
   });
 
   @override
-
-  /// Builds the intentionally compact utility menu. Feature destinations live
-  /// on their dedicated pages instead of being duplicated in this menu.
   Widget build(BuildContext context) {
     return _PremiumSheet(
-      title: tr('More'),
-      subtitle: tr('Manage your streaming service'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      title: 'More',
+      subtitle: 'Servers, account tools and additional experiences',
+      child: GridView.count(
+        shrinkWrap: true,
+        crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 3 : 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.7,
         children: [
-          _SheetAction(
-            icon: Icons.library_add_outlined,
-            title: tr('Import / Rip'),
-            subtitle: tr('DVD, Blu-ray, UHD and approved media import'),
-            onTap: onImport,
-          ),
-          _SheetAction(
-            icon: Icons.devices_other_rounded,
-            title: tr('Remote Access'),
-            subtitle: tr('Manage trusted remote computers and imports'),
-            onTap: onRemoteAccess,
-          ),
-          _SheetAction(
-            icon: Icons.settings_rounded,
-            title: tr('Settings'),
-            subtitle: tr('Storage, subscription and account controls'),
-            onTap: onSettings,
-          ),
-          _SheetAction(
-            icon: Icons.devices_rounded,
-            title: tr('Device Center'),
-            subtitle: tr('Downloads, casting, HDMI and Bluetooth guidance'),
-            onTap: onDevices,
-          ),
-          _SheetAction(
-            icon: Icons.dns_rounded,
-            title: tr('Home Server'),
-            subtitle: tr('Server health, storage and media import pipeline'),
-            onTap: onHomeServer,
-          ),
-          _SheetAction(
-            icon: Icons.people_alt_outlined,
-            title: tr('Members'),
-            subtitle: tr('Manage people who can use this account'),
-            onTap: onMembers,
-          ),
-          _SheetAction(
-            icon: Icons.tune_rounded,
-            title: tr('Customize App'),
-            subtitle: tr('Change your Home, Details and Music page layout'),
-            onTap: onCustomize,
-          ),
-          _SheetAction(
-            icon: Icons.auto_awesome_rounded,
-            title: tr('Personal Streaming'),
-            subtitle: tr('Discovery, My Stuff, stats, downloads and playback preferences'),
-            onTap: onPersonalStreaming,
-          ),
+          _moreCard(Icons.library_add_outlined, 'Import / Rip', 'Add physical media', onImport),
+          _moreCard(Icons.people_alt_outlined, 'Account Members', 'Add people to this account', onMembers),
+          _moreCard(Icons.dns_rounded, 'Home Server', 'Server and storage', onHomeServer),
+          _moreCard(Icons.settings_remote_rounded, 'Remote Access', 'Trusted remote access', onRemoteAccess),
+          _moreCard(Icons.devices_rounded, 'Device Center', 'Downloads and devices', onDevices),
+          _moreCard(Icons.settings_rounded, 'Settings', 'Account and subscription', onSettings),
+          _moreCard(Icons.auto_awesome_rounded, 'Personal Streaming', 'Playback and discovery', onPersonalStreaming),
+          _moreCard(Icons.group_rounded, 'Group Watch / Chat', 'Watch and chat together', onGroupWatch),
+          _moreCard(Icons.shopping_bag_outlined, 'Shop', 'Marketplace', onShop),
         ],
       ),
     );
   }
-}
 
-class _SheetAction extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _SheetAction({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Colors.white.withValues(alpha: .045),
+  Widget _moreCard(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return Material(
+      color: Colors.white.withValues(alpha: .045),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: Colors.white),
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 3),
-                      Text(subtitle,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-              ],
-            ),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 26),
+              const SizedBox(height: 8),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 3),
+              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Implements the `_PremiumSheet` class for this feature or UI component.
-class _PremiumSheet extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  const _PremiumSheet({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.sizeOf(context).height * .82;
-
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: Container(
-            margin: const EdgeInsets.all(10),
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-            decoration: BoxDecoration(
-              color: const Color(0xFF141414),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withValues(alpha: .08)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.white54)),
-                const SizedBox(height: 16),
-                Flexible(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: child,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Implements the `_ActivitySheet` class for this feature or UI component.
-class _ActivitySheet extends StatelessWidget {
-  const _ActivitySheet();
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final activity = AppController.instance.activity;
-    return _PremiumSheet(
-      title: tr('Notifications'),
-      subtitle: activity.isEmpty ? 'You are all caught up' : 'Recent activity',
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * .55,
-        child: activity.isEmpty
-            ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.notifications_none_rounded,
-                        size: 54, color: Colors.white38),
-                    SizedBox(height: 12),
-                    UniversalText('No activity yet.',
-                        style: TextStyle(color: Colors.white60)),
-                  ],
-                ),
-              )
-            : ListView.separated(
-                itemCount: activity.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, index) {
-                  final event = activity[index];
-                  return Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .045),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Color(0x22FF0000),
-                          child:
-                              Icon(Icons.notifications_none_rounded, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(event.title,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 4),
-                              Text(event.action,
-                                  style:
-                                      const TextStyle(color: Colors.white60)),
-                              const SizedBox(height: 5),
-                              Text(
-                                event.timestamp.toString(),
-                                style: const TextStyle(
-                                    color: Colors.white38, fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
       ),
     );
   }
@@ -4731,12 +3915,14 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onRefresh;
   final VoidCallback? onNotifications;
   final HomeCustomization? previewSettings;
+  final bool showAppBar;
 
   const HomeScreen({
     super.key,
     this.onRefresh,
     this.onNotifications,
     this.previewSettings,
+    this.showAppBar = true,
   });
 
   @override
@@ -4822,26 +4008,27 @@ class _HomeScreenState extends State<HomeScreen>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverAppBar(
-              pinned: true,
-              floating: true,
-              automaticallyImplyLeading: false,
-              elevation: 0,
-              backgroundColor: const Color(0xE6070707),
-              surfaceTintColor: Colors.transparent,
-              titleSpacing: 20,
-              title: const UniversalText(
-                'Home',
-                style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1),
+            if (widget.showAppBar)
+              SliverAppBar(
+                pinned: true,
+                floating: true,
+                automaticallyImplyLeading: false,
+                elevation: 0,
+                backgroundColor: const Color(0xE6070707),
+                surfaceTintColor: Colors.transparent,
+                titleSpacing: 20,
+                title: const UniversalText(
+                  'Home',
+                  style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1),
+                ),
+                actions: [
+                  ActivityButton(onPressed: widget.onNotifications),
+                  const SizedBox(width: 8),
+                ],
               ),
-              actions: [
-                ActivityButton(onPressed: widget.onNotifications),
-                const SizedBox(width: 8),
-              ],
-            ),
             if (settings.showHero && library.isNotEmpty)
               SliverToBoxAdapter(
                 child: FadeTransition(
@@ -5295,6 +4482,139 @@ class ActivityButton extends StatelessWidget {
                 builder: (_) => const _ActivitySheet(),
               );
             },
+      ),
+    );
+  }
+}
+
+/// Shared presentation container for More/notification sheets.
+class _PremiumSheet extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  const _PremiumSheet({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * .82;
+
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Container(
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141414),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: .08)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Colors.white54)),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: child,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Activity/notification sheet backed by the local account activity feed.
+class _ActivitySheet extends StatelessWidget {
+  const _ActivitySheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final activity = AppController.instance.activity;
+    return _PremiumSheet(
+      title: tr('Notifications'),
+      subtitle: activity.isEmpty ? 'You are all caught up' : 'Recent activity',
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * .55,
+        child: activity.isEmpty
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.notifications_none_rounded,
+                        size: 54, color: Colors.white38),
+                    SizedBox(height: 12),
+                    UniversalText('No activity yet.',
+                        style: TextStyle(color: Colors.white60)),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                itemCount: activity.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, index) {
+                  final event = activity[index];
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .045),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Color(0x22FF0000),
+                          child: Icon(Icons.notifications_none_rounded, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(event.title,
+                                  style: const TextStyle(fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 4),
+                              Text(event.action,
+                                  style: const TextStyle(color: Colors.white60)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -5874,6 +5194,12 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       return;
     }
 
+    final releaseChoice = await showLibraryReleaseChoice(context);
+    if (releaseChoice == null) {
+      if (mounted) setState(() => addingToLibrary = false);
+      return;
+    }
+
     final poster = posterController.text.trim();
     final trailer = trailerController.text.trim();
     final collectionId = job['discId']?.toString() ??
@@ -5909,7 +5235,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       if (title.isEmpty) continue;
 
       if (mounted) {
-        setState(() => statusMessage = 'Saving "$title" to the home server…');
+        setState(() => statusMessage = releaseChoice.schedule ? 'Saving "$title" to the NAS and scheduling release…' : 'Saving "$title" to the home server…');
       }
 
       final metadata = titleData['metadata'] is Map
@@ -6079,6 +5405,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
             'armJobId': job['id'],
             'verification': verification,
             'ownershipConfirmed': true,
+            'libraryPublicationMode': releaseChoice.schedule ? 'scheduled' : 'immediate',
+            if (releaseChoice.schedule) 'scheduledFor': releaseChoice.scheduledFor!.toUtc().toIso8601String(),
+            if (releaseChoice.schedule) 'scheduledTimeZone': releaseChoice.timeZone,
           },
         );
         final mediaId = saved['mediaId']?.toString();
@@ -6090,7 +5419,17 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         final persistedMedia = MediaItem.fromJson(
           <String, dynamic>{...media.toJson(), 'id': mediaId},
         );
-        AppController.instance.addToLibrary(persistedMedia);
+        if (releaseChoice.schedule) {
+          await AppController.instance.backendApi.scheduleLibraryAddition(
+            mediaId: mediaId,
+            title: media.title,
+            mediaType: media.type,
+            scheduledFor: releaseChoice.scheduledFor!,
+            timeZone: releaseChoice.timeZone,
+          );
+        } else {
+          AppController.instance.addToLibrary(persistedMedia);
+        }
       } catch (error) {
         if (mounted) {
           setState(() {

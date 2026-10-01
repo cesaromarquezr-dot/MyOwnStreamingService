@@ -179,6 +179,7 @@ class BackendApi {
   /// subscription and returns a payment session.
   Future<Map<String, dynamic>> signup({
     required String email,
+    required String username,
     required String password,
     required String firstProfileName,
     required String plan,
@@ -204,6 +205,7 @@ class BackendApi {
       headers: _headers,
       body: jsonEncode({
         'email': email,
+        'username': username,
         'password': password,
         'firstProfileName': firstProfileName,
         'plan': cleanPlan,
@@ -339,6 +341,22 @@ class BackendApi {
   }
 
   /// Loads the members of the authenticated streaming account.
+  Future<Map<String, dynamic>> addExistingAccountMember({
+    required String username,
+    String role = 'member',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/members/add'),
+      headers: _headers,
+      body: jsonEncode({
+        'username': username.trim().replaceFirst('@', ''),
+        'role': role,
+      }),
+    );
+
+    return _requireSuccess(response, 'Unable to add that existing user to this account.');
+  }
+
   Future<List<Map<String, dynamic>>> getAccountMembers() async {
     _requireAuthentication();
 
@@ -1006,6 +1024,27 @@ class BackendApi {
 
   /// Persists a reviewed ARM rip in the home server's indexed library.
   /// The backend verifies that the output file exists inside MEDIA_ROOT.
+  Future<List<Map<String, dynamic>>> getScheduledLibraryAdditions() async {
+    final response = await http.get(Uri.parse('$baseUrl/library/releases'), headers: _headers);
+    final data = await _requireSuccess(response, 'Unable to load scheduled library additions.');
+    final raw = data['items'];
+    return raw is List ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> scheduleLibraryAddition({required String mediaId, required String title, required String mediaType, required DateTime scheduledFor, String timeZone = 'UTC'}) async {
+    final response = await http.post(Uri.parse('$baseUrl/library/releases'), headers: _headers, body: jsonEncode({'mediaId': mediaId, 'title': title, 'mediaType': mediaType, 'scheduledFor': scheduledFor.toUtc().toIso8601String(), 'timeZone': timeZone}));
+    return _requireSuccess(response, 'Unable to schedule library addition.');
+  }
+
+  Future<Map<String, dynamic>> publishScheduledLibraryAddition(String id) async { final r = await http.post(Uri.parse('$baseUrl/library/releases/$id/publish'), headers: _headers); return _requireSuccess(r, 'Unable to publish scheduled library addition.'); }
+  Future<Map<String, dynamic>> cancelScheduledLibraryAddition(String id) async { final r = await http.post(Uri.parse('$baseUrl/library/releases/$id/cancel'), headers: _headers); return _requireSuccess(r, 'Unable to cancel scheduled library addition.'); }
+
+  Future<Map<String, dynamic>> getPaymentProviderStatus() async {
+    final r = await http.get(Uri.parse('$baseUrl/payment/providers'), headers: _headers);
+    return _requireSuccess(r, 'Unable to load payment providers.');
+  }
+
+
   Future<Map<String, dynamic>> importApprovedArmMedia({
     required String outputPath,
     required String title,

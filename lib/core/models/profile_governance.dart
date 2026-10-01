@@ -4,7 +4,6 @@
 /// manage only their own profile when the account enables self-management and
 /// the profile explicitly permits it. Rating restrictions are represented as
 /// policy data rather than being inferred from profile names.
-library;
 
 enum ProfileContentLevel {
   littleKids,

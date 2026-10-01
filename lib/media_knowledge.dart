@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'backend_api.dart';
 import 'localization.dart';
 
 class MediaKnowledgePanel extends StatefulWidget {

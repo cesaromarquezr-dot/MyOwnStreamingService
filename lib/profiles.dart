@@ -11,7 +11,6 @@ import 'app_core.dart';
 import 'music_achievements.dart';
 import 'profile_content_safety.dart';
 import 'profile_administration.dart';
-import 'main.dart';
 import 'localization.dart';
 
 /// ============================================================
@@ -74,22 +73,10 @@ class _ProfileSelectionScreenState
     if (profiles.isEmpty) return;
 
     final profile = profiles.last;
-    if (HomeCustomizationStore.isConfigured(profile)) return;
-
     AppController.instance.switchProfile(profile.id);
     await LanguageController.instance.loadForCurrentProfile();
     if (!mounted) return;
-    final completed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => const CustomizeHomeScreen(firstSetup: true),
-      ),
-    );
-
-    if (!mounted) return;
-    if (completed == true) {
-      _finishProfileSelection(context);
-    }
+    _finishProfileSelection(context);
   }
 
   /// Performs `_editProfile` for this feature. Update this documentation when its contract changes.
@@ -153,17 +140,6 @@ class _ProfileSelectionScreenState
     }
 
     if (!mounted) return;
-
-    if (!HomeCustomizationStore.isConfigured(profile)) {
-      final completed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => const CustomizeHomeScreen(firstSetup: true),
-        ),
-      );
-
-      if (!mounted || completed != true) return;
-    }
 
     _finishProfileSelection(context);
   }

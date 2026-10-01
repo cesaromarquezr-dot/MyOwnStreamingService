@@ -179,7 +179,12 @@ class _SearchMatch {
 }
 
 class SmartSearchScreen extends StatefulWidget {
-  const SmartSearchScreen({super.key});
+  final String initialQuery;
+
+  const SmartSearchScreen({
+    super.key,
+    this.initialQuery = '',
+  });
 
   @override
   State<SmartSearchScreen> createState() =>
@@ -201,6 +206,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+
+    controller.text = widget.initialQuery;
+    if (widget.initialQuery.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) performSearch(widget.initialQuery);
+      });
+    }
 
     searchFocusNode.addListener(_focusChanged);
 

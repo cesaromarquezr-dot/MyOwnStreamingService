@@ -328,6 +328,70 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
     }
   }
 
+  Future<void> _addExistingUser() async {
+    final usernameController = TextEditingController();
+    var role = 'member';
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const UniversalText('Add existing user'),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: UniversalText('Add someone who already has a Streaming Service account. They keep their own login and username but gain access to this account’s shared NAS library.'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: usernameController,
+                  autofocus: true,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: '@username',
+                    prefixIcon: Icon(Icons.alternate_email_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: role,
+                  decoration: const InputDecoration(labelText: 'Role'),
+                  items: const [
+                    DropdownMenuItem(value: 'member', child: Text('Member')),
+                    DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                  ],
+                  onChanged: (value) => setDialogState(() => role = value ?? 'member'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('CANCEL')),
+            FilledButton(
+              onPressed: () async {
+                final username = usernameController.text.trim().replaceFirst('@', '');
+                if (username.isEmpty) return;
+                try {
+                  await AppController.instance.backendApi.addExistingAccountMember(username: username, role: role);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+                } catch (e) {
+                  if (!dialogContext.mounted) return;
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                }
+              },
+              child: const Text('ADD USER'),
+            ),
+          ],
+        ),
+      ),
+    );
+    usernameController.dispose();
+    if (result == true && mounted) await _loadMembers();
+  }
+
   Future<void> _invite() async {
     await showDialog<bool>(
       context: context,
@@ -456,13 +520,16 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                                 .toUpperCase(),
                           ),
                         ),
-                        title: Text(
+                                        title: Text(
                           member['displayName']?.toString().trim().isNotEmpty ==
                                   true
                               ? member['displayName'].toString()
-                              : member['email']?.toString() ?? 'Member',
+                              : member['username']?.toString().trim().isNotEmpty == true
+                                  ? '@${member['username']}'
+                                  : member['email']?.toString() ?? 'Member',
                         ),
-                        subtitle: UniversalText('${member['email'] ?? ''} • ${(member['role'] ?? 'member').toString().toUpperCase()}',
+                        subtitle: UniversalText(
+                          '${member['username'] == null ? '' : '@${member['username']} • '}${member['email'] ?? ''} • ${(member['role'] ?? 'member').toString().toUpperCase()}',
                         ),
                       ),
                   ],
@@ -470,13 +537,24 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            SizedBox(
-              height: 54,
-              child: FilledButton.icon(
-                onPressed: _invite,
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const UniversalText('INVITE ACCOUNT MEMBER'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _invite,
+                    icon: const Icon(Icons.email_outlined),
+                    label: const UniversalText('INVITE BY EMAIL'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _addExistingUser,
+                    icon: const Icon(Icons.alternate_email_rounded),
+                    label: const UniversalText('ADD BY USERNAME'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             const Card(
