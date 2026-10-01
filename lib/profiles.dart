@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'app_core.dart';
 import 'music_achievements.dart';
 import 'profile_content_safety.dart';
+import 'profile_administration.dart';
 import 'main.dart';
 import 'localization.dart';
 
@@ -1190,6 +1191,26 @@ class _EditProfileSheetState
                           ),
                   icon: const Icon(Icons.shield_outlined),
                   label: const UniversalText('CONTENT & SAFETY'),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _saving
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProfileAdministrationScreen(
+                                profile: widget.profile,
+                              ),
+                            ),
+                          ),
+                  icon: const Icon(Icons.admin_panel_settings_outlined),
+                  label: const UniversalText('PROFILE ADMINISTRATION'),
                 ),
               ),
 

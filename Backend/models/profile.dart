@@ -14,11 +14,16 @@
 // - A profile must never be treated as an account-wide authorization boundary.
 //   Account/member authorization belongs to the backend account/session layer.
 
+import 'profile_governance.dart';
+
 class Profile {
   final String id;
 
   String name;
   String? avatarUrl;
+
+  /// Backend-authoritative content and profile administration policy.
+  ProfileGovernance governance;
 
   // Media owned by this profile.
   //
@@ -59,6 +64,7 @@ class Profile {
     required this.id,
     required this.name,
     this.avatarUrl,
+    ProfileGovernance? governance,
     List<String>? ownedMediaIds,
     List<String>? watchedMediaIds,
     List<String>? likedMediaIds,
@@ -73,7 +79,8 @@ class Profile {
         watchProgress = _normalizeProgressMap(watchProgress),
         watchHistory = _normalizeStringList(watchHistory),
         watchHistoryTimestamps =
-            _normalizeDateTimeMap(watchHistoryTimestamps);
+            _normalizeDateTimeMap(watchHistoryTimestamps),
+        governance = governance ?? const ProfileGovernance();
 
   // ------------------------------------------------------------
   // STATE / IDENTITY
@@ -512,6 +519,7 @@ class Profile {
     Map<String, double>? watchProgress,
     List<String>? watchHistory,
     Map<String, DateTime>? watchHistoryTimestamps,
+    ProfileGovernance? governance,
     bool clearAvatarUrl = false,
   }) {
     return Profile(
@@ -535,6 +543,7 @@ class Profile {
           Map<String, DateTime>.from(
             this.watchHistoryTimestamps,
           ),
+      governance: governance ?? this.governance,
     );
   }
 
@@ -554,6 +563,7 @@ class Profile {
       'dislikedMediaIds': List<String>.from(dislikedMediaIds),
       'watchProgress': Map<String, double>.from(watchProgress),
       'watchHistory': List<String>.from(watchHistory),
+      'governance': governance.toJson(),
       'watchHistoryTimestamps': watchHistoryTimestamps.map(
         (key, value) => MapEntry(
           key,
@@ -590,6 +600,11 @@ class Profile {
       ),
       watchHistoryTimestamps: _dateTimeMap(
         json['watchHistoryTimestamps'],
+      ),
+      governance: ProfileGovernance.fromJson(
+        json['governance'] is Map
+            ? Map<String, dynamic>.from(json['governance'])
+            : null,
       ),
     );
   }

@@ -19,6 +19,7 @@ import 'models/account.dart';
 import 'models/account_member.dart';
 import 'models/payment_session.dart';
 import 'models/profile.dart';
+import 'models/profile_governance.dart';
 import 'models/physical_item.dart';
 import 'models/shop_entity.dart';
 import 'models/subscription.dart';
@@ -404,6 +405,9 @@ class SupabaseStore {
       'email': email,
       'display_name': username,
       'status': 'active',
+      'profile_administration_policy': {
+        'allowMembersToManageOwnProfiles': account.allowMembersToManageOwnProfiles,
+      },
     };
 
     if (existing == null) {
@@ -576,6 +580,7 @@ class SupabaseStore {
         'mfa_challenge_hash': account.mfaChallengeHash,
         'mfa_challenge_expires_at':
             account.mfaChallengeExpiresAt?.toUtc().toIso8601String(),
+        'mfa_challenge_member_id': account.mfaChallengeMemberId,
       },
       onConflict: 'external_account_id',
     );
@@ -645,6 +650,7 @@ class SupabaseStore {
             profile.avatarUrl,
             maxLength: 2048,
           ),
+          'governance': profile.governance.toJson(),
           'is_active': true,
         },
         onConflict: 'external_profile_id',
@@ -968,6 +974,11 @@ class SupabaseStore {
               avatarUrl: _nullable(
                 profileRow['avatar_url'],
               ),
+              governance: ProfileGovernance.fromJson(
+                profileRow['governance'] is Map
+                    ? Map<String, dynamic>.from(profileRow['governance'])
+                    : null,
+              ),
             ),
           );
         }
@@ -1034,6 +1045,11 @@ class SupabaseStore {
                     ?.toString() ??
                 '',
           ),
+          mfaChallengeMemberId:
+              credentialRow['mfa_challenge_member_id']?.toString(),
+          allowMembersToManageOwnProfiles:
+              row['profile_administration_policy'] is Map &&
+                  Map<String, dynamic>.from(row['profile_administration_policy'])['allowMembersToManageOwnProfiles'] == true,
           profiles: profiles,
           subscription: subscription,
         );
@@ -1065,8 +1081,26 @@ class SupabaseStore {
         );
 
     final members = await c.from('account_members').select(
-      'id,account_id,identity_id,role,status',
+      'id,account_id,identity_id,role,status,profile_id',
     );
+
+    List<dynamic> memberProfileRows = const <dynamic>[];
+    try {
+      memberProfileRows = await c.from('account_member_profiles').select(
+        'account_member_id,profile_id,is_primary',
+      );
+    } catch (_) {
+      // The additive profile-assignment migration may not have been applied
+      // yet. Fall back to the legacy single profile_id column.
+    }
+    final profileIdsByMember = <String, List<String>>{};
+    for (final rawAssignment in memberProfileRows) {
+      final assignment = Map<String, dynamic>.from(rawAssignment);
+      final memberId = assignment['account_member_id']?.toString() ?? '';
+      final profileId = assignment['profile_id']?.toString() ?? '';
+      if (memberId.isEmpty || profileId.isEmpty) continue;
+      profileIdsByMember.putIfAbsent(memberId, () => <String>[]).add(profileId);
+    }
 
     final identityById = <String, Map<String, dynamic>>{};
 
@@ -1129,6 +1163,10 @@ class SupabaseStore {
           status:
               member['status']?.toString() ??
                   'active',
+          profileIds: <String>[
+            ...?profileIdsByMember[member['id']?.toString()],
+            if (member['profile_id']?.toString().trim().isNotEmpty == true) member['profile_id'].toString(),
+          ],
         ),
       );
     }
@@ -1392,6 +1430,66 @@ class SupabaseStore {
   // ACCOUNT MEMBERS
   // ---------------------------------------------------------------------------
 
+  Future<void> assignMemberProfiles({
+    required String accountExternalId,
+    required String memberId,
+    required List<String> profileIds,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found in Supabase.');
+
+    final internalAccountId = _requiredId(account['id']?.toString(), field: 'accounts.id');
+    final cleanMemberId = _requiredId(memberId, field: 'memberId');
+    final uniqueProfiles = <String>{
+      for (final id in profileIds)
+        if (id.trim().isNotEmpty) id.trim(),
+    };
+
+    final member = await c
+        .from('account_members')
+        .select('id,account_id')
+        .eq('id', cleanMemberId)
+        .eq('account_id', internalAccountId)
+        .maybeSingle();
+    if (member == null) throw StateError('Account member not found.');
+
+    final profileIdMap = <String, String>{};
+    if (uniqueProfiles.isNotEmpty) {
+      final validRows = await c
+          .from('profiles')
+          .select('id,external_profile_id')
+          .eq('account_id', internalAccountId);
+      for (final row in validRows) {
+        final external = row['external_profile_id']?.toString().trim() ?? '';
+        final internal = row['id']?.toString().trim() ?? '';
+        if (external.isNotEmpty && internal.isNotEmpty) profileIdMap[external] = internal;
+      }
+      final invalid = uniqueProfiles.difference(profileIdMap.keys.toSet());
+      if (invalid.isNotEmpty) throw StateError('One or more profiles do not belong to this account.');
+    }
+
+    await c.from('account_member_profiles').delete().eq('account_member_id', cleanMemberId);
+    if (uniqueProfiles.isEmpty) return;
+
+    final rows = uniqueProfiles.toList()
+        .asMap()
+        .entries
+        .map((entry) => {
+              'account_member_id': cleanMemberId,
+              'profile_id': profileIdMap[entry.value],
+              'is_primary': entry.key == 0,
+            })
+        .toList();
+    await c.from('account_member_profiles').insert(rows);
+  }
+
   Future<List<Map<String, dynamic>>> listAccountMembers(
     String accountExternalId,
   ) async {
@@ -1455,6 +1553,34 @@ class SupabaseStore {
       }
     }
 
+    List<dynamic> memberProfileRows = const <dynamic>[];
+    try {
+      memberProfileRows = await c.from('account_member_profiles').select(
+        'account_member_id,profile_id,is_primary',
+      );
+    } catch (_) {}
+
+    final internalToExternalProfile = <String, String>{};
+    final profileRows = await c
+        .from('profiles')
+        .select('id,external_profile_id')
+        .eq('account_id', internalAccountId);
+    for (final rawProfile in profileRows) {
+      final internal = rawProfile['id']?.toString().trim() ?? '';
+      final external = rawProfile['external_profile_id']?.toString().trim() ?? '';
+      if (internal.isNotEmpty && external.isNotEmpty) internalToExternalProfile[internal] = external;
+    }
+
+    final profilesByMember = <String, List<String>>{};
+    for (final rawAssignment in memberProfileRows) {
+      final row = Map<String, dynamic>.from(rawAssignment as Map);
+      final memberId = row['account_member_id']?.toString().trim() ?? '';
+      final profileId = internalToExternalProfile[row['profile_id']?.toString().trim() ?? ''];
+      if (memberId.isNotEmpty && profileId != null) {
+        profilesByMember.putIfAbsent(memberId, () => <String>[]).add(profileId);
+      }
+    }
+
     final result = <Map<String, dynamic>>[];
 
     for (final raw in members) {
@@ -1470,13 +1596,20 @@ class SupabaseStore {
         continue;
       }
 
+      final memberId = member['id']?.toString() ?? '';
+      final assignedProfiles = <String>[
+        ...?profilesByMember[memberId],
+        if (member['profile_id']?.toString().trim().isNotEmpty == true) member['profile_id'].toString(),
+      ].toSet().toList();
+
       result.add({
         'id': member['id'],
         'email': identity['email'],
         'role': member['role'],
         'status': member['status'],
         'displayName': member['display_name'],
-        'profileId': member['profile_id'],
+        'profileId': assignedProfiles.isEmpty ? null : assignedProfiles.first,
+        'profileIds': assignedProfiles,
       });
     }
 
@@ -1599,6 +1732,33 @@ class SupabaseStore {
       'id',
       profile['id'],
     );
+  }
+
+  Future<void> upsertProfile({
+    required String accountExternalId,
+    required Profile profile,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', _requiredId(accountExternalId, field: 'accountExternalId'))
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found in Supabase.');
+
+    final internalAccountId = _requiredId(account['id']?.toString(), field: 'accounts.id');
+    final profileId = _requiredId(profile.id, field: 'profile.id');
+
+    await c.from('profiles').upsert({
+      'account_id': internalAccountId,
+      'external_profile_id': profileId,
+      'name': _boundedText(profile.name, field: 'profile.name', maxLength: _maxNameLength),
+      'avatar_url': _safeNullableText(profile.avatarUrl, maxLength: 2048),
+      'governance': profile.governance.toJson(),
+      'is_active': true,
+    }, onConflict: 'external_profile_id');
   }
 
   // ---------------------------------------------------------------------------

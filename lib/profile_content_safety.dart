@@ -6,6 +6,8 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'core/models/profile_governance.dart';
+import 'core/services/profile_governance_api.dart';
 import 'localization.dart';
 import 'platform_expansion.dart';
 
@@ -22,17 +24,73 @@ class ProfileContentSafetyScreen extends StatefulWidget {
 
 class _ProfileContentSafetyScreenState
     extends State<ProfileContentSafetyScreen> {
-  static const _levels = <String>['Baby', 'Kids', 'Teen', '18+', '21+', 'Custom'];
+  static const _levels = <String>[
+    'Little Kids',
+    'Kids',
+    'Older Kids',
+    'Teen',
+    'Mature',
+    'Unrestricted',
+    'Custom',
+  ];
 
-  String get _level => PlatformPreferenceStore.getString(
-        'content_safety',
-        'level',
-        fallback: 'Teen',
-      );
+  ProfileGovernance _serverGovernance = const ProfileGovernance();
+  bool _serverLoading = true;
+  String? _serverError;
+
+  String get _level => _label(_serverGovernance.contentLevel);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServerGovernance();
+  }
+
+  Future<void> _loadServerGovernance() async {
+    try {
+      final governance = await ProfileGovernanceApi(
+        AppController.instance.backendApi,
+      ).getGovernance(widget.profile.id);
+      _serverGovernance = governance;
+      widget.profile.governance = governance;
+    } catch (error) {
+      _serverError = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) setState(() => _serverLoading = false);
+    }
+  }
 
   Future<void> _setLevel(String value) async {
-    await PlatformPreferenceStore.setString('content_safety', 'level', value);
+    final level = ProfileContentLevel.values.firstWhere(
+      (item) => _label(item) == value,
+      orElse: () => ProfileContentLevel.teen,
+    );
+    try {
+      final next = _serverGovernance.copyWith(contentLevel: level);
+      _serverGovernance = await ProfileGovernanceApi(
+        AppController.instance.backendApi,
+      ).updateGovernance(
+        profileId: widget.profile.id,
+        governance: next,
+      );
+      widget.profile.governance = _serverGovernance;
+      await PlatformPreferenceStore.setString('content_safety', 'level', value);
+    } catch (error) {
+      _serverError = error.toString().replaceFirst('Exception: ', '');
+    }
     if (mounted) setState(() {});
+  }
+
+  String _label(ProfileContentLevel value) {
+    switch (value) {
+      case ProfileContentLevel.littleKids: return 'Little Kids';
+      case ProfileContentLevel.kids: return 'Kids';
+      case ProfileContentLevel.olderKids: return 'Older Kids';
+      case ProfileContentLevel.teen: return 'Teen';
+      case ProfileContentLevel.mature: return 'Mature';
+      case ProfileContentLevel.unrestricted: return 'Unrestricted';
+      case ProfileContentLevel.custom: return 'Custom';
+    }
   }
 
   bool _get(String key, {bool fallback = false}) =>
@@ -68,6 +126,16 @@ class _ProfileContentSafetyScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_serverLoading)
+                    const LinearProgressIndicator(),
+                  if (_serverError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: UniversalText(
+                        _serverError!,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
                   const UniversalText(
                     'Movies & TV',
                     style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),

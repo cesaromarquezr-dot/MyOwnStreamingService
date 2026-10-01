@@ -79,6 +79,8 @@ import 'routes/shop_routes.dart';
 import 'routes/live_shopping_routes.dart';
 import 'routes/physical_item_routes.dart';
 import 'routes/radio_routes.dart';
+import 'routes/profile_governance_routes.dart';
+import 'routes/server_agent_routes.dart';
 
 import 'services/auth_service.dart';
 import 'services/recommendations_service.dart';
@@ -102,6 +104,8 @@ import 'services/transcoding_service.dart';
 import 'services/storage_manager_service.dart';
 import 'services/shop_service.dart';
 import 'services/payment_method_service.dart';
+import 'services/profile_governance_service.dart';
+import 'services/media_server_agent_service.dart';
 
 import 'arm/arm_client.dart';
 import 'arm/arm_service.dart';
@@ -205,6 +209,18 @@ final physicalItemRoutes = PhysicalItemRoutes(
   store: SupabaseStore.instance,
 );
 
+final profileGovernanceService = ProfileGovernanceService(database);
+final mediaServerAgentService = MediaServerAgentService();
+final profileGovernanceRoutes = ProfileGovernanceRoutes(
+  authentication: authentication,
+  service: profileGovernanceService,
+);
+
+final serverAgentRoutes = ServerAgentRoutes(
+  authentication: authentication,
+  service: mediaServerAgentService,
+);
+
 // ------------------------------------------------------------
 // AUTH ROUTES
 // ------------------------------------------------------------
@@ -214,6 +230,7 @@ authService: authService,
 authentication: authentication,
 paymentService: paymentService,
 emailService: emailService,
+profileGovernanceService: profileGovernanceService,
 );
 
 // ------------------------------------------------------------
@@ -455,6 +472,8 @@ radioRoutes,
 selfHostingRoutes,
 selfHostingSecurity,
 physicalItemRoutes,
+profileGovernanceRoutes,
+serverAgentRoutes,
 ).catchError(
 (Object error, StackTrace stackTrace) {
 developer.log(
@@ -499,6 +518,8 @@ RadioRoutes radioRoutes,
 SelfHostingRoutes selfHostingRoutes,
 SelfHostingSecurity selfHostingSecurity,
 PhysicalItemRoutes physicalItemRoutes,
+ProfileGovernanceRoutes profileGovernanceRoutes,
+ServerAgentRoutes serverAgentRoutes,
 ) async {
 var responseStarted = false;
 
@@ -586,6 +607,26 @@ final path = request.uri.path;
 if (request.method == 'GET' &&
     path == '/api/v1/health') {
   await _health(request);
+  responseStarted = true;
+  return;
+}
+
+// ----------------------------------------------------------
+// PROFILE GOVERNANCE
+// ----------------------------------------------------------
+
+if (path.startsWith('/api/v1/profile-governance/')) {
+  await profileGovernanceRoutes.handle(request);
+  responseStarted = true;
+  return;
+}
+
+// ----------------------------------------------------------
+// SERVER AGENT
+// ----------------------------------------------------------
+
+if (path.startsWith('/api/v1/server-agent/')) {
+  await serverAgentRoutes.handle(request);
   responseStarted = true;
   return;
 }

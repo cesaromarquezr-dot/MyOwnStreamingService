@@ -838,3 +838,8 @@ Provider credentials remain backend-only. Configure only providers for which the
 - `OMDB_API_KEY` — OMDb API key for provider fields available through OMDb.
 
 The Flutter client never receives these credentials. Provider ratings are stored and displayed independently; the backend does not calculate a single cross-provider master score.
+
+
+## Master Product Architecture
+
+See `../docs/MASTER_PRODUCT_ARCHITECTURE.md`. The backend is organized around domain services, authenticated capabilities, long-running jobs, events, profile governance, and a local Media Server Agent boundary for NAS access.

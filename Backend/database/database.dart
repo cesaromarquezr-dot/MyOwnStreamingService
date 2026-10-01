@@ -34,6 +34,7 @@ import '../supabase_store.dart';
 class SessionRecord {
   final String token;
   final String accountId;
+  final String? memberId;
 
   final DateTime createdAt;
   final DateTime expiresAt;
@@ -46,6 +47,7 @@ class SessionRecord {
   SessionRecord({
     required this.token,
     required this.accountId,
+    this.memberId,
     required this.createdAt,
     required this.expiresAt,
     required this.lastUsedAt,
@@ -66,6 +68,7 @@ class SessionRecord {
       'lastUsedAt': lastUsedAt.toIso8601String(),
       'ipAddress': ipAddress,
       'userAgent': userAgent,
+      if (memberId != null) 'memberId': memberId,
     };
   }
 }
@@ -827,6 +830,45 @@ class Database {
     );
   }
 
+  MemberLoginRecord? getMemberLoginById(String memberId) {
+    final clean = memberId.trim();
+    if (clean.isEmpty) return null;
+    for (final entries in memberLoginsByEmail.values) {
+      for (final entry in entries) {
+        if (entry.memberId == clean) return entry;
+      }
+    }
+    return null;
+  }
+
+  Future<void> supabaseAssignMemberProfiles({
+    required String accountExternalId,
+    required String memberId,
+    required List<String> profileIds,
+  }) {
+    return SupabaseStore.instance.assignMemberProfiles(
+      accountExternalId: accountExternalId,
+      memberId: memberId,
+      profileIds: profileIds,
+    );
+  }
+
+  void persistProfile(Profile profile, Account account) {
+    unawaited(
+      SupabaseStore.instance.upsertProfile(
+        accountExternalId: account.id,
+        profile: profile,
+      ).catchError((error, stackTrace) {
+        developer.log(
+          'Profile persistence failed.',
+          name: 'Database',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }),
+    );
+  }
+
   void registerMemberLogin(
     MemberLoginRecord login,
   ) {
@@ -846,6 +888,30 @@ class Database {
     );
 
     entries.add(login);
+  }
+
+  void updateMemberProfileIds(
+    String memberId,
+    List<String> profileIds,
+  ) {
+    final cleanMemberId = memberId.trim();
+    if (cleanMemberId.isEmpty) return;
+
+    for (final entry in memberLoginsByEmail.entries) {
+      final index = entry.value.indexWhere((item) => item.memberId == cleanMemberId);
+      if (index == -1) continue;
+      final current = entry.value[index];
+      entry.value[index] = MemberLoginRecord(
+        memberId: current.memberId,
+        accountId: current.accountId,
+        email: current.email,
+        passwordHash: current.passwordHash,
+        role: current.role,
+        status: current.status,
+        profileIds: profileIds,
+      );
+      return;
+    }
   }
 
   void removeMemberLogin(
@@ -1068,6 +1134,7 @@ class Database {
   void saveSession(
     String token,
     String accountId, {
+    String? memberId,
     Duration? ttl,
     String ipAddress = 'unknown',
     String userAgent = 'unknown',
@@ -1085,6 +1152,7 @@ class Database {
     sessions[normalizedToken] = SessionRecord(
       token: normalizedToken,
       accountId: normalizedAccountId,
+      memberId: memberId?.trim(),
       createdAt: now,
       expiresAt: now.add(lifetime),
       lastUsedAt: now,
@@ -1163,6 +1231,7 @@ class Database {
     sessions[newToken] = SessionRecord(
       token: newToken,
       accountId: session.accountId,
+      memberId: session.memberId,
       createdAt: now,
       expiresAt: now.add(defaultSessionLifetime),
       lastUsedAt: now,

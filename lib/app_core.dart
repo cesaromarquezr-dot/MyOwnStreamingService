@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'backend_api.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
-
+import 'core/models/profile_governance.dart';
 enum SubscriptionPlan {
   monthly,
   yearly,
@@ -444,11 +444,13 @@ class Profile {
   final String id;
   String name;
   String? avatarUrl;
+  ProfileGovernance governance;
 
   Profile({
     required this.id,
     required this.name,
     this.avatarUrl,
+    this.governance = const ProfileGovernance(),
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) {
@@ -456,6 +458,11 @@ class Profile {
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Profile',
       avatarUrl: json['avatarUrl']?.toString(),
+      governance: ProfileGovernance.fromJson(
+        json['governance'] is Map
+            ? Map<String, dynamic>.from(json['governance'])
+            : null,
+      ),
     );
   }
 
@@ -465,6 +472,7 @@ class Profile {
       'id': id,
       'name': name,
       'avatarUrl': avatarUrl,
+      'governance': governance.toJson(),
     };
   }
 }
@@ -484,6 +492,7 @@ class UserAccount {
   int storageRequestedTerabytes;
   double storageRequestFeeUsd;
   String storageRequestStatus;
+  bool allowMembersToManageOwnProfiles;
 
   UserAccount({
     this.id = '',
@@ -498,6 +507,7 @@ class UserAccount {
     this.storageRequestedTerabytes = 0,
     this.storageRequestFeeUsd = 0,
     this.storageRequestStatus = 'none',
+    this.allowMembersToManageOwnProfiles = false,
   }) : profiles = profiles ?? [];
 
   bool get hasActiveSubscription =>
@@ -523,6 +533,7 @@ class UserAccount {
       'storageRequestedTerabytes': storageRequestedTerabytes,
       'storageRequestFeeUsd': storageRequestFeeUsd,
       'storageRequestStatus': storageRequestStatus,
+      'allowMembersToManageOwnProfiles': allowMembersToManageOwnProfiles,
     };
   }
 }
@@ -1625,6 +1636,8 @@ class AppController extends ChangeNotifier {
           : 0,
       storageRequestStatus:
           accountMap['storageRequestStatus']?.toString() ?? 'none',
+      allowMembersToManageOwnProfiles:
+          accountMap['allowMembersToManageOwnProfiles'] == true,
     );
     currentProfile = profiles.isEmpty ? null : profiles.first;
     activeProfileIds

@@ -13,24 +13,28 @@ final String accountId;
 final String email;
 final String role;
 final String status;
-final String? profileId;
+final List<String> profileIds;
 final String? displayName;
 
-const AccountMember({
+AccountMember({
 required this.id,
 required this.accountId,
 required this.email,
 this.role = AccountMemberRole.member,
 this.status = AccountMemberStatus.active,
-this.profileId,
+List<String>? profileIds,
+String? profileId,
 this.displayName,
-});
+}) : profileIds = _normalizeProfileIds(profileIds, profileId);
 
 /// Normalized email used for account/member lookups.
 String get normalizedEmail => email.trim().toLowerCase();
 
 /// Whether this membership is currently active.
 bool get isActive => status == AccountMemberStatus.active;
+
+/// Legacy single-profile view retained for compatibility.
+String? get profileId => profileIds.isEmpty ? null : profileIds.first;
 
 /// Whether this membership has administrator privileges.
 bool get isAdmin => role == AccountMemberRole.admin;
@@ -56,6 +60,7 @@ status: _stringOrDefault(
 json['status'],
 AccountMemberStatus.active,
 ),
+profileIds: _stringList(json['profileIds'] ?? json['profile_ids']),
 profileId: _nullableString(
 json['profileId'] ?? json['profile_id'],
 ),
@@ -76,6 +81,7 @@ return {
 'email': email,
 'role': role,
 'status': status,
+'profileIds': List<String>.from(profileIds),
 if (profileId != null) 'profileId': profileId,
 if (displayName != null) 'displayName': displayName,
 };
@@ -87,6 +93,7 @@ String? accountId,
 String? email,
 String? role,
 String? status,
+List<String>? profileIds,
 String? profileId,
 String? displayName,
 }) {
@@ -96,6 +103,7 @@ accountId: accountId ?? this.accountId,
 email: email ?? this.email,
 role: role ?? this.role,
 status: status ?? this.status,
+profileIds: profileIds ?? this.profileIds,
 profileId: profileId ?? this.profileId,
 displayName: displayName ?? this.displayName,
 );
@@ -127,15 +135,17 @@ final String email;
 final String passwordHash;
 final String role;
 final String status;
+final List<String> profileIds;
 
-const MemberLoginRecord({
+MemberLoginRecord({
 required this.memberId,
 required this.accountId,
 required this.email,
 required this.passwordHash,
 required this.role,
 required this.status,
-});
+List<String>? profileIds,
+}) : profileIds = _normalizeProfileIds(profileIds, null);
 
 String get normalizedEmail => email.trim().toLowerCase();
 
@@ -168,6 +178,7 @@ status: _stringOrDefault(
 json['status'],
 AccountMemberStatus.active,
 ),
+profileIds: _stringList(json['profileIds'] ?? json['profile_ids']),
 );
 }
 
@@ -182,6 +193,7 @@ return {
 'passwordHash': passwordHash,
 'role': role,
 'status': status,
+'profileIds': List<String>.from(profileIds),
 };
 }
 
@@ -196,6 +208,7 @@ accountId: accountId,
 email: email,
 role: role,
 status: status,
+profileIds: profileId == null ? profileIds : <String>[profileId],
 profileId: profileId,
 displayName: displayName,
 );
@@ -252,4 +265,41 @@ return null;
 }
 
 return result;
+}
+
+List<String> _stringList(Object? value) {
+if (value is! List) {
+return <String>[];
+}
+
+return value
+    .map((item) => item?.toString().trim() ?? '')
+    .where((item) => item.isNotEmpty)
+    .toSet()
+    .toList();
+}
+
+List<String> _normalizeProfileIds(
+List<String>? profileIds,
+String? profileId,
+) {
+final ids = <String>[];
+
+if (profileIds != null) {
+for (final id in profileIds) {
+final normalized = id.trim();
+if (normalized.isNotEmpty && !ids.contains(normalized)) {
+ids.add(normalized);
+}
+}
+}
+
+final legacyProfileId = profileId?.trim();
+if (legacyProfileId != null &&
+    legacyProfileId.isNotEmpty &&
+    !ids.contains(legacyProfileId)) {
+ids.add(legacyProfileId);
+}
+
+return ids;
 }

@@ -42,6 +42,13 @@ bool mfaEnabled;
 String mfaChallengeHash;
 DateTime? mfaChallengeExpiresAt;
 
+/// When true, invited members may administer only profiles explicitly
+/// assigned to them and only when those profiles are self-managed.
+bool allowMembersToManageOwnProfiles;
+
+/// Backend-only identity attached to the current MFA challenge.
+String? mfaChallengeMemberId;
+
 Subscription? subscription;
 
 final List<Profile> profiles;
@@ -87,6 +94,8 @@ this.securityAnswerHash = '',
 this.mfaEnabled = false,
 this.mfaChallengeHash = '',
 this.mfaChallengeExpiresAt,
+this.allowMembersToManageOwnProfiles = false,
+this.mfaChallengeMemberId,
 this.subscription,
 List<Profile>? profiles,
 List<String>? sharedMediaIds,
@@ -430,6 +439,7 @@ final data = <String, dynamic>{
 
   'securityQuestion': securityQuestion,
   'mfaEnabled': mfaEnabled,
+  'allowMembersToManageOwnProfiles': allowMembersToManageOwnProfiles,
 
   'profiles': profiles
       .map(

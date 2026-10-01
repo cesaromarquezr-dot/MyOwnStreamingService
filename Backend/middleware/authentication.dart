@@ -15,6 +15,7 @@
 import 'dart:io';
 
 import '../models/account.dart';
+import '../models/authenticated_principal.dart';
 import '../services/auth_service.dart';
 
 class AuthenticationMiddleware {
@@ -87,4 +88,22 @@ if (token.isEmpty) {
 return token;
 
 }
+
+  AuthenticatedPrincipal? principal(HttpRequest request) {
+    final token = extractToken(request);
+    if (token == null) return null;
+
+    final session = authService.sessionFromToken(token);
+    final account = authService.accountFromToken(token);
+    if (session == null || account == null) return null;
+
+    final memberId = session.memberId;
+    return AuthenticatedPrincipal(
+      account: account,
+      memberId: memberId == null || memberId.trim().isEmpty
+          ? 'owner_${account.id}'
+          : memberId,
+    );
+  }
+
 }

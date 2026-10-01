@@ -88,3 +88,8 @@ Only application metadata and non-file state are synchronized, including:
 * other metadata required by the streaming-service application
 
 The home server remains responsible for the physical media files and their server-private storage paths.
+
+
+### Master product architecture
+
+Apply `migrations/master_product_architecture.sql` after the existing account/membership, media, server, and shop migrations. It adds profile governance, member-to-profile assignments, multi-event media associations, media-server-agent state, and durable import-job metadata.

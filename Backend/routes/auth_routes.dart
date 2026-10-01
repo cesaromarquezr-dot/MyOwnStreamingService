@@ -22,6 +22,8 @@ import 'dart:io';
 
 import '../middleware/authentication.dart';
 import '../models/account.dart';
+import '../models/profile_governance.dart';
+import '../services/profile_governance_service.dart';
 import '../models/subscription.dart';
 import '../services/auth_service.dart';
 import '../services/email_service.dart';
@@ -33,12 +35,14 @@ class AuthRoutes {
   final AuthenticationMiddleware authentication;
   final PaymentService paymentService;
   final EmailService emailService;
+  final ProfileGovernanceService profileGovernanceService;
 
   AuthRoutes({
     required this.authService,
     required this.authentication,
     required this.paymentService,
     required this.emailService,
+    required this.profileGovernanceService,
   });
 
   Future<void> handle(HttpRequest request) async {
@@ -1222,15 +1226,26 @@ class AuthRoutes {
   Future<void> _addProfile(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
+    final principal = authentication.principal(request);
 
-    if (account == null) {
-      await _sendAuthenticationRequired(
+    if (principal == null) {
+      await _sendAuthenticationRequired(request.response);
+      return;
+    }
+
+    if (!principal.isOwner) {
+      await _sendJson(
         request.response,
+        statusCode: HttpStatus.forbidden,
+        body: {
+          'success': false,
+          'error': 'Only the account owner can create profiles.',
+        },
       );
       return;
     }
+
+    final account = principal.account;
 
     final body = await _readJsonBody(request);
 
@@ -1275,15 +1290,14 @@ class AuthRoutes {
   Future<void> _updateProfile(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
+    final principal = authentication.principal(request);
 
-    if (account == null) {
-      await _sendAuthenticationRequired(
-        request.response,
-      );
+    if (principal == null) {
+      await _sendAuthenticationRequired(request.response);
       return;
     }
+
+    final account = principal.account;
 
     final profileId =
         _profileIdFromPath(request.uri.path);
@@ -1294,6 +1308,29 @@ class AuthRoutes {
       );
     }
 
+    final profile =
+        profileGovernanceService.profileFor(
+      account,
+      profileId,
+    );
+
+    if (profile == null ||
+        !profileGovernanceService.canManageProfile(
+          principal,
+          profile,
+          permission: ProfilePermission.editIdentity,
+        )) {
+      await _sendJson(
+        request.response,
+        statusCode: HttpStatus.forbidden,
+        body: {
+          'success': false,
+          'error': 'You cannot administer this profile.',
+        },
+      );
+      return;
+    }
+
     final body = await _readJsonBody(request);
 
     final name =
@@ -1302,7 +1339,7 @@ class AuthRoutes {
     final avatarUrl =
         body['avatarUrl']?.toString();
 
-    final profile =
+    final updatedProfile =
         await authService.updateProfile(
       account: account,
       profileId: profileId,
@@ -1315,7 +1352,15 @@ class AuthRoutes {
       statusCode: HttpStatus.ok,
       body: {
         'success': true,
-        'profile': profile.toJson(),
+        'profile': updatedProfile.toJson(),
+        'profiles': account.profiles
+            .map(
+              (profile) => profile.toJson(),
+            )
+            .toList(),
+        'profileCount':
+            account.profiles.length,
+        'maxProfiles': 7,
       },
     );
   }
@@ -1323,15 +1368,26 @@ class AuthRoutes {
   Future<void> _removeProfile(
     HttpRequest request,
   ) async {
-    final account =
-        authentication.authenticate(request);
+    final principal = authentication.principal(request);
 
-    if (account == null) {
-      await _sendAuthenticationRequired(
+    if (principal == null) {
+      await _sendAuthenticationRequired(request.response);
+      return;
+    }
+
+    if (!principal.isOwner) {
+      await _sendJson(
         request.response,
+        statusCode: HttpStatus.forbidden,
+        body: {
+          'success': false,
+          'error': 'Only the account owner can remove profiles.',
+        },
       );
       return;
     }
+
+    final account = principal.account;
 
     final profileId =
         _profileIdFromPath(request.uri.path);
@@ -1389,7 +1445,8 @@ class AuthRoutes {
       return null;
     }
 
-    final prefix = '/api/v1/profiles/';
+    const prefix = '/api/v1/profiles/';
+
     final encodedId =
         path.substring(prefix.length);
 

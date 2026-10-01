@@ -406,6 +406,7 @@ class AuthService {
     }
 
     String? passwordHash;
+    String? authenticatedMemberId;
 
     // Account.passwordHash is the canonical owner credential.
     if (account != null &&
@@ -418,9 +419,10 @@ class AuthService {
 
       // Keep the canonical owner identity synchronized for legacy/member-based
       // operations without using it as the source of truth for owner login.
+      authenticatedMemberId = 'owner_${account.id}';
       database.registerMemberLogin(
         MemberLoginRecord(
-          memberId: 'owner_${account.id}',
+          memberId: authenticatedMemberId,
           accountId: account.id,
           email: account.email.trim().toLowerCase(),
           passwordHash: account.passwordHash,
@@ -466,6 +468,7 @@ class AuthService {
             database.getAccountById(member.accountId);
 
         passwordHash = member.passwordHash;
+        authenticatedMemberId = member.memberId;
       } else if (matches.length > 1) {
         await _recordLoginFailure(normalizedLogin);
 
@@ -565,6 +568,9 @@ class AuthService {
     }
 
     if (account.mfaEnabled) {
+      account.mfaChallengeMemberId = authenticatedMemberId ?? 'owner_${account.id}';
+      database.saveAccount(account);
+      await database.persistAccountAndWait(account);
       await startMfaChallenge(
         account,
       );
@@ -582,6 +588,7 @@ class AuthService {
     database.saveSession(
       token,
       account.id,
+      memberId: authenticatedMemberId ?? 'owner_${account.id}',
       ttl: Database.defaultSessionLifetime,
       ipAddress: normalizedIp,
       userAgent: normalizedAgent,
@@ -922,9 +929,13 @@ class AuthService {
     final token =
         _generateSessionToken();
 
+    final challengeMemberId = account.mfaChallengeMemberId ?? 'owner_${account.id}';
+    account.mfaChallengeMemberId = null;
+
     database.saveSession(
       token,
       account.id,
+      memberId: challengeMemberId,
       ttl: Database.defaultSessionLifetime,
       ipAddress: normalizedIp,
       userAgent: normalizedAgent,

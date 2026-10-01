@@ -2885,6 +2885,123 @@ class BackendApi {
   }
 
   // ==========================================================
+  // MASTER PRODUCT ARCHITECTURE
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getProfileGovernanceCapabilities() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/profile-governance/capabilities'),
+        headers: _headers,
+      ),
+      'Unable to load profile governance capabilities.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getProfileGovernance({required String profileId}) async {
+    _requireAuthentication();
+    final clean = profileId.trim();
+    if (clean.isEmpty) throw BackendApiException('Profile ID is required.');
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/profile-governance/${Uri.encodeComponent(clean)}'),
+        headers: _headers,
+      ),
+      'Unable to load profile governance.',
+    );
+  }
+
+  Future<Map<String, dynamic>> updateProfileGovernance({
+    required String profileId,
+    required Map<String, dynamic> governance,
+  }) async {
+    _requireAuthentication();
+    final clean = profileId.trim();
+    if (clean.isEmpty) throw BackendApiException('Profile ID is required.');
+    return _requireSuccess(
+      await http.patch(
+        Uri.parse('$baseUrl/profile-governance/${Uri.encodeComponent(clean)}'),
+        headers: _headers,
+        body: jsonEncode({'governance': governance}),
+      ),
+      'Unable to update profile governance.',
+    );
+  }
+
+  Future<Map<String, dynamic>> updateAccountProfileAdministrationPolicy({
+    required bool allowMembersToManageOwnProfiles,
+  }) async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.patch(
+        Uri.parse('$baseUrl/profile-governance/account-policy'),
+        headers: _headers,
+        body: jsonEncode({
+          'allowMembersToManageOwnProfiles': allowMembersToManageOwnProfiles,
+        }),
+      ),
+      'Unable to update account profile administration policy.',
+    );
+  }
+
+  Future<Map<String, dynamic>> assignMemberProfiles({
+    required String memberId,
+    required List<String> profileIds,
+  }) async {
+    _requireAuthentication();
+    final cleanMember = memberId.trim();
+    if (cleanMember.isEmpty) throw BackendApiException('Member ID is required.');
+    return _requireSuccess(
+      await http.patch(
+        Uri.parse('$baseUrl/profile-governance/member/${Uri.encodeComponent(cleanMember)}'),
+        headers: _headers,
+        body: jsonEncode({'profileIds': profileIds}),
+      ),
+      'Unable to assign profiles to this member.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getServerAgentStatus({required String serverId}) async {
+    _requireAuthentication();
+    final clean = serverId.trim();
+    if (clean.isEmpty) throw BackendApiException('Server ID is required.');
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/server-agent/${Uri.encodeComponent(clean)}/status'),
+        headers: _headers,
+      ),
+      'Unable to load server agent status.',
+    );
+  }
+
+  Future<Map<String, dynamic>> createMediaPlaybackStream({
+    required String mediaId,
+    String? versionId,
+    String? serverId,
+  }) async {
+    _requireAuthentication();
+    final cleanMedia = mediaId.trim();
+    final cleanServer = serverId?.trim();
+    if (cleanMedia.isEmpty || cleanServer == null || cleanServer.isEmpty) {
+      throw BackendApiException('Media ID and server ID are required for agent playback.');
+    }
+    final body = <String, dynamic>{
+      'mediaId': cleanMedia,
+      'serverId': cleanServer,
+      if (versionId?.trim().isNotEmpty == true) 'versionId': versionId!.trim(),
+    };
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/server-agent/playback'),
+        headers: _headers,
+        body: jsonEncode(body),
+      ),
+      'Unable to create a media playback stream.',
+    );
+  }
+
+  // ==========================================================
   // SECURITY / MFA
   // ==========================================================
 
