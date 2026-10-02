@@ -20,6 +20,7 @@ class _MyTvChannel {
   final String filterText;
   final bool favoritesOnly;
   final bool isFavorite;
+  final int startTimeMinutes;
 
   const _MyTvChannel({
     required this.id,
@@ -29,21 +30,30 @@ class _MyTvChannel {
     this.filterText = '',
     this.favoritesOnly = false,
     this.isFavorite = false,
+    this.startTimeMinutes = 420,
   });
 
   factory _MyTvChannel.fromJson(Map<String, dynamic> json) => _MyTvChannel(
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? 'My Channel',
         contentTypes: json['contentTypes'] is List
-            ? (json['contentTypes'] as List).map((value) => value.toString())
-                .where(_channelContentTypes.contains).toList()
+            ? (json['contentTypes'] as List)
+                .map((value) => value.toString())
+                .where(_channelContentTypes.contains)
+                .toList()
             : _channelContentTypes,
         shuffle: json['shuffle'] is bool ? json['shuffle'] as bool : true,
         filterText: json['filterText']?.toString() ??
-            json['customQuery']?.toString() ?? json['genre']?.toString() ??
-            _legacyFilter(json['template']?.toString(), json['mode']?.toString()),
-        favoritesOnly: json['favoritesOnly'] == true || json['mode']?.toString() == 'Favorites',
+            json['customQuery']?.toString() ??
+            json['genre']?.toString() ??
+            _legacyFilter(
+                json['template']?.toString(), json['mode']?.toString()),
+        favoritesOnly: json['favoritesOnly'] == true ||
+            json['mode']?.toString() == 'Favorites',
         isFavorite: json['isFavorite'] == true,
+        startTimeMinutes: ((json['startTimeMinutes'] as num?)?.toInt() ?? 420)
+            .clamp(0, 1439)
+            .toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -54,11 +64,16 @@ class _MyTvChannel {
         'filterText': filterText,
         'favoritesOnly': favoritesOnly,
         'isFavorite': isFavorite,
+        'startTimeMinutes': startTimeMinutes,
       };
 }
 
 String _legacyFilter(String? template, String? mode) {
-  if (mode == 'Favorites' || template == null || template.startsWith('Variety')) return '';
+  if (mode == 'Favorites' ||
+      template == null ||
+      template.startsWith('Variety')) {
+    return '';
+  }
   return template;
 }
 
@@ -120,7 +135,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
           }
         }
       } catch (_) {
-        _error = 'Could not sync channel settings. Using this device’s saved settings.';
+        _error =
+            'Could not sync channel settings. Using this device’s saved settings.';
       }
     }
     data ??= _decode(prefs.getString(_preferenceKey));
@@ -186,7 +202,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Saved on this device. Server sync will retry later.'),
+              content:
+                  Text('Saved on this device. Server sync will retry later.'),
             ),
           );
         }
@@ -206,6 +223,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   filterText: item.filterText,
                   favoritesOnly: item.favoritesOnly,
                   isFavorite: !item.isFavorite,
+                  startTimeMinutes: item.startTimeMinutes,
                 )
               : item)
           .toList();
@@ -223,7 +241,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
   List<_ChannelEntry> _schedule(_MyTvChannel channel) {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
-    final terms = channel.filterText.split(',')
+    final terms = channel.filterText
+        .split(',')
         .map((term) => term.trim().toLowerCase())
         .where((term) => term.isNotEmpty)
         .toList();
@@ -232,6 +251,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       final text = fields.join(' ').toLowerCase();
       return terms.any(text.contains);
     }
+
     var eligible = controller.library
         .where((media) =>
             media.isAccessibleTo(profile) &&
@@ -253,13 +273,21 @@ class _MyTvScreenState extends State<MyTvScreen> {
         track.audioUrl?.trim().isNotEmpty == true &&
         !(profileBlocksExplicitMusic(profile) && track.explicit) &&
         !(profileBlocksMatureMusic(profile) && track.matureTheme) &&
-        (!channel.favoritesOnly || MusicFavoritesBridge.likedTracks().contains(track.id)) &&
-        matches([track.title, track.artist, track.album, ...track.genres, ...track.subgenres]));
+        (!channel.favoritesOnly ||
+            MusicFavoritesBridge.likedTracks().contains(track.id)) &&
+        matches([
+          track.title,
+          track.artist,
+          track.album,
+          ...track.genres,
+          ...track.subgenres
+        ]));
     eligible.addAll(tracks.map(_ChannelEntry.track));
-    if (eligible.length < 3) return const [];
+    if (eligible.isEmpty) return const [];
     final recent = _recentlyPlayed[channel.id] ?? const <String>[];
-    final unseen = eligible.where((entry) => !recent.take(8).contains(entry.id)).toList();
-    if (unseen.length >= 3) eligible = unseen;
+    final unseen =
+        eligible.where((entry) => !recent.take(8).contains(entry.id)).toList();
+    if (unseen.isNotEmpty) eligible = unseen;
 
     if (channel.shuffle) {
       // Keep the same guide ordering while rebuilding the screen.
@@ -270,16 +298,47 @@ class _MyTvScreenState extends State<MyTvScreen> {
 
   bool _channelAcceptsVideoType(_MyTvChannel channel, String type) {
     final normalized = type.toLowerCase();
-    final isShow = normalized.contains('tv') || normalized.contains('show') ||
-        normalized.contains('series') || normalized.contains('episode');
+    final isShow = normalized.contains('tv') ||
+        normalized.contains('show') ||
+        normalized.contains('series') ||
+        normalized.contains('episode');
     return channel.contentTypes.contains(isShow ? 'Shows' : 'Movies');
   }
 
   bool _isPlayable(MediaItem media) {
     final type = media.type.toLowerCase();
-    return type.contains('movie') || type.contains('film') ||
-        type.contains('tv') || type.contains('show') ||
-        type.contains('series') || type.contains('episode');
+    return type.contains('movie') ||
+        type.contains('film') ||
+        type.contains('tv') ||
+        type.contains('show') ||
+        type.contains('series') ||
+        type.contains('episode');
+  }
+
+  int _durationMinutes(_ChannelEntry entry) {
+    if (entry.track != null) {
+      final durationSeconds = entry.track!.duration.inSeconds;
+      return durationSeconds > 0 ? (durationSeconds + 59) ~/ 60 : 4;
+    }
+    final type = entry.media?.type.toLowerCase() ?? '';
+    final isEpisode = type.contains('tv') ||
+        type.contains('show') ||
+        type.contains('series') ||
+        type.contains('episode');
+    return isEpisode ? 30 : 120;
+  }
+
+  String _scheduleTime(
+    BuildContext context,
+    _MyTvChannel channel,
+    List<_ChannelEntry> entries,
+    int index,
+  ) {
+    final elapsed = entries
+        .take(index)
+        .fold<int>(0, (total, entry) => total + _durationMinutes(entry));
+    final minutes = (channel.startTimeMinutes + elapsed) % (24 * 60);
+    return TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60).format(context);
   }
 
   Future<void> _addChannel() async {
@@ -287,30 +346,54 @@ class _MyTvScreenState extends State<MyTvScreen> {
     final filterText = TextEditingController();
     final selectedTypes = _channelContentTypes.toSet();
     var favoritesOnly = false;
+    var startTime = const TimeOfDay(hour: 7, minute: 0);
     final added = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Create a channel'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Channel name')),
-            const Align(alignment: Alignment.centerLeft, child: Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Text('Include in channel'),
-            )),
+            TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Channel name')),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final selected = await showTimePicker(
+                    context: context,
+                    initialTime: startTime,
+                  );
+                  if (selected != null) {
+                    setDialogState(() => startTime = selected);
+                  }
+                },
+                icon: const Icon(Icons.schedule_rounded),
+                label:
+                    Text('Daily guide starts at ${startTime.format(context)}'),
+              ),
+            ),
+            const Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text('Include in channel'),
+                )),
             Wrap(
               spacing: 8,
-              children: _channelContentTypes.map((type) => FilterChip(
-                label: Text(type),
-                selected: selectedTypes.contains(type),
-                onSelected: (selected) => setDialogState(() {
-                  if (selected) {
-                    selectedTypes.add(type);
-                  } else {
-                    selectedTypes.remove(type);
-                  }
-                }),
-              )).toList(),
+              children: _channelContentTypes
+                  .map((type) => FilterChip(
+                        label: Text(type),
+                        selected: selectedTypes.contains(type),
+                        onSelected: (selected) => setDialogState(() {
+                          if (selected) {
+                            selectedTypes.add(type);
+                          } else {
+                            selectedTypes.remove(type);
+                          }
+                        }),
+                      ))
+                  .toList(),
             ),
             TextField(
               controller: filterText,
@@ -323,13 +406,19 @@ class _MyTvScreenState extends State<MyTvScreen> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Only include liked items'),
               value: favoritesOnly,
-              onChanged: (value) => setDialogState(() => favoritesOnly = value ?? false),
+              onChanged: (value) =>
+                  setDialogState(() => favoritesOnly = value ?? false),
             ),
-            const Text('Matching uses metadata already in your library. Review channel contents and media ratings before watching.'),
+            const Text(
+                'Matching uses metadata already in your library. Review channel contents and media ratings before watching.'),
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Create')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Create')),
           ],
         ),
       ),
@@ -345,6 +434,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       contentTypes: _channelContentTypes.where(selectedTypes.contains).toList(),
       filterText: channelFilter,
       favoritesOnly: favoritesOnly,
+      startTimeMinutes: startTime.hour * 60 + startTime.minute,
     );
     setState(() {
       _channels = [..._channels, channel];
@@ -356,7 +446,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
   Future<void> _play(_ChannelEntry entry, {String? channelId}) async {
     final targetChannelId = channelId ?? _selected?.id;
     if (targetChannelId != null) {
-      final recent = List<String>.from(_recentlyPlayed[targetChannelId] ?? const []);
+      final recent =
+          List<String>.from(_recentlyPlayed[targetChannelId] ?? const []);
       recent.remove(entry.id);
       recent.insert(0, entry.id);
       _recentlyPlayed[targetChannelId] = recent.take(40).toList();
@@ -366,20 +457,32 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (entry.track != null) {
       await MusicPlaybackController.instance.play(entry.track!);
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: entry.media!)));
+      Navigator.push(context,
+          MaterialPageRoute(builder: (_) => PlayerScreen(media: entry.media!)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final channel = _selected;
-    final schedule = channel == null ? const <_ChannelEntry>[] : _schedule(channel);
+    final schedule =
+        channel == null ? const <_ChannelEntry>[] : _schedule(channel);
     return Scaffold(
       appBar: AppBar(
         title: const Text('My TV'),
         actions: [
-          IconButton(onPressed: _loading ? null : () => setState(() => _showGuide = !_showGuide), tooltip: 'TV Guide', icon: Icon(_showGuide ? Icons.live_tv_rounded : Icons.calendar_view_week_rounded)),
-          IconButton(onPressed: _loading ? null : _addChannel, tooltip: 'Create channel', icon: const Icon(Icons.add)),
+          IconButton(
+              onPressed: _loading
+                  ? null
+                  : () => setState(() => _showGuide = !_showGuide),
+              tooltip: 'TV Guide',
+              icon: Icon(_showGuide
+                  ? Icons.live_tv_rounded
+                  : Icons.calendar_view_week_rounded)),
+          IconButton(
+              onPressed: _loading ? null : _addChannel,
+              tooltip: 'Create channel',
+              icon: const Icon(Icons.add)),
         ],
       ),
       body: _loading
@@ -387,37 +490,83 @@ class _MyTvScreenState extends State<MyTvScreen> {
           : ListView(
               padding: const EdgeInsets.all(18),
               children: [
-                if (_error != null) Text(_error!, style: const TextStyle(color: Colors.amber)),
-                Text(_showGuide ? 'TV Guide' : 'Your library, programmed as a channel', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                if (_error != null)
+                  Text(_error!, style: const TextStyle(color: Colors.amber)),
+                Text(
+                    _showGuide
+                        ? 'TV Guide'
+                        : 'Your library, programmed as a channel',
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
-                Text(_showGuide ? 'All channels · now, next, and later' : 'Personal programming uses media available to this profile. No commercial ads are inserted.', style: const TextStyle(color: Colors.white60)),
+                Text(
+                    _showGuide
+                        ? 'Today’s channel schedules · no commercial ads'
+                        : 'Personal programming uses media available to this profile. No commercial ads are inserted.',
+                    style: const TextStyle(color: Colors.white60)),
+                if (_showGuide)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Unavailable runtimes are estimated at 30 minutes for episodes and 2 hours for movies.',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 if (_showGuide) ..._guideCards(context),
                 if (!_showGuide) ...[
-                Row(children: [
-                Expanded(child: DropdownButtonFormField<String>(
-                  initialValue: _selectedChannelId,
-                  items: _channels.map((item) => DropdownMenuItem(value: item.id, child: Text(item.name))).toList(),
-                  onChanged: (value) => setState(() => _selectedChannelId = value),
-                  decoration: const InputDecoration(labelText: 'Channel'),
-                )),
-                if (channel != null) IconButton(
-                  tooltip: channel.isFavorite ? 'Remove favorite channel' : 'Favorite channel',
-                  onPressed: () => _toggleFavorite(channel),
-                  icon: Icon(channel.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded),
-                  color: channel.isFavorite ? Colors.amber : null,
-                ),
-                ]),
-                const SizedBox(height: 18),
-                if (schedule.isEmpty)
-                  const Card(child: ListTile(leading: Icon(Icons.tv_off_outlined), title: Text('No matching library items yet'), subtitle: Text('Add matching movies, shows, episodes, or music to this profile library.')))
-                else ...[
-                  _scheduleCard(context, 'Now', schedule[0], 'Play now', channelId: channel?.id),
-                  for (var i = 1; i < schedule.length; i++)
-                      _scheduleCard(context, i == 1 ? 'Next' : 'Later', schedule[i], null, channelId: channel?.id),
-                  const SizedBox(height: 12),
-                  Text('${channel?.name ?? 'Channel'} · ${schedule.length} items queued', style: const TextStyle(color: Colors.white54)),
-                ],
+                  Row(children: [
+                    Expanded(
+                        child: DropdownButtonFormField<String>(
+                      initialValue: _selectedChannelId,
+                      items: _channels
+                          .map((item) => DropdownMenuItem(
+                              value: item.id, child: Text(item.name)))
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _selectedChannelId = value),
+                      decoration: const InputDecoration(labelText: 'Channel'),
+                    )),
+                    if (channel != null)
+                      IconButton(
+                        tooltip: channel.isFavorite
+                            ? 'Remove favorite channel'
+                            : 'Favorite channel',
+                        onPressed: () => _toggleFavorite(channel),
+                        icon: Icon(channel.isFavorite
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded),
+                        color: channel.isFavorite ? Colors.amber : null,
+                      ),
+                  ]),
+                  const SizedBox(height: 18),
+                  if (schedule.isEmpty)
+                    const Card(
+                        child: ListTile(
+                            leading: Icon(Icons.tv_off_outlined),
+                            title: Text('No matching library items yet'),
+                            subtitle: Text(
+                                'Add matching movies, shows, episodes, or music to this profile library.')))
+                  else ...[
+                    _scheduleCard(
+                      context,
+                      '${_scheduleTime(context, channel!, schedule, 0)} · Now',
+                      schedule[0],
+                      'Play now',
+                      channelId: channel.id,
+                    ),
+                    for (var i = 1; i < schedule.length; i++)
+                      _scheduleCard(
+                        context,
+                        _scheduleTime(context, channel, schedule, i),
+                        schedule[i],
+                        null,
+                        channelId: channel.id,
+                      ),
+                    const SizedBox(height: 12),
+                    Text('${channel.name} · ${schedule.length} items queued',
+                        style: const TextStyle(color: Colors.white54)),
+                  ],
                 ],
               ],
             ),
@@ -425,8 +574,9 @@ class _MyTvScreenState extends State<MyTvScreen> {
   }
 
   List<Widget> _guideCards(BuildContext context) => (_channels.toList()
-        ..sort((a, b) => (b.isFavorite ? 1 : 0).compareTo(a.isFavorite ? 1 : 0)))
-      .map((channel) {
+            ..sort((a, b) =>
+                (b.isFavorite ? 1 : 0).compareTo(a.isFavorite ? 1 : 0)))
+          .map((channel) {
         final entries = _schedule(channel);
         return Card(
           child: Padding(
@@ -435,33 +585,60 @@ class _MyTvScreenState extends State<MyTvScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Expanded(child: Text(channel.name, style: Theme.of(context).textTheme.titleLarge)),
+                  Expanded(
+                      child: Text(channel.name,
+                          style: Theme.of(context).textTheme.titleLarge)),
                   IconButton(
-                    tooltip: channel.isFavorite ? 'Remove favorite channel' : 'Favorite channel',
+                    tooltip: channel.isFavorite
+                        ? 'Remove favorite channel'
+                        : 'Favorite channel',
                     onPressed: () => _toggleFavorite(channel),
-                    icon: Icon(channel.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded),
+                    icon: Icon(channel.isFavorite
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded),
                     color: channel.isFavorite ? Colors.amber : null,
                   ),
                 ]),
                 if (entries.isEmpty)
-                  const ListTile(title: Text('No matching items'), subtitle: Text('Add matching items to this profile library.'))
+                  const ListTile(
+                      title: Text('No matching items'),
+                      subtitle:
+                          Text('Add matching items to this profile library.'))
                 else
-                  for (var i = 0; i < min(entries.length, 3); i++)
-                    _scheduleCard(context, i == 0 ? 'Now' : i == 1 ? 'Next' : 'Later', entries[i], null, channelId: channel.id),
+                  for (var i = 0; i < min(entries.length, 12); i++)
+                    _scheduleCard(
+                      context,
+                      _scheduleTime(context, channel, entries, i),
+                      entries[i],
+                      null,
+                      channelId: channel.id,
+                    ),
               ],
             ),
           ),
         );
       }).toList();
 
-  Widget _scheduleCard(BuildContext context, String slot, _ChannelEntry entry, String? action, {String? channelId}) => Card(
+  Widget _scheduleCard(BuildContext context, String slot, _ChannelEntry entry,
+          String? action,
+          {String? channelId}) =>
+      Card(
         child: ListTile(
-          leading: CircleAvatar(child: Icon(entry.track == null ? Icons.movie_outlined : Icons.music_note_rounded)),
-          title: Text('$slot · ${entry.title}', maxLines: 1, overflow: TextOverflow.ellipsis),
+          leading: CircleAvatar(
+              child: Icon(entry.track == null
+                  ? Icons.movie_outlined
+                  : Icons.music_note_rounded)),
+          title: Text('$slot · ${entry.title}',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(entry.subtitle),
           trailing: action == null
-              ? IconButton(tooltip: 'Play now', onPressed: () => _play(entry, channelId: channelId), icon: const Icon(Icons.play_arrow_rounded))
-              : FilledButton(onPressed: () => _play(entry, channelId: channelId), child: Text(action)),
+              ? IconButton(
+                  tooltip: 'Play now',
+                  onPressed: () => _play(entry, channelId: channelId),
+                  icon: const Icon(Icons.play_arrow_rounded))
+              : FilledButton(
+                  onPressed: () => _play(entry, channelId: channelId),
+                  child: Text(action)),
           onTap: () => _play(entry, channelId: channelId),
         ),
       );

@@ -269,7 +269,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
             if (destination == 'community' && communityId.text.trim().isEmpty) continue;
             try {
               final published = await AppController.instance.backendApi.publishReview(
-                reviewId: reviewId!,
+                reviewId: reviewId,
                 mediaId: media.id,
                 profileId: profile.id,
                 destination: destination,

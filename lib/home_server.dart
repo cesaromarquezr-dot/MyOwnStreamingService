@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:country_picker/country_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'app_core.dart';
 import 'storage_dashboard.dart';
 import 'music.dart';
@@ -592,13 +594,23 @@ class _InviteMemberDialog extends StatefulWidget {
 
 class _InviteMemberDialogState extends State<_InviteMemberDialog> {
   final emailController = TextEditingController();
+  final phoneController = TextEditingController();
   String role = 'member';
+  String deliveryMethod = 'email';
+  String callingCode = '1';
+  String phoneCountry = 'United States';
+  String invitationEmail = '';
+  String invitationPhone = '';
   bool submitting = false;
   String? invitationLink;
   DateTime? expiresAt;
 
   @override
-  void dispose() { emailController.dispose(); super.dispose(); }
+  void dispose() {
+    emailController.dispose();
+    phoneController.dispose();
+    super.dispose();
+  }
 
   /// Creates a seven-day invitation. Supabase stores only the SHA-256 token hash.
   Future<void> _create() async {
@@ -607,9 +619,21 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Enter a valid member email address.')));
       return;
     }
+    final phoneDigits = phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (deliveryMethod == 'sms' &&
+        (phoneDigits.length < 7 || phoneDigits.length > 15)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid phone number for SMS.')),
+      );
+      return;
+    }
     setState(() => submitting = true);
     try {
-      final result = await AppController.instance.backendApi.inviteAccountMember(email: email, role: role);
+      final result = await AppController.instance.backendApi.inviteAccountMember(
+        email: email,
+        role: role,
+        sendEmail: deliveryMethod == 'email',
+      );
       final token = result['invitationToken']?.toString() ?? '';
       if (token.isEmpty) throw Exception('The server did not return an invitation token.');
 
@@ -621,9 +645,14 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       if (!mounted) return;
       setState(() {
         invitationLink = link;
+        invitationEmail = email;
+        invitationPhone = deliveryMethod == 'sms'
+            ? '+$callingCode$phoneDigits'
+            : '';
         expiresAt = DateTime.now().toUtc().add(const Duration(days: 7));
         submitting = false;
       });
+      if (deliveryMethod == 'sms') await _openSmsComposer();
     } catch (e) {
       if (!mounted) return;
       setState(() => submitting = false);
@@ -639,6 +668,34 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Invitation link copied.')));
   }
 
+  Future<void> _openSmsComposer() async {
+    if (invitationLink == null || invitationPhone.isEmpty) return;
+    final uri = Uri(
+      scheme: 'sms',
+      path: invitationPhone,
+      queryParameters: {
+        'body':
+            'You are invited to join a Streaming Service account. Open this secure link, then sign in using $invitationEmail: $invitationLink',
+      },
+    );
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the SMS app. Copy the invitation link instead.'),
+          ),
+        );
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open the SMS app: ${error.message ?? error.code}')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -651,6 +708,67 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                 const SizedBox(height: 16),
                 TextField(controller: emailController, keyboardType: TextInputType.emailAddress, enabled: !submitting, decoration: InputDecoration(labelText: tr('Member email'), prefixIcon: Icon(Icons.email_outlined))),
                 const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Email'),
+                        selected: deliveryMethod == 'email',
+                        onSelected: submitting
+                            ? null
+                            : (_) => setState(() => deliveryMethod = 'email'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('SMS'),
+                        selected: deliveryMethod == 'sms',
+                        onSelected: submitting
+                            ? null
+                            : (_) => setState(() => deliveryMethod = 'sms'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (deliveryMethod == 'sms') ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: submitting
+                            ? null
+                            : () => showCountryPicker(
+                                  context: context,
+                                  showPhoneCode: true,
+                                  favorite: const ['US', 'MX', 'PE', 'AR'],
+                                  onSelect: (country) => setState(() {
+                                    callingCode = country.phoneCode;
+                                    phoneCountry = country.name;
+                                  }),
+                                ),
+                        child: Text('+$callingCode · $phoneCountry'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: phoneController,
+                          enabled: !submitting,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            labelText: 'Phone number',
+                            prefixIcon: Icon(Icons.phone_outlined),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const UniversalText(
+                    'The secure link is prepared in your SMS app. The member still signs in with the email address above.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String>(initialValue: role, decoration: InputDecoration(labelText: tr('Role')), items: const [DropdownMenuItem(value: 'member', child: UniversalText('Member')), DropdownMenuItem(value: 'admin', child: UniversalText('Admin'))], onChanged: submitting ? null : (value) => setState(() => role = value ?? 'member')),
                 const SizedBox(height: 12),
                 const UniversalText('The invitation expires after 7 days. Only a SHA-256 hash of the token is stored in the database.', style: TextStyle(color: Colors.white54, fontSize: 12)),
@@ -660,10 +778,15 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                 const SizedBox(height: 10),
                 const UniversalText('Invitation created', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
-                UniversalText('Send this link to ${emailController.text.trim()}. It expires in 7 days.'),
+                UniversalText(invitationPhone.isEmpty
+                    ? 'Send this link to $invitationEmail. It expires in 7 days.'
+                    : 'Send this link to $invitationPhone. The member must sign in with $invitationEmail. It expires in 7 days.'),
                 const SizedBox(height: 14),
                 SelectableText(invitationLink!, style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 14),
+                if (invitationPhone.isNotEmpty)
+                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _openSmsComposer, icon: const Icon(Icons.sms_outlined), label: const UniversalText('OPEN SMS WITH INVITE LINK'))),
+                if (invitationPhone.isNotEmpty) const SizedBox(height: 8),
                 SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _copy, icon: const Icon(Icons.copy_rounded), label: const UniversalText('COPY INVITATION LINK'))),
                 const SizedBox(height: 8),
                 const UniversalText('The recipient must use the invited email. The link grants account membership only; it does not reveal a password or server credentials.', style: TextStyle(color: Colors.white54, fontSize: 12)),

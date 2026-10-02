@@ -322,6 +322,7 @@ class BackendApi {
   Future<Map<String, dynamic>> inviteAccountMember({
     required String email,
     String role = 'member',
+    bool sendEmail = true,
   }) async {
     _requireAuthentication();
 
@@ -331,6 +332,7 @@ class BackendApi {
       body: jsonEncode({
         'email': email.trim().toLowerCase(),
         'role': role,
+        'sendEmail': sendEmail,
       }),
     );
 
@@ -2861,7 +2863,7 @@ class BackendApi {
     if (cleanCountry.isEmpty || cleanCity.isEmpty) {
       throw BackendApiException('Country code and city are required.');
     }
-    final uri = Uri.parse('$baseUrl/worldwide/postal-codes').replace(
+    final uri = Uri.parse('$baseUrl/location/postal-codes').replace(
       queryParameters: {
         'country': cleanCountry,
         'city': cleanCity,
@@ -2871,6 +2873,47 @@ class BackendApi {
       await http.get(uri, headers: _headers),
       'Unable to retrieve postal codes.',
     );
+  }
+
+  Future<List<Map<String, dynamic>>> searchAddressSuggestions(
+    String query,
+  ) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.length < 3) return const [];
+    final uri = Uri.parse('$baseUrl/location/address-suggestions').replace(
+      queryParameters: {'q': cleanQuery},
+    );
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to search addresses.',
+    );
+    return data['suggestions'] is List
+        ? (data['suggestions'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false)
+        : const [];
+  }
+
+  Future<Map<String, dynamic>> reverseGeocode({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final uri = Uri.parse('$baseUrl/location/reverse').replace(
+      queryParameters: {
+        'lat': '$latitude',
+        'lon': '$longitude',
+      },
+    );
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to determine the current location.',
+    );
+    final location = data['location'];
+    if (location is! Map) {
+      throw BackendApiException('The location provider returned no address.');
+    }
+    return Map<String, dynamic>.from(location);
   }
 
   // ==========================================================

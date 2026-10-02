@@ -119,7 +119,18 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
 
   void _open(BuildContext? context, Widget page) {
     if (context == null) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    final pageId = switch (page) {
+      MoviesScreen() => 'movies',
+      SeriesScreen() => 'series',
+      _ => 'movies',
+    };
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: RouteSettings(name: '/app/page/$pageId'),
+        builder: (_) => page,
+      ),
+    );
   }
 
   void _showItems(BuildContext context, String title, List<MediaItem> items) {

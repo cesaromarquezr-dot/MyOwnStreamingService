@@ -5,12 +5,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
-import 'backend_api.dart';
 import 'localization.dart';
 
 class RadioScreen extends StatefulWidget {
@@ -32,6 +32,7 @@ class _RadioScreenState extends State<RadioScreen> {
   Map<String, dynamic>? _selected;
   VideoPlayerController? _player;
   bool _loading = false;
+  bool _gettingLocation = false;
   bool _playing = false;
   String _band = 'All';
   String? _error;
@@ -53,9 +54,7 @@ class _RadioScreenState extends State<RadioScreen> {
     _recent.addAll(recentJson.map((value) => {'name': value}));
     if (mounted) {
       setState(() {});
-      if (_country.text.trim().isNotEmpty || _city.text.trim().isNotEmpty) {
-        _loadStations();
-      }
+      _discoverNearbyStations();
     }
   }
 
@@ -98,6 +97,64 @@ class _RadioScreenState extends State<RadioScreen> {
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _discoverNearbyStations() async {
+    if (_gettingLocation) return;
+    setState(() {
+      _gettingLocation = true;
+      _error = null;
+    });
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError('Turn on device location to find nearby radio stations.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw StateError('Allow location access to discover local radio stations.');
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw StateError('Location access is disabled for this app. Enable it in device settings.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+      final location = await AppController.instance.backendApi.reverseGeocode(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      final countryCode = location['countryCode']?.toString().trim() ?? '';
+      final city = location['city']?.toString().trim() ?? '';
+      if (countryCode.isEmpty || city.isEmpty) {
+        throw StateError('A nearby city could not be determined from your location.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _country.text = countryCode;
+        _state.text = location['state']?.toString().trim() ?? '';
+        _city.text = city;
+      });
+      await _saveLocalState();
+      await _loadStations();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = error
+              .toString()
+              .replaceFirst('Bad state: ', '')
+              .replaceFirst('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _gettingLocation = false);
     }
   }
 
@@ -166,13 +223,13 @@ class _RadioScreenState extends State<RadioScreen> {
         actions: [
           IconButton(
             tooltip: tr('Listening location'),
-            onPressed: _showLocationDialog,
+            onPressed: _gettingLocation ? null : _discoverNearbyStations,
             icon: const Icon(Icons.location_on_outlined),
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadStations,
+        onRefresh: _discoverNearbyStations,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
@@ -181,8 +238,8 @@ class _RadioScreenState extends State<RadioScreen> {
               country: _country.text,
               state: _state.text,
               city: _city.text,
-              onEdit: _showLocationDialog,
-              onDiscover: _loadStations,
+              locating: _gettingLocation,
+              onDiscover: _discoverNearbyStations,
             ),
             const SizedBox(height: 12),
             Card(
@@ -224,7 +281,11 @@ class _RadioScreenState extends State<RadioScreen> {
                 ]),
               ),
             ),
-            if (_loading) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
+            if (_loading || _gettingLocation)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: LinearProgressIndicator(),
+              ),
             if (_error != null)
               Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(_error!, style: const TextStyle(color: Colors.amber)))),
             if (active != null) ...[
@@ -323,42 +384,6 @@ class _RadioScreenState extends State<RadioScreen> {
     );
   }
 
-  Future<void> _showLocationDialog() async {
-    final country = TextEditingController(text: _country.text);
-    final state = TextEditingController(text: _state.text);
-    final city = TextEditingController(text: _city.text);
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const UniversalText('Listening location'),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: country, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Country code', hintText: 'US / MX / GB')),
-            TextField(controller: state, decoration: const InputDecoration(labelText: 'State / region')),
-            TextField(controller: city, decoration: const InputDecoration(labelText: 'City')),
-            const SizedBox(height: 10),
-            const Text('Radio availability follows the listening location you choose. You can change it while traveling.', style: TextStyle(color: Colors.white60)),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save & Discover')),
-        ],
-      ),
-    );
-    if (save != true) {
-      country.dispose(); state.dispose(); city.dispose();
-      return;
-    }
-    setState(() {
-      _country.text = country.text.trim().toUpperCase();
-      _state.text = state.text.trim();
-      _city.text = city.text.trim();
-    });
-    country.dispose(); state.dispose(); city.dispose();
-    await _loadStations();
-  }
-
   @override
   void dispose() {
     _player?.dispose();
@@ -374,10 +399,16 @@ class _LocationCard extends StatelessWidget {
   final String country;
   final String state;
   final String city;
-  final VoidCallback onEdit;
+  final bool locating;
   final VoidCallback onDiscover;
 
-  const _LocationCard({required this.country, required this.state, required this.city, required this.onEdit, required this.onDiscover});
+  const _LocationCard({
+    required this.country,
+    required this.state,
+    required this.city,
+    required this.locating,
+    required this.onDiscover,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -385,12 +416,20 @@ class _LocationCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: const Icon(Icons.location_searching_rounded),
-        title: UniversalText(location.isEmpty ? 'Choose your current listening location' : location),
-        subtitle: const UniversalText('AM, FM and internet stations from public directories plus verified broadcaster listings'),
-        trailing: Wrap(children: [
-          IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_location_alt_rounded)),
-          IconButton(onPressed: onDiscover, icon: const Icon(Icons.refresh_rounded)),
-        ]),
+        title: UniversalText(location.isEmpty ? 'Finding your current location…' : location),
+        subtitle: const UniversalText(
+          'Device location resolves your city with OpenStreetMap. Only your country, region, and city are saved on this device.',
+        ),
+        trailing: IconButton(
+          tooltip: 'Update my location',
+          onPressed: locating ? null : onDiscover,
+          icon: locating
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.my_location_rounded),
+        ),
       ),
     );
   }

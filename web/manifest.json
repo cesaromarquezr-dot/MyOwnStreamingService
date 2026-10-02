@@ -1,6 +1,6 @@
 {
-    "name": "netflix",
-    "short_name": "netflix",
+    "name": "My Personal Streaming Service",
+    "short_name": "My Streaming Service",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

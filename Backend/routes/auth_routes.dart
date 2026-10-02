@@ -397,11 +397,13 @@ class AuthRoutes {
 
     final role =
         body['role']?.toString().trim().toLowerCase() ?? 'member';
+    final sendEmail = body['sendEmail'] != false;
 
     final token = await authService.inviteMember(
       account: account,
       email: email,
       role: role,
+      sendEmail: sendEmail,
     );
 
     await _sendJson(
@@ -409,7 +411,9 @@ class AuthRoutes {
       statusCode: HttpStatus.created,
       body: {
         'success': true,
-        'message': 'Invitation created.',
+        'message': sendEmail
+            ? 'Invitation created.'
+            : 'Invitation created for sharing by secure link.',
         // Development clients can use the token to complete the flow when
         // SMTP is not configured. Persistent storage must contain only the
         // token hash.

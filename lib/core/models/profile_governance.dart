@@ -1,9 +1,9 @@
-/// Profile governance primitives shared by profile administration UI/API.
-///
-/// The account owner remains the authoritative administrator. A member can
-/// manage only their own profile when the account enables self-management and
-/// the profile explicitly permits it. Rating restrictions are represented as
-/// policy data rather than being inferred from profile names.
+// Profile governance primitives shared by profile administration UI/API.
+//
+// The account owner remains the authoritative administrator. A member can
+// manage only their own profile when the account enables self-management and
+// the profile explicitly permits it. Rating restrictions are represented as
+// policy data rather than being inferred from profile names.
 
 enum ProfileContentLevel {
   littleKids,

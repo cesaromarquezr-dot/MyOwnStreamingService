@@ -25,6 +25,7 @@ import '../models/account.dart';
 import '../models/subscription.dart';
 import '../services/payment_service.dart';
 import '../services/payment_method_service.dart';
+import '../services/payment_provider_service.dart';
 import '../supabase_store.dart';
 
 class PaymentRoutes {
@@ -39,6 +40,7 @@ class PaymentRoutes {
   final PaymentService paymentService;
   final Database database;
   final PaymentMethodService paymentMethods;
+  final PaymentProviderService providerService;
   final Map<String, List<Map<String, dynamic>>> _memoryDestinations = {};
 
   PaymentRoutes({
@@ -46,6 +48,7 @@ class PaymentRoutes {
     required this.paymentService,
     required this.database,
     required this.paymentMethods,
+    required this.providerService,
   });
 
   /// Handles all payment routes.
@@ -112,6 +115,24 @@ class PaymentRoutes {
       if (request.method == 'POST' &&
           path == '$_paymentPrefix/create') {
         await _createPayment(request, account);
+        return;
+      }
+
+      if (request.method == 'GET' &&
+          path == '$_paymentPrefix/providers') {
+        await _sendJson(
+          request.response,
+          HttpStatus.ok,
+          {
+            'success': true,
+            'providers': providerService
+                .capabilities()
+                .map((provider) => provider.toJson())
+                .toList(),
+            'anyRealProviderConfigured':
+                providerService.anyRealProviderConfigured,
+          },
+        );
         return;
       }
 

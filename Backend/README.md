@@ -843,3 +843,19 @@ The Flutter client never receives these credentials. Provider ratings are stored
 ## Master Product Architecture
 
 See `../docs/MASTER_PRODUCT_ARCHITECTURE.md`. The backend is organized around domain services, authenticated capabilities, long-running jobs, events, profile governance, and a local Media Server Agent boundary for NAS access.
+
+## External provider configuration
+
+Optional production integrations are backend-only:
+
+- `PAYPAL_CLIENT_ID`
+- `PAYPAL_CLIENT_SECRET`
+- `PAYPAL_BASE_URL` (sandbox default)
+- `APPLE_PAY_MERCHANT_ID`
+- `MERCADO_PAGO_ACCESS_TOKEN`
+- `TMDB_API_TOKEN`
+- `OMDB_API_KEY`
+- `LASTFM_API_KEY`
+- `MUSIC_METADATA_USER_AGENT`
+
+Never place these secrets in Flutter, Supabase client configuration, or source control. Apple Pay also requires the platform's merchant-validation/client setup; the backend exposes capability state but does not accept raw payment credentials.

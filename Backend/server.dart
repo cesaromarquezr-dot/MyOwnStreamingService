@@ -107,8 +107,6 @@ import 'services/shop_service.dart';
 import 'services/payment_method_service.dart';
 import 'services/profile_governance_service.dart';
 import 'services/media_server_agent_service.dart';
-import 'services/event_bus_service.dart';
-import 'services/job_service.dart';
 import 'services/library_release_service.dart';
 import 'services/payment_provider_service.dart';
 
@@ -218,8 +216,6 @@ final physicalItemRoutes = PhysicalItemRoutes(
 
 final profileGovernanceService = ProfileGovernanceService(database);
 final mediaServerAgentService = MediaServerAgentService();
-final eventBusService = EventBusService();
-final jobService = JobService();
 
 final profileGovernanceRoutes = ProfileGovernanceRoutes(
   authentication: authentication,
@@ -374,7 +370,6 @@ paymentService: paymentService,
 
 final libraryRoutes = LibraryRoutes(
 authentication: authentication,
-  releaseService: libraryReleaseService,
 );
 
 final transcodingService = TranscodingService(
@@ -478,6 +473,7 @@ remoteAccessRoutes,
 storageRoutes,
 platformRoutes,
 libraryRoutes,
+libraryReleaseRoutes,
 playbackRoutes,
 legalRoutes,
 reviewRoutes,
@@ -524,6 +520,7 @@ RemoteAccessRoutes remoteAccessRoutes,
 StorageRoutes storageRoutes,
 PlatformRoutes platformRoutes,
 LibraryRoutes libraryRoutes,
+LibraryReleaseRoutes libraryReleaseRoutes,
 PlaybackRoutes playbackRoutes,
 LegalRoutes legalRoutes,
 ReviewRoutes reviewRoutes,
@@ -1046,17 +1043,13 @@ if (!AppConfig.backendTlsEnabled) {
 return null;
 }
 
-final defaultCertificatePath = Platform.script
-.resolve(
-'certs/127.0.0.1+2.pem',
-)
-.toFilePath();
-
-final defaultPrivateKeyPath = Platform.script
-.resolve(
-'certs/127.0.0.1+2-key.pem',
-)
-.toFilePath();
+final backendDirectory = Directory.current.path;
+final defaultCertificatePath = '$backendDirectory'
+    '${Platform.pathSeparator}certs'
+    '${Platform.pathSeparator}127.0.0.1+2.pem';
+final defaultPrivateKeyPath = '$backendDirectory'
+    '${Platform.pathSeparator}certs'
+    '${Platform.pathSeparator}127.0.0.1+2-key.pem';
 
 final configuredCertificate =
 Platform.environment['TLS_CERTIFICATE_PATH']?.trim();

@@ -573,5 +573,25 @@ Widget _sectionTitle(String title) => Padding(
     );
 
 void _push(BuildContext context, Widget page) {
-  Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  final pageId = switch (page) {
+    MoviesScreen() => 'movies',
+    SeriesScreen() => 'series',
+    MusicScreen() => 'music',
+    LibraryActorsScreen() => 'actors',
+    RadioScreen() => 'radio',
+    CollectionsPanel() => 'collections',
+    MyTvScreen() => 'my-tv',
+    FavoritesScreen() => 'favorites',
+    ComingSoonScreen() => 'coming-soon',
+    SmartSearchScreen() => 'search',
+    ReviewsHubScreen() => 'reviews',
+    _ => null,
+  };
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      settings: pageId == null ? null : RouteSettings(name: '/app/page/$pageId'),
+      builder: (_) => page,
+    ),
+  );
 }

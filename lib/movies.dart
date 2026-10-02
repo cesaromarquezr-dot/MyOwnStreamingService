@@ -50,7 +50,8 @@ class _MoviesScreenState extends State<MoviesScreen>
     Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 450),
+      settings: const RouteSettings(name: '/app/details'),
+      transitionDuration: const Duration(milliseconds: 450),
         reverseTransitionDuration: const Duration(milliseconds: 300),
         pageBuilder: (
           context,
@@ -112,7 +113,7 @@ class _MoviesScreenState extends State<MoviesScreen>
         filteredMovies.isNotEmpty ? filteredMovies.first : null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF050505),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
           const _MoviesBackground(),

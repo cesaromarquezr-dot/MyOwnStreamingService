@@ -13,6 +13,12 @@ if ([string]::IsNullOrWhiteSpace($key)) {
 
 $env:SUPABASE_URL = $url
 $env:SUPABASE_SERVICE_ROLE_KEY = $key
+if ([string]::IsNullOrWhiteSpace($env:TLS_CERTIFICATE_PATH)) {
+    $env:TLS_CERTIFICATE_PATH = Join-Path $PSScriptRoot "certs\127.0.0.1+2.pem"
+}
+if ([string]::IsNullOrWhiteSpace($env:TLS_PRIVATE_KEY_PATH)) {
+    $env:TLS_PRIVATE_KEY_PATH = Join-Path $PSScriptRoot "certs\127.0.0.1+2-key.pem"
+}
 
 Push-Location $PSScriptRoot
 try {

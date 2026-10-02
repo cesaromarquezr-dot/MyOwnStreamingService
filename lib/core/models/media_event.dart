@@ -1,8 +1,8 @@
-/// Events/occasions provide many-to-many context for media and themes.
-///
-/// A media item can belong to multiple occasions at the same time. For
-/// example, The Nightmare Before Christmas can be associated with both
-/// Halloween and Christmas without creating duplicate media records.
+// Events/occasions provide many-to-many context for media and themes.
+//
+// A media item can belong to multiple occasions at the same time. For
+// example, The Nightmare Before Christmas can be associated with both
+// Halloween and Christmas without creating duplicate media records.
 
 enum MediaEventType {
   season,

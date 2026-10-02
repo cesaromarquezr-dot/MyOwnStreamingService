@@ -5,6 +5,8 @@
 // coverage differ by country; the backend can optionally resolve city postal
 // codes from a configured postal provider.
 
+import 'dart:async';
+
 import 'package:countrify/countrify.dart';
 import 'package:flutter/material.dart';
 
@@ -113,6 +115,13 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
 
   List<String> _postalResults = <String>[];
   bool _loadingPostalCodes = false;
+  late final TextEditingController _addressSearch;
+  Timer? _addressDebounce;
+  List<Map<String, dynamic>> _addressSuggestions = <Map<String, dynamic>>[];
+  bool _loadingAddressSuggestions = false;
+  String? _addressSearchError;
+  String? _suggestedCity;
+  String? _suggestedState;
 
   bool _initializationStarted = false;
 
@@ -133,6 +142,9 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
     _postal = TextEditingController(
       text: initial?.postalCode ?? '',
     );
+    _addressSearch = TextEditingController(
+      text: initial?.addressLine1 ?? '',
+    );
 
     _line1.addListener(_emit);
     _line2.addListener(_emit);
@@ -151,6 +163,8 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
     _line1.dispose();
     _line2.dispose();
     _postal.dispose();
+    _addressDebounce?.cancel();
+    _addressSearch.dispose();
     super.dispose();
   }
 
@@ -183,6 +197,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
       await _loadStates(
         matchingCountry,
         desiredStateName: initial.state,
+        desiredCityName: initial.city,
       );
     } catch (_) {
       // Initial address restoration is best-effort. The user can still
@@ -193,6 +208,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
   Future<void> _loadStates(
     Country country, {
     String? desiredStateName,
+    String? desiredCityName,
   }) async {
     if (!mounted) {
       return;
@@ -243,7 +259,8 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
       if (restoredState != null) {
         await _loadCities(
           restoredState,
-          desiredCityName: widget.initialAddress?.city,
+          desiredCityName:
+              desiredCityName ?? widget.initialAddress?.city,
         );
       } else {
         _emit();
@@ -343,7 +360,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
 
   Future<void> _lookupPostalCodes() async {
     final country = _country;
-    final city = _city;
+    final city = _city?.name ?? _suggestedCity;
 
     if (country == null || city == null) {
       return;
@@ -357,7 +374,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
       final response =
           await AppController.instance.backendApi.getPostalCodes(
         country.alpha2Code,
-        city.name,
+        city,
       );
       final rawPostalCodes = response['postalCodes'];
       final results = rawPostalCodes is List
@@ -405,6 +422,78 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
     }
   }
 
+  void _onAddressQueryChanged(String value) {
+    _addressDebounce?.cancel();
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _addressSuggestions = <Map<String, dynamic>>[];
+        _addressSearchError = null;
+        _loadingAddressSuggestions = false;
+      });
+      return;
+    }
+    _addressDebounce = Timer(const Duration(milliseconds: 700), () {
+      _searchAddresses(query);
+    });
+  }
+
+  Future<void> _searchAddresses(String query) async {
+    setState(() {
+      _loadingAddressSuggestions = true;
+      _addressSearchError = null;
+    });
+    try {
+      final suggestions = await AppController.instance.backendApi
+          .searchAddressSuggestions(query);
+      if (!mounted || _addressSearch.text.trim() != query) return;
+      setState(() {
+        _addressSuggestions = suggestions;
+        _loadingAddressSuggestions = false;
+      });
+    } catch (error) {
+      if (!mounted || _addressSearch.text.trim() != query) return;
+      setState(() {
+        _addressSuggestions = <Map<String, dynamic>>[];
+        _addressSearchError = error
+            .toString()
+            .replaceFirst('BackendApiException: ', '');
+        _loadingAddressSuggestions = false;
+      });
+    }
+  }
+
+  Future<void> _selectAddress(Map<String, dynamic> suggestion) async {
+    final countryCode =
+        suggestion['countryCode']?.toString().trim().toUpperCase() ?? '';
+    final country = CountryUtils.getAllCountries().where(
+      (candidate) =>
+          candidate.alpha2Code.toUpperCase() == countryCode,
+    );
+    final selectedCountry = country.isEmpty ? null : country.first;
+
+    _addressDebounce?.cancel();
+    _line1.text = suggestion['addressLine1']?.toString() ?? '';
+    _postal.text = suggestion['postalCode']?.toString() ?? '';
+    _suggestedCity = suggestion['city']?.toString().trim();
+    _suggestedState = suggestion['state']?.toString().trim();
+    _addressSearch.text = suggestion['label']?.toString() ?? '';
+    setState(() {
+      _addressSuggestions = <Map<String, dynamic>>[];
+      _addressSearchError = null;
+    });
+
+    if (selectedCountry != null) {
+      await _loadStates(
+        selectedCountry,
+        desiredStateName: _suggestedState,
+        desiredCityName: _suggestedCity,
+      );
+    } else {
+      _emit();
+    }
+  }
+
   void _emit() {
     final country = _country;
 
@@ -417,9 +506,9 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
       WorldwideAddress(
         country: country.name,
         countryCode: country.alpha2Code,
-        state: _state?.name,
+        state: _state?.name ?? _suggestedState,
         stateCode: _state?.iso2,
-        city: _city?.name,
+        city: _city?.name ?? _suggestedCity,
         postalCode: _postal.text.trim(),
         addressLine1: _line1.text.trim(),
         addressLine2: _line2.text.trim(),
@@ -429,6 +518,8 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
 
   void _handleCountryChanged(Country? country) {
     if (country == null) {
+      _suggestedState = null;
+      _suggestedCity = null;
       setState(() {
         _country = null;
         _state = null;
@@ -442,10 +533,14 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
       return;
     }
 
+    _suggestedState = null;
+    _suggestedCity = null;
     _loadStates(country);
   }
 
   void _handleStateChanged(CountryState? state) {
+    _suggestedState = null;
+    _suggestedCity = null;
     if (state == null) {
       setState(() {
         _state = null;
@@ -462,6 +557,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
   }
 
   void _handleCityChanged(City? city) {
+    _suggestedCity = null;
     setState(() {
       _city = city;
       _postalResults = <String>[];
@@ -545,6 +641,53 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        TextField(
+          controller: _addressSearch,
+          onChanged: _onAddressQueryChanged,
+          textInputAction: TextInputAction.search,
+          decoration: _decoration('Find ZIP/postal code of the city')
+              .copyWith(
+            prefixIcon: const Icon(Icons.search_rounded),
+            helperText: 'Address suggestions are provided by OpenStreetMap Photon.',
+            suffixIcon: _loadingAddressSuggestions
+                ? const Padding(
+                    padding: EdgeInsets.all(13),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+          ),
+        ),
+        if (_addressSuggestions.isNotEmpty)
+          Card(
+            margin: const EdgeInsets.only(top: 4, bottom: 8),
+            child: Column(
+              children: _addressSuggestions
+                  .map(
+                    (suggestion) => ListTile(
+                      leading: const Icon(Icons.location_on_outlined),
+                      title: Text(
+                        suggestion['label']?.toString() ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _selectAddress(suggestion),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        if (_addressSearchError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
+            child: Text(
+              _addressSearchError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         // -------------------------------------------------------------------
         // COUNTRY
         // -------------------------------------------------------------------
@@ -672,7 +815,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
           decoration: _decoration('Postal / ZIP code'),
         ),
 
-        if (_country != null && _city != null) ...[
+        if (_country != null && (_city != null || _suggestedCity != null)) ...[
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerLeft,

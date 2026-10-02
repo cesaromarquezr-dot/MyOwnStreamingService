@@ -60,6 +60,7 @@ class ShopAssociation {
   final String type;
   final String id;
   final String name;
+
   /// Identifies the source account for account-scoped entities such as a
   /// user's collection or playlist. Global media can leave this null.
   final String? sourceAccountId;
@@ -78,7 +79,8 @@ class ShopAssociation {
         'sourceAccountId': sourceAccountId,
       };
 
-  factory ShopAssociation.fromJson(Map<String, dynamic> json) => ShopAssociation(
+  factory ShopAssociation.fromJson(Map<String, dynamic> json) =>
+      ShopAssociation(
         type: json['type']?.toString() ?? 'other',
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
@@ -142,13 +144,21 @@ class ShopProduct {
         description: json['description']?.toString() ?? '',
         productType: json['productType']?.toString() ?? 'Merchandise',
         category: json['category']?.toString() ?? 'Other',
-        price: json['price'] is num ? (json['price'] as num).toDouble() : double.tryParse(json['price']?.toString() ?? '') ?? 0,
+        price: json['price'] is num
+            ? (json['price'] as num).toDouble()
+            : double.tryParse(json['price']?.toString() ?? '') ?? 0,
         currency: json['currency']?.toString() ?? 'USD',
-        inventoryQuantity: json['inventoryQuantity'] is num ? (json['inventoryQuantity'] as num).toInt() : int.tryParse(json['inventoryQuantity']?.toString() ?? '') ?? 0,
+        inventoryQuantity: json['inventoryQuantity'] is num
+            ? (json['inventoryQuantity'] as num).toInt()
+            : int.tryParse(json['inventoryQuantity']?.toString() ?? '') ?? 0,
         featured: json['featured'] == true,
         active: json['active'] != false,
-        imageUrls: (json['imageUrls'] as List?)?.map((e) => e.toString()).toList(),
-        associations: (json['associations'] as List?)?.whereType<Map>().map((e) => ShopAssociation.fromJson(Map<String, dynamic>.from(e))).toList(),
+        imageUrls:
+            (json['imageUrls'] as List?)?.map((e) => e.toString()).toList(),
+        associations: (json['associations'] as List?)
+            ?.whereType<Map>()
+            .map((e) => ShopAssociation.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
       );
 }
 
@@ -199,47 +209,63 @@ class StorefrontDesign extends PagePresentation {
 
   @override
   Map<String, dynamic> toJson() => {
-    ...super.toJson(),
-    'sectionBackgrounds': sectionBackgrounds,
-    'productLayout': productLayout, 'mobileColumns': mobileColumns,
-    'desktopColumns': desktopColumns, 'imageRatio': imageRatio,
-    'heroTitle': heroTitle, 'heroSubtitle': heroSubtitle,
-    'heroCtaLabel': heroCtaLabel, 'heroCtaTarget': heroCtaTarget,
-    'mobileBannerUrl': mobileBannerUrl, 'bannerPosition': bannerPosition,
-    'bannerOverlay': bannerOverlay, 'sectionOrder': sectionOrder,
-  };
+        ...super.toJson(),
+        'sectionBackgrounds': sectionBackgrounds,
+        'productLayout': productLayout,
+        'mobileColumns': mobileColumns,
+        'desktopColumns': desktopColumns,
+        'imageRatio': imageRatio,
+        'heroTitle': heroTitle,
+        'heroSubtitle': heroSubtitle,
+        'heroCtaLabel': heroCtaLabel,
+        'heroCtaTarget': heroCtaTarget,
+        'mobileBannerUrl': mobileBannerUrl,
+        'bannerPosition': bannerPosition,
+        'bannerOverlay': bannerOverlay,
+        'sectionOrder': sectionOrder,
+      };
 
-  factory StorefrontDesign.fromJson(Map<String, dynamic> json) => StorefrontDesign(
-    presetTheme: json['presetTheme']?.toString() ?? 'Indigo',
-    brightnessMode: json['brightnessMode']?.toString() ?? 'system',
-    primaryColor: _designInt(json['primaryColor'], 0xFF536DFE),
-    secondaryColor: _designInt(json['secondaryColor'], 0xFFFFB74D),
-    backgroundColor: _designInt(json['backgroundColor'], 0xFFF6F7FB),
-    gradientEndColor: _designInt(json['gradientEndColor'], 0xFFE8EAF6),
-    backgroundType: json['backgroundType']?.toString() ?? 'solid',
-    backgroundImageUrl: json['backgroundImageUrl']?.toString() ?? '',
-    sectionBackgrounds: json['sectionBackgrounds']?.toString() ?? '',
-    fontFamily: json['fontFamily']?.toString() ?? 'Default',
-    fontScale: _designDouble(json['fontScale'], 1).clamp(0.8, 1.4).toDouble(),
-    buttonRadius: _designDouble(json['buttonRadius'], 14).clamp(0, 32).toDouble(),
-    cardRadius: _designDouble(json['cardRadius'], 18).clamp(0, 36).toDouble(),
-    productLayout: json['productLayout']?.toString() ?? 'list',
-    mobileColumns: _designInt(json['mobileColumns'], 1).clamp(1, 2),
-    desktopColumns: _designInt(json['desktopColumns'], 3).clamp(2, 5),
-    imageRatio: json['imageRatio']?.toString() ?? 'Square',
-    heroTitle: json['heroTitle']?.toString() ?? '',
-    heroSubtitle: json['heroSubtitle']?.toString() ?? '',
-    heroCtaLabel: json['heroCtaLabel']?.toString() ?? '',
-    heroCtaTarget: json['heroCtaTarget']?.toString() ?? 'products',
-    mobileBannerUrl: json['mobileBannerUrl']?.toString() ?? '',
-    bannerPosition: json['bannerPosition']?.toString() ?? 'center',
-    bannerOverlay: _designDouble(json['bannerOverlay'], 0.25).clamp(0, 0.8).toDouble(),
-    sectionOrder: (json['sectionOrder'] as List?)?.map((e) => e.toString()).toList(),
-  );
+  factory StorefrontDesign.fromJson(Map<String, dynamic> json) =>
+      StorefrontDesign(
+        presetTheme: json['presetTheme']?.toString() ?? 'Indigo',
+        brightnessMode: json['brightnessMode']?.toString() ?? 'system',
+        primaryColor: _designInt(json['primaryColor'], 0xFF536DFE),
+        secondaryColor: _designInt(json['secondaryColor'], 0xFFFFB74D),
+        backgroundColor: _designInt(json['backgroundColor'], 0xFFF6F7FB),
+        gradientEndColor: _designInt(json['gradientEndColor'], 0xFFE8EAF6),
+        backgroundType: json['backgroundType']?.toString() ?? 'solid',
+        backgroundImageUrl: json['backgroundImageUrl']?.toString() ?? '',
+        sectionBackgrounds: json['sectionBackgrounds']?.toString() ?? '',
+        fontFamily: json['fontFamily']?.toString() ?? 'Default',
+        fontScale:
+            _designDouble(json['fontScale'], 1).clamp(0.8, 1.4).toDouble(),
+        buttonRadius:
+            _designDouble(json['buttonRadius'], 14).clamp(0, 32).toDouble(),
+        cardRadius:
+            _designDouble(json['cardRadius'], 18).clamp(0, 36).toDouble(),
+        productLayout: json['productLayout']?.toString() ?? 'list',
+        mobileColumns: _designInt(json['mobileColumns'], 1).clamp(1, 2),
+        desktopColumns: _designInt(json['desktopColumns'], 3).clamp(2, 5),
+        imageRatio: json['imageRatio']?.toString() ?? 'Square',
+        heroTitle: json['heroTitle']?.toString() ?? '',
+        heroSubtitle: json['heroSubtitle']?.toString() ?? '',
+        heroCtaLabel: json['heroCtaLabel']?.toString() ?? '',
+        heroCtaTarget: json['heroCtaTarget']?.toString() ?? 'products',
+        mobileBannerUrl: json['mobileBannerUrl']?.toString() ?? '',
+        bannerPosition: json['bannerPosition']?.toString() ?? 'center',
+        bannerOverlay:
+            _designDouble(json['bannerOverlay'], 0.25).clamp(0, 0.8).toDouble(),
+        sectionOrder:
+            (json['sectionOrder'] as List?)?.map((e) => e.toString()).toList(),
+      );
 }
 
-int _designInt(dynamic value, int fallback) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '') ?? fallback;
-double _designDouble(dynamic value, double fallback) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? fallback;
+int _designInt(dynamic value, int fallback) => value is num
+    ? value.toInt()
+    : int.tryParse(value?.toString() ?? '') ?? fallback;
+double _designDouble(dynamic value, double fallback) => value is num
+    ? value.toDouble()
+    : double.tryParse(value?.toString() ?? '') ?? fallback;
 const _storefrontColorChoices = <String, int>{
   'Indigo blue': 0xFF536DFE,
   'Blue': 0xFF1565C0,
@@ -275,9 +301,13 @@ ThemeData _storefrontTheme(BuildContext context, PagePresentation design) {
       : design.brightnessMode == 'light'
           ? Brightness.light
           : Theme.of(context).brightness;
-  final scheme = ColorScheme.fromSeed(seedColor: Color(design.primaryColor), brightness: brightness).copyWith(
+  final scheme = ColorScheme.fromSeed(
+          seedColor: Color(design.primaryColor), brightness: brightness)
+      .copyWith(
     secondary: Color(design.secondaryColor),
-    surface: brightness == Brightness.dark ? const Color(0xFF17191F) : Color(design.backgroundColor),
+    surface: brightness == Brightness.dark
+        ? const Color(0xFF17191F)
+        : Color(design.backgroundColor),
   );
   final family = design.fontFamily == 'Default' ? null : design.fontFamily;
   return ThemeData(
@@ -286,28 +316,49 @@ ThemeData _storefrontTheme(BuildContext context, PagePresentation design) {
     colorScheme: scheme,
     scaffoldBackgroundColor: Color(design.backgroundColor),
     fontFamily: family,
-    textTheme: Theme.of(context).textTheme.apply(fontFamily: family, fontSizeFactor: design.fontScale),
-    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(design.buttonRadius)))),
-    outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(design.buttonRadius)))),
-    inputDecorationTheme: InputDecorationTheme(border: OutlineInputBorder(borderRadius: BorderRadius.circular(design.buttonRadius))),
+    textTheme: Theme.of(context)
+        .textTheme
+        .apply(fontFamily: family, fontSizeFactor: design.fontScale),
+    filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(design.buttonRadius)))),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(design.buttonRadius)))),
+    inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(design.buttonRadius))),
   );
 }
 
 Decoration _storefrontBackground(PagePresentation design) {
-  if (design.backgroundType == 'image' && design.backgroundImageUrl.startsWith('https://')) {
-    return BoxDecoration(color: Color(design.backgroundColor), image: DecorationImage(image: NetworkImage(design.backgroundImageUrl), fit: BoxFit.cover));
+  if (design.backgroundType == 'image' &&
+      design.backgroundImageUrl.startsWith('https://')) {
+    return BoxDecoration(
+        color: Color(design.backgroundColor),
+        image: DecorationImage(
+            image: NetworkImage(design.backgroundImageUrl), fit: BoxFit.cover));
   }
   if (design.backgroundType == 'gradient') {
-    return BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(design.backgroundColor), Color(design.gradientEndColor)]));
+    return BoxDecoration(
+        gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+          Color(design.backgroundColor),
+          Color(design.gradientEndColor)
+        ]));
   }
   return BoxDecoration(color: Color(design.backgroundColor));
 }
 
 Alignment _bannerAlignment(String position) => switch (position) {
-  'left' => Alignment.centerLeft,
-  'right' => Alignment.centerRight,
-  _ => Alignment.center,
-};
+      'left' => Alignment.centerLeft,
+      'right' => Alignment.centerRight,
+      _ => Alignment.center,
+    };
 
 /// A marketplace store owned by an account.
 class ShopStore {
@@ -354,9 +405,13 @@ class ShopStore {
         bannerUrl: json['bannerUrl']?.toString(),
         active: json['active'] != false,
         address: json['address'] is Map
-            ? WorldwideAddress.fromJson(Map<String, dynamic>.from(json['address'] as Map))
+            ? WorldwideAddress.fromJson(
+                Map<String, dynamic>.from(json['address'] as Map))
             : null,
-        design: json['design'] is Map ? StorefrontDesign.fromJson(Map<String, dynamic>.from(json['design'] as Map)) : null,
+        design: json['design'] is Map
+            ? StorefrontDesign.fromJson(
+                Map<String, dynamic>.from(json['design'] as Map))
+            : null,
       );
 }
 
@@ -367,6 +422,7 @@ class ShopBagLine {
 
   ShopBagLine({required this.productId, this.quantity = 1});
 }
+
 /// A saved payment-method summary. Sensitive card data is intentionally absent.
 class ShopPaymentMethod {
   final String id;
@@ -433,11 +489,19 @@ class ShopOrder {
   final String transactionId;
   final DateTime createdAt;
 
-  ShopOrder({required this.id, required this.lines, required this.total, required this.transactionId, DateTime? createdAt}) : createdAt = createdAt ?? DateTime.now();
+  ShopOrder(
+      {required this.id,
+      required this.lines,
+      required this.total,
+      required this.transactionId,
+      DateTime? createdAt})
+      : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'lines': lines.map((l) => {'productId': l.productId, 'quantity': l.quantity}).toList(),
+        'lines': lines
+            .map((l) => {'productId': l.productId, 'quantity': l.quantity})
+            .toList(),
         'total': total,
         'transactionId': transactionId,
         'createdAt': createdAt.toIso8601String(),
@@ -446,10 +510,16 @@ class ShopOrder {
   factory ShopOrder.fromJson(Map<String, dynamic> json) => ShopOrder(
         id: json['id']?.toString() ?? '',
         lines: (json['lines'] as List?)?.whereType<Map>().map((item) {
-          final map = Map<String, dynamic>.from(item);
-          return ShopBagLine(productId: map['productId']?.toString() ?? '', quantity: int.tryParse(map['quantity']?.toString() ?? '') ?? 1);
-        }).toList() ?? <ShopBagLine>[],
-        total: json['total'] is num ? (json['total'] as num).toDouble() : double.tryParse(json['total']?.toString() ?? '') ?? 0,
+              final map = Map<String, dynamic>.from(item);
+              return ShopBagLine(
+                  productId: map['productId']?.toString() ?? '',
+                  quantity:
+                      int.tryParse(map['quantity']?.toString() ?? '') ?? 1);
+            }).toList() ??
+            <ShopBagLine>[],
+        total: json['total'] is num
+            ? (json['total'] as num).toDouble()
+            : double.tryParse(json['total']?.toString() ?? '') ?? 0,
         transactionId: json['transactionId']?.toString() ?? '',
         createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       );
@@ -486,30 +556,49 @@ class ShopCatalog extends ChangeNotifier {
       final rawSavedForLater = _prefs!.getString('shop_saved_for_later');
       if (rawStores != null) {
         final decoded = jsonDecode(rawStores);
-        if (decoded is List) stores.addAll(decoded.whereType<Map>().map((e) => ShopStore.fromJson(Map<String, dynamic>.from(e))));
+        if (decoded is List) {
+          stores.addAll(decoded
+              .whereType<Map>()
+              .map((e) => ShopStore.fromJson(Map<String, dynamic>.from(e))));
+        }
       }
       if (rawProducts != null) {
         final decoded = jsonDecode(rawProducts);
-        if (decoded is List) products.addAll(decoded.whereType<Map>().map((e) => ShopProduct.fromJson(Map<String, dynamic>.from(e))));
+        if (decoded is List) {
+          products.addAll(decoded
+              .whereType<Map>()
+              .map((e) => ShopProduct.fromJson(Map<String, dynamic>.from(e))));
+        }
       }
       if (rawWishlist != null) {
         final decoded = jsonDecode(rawWishlist);
-        if (decoded is List) wishlistProductIds.addAll(decoded.map((e) => e.toString()));
+        if (decoded is List) {
+          wishlistProductIds.addAll(decoded.map((e) => e.toString()));
+        }
       }
       if (rawSavedForLater != null) {
         final decoded = jsonDecode(rawSavedForLater);
-        if (decoded is List) savedForLaterProductIds.addAll(decoded.map((e) => e.toString()));
+        if (decoded is List) {
+          savedForLaterProductIds.addAll(decoded.map((e) => e.toString()));
+        }
       }
       if (rawOrders != null) {
         final decoded = jsonDecode(rawOrders);
-        if (decoded is List) orders.addAll(decoded.whereType<Map>().map((e) => ShopOrder.fromJson(Map<String, dynamic>.from(e))));
+        if (decoded is List) {
+          orders.addAll(decoded
+              .whereType<Map>()
+              .map((e) => ShopOrder.fromJson(Map<String, dynamic>.from(e))));
+        }
       }
       if (rawBag != null) {
         final decoded = jsonDecode(rawBag);
         if (decoded is List) {
           for (final item in decoded.whereType<Map>()) {
             final map = Map<String, dynamic>.from(item);
-            bag.add(ShopBagLine(productId: map['productId']?.toString() ?? '', quantity: int.tryParse(map['quantity']?.toString() ?? '') ?? 1));
+            bag.add(ShopBagLine(
+                productId: map['productId']?.toString() ?? '',
+                quantity:
+                    int.tryParse(map['quantity']?.toString() ?? '') ?? 1));
           }
         }
       }
@@ -522,26 +611,36 @@ class ShopCatalog extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = _prefs;
     if (prefs == null) return;
-    await prefs.setString('shop_stores', jsonEncode(stores.map((s) => s.toJson()).toList()));
-    await prefs.setString('shop_products', jsonEncode(products.map((p) => p.toJson()).toList()));
+    await prefs.setString(
+        'shop_stores', jsonEncode(stores.map((s) => s.toJson()).toList()));
+    await prefs.setString(
+        'shop_products', jsonEncode(products.map((p) => p.toJson()).toList()));
     await prefs.setString('shop_wishlist', jsonEncode(wishlistProductIds));
-    await prefs.setString('shop_saved_for_later', jsonEncode(savedForLaterProductIds));
-    await prefs.setString('shop_bag', jsonEncode(bag.map((line) => {'productId': line.productId, 'quantity': line.quantity}).toList()));
-    await prefs.setString('shop_orders', jsonEncode(orders.map((order) => order.toJson()).toList()));
+    await prefs.setString(
+        'shop_saved_for_later', jsonEncode(savedForLaterProductIds));
+    await prefs.setString(
+        'shop_bag',
+        jsonEncode(bag
+            .map((line) =>
+                {'productId': line.productId, 'quantity': line.quantity})
+            .toList()));
+    await prefs.setString('shop_orders',
+        jsonEncode(orders.map((order) => order.toJson()).toList()));
   }
 
   /// Returns stores owned by the current account.
   List<ShopStore> get currentAccountStores {
     final accountId = AppController.instance.currentAccount?.id;
     if (accountId == null || accountId.isEmpty) return <ShopStore>[];
-    return stores.where((s) => s.ownerAccountId == accountId && s.active).toList();
+    return stores
+        .where((s) => s.ownerAccountId == accountId && s.active)
+        .toList();
   }
 
   bool get hasCurrentAccountStore => currentAccountStores.isNotEmpty;
 
-  List<ShopProduct> productsForStore(String storeId) => products
-      .where((p) => p.storeId == storeId && p.active)
-      .toList();
+  List<ShopProduct> productsForStore(String storeId) =>
+      products.where((p) => p.storeId == storeId && p.active).toList();
 
   ShopProduct? productById(String id) {
     for (final product in products) {
@@ -577,27 +676,57 @@ class ShopCatalog extends ChangeNotifier {
     }
 
     for (final media in controller.library) {
-      final type = media.type.toLowerCase().contains('show') || media.type.toLowerCase().contains('series')
+      final type = media.type.toLowerCase().contains('show') ||
+              media.type.toLowerCase().contains('series')
           ? 'show'
           : 'movie';
-      add(ShopEntity(type: type, id: media.id, name: media.title, subtitle: '${type == 'movie' ? 'Movie' : 'TV show'}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'));
+      add(ShopEntity(
+          type: type,
+          id: media.id,
+          name: media.title,
+          subtitle:
+              '${type == 'movie' ? 'Movie' : 'TV show'}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'));
       if (media.franchiseId != null && media.franchiseName != null) {
-        add(ShopEntity(type: 'franchise', id: media.franchiseId!, name: media.franchiseName!, subtitle: 'Franchise'));
+        add(ShopEntity(
+            type: 'franchise',
+            id: media.franchiseId!,
+            name: media.franchiseName!,
+            subtitle: 'Franchise'));
       }
       for (final value in media.genres) {
-        add(ShopEntity(type: 'genre', id: 'genre:${value.toLowerCase()}', name: value, subtitle: 'Genre'));
+        add(ShopEntity(
+            type: 'genre',
+            id: 'genre:${value.toLowerCase()}',
+            name: value,
+            subtitle: 'Genre'));
       }
       for (final value in media.tags) {
-        add(ShopEntity(type: 'tag', id: 'tag:${value.toLowerCase()}', name: value, subtitle: 'Tag'));
+        add(ShopEntity(
+            type: 'tag',
+            id: 'tag:${value.toLowerCase()}',
+            name: value,
+            subtitle: 'Tag'));
       }
       for (final value in media.actors) {
-        add(ShopEntity(type: 'actor', id: 'actor:${value.toLowerCase()}', name: value, subtitle: 'Actor'));
+        add(ShopEntity(
+            type: 'actor',
+            id: 'actor:${value.toLowerCase()}',
+            name: value,
+            subtitle: 'Actor'));
       }
       for (final value in media.directors) {
-        add(ShopEntity(type: 'director', id: 'director:${value.toLowerCase()}', name: value, subtitle: 'Director'));
+        add(ShopEntity(
+            type: 'director',
+            id: 'director:${value.toLowerCase()}',
+            name: value,
+            subtitle: 'Director'));
       }
       for (final value in media.music) {
-        add(ShopEntity(type: 'artist', id: 'artist:${value.toLowerCase()}', name: value, subtitle: 'Artist / Music'));
+        add(ShopEntity(
+            type: 'artist',
+            id: 'artist:${value.toLowerCase()}',
+            name: value,
+            subtitle: 'Artist / Music'));
       }
     }
     for (final collection in controller.collections) {
@@ -608,7 +737,10 @@ class ShopCatalog extends ChangeNotifier {
         subtitle: 'Collection',
       ));
     }
-    result.addAll({for (final e in _externalEntities.values) '${e.type}:${e.id}'.toLowerCase(): e});
+    result.addAll({
+      for (final e in _externalEntities.values)
+        '${e.type}:${e.id}'.toLowerCase(): e
+    });
     return result.values.toList();
   }
 
@@ -617,16 +749,21 @@ class ShopCatalog extends ChangeNotifier {
     if (q.isEmpty) return <ShopEntity>[];
     final merged = <String, ShopEntity>{};
     for (final entity in localShopEntities) {
-      if ('${entity.name} ${entity.type} ${entity.subtitle}'.toLowerCase().contains(q)) {
+      if ('${entity.name} ${entity.type} ${entity.subtitle}'
+          .toLowerCase()
+          .contains(q)) {
         merged['${entity.type}:${entity.id}'.toLowerCase()] = entity;
       }
     }
     try {
       if (AppController.instance.backendApi.isAuthenticated) {
         final queries = <String>{query};
-        if (query.endsWith('s') && query.length > 3) queries.add(query.substring(0, query.length - 1));
+        if (query.endsWith('s') && query.length > 3) {
+          queries.add(query.substring(0, query.length - 1));
+        }
         for (final remoteQuery in queries) {
-          final remote = await AppController.instance.backendApi.searchShopEntities(
+          final remote =
+              await AppController.instance.backendApi.searchShopEntities(
             remoteQuery,
             50,
           );
@@ -651,8 +788,16 @@ class ShopCatalog extends ChangeNotifier {
       ..sort((a, b) {
         final aa = a.name.toLowerCase();
         final bb = b.name.toLowerCase();
-        final ar = aa == q ? 0 : aa.startsWith(q) ? 1 : 2;
-        final br = bb == q ? 0 : bb.startsWith(q) ? 1 : 2;
+        final ar = aa == q
+            ? 0
+            : aa.startsWith(q)
+                ? 1
+                : 2;
+        final br = bb == q
+            ? 0
+            : bb.startsWith(q)
+                ? 1
+                : 2;
         final rank = ar.compareTo(br);
         return rank != 0 ? rank : aa.compareTo(bb);
       });
@@ -702,13 +847,19 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   /// Updates a seller-owned store's public profile and appearance.
-  void updateStore(ShopStore store, {String? name, String? description, String? logoUrl, String? bannerUrl, StorefrontDesign? design}) {
+  void updateStore(ShopStore store,
+      {String? name,
+      String? description,
+      String? logoUrl,
+      String? bannerUrl,
+      StorefrontDesign? design}) {
     final accountId = AppController.instance.currentAccount?.id;
     if (store.ownerAccountId != accountId) return;
     if (name != null && name.trim().isNotEmpty) store.name = name.trim();
     if (description != null) store.description = description.trim();
     store.logoUrl = logoUrl?.trim().isEmpty == true ? null : logoUrl?.trim();
-    store.bannerUrl = bannerUrl?.trim().isEmpty == true ? null : bannerUrl?.trim();
+    store.bannerUrl =
+        bannerUrl?.trim().isEmpty == true ? null : bannerUrl?.trim();
     if (design != null) store.design = design;
     notifyListeners();
     _save();
@@ -753,14 +904,22 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   /// Updates a seller-owned product.
-  void updateProduct(ShopProduct product, {String? name, String? description, double? price, int? inventoryQuantity, bool? featured, bool? active}) {
+  void updateProduct(ShopProduct product,
+      {String? name,
+      String? description,
+      double? price,
+      int? inventoryQuantity,
+      bool? featured,
+      bool? active}) {
     final accountId = AppController.instance.currentAccount?.id;
     final store = storeById(product.storeId);
     if (store == null || store.ownerAccountId != accountId) return;
     if (name != null && name.trim().isNotEmpty) product.name = name.trim();
     if (description != null) product.description = description.trim();
     if (price != null && price >= 0) product.price = price;
-    if (inventoryQuantity != null && inventoryQuantity >= 0) product.inventoryQuantity = inventoryQuantity;
+    if (inventoryQuantity != null && inventoryQuantity >= 0) {
+      product.inventoryQuantity = inventoryQuantity;
+    }
     if (featured != null) product.featured = featured;
     if (active != null) product.active = active;
     notifyListeners();
@@ -771,7 +930,10 @@ class ShopCatalog extends ChangeNotifier {
   void deleteProduct(String productId) {
     final product = productById(productId);
     final accountId = AppController.instance.currentAccount?.id;
-    if (product == null || storeById(product.storeId)?.ownerAccountId != accountId) return;
+    if (product == null ||
+        storeById(product.storeId)?.ownerAccountId != accountId) {
+      return;
+    }
     products.remove(product);
     wishlistProductIds.remove(productId);
     bag.removeWhere((line) => line.productId == productId);
@@ -780,7 +942,8 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   /// Returns products directly associated with an entertainment entity.
-  List<ShopProduct> productsForAssociation(String type, String id, {String? name}) {
+  List<ShopProduct> productsForAssociation(String type, String id,
+      {String? name}) {
     final cleanId = id.trim().toLowerCase();
     final cleanName = name?.trim().toLowerCase();
     return products.where((product) {
@@ -802,6 +965,7 @@ class ShopCatalog extends ChangeNotifier {
       if (clean.isEmpty) return;
       signals[clean] = (signals[clean] ?? 0) + weight;
     }
+
     for (final media in controller.library) {
       signal(media.id, 100);
       signal(media.title, 100);
@@ -867,12 +1031,27 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   Widget _productImageForDialog(ShopProduct product, BuildContext context) {
-    if (product.imageUrls.isEmpty) return const Icon(Icons.shopping_bag_outlined);
+    if (product.imageUrls.isEmpty) {
+      return const Icon(Icons.shopping_bag_outlined);
+    }
     final source = product.imageUrls.first;
     if (source.startsWith('data:image/')) {
-      return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(base64Decode(source.substring(source.indexOf(',') + 1)), width: 52, height: 52, fit: BoxFit.cover));
+      return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+              base64Decode(source.substring(source.indexOf(',') + 1)),
+              width: 52,
+              height: 52,
+              fit: BoxFit.cover));
     }
-    return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(source, width: 52, height: 52, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)));
+    return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(source,
+            width: 52,
+            height: 52,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.broken_image_outlined)));
   }
 
   bool isWishlisted(String productId) => wishlistProductIds.contains(productId);
@@ -887,7 +1066,9 @@ class ShopCatalog extends ChangeNotifier {
   }
 
   void saveForLater(String productId) {
-    if (!savedForLaterProductIds.contains(productId)) savedForLaterProductIds.add(productId);
+    if (!savedForLaterProductIds.contains(productId)) {
+      savedForLaterProductIds.add(productId);
+    }
     bag.removeWhere((line) => line.productId == productId);
     notifyListeners();
     _save();
@@ -918,26 +1099,35 @@ class ShopCatalog extends ChangeNotifier {
 
   void addToBag(String productId, {int quantity = 1}) {
     final product = productById(productId);
-    if (product == null || !product.active || product.inventoryQuantity <= 0) return;
+    if (product == null || !product.active || product.inventoryQuantity <= 0) {
+      return;
+    }
     final existing = bag.where((line) => line.productId == productId).toList();
     if (existing.isEmpty) {
-      bag.add(ShopBagLine(productId: productId, quantity: quantity.clamp(1, product.inventoryQuantity).toInt()));
+      bag.add(ShopBagLine(
+          productId: productId,
+          quantity: quantity.clamp(1, product.inventoryQuantity).toInt()));
     } else {
-      existing.first.quantity = (existing.first.quantity + quantity).clamp(1, product.inventoryQuantity).toInt();
+      existing.first.quantity = (existing.first.quantity + quantity)
+          .clamp(1, product.inventoryQuantity)
+          .toInt();
     }
     notifyListeners();
     _save();
   }
 
   void changeQuantity(String productId, int delta) {
-    final line = bag.where((x) => x.productId == productId).isEmpty ? null : bag.where((x) => x.productId == productId).first;
+    final line = bag.where((x) => x.productId == productId).isEmpty
+        ? null
+        : bag.where((x) => x.productId == productId).first;
     final product = productById(productId);
     if (line == null || product == null) return;
     line.quantity += delta;
     if (line.quantity <= 0) {
       bag.remove(line);
     } else {
-      line.quantity = line.quantity.clamp(1, product.inventoryQuantity).toInt().toInt();
+      line.quantity =
+          line.quantity.clamp(1, product.inventoryQuantity).toInt().toInt();
     }
     notifyListeners();
     _save();
@@ -951,7 +1141,8 @@ class ShopCatalog extends ChangeNotifier {
 
   List<ShopBagLine> linesForStore(String storeId) => bag
       .where((line) => productById(line.productId)?.storeId == storeId)
-      .map((line) => ShopBagLine(productId: line.productId, quantity: line.quantity))
+      .map((line) =>
+          ShopBagLine(productId: line.productId, quantity: line.quantity))
       .toList();
 
   double subtotal([Iterable<ShopBagLine>? lines]) {
@@ -965,13 +1156,21 @@ class ShopCatalog extends ChangeNotifier {
   int get bagCount => bag.fold<int>(0, (sum, line) => sum + line.quantity);
 
   /// Records a completed order after payment succeeds.
-  void recordOrder({required Iterable<ShopBagLine> lines, required double total, required String transactionId}) {
-    orders.insert(0, ShopOrder(
-      id: 'order_${DateTime.now().microsecondsSinceEpoch}',
-      lines: lines.map((line) => ShopBagLine(productId: line.productId, quantity: line.quantity)).toList(),
-      total: total,
-      transactionId: transactionId,
-    ));
+  void recordOrder(
+      {required Iterable<ShopBagLine> lines,
+      required double total,
+      required String transactionId}) {
+    orders.insert(
+        0,
+        ShopOrder(
+          id: 'order_${DateTime.now().microsecondsSinceEpoch}',
+          lines: lines
+              .map((line) => ShopBagLine(
+                  productId: line.productId, quantity: line.quantity))
+              .toList(),
+          total: total,
+          transactionId: transactionId,
+        ));
     if (orders.length > 500) orders.removeRange(500, orders.length);
     _save();
     notifyListeners();
@@ -982,9 +1181,14 @@ class ShopCatalog extends ChangeNotifier {
     for (final purchased in purchasedLines) {
       final product = productById(purchased.productId);
       if (product != null) {
-        product.inventoryQuantity = (product.inventoryQuantity - purchased.quantity).clamp(0, product.inventoryQuantity).toInt();
+        product.inventoryQuantity =
+            (product.inventoryQuantity - purchased.quantity)
+                .clamp(0, product.inventoryQuantity)
+                .toInt();
       }
-      final line = bag.where((x) => x.productId == purchased.productId).isEmpty ? null : bag.where((x) => x.productId == purchased.productId).first;
+      final line = bag.where((x) => x.productId == purchased.productId).isEmpty
+          ? null
+          : bag.where((x) => x.productId == purchased.productId).first;
       if (line == null) continue;
       line.quantity -= purchased.quantity;
       if (line.quantity <= 0) bag.remove(line);
@@ -1028,7 +1232,8 @@ class _ShopScreenState extends State<ShopScreen> {
 
   List<ShopProduct> get visibleProducts {
     List<ShopProduct> result;
-    if (widget.contextAssociationType != null && widget.contextAssociationId != null) {
+    if (widget.contextAssociationType != null &&
+        widget.contextAssociationId != null) {
       result = catalog.productsForAssociation(
         widget.contextAssociationType!,
         widget.contextAssociationId!,
@@ -1056,24 +1261,29 @@ class _ShopScreenState extends State<ShopScreen> {
     super.dispose();
   }
 
-  List<ShopProduct> get featuredProducts => catalog.products.where((p) => p.active && p.featured).take(8).toList();
+  List<ShopProduct> get featuredProducts =>
+      catalog.products.where((p) => p.active && p.featured).take(8).toList();
 
-  List<ShopProduct> get libraryRelatedProducts => catalog.personalizedProducts(limit: 8);
+  List<ShopProduct> get libraryRelatedProducts =>
+      catalog.personalizedProducts(limit: 8);
 
   List<MediaItem> get mediaMatches {
     final q = search.trim().toLowerCase();
     if (q.isEmpty) return const <MediaItem>[];
-    return AppController.instance.library.where((media) {
-      final haystack = [
-        media.title,
-        media.franchiseName ?? '',
-        media.originalTitle ?? '',
-        media.canonicalTitle ?? '',
-        ...media.genres,
-        ...media.tags,
-      ].join(' ').toLowerCase();
-      return haystack.contains(q);
-    }).take(12).toList();
+    return AppController.instance.library
+        .where((media) {
+          final haystack = [
+            media.title,
+            media.franchiseName ?? '',
+            media.originalTitle ?? '',
+            media.canonicalTitle ?? '',
+            ...media.genres,
+            ...media.tags,
+          ].join(' ').toLowerCase();
+          return haystack.contains(q);
+        })
+        .take(12)
+        .toList();
   }
 
   @override
@@ -1082,24 +1292,47 @@ class _ShopScreenState extends State<ShopScreen> {
       animation: catalog,
       builder: (context, _) {
         final products = visibleProducts;
-        final stores = catalog.stores.where((s) => s.active &&
-            (search.isEmpty || s.name.toLowerCase().contains(search.toLowerCase()) || s.description.toLowerCase().contains(search.toLowerCase()))).toList();
+        final stores = catalog.stores
+            .where((s) =>
+                s.active &&
+                (search.isEmpty ||
+                    s.name.toLowerCase().contains(search.toLowerCase()) ||
+                    s.description.toLowerCase().contains(search.toLowerCase())))
+            .toList();
         return Scaffold(
           appBar: AppBar(
             automaticallyImplyLeading: false,
-            title: UniversalText(widget.contextAssociationName == null ? 'Shop' : 'Shop • ${widget.contextAssociationName}'),
+            title: UniversalText(widget.contextAssociationName == null
+                ? 'Shop'
+                : 'Shop • ${widget.contextAssociationName}'),
             actions: [
               IconButton(
                 tooltip: 'Wishlist',
                 icon: const Icon(Icons.favorite_border_rounded),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopWishlistScreen())),
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ShopWishlistScreen())),
               ),
               IconButton(
                 tooltip: 'Compare selected products',
-                onPressed: catalog.compareProductIds.isEmpty ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopProductComparisonScreen())),
-                icon: Badge(label: Text('${catalog.compareProductIds.length}'), child: const Icon(Icons.compare_arrows)),
+                onPressed: catalog.compareProductIds.isEmpty
+                    ? null
+                    : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const ShopProductComparisonScreen())),
+                icon: Badge(
+                    label: Text('${catalog.compareProductIds.length}'),
+                    child: const Icon(Icons.compare_arrows)),
               ),
-              _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopBagScreen(onHome: widget.onHome)))),
+              _BagButton(
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              ShopBagScreen(onHome: widget.onHome)))),
               const LanguagePicker(),
             ],
           ),
@@ -1112,12 +1345,47 @@ class _ShopScreenState extends State<ShopScreen> {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  Text(widget.contextAssociationName == null ? 'Marketplace' : 'Related products', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+                  Text(
+                      widget.contextAssociationName == null
+                          ? 'Marketplace'
+                          : 'Related products',
+                      style: const TextStyle(
+                          fontSize: 30, fontWeight: FontWeight.w900)),
                   if (widget.contextAssociationName == null)
                     Wrap(spacing: 8, runSpacing: 8, children: [
-                      FilledButton.icon(onPressed: () => showDialog<void>(context: context, builder: (_) => const _AskShopAssistantDialog()), icon: const Icon(Icons.auto_awesome), label: const UniversalText('Ask Shop')),
-                      OutlinedButton.icon(onPressed: _createStore, icon: const Icon(Icons.storefront_outlined), label: const UniversalText('Create Store')),
-                      OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveShoppingScreen())), icon: const Icon(Icons.live_tv_outlined), label: const UniversalText('Live Shopping')),
+                      FilledButton.icon(
+                          onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (_) => const _AskShopAssistantDialog()),
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const UniversalText('Ask Shop')),
+                      OutlinedButton.icon(
+                          onPressed: _createStore,
+                          icon: const Icon(Icons.storefront_outlined),
+                          label: const UniversalText('Create Store')),
+                      if (catalog.currentAccountStores.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              settings: const RouteSettings(
+                                name: '/app/page/seller-dashboard',
+                              ),
+                              builder: (_) => SellerDashboardScreen(
+                                onHome: widget.onHome,
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.dashboard_outlined),
+                          label: const UniversalText('Seller Dashboard'),
+                        ),
+                      OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const LiveShoppingScreen())),
+                          icon: const Icon(Icons.live_tv_outlined),
+                          label: const UniversalText('Live Shopping')),
                     ]),
                 ],
               ),
@@ -1133,7 +1401,14 @@ class _ShopScreenState extends State<ShopScreen> {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search_rounded),
                     hintText: tr('Search the Shop'),
-                    suffixIcon: search.isEmpty ? null : IconButton(onPressed: () { searchController.clear(); setState(() => search = ''); }, icon: const Icon(Icons.clear)),
+                    suffixIcon: search.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              searchController.clear();
+                              setState(() => search = '');
+                            },
+                            icon: const Icon(Icons.clear)),
                     border: const OutlineInputBorder(),
                   ),
                 ),
@@ -1142,15 +1417,19 @@ class _ShopScreenState extends State<ShopScreen> {
                 _shopCategoryRow(),
                 if (search.isEmpty && featuredProducts.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  _sectionTitle('Featured Products', Icons.star_outline_rounded),
+                  _sectionTitle(
+                      'Featured Products', Icons.star_outline_rounded),
                   const SizedBox(height: 8),
-                  for (final product in featuredProducts) _productCard(context, product),
+                  for (final product in featuredProducts)
+                    _productCard(context, product),
                 ],
                 if (search.isEmpty && libraryRelatedProducts.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  _sectionTitle('Related to Your Library', Icons.library_music_outlined),
+                  _sectionTitle(
+                      'Related to Your Library', Icons.library_music_outlined),
                   const SizedBox(height: 8),
-                  for (final product in libraryRelatedProducts) _productCard(context, product),
+                  for (final product in libraryRelatedProducts)
+                    _productCard(context, product),
                 ],
                 const SizedBox(height: 20),
                 _sectionTitle('Stores', Icons.storefront_outlined),
@@ -1161,19 +1440,26 @@ class _ShopScreenState extends State<ShopScreen> {
                   const SizedBox(height: 18),
                   _sectionTitle('Media', Icons.movie_filter_outlined),
                   const SizedBox(height: 8),
-                  if (mediaMatches.isEmpty) _empty('No library media matches this search.'),
+                  if (mediaMatches.isEmpty)
+                    _empty('No library media matches this search.'),
                   for (final media in mediaMatches)
                     Card(
                       child: ListTile(
                         title: Text(media.title),
-                        subtitle: Text(media.franchiseName == null ? media.type : '${media.type} • ${media.franchiseName}'),
+                        subtitle: Text(media.franchiseName == null
+                            ? media.type
+                            : '${media.type} • ${media.franchiseName}'),
                         trailing: ContextualShopButton.forMedia(context, media),
                       ),
                     ),
                 ],
               ],
               const SizedBox(height: 20),
-              _sectionTitle(widget.contextAssociationName == null ? 'Products' : 'Shop this title', Icons.shopping_bag_outlined),
+              _sectionTitle(
+                  widget.contextAssociationName == null
+                      ? 'Products'
+                      : 'Shop this title',
+                  Icons.shopping_bag_outlined),
               const SizedBox(height: 8),
               if (products.isEmpty)
                 _empty(widget.contextAssociationName == null
@@ -1189,8 +1475,19 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Widget _shopCategoryRow() {
     const categories = <String>[
-      'All', 'Movies', 'Shows', 'Music', 'Franchise', 'Clothing',
-      'Collectibles', 'Physical Media', 'Posters', 'Books', 'Toys', 'Accessories', 'Home',
+      'All',
+      'Movies',
+      'Shows',
+      'Music',
+      'Franchise',
+      'Clothing',
+      'Collectibles',
+      'Physical Media',
+      'Posters',
+      'Books',
+      'Toys',
+      'Accessories',
+      'Home',
     ];
     return Row(
       children: [
@@ -1205,7 +1502,8 @@ class _ShopScreenState extends State<ShopScreen> {
                     child: ChoiceChip(
                       label: Text(category),
                       selected: categoryFilter == category,
-                      onSelected: (_) => setState(() => categoryFilter = category),
+                      onSelected: (_) =>
+                          setState(() => categoryFilter = category),
                     ),
                   ),
               ],
@@ -1219,8 +1517,10 @@ class _ShopScreenState extends State<ShopScreen> {
           items: const [
             DropdownMenuItem(value: 'Relevance', child: Text('Relevance')),
             DropdownMenuItem(value: 'Newest', child: Text('Newest')),
-            DropdownMenuItem(value: 'Price: low to high', child: Text('Price ↑')),
-            DropdownMenuItem(value: 'Price: high to low', child: Text('Price ↓')),
+            DropdownMenuItem(
+                value: 'Price: low to high', child: Text('Price ↑')),
+            DropdownMenuItem(
+                value: 'Price: high to low', child: Text('Price ↓')),
           ],
           onChanged: (value) => setState(() => sortMode = value ?? 'Relevance'),
         ),
@@ -1228,17 +1528,37 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  Widget _sectionTitle(String title, IconData icon) => Row(children: [Icon(icon), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900))]);
+  Widget _sectionTitle(String title, IconData icon) => Row(children: [
+        Icon(icon),
+        const SizedBox(width: 8),
+        Text(title,
+            style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900))
+      ]);
 
-  Widget _empty(String text) => Card(child: Padding(padding: const EdgeInsets.all(20), child: UniversalText(text, textAlign: TextAlign.center)));
+  Widget _empty(String text) => Card(
+      child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: UniversalText(text, textAlign: TextAlign.center)));
 
   Widget _storeTile(BuildContext context, ShopStore store) => Card(
         child: ListTile(
-          leading: CircleAvatar(child: Text(store.name.isEmpty ? '?' : store.name.isEmpty ? '?' : store.name.substring(0, 1).toUpperCase())),
+          leading: CircleAvatar(
+              child: Text(store.name.isEmpty
+                  ? '?'
+                  : store.name.isEmpty
+                      ? '?'
+                      : store.name.substring(0, 1).toUpperCase())),
           title: Text(store.name),
-          subtitle: Text('${catalog.productsForStore(store.id).length} active product(s)${store.description.isEmpty ? '' : ' • ${store.description}'}', maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+              '${catalog.productsForStore(store.id).length} active product(s)${store.description.isEmpty ? '' : ' • ${store.description}'}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: store, onHome: widget.onHome))),
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      ShopStoreScreen(store: store, onHome: widget.onHome))),
         ),
       );
 
@@ -1253,19 +1573,48 @@ class _ShopScreenState extends State<ShopScreen> {
           children: [
             _productImage(product, size: 92),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(product.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 3),
-              Text('${product.productType} • ${product.category} • ${store?.name ?? 'Store'}', style: const TextStyle(fontSize: 12)),
-              if (product.associations.isNotEmpty) Text(product.associations.map((a) => a.name).join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 6),
-              Text(_money(product.price, product.currency), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-              Text('${product.inventoryQuantity} in stock', style: const TextStyle(fontSize: 12)),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(product.name,
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 3),
+                  Text(
+                      '${product.productType} • ${product.category} • ${store?.name ?? 'Store'}',
+                      style: const TextStyle(fontSize: 12)),
+                  if (product.associations.isNotEmpty)
+                    Text(product.associations.map((a) => a.name).join(' • '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 6),
+                  Text(_money(product.price, product.currency),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text('${product.inventoryQuantity} in stock',
+                      style: const TextStyle(fontSize: 12)),
+                ])),
             Column(children: [
-              IconButton(onPressed: () => catalog.toggleWishlist(product.id), icon: Icon(catalog.isWishlisted(product.id) ? Icons.favorite : Icons.favorite_border)),
-              IconButton(tooltip: catalog.compareProductIds.contains(product.id) ? 'Remove from comparison' : 'Compare', onPressed: () => catalog.toggleCompare(product.id), icon: Icon(catalog.compareProductIds.contains(product.id) ? Icons.check_box : Icons.compare_arrows)),
-              FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const UniversalText('Add to Bag')),
+              IconButton(
+                  onPressed: () => catalog.toggleWishlist(product.id),
+                  icon: Icon(catalog.isWishlisted(product.id)
+                      ? Icons.favorite
+                      : Icons.favorite_border)),
+              IconButton(
+                  tooltip: catalog.compareProductIds.contains(product.id)
+                      ? 'Remove from comparison'
+                      : 'Compare',
+                  onPressed: () => catalog.toggleCompare(product.id),
+                  icon: Icon(catalog.compareProductIds.contains(product.id)
+                      ? Icons.check_box
+                      : Icons.compare_arrows)),
+              FilledButton(
+                  onPressed: product.inventoryQuantity <= 0
+                      ? null
+                      : () => catalog.addToBag(product.id),
+                  child: const UniversalText('Add to Bag')),
             ]),
           ],
         ),
@@ -1274,58 +1623,153 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Widget _productImage(ShopProduct product, {double size = 80}) {
-    if (product.imageUrls.isEmpty) return Container(width: size, height: size, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Theme.of(context).colorScheme.surfaceContainerHighest), child: const Icon(Icons.shopping_bag_outlined));
+    if (product.imageUrls.isEmpty) {
+      return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest),
+          child: const Icon(Icons.shopping_bag_outlined));
+    }
     final source = product.imageUrls.first;
     final image = source.startsWith('data:image/')
-        ? Image.memory(base64Decode(source.substring(source.indexOf(',') + 1)), width: size, height: size, fit: BoxFit.cover)
-        : Image.network(source, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: size, height: size, color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)));
+        ? Image.memory(base64Decode(source.substring(source.indexOf(',') + 1)),
+            width: size, height: size, fit: BoxFit.cover)
+        : Image.network(source,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+                width: size,
+                height: size,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: const Icon(Icons.broken_image_outlined)));
     return ClipRRect(borderRadius: BorderRadius.circular(12), child: image);
   }
 
   Future<void> _createStore() async {
-    final name = TextEditingController();
-    final description = TextEditingController();
-    final logo = TextEditingController();
-    final banner = TextEditingController();
-    WorldwideAddress? address;
-    await showDialog<void>(context: context, builder: (_) => AlertDialog(
-      title: const UniversalText('Create Store'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Store name')),
-        TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')),
-        TextField(controller: logo, decoration: const InputDecoration(labelText: 'Logo URL (optional)')),
-        TextField(controller: banner, decoration: const InputDecoration(labelText: 'Banner URL (optional)')),
-        const SizedBox(height: 14),
-        const Align(alignment: Alignment.centerLeft, child: UniversalText('Store address', style: TextStyle(fontWeight: FontWeight.w800))),
-        const SizedBox(height: 8),
-        StatefulBuilder(builder: (context, setAddressState) => WorldwideAddressForm(
-          requireStreet: true,
-          onChanged: (value) {
-            address = value;
-            setAddressState(() {});
-          },
-        )),
-      ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')),
-        FilledButton(onPressed: () {
-          try {
-            if (address == null || !address!.isComplete || address!.addressLine1.trim().isEmpty) {
-              throw Exception('Enter the complete store address, including country, city and postal/ZIP code.');
-            }
-            final store = catalog.createStore(name: name.text, description: description.text, logoUrl: logo.text, bannerUrl: banner.text, address: address);
-            Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (_) => SellerDashboardScreen(store: store, onHome: widget.onHome)));
-          } catch (error) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
-          }
-        }, child: const UniversalText('Create Store')),
-      ],
-    ));
-    name.dispose(); description.dispose(); logo.dispose(); banner.dispose();
+    final store = await showDialog<ShopStore>(
+      context: context,
+      builder: (_) => const _CreateStoreDialog(),
+    );
+    if (store == null || !mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/page/seller-dashboard'),
+        builder: (_) => SellerDashboardScreen(
+          store: store,
+          onHome: widget.onHome,
+        ),
+      ),
+    );
   }
 
-  String _money(double value, String currency) => '${currency == 'USD' ? '\$' : currency} ${value.toStringAsFixed(2)}';
+  String _money(double value, String currency) =>
+      '${currency == 'USD' ? '\$' : currency} ${value.toStringAsFixed(2)}';
+}
+
+class _CreateStoreDialog extends StatefulWidget {
+  const _CreateStoreDialog();
+
+  @override
+  State<_CreateStoreDialog> createState() => _CreateStoreDialogState();
+}
+
+class _CreateStoreDialogState extends State<_CreateStoreDialog> {
+  final _name = TextEditingController();
+  final _description = TextEditingController();
+  final _logo = TextEditingController();
+  final _banner = TextEditingController();
+  WorldwideAddress? _address;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    _logo.dispose();
+    _banner.dispose();
+    super.dispose();
+  }
+
+  void _create() {
+    final address = _address;
+    if (address == null ||
+        !address.isComplete ||
+        address.addressLine1.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enter the complete store address, including country, city and postal/ZIP code.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final store = ShopCatalog.instance.createStore(
+      name: _name.text,
+      description: _description.text,
+      logoUrl: _logo.text,
+      bannerUrl: _banner.text,
+      address: address,
+    );
+    Navigator.of(context).pop<ShopStore>(store);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const UniversalText('Create Store'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(labelText: 'Store name'),
+              ),
+              TextField(
+                controller: _description,
+                decoration: const InputDecoration(labelText: 'Description'),
+              ),
+              TextField(
+                controller: _logo,
+                decoration:
+                    const InputDecoration(labelText: 'Logo URL (optional)'),
+              ),
+              TextField(
+                controller: _banner,
+                decoration:
+                    const InputDecoration(labelText: 'Banner URL (optional)'),
+              ),
+              const SizedBox(height: 14),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: UniversalText(
+                  'Store address',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(height: 8),
+              WorldwideAddressForm(
+                requireStreet: true,
+                onChanged: (value) => setState(() => _address = value),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const UniversalText('Cancel'),
+          ),
+          FilledButton(
+            onPressed: _create,
+            child: const UniversalText('Create Store'),
+          ),
+        ],
+      );
 }
 
 /// Target-inspired Shop assistant. It is deliberately transparent: the first
@@ -1333,7 +1777,8 @@ class _ShopScreenState extends State<ShopScreen> {
 class _AskShopAssistantDialog extends StatefulWidget {
   const _AskShopAssistantDialog();
   @override
-  State<_AskShopAssistantDialog> createState() => _AskShopAssistantDialogState();
+  State<_AskShopAssistantDialog> createState() =>
+      _AskShopAssistantDialogState();
 }
 
 class _AskShopAssistantDialogState extends State<_AskShopAssistantDialog> {
@@ -1357,8 +1802,11 @@ class _AskShopAssistantDialogState extends State<_AskShopAssistantDialog> {
         .split(RegExp(r'[^a-z0-9]+'))
         .where((v) => v.length >= 2)
         .toSet();
-    final budgetMatch = RegExp(r'(?:under|below|less than)\s*\$?\s*(\d+(?:\.\d+)?)').firstMatch(question.toLowerCase());
-    final budget = budgetMatch == null ? null : double.tryParse(budgetMatch.group(1)!);
+    final budgetMatch =
+        RegExp(r'(?:under|below|less than)\s*\$?\s*(\d+(?:\.\d+)?)')
+            .firstMatch(question.toLowerCase());
+    final budget =
+        budgetMatch == null ? null : double.tryParse(budgetMatch.group(1)!);
     final scored = <({ShopProduct product, int score})>[];
     for (final product in catalog.products.where((p) => p.active)) {
       if (budget != null && product.price > budget) continue;
@@ -1385,46 +1833,83 @@ class _AskShopAssistantDialogState extends State<_AskShopAssistantDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Row(children: [Icon(Icons.auto_awesome), SizedBox(width: 8), UniversalText('Ask Shop')]),
+        title: const Row(children: [
+          Icon(Icons.auto_awesome),
+          SizedBox(width: 8),
+          UniversalText('Ask Shop')
+        ]),
         content: SizedBox(
           width: 620,
           child: SingleChildScrollView(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const UniversalText('Ask naturally about products, media, artists, collections, genres or budgets.'),
-              const SizedBox(height: 10),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                onSubmitted: (_) => _ask(),
-                decoration: const InputDecoration(
-                  labelText: 'What are you looking for?',
-                  hintText: 'KISS merchandise under 50 dollars',
-                  prefixIcon: Icon(Icons.search_rounded),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, children: [
-                for (final example in const ['KISS merchandise', 'Marvel posters', '80s music gifts', 'movies under 50'])
-                  ActionChip(label: Text(example), onPressed: () { controller.text = example; _ask(); }),
-              ]),
-              const SizedBox(height: 14),
-              if (loading) const Center(child: CircularProgressIndicator()),
-              if (!loading && controller.text.trim().isNotEmpty && results.isEmpty)
-                const UniversalText('No matching products were found. Try an artist, movie, collection, genre, or a broader description.'),
-              for (final product in results)
-                Card(
-                  child: ListTile(
-                    leading: ShopCatalog.instance._productImageForDialog(product, context),
-                    title: Text(product.name),
-                    subtitle: Text('${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency}'),
-                    trailing: FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () { ShopCatalog.instance.addToBag(product.id); Navigator.pop(context); }, child: const UniversalText('Add')),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const UniversalText(
+                      'Ask naturally about products, media, artists, collections, genres or budgets.'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    onSubmitted: (_) => _ask(),
+                    decoration: const InputDecoration(
+                      labelText: 'What are you looking for?',
+                      hintText: 'KISS merchandise under 50 dollars',
+                      prefixIcon: Icon(Icons.search_rounded),
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-            ]),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 6, children: [
+                    for (final example in const [
+                      'KISS merchandise',
+                      'Marvel posters',
+                      '80s music gifts',
+                      'movies under 50'
+                    ])
+                      ActionChip(
+                          label: Text(example),
+                          onPressed: () {
+                            controller.text = example;
+                            _ask();
+                          }),
+                  ]),
+                  const SizedBox(height: 14),
+                  if (loading) const Center(child: CircularProgressIndicator()),
+                  if (!loading &&
+                      controller.text.trim().isNotEmpty &&
+                      results.isEmpty)
+                    const UniversalText(
+                        'No matching products were found. Try an artist, movie, collection, genre, or a broader description.'),
+                  for (final product in results)
+                    Card(
+                      child: ListTile(
+                        leading: ShopCatalog.instance
+                            ._productImageForDialog(product, context),
+                        title: Text(product.name),
+                        subtitle: Text(
+                            '${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency}'),
+                        trailing: FilledButton(
+                            onPressed: product.inventoryQuantity <= 0
+                                ? null
+                                : () {
+                                    ShopCatalog.instance.addToBag(product.id);
+                                    Navigator.pop(context);
+                                  },
+                            child: const UniversalText('Add')),
+                      ),
+                    ),
+                ]),
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Close')), FilledButton.icon(onPressed: loading ? null : _ask, icon: const Icon(Icons.auto_awesome), label: const UniversalText('Ask'))],
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const UniversalText('Close')),
+          FilledButton.icon(
+              onPressed: loading ? null : _ask,
+              icon: const Icon(Icons.auto_awesome),
+              label: const UniversalText('Ask'))
+        ],
       );
 }
 
@@ -1438,51 +1923,275 @@ class ShopStoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final catalog = ShopCatalog.instance;
-    return AnimatedBuilder(animation: catalog, builder: (_, __) {
-      final products = catalog.productsForStore(store.id);
-      final lines = catalog.linesForStore(store.id);
-      final design = store.design;
-      final sections = <String, Widget>{
-        if (store.description.isNotEmpty) 'About': Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(store.description, style: Theme.of(context).textTheme.bodyLarge)),
-        if (products.any((p) => p.featured)) 'Featured': Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Featured', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), const SizedBox(height: 8), for (final product in products.where((p) => p.featured)) _productRow(context, product)]),
-        'Products': Column(key: _productsSectionKey, crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('All Products', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), const SizedBox(height: 8), if (design.productLayout == 'grid') _productGrid(context, products, design) else for (final product in products) _productRow(context, product)]),
-      };
-      final heroImageUrl = MediaQuery.sizeOf(context).width < 600 && design.mobileBannerUrl.isNotEmpty ? design.mobileBannerUrl : store.bannerUrl;
-      return Theme(
-        data: _storefrontTheme(context, design),
-        child: Scaffold(
-        appBar: AppBar(title: Text(store.name), actions: [
-          _BagButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopBagScreen(onHome: onHome)))),
-        ]),
-        body: Container(decoration: _storefrontBackground(design), child: ListView(padding: const EdgeInsets.all(18), children: [
-          Container(height: 190, decoration: BoxDecoration(borderRadius: BorderRadius.circular(design.cardRadius), color: Color(design.backgroundColor), gradient: design.backgroundType == 'gradient' ? LinearGradient(colors: [Color(design.backgroundColor), Color(design.gradientEndColor)]) : null, image: heroImageUrl?.isNotEmpty == true ? DecorationImage(image: NetworkImage(heroImageUrl!), fit: BoxFit.cover, alignment: _bannerAlignment(design.bannerPosition), colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: design.bannerOverlay), BlendMode.darken)) : null), child: Padding(padding: const EdgeInsets.all(22), child: Align(alignment: Alignment.bottomLeft, child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [if (design.heroTitle.isNotEmpty) Text(design.heroTitle, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)), if (design.heroSubtitle.isNotEmpty) Text(design.heroSubtitle, style: const TextStyle(color: Colors.white, fontSize: 16)), if (design.heroCtaLabel.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: FilledButton(onPressed: () { final target = _productsSectionKey.currentContext; if (target != null) Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 350), alignment: 0.08); }, child: Text(design.heroCtaLabel)))])))),
-          const SizedBox(height: 14),
-          Row(children: [CircleAvatar(radius: 30, backgroundImage: store.logoUrl?.isNotEmpty == true ? NetworkImage(store.logoUrl!) : null, child: store.logoUrl?.isNotEmpty == true ? null : Text(store.name.isEmpty ? '?' : store.name.substring(0, 1).toUpperCase())), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(store.name, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)), if (store.description.isNotEmpty) Text(store.description)]))]),
-          const SizedBox(height: 18),
-          if (lines.isNotEmpty) FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: lines, title: 'Checkout • ${store.name}', storeSpecific: true, onHome: onHome))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout this Store')),
-          const SizedBox(height: 16),
-          for (final section in design.sectionOrder) if (sections[section] != null) Padding(padding: const EdgeInsets.only(bottom: 16), child: sections[section]!),
-        ])),
-      ));
-    });
+    return AnimatedBuilder(
+        animation: catalog,
+        builder: (_, __) {
+          final products = catalog.productsForStore(store.id);
+          final lines = catalog.linesForStore(store.id);
+          final design = store.design;
+          final sections = <String, Widget>{
+            if (store.description.isNotEmpty)
+              'About': Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(store.description,
+                      style: Theme.of(context).textTheme.bodyLarge)),
+            if (products.any((p) => p.featured))
+              'Featured': Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Featured',
+                        style: TextStyle(
+                            fontSize: 21, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    for (final product in products.where((p) => p.featured))
+                      _productRow(context, product)
+                  ]),
+            'Products': Column(
+                key: _productsSectionKey,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('All Products',
+                      style:
+                          TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  if (design.productLayout == 'grid')
+                    _productGrid(context, products, design)
+                  else
+                    for (final product in products)
+                      _productRow(context, product)
+                ]),
+          };
+          final heroImageUrl = MediaQuery.sizeOf(context).width < 600 &&
+                  design.mobileBannerUrl.isNotEmpty
+              ? design.mobileBannerUrl
+              : store.bannerUrl;
+          return Theme(
+              data: _storefrontTheme(context, design),
+              child: Scaffold(
+                appBar: AppBar(title: Text(store.name), actions: [
+                  _BagButton(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => ShopBagScreen(onHome: onHome)))),
+                ]),
+                body: Container(
+                    decoration: _storefrontBackground(design),
+                    child:
+                        ListView(padding: const EdgeInsets.all(18), children: [
+                      Container(
+                          height: 190,
+                          decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(design.cardRadius),
+                              color: Color(design.backgroundColor),
+                              gradient: design.backgroundType == 'gradient'
+                                  ? LinearGradient(colors: [
+                                      Color(design.backgroundColor),
+                                      Color(design.gradientEndColor)
+                                    ])
+                                  : null,
+                              image: heroImageUrl?.isNotEmpty == true
+                                  ? DecorationImage(
+                                      image: NetworkImage(heroImageUrl!),
+                                      fit: BoxFit.cover,
+                                      alignment: _bannerAlignment(
+                                          design.bannerPosition),
+                                      colorFilter: ColorFilter.mode(
+                                          Colors.black.withValues(
+                                              alpha: design.bannerOverlay),
+                                          BlendMode.darken))
+                                  : null),
+                          child: Padding(
+                              padding: const EdgeInsets.all(22),
+                              child: Align(
+                                  alignment: Alignment.bottomLeft,
+                                  child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (design.heroTitle.isNotEmpty)
+                                          Text(design.heroTitle,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 26,
+                                                  fontWeight: FontWeight.w900)),
+                                        if (design.heroSubtitle.isNotEmpty)
+                                          Text(design.heroSubtitle,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 16)),
+                                        if (design.heroCtaLabel.isNotEmpty)
+                                          Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 8),
+                                              child: FilledButton(
+                                                  onPressed: () {
+                                                    final target =
+                                                        _productsSectionKey
+                                                            .currentContext;
+                                                    if (target != null) {
+                                                      Scrollable.ensureVisible(
+                                                          target,
+                                                          duration:
+                                                              const Duration(
+                                                                  milliseconds:
+                                                                      350),
+                                                          alignment: 0.08);
+                                                    }
+                                                  },
+                                                  child: Text(
+                                                      design.heroCtaLabel)))
+                                      ])))),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        CircleAvatar(
+                            radius: 30,
+                            backgroundImage: store.logoUrl?.isNotEmpty == true
+                                ? NetworkImage(store.logoUrl!)
+                                : null,
+                            child: store.logoUrl?.isNotEmpty == true
+                                ? null
+                                : Text(store.name.isEmpty
+                                    ? '?'
+                                    : store.name
+                                        .substring(0, 1)
+                                        .toUpperCase())),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(store.name,
+                                  style: const TextStyle(
+                                      fontSize: 25,
+                                      fontWeight: FontWeight.w900)),
+                              if (store.description.isNotEmpty)
+                                Text(store.description)
+                            ]))
+                      ]),
+                      const SizedBox(height: 18),
+                      if (lines.isNotEmpty)
+                        FilledButton.icon(
+                            onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => ShopCheckoutScreen(
+                                        lines: lines,
+                                        title: 'Checkout • ${store.name}',
+                                        storeSpecific: true,
+                                        onHome: onHome))),
+                            icon: const Icon(Icons.lock_outline),
+                            label: const UniversalText('Checkout this Store')),
+                      const SizedBox(height: 16),
+                      for (final section in design.sectionOrder)
+                        if (sections[section] != null)
+                          Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: sections[section]!),
+                    ])),
+              ));
+        });
   }
 
-  Widget _productGrid(BuildContext context, List<ShopProduct> products, StorefrontDesign design) {
+  Widget _productGrid(BuildContext context, List<ShopProduct> products,
+      StorefrontDesign design) {
     final width = MediaQuery.sizeOf(context).width;
     final count = width < 600 ? design.mobileColumns : design.desktopColumns;
-    return GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: count, childAspectRatio: design.imageRatio == 'Portrait' ? 0.72 : design.imageRatio == 'Landscape' ? 1.35 : 0.92, children: [
-      for (final product in products) Card(clipBehavior: Clip.antiAlias, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(design.cardRadius)), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: product.imageUrls.isEmpty ? const Center(child: Icon(Icons.shopping_bag_outlined)) : Image.network(product.imageUrls.first, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))), Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)), Text('${product.price.toStringAsFixed(2)} ${product.currency}'), SizedBox(width: double.infinity, child: FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => ShopCatalog.instance.addToBag(product.id), child: const Text('Add')))]))])),
-    ]);
+    return GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: count,
+        childAspectRatio: design.imageRatio == 'Portrait'
+            ? 0.72
+            : design.imageRatio == 'Landscape'
+                ? 1.35
+                : 0.92,
+        children: [
+          for (final product in products)
+            Card(
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(design.cardRadius)),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                          child: product.imageUrls.isEmpty
+                              ? const Center(
+                                  child: Icon(Icons.shopping_bag_outlined))
+                              : Image.network(product.imageUrls.first,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.broken_image_outlined))),
+                      Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(product.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                                Text(
+                                    '${product.price.toStringAsFixed(2)} ${product.currency}'),
+                                SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton(
+                                        onPressed:
+                                            product.inventoryQuantity <= 0
+                                                ? null
+                                                : () => ShopCatalog.instance
+                                                    .addToBag(product.id),
+                                        child: const Text('Add')))
+                              ]))
+                    ])),
+        ]);
   }
 
   Widget _productRow(BuildContext context, ShopProduct product) {
     final catalog = ShopCatalog.instance;
-    return Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(store.design.cardRadius)), child: ListTile(
-      leading: product.imageUrls.isEmpty ? const Icon(Icons.shopping_bag_outlined) : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(product.imageUrls.first, width: 52, height: 52, fit: BoxFit.cover)),
-      title: Text(product.name),
-      subtitle: Text('${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'),
-      trailing: Wrap(children: [IconButton(onPressed: () => catalog.toggleWishlist(product.id), icon: Icon(catalog.isWishlisted(product.id) ? Icons.favorite : Icons.favorite_border)), OutlinedButton(onPressed: product.inventoryQuantity <= 0 ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: [ShopBagLine(productId: product.id)], title: 'Checkout • ${store.name}', storeSpecific: true, onHome: onHome))), child: const UniversalText('Buy Now')), const SizedBox(width: 6), FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const UniversalText('Add'))]),
-    ));
+    return Card(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(store.design.cardRadius)),
+        child: ListTile(
+          leading: product.imageUrls.isEmpty
+              ? const Icon(Icons.shopping_bag_outlined)
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(product.imageUrls.first,
+                      width: 52, height: 52, fit: BoxFit.cover)),
+          title: Text(product.name),
+          subtitle: Text(
+              '${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'),
+          trailing: Wrap(children: [
+            IconButton(
+                onPressed: () => catalog.toggleWishlist(product.id),
+                icon: Icon(catalog.isWishlisted(product.id)
+                    ? Icons.favorite
+                    : Icons.favorite_border)),
+            OutlinedButton(
+                onPressed: product.inventoryQuantity <= 0
+                    ? null
+                    : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => ShopCheckoutScreen(
+                                lines: [ShopBagLine(productId: product.id)],
+                                title: 'Checkout • ${store.name}',
+                                storeSpecific: true,
+                                onHome: onHome))),
+                child: const UniversalText('Buy Now')),
+            const SizedBox(width: 6),
+            FilledButton(
+                onPressed: product.inventoryQuantity <= 0
+                    ? null
+                    : () => catalog.addToBag(product.id),
+                child: const UniversalText('Add'))
+          ]),
+        ));
   }
 }
 
@@ -1498,113 +2207,418 @@ class SellerDashboardScreen extends StatelessWidget {
     final stores = catalog.currentAccountStores;
     final activeStore = store ?? (stores.isEmpty ? null : stores.first);
     return Scaffold(
-      appBar: AppBar(automaticallyImplyLeading: false, title: const UniversalText('Seller Dashboard')),
+      appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const UniversalText('Seller Dashboard')),
       body: activeStore == null
-          ? const Center(child: UniversalText('Create a store to become a seller.'))
-          : AnimatedBuilder(animation: catalog, builder: (_, __) {
-              final products = catalog.productsForStore(activeStore.id);
-              final featured = products.where((p) => p.featured).length;
-              final inventory = products.fold<int>(0, (sum, p) => sum + p.inventoryQuantity);
-              final storeOrders = catalog.orders.where((o) => o.lines.any((line) => catalog.productById(line.productId)?.storeId == activeStore.id)).toList();
-              final salesByCurrency = <String, double>{};
-              for (final order in storeOrders) {
-                for (final line in order.lines) {
-                  final product = catalog.productById(line.productId);
-                  if (product != null && product.storeId == activeStore.id) {
-                    salesByCurrency[product.currency] = (salesByCurrency[product.currency] ?? 0) + product.price * line.quantity;
+          ? const Center(
+              child: UniversalText('Create a store to become a seller.'))
+          : AnimatedBuilder(
+              animation: catalog,
+              builder: (_, __) {
+                final products = catalog.productsForStore(activeStore.id);
+                final featured = products.where((p) => p.featured).length;
+                final inventory = products.fold<int>(
+                    0, (sum, p) => sum + p.inventoryQuantity);
+                final storeOrders = catalog.orders
+                    .where((o) => o.lines.any((line) =>
+                        catalog.productById(line.productId)?.storeId ==
+                        activeStore.id))
+                    .toList();
+                final salesByCurrency = <String, double>{};
+                for (final order in storeOrders) {
+                  for (final line in order.lines) {
+                    final product = catalog.productById(line.productId);
+                    if (product != null && product.storeId == activeStore.id) {
+                      salesByCurrency[product.currency] =
+                          (salesByCurrency[product.currency] ?? 0) +
+                              product.price * line.quantity;
+                    }
                   }
                 }
-              }
-              final salesLabel = salesByCurrency.isEmpty
-                  ? '0'
-                  : salesByCurrency.length == 1
-                      ? '${salesByCurrency.values.single.toStringAsFixed(2)} ${salesByCurrency.keys.single}'
-                      : '${salesByCurrency.length} currencies';
-              return ListView(padding: const EdgeInsets.all(18), children: [
-                Card(child: ListTile(leading: const Icon(Icons.storefront), title: Text(activeStore.name, style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: UniversalText(activeStore.address?.summary ?? 'Store settings, appearance and featured products'))),
-                GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: MediaQuery.sizeOf(context).width > 800 ? 4 : 2, childAspectRatio: 1.8, children: [
-                  _metric('Products', '${products.length}', Icons.inventory_2_outlined),
-                  _metric('Featured', '$featured', Icons.star_outline),
-                  _metric('Inventory', '$inventory', Icons.warehouse_outlined),
-                  _metric('Recorded sales', salesLabel, Icons.payments_outlined),
-                  _metric('Orders', '${storeOrders.length}', Icons.receipt_long_outlined),
-                ]),
-                const SizedBox(height: 14),
-                FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddShopProductScreen(store: activeStore))), icon: const Icon(Icons.add_box_outlined), label: const UniversalText('Add Product')),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreScreen(store: activeStore, onHome: onHome))), icon: const Icon(Icons.storefront_outlined), label: const UniversalText('View Store')),
-                const SizedBox(height: 8),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.account_balance_wallet_outlined),
-                    title: const UniversalText('Seller payment & payout methods'),
-                    subtitle: const UniversalText('Manage accepted payment methods and where your seller earnings are paid.'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ShopStoreSettingsScreen(store: activeStore),
+                final salesLabel = salesByCurrency.isEmpty
+                    ? '0'
+                    : salesByCurrency.length == 1
+                        ? '${salesByCurrency.values.single.toStringAsFixed(2)} ${salesByCurrency.keys.single}'
+                        : '${salesByCurrency.length} currencies';
+                return ListView(padding: const EdgeInsets.all(18), children: [
+                  Card(
+                      child: ListTile(
+                          leading: const Icon(Icons.storefront),
+                          title: Text(activeStore.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900)),
+                          subtitle: UniversalText(activeStore
+                                  .address?.summary ??
+                              'Store settings, appearance and featured products'))),
+                  GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount:
+                          MediaQuery.sizeOf(context).width > 800 ? 4 : 2,
+                      childAspectRatio: 1.8,
+                      children: [
+                        _metric('Products', '${products.length}',
+                            Icons.inventory_2_outlined),
+                        _metric('Featured', '$featured', Icons.star_outline),
+                        _metric('Inventory', '$inventory',
+                            Icons.warehouse_outlined),
+                        _metric('Recorded sales', salesLabel,
+                            Icons.payments_outlined),
+                        _metric('Orders', '${storeOrders.length}',
+                            Icons.receipt_long_outlined),
+                      ]),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  AddShopProductScreen(store: activeStore))),
+                      icon: const Icon(Icons.add_box_outlined),
+                      label: const UniversalText('Add Product')),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => ShopStoreScreen(
+                                  store: activeStore, onHome: onHome))),
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: const UniversalText('View Store')),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: ListTile(
+                      leading:
+                          const Icon(Icons.account_balance_wallet_outlined),
+                      title: const UniversalText(
+                          'Seller payment & payout methods'),
+                      subtitle: const UniversalText(
+                          'Manage accepted payment methods and where your seller earnings are paid.'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ShopStoreSettingsScreen(store: activeStore),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Card(child: ListTile(
-                  leading: const Icon(Icons.live_tv_outlined),
-                  title: const UniversalText('Live shopping & product videos'),
-                  subtitle: const UniversalText('Schedule demonstrations, manage live events, feature products, polls, and replay links.'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerLiveShoppingScreen(store: activeStore))),
-                )),
-                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreSettingsScreen(store: activeStore, designerOnly: true))), icon: const Icon(Icons.palette_outlined), label: const UniversalText('Storefront Designer')),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopStoreSettingsScreen(store: activeStore))), icon: const Icon(Icons.settings_outlined), label: const UniversalText('Store Settings & Payouts')),
-                const SizedBox(height: 14),
-                const Text('Orders', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                for (final order in storeOrders.take(20))
-                  Card(child: ListTile(title: Text(order.id), subtitle: Text('${order.createdAt} • ${order.total.toStringAsFixed(2)} USD'), trailing: const Icon(Icons.receipt_long_outlined))),
-                const SizedBox(height: 14),
-                const Text('Products', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                for (final product in products) Card(child: ListTile(title: Text(product.name), subtitle: Text('${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'), trailing: PopupMenuButton<String>(onSelected: (value) { if (value == 'edit') { _editProduct(context, product); } else if (value == 'delete') { catalog.deleteProduct(product.id); } else if (value == 'feature') { catalog.updateProduct(product, featured: !product.featured); } }, itemBuilder: (_) => [PopupMenuItem(value: 'edit', child: const UniversalText('Edit Product')), PopupMenuItem(value: 'feature', child: UniversalText(product.featured ? 'Remove Featured' : 'Make Featured')), const PopupMenuItem(value: 'delete', child: UniversalText('Delete Product'))]))),
-              ]);
-            }),
+                  const SizedBox(height: 8),
+                  Card(
+                      child: ListTile(
+                    leading: const Icon(Icons.live_tv_outlined),
+                    title:
+                        const UniversalText('Live shopping & product videos'),
+                    subtitle: const UniversalText(
+                        'Schedule demonstrations, manage live events, feature products, polls, and replay links.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                SellerLiveShoppingScreen(store: activeStore))),
+                  )),
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => ShopStoreSettingsScreen(
+                                  store: activeStore, designerOnly: true))),
+                      icon: const Icon(Icons.palette_outlined),
+                      label: const UniversalText('Storefront Designer')),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  ShopStoreSettingsScreen(store: activeStore))),
+                      icon: const Icon(Icons.settings_outlined),
+                      label: const UniversalText('Store Settings & Payouts')),
+                  const SizedBox(height: 14),
+                  const Text('Orders',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  for (final order in storeOrders.take(20))
+                    Card(
+                        child: ListTile(
+                            title: Text(order.id),
+                            subtitle: Text(
+                                '${order.createdAt} • ${order.total.toStringAsFixed(2)} USD'),
+                            trailing: const Icon(Icons.receipt_long_outlined))),
+                  const SizedBox(height: 14),
+                  const Text('Products',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  for (final product in products)
+                    Card(
+                        child: ListTile(
+                            title: Text(product.name),
+                            subtitle: Text(
+                                '${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'),
+                            trailing: PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    _editProduct(context, product);
+                                  } else if (value == 'delete') {
+                                    catalog.deleteProduct(product.id);
+                                  } else if (value == 'feature') {
+                                    catalog.updateProduct(product,
+                                        featured: !product.featured);
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                      PopupMenuItem(
+                                          value: 'edit',
+                                          child: const UniversalText(
+                                              'Edit Product')),
+                                      PopupMenuItem(
+                                          value: 'feature',
+                                          child: UniversalText(product.featured
+                                              ? 'Remove Featured'
+                                              : 'Make Featured')),
+                                      const PopupMenuItem(
+                                          value: 'delete',
+                                          child:
+                                              UniversalText('Delete Product'))
+                                    ]))),
+                ]);
+              }),
     );
   }
 
   Future<void> _editProduct(BuildContext context, ShopProduct product) async {
-    final name = TextEditingController(text: product.name);
-    final description = TextEditingController(text: product.description);
-    final price = TextEditingController(text: product.price.toStringAsFixed(2));
-    final inventory = TextEditingController(text: product.inventoryQuantity.toString());
-    await showDialog<void>(context: context, builder: (_) => AlertDialog(title: const UniversalText('Edit Product'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')), TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')), TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price')), TextField(controller: inventory, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Inventory'))])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () { ShopCatalog.instance.updateProduct(product, name: name.text, description: description.text, price: double.tryParse(price.text), inventoryQuantity: int.tryParse(inventory.text)); Navigator.pop(context); }, child: const UniversalText('Save'))]));
-    name.dispose(); description.dispose(); price.dispose(); inventory.dispose();
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _EditShopProductDialog(product: product),
+    );
   }
 
-  Widget _metric(String label, String value, IconData icon) => Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon), const Spacer(), Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), UniversalText(label)])));
+  Widget _metric(String label, String value, IconData icon) => Card(
+      child: Padding(
+          padding: const EdgeInsets.all(12),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon),
+            const Spacer(),
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            UniversalText(label)
+          ])));
+}
+
+class _EditShopProductDialog extends StatefulWidget {
+  final ShopProduct product;
+
+  const _EditShopProductDialog({required this.product});
+
+  @override
+  State<_EditShopProductDialog> createState() => _EditShopProductDialogState();
+}
+
+class _EditShopProductDialogState extends State<_EditShopProductDialog> {
+  late final TextEditingController _name =
+      TextEditingController(text: widget.product.name);
+  late final TextEditingController _description =
+      TextEditingController(text: widget.product.description);
+  late final TextEditingController _price = TextEditingController(
+    text: widget.product.price.toStringAsFixed(2),
+  );
+  late final TextEditingController _inventory = TextEditingController(
+    text: widget.product.inventoryQuantity.toString(),
+  );
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    _price.dispose();
+    _inventory.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const UniversalText('Edit Product'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              TextField(
+                controller: _description,
+                decoration: const InputDecoration(labelText: 'Description'),
+              ),
+              TextField(
+                controller: _price,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Price'),
+              ),
+              TextField(
+                controller: _inventory,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Inventory'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const UniversalText('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              ShopCatalog.instance.updateProduct(
+                widget.product,
+                name: _name.text,
+                description: _description.text,
+                price: double.tryParse(_price.text),
+                inventoryQuantity: int.tryParse(_inventory.text),
+              );
+              Navigator.of(context).pop();
+            },
+            child: const UniversalText('Save'),
+          ),
+        ],
+      );
+}
+
+class _AddPayoutDestinationDialog extends StatefulWidget {
+  const _AddPayoutDestinationDialog();
+
+  @override
+  State<_AddPayoutDestinationDialog> createState() =>
+      _AddPayoutDestinationDialogState();
+}
+
+class _AddPayoutDestinationDialogState
+    extends State<_AddPayoutDestinationDialog> {
+  final _provider = TextEditingController();
+  final _method = TextEditingController();
+  final _display = TextEditingController();
+  final _reference = TextEditingController();
+  final _masked = TextEditingController();
+
+  @override
+  void dispose() {
+    _provider.dispose();
+    _method.dispose();
+    _display.dispose();
+    _reference.dispose();
+    _masked.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const UniversalText('Add Payout Method'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _provider,
+                decoration: const InputDecoration(
+                  labelText: 'Provider key',
+                  hintText: 'paypal / mercado_pago / bank',
+                ),
+              ),
+              TextField(
+                controller: _method,
+                decoration: const InputDecoration(
+                  labelText: 'Method type',
+                  hintText: 'wallet / bank_account',
+                ),
+              ),
+              TextField(
+                controller: _display,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  hintText: 'My PayPal',
+                ),
+              ),
+              TextField(
+                controller: _reference,
+                decoration: const InputDecoration(
+                    labelText: 'Provider account reference'),
+              ),
+              TextField(
+                controller: _masked,
+                decoration: const InputDecoration(
+                  labelText: 'Masked identifier',
+                  hintText: 'email or ••••4821',
+                ),
+              ),
+              const SizedBox(height: 8),
+              const UniversalText(
+                'Provider references are stored instead of raw financial credentials.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const UniversalText('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(<String>[
+              _provider.text.trim(),
+              _method.text.trim(),
+              _display.text.trim(),
+              _reference.text.trim(),
+              _masked.text.trim(),
+            ]),
+            child: const UniversalText('Save'),
+          ),
+        ],
+      );
 }
 
 /// Seller store settings and appearance editor.
 class ShopStoreSettingsScreen extends StatefulWidget {
   final ShopStore store;
   final bool designerOnly;
-  const ShopStoreSettingsScreen({super.key, required this.store, this.designerOnly = false});
+  const ShopStoreSettingsScreen(
+      {super.key, required this.store, this.designerOnly = false});
   @override
-  State<ShopStoreSettingsScreen> createState() => _ShopStoreSettingsScreenState();
+  State<ShopStoreSettingsScreen> createState() =>
+      _ShopStoreSettingsScreenState();
 }
 
 class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
-  late final TextEditingController name = TextEditingController(text: widget.store.name);
-  late final TextEditingController description = TextEditingController(text: widget.store.description);
-  late final TextEditingController logo = TextEditingController(text: widget.store.logoUrl ?? '');
-  late final TextEditingController banner = TextEditingController(text: widget.store.bannerUrl ?? '');
-  late final TextEditingController paymentCountry = TextEditingController(text: widget.store.address?.countryCode ?? '');
-  late final TextEditingController paymentCurrency = TextEditingController(text: 'USD');
-  late final StorefrontDesign designDraft = StorefrontDesign.fromJson(widget.store.design.toJson());
-  late final TextEditingController backgroundUrl = TextEditingController(text: widget.store.design.backgroundImageUrl);
-  late final TextEditingController mobileBanner = TextEditingController(text: widget.store.design.mobileBannerUrl);
-  late final TextEditingController heroTitle = TextEditingController(text: widget.store.design.heroTitle);
-  late final TextEditingController heroSubtitle = TextEditingController(text: widget.store.design.heroSubtitle);
-  late final TextEditingController heroCta = TextEditingController(text: widget.store.design.heroCtaLabel);
+  late final TextEditingController name =
+      TextEditingController(text: widget.store.name);
+  late final TextEditingController description =
+      TextEditingController(text: widget.store.description);
+  late final TextEditingController logo =
+      TextEditingController(text: widget.store.logoUrl ?? '');
+  late final TextEditingController banner =
+      TextEditingController(text: widget.store.bannerUrl ?? '');
+  late final TextEditingController paymentCountry =
+      TextEditingController(text: widget.store.address?.countryCode ?? '');
+  late final TextEditingController paymentCurrency =
+      TextEditingController(text: 'USD');
+  late final StorefrontDesign designDraft =
+      StorefrontDesign.fromJson(widget.store.design.toJson());
+  late final TextEditingController backgroundUrl =
+      TextEditingController(text: widget.store.design.backgroundImageUrl);
+  late final TextEditingController mobileBanner =
+      TextEditingController(text: widget.store.design.mobileBannerUrl);
+  late final TextEditingController heroTitle =
+      TextEditingController(text: widget.store.design.heroTitle);
+  late final TextEditingController heroSubtitle =
+      TextEditingController(text: widget.store.design.heroSubtitle);
+  late final TextEditingController heroCta =
+      TextEditingController(text: widget.store.design.heroCtaLabel);
 
   bool loadingPaymentRegistry = true;
   bool savingPaymentMethods = false;
@@ -1624,151 +2638,432 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   }
 
   @override
-  void dispose() { name.dispose(); description.dispose(); logo.dispose(); banner.dispose(); paymentCountry.dispose(); paymentCurrency.dispose(); backgroundUrl.dispose(); mobileBanner.dispose(); heroTitle.dispose(); heroSubtitle.dispose(); heroCta.dispose(); super.dispose(); }
+  void dispose() {
+    name.dispose();
+    description.dispose();
+    logo.dispose();
+    banner.dispose();
+    paymentCountry.dispose();
+    paymentCurrency.dispose();
+    backgroundUrl.dispose();
+    mobileBanner.dispose();
+    heroTitle.dispose();
+    heroSubtitle.dispose();
+    heroCta.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: UniversalText(widget.designerOnly ? 'Storefront Designer' : 'Store Settings & Appearance')),
-    body: ListView(padding: const EdgeInsets.all(18), children: [
-      if (!widget.designerOnly) ...[
-      TextField(controller: name, decoration: const InputDecoration(labelText: 'Store name', border: OutlineInputBorder())),
-      const SizedBox(height: 10),
-      TextField(controller: description, minLines: 3, maxLines: 6, decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder())),
-      const SizedBox(height: 10),
-      ],
-      const SizedBox(height: 22),
-      const Text('Storefront Designer', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-      const Text('Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
-      const SizedBox(height: 12),
-      TextField(controller: logo, decoration: const InputDecoration(labelText: 'Store logo URL', border: OutlineInputBorder())),
-      const SizedBox(height: 10),
-      TextField(controller: banner, decoration: const InputDecoration(labelText: 'Desktop hero/banner image URL', border: OutlineInputBorder())),
-      DropdownButtonFormField<String>(initialValue: designDraft.presetTheme, decoration: const InputDecoration(labelText: 'Theme preset', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'Indigo', child: Text('Indigo')), DropdownMenuItem(value: 'Ocean', child: Text('Ocean')), DropdownMenuItem(value: 'Forest', child: Text('Forest')), DropdownMenuItem(value: 'Sunset', child: Text('Sunset')), DropdownMenuItem(value: 'Custom', child: Text('Custom'))], onChanged: (value) => _applyThemePreset(value)),
-      const SizedBox(height: 10),
-      DropdownButtonFormField<String>(initialValue: designDraft.brightnessMode, decoration: const InputDecoration(labelText: 'Light / dark appearance', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'system', child: Text('Auto (follow device)')), DropdownMenuItem(value: 'light', child: Text('Light')), DropdownMenuItem(value: 'dark', child: Text('Dark'))], onChanged: (value) { if (value != null) setState(() => designDraft.brightnessMode = value); }),
-      const SizedBox(height: 10),
-      Row(children: [
-        Expanded(child: _colorPicker('Brand primary color', designDraft.primaryColor, (color) => designDraft.primaryColor = color)),
-        const SizedBox(width: 8),
-        Expanded(child: _colorPicker('Brand accent color', designDraft.secondaryColor, (color) => designDraft.secondaryColor = color)),
-      ]),
-      const SizedBox(height: 10),
-      DropdownButtonFormField<String>(initialValue: designDraft.backgroundType, decoration: const InputDecoration(labelText: 'Store background', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'solid', child: Text('Solid color')), DropdownMenuItem(value: 'gradient', child: Text('Gradient')), DropdownMenuItem(value: 'image', child: Text('Image'))], onChanged: (value) { if (value != null) setState(() => designDraft.backgroundType = value); }),
-      if (designDraft.backgroundType == 'solid' || designDraft.backgroundType == 'gradient') ...[
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _colorPicker('Background color', designDraft.backgroundColor, (color) => designDraft.backgroundColor = color)),
-          if (designDraft.backgroundType == 'gradient') ...[
-            const SizedBox(width: 8),
-            Expanded(child: _colorPicker('Gradient end', designDraft.gradientEndColor, (color) => designDraft.gradientEndColor = color)),
+        appBar: AppBar(
+            title: UniversalText(widget.designerOnly
+                ? 'Storefront Designer'
+                : 'Store Settings & Appearance')),
+        body: ListView(padding: const EdgeInsets.all(18), children: [
+          if (!widget.designerOnly) ...[
+            TextField(
+                controller: name,
+                decoration: const InputDecoration(
+                    labelText: 'Store name', border: OutlineInputBorder())),
+            const SizedBox(height: 10),
+            TextField(
+                controller: description,
+                minLines: 3,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                    labelText: 'Description', border: OutlineInputBorder())),
+            const SizedBox(height: 10),
           ],
-        ]),
-      ],
-      if (designDraft.backgroundType == 'image') ...[const SizedBox(height: 10), TextField(controller: backgroundUrl, decoration: const InputDecoration(labelText: 'Background image URL'))],
-      const SizedBox(height: 10),
-      Row(children: [Expanded(child: TextField(controller: mobileBanner, decoration: const InputDecoration(labelText: 'Mobile hero image URL'))), const SizedBox(width: 8), Expanded(child: DropdownButtonFormField<String>(initialValue: designDraft.bannerPosition, decoration: const InputDecoration(labelText: 'Hero image position'), items: const [DropdownMenuItem(value: 'left', child: Text('Left')), DropdownMenuItem(value: 'center', child: Text('Center')), DropdownMenuItem(value: 'right', child: Text('Right'))], onChanged: (value) { if (value != null) setState(() => designDraft.bannerPosition = value); }))]),
-      const SizedBox(height: 10),
-      TextField(controller: heroTitle, decoration: const InputDecoration(labelText: 'Hero headline')),
-      TextField(controller: heroSubtitle, decoration: const InputDecoration(labelText: 'Hero supporting text')),
-      TextField(controller: heroCta, decoration: const InputDecoration(labelText: 'Hero call-to-action label')),
-      const SizedBox(height: 8),
-      Text('Hero overlay strength: ${designDraft.bannerOverlay.toStringAsFixed(2)}'),
-      Slider(value: designDraft.bannerOverlay, min: 0, max: 0.8, onChanged: (value) => setState(() => designDraft.bannerOverlay = value)),
-      DropdownButtonFormField<String>(initialValue: designDraft.fontFamily, decoration: const InputDecoration(labelText: 'Typography'), items: const [DropdownMenuItem(value: 'Default', child: Text('System')), DropdownMenuItem(value: 'Serif', child: Text('Serif')), DropdownMenuItem(value: 'Monospace', child: Text('Monospace'))], onChanged: (value) { if (value != null) setState(() => designDraft.fontFamily = value); }),
-      Text('Text size: ${(designDraft.fontScale * 100).round()}%'),
-      Slider(value: designDraft.fontScale, min: 0.8, max: 1.4, onChanged: (value) => setState(() => designDraft.fontScale = value)),
-      Text('Button corner radius: ${designDraft.buttonRadius.round()}'),
-      Slider(value: designDraft.buttonRadius, min: 0, max: 32, onChanged: (value) => setState(() => designDraft.buttonRadius = value)),
-      Text('Card corner radius: ${designDraft.cardRadius.round()}'),
-      Slider(value: designDraft.cardRadius, min: 0, max: 36, onChanged: (value) => setState(() => designDraft.cardRadius = value)),
-      DropdownButtonFormField<String>(initialValue: designDraft.productLayout, decoration: const InputDecoration(labelText: 'Product presentation'), items: const [DropdownMenuItem(value: 'list', child: Text('Compact list')), DropdownMenuItem(value: 'grid', child: Text('Product grid'))], onChanged: (value) { if (value != null) setState(() => designDraft.productLayout = value); }),
-      if (designDraft.productLayout == 'grid') ...[
-        DropdownButtonFormField<int>(initialValue: designDraft.mobileColumns, decoration: const InputDecoration(labelText: 'Mobile grid columns'), items: const [DropdownMenuItem(value: 1, child: Text('1 column')), DropdownMenuItem(value: 2, child: Text('2 columns'))], onChanged: (value) { if (value != null) setState(() => designDraft.mobileColumns = value); }),
-        DropdownButtonFormField<int>(initialValue: designDraft.desktopColumns, decoration: const InputDecoration(labelText: 'Desktop grid columns'), items: [for (var i = 2; i <= 5; i++) DropdownMenuItem(value: i, child: Text('$i columns'))], onChanged: (value) { if (value != null) setState(() => designDraft.desktopColumns = value); }),
-      ],
-      DropdownButtonFormField<String>(initialValue: designDraft.imageRatio, decoration: const InputDecoration(labelText: 'Product image ratio'), items: const [DropdownMenuItem(value: 'Square', child: Text('Square')), DropdownMenuItem(value: 'Portrait', child: Text('Portrait')), DropdownMenuItem(value: 'Landscape', child: Text('Landscape'))], onChanged: (value) { if (value != null) setState(() => designDraft.imageRatio = value); }),
-      const SizedBox(height: 10),
-      const Text('Store section order', style: TextStyle(fontWeight: FontWeight.bold)),
-      for (var index = 0; index < designDraft.sectionOrder.length; index++) ListTile(dense: true, title: Text(designDraft.sectionOrder[index]), trailing: Wrap(children: [IconButton(onPressed: index == 0 ? null : () => _moveSection(index, index - 1), icon: const Icon(Icons.arrow_upward)), IconButton(onPressed: index == designDraft.sectionOrder.length - 1 ? null : () => _moveSection(index, index + 1), icon: const Icon(Icons.arrow_downward))])),
-      const SizedBox(height: 14),
-      StorefrontDevicePreview(design: designDraft, storeName: name.text, products: ShopCatalog.instance.productsForStore(widget.store.id)),
-      const SizedBox(height: 18),
-      if (!widget.designerOnly) ...[
-      const UniversalText('Seller payment & payout methods', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 6),
-      const UniversalText('Choose any supported providers. The buyer checkout filters these methods by buyer country, currency, and provider eligibility. The registry is extensible; these entries are not the complete worldwide list.'),
-      const SizedBox(height: 12),
-      Row(children: [
-        Expanded(child: TextField(controller: paymentCountry, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Seller country', hintText: 'MX', border: OutlineInputBorder()))),
-        const SizedBox(width: 10),
-        Expanded(child: TextField(controller: paymentCurrency, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Settlement currency', hintText: 'USD', border: OutlineInputBorder()))),
-      ]),
-      const SizedBox(height: 10),
-      if (loadingPaymentRegistry) const LinearProgressIndicator() else ...paymentRegistry.map((method) {
-        final id = method['id']?.toString() ?? '';
-        return CheckboxListTile(
-          value: selectedPaymentMethodIds.contains(id),
-          onChanged: savingPaymentMethods
-              ? null
-              : (value) {
-                  setState(() {
-                    if (value == true) {
-                      selectedPaymentMethodIds.add(id);
-                    } else {
-                      selectedPaymentMethodIds.remove(id);
-                    }
-                  });
-                },
-          title: Text(method['displayName']?.toString() ?? id),
-          subtitle: Text(method['methodType']?.toString() ?? 'payment'),
-        );
-      }),
-      const SizedBox(height: 8),
-      FilledButton.icon(onPressed: savingPaymentMethods ? null : _savePaymentMethods, icon: savingPaymentMethods ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments_outlined), label: UniversalText(savingPaymentMethods ? 'Saving payment methods…' : 'Save Payment Methods')),
-      const SizedBox(height: 20),
-      const UniversalText('Seller payout destinations', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 6),
-      const UniversalText('Add where marketplace earnings should be paid. Use provider account references or masked identifiers; never enter bank passwords, card numbers, CVV, or equivalent secrets.'),
-      const SizedBox(height: 10),
-      if (loadingPayouts)
-        const LinearProgressIndicator()
-      else if (payoutDestinations.isEmpty)
-        const Card(child: ListTile(title: UniversalText('No payout destinations added yet.')))
-      else
-        for (final destination in payoutDestinations)
-          Card(child: ListTile(
-            leading: const Icon(Icons.account_balance_wallet_outlined),
-            title: Text(destination['displayName']?.toString() ?? destination['providerKey']?.toString() ?? 'Payout destination'),
-            subtitle: Text('${destination['methodType'] ?? 'payout'}${destination['maskedIdentifier'] == null ? '' : ' • ${destination['maskedIdentifier']}'}${destination['verified'] == true ? ' • Verified' : ' • Pending verification'}'),
-            trailing: IconButton(
-              tooltip: 'Remove payout destination',
-              onPressed: savingPayout ? null : () => _deletePayoutDestination(destination['id']?.toString() ?? ''),
-              icon: const Icon(Icons.delete_outline),
+          const SizedBox(height: 22),
+          const Text('Storefront Designer',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const Text(
+              'Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
+          const SizedBox(height: 12),
+          TextField(
+              controller: logo,
+              decoration: const InputDecoration(
+                  labelText: 'Store logo URL', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          TextField(
+              controller: banner,
+              decoration: const InputDecoration(
+                  labelText: 'Desktop hero/banner image URL',
+                  border: OutlineInputBorder())),
+          DropdownButtonFormField<String>(
+              initialValue: designDraft.presetTheme,
+              decoration: const InputDecoration(
+                  labelText: 'Theme preset', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'Indigo', child: Text('Indigo')),
+                DropdownMenuItem(value: 'Ocean', child: Text('Ocean')),
+                DropdownMenuItem(value: 'Forest', child: Text('Forest')),
+                DropdownMenuItem(value: 'Sunset', child: Text('Sunset')),
+                DropdownMenuItem(value: 'Custom', child: Text('Custom'))
+              ],
+              onChanged: (value) => _applyThemePreset(value)),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+              initialValue: designDraft.brightnessMode,
+              decoration: const InputDecoration(
+                  labelText: 'Light / dark appearance',
+                  border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(
+                    value: 'system', child: Text('Auto (follow device)')),
+                DropdownMenuItem(value: 'light', child: Text('Light')),
+                DropdownMenuItem(value: 'dark', child: Text('Dark'))
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => designDraft.brightnessMode = value);
+                }
+              }),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+                child: _colorPicker(
+                    'Brand primary color',
+                    designDraft.primaryColor,
+                    (color) => designDraft.primaryColor = color)),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _colorPicker(
+                    'Brand accent color',
+                    designDraft.secondaryColor,
+                    (color) => designDraft.secondaryColor = color)),
+          ]),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+              initialValue: designDraft.backgroundType,
+              decoration: const InputDecoration(
+                  labelText: 'Store background', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'solid', child: Text('Solid color')),
+                DropdownMenuItem(value: 'gradient', child: Text('Gradient')),
+                DropdownMenuItem(value: 'image', child: Text('Image'))
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => designDraft.backgroundType = value);
+                }
+              }),
+          if (designDraft.backgroundType == 'solid' ||
+              designDraft.backgroundType == 'gradient') ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                  child: _colorPicker(
+                      'Background color',
+                      designDraft.backgroundColor,
+                      (color) => designDraft.backgroundColor = color)),
+              if (designDraft.backgroundType == 'gradient') ...[
+                const SizedBox(width: 8),
+                Expanded(
+                    child: _colorPicker(
+                        'Gradient end',
+                        designDraft.gradientEndColor,
+                        (color) => designDraft.gradientEndColor = color)),
+              ],
+            ]),
+          ],
+          if (designDraft.backgroundType == 'image') ...[
+            const SizedBox(height: 10),
+            TextField(
+                controller: backgroundUrl,
+                decoration:
+                    const InputDecoration(labelText: 'Background image URL'))
+          ],
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+                child: TextField(
+                    controller: mobileBanner,
+                    decoration: const InputDecoration(
+                        labelText: 'Mobile hero image URL'))),
+            const SizedBox(width: 8),
+            Expanded(
+                child: DropdownButtonFormField<String>(
+                    initialValue: designDraft.bannerPosition,
+                    decoration:
+                        const InputDecoration(labelText: 'Hero image position'),
+                    items: const [
+                      DropdownMenuItem(value: 'left', child: Text('Left')),
+                      DropdownMenuItem(value: 'center', child: Text('Center')),
+                      DropdownMenuItem(value: 'right', child: Text('Right'))
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => designDraft.bannerPosition = value);
+                      }
+                    }))
+          ]),
+          const SizedBox(height: 10),
+          TextField(
+              controller: heroTitle,
+              decoration: const InputDecoration(labelText: 'Hero headline')),
+          TextField(
+              controller: heroSubtitle,
+              decoration:
+                  const InputDecoration(labelText: 'Hero supporting text')),
+          TextField(
+              controller: heroCta,
+              decoration: const InputDecoration(
+                  labelText: 'Hero call-to-action label')),
+          const SizedBox(height: 8),
+          Text(
+              'Hero overlay strength: ${designDraft.bannerOverlay.toStringAsFixed(2)}'),
+          Slider(
+              value: designDraft.bannerOverlay,
+              min: 0,
+              max: 0.8,
+              onChanged: (value) =>
+                  setState(() => designDraft.bannerOverlay = value)),
+          DropdownButtonFormField<String>(
+              initialValue: designDraft.fontFamily,
+              decoration: const InputDecoration(labelText: 'Typography'),
+              items: const [
+                DropdownMenuItem(value: 'Default', child: Text('System')),
+                DropdownMenuItem(value: 'Serif', child: Text('Serif')),
+                DropdownMenuItem(value: 'Monospace', child: Text('Monospace'))
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => designDraft.fontFamily = value);
+                }
+              }),
+          Text('Text size: ${(designDraft.fontScale * 100).round()}%'),
+          Slider(
+              value: designDraft.fontScale,
+              min: 0.8,
+              max: 1.4,
+              onChanged: (value) =>
+                  setState(() => designDraft.fontScale = value)),
+          Text('Button corner radius: ${designDraft.buttonRadius.round()}'),
+          Slider(
+              value: designDraft.buttonRadius,
+              min: 0,
+              max: 32,
+              onChanged: (value) =>
+                  setState(() => designDraft.buttonRadius = value)),
+          Text('Card corner radius: ${designDraft.cardRadius.round()}'),
+          Slider(
+              value: designDraft.cardRadius,
+              min: 0,
+              max: 36,
+              onChanged: (value) =>
+                  setState(() => designDraft.cardRadius = value)),
+          DropdownButtonFormField<String>(
+              initialValue: designDraft.productLayout,
+              decoration:
+                  const InputDecoration(labelText: 'Product presentation'),
+              items: const [
+                DropdownMenuItem(value: 'list', child: Text('Compact list')),
+                DropdownMenuItem(value: 'grid', child: Text('Product grid'))
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => designDraft.productLayout = value);
+                }
+              }),
+          if (designDraft.productLayout == 'grid') ...[
+            DropdownButtonFormField<int>(
+                initialValue: designDraft.mobileColumns,
+                decoration:
+                    const InputDecoration(labelText: 'Mobile grid columns'),
+                items: const [
+                  DropdownMenuItem(value: 1, child: Text('1 column')),
+                  DropdownMenuItem(value: 2, child: Text('2 columns'))
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => designDraft.mobileColumns = value);
+                  }
+                }),
+            DropdownButtonFormField<int>(
+                initialValue: designDraft.desktopColumns,
+                decoration:
+                    const InputDecoration(labelText: 'Desktop grid columns'),
+                items: [
+                  for (var i = 2; i <= 5; i++)
+                    DropdownMenuItem(value: i, child: Text('$i columns'))
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => designDraft.desktopColumns = value);
+                  }
+                }),
+          ],
+          DropdownButtonFormField<String>(
+              initialValue: designDraft.imageRatio,
+              decoration:
+                  const InputDecoration(labelText: 'Product image ratio'),
+              items: const [
+                DropdownMenuItem(value: 'Square', child: Text('Square')),
+                DropdownMenuItem(value: 'Portrait', child: Text('Portrait')),
+                DropdownMenuItem(value: 'Landscape', child: Text('Landscape'))
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => designDraft.imageRatio = value);
+                }
+              }),
+          const SizedBox(height: 10),
+          const Text('Store section order',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          for (var index = 0; index < designDraft.sectionOrder.length; index++)
+            ListTile(
+                dense: true,
+                title: Text(designDraft.sectionOrder[index]),
+                trailing: Wrap(children: [
+                  IconButton(
+                      onPressed: index == 0
+                          ? null
+                          : () => _moveSection(index, index - 1),
+                      icon: const Icon(Icons.arrow_upward)),
+                  IconButton(
+                      onPressed: index == designDraft.sectionOrder.length - 1
+                          ? null
+                          : () => _moveSection(index, index + 1),
+                      icon: const Icon(Icons.arrow_downward))
+                ])),
+          const SizedBox(height: 14),
+          StorefrontDevicePreview(
+              design: designDraft,
+              storeName: name.text,
+              products: ShopCatalog.instance.productsForStore(widget.store.id)),
+          const SizedBox(height: 18),
+          if (!widget.designerOnly) ...[
+            const UniversalText('Seller payment & payout methods',
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            const UniversalText(
+                'Choose any supported providers. The buyer checkout filters these methods by buyer country, currency, and provider eligibility. The registry is extensible; these entries are not the complete worldwide list.'),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                  child: TextField(
+                      controller: paymentCountry,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                          labelText: 'Seller country',
+                          hintText: 'MX',
+                          border: OutlineInputBorder()))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: TextField(
+                      controller: paymentCurrency,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                          labelText: 'Settlement currency',
+                          hintText: 'USD',
+                          border: OutlineInputBorder()))),
+            ]),
+            const SizedBox(height: 10),
+            if (loadingPaymentRegistry)
+              const LinearProgressIndicator()
+            else
+              ...paymentRegistry.map((method) {
+                final id = method['id']?.toString() ?? '';
+                return CheckboxListTile(
+                  value: selectedPaymentMethodIds.contains(id),
+                  onChanged: savingPaymentMethods
+                      ? null
+                      : (value) {
+                          setState(() {
+                            if (value == true) {
+                              selectedPaymentMethodIds.add(id);
+                            } else {
+                              selectedPaymentMethodIds.remove(id);
+                            }
+                          });
+                        },
+                  title: Text(method['displayName']?.toString() ?? id),
+                  subtitle: Text(method['methodType']?.toString() ?? 'payment'),
+                );
+              }),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+                onPressed: savingPaymentMethods ? null : _savePaymentMethods,
+                icon: savingPaymentMethods
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.payments_outlined),
+                label: UniversalText(savingPaymentMethods
+                    ? 'Saving payment methods…'
+                    : 'Save Payment Methods')),
+            const SizedBox(height: 20),
+            const UniversalText('Seller payout destinations',
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            const UniversalText(
+                'Add where marketplace earnings should be paid. Use provider account references or masked identifiers; never enter bank passwords, card numbers, CVV, or equivalent secrets.'),
+            const SizedBox(height: 10),
+            if (loadingPayouts)
+              const LinearProgressIndicator()
+            else if (payoutDestinations.isEmpty)
+              const Card(
+                  child: ListTile(
+                      title:
+                          UniversalText('No payout destinations added yet.')))
+            else
+              for (final destination in payoutDestinations)
+                Card(
+                    child: ListTile(
+                  leading: const Icon(Icons.account_balance_wallet_outlined),
+                  title: Text(destination['displayName']?.toString() ??
+                      destination['providerKey']?.toString() ??
+                      'Payout destination'),
+                  subtitle: Text(
+                      '${destination['methodType'] ?? 'payout'}${destination['maskedIdentifier'] == null ? '' : ' • ${destination['maskedIdentifier']}'}${destination['verified'] == true ? ' • Verified' : ' • Pending verification'}'),
+                  trailing: IconButton(
+                    tooltip: 'Remove payout destination',
+                    onPressed: savingPayout
+                        ? null
+                        : () => _deletePayoutDestination(
+                            destination['id']?.toString() ?? ''),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                )),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: savingPayout ? null : _addPayoutDestination,
+              icon: savingPayout
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.add_card_outlined),
+              label: const UniversalText('Add Payout Method'),
             ),
-          )),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(
-        onPressed: savingPayout ? null : _addPayoutDestination,
-        icon: savingPayout ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_card_outlined),
-        label: const UniversalText('Add Payout Method'),
-      ),
-      ],
-      const SizedBox(height: 14),
-      FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save_outlined), label: UniversalText(widget.designerOnly ? 'Save Storefront Design' : 'Save Store Settings')),
-    ]),
-  );
+          ],
+          const SizedBox(height: 14),
+          FilledButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.save_outlined),
+              label: UniversalText(widget.designerOnly
+                  ? 'Save Storefront Design'
+                  : 'Save Store Settings')),
+        ]),
+      );
 
   Future<void> _loadSellerPaymentMethods() async {
     try {
       final api = AppController.instance.backendApi;
       final registry = await api.getPaymentMethodCatalog();
-      final selected = await api.getAppRecords(recordType: 'seller_payment_method');
+      final selected =
+          await api.getAppRecords(recordType: 'seller_payment_method');
       if (!mounted) return;
       setState(() {
         paymentRegistry = registry;
         for (final record in selected) {
           final data = record['data'];
-          if (data is Map && data['enabled'] != false) selectedPaymentMethodIds.add(data['paymentMethodId']?.toString() ?? '');
+          if (data is Map && data['enabled'] != false) {
+            selectedPaymentMethodIds
+                .add(data['paymentMethodId']?.toString() ?? '');
+          }
         }
         loadingPaymentRegistry = false;
       });
@@ -1779,41 +3074,30 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
 
   Future<void> _loadPayoutDestinations() async {
     try {
-      final values = await AppController.instance.backendApi.getSellerPayoutDestinations();
-      if (mounted) setState(() { payoutDestinations = values; loadingPayouts = false; });
+      final values =
+          await AppController.instance.backendApi.getSellerPayoutDestinations();
+      if (mounted) {
+        setState(() {
+          payoutDestinations = values;
+          loadingPayouts = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => loadingPayouts = false);
     }
   }
 
   Future<void> _addPayoutDestination() async {
-    final provider = TextEditingController();
-    final method = TextEditingController();
-    final display = TextEditingController();
-    final reference = TextEditingController();
-    final masked = TextEditingController();
-    final submitted = await showDialog<bool>(
+    final values = await showDialog<List<String>>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const UniversalText('Add Payout Method'),
-        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: provider, decoration: const InputDecoration(labelText: 'Provider key', hintText: 'paypal / mercado_pago / bank')),
-          TextField(controller: method, decoration: const InputDecoration(labelText: 'Method type', hintText: 'wallet / bank_account')),
-          TextField(controller: display, decoration: const InputDecoration(labelText: 'Display name', hintText: 'My PayPal')),
-          TextField(controller: reference, decoration: const InputDecoration(labelText: 'Provider account reference')),
-          TextField(controller: masked, decoration: const InputDecoration(labelText: 'Masked identifier', hintText: 'email or ••••4821')),
-          const SizedBox(height: 8),
-          const UniversalText('Provider references are stored instead of raw financial credentials.'),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Save')),
-        ],
-      ),
+      builder: (_) => const _AddPayoutDestinationDialog(),
     );
-    final values = [provider, method, display, reference, masked].map((c) => c.text.trim()).toList();
-    provider.dispose(); method.dispose(); display.dispose(); reference.dispose(); masked.dispose();
-    if (submitted != true || values[0].isEmpty || values[1].isEmpty || values[2].isEmpty) return;
+    if (values == null ||
+        values[0].isEmpty ||
+        values[1].isEmpty ||
+        values[2].isEmpty) {
+      return;
+    }
     setState(() => savingPayout = true);
     try {
       await AppController.instance.backendApi.saveSellerPayoutDestination(
@@ -1824,9 +3108,15 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
         maskedIdentifier: values[4].isEmpty ? null : values[4],
       );
       await _loadPayoutDestinations();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Payout destination saved.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: UniversalText('Payout destination saved.')));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to save payout destination: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to save payout destination: $e')));
+      }
     } finally {
       if (mounted) setState(() => savingPayout = false);
     }
@@ -1839,7 +3129,10 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
       await AppController.instance.backendApi.deleteSellerPayoutDestination(id);
       await _loadPayoutDestinations();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to remove payout destination: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to remove payout destination: $e')));
+      }
     } finally {
       if (mounted) setState(() => savingPayout = false);
     }
@@ -1849,12 +3142,15 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
     final country = paymentCountry.text.trim().toUpperCase();
     final currency = paymentCurrency.text.trim().toUpperCase();
     if (country.isEmpty || currency.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter the seller country and settlement currency first.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: UniversalText(
+              'Enter the seller country and settlement currency first.')));
       return;
     }
     setState(() => savingPaymentMethods = true);
     try {
-      for (final methodId in selectedPaymentMethodIds.where((id) => id.trim().isNotEmpty)) {
+      for (final methodId
+          in selectedPaymentMethodIds.where((id) => id.trim().isNotEmpty)) {
         await AppController.instance.backendApi.saveSellerPaymentMethod(
           paymentMethodId: methodId,
           countryCode: country,
@@ -1862,9 +3158,16 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
           verified: false,
         );
       }
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Seller payment methods saved. Provider verification still occurs server-side.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: UniversalText(
+                'Seller payment methods saved. Provider verification still occurs server-side.')));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to save payment methods: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to save payment methods: $e')));
+      }
     } finally {
       if (mounted) setState(() => savingPaymentMethods = false);
     }
@@ -1888,7 +3191,8 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
     });
   }
 
-  Widget _colorPicker(String label, int selectedColor, void Function(int) apply) {
+  Widget _colorPicker(
+      String label, int selectedColor, void Function(int) apply) {
     Widget swatch(int color) => Container(
           width: 22,
           height: 22,
@@ -1901,16 +3205,25 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
 
     return DropdownButtonFormField<int>(
       initialValue: selectedColor,
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      decoration:
+          InputDecoration(labelText: label, border: const OutlineInputBorder()),
       items: [
         if (!_storefrontColorChoices.values.contains(selectedColor))
           DropdownMenuItem<int>(
             value: selectedColor,
-            child: Row(children: [swatch(selectedColor), const SizedBox(width: 10), const Text('Saved custom color')]),
+            child: Row(children: [
+              swatch(selectedColor),
+              const SizedBox(width: 10),
+              const Text('Saved custom color')
+            ]),
           ),
         ..._storefrontColorChoices.entries.map((entry) => DropdownMenuItem<int>(
               value: entry.value,
-              child: Row(children: [swatch(entry.value), const SizedBox(width: 10), Text(entry.key)]),
+              child: Row(children: [
+                swatch(entry.value),
+                const SizedBox(width: 10),
+                Text(entry.key)
+              ]),
             )),
       ],
       onChanged: (value) {
@@ -2339,9 +3652,7 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
                     )
                   : const Icon(Icons.file_upload_outlined),
               label: UniversalText(
-                importingImages
-                    ? 'Importing…'
-                    : 'Import Product Image(s)',
+                importingImages ? 'Importing…' : 'Import Product Image(s)',
               ),
             ),
             if (imageDataUris.isNotEmpty) ...[
@@ -2465,56 +3776,105 @@ class ShopBagScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final catalog = ShopCatalog.instance;
-    return AnimatedBuilder(animation: catalog, builder: (_, __) {
-      final lines = catalog.bag;
-      final byStore = <String, List<ShopBagLine>>{};
-      for (final line in lines) {
-        final product = catalog.productById(line.productId);
-        if (product == null) continue;
-        byStore.putIfAbsent(product.storeId, () => <ShopBagLine>[]).add(line);
-      }
-      return Scaffold(
-        appBar: AppBar(title: const UniversalText('Shopping Bag')),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-                if (lines.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 26), child: Center(child: UniversalText('Your bag is empty.'))),
-                if (lines.isNotEmpty) ...[
+    return AnimatedBuilder(
+        animation: catalog,
+        builder: (_, __) {
+          final lines = catalog.bag;
+          final byStore = <String, List<ShopBagLine>>{};
+          for (final line in lines) {
+            final product = catalog.productById(line.productId);
+            if (product == null) continue;
+            byStore
+                .putIfAbsent(product.storeId, () => <ShopBagLine>[])
+                .add(line);
+          }
+          return Scaffold(
+            appBar: AppBar(title: const UniversalText('Shopping Bag')),
+            body: ListView(padding: const EdgeInsets.all(18), children: [
+              if (lines.isEmpty)
+                const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 26),
+                    child: Center(child: UniversalText('Your bag is empty.'))),
+              if (lines.isNotEmpty) ...[
                 for (final entry in byStore.entries) ...[
-                  Text(catalog.storeById(entry.key)?.name ?? 'Store', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  Text(catalog.storeById(entry.key)?.name ?? 'Store',
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w900)),
                   for (final line in entry.value) _bagLine(context, line),
                   const SizedBox(height: 8),
                 ],
-                Card(child: ListTile(title: const UniversalText('Bag total'), trailing: Text(_money(catalog.subtotal(), 'USD'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)))),
+                Card(
+                    child: ListTile(
+                        title: const UniversalText('Bag total'),
+                        trailing: Text(_money(catalog.subtotal(), 'USD'),
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w900)))),
                 const SizedBox(height: 10),
-                FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopCheckoutScreen(lines: List<ShopBagLine>.from(lines), title: 'Checkout • All Stores', storeSpecific: false, onHome: onHome))), icon: const Icon(Icons.lock_outline), label: const UniversalText('Checkout All Stores')),
-                ],
-                if (catalog.savedForLaterProductIds.isNotEmpty) ...[
-                  const SizedBox(height: 22), const Text('Saved for later', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-                  for (final product in catalog.savedForLaterProductIds.map(catalog.productById).whereType<ShopProduct>())
-                    Card(child: ListTile(title: Text(product.name), subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency}'), trailing: TextButton(onPressed: () => catalog.moveSavedToBag(product.id), child: const Text('Move to bag')))),
-                ],
-              ]),
-      );
-    });
+                FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => ShopCheckoutScreen(
+                                lines: List<ShopBagLine>.from(lines),
+                                title: 'Checkout • All Stores',
+                                storeSpecific: false,
+                                onHome: onHome))),
+                    icon: const Icon(Icons.lock_outline),
+                    label: const UniversalText('Checkout All Stores')),
+              ],
+              if (catalog.savedForLaterProductIds.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                const Text('Saved for later',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                for (final product in catalog.savedForLaterProductIds
+                    .map(catalog.productById)
+                    .whereType<ShopProduct>())
+                  Card(
+                      child: ListTile(
+                          title: Text(product.name),
+                          subtitle: Text(
+                              '${product.price.toStringAsFixed(2)} ${product.currency}'),
+                          trailing: TextButton(
+                              onPressed: () =>
+                                  catalog.moveSavedToBag(product.id),
+                              child: const Text('Move to bag')))),
+              ],
+            ]),
+          );
+        });
   }
 
   Widget _bagLine(BuildContext context, ShopBagLine line) {
     final catalog = ShopCatalog.instance;
     final product = catalog.productById(line.productId);
     if (product == null) return const SizedBox.shrink();
-    return Card(child: ListTile(
+    return Card(
+        child: ListTile(
       title: Text(product.name),
       subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency}'),
       trailing: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
-        IconButton(onPressed: () => catalog.changeQuantity(product.id, -1), icon: const Icon(Icons.remove_circle_outline)),
-        Text('${line.quantity}', style: const TextStyle(fontWeight: FontWeight.w800)),
-        IconButton(onPressed: () => catalog.changeQuantity(product.id, 1), icon: const Icon(Icons.add_circle_outline)),
-        IconButton(tooltip: 'Save for later', onPressed: () => catalog.saveForLater(product.id), icon: const Icon(Icons.bookmark_add_outlined)),
-        IconButton(onPressed: () => catalog.removeFromBag(product.id), icon: const Icon(Icons.delete_outline)),
+        IconButton(
+            onPressed: () => catalog.changeQuantity(product.id, -1),
+            icon: const Icon(Icons.remove_circle_outline)),
+        Text('${line.quantity}',
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        IconButton(
+            onPressed: () => catalog.changeQuantity(product.id, 1),
+            icon: const Icon(Icons.add_circle_outline)),
+        IconButton(
+            tooltip: 'Save for later',
+            onPressed: () => catalog.saveForLater(product.id),
+            icon: const Icon(Icons.bookmark_add_outlined)),
+        IconButton(
+            onPressed: () => catalog.removeFromBag(product.id),
+            icon: const Icon(Icons.delete_outline)),
       ]),
     ));
   }
 
-  static String _money(double value, String currency) => '${currency == 'USD' ? '\$' : currency} ${value.toStringAsFixed(2)}';
+  static String _money(double value, String currency) =>
+      '${currency == 'USD' ? '\$' : currency} ${value.toStringAsFixed(2)}';
 }
 
 /// Side-by-side view of up to four products selected from marketplace cards.
@@ -2523,27 +3883,66 @@ class ShopProductComparisonScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: ShopCatalog.instance,
-    builder: (context, _) {
-      final catalog = ShopCatalog.instance;
-      final products = catalog.compareProductIds.map(catalog.productById).whereType<ShopProduct>().toList();
-      return Scaffold(appBar: AppBar(title: const Text('Compare products')), body: products.isEmpty
-        ? const Center(child: Text('Select products from the marketplace to compare them.'))
-        : ListView(padding: const EdgeInsets.all(16), children: [
-            for (final product in products) Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [Expanded(child: Text(product.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))), IconButton(onPressed: () => catalog.toggleCompare(product.id), icon: const Icon(Icons.close))]),
-              Text('${product.price.toStringAsFixed(2)} ${product.currency}'),
-              Text('Category: ${product.category}'),
-              Text('Type: ${product.productType}'),
-              Text('Availability: ${product.inventoryQuantity > 0 ? '${product.inventoryQuantity} in stock' : 'Out of stock'}'),
-              Text('Store: ${catalog.storeById(product.storeId)?.name ?? 'Store'}'),
-              if (product.description.isNotEmpty) Text(product.description),
-              if (product.associations.isNotEmpty) Text('Related: ${product.associations.map((a) => a.name).join(', ')}'),
-              Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: product.inventoryQuantity <= 0 ? null : () => catalog.addToBag(product.id), child: const Text('Add to bag'))),
-            ]))),
-          ]));
-    },
-  );
+        animation: ShopCatalog.instance,
+        builder: (context, _) {
+          final catalog = ShopCatalog.instance;
+          final products = catalog.compareProductIds
+              .map(catalog.productById)
+              .whereType<ShopProduct>()
+              .toList();
+          return Scaffold(
+              appBar: AppBar(title: const Text('Compare products')),
+              body: products.isEmpty
+                  ? const Center(
+                      child: Text(
+                          'Select products from the marketplace to compare them.'))
+                  : ListView(padding: const EdgeInsets.all(16), children: [
+                      for (final product in products)
+                        Card(
+                            child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(children: [
+                                        Expanded(
+                                            child: Text(product.name,
+                                                style: const TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight:
+                                                        FontWeight.bold))),
+                                        IconButton(
+                                            onPressed: () => catalog
+                                                .toggleCompare(product.id),
+                                            icon: const Icon(Icons.close))
+                                      ]),
+                                      Text(
+                                          '${product.price.toStringAsFixed(2)} ${product.currency}'),
+                                      Text('Category: ${product.category}'),
+                                      Text('Type: ${product.productType}'),
+                                      Text(
+                                          'Availability: ${product.inventoryQuantity > 0 ? '${product.inventoryQuantity} in stock' : 'Out of stock'}'),
+                                      Text(
+                                          'Store: ${catalog.storeById(product.storeId)?.name ?? 'Store'}'),
+                                      if (product.description.isNotEmpty)
+                                        Text(product.description),
+                                      if (product.associations.isNotEmpty)
+                                        Text(
+                                            'Related: ${product.associations.map((a) => a.name).join(', ')}'),
+                                      Align(
+                                          alignment: Alignment.centerRight,
+                                          child: FilledButton(
+                                              onPressed:
+                                                  product.inventoryQuantity <= 0
+                                                      ? null
+                                                      : () => catalog
+                                                          .addToBag(product.id),
+                                              child: const Text('Add to bag'))),
+                                    ]))),
+                    ]));
+        },
+      );
 }
 
 /// Wishlist page.
@@ -2551,10 +3950,32 @@ class ShopWishlistScreen extends StatelessWidget {
   const ShopWishlistScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(animation: ShopCatalog.instance, builder: (_, __) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: ShopCatalog.instance,
+      builder: (_, __) {
         final catalog = ShopCatalog.instance;
-        final products = catalog.wishlistProductIds.map(catalog.productById).whereType<ShopProduct>().toList();
-        return Scaffold(appBar: AppBar(title: const UniversalText('Shop Wishlist')), body: products.isEmpty ? const Center(child: UniversalText('Your Shop wishlist is empty.')) : ListView(padding: const EdgeInsets.all(18), children: [for (final p in products) Card(child: ListTile(title: Text(p.name), subtitle: Text('${p.price.toStringAsFixed(2)} ${p.currency}'), trailing: FilledButton(onPressed: p.inventoryQuantity <= 0 ? null : () => catalog.addToBag(p.id), child: const UniversalText('Add to Bag'))))]));
+        final products = catalog.wishlistProductIds
+            .map(catalog.productById)
+            .whereType<ShopProduct>()
+            .toList();
+        return Scaffold(
+            appBar: AppBar(title: const UniversalText('Shop Wishlist')),
+            body: products.isEmpty
+                ? const Center(
+                    child: UniversalText('Your Shop wishlist is empty.'))
+                : ListView(padding: const EdgeInsets.all(18), children: [
+                    for (final p in products)
+                      Card(
+                          child: ListTile(
+                              title: Text(p.name),
+                              subtitle: Text(
+                                  '${p.price.toStringAsFixed(2)} ${p.currency}'),
+                              trailing: FilledButton(
+                                  onPressed: p.inventoryQuantity <= 0
+                                      ? null
+                                      : () => catalog.addToBag(p.id),
+                                  child: const UniversalText('Add to Bag'))))
+                  ]));
       });
 }
 
@@ -2565,7 +3986,12 @@ class ShopCheckoutScreen extends StatefulWidget {
   final bool storeSpecific;
   final VoidCallback? onHome;
 
-  const ShopCheckoutScreen({super.key, required this.lines, required this.title, required this.storeSpecific, this.onHome});
+  const ShopCheckoutScreen(
+      {super.key,
+      required this.lines,
+      required this.title,
+      required this.storeSpecific,
+      this.onHome});
 
   @override
   State<ShopCheckoutScreen> createState() => _ShopCheckoutScreenState();
@@ -2582,13 +4008,24 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
   bool addressConfirmed = false;
   bool processing = false;
   bool loadingPaymentMethods = false;
-  List<Map<String, dynamic>> compatiblePaymentMethods = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> compatiblePaymentMethods =
+      <Map<String, dynamic>>[];
   String? selectedProviderMethodId;
 
-  static const savedSubscriptionCard = ShopPaymentMethod(id: 'subscription_card', label: 'Card on file for your streaming subscription', subscriptionCard: true);
+  static const savedSubscriptionCard = ShopPaymentMethod(
+      id: 'subscription_card',
+      label: 'Card on file for your streaming subscription',
+      subscriptionCard: true);
 
   @override
-  void dispose() { cardholder.dispose(); cardNumber.dispose(); expiry.dispose(); cvv.dispose(); postal.dispose(); super.dispose(); }
+  void dispose() {
+    cardholder.dispose();
+    cardNumber.dispose();
+    expiry.dispose();
+    cvv.dispose();
+    postal.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2606,11 +4043,19 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
       appBar: AppBar(title: Text(widget.title)),
       body: ListView(padding: const EdgeInsets.all(18), children: [
         if (!addressConfirmed) ...[
-          Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Delivery address', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            const UniversalText('Enter where you want your order delivered. We’ll show the full order total and payment options next.'),
-          ]))),
+          Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Delivery address',
+                            style: TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        const UniversalText(
+                            'Enter where you want your order delivered. We’ll show the full order total and payment options next.'),
+                      ]))),
           const SizedBox(height: 14),
           WorldwideAddressForm(
             requireStreet: true,
@@ -2620,69 +4065,121 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
             },
           ),
           const SizedBox(height: 14),
-          SizedBox(height: 52, child: FilledButton.icon(
-            onPressed: _continueToPayment,
-            icon: const Icon(Icons.arrow_forward),
-            label: const UniversalText('Continue to payment'),
-          )),
+          SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: _continueToPayment,
+                icon: const Icon(Icons.arrow_forward),
+                label: const UniversalText('Continue to payment'),
+              )),
         ] else ...[
-          Align(alignment: Alignment.centerLeft, child: TextButton.icon(
-            onPressed: processing ? null : () => setState(() => addressConfirmed = false),
-            icon: const Icon(Icons.arrow_back),
-            label: const UniversalText('Edit address'),
-          )),
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.storeSpecific ? 'Store Checkout' : 'All Stores Checkout', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          UniversalText(widget.storeSpecific ? 'Only items from this store are included.' : 'Every item currently in your bag is included, grouped into one checkout.'),
-          const SizedBox(height: 14),
-          for (final line in widget.lines) _summaryLine(line),
-          const Divider(),
-          _feeRow('Items subtotal', subtotal),
-          const SizedBox(height: 6),
-          _feeRow(r'Shipping ($5.99 per store estimate)', shippingFee),
-          const SizedBox(height: 6),
-          _feeRow('Service fee (5%)', serviceFee),
-          const Divider(height: 24),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const UniversalText('Total', style: TextStyle(fontWeight: FontWeight.w900)), Text(_money(total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))]),
-        ]))),
-        const SizedBox(height: 14),
-        const Text('Payment method', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-        _paymentProviderOptions(),
-        const SizedBox(height: 8),
-        RadioGroup<int>(
-          groupValue: paymentChoice,
-          onChanged: (value) {
-            if (processing || value == null) return;
-            setState(() => paymentChoice = value);
-          },
-          child: Column(
-            children: [
-              RadioListTile<int>(
-                value: 0,
-                title: Text(savedSubscriptionCard.label),
-                subtitle: const UniversalText('Use the payment method already associated with your streaming service.'),
-              ),
-              RadioListTile<int>(
-                value: 1,
-                title: const UniversalText('Choose another payment option'),
-                subtitle: const UniversalText('Select a card, wallet, or regional payment provider below.'),
-              ),
-            ],
-          ),
-        ),
-        if (paymentChoice == 1 && (selectedProviderMethodId == null || selectedProviderMethodId == 'card_processor')) _newCardForm(),
-        if (paymentChoice == 1 && selectedProviderMethodId != null && selectedProviderMethodId != 'card_processor')
+          Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: processing
+                    ? null
+                    : () => setState(() => addressConfirmed = false),
+                icon: const Icon(Icons.arrow_back),
+                label: const UniversalText('Edit address'),
+              )),
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: UniversalText('The selected provider will use its own secure checkout/authorization flow. Sensitive wallet or bank credentials are never collected into this app database.'),
+              child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            widget.storeSpecific
+                                ? 'Store Checkout'
+                                : 'All Stores Checkout',
+                            style: const TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        UniversalText(widget.storeSpecific
+                            ? 'Only items from this store are included.'
+                            : 'Every item currently in your bag is included, grouped into one checkout.'),
+                        const SizedBox(height: 14),
+                        for (final line in widget.lines) _summaryLine(line),
+                        const Divider(),
+                        _feeRow('Items subtotal', subtotal),
+                        const SizedBox(height: 6),
+                        _feeRow(r'Shipping ($5.99 per store estimate)',
+                            shippingFee),
+                        const SizedBox(height: 6),
+                        _feeRow('Service fee (5%)', serviceFee),
+                        const Divider(height: 24),
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const UniversalText('Total',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w900)),
+                              Text(_money(total),
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900))
+                            ]),
+                      ]))),
+          const SizedBox(height: 14),
+          const Text('Payment method',
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          _paymentProviderOptions(),
+          const SizedBox(height: 8),
+          RadioGroup<int>(
+            groupValue: paymentChoice,
+            onChanged: (value) {
+              if (processing || value == null) return;
+              setState(() => paymentChoice = value);
+            },
+            child: Column(
+              children: [
+                RadioListTile<int>(
+                  value: 0,
+                  title: Text(savedSubscriptionCard.label),
+                  subtitle: const UniversalText(
+                      'Use the payment method already associated with your streaming service.'),
+                ),
+                RadioListTile<int>(
+                  value: 1,
+                  title: const UniversalText('Choose another payment option'),
+                  subtitle: const UniversalText(
+                      'Select a card, wallet, or regional payment provider below.'),
+                ),
+              ],
             ),
           ),
-        const SizedBox(height: 12),
-        Card(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Padding(padding: EdgeInsets.all(14), child: UniversalText('Security: the current development gateway does not charge a real card. It returns a test transaction token. For production, connect this screen to a PCI-compliant payment processor or hosted wallet/bank checkout that tokenizes or authorizes credentials before they reach your backend.'))),
-        const SizedBox(height: 12),
-        FilledButton.icon(onPressed: processing ? null : () => _pay(total), icon: processing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.credit_card), label: UniversalText(processing ? 'Processing…' : 'Place Order & Pay')),
+          if (paymentChoice == 1 &&
+              (selectedProviderMethodId == null ||
+                  selectedProviderMethodId == 'card_processor'))
+            _newCardForm(),
+          if (paymentChoice == 1 &&
+              selectedProviderMethodId != null &&
+              selectedProviderMethodId != 'card_processor')
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: UniversalText(
+                    'The selected provider will use its own secure checkout/authorization flow. Sensitive wallet or bank credentials are never collected into this app database.'),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Card(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: UniversalText(
+                      'Security: the current development gateway does not charge a real card. It returns a test transaction token. For production, connect this screen to a PCI-compliant payment processor or hosted wallet/bank checkout that tokenizes or authorizes credentials before they reach your backend.'))),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+              onPressed: processing ? null : () => _pay(total),
+              icon: processing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.credit_card),
+              label: UniversalText(
+                  processing ? 'Processing…' : 'Place Order & Pay')),
         ],
       ]),
     );
@@ -2695,9 +4192,12 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
 
   void _continueToPayment() {
     final address = shippingAddress;
-    if (address == null || !address.isComplete || address.addressLine1.trim().isEmpty) {
+    if (address == null ||
+        !address.isComplete ||
+        address.addressLine1.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: UniversalText('Enter a complete delivery address, including postal/ZIP code.'),
+        content: UniversalText(
+            'Enter a complete delivery address, including postal/ZIP code.'),
       ));
       return;
     }
@@ -2715,7 +4215,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(14),
-          child: UniversalText('Enter your billing/shipping country to see payment providers compatible with both you and the seller(s).'),
+          child: UniversalText(
+              'Enter your billing/shipping country to see payment providers compatible with both you and the seller(s).'),
         ),
       );
     }
@@ -2725,9 +4226,11 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const UniversalText('Available payment providers', style: TextStyle(fontWeight: FontWeight.w800)),
+            const UniversalText('Available payment providers',
+                style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            const UniversalText('Providers vary by country, currency, seller configuration, and provider eligibility. Unsupported regional methods are filtered out automatically.'),
+            const UniversalText(
+                'Providers vary by country, currency, seller configuration, and provider eligibility. Unsupported regional methods are filtered out automatically.'),
             const SizedBox(height: 8),
             Wrap(
               spacing: 10,
@@ -2735,7 +4238,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
               children: compatiblePaymentMethods.map((method) {
                 final id = method['id']?.toString() ?? '';
                 final label = method['displayName']?.toString() ??
-                    method['provider']?.toString() ?? id;
+                    method['provider']?.toString() ??
+                    id;
                 final selected = selectedProviderMethodId == id;
                 return ChoiceChip(
                   avatar: Icon(_paymentMethodIcon(id), size: 18),
@@ -2753,7 +4257,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
                   labelStyle: TextStyle(
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 );
               }).toList(),
             ),
@@ -2783,16 +4288,24 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
     }
   }
 
-  Future<void> _refreshCompatiblePaymentMethods(WorldwideAddress? address) async {
+  Future<void> _refreshCompatiblePaymentMethods(
+      WorldwideAddress? address) async {
     final country = address?.countryCode.trim().toUpperCase();
     if (country == null || country.isEmpty) {
-      if (mounted) setState(() { compatiblePaymentMethods = <Map<String, dynamic>>[]; selectedProviderMethodId = null; });
+      if (mounted) {
+        setState(() {
+          compatiblePaymentMethods = <Map<String, dynamic>>[];
+          selectedProviderMethodId = null;
+        });
+      }
       return;
     }
     final sellerIds = widget.lines
         .map((line) => ShopCatalog.instance.productById(line.productId))
         .whereType<ShopProduct>()
-        .map((product) => ShopCatalog.instance.storeById(product.storeId)?.ownerAccountId ?? '')
+        .map((product) =>
+            ShopCatalog.instance.storeById(product.storeId)?.ownerAccountId ??
+            '')
         .where((id) => id.trim().isNotEmpty)
         .toSet();
     if (sellerIds.isEmpty) return;
@@ -2807,7 +4320,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
       final settlementCurrency = currency.length == 1 ? currency.first : 'USD';
       List<Map<String, dynamic>>? intersection;
       for (final sellerId in sellerIds) {
-        final methods = await AppController.instance.backendApi.filterPaymentMethodsForBuyer(
+        final methods = await AppController.instance.backendApi
+            .filterPaymentMethodsForBuyer(
           sellerAccountId: sellerId,
           buyerCountryCode: country,
           currencyCode: settlementCurrency,
@@ -2815,21 +4329,31 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
         if (intersection == null) {
           intersection = methods;
         } else {
-          final ids = methods.map((m) => m['id']?.toString()).whereType<String>().toSet();
-          intersection = intersection.where((m) => ids.contains(m['id']?.toString())).toList();
+          final ids = methods
+              .map((m) => m['id']?.toString())
+              .whereType<String>()
+              .toSet();
+          intersection = intersection
+              .where((m) => ids.contains(m['id']?.toString()))
+              .toList();
         }
       }
       final values = intersection ?? <Map<String, dynamic>>[];
       if (!mounted) return;
       setState(() {
         compatiblePaymentMethods = values;
-        if (selectedProviderMethodId == null || !values.any((m) => m['id']?.toString() == selectedProviderMethodId)) {
-          selectedProviderMethodId = values.isEmpty ? null : values.first['id']?.toString();
+        if (selectedProviderMethodId == null ||
+            !values
+                .any((m) => m['id']?.toString() == selectedProviderMethodId)) {
+          selectedProviderMethodId =
+              values.isEmpty ? null : values.first['id']?.toString();
         }
       });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to load compatible payment methods: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text('Unable to load compatible payment methods: $error')));
         setState(() => compatiblePaymentMethods = <Map<String, dynamic>>[]);
       }
     } finally {
@@ -2840,26 +4364,78 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
   Widget _summaryLine(ShopBagLine line) {
     final product = ShopCatalog.instance.productById(line.productId);
     if (product == null) return const SizedBox.shrink();
-    return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [Expanded(child: Text(product.name)), Text('× ${line.quantity}'), const SizedBox(width: 14), Text('${(product.price * line.quantity).toStringAsFixed(2)} ${product.currency}')]));
+    return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(children: [
+          Expanded(child: Text(product.name)),
+          Text('× ${line.quantity}'),
+          const SizedBox(width: 14),
+          Text(
+              '${(product.price * line.quantity).toStringAsFixed(2)} ${product.currency}')
+        ]));
   }
 
   Widget _newCardForm() => Column(children: [
-        TextField(controller: cardholder, decoration: const InputDecoration(labelText: 'Cardholder name', border: OutlineInputBorder())), const SizedBox(height: 10),
-        TextField(controller: cardNumber, keyboardType: TextInputType.number, obscureText: true, decoration: const InputDecoration(labelText: 'Card number', hintText: 'Enter card number securely', border: OutlineInputBorder())), const SizedBox(height: 10),
-        Row(children: [Expanded(child: TextField(controller: expiry, keyboardType: TextInputType.datetime, decoration: const InputDecoration(labelText: 'MM/YY', border: OutlineInputBorder()))), const SizedBox(width: 10), Expanded(child: TextField(controller: cvv, keyboardType: TextInputType.number, obscureText: true, decoration: const InputDecoration(labelText: 'CVV', border: OutlineInputBorder())))]), const SizedBox(height: 10),
-        TextField(controller: postal, decoration: const InputDecoration(labelText: 'Billing postal code', border: OutlineInputBorder())),
+        TextField(
+            controller: cardholder,
+            decoration: const InputDecoration(
+                labelText: 'Cardholder name', border: OutlineInputBorder())),
+        const SizedBox(height: 10),
+        TextField(
+            controller: cardNumber,
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            decoration: const InputDecoration(
+                labelText: 'Card number',
+                hintText: 'Enter card number securely',
+                border: OutlineInputBorder())),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+              child: TextField(
+                  controller: expiry,
+                  keyboardType: TextInputType.datetime,
+                  decoration: const InputDecoration(
+                      labelText: 'MM/YY', border: OutlineInputBorder()))),
+          const SizedBox(width: 10),
+          Expanded(
+              child: TextField(
+                  controller: cvv,
+                  keyboardType: TextInputType.number,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                      labelText: 'CVV', border: OutlineInputBorder())))
+        ]),
+        const SizedBox(height: 10),
+        TextField(
+            controller: postal,
+            decoration: const InputDecoration(
+                labelText: 'Billing postal code',
+                border: OutlineInputBorder())),
       ]);
 
   Future<void> _pay(double total) async {
     if (widget.lines.isEmpty || total <= 0) return;
-    if (shippingAddress == null || !shippingAddress!.isComplete || shippingAddress!.addressLine1.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a complete shipping / billing address, including postal/ZIP code.')));
+    if (shippingAddress == null ||
+        !shippingAddress!.isComplete ||
+        shippingAddress!.addressLine1.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: UniversalText(
+              'Enter a complete shipping / billing address, including postal/ZIP code.')));
       return;
     }
-    if (paymentChoice == 1 && (selectedProviderMethodId == null || selectedProviderMethodId == 'card_processor')) {
+    if (paymentChoice == 1 &&
+        (selectedProviderMethodId == null ||
+            selectedProviderMethodId == 'card_processor')) {
       final digits = cardNumber.text.replaceAll(RegExp(r'\D'), '');
-      if (cardholder.text.trim().isEmpty || digits.length < 12 || cvv.text.trim().length < 3 || expiry.text.trim().isEmpty || postal.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter the required card and billing information.')));
+      if (cardholder.text.trim().isEmpty ||
+          digits.length < 12 ||
+          cvv.text.trim().length < 3 ||
+          expiry.text.trim().isEmpty ||
+          postal.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: UniversalText(
+                'Enter the required card and billing information.')));
         return;
       }
     }
@@ -2871,17 +4447,38 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
             ? savedSubscriptionCard
             : ShopPaymentMethod(
                 id: selectedProviderMethodId ?? 'one_time_card',
-                label: compatiblePaymentMethods.firstWhere(
-                  (m) => m['id']?.toString() == selectedProviderMethodId,
-                  orElse: () => const <String, dynamic>{},
-                )['displayName']?.toString() ?? 'Selected payment method',
+                label: compatiblePaymentMethods
+                        .firstWhere(
+                          (m) =>
+                              m['id']?.toString() == selectedProviderMethodId,
+                          orElse: () => const <String, dynamic>{},
+                        )['displayName']
+                        ?.toString() ??
+                    'Selected payment method',
               ),
-        cardNumber: paymentChoice == 1 && (selectedProviderMethodId == null || selectedProviderMethodId == 'card_processor') ? cardNumber.text : null,
+        cardNumber: paymentChoice == 1 &&
+                (selectedProviderMethodId == null ||
+                    selectedProviderMethodId == 'card_processor')
+            ? cardNumber.text
+            : null,
       );
       if (!mounted) return;
-      ShopCatalog.instance.recordOrder(lines: widget.lines, total: total, transactionId: result.transactionId);
+      ShopCatalog.instance.recordOrder(
+          lines: widget.lines,
+          total: total,
+          transactionId: result.transactionId);
       ShopCatalog.instance.completeCheckout(widget.lines);
-      await showDialog<void>(context: context, builder: (_) => AlertDialog(title: const UniversalText('Order placed'), content: UniversalText('Payment approved in development mode. Transaction: ${result.transactionId}${result.last4 == null ? '' : ' • Card ending ${result.last4}'}'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Done'))]));
+      await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+                  title: const UniversalText('Order placed'),
+                  content: UniversalText(
+                      'Payment approved in development mode. Transaction: ${result.transactionId}${result.last4 == null ? '' : ' • Card ending ${result.last4}'}'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const UniversalText('Done'))
+                  ]));
       if (mounted) {
         final navigator = Navigator.of(context, rootNavigator: true);
         final onHome = widget.onHome;
@@ -2896,7 +4493,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', ''))));
     } finally {
       if (mounted) setState(() => processing = false);
     }
@@ -2910,7 +4508,25 @@ class _BagButton extends StatelessWidget {
   final VoidCallback onPressed;
   const _BagButton({required this.onPressed});
   @override
-  Widget build(BuildContext context) => Stack(children: [IconButton(tooltip: 'Shopping bag', onPressed: onPressed, icon: const Icon(Icons.shopping_bag_outlined)), if (ShopCatalog.instance.bagCount > 0) Positioned(right: 4, top: 4, child: Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(10)), child: Text('${ShopCatalog.instance.bagCount}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900))))]);
+  Widget build(BuildContext context) => Stack(children: [
+        IconButton(
+            tooltip: 'Shopping bag',
+            onPressed: onPressed,
+            icon: const Icon(Icons.shopping_bag_outlined)),
+        if (ShopCatalog.instance.bagCount > 0)
+          Positioned(
+              right: 4,
+              top: 4,
+              child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('${ShopCatalog.instance.bagCount}',
+                      style: const TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.w900))))
+      ]);
 }
 
 /// Builds a Shop button for a specific entertainment entity.
@@ -2919,26 +4535,58 @@ class ContextualShopButton extends StatelessWidget {
   final String associationId;
   final String associationName;
 
-  const ContextualShopButton({super.key, required this.associationType, required this.associationId, required this.associationName});
+  const ContextualShopButton(
+      {super.key,
+      required this.associationType,
+      required this.associationId,
+      required this.associationName});
 
   @override
   Widget build(BuildContext context) {
-    final hasProducts = ShopCatalog.instance.productsForAssociation(associationType, associationId, name: associationName).isNotEmpty;
+    final hasProducts = ShopCatalog.instance
+        .productsForAssociation(associationType, associationId,
+            name: associationName)
+        .isNotEmpty;
     return OutlinedButton.icon(
-      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: associationType, contextAssociationId: associationId, contextAssociationName: associationName))),
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/app/shop'),
+          builder: (_) => ShopScreen(
+            contextAssociationType: associationType,
+            contextAssociationId: associationId,
+            contextAssociationName: associationName,
+          ),
+        ),
+      ),
       icon: const Icon(Icons.storefront_outlined),
       label: UniversalText(hasProducts ? 'Shop Related Products' : 'Shop'),
     );
   }
 
   /// Convenience helper for media details.
-  static Widget forMedia(BuildContext context, MediaItem media) => ContextualShopButton(associationType: (media.type.toLowerCase() == 'tvshow' || media.type.toLowerCase() == 'tv_show' || media.type.toLowerCase() == 'tv show') ? 'show' : 'movie', associationId: media.id, associationName: media.title);
+  static Widget forMedia(BuildContext context, MediaItem media) =>
+      ContextualShopButton(
+          associationType: (media.type.toLowerCase() == 'tvshow' ||
+                  media.type.toLowerCase() == 'tv_show' ||
+                  media.type.toLowerCase() == 'tv show')
+              ? 'show'
+              : 'movie',
+          associationId: media.id,
+          associationName: media.title);
 
   /// Convenience helper for music entities.
-  static Widget forMusic({required String type, required String id, required String name}) => ContextualShopButton(associationType: type, associationId: id, associationName: name);
+  static Widget forMusic(
+          {required String type, required String id, required String name}) =>
+      ContextualShopButton(
+          associationType: type, associationId: id, associationName: name);
 
   /// Convenience helper for collections.
-  static Widget forCollection(MediaCollection collection) => ContextualShopButton(associationType: 'collection', associationId: collection.id, associationName: collection.name);
+  static Widget forCollection(MediaCollection collection) =>
+      ContextualShopButton(
+          associationType: 'collection',
+          associationId: collection.id,
+          associationName: collection.name);
 }
 
 /// Reusable storefront device preview used by Storefront Designer.
@@ -2955,7 +4603,8 @@ class StorefrontDevicePreview extends StatefulWidget {
   });
 
   @override
-  State<StorefrontDevicePreview> createState() => _StorefrontDevicePreviewState();
+  State<StorefrontDevicePreview> createState() =>
+      _StorefrontDevicePreviewState();
 }
 
 class _StorefrontDevicePreviewState extends State<StorefrontDevicePreview> {

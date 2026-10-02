@@ -64,7 +64,16 @@ class _PeopleDirectoryScreen extends StatelessWidget {
                 return Card(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _PersonMediaScreen(kind: kind, person: person))),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        settings: const RouteSettings(
+                          name: '/app/page/actors',
+                        ),
+                        builder: (_) =>
+                            _PersonMediaScreen(kind: kind, person: person),
+                      ),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [

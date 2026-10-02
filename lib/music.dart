@@ -728,6 +728,7 @@ class _MusicScreenState extends State<MusicScreen> {
               }
             }
             Navigator.push(context, MaterialPageRoute(
+              settings: const RouteSettings(name: '/app/page/artists'),
               builder: (_) => PeopleCareerTimelineScreen(personName: artist, localCredits: credits),
             ));
           },
@@ -1244,6 +1245,7 @@ class _MusicScreenState extends State<MusicScreen> {
                         onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: '/app/shop'),
                             builder: (_) => ShopScreen(
                               contextAssociationType: 'playlist',
                               contextAssociationId: entry.key,
@@ -1345,11 +1347,7 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   void _showCustomization() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _MusicCustomization(store: library),
-    ).then((_) {
+    showMusicCustomization(context).then((_) {
       if (mounted) setState(() {});
     });
   }
@@ -1645,19 +1643,49 @@ class MusicDiscoverScreen extends StatelessWidget {
                       IconButton(
                         tooltip: 'Shop song products',
                         icon: const Icon(Icons.storefront_outlined),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: 'song', contextAssociationId: track.id, contextAssociationName: track.title))),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            settings: const RouteSettings(name: '/app/shop'),
+                            builder: (_) => ShopScreen(
+                              contextAssociationType: 'song',
+                              contextAssociationId: track.id,
+                              contextAssociationName: track.title,
+                            ),
+                          ),
+                        ),
                       ),
                     if (ShopCatalog.instance.productsForAssociation('artist', track.artist, name: track.artist).isNotEmpty)
                       IconButton(
                         tooltip: 'Shop artist products',
                         icon: const Icon(Icons.person_outline_rounded),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: 'artist', contextAssociationId: track.artist, contextAssociationName: track.artist))),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            settings: const RouteSettings(name: '/app/shop'),
+                            builder: (_) => ShopScreen(
+                              contextAssociationType: 'artist',
+                              contextAssociationId: track.artist,
+                              contextAssociationName: track.artist,
+                            ),
+                          ),
+                        ),
                       ),
                     if (ShopCatalog.instance.productsForAssociation('album', track.album, name: track.album).isNotEmpty)
                       IconButton(
                         tooltip: 'Shop album products',
                         icon: const Icon(Icons.album_outlined),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(contextAssociationType: 'album', contextAssociationId: track.album, contextAssociationName: track.album))),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            settings: const RouteSettings(name: '/app/shop'),
+                            builder: (_) => ShopScreen(
+                              contextAssociationType: 'album',
+                              contextAssociationId: track.album,
+                              contextAssociationName: track.album,
+                            ),
+                          ),
+                        ),
                       ),
                     IconButton(
                       tooltip: 'Play',
@@ -1784,6 +1812,16 @@ class _MusicSearchDelegate extends SearchDelegate<MusicTrack?> {
     );
   }
 }
+
+Future<void> showMusicCustomization(BuildContext context) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      routeSettings: const RouteSettings(name: '/app/customize'),
+      builder: (_) => _MusicCustomization(
+        store: MusicLibraryStore.instance,
+      ),
+    );
 
 /// Music-specific visual and discovery customization.
 class _MusicCustomization extends StatefulWidget {

@@ -146,8 +146,7 @@ class AuthService {
   Future<String> _hashSecurityAnswer(
     String answer,
   ) async {
-    final cleanAnswer =
-        answer.trim().toLowerCase();
+    final cleanAnswer = answer.trim().toLowerCase();
 
     if (cleanAnswer.isEmpty) {
       throw Exception(
@@ -155,8 +154,7 @@ class AuthService {
       );
     }
 
-    if (cleanAnswer.length >
-        maximumSecurityAnswerLength) {
+    if (cleanAnswer.length > maximumSecurityAnswerLength) {
       throw Exception(
         'Security answer is too long.',
       );
@@ -207,15 +205,12 @@ class AuthService {
   }) async {
     final cleanEmail = email.trim().toLowerCase();
 
-    if (cleanEmail.length > maximumEmailLength ||
-        !_isValidEmail(cleanEmail)) {
+    if (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail)) {
       throw Exception('A valid email address is required.');
     }
 
-    final localPart = cleanEmail
-        .split('@')
-        .first
-        .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final localPart =
+        cleanEmail.split('@').first.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
     var cleanUsername = (username ?? '').trim();
 
@@ -329,8 +324,7 @@ class AuthService {
 
         return account;
       } on PostgrestException catch (e) {
-        final isUsernameConflict =
-            e.code == '23505' &&
+        final isUsernameConflict = e.code == '23505' &&
             (e.message.contains('accounts_username_key') ||
                 e.details.toString().contains('accounts_username_key'));
 
@@ -397,12 +391,10 @@ class AuthService {
       );
     }
 
-    Account? account =
-        database.getAccountByEmail(normalizedLogin);
+    Account? account = database.getAccountByEmail(normalizedLogin);
 
     if (account == null) {
-      account =
-          database.getAccountByUsername(normalizedLogin);
+      account = database.getAccountByUsername(normalizedLogin);
     }
 
     String? passwordHash;
@@ -434,8 +426,7 @@ class AuthService {
 
     // An email may also identify an invited member of another account.
     if (passwordHash == null) {
-      final memberLogins =
-          database.getMemberLoginsByEmail(normalizedLogin);
+      final memberLogins = database.getMemberLoginsByEmail(normalizedLogin);
 
       final activeMembers = memberLogins
           .where(
@@ -453,8 +444,7 @@ class AuthService {
           continue;
         }
 
-        final memberAccount =
-            database.getAccountById(member.accountId);
+        final memberAccount = database.getAccountById(member.accountId);
 
         if (memberAccount != null) {
           matches.add(member);
@@ -464,8 +454,7 @@ class AuthService {
       if (matches.length == 1) {
         final member = matches.single;
 
-        account =
-            database.getAccountById(member.accountId);
+        account = database.getAccountById(member.accountId);
 
         passwordHash = member.passwordHash;
         authenticatedMemberId = member.memberId;
@@ -479,9 +468,7 @@ class AuthService {
       }
     }
 
-    if (account == null ||
-        passwordHash == null ||
-        passwordHash.isEmpty) {
+    if (account == null || passwordHash == null || passwordHash.isEmpty) {
       await _recordLoginFailure(normalizedLogin);
 
       throw Exception(
@@ -491,8 +478,7 @@ class AuthService {
 
     if (passwordHash == account.passwordHash &&
         PasswordGuard.needsRehash(account.passwordHash)) {
-      account.passwordHash =
-          await _hashPassword(password);
+      account.passwordHash = await _hashPassword(password);
 
       database.saveAccount(account);
       await database.persistAccountAndWait(account);
@@ -509,28 +495,22 @@ class AuthService {
       );
     }
 
-    final recentFailures =
-        database.recentFailedLoginCount(normalizedLogin);
+    final recentFailures = database.recentFailedLoginCount(normalizedLogin);
 
     final normalizedIp = _normalizeIp(ipAddress);
-    final normalizedAgent =
-        _normalizeUserAgent(userAgent);
+    final normalizedAgent = _normalizeUserAgent(userAgent);
 
-    final fingerprint =
-        '$normalizedIp|$normalizedAgent';
+    final fingerprint = '$normalizedIp|$normalizedAgent';
 
-    final knownFingerprints =
-        database.getKnownLoginFingerprints(
+    final knownFingerprints = database.getKnownLoginFingerprints(
       account.id,
     );
 
-    final knownDevice =
-        knownFingerprints.contains(fingerprint);
+    final knownDevice = knownFingerprints.contains(fingerprint);
 
     final reasons = <String>[];
 
-    if (knownFingerprints.isNotEmpty &&
-        !knownDevice) {
+    if (knownFingerprints.isNotEmpty && !knownDevice) {
       reasons.add(
         'new browser or device or network',
       );
@@ -568,7 +548,8 @@ class AuthService {
     }
 
     if (account.mfaEnabled) {
-      account.mfaChallengeMemberId = authenticatedMemberId ?? 'owner_${account.id}';
+      account.mfaChallengeMemberId =
+          authenticatedMemberId ?? 'owner_${account.id}';
       database.saveAccount(account);
       await database.persistAccountAndWait(account);
       await startMfaChallenge(
@@ -672,20 +653,19 @@ class AuthService {
   Future<void> startMfaChallenge(
     Account account,
   ) async {
-    final code =
-        (100000 + _random.nextInt(900000)).toString();
+    final code = (100000 + _random.nextInt(900000)).toString();
 
-    final codeHash =
-        sha256.convert(
+    final codeHash = sha256
+        .convert(
           utf8.encode(code),
-        ).toString();
+        )
+        .toString();
 
     account.mfaChallengeHash = codeHash;
 
-    account.mfaChallengeExpiresAt =
-        DateTime.now().toUtc().add(
-              const Duration(minutes: 10),
-            );
+    account.mfaChallengeExpiresAt = DateTime.now().toUtc().add(
+          const Duration(minutes: 10),
+        );
 
     database.saveAccount(account);
     await database.persistAccountAndWait(account);
@@ -732,25 +712,21 @@ class AuthService {
   ) async {
     _validateMfaCode(code);
 
-    final expires =
-        account.mfaChallengeExpiresAt;
+    final expires = account.mfaChallengeExpiresAt;
 
-    if (expires == null ||
-        !DateTime.now()
-            .toUtc()
-            .isBefore(expires.toUtc())) {
+    if (expires == null || !DateTime.now().toUtc().isBefore(expires.toUtc())) {
       throw Exception(
         'The MFA verification code has expired.',
       );
     }
 
-    final expected =
-        account.mfaChallengeHash.trim();
+    final expected = account.mfaChallengeHash.trim();
 
-    final actual =
-        sha256.convert(
+    final actual = sha256
+        .convert(
           utf8.encode(code.trim()),
-        ).toString();
+        )
+        .toString();
 
     if (expected.isEmpty ||
         !_constantTimeStringEquals(
@@ -810,8 +786,7 @@ class AuthService {
       );
     }
 
-    account.passwordHash =
-        await _hashPassword(newPassword);
+    account.passwordHash = await _hashPassword(newPassword);
 
     database.saveAccount(account);
     await database.persistAccountAndWait(account);
@@ -834,8 +809,7 @@ class AuthService {
     String ipAddress = 'unknown',
     String userAgent = 'unknown',
   }) async {
-    final normalized =
-        login.trim().toLowerCase();
+    final normalized = login.trim().toLowerCase();
 
     if (normalized.isEmpty) {
       throw Exception(
@@ -856,11 +830,9 @@ class AuthService {
       );
     }
 
-    Account? account =
-        database.getAccountByEmail(normalized);
+    Account? account = database.getAccountByEmail(normalized);
 
-    account ??=
-        database.getAccountByUsername(normalized);
+    account ??= database.getAccountByUsername(normalized);
 
     if (account == null || !account.mfaEnabled) {
       database.recordFailedLogin(
@@ -878,22 +850,19 @@ class AuthService {
       );
     }
 
-    final expires =
-        account.mfaChallengeExpiresAt;
+    final expires = account.mfaChallengeExpiresAt;
 
-    final expected =
-        account.mfaChallengeHash.trim();
+    final expected = account.mfaChallengeHash.trim();
 
-    final actual =
-        sha256.convert(
+    final actual = sha256
+        .convert(
           utf8.encode(code.trim()),
-        ).toString();
+        )
+        .toString();
 
     final valid = expected.isNotEmpty &&
         expires != null &&
-        DateTime.now()
-            .toUtc()
-            .isBefore(expires.toUtc()) &&
+        DateTime.now().toUtc().isBefore(expires.toUtc()) &&
         _constantTimeStringEquals(
           expected,
           actual,
@@ -920,16 +889,14 @@ class AuthService {
     database.saveAccount(account);
     await database.persistAccountAndWait(account);
 
-    final normalizedIp =
-        _normalizeIp(ipAddress);
+    final normalizedIp = _normalizeIp(ipAddress);
 
-    final normalizedAgent =
-        _normalizeUserAgent(userAgent);
+    final normalizedAgent = _normalizeUserAgent(userAgent);
 
-    final token =
-        _generateSessionToken();
+    final token = _generateSessionToken();
 
-    final challengeMemberId = account.mfaChallengeMemberId ?? 'owner_${account.id}';
+    final challengeMemberId =
+        account.mfaChallengeMemberId ?? 'owner_${account.id}';
     account.mfaChallengeMemberId = null;
 
     database.saveSession(
@@ -963,22 +930,18 @@ class AuthService {
     Account account,
     String currentToken,
   ) {
-    final current =
-        currentToken.trim();
+    final current = currentToken.trim();
 
-    final currentSession =
-        database.getSession(current);
+    final currentSession = database.getSession(current);
 
-    return database
-        .getSessionsForAccount(account.id)
-        .map((session) {
-      final fingerprint =
-          _sessionFingerprint(session);
+    return database.getSessionsForAccount(account.id).map((session) {
+      final fingerprint = _sessionFingerprint(session);
 
-      final sessionId =
-          sha256.convert(
+      final sessionId = sha256
+          .convert(
             utf8.encode(fingerprint),
-          ).toString();
+          )
+          .toString();
 
       return {
         'sessionId': sessionId,
@@ -987,12 +950,9 @@ class AuthService {
               session,
               currentSession,
             ),
-        'createdAt':
-            session.createdAt.toIso8601String(),
-        'expiresAt':
-            session.expiresAt.toIso8601String(),
-        'lastUsedAt':
-            session.lastUsedAt.toIso8601String(),
+        'createdAt': session.createdAt.toIso8601String(),
+        'expiresAt': session.expiresAt.toIso8601String(),
+        'lastUsedAt': session.lastUsedAt.toIso8601String(),
         'ipAddress': session.ipAddress,
         'userAgent': session.userAgent,
       };
@@ -1013,27 +973,26 @@ class AuthService {
     Account account,
     String sessionId,
   ) {
-    final cleanId =
-        sessionId.trim();
+    final cleanId = sessionId.trim();
 
     if (cleanId.isEmpty) {
       return false;
     }
 
-    for (final entry
-        in database.sessions.entries.toList()) {
+    for (final entry in database.sessions.entries.toList()) {
       final session = entry.value;
 
       if (session.accountId != account.id) {
         continue;
       }
 
-      final fingerprint =
-          sha256.convert(
+      final fingerprint = sha256
+          .convert(
             utf8.encode(
               _sessionFingerprint(session),
             ),
-          ).toString();
+          )
+          .toString();
 
       if (_constantTimeStringEquals(
         fingerprint,
@@ -1059,11 +1018,9 @@ class AuthService {
   String getSecurityQuestion(
     String login,
   ) {
-    final normalized =
-        login.trim().toLowerCase();
+    final normalized = login.trim().toLowerCase();
 
-    final recoveryKey =
-        'recovery-question:$normalized';
+    final recoveryKey = 'recovery-question:$normalized';
 
     if (database.recentFailedLoginCount(
           recoveryKey,
@@ -1074,14 +1031,11 @@ class AuthService {
       );
     }
 
-    Account? account =
-        database.getAccountByEmail(normalized);
+    Account? account = database.getAccountByEmail(normalized);
 
-    account ??=
-        database.getAccountByUsername(normalized);
+    account ??= database.getAccountByUsername(normalized);
 
-    if (account == null ||
-        account.securityQuestion.trim().isEmpty) {
+    if (account == null || account.securityQuestion.trim().isEmpty) {
       throw Exception(
         'We could not find an account with those sign-in details.',
       );
@@ -1099,11 +1053,9 @@ class AuthService {
   }) async {
     _validatePassword(newPassword);
 
-    final normalized =
-        login.trim().toLowerCase();
+    final normalized = login.trim().toLowerCase();
 
-    final answer =
-        securityAnswer.trim().toLowerCase();
+    final answer = securityAnswer.trim().toLowerCase();
 
     if (answer.isEmpty) {
       throw Exception(
@@ -1111,15 +1063,13 @@ class AuthService {
       );
     }
 
-    if (answer.length >
-        maximumSecurityAnswerLength) {
+    if (answer.length > maximumSecurityAnswerLength) {
       throw Exception(
         'Security answer is too long.',
       );
     }
 
-    final recoveryKey =
-        'recovery:$normalized';
+    final recoveryKey = 'recovery:$normalized';
 
     if (database.recentFailedLoginCount(
           recoveryKey,
@@ -1130,14 +1080,11 @@ class AuthService {
       );
     }
 
-    Account? account =
-        database.getAccountByEmail(normalized);
+    Account? account = database.getAccountByEmail(normalized);
 
-    account ??=
-        database.getAccountByUsername(normalized);
+    account ??= database.getAccountByUsername(normalized);
 
-    if (account == null ||
-        account.securityAnswerHash.trim().isEmpty) {
+    if (account == null || account.securityAnswerHash.trim().isEmpty) {
       database.recordFailedLogin(
         recoveryKey,
       );
@@ -1147,8 +1094,7 @@ class AuthService {
       );
     }
 
-    final valid =
-        await _verifyPassword(
+    final valid = await _verifyPassword(
       answer,
       account.securityAnswerHash,
     );
@@ -1168,8 +1114,7 @@ class AuthService {
       );
     }
 
-    account.passwordHash =
-        await _hashPassword(newPassword);
+    account.passwordHash = await _hashPassword(newPassword);
 
     database.saveAccount(account);
     await database.persistAccountAndWait(account);
@@ -1197,26 +1142,23 @@ class AuthService {
     required Account account,
     required String email,
     String role = 'member',
+    bool sendEmail = true,
   }) async {
-    final cleanEmail =
-        email.trim().toLowerCase();
+    final cleanEmail = email.trim().toLowerCase();
 
-    if (cleanEmail.length > maximumEmailLength ||
-        !_isValidEmail(cleanEmail)) {
+    if (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail)) {
       throw Exception(
         'A valid member email address is required.',
       );
     }
 
-    if (cleanEmail ==
-        account.email.trim().toLowerCase()) {
+    if (cleanEmail == account.email.trim().toLowerCase()) {
       throw Exception(
         'The account owner is already a member.',
       );
     }
 
-    final cleanRole =
-        role.trim().toLowerCase();
+    final cleanRole = role.trim().toLowerCase();
 
     const validRoles = {
       'member',
@@ -1229,21 +1171,19 @@ class AuthService {
       );
     }
 
-    final token =
-        _generateSessionToken();
+    final token = _generateSessionToken();
 
-    final tokenHash =
-        sha256.convert(
+    final tokenHash = sha256
+        .convert(
           utf8.encode(token),
-        ).toString();
+        )
+        .toString();
 
-    final expiresAt =
-        DateTime.now().toUtc().add(
-              const Duration(days: 7),
-            );
+    final expiresAt = DateTime.now().toUtc().add(
+          const Duration(days: 7),
+        );
 
-    await SupabaseStore.instance
-        .createMemberInvitation(
+    await SupabaseStore.instance.createMemberInvitation(
       accountExternalId: account.id,
       email: cleanEmail,
       role: cleanRole,
@@ -1251,22 +1191,24 @@ class AuthService {
       expiresAt: expiresAt,
     );
 
-    try {
-      await emailService.memberInvitation(
-        cleanEmail,
-        account.username,
-        token,
-        expiresAt,
-      );
-    } catch (e, stackTrace) {
-      stderr.writeln(
-        'Member invitation email failed for account ${account.id}: $e',
-      );
-      stderr.writeln(stackTrace);
+    if (sendEmail) {
+      try {
+        await emailService.memberInvitation(
+          cleanEmail,
+          account.username,
+          token,
+          expiresAt,
+        );
+      } catch (e, stackTrace) {
+        stderr.writeln(
+          'Member invitation email failed for account ${account.id}: $e',
+        );
+        stderr.writeln(stackTrace);
 
-      // The invitation itself already exists in persistent storage.
-      // Do not return a bearer invitation token as an error response.
-      rethrow;
+        // The invitation itself already exists in persistent storage.
+        // Do not return a bearer invitation token as an error response.
+        rethrow;
+      }
     }
 
     await _audit(
@@ -1274,6 +1216,7 @@ class AuthService {
       accountId: account.id,
       metadata: {
         'role': cleanRole,
+        'delivery': sendEmail ? 'email' : 'share-link',
       },
     );
 
@@ -1285,61 +1228,50 @@ class AuthService {
     required String email,
     String? password,
   }) async {
-    final cleanToken =
-        token.trim();
+    final cleanToken = token.trim();
 
-    final cleanEmail =
-        email.trim().toLowerCase();
+    final cleanEmail = email.trim().toLowerCase();
 
-    if (cleanToken.isEmpty ||
-        !_isValidEmail(cleanEmail)) {
+    if (cleanToken.isEmpty || !_isValidEmail(cleanEmail)) {
       throw Exception(
         'A valid invitation and email are required.',
       );
     }
 
-    final tokenHash =
-        sha256.convert(
+    final tokenHash = sha256
+        .convert(
           utf8.encode(cleanToken),
-        ).toString();
+        )
+        .toString();
 
     String? passwordHash;
 
-    if (password != null &&
-        password.isNotEmpty) {
+    if (password != null && password.isNotEmpty) {
       _validatePassword(password);
 
-      passwordHash =
-          await _hashPassword(password);
+      passwordHash = await _hashPassword(password);
     }
 
-    final result =
-        await SupabaseStore.instance
-            .acceptMemberInvitation(
+    final result = await SupabaseStore.instance.acceptMemberInvitation(
       tokenHash: tokenHash,
       email: cleanEmail,
       passwordHash: passwordHash,
     );
 
-    final account =
-        database.getAccountById(
+    final account = database.getAccountById(
       result['accountId']?.toString() ?? '',
     );
 
     if (account != null) {
       database.registerMemberLogin(
         MemberLoginRecord(
-          memberId:
-              result['memberId']?.toString() ?? '',
+          memberId: result['memberId']?.toString() ?? '',
           accountId: account.id,
           email: cleanEmail,
-          passwordHash:
-              result['_passwordHash']?.toString() ??
-                  passwordHash ??
-                  account.passwordHash,
-          role:
-              result['role']?.toString() ??
-                  'member',
+          passwordHash: result['_passwordHash']?.toString() ??
+              passwordHash ??
+              account.passwordHash,
+          role: result['role']?.toString() ?? 'member',
           status: 'active',
         ),
       );
@@ -1365,18 +1297,15 @@ class AuthService {
     Account account,
   ) {
     database.sessions.removeWhere(
-      (_, session) =>
-          session.accountId == account.id,
+      (_, session) => session.accountId == account.id,
     );
 
     database.remoteWorkersById.removeWhere(
-      (_, worker) =>
-          worker.accountId == account.id,
+      (_, worker) => worker.accountId == account.id,
     );
 
     database.remoteImportJobsById.removeWhere(
-      (_, job) =>
-          job.accountId == account.id,
+      (_, job) => job.accountId == account.id,
     );
 
     database.deleteAccount(
@@ -1408,8 +1337,7 @@ class AuthService {
   Account? accountFromToken(
     String token,
   ) {
-    final cleanToken =
-        token.trim();
+    final cleanToken = token.trim();
 
     if (cleanToken.isEmpty) {
       return null;
@@ -1423,8 +1351,7 @@ class AuthService {
   SessionRecord? sessionFromToken(
     String token,
   ) {
-    final cleanToken =
-        token.trim();
+    final cleanToken = token.trim();
 
     if (cleanToken.isEmpty) {
       return null;
@@ -1444,11 +1371,9 @@ class AuthService {
     required String token,
     required String answer,
   }) async {
-    final account =
-        accountFromToken(token);
+    final account = accountFromToken(token);
 
-    if (account == null ||
-        answer.trim().isEmpty) {
+    if (account == null || answer.trim().isEmpty) {
       return false;
     }
 
@@ -1465,8 +1390,7 @@ class AuthService {
   void logout(
     String token,
   ) {
-    final cleanToken =
-        token.trim();
+    final cleanToken = token.trim();
 
     if (cleanToken.isEmpty) {
       return;
@@ -1480,8 +1404,7 @@ class AuthService {
   void logoutAllSessions(
     String accountId,
   ) {
-    final cleanAccountId =
-        accountId.trim();
+    final cleanAccountId = accountId.trim();
 
     if (cleanAccountId.isEmpty) {
       return;
@@ -1501,8 +1424,7 @@ class AuthService {
     required String name,
     String? avatarUrl,
   }) {
-    final cleanName =
-        name.trim();
+    final cleanName = name.trim();
 
     if (cleanName.isEmpty) {
       throw Exception(
@@ -1528,11 +1450,9 @@ class AuthService {
       );
     }
 
-    final cleanAvatarUrl =
-        avatarUrl?.trim();
+    final cleanAvatarUrl = avatarUrl?.trim();
 
-    if (cleanAvatarUrl != null &&
-        cleanAvatarUrl.length > 2048) {
+    if (cleanAvatarUrl != null && cleanAvatarUrl.length > 2048) {
       throw Exception(
         'Avatar URL is too long.',
       );
@@ -1541,11 +1461,9 @@ class AuthService {
     final profile = Profile(
       id: _generateId('profile'),
       name: cleanName,
-      avatarUrl:
-          cleanAvatarUrl == null ||
-                  cleanAvatarUrl.isEmpty
-              ? null
-              : cleanAvatarUrl,
+      avatarUrl: cleanAvatarUrl == null || cleanAvatarUrl.isEmpty
+          ? null
+          : cleanAvatarUrl,
     );
 
     account.addExistingProfile(
@@ -1563,8 +1481,7 @@ class AuthService {
     required Account account,
     required String profileId,
   }) {
-    final cleanProfileId =
-        profileId.trim();
+    final cleanProfileId = profileId.trim();
 
     if (cleanProfileId.isEmpty) {
       throw Exception(
@@ -1578,8 +1495,7 @@ class AuthService {
       );
     }
 
-    final profile =
-        account.getProfileById(
+    final profile = account.getProfileById(
       cleanProfileId,
     );
 
@@ -1618,27 +1534,23 @@ class AuthService {
       );
     }
 
-    final nextUsername =
-        username?.trim();
+    final nextUsername = username?.trim();
 
-    final nextEmail =
-        email?.trim().toLowerCase();
+    final nextEmail = email?.trim().toLowerCase();
 
     if (nextUsername != null) {
       _validateUsername(nextUsername);
     }
 
     if (nextEmail != null &&
-        (nextEmail.length > maximumEmailLength ||
-            !_isValidEmail(nextEmail))) {
+        (nextEmail.length > maximumEmailLength || !_isValidEmail(nextEmail))) {
       throw Exception(
         'A valid email address is required.',
       );
     }
 
     if (nextUsername != null &&
-        nextUsername.toLowerCase() !=
-            account.username.trim().toLowerCase() &&
+        nextUsername.toLowerCase() != account.username.trim().toLowerCase() &&
         database.getAccountByUsername(
               nextUsername,
             ) !=
@@ -1649,8 +1561,7 @@ class AuthService {
     }
 
     if (nextEmail != null &&
-        nextEmail !=
-            account.email.trim().toLowerCase() &&
+        nextEmail != account.email.trim().toLowerCase() &&
         database.getAccountByEmail(
               nextEmail,
             ) !=
@@ -1660,9 +1571,8 @@ class AuthService {
       );
     }
 
-    final emailChanged = nextEmail != null &&
-        nextEmail !=
-            account.email.trim().toLowerCase();
+    final emailChanged =
+        nextEmail != null && nextEmail != account.email.trim().toLowerCase();
 
     if (nextUsername != null) {
       account.username = nextUsername;
@@ -1700,11 +1610,9 @@ class AuthService {
     required String name,
     String? avatarUrl,
   }) async {
-    final cleanId =
-        profileId.trim();
+    final cleanId = profileId.trim();
 
-    final cleanName =
-        name.trim();
+    final cleanName = name.trim();
 
     if (cleanId.isEmpty) {
       throw Exception(
@@ -1724,8 +1632,7 @@ class AuthService {
       );
     }
 
-    final profile =
-        account.getProfileById(cleanId);
+    final profile = account.getProfileById(cleanId);
 
     if (profile == null) {
       throw Exception(
@@ -1736,8 +1643,7 @@ class AuthService {
     final existing = account.profiles.any(
       (item) =>
           item.id != cleanId &&
-          item.name.trim().toLowerCase() ==
-              cleanName.toLowerCase(),
+          item.name.trim().toLowerCase() == cleanName.toLowerCase(),
     );
 
     if (existing) {
@@ -1746,24 +1652,18 @@ class AuthService {
       );
     }
 
-    final cleanAvatar =
-        avatarUrl?.trim();
+    final cleanAvatar = avatarUrl?.trim();
 
-    if (cleanAvatar != null &&
-        cleanAvatar.length > 2048) {
+    if (cleanAvatar != null && cleanAvatar.length > 2048) {
       throw Exception(
         'Avatar URL is too long.',
       );
     }
 
-    profile.name =
-        cleanName;
+    profile.name = cleanName;
 
     profile.avatarUrl =
-        cleanAvatar == null ||
-                cleanAvatar.isEmpty
-            ? null
-            : cleanAvatar;
+        cleanAvatar == null || cleanAvatar.isEmpty ? null : cleanAvatar;
 
     database.saveAccount(
       account,
@@ -1783,15 +1683,13 @@ class AuthService {
   void _validatePassword(
     String password,
   ) {
-    if (password.length <
-        minimumPasswordLength) {
+    if (password.length < minimumPasswordLength) {
       throw Exception(
         'Password must be at least $minimumPasswordLength characters long.',
       );
     }
 
-    if (password.length >
-        maximumPasswordLength) {
+    if (password.length > maximumPasswordLength) {
       throw Exception(
         'Password cannot exceed $maximumPasswordLength characters.',
       );
@@ -1807,8 +1705,7 @@ class AuthService {
       );
     }
 
-    if (username.length >
-        maximumUsernameLength) {
+    if (username.length > maximumUsernameLength) {
       throw Exception(
         'Username cannot exceed $maximumUsernameLength characters.',
       );
@@ -1826,8 +1723,7 @@ class AuthService {
   void _validateMfaCode(
     String code,
   ) {
-    if (!RegExp(r'^\d{6}$')
-        .hasMatch(code.trim())) {
+    if (!RegExp(r'^\d{6}$').hasMatch(code.trim())) {
       throw Exception(
         'MFA code must contain exactly 6 digits.',
       );
@@ -1837,11 +1733,9 @@ class AuthService {
   String _normalizeIp(
     String ipAddress,
   ) {
-    final value =
-        ipAddress.trim();
+    final value = ipAddress.trim();
 
-    if (value.isEmpty ||
-        value.length > 128) {
+    if (value.isEmpty || value.length > 128) {
       return 'unknown';
     }
 
@@ -1851,8 +1745,7 @@ class AuthService {
   String _normalizeUserAgent(
     String userAgent,
   ) {
-    final value =
-        userAgent.trim();
+    final value = userAgent.trim();
 
     if (value.isEmpty) {
       return 'unknown';
@@ -1879,24 +1772,18 @@ class AuthService {
     String left,
     String right,
   ) {
-    final leftBytes =
-        utf8.encode(left);
+    final leftBytes = utf8.encode(left);
 
-    final rightBytes =
-        utf8.encode(right);
+    final rightBytes = utf8.encode(right);
 
-    if (leftBytes.length !=
-        rightBytes.length) {
+    if (leftBytes.length != rightBytes.length) {
       return false;
     }
 
     var difference = 0;
 
-    for (var i = 0;
-        i < leftBytes.length;
-        i++) {
-      difference |=
-          leftBytes[i] ^ rightBytes[i];
+    for (var i = 0; i < leftBytes.length; i++) {
+      difference |= leftBytes[i] ^ rightBytes[i];
     }
 
     return difference == 0;
@@ -1905,8 +1792,7 @@ class AuthService {
   bool _isValidEmail(
     String email,
   ) {
-    if (email.isEmpty ||
-        email.length > maximumEmailLength) {
+    if (email.isEmpty || email.length > maximumEmailLength) {
       return false;
     }
 

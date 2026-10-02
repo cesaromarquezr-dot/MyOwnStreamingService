@@ -23,6 +23,7 @@ import '../models/media.dart';
 import '../models/group_recommendation.dart';
 import '../models/group_watch_session.dart';
 import '../models/group_chat_room.dart';
+import '../models/library_addition.dart';
 import '../models/payment_session.dart';
 import '../models/subscription.dart';
 import '../models/profile.dart';
@@ -121,6 +122,12 @@ class Database {
 
       for (final payment in payments) {
         paymentsById[payment.id] = payment;
+      }
+
+      final libraryAdditions = await store.loadLibraryAdditions();
+
+      for (final addition in libraryAdditions) {
+        libraryAdditionsById[addition.id] = addition;
       }
 
       final memberLogins = await store.loadMemberLogins();
@@ -233,6 +240,27 @@ class Database {
     paymentsById[payment.id] = payment;
 
     await SupabaseStore.instance.upsertPayment(payment);
+  }
+
+  /// Stores a scheduled library addition in memory and persists it to
+  /// Supabase when durable storage is enabled.
+  void saveLibraryAddition(
+    LibraryAddition addition,
+  ) {
+    libraryAdditionsById[addition.id] = addition;
+
+    unawaited(
+      SupabaseStore.instance
+          .upsertLibraryAddition(addition)
+          .catchError((error, stackTrace) {
+        developer.log(
+          'Library addition persistence failed.',
+          name: 'Database',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }),
+    );
   }
 
   /// Retrieves a payment session from the in-memory payment cache.
@@ -775,6 +803,10 @@ class Database {
   // ---------------------------------------------------------------------------
 
   final Map<String, Media> mediaById = <String, Media>{};
+
+  /// Scheduled publication state, cached here after loading from Supabase.
+  final Map<String, LibraryAddition> libraryAdditionsById =
+      <String, LibraryAddition>{};
 
   // Media reviews are kept here by the current backend persistence abstraction.
   final Map<String, MediaReview> reviewsById =
