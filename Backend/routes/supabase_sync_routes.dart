@@ -592,6 +592,91 @@ class SupabaseSyncRoutes {
         });
       }
 
+      if (bits.length == 3 &&
+          bits[0] == 'stories' &&
+          bits[2] == 'view' &&
+          request.method == 'POST') {
+        final view = await store.recordSocialStoryView(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          storyId: bits[1],
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'view': view,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'stories' &&
+          bits[2] == 'insights' &&
+          request.method == 'GET') {
+        final insights = await store.getSocialStoryInsights(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          storyId: bits[1],
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...insights,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'stories' &&
+          bits[2] == 'react' &&
+          request.method == 'POST') {
+        final reaction = await store.reactToSocialStory(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          storyId: bits[1],
+          reaction: _requiredText(body, 'reaction', 32),
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'reaction': reaction,
+        });
+      }
+
+      if (bits.length == 4 &&
+          bits[0] == 'stories' &&
+          bits[2] == 'poll' &&
+          bits[3] == 'vote' &&
+          request.method == 'POST') {
+        final optionIndex = body['optionIndex'];
+        if (optionIndex is! int) {
+          throw const FormatException('A Story poll option is required.');
+        }
+        final vote = await store.voteSocialStoryPoll(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          storyId: bits[1],
+          optionIndex: optionIndex,
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'vote': vote,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'stories' &&
+          bits[2] == 'reshare' &&
+          request.method == 'POST') {
+        final reshare = await store.reshareSocialStory(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          storyId: bits[1],
+          expiresInHours: int.tryParse('${body['expiresInHours'] ?? 24}') ??
+              (throw const FormatException(
+                  'Story duration must be an integer.')),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'story': reshare,
+        });
+      }
+
       if (bits.length == 1 &&
           bits[0] == 'stories' &&
           request.method == 'POST') {

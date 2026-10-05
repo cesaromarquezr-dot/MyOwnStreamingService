@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'app_customization.dart';
 import 'feature_center.dart';
 import 'library_hubs.dart';
 import 'library_release.dart';
@@ -44,6 +45,7 @@ class LibraryHubScreen extends StatelessWidget {
               type.contains('track');
         }).length;
         final settings = PageContentCustomizationStore.settingsFor('library');
+        final sectionDraft = AppSectionCustomizationStore.settingsFor(controller.currentProfile);
         final entries = <String, _HubEntry>{
           'movies': _HubEntry(
             'Movies',
@@ -158,7 +160,12 @@ class LibraryHubScreen extends StatelessWidget {
                   ),
                 )
               else if (entries[section] case final entry?)
-                _hubCard(context, entry),
+                _hubCard(
+                  context,
+                  entry,
+                  compact: sectionDraft.libraryCardStyle == 'Compact',
+                  landscape: sectionDraft.libraryCardStyle == 'Landscape',
+                ),
           ],
         );
       },
@@ -323,11 +330,30 @@ class _HubEntry {
   const _HubEntry(this.title, this.subtitle, this.icon, this.onTap);
 }
 
-Widget _hubCard(BuildContext context, _HubEntry entry) => Card(
+Widget _hubCard(
+  BuildContext context,
+  _HubEntry entry, {
+  bool compact = false,
+  bool landscape = false,
+}) =>
+    Card(
       child: ListTile(
-        leading: Icon(entry.icon),
-        title: Text(entry.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text(entry.subtitle),
+        dense: compact,
+        minVerticalPadding: compact ? 4 : 8,
+        leading: landscape
+            ? CircleAvatar(child: Icon(entry.icon, size: 20))
+            : Icon(entry.icon),
+        title: Text(
+          entry.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          entry.subtitle,
+          maxLines: landscape ? 1 : 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: entry.onTap,
       ),

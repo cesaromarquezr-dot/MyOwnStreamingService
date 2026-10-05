@@ -366,7 +366,10 @@ class _ProfileCardState extends State<_ProfileCard> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) {
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * .88;
         return Container(
           padding: const EdgeInsets.fromLTRB(
             22,
@@ -382,9 +385,12 @@ class _ProfileCardState extends State<_ProfileCard> {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                 Container(
                   width: 44,
                   height: 5,
@@ -444,7 +450,9 @@ class _ProfileCardState extends State<_ProfileCard> {
                     widget.onAchievements();
                   },
                 ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         );

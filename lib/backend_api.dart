@@ -3681,6 +3681,62 @@ class BackendApi {
         'Unable to comment on post.',
       );
 
+  Future<Map<String, dynamic>> recordSocialStoryView({
+    required String profileId,
+    required String storyId,
+  }) =>
+      _socialPost(
+        'stories/${Uri.encodeComponent(storyId)}/view',
+        {'profileId': profileId},
+        'Unable to record Story view.',
+      );
+
+  Future<Map<String, dynamic>> getSocialStoryInsights({
+    required String profileId,
+    required String storyId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/social/stories/${Uri.encodeComponent(storyId)}/insights')
+        .replace(queryParameters: {'profileId': profileId});
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load Story views.',
+    );
+  }
+
+  Future<Map<String, dynamic>> reactToSocialStory({
+    required String profileId,
+    required String storyId,
+    required String reaction,
+  }) =>
+      _socialPost(
+        'stories/${Uri.encodeComponent(storyId)}/react',
+        {'profileId': profileId, 'reaction': reaction},
+        'Unable to react to Story.',
+      );
+
+  Future<Map<String, dynamic>> voteSocialStoryPoll({
+    required String profileId,
+    required String storyId,
+    required int optionIndex,
+  }) =>
+      _socialPost(
+        'stories/${Uri.encodeComponent(storyId)}/poll/vote',
+        {'profileId': profileId, 'optionIndex': optionIndex},
+        'Unable to vote on Story poll.',
+      );
+
+  Future<Map<String, dynamic>> reshareSocialStory({
+    required String profileId,
+    required String storyId,
+    int expiresInHours = 24,
+  }) =>
+      _socialPost(
+        'stories/${Uri.encodeComponent(storyId)}/reshare',
+        {'profileId': profileId, 'expiresInHours': expiresInHours},
+        'Unable to reshare Story.',
+      );
+
   Future<Map<String, dynamic>> createSocialStory({
     required String profileId,
     required String body,

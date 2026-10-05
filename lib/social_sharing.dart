@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'app_core.dart';
 
@@ -99,6 +100,17 @@ Future<void> showSocialShareDialog(
                   const SizedBox(height: 10),
                   Row(
                     children: [
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await SharePlus.instance.share(ShareParams(
+                            title: title,
+                            text: [title, message].where((value) => value.trim().isNotEmpty).join('\n'),
+                          ));
+                        },
+                        icon: const Icon(Icons.ios_share_outlined),
+                        label: const Text('Share outside app'),
+                      ),
+                      const SizedBox(width: 8),
                       TextButton(
                         onPressed: () => Navigator.pop(sheetContext),
                         child: const Text('Cancel'),

@@ -129,6 +129,7 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
             ? List<String>.from((m['featuredArtists'] as List).map((e) => e.toString()))
             : const <String>[],
         audioUrl: '${serverApi.baseUrl}/library/stream?path=${Uri.encodeComponent(m['id']?.toString() ?? '')}',
+        lyrics: m['lyrics']?.toString() ?? '',
       )).toList();
       MusicLibraryStore.instance.tracks
         ..clear()

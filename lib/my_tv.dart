@@ -617,51 +617,100 @@ class _MyTvScreenState extends State<MyTvScreen> {
     );
   }
 
-  List<Widget> _guideCards(BuildContext context) => (_channels.toList()
-            ..sort((a, b) =>
-                (b.isFavorite ? 1 : 0).compareTo(a.isFavorite ? 1 : 0)))
-          .map((channel) {
-        final entries = _schedule(channel);
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Expanded(
-                      child: Text(channel.name,
-                          style: Theme.of(context).textTheme.titleLarge)),
-                  IconButton(
-                    tooltip: channel.isFavorite
-                        ? 'Remove favorite channel'
-                        : 'Favorite channel',
-                    onPressed: () => _toggleFavorite(channel),
-                    icon: Icon(channel.isFavorite
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded),
-                    color: channel.isFavorite ? Colors.amber : null,
-                  ),
-                ]),
-                if (entries.isEmpty)
-                  const ListTile(
-                      title: Text('No matching items'),
-                      subtitle:
-                          Text('Add matching items to this profile library.'))
-                else
-                  for (var i = 0; i < min(entries.length, 12); i++)
-                    _scheduleCard(
-                      context,
-                      _scheduleTime(context, channel, entries, i),
-                      entries[i],
-                      null,
-                      channelId: channel.id,
+  List<Widget> _guideCards(BuildContext context) {
+    final channels = _channels.toList()
+      ..sort((a, b) => (b.isFavorite ? 1 : 0).compareTo(a.isFavorite ? 1 : 0));
+    const slotWidth = 170.0;
+    const channelWidth = 150.0;
+    const headerHeight = 48.0;
+    return [
+      Card(
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final rows = <Widget>[];
+            for (final channel in channels) {
+              final entries = _schedule(channel).take(12).toList();
+              rows.add(SizedBox(
+                height: 94,
+                child: Row(
+                  children: [
+                    Container(
+                      width: channelWidth,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(children: [Expanded(child: Text(channel.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))), IconButton(visualDensity: VisualDensity.compact, tooltip: channel.isFavorite ? 'Remove favorite channel' : 'Favorite channel', onPressed: () => _toggleFavorite(channel), icon: Icon(channel.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded), color: channel.isFavorite ? Colors.amber : null)]),
+                          Text(channel.contentTypes.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                        ],
+                      ),
                     ),
-              ],
-            ),
-          ),
-        );
-      }).toList();
+                    Expanded(
+                      child: entries.isEmpty
+                          ? const Center(child: Text('No matching programs', style: TextStyle(color: Colors.white54)))
+                          : ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: entries.length,
+                              itemBuilder: (context, index) {
+                                final entry = entries[index];
+                                final minutes = _durationMinutes(entry);
+                                final width = (slotWidth * (minutes / 30)).clamp(slotWidth, slotWidth * 4);
+                                final start = _scheduleTime(context, channel, entries, index);
+                                return SizedBox(
+                                  width: width,
+                                  child: InkWell(
+                                    onTap: () => _play(entry),
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        color: index == 0 ? Theme.of(context).colorScheme.primaryContainer : Colors.white.withValues(alpha: .055),
+                                        border: Border.all(color: Colors.white10),
+                                      ),
+                                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Text(start, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white60)),
+                                        const SizedBox(height: 5),
+                                        Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                                        const SizedBox(height: 3),
+                                        Text(entry.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                                      ]),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ));
+            }
+            final timelineWidth = max(constraints.maxWidth, channelWidth + slotWidth * 12);
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: timelineWidth,
+                child: Column(children: [
+                  SizedBox(
+                    height: headerHeight,
+                    child: Row(children: [
+                      Container(width: channelWidth, padding: const EdgeInsets.all(12), alignment: Alignment.centerLeft, child: const Text('CHANNELS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2))),
+                      for (var i = 0; i < 12; i++)
+                        SizedBox(width: slotWidth, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 15), child: Text(TimeOfDay(hour: ((DateTime.now().hour * 60 + DateTime.now().minute + i * 30) ~/ 60) % 24, minute: (DateTime.now().minute + i * 30) % 60).format(context), style: const TextStyle(fontSize: 11, color: Colors.white54)))),
+                    ]),
+                  ),
+                  ...rows,
+                ]),
+              ),
+            );
+          },
+        ),
+      ),
+    ];
+  }
 
   Widget _scheduleCard(BuildContext context, String slot, _ChannelEntry entry,
           String? action,

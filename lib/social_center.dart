@@ -7,11 +7,13 @@ import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'app_core.dart';
+import 'app_customization.dart';
 import 'music.dart';
 import 'shop.dart';
 import 'social_video_editor.dart';
 import 'social_sharing.dart';
 import 'social_reels.dart';
+import 'social_story_experience.dart';
 
 class _SocialPostDraft {
   const _SocialPostDraft({required this.body, this.photo});
@@ -146,9 +148,16 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     super.initState();
     _visibleTabSections = _configuredTabSections;
     _tabs = TabController(length: _visibleTabSections.length, vsync: this);
+    StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
+    unawaited(_loadStoryPlacement());
     PageContentCustomizationStore.revision
         .addListener(_onPageCustomizationChanged);
     _load();
+  }
+
+  Future<void> _loadStoryPlacement() async {
+    await StoryPlacementStore.load(AppController.instance.currentProfile);
+    if (mounted) setState(() {});
   }
 
   List<String> get _configuredTabSections {
@@ -158,6 +167,10 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   }
 
   List<String> get _tabSections => _visibleTabSections;
+
+  void _onStoryPlacementChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _onPageCustomizationChanged() {
     if (!mounted) return;
@@ -181,6 +194,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
 
   @override
   void dispose() {
+    StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
     PageContentCustomizationStore.revision
         .removeListener(_onPageCustomizationChanged);
     _tabs.dispose();
@@ -354,16 +368,17 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             }).toList(),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 96,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _storyComposer(),
-                ...stories.map(_storyBubble),
-              ],
+          if (StoryPlacementStore.showsOnFriends(AppController.instance.currentProfile))
+            SizedBox(
+              height: 106,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _storyComposer(),
+                  ...stories.map(_storyBubble),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1341,8 +1356,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final friends = _list('friends');
     final requests = _list('requests');
     final suggestions = _list('suggestions');
+    final profile = AppController.instance.currentProfile;
 
-    return RefreshIndicator(
+    return AnimatedBuilder(
+      animation: AppSectionCustomizationStore.revision,
+      builder: (context, _) {
+        final displayStyle =
+            AppSectionCustomizationStore.settingsFor(profile).friendsDisplayStyle;
+        return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(18),
@@ -1371,37 +1392,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 subtitle: Text('Use a unique @username to connect.'),
               ),
             ),
-          ...friends.map(
-            (friend) => Card(
-              child: ListTile(
-                leading: CircleAvatar(
-                  child: Text(
-                    _initial(
-                      friend['display_name']?.toString() ??
-                          friend['username']?.toString() ??
-                          'F',
-                    ),
-                  ),
-                ),
-                title: Text(
-                  friend['display_name']?.toString() ?? 'Friend',
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                subtitle: Text(
-                  friend['username'] == null
-                      ? 'Friend'
-                      : '@${friend['username']}',
-                ),
-                trailing: IconButton(
-                  tooltip: 'Message',
-                  onPressed: () => _startMessageFor(
-                    friend['username']?.toString() ?? '',
-                  ),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded),
-                ),
-              ),
-            ),
-          ),
+          ...friends.map((friend) => _friendDisplayCard(friend, displayStyle)),
           if (requests.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Text(
@@ -1420,6 +1411,40 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             ...suggestions.map(_suggestionCard),
           ],
         ],
+      ),
+        );
+      },
+    );
+  }
+
+  Widget _friendDisplayCard(Map<String, dynamic> friend, String style) {
+    final name = friend['display_name']?.toString() ?? 'Friend';
+    final username = friend['username']?.toString() ?? '';
+    final avatar = CircleAvatar(
+      radius: style == 'Compact' ? 17 : 21,
+      child: Text(_initial(name)),
+    );
+    final message = IconButton(
+      tooltip: 'Message',
+      onPressed: () => _startMessageFor(username),
+      icon: const Icon(Icons.chat_bubble_outline_rounded),
+    );
+    if (style == 'List') {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        leading: avatar,
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(username.isEmpty ? 'Friend' : '@$username'),
+        trailing: message,
+      );
+    }
+    return Card(
+      child: ListTile(
+        dense: style == 'Compact',
+        leading: avatar,
+        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(username.isEmpty ? 'Friend' : '@$username', maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: message,
       ),
     );
   }
@@ -1760,63 +1785,68 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Future<void> _composeStory({String? communityId}) async {
     final profile = AppController.instance.currentProfile;
     if (profile == null) return;
-    final controller = TextEditingController();
-    var expiresInHours = 24;
-    final value = await showDialog<(String, int)>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Your story'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLines: 4,
-                maxLength: 1000,
-                decoration: const InputDecoration(
-                  hintText: 'Share something with your friends',
-                ),
-              ),
-              DropdownButtonFormField<int>(
-                initialValue: expiresInHours,
-                decoration: const InputDecoration(labelText: 'Story lifetime'),
-                items: const [
-                  DropdownMenuItem(value: 24, child: Text('24 hours')),
-                  DropdownMenuItem(value: 48, child: Text('2 days')),
-                  DropdownMenuItem(value: 72, child: Text('3 days')),
-                  DropdownMenuItem(value: 168, child: Text('1 week')),
-                ],
-                onChanged: (value) =>
-                    setDialogState(() => expiresInHours = value ?? 24),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                (controller.text, expiresInHours),
-              ),
-              child: const Text('Share'),
-            ),
-          ],
-        ),
+    final friends = _list('friends');
+    final media = AppController.instance.library
+        .where((item) => item.isAccessibleTo(profile))
+        .toList();
+    final draft = await Navigator.push<StoryDraft>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/app/story/create'),
+        builder: (_) => StoryComposerScreen(friends: friends, media: media),
       ),
     );
-    controller.dispose();
-    if (value == null || value.$1.trim().isEmpty) return;
+    if (!mounted || draft == null) return;
+    String? attachmentPath;
+    if (draft.media != null) {
+      try {
+        final bytes = await draft.media!.readAsBytes();
+        if (bytes.isEmpty || bytes.length > 50 * 1024 * 1024) {
+          _showError('Story attachments must be smaller than 50 MB.');
+          return;
+        }
+        final extension = draft.media!.name.split('.').last.toLowerCase();
+        final contentType = draft.mediaType == 'photo'
+            ? switch (extension) {
+                'jpg' || 'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                _ => null,
+              }
+            : switch (extension) {
+                'mp4' || 'm4v' => 'video/mp4',
+                'mov' => 'video/quicktime',
+                'webm' => 'video/webm',
+                _ => null,
+              };
+        if (contentType == null) {
+          _showError('Choose a JPEG, PNG, WebP, MP4, MOV, or WebM Story file.');
+          return;
+        }
+        attachmentPath = await AppController.instance.backendApi.uploadSocialAttachment(
+          profileId: profile.id,
+          bytes: bytes,
+          contentType: contentType,
+        );
+      } catch (error) {
+        _showError(error.toString());
+        return;
+      }
+    }
+    final reference = <String, dynamic>{
+      'type': draft.mediaType == 'photo' ? 'photo' : draft.mediaType == 'video' ? 'video' : 'story',
+      if (attachmentPath != null)
+        (draft.mediaType == 'photo' ? 'photoPath' : 'videoPath'): attachmentPath,
+      if (draft.media != null) 'fileName': draft.media!.name,
+      if (draft.storyData.isNotEmpty) 'storyData': draft.storyData,
+    };
     await _act(
       () => AppController.instance.backendApi.createSocialStory(
         profileId: profile.id,
-        body: value.$1.trim(),
+        body: draft.body.trim().isEmpty ? 'Story' : draft.body.trim(),
         communityId: communityId,
-        expiresInHours: value.$2,
+        expiresInHours: draft.expiresInHours,
+        mediaReference: reference['type'] == 'story' && draft.storyData.isEmpty ? null : reference,
       ),
     );
   }
@@ -2328,54 +2358,16 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     );
   }
 
+  void _showError(String message) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message.replaceFirst('Exception: ', ''))));
+  }
+
   void _showStory(Map<String, dynamic> story) {
-    final author = story['author'] is Map
-        ? Map<String, dynamic>.from(story['author'] as Map)
-        : <String, dynamic>{};
-    final name = author['display_name']?.toString() ??
-        author['username']?.toString() ??
-        'Friend';
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(story['body']?.toString() ?? ''),
-            if (story['mediaReference'] is Map &&
-                (story['mediaReference'] as Map)['coverUrl'] != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: InkWell(
-                  onTap: () {
-                    final reference = story['mediaReference'] as Map;
-                    final videoUrl = reference['videoUrl']?.toString();
-                    if (videoUrl != null) _playSocialVideo(videoUrl);
-                  },
-                  child: Image.network(
-                    (story['mediaReference'] as Map)['coverUrl'].toString(),
-                    height: 220,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            if (story['expires_at'] != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Expires ${DateTime.tryParse(story['expires_at'].toString())?.toLocal()}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
-          ),
-        ],
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/app/story/view'),
+        builder: (_) => StoryViewerScreen(story: story),
       ),
     );
   }

@@ -18,6 +18,9 @@ import 'worldwide_location.dart';
 import 'live_shopping.dart';
 import 'page_presentation.dart';
 import 'social_sharing.dart';
+import 'shop_customization_models.dart';
+import 'shop_customization.dart';
+import 'app_customization.dart';
 
 /// A globally searchable entity that a seller can associate with a product.
 ///
@@ -90,20 +93,27 @@ class ShopAssociation {
 }
 
 /// A seller-created marketplace product.
-class ShopProduct {
+class ShopProduct implements ShopProductSource {
+  @override
   final String id;
   final String storeId;
+  @override
   String name;
   String description;
   String productType;
   String category;
+  @override
   double price;
+  @override
   String currency;
   int inventoryQuantity;
   bool featured;
   bool active;
+  @override
   List<String> imageUrls;
   List<ShopAssociation> associations;
+  @override
+  List<ShopCustomizationGroup> customizationGroups;
 
   ShopProduct({
     required this.id,
@@ -119,8 +129,10 @@ class ShopProduct {
     this.active = true,
     List<String>? imageUrls,
     List<ShopAssociation>? associations,
+    List<ShopCustomizationGroup>? customizationGroups,
   })  : imageUrls = imageUrls ?? <String>[],
-        associations = associations ?? <ShopAssociation>[];
+        associations = associations ?? <ShopAssociation>[],
+        customizationGroups = customizationGroups ?? <ShopCustomizationGroup>[];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -136,6 +148,7 @@ class ShopProduct {
         'active': active,
         'imageUrls': imageUrls,
         'associations': associations.map((a) => a.toJson()).toList(),
+        'customizationGroups': customizationGroups.map((g) => g.toJson()).toList(),
       };
 
   factory ShopProduct.fromJson(Map<String, dynamic> json) => ShopProduct(
@@ -159,6 +172,10 @@ class ShopProduct {
         associations: (json['associations'] as List?)
             ?.whereType<Map>()
             .map((e) => ShopAssociation.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+        customizationGroups: (json['customizationGroups'] as List?)
+            ?.whereType<Map>()
+            .map((e) => ShopCustomizationGroup.fromJson(Map<String, dynamic>.from(e)))
             .toList(),
       );
 }
@@ -420,8 +437,13 @@ class ShopStore {
 class ShopBagLine {
   final String productId;
   int quantity;
+  Map<String, dynamic> customization;
 
-  ShopBagLine({required this.productId, this.quantity = 1});
+  ShopBagLine({
+    required this.productId,
+    this.quantity = 1,
+    Map<String, dynamic>? customization,
+  }) : customization = customization ?? <String, dynamic>{};
 }
 
 /// A saved payment-method summary. Sensitive card data is intentionally absent.
@@ -501,7 +523,11 @@ class ShopOrder {
   Map<String, dynamic> toJson() => {
         'id': id,
         'lines': lines
-            .map((l) => {'productId': l.productId, 'quantity': l.quantity})
+            .map((l) => {
+                  'productId': l.productId,
+                  'quantity': l.quantity,
+                  'customization': l.customization,
+                })
             .toList(),
         'total': total,
         'transactionId': transactionId,
@@ -513,9 +539,12 @@ class ShopOrder {
         lines: (json['lines'] as List?)?.whereType<Map>().map((item) {
               final map = Map<String, dynamic>.from(item);
               return ShopBagLine(
-                  productId: map['productId']?.toString() ?? '',
-                  quantity:
-                      int.tryParse(map['quantity']?.toString() ?? '') ?? 1);
+                productId: map['productId']?.toString() ?? '',
+                quantity: int.tryParse(map['quantity']?.toString() ?? '') ?? 1,
+                customization: map['customization'] is Map
+                    ? Map<String, dynamic>.from(map['customization'] as Map)
+                    : <String, dynamic>{},
+              );
             }).toList() ??
             <ShopBagLine>[],
         total: json['total'] is num
@@ -597,9 +626,12 @@ class ShopCatalog extends ChangeNotifier {
           for (final item in decoded.whereType<Map>()) {
             final map = Map<String, dynamic>.from(item);
             bag.add(ShopBagLine(
-                productId: map['productId']?.toString() ?? '',
-                quantity:
-                    int.tryParse(map['quantity']?.toString() ?? '') ?? 1));
+              productId: map['productId']?.toString() ?? '',
+              quantity: int.tryParse(map['quantity']?.toString() ?? '') ?? 1,
+              customization: map['customization'] is Map
+                  ? Map<String, dynamic>.from(map['customization'] as Map)
+                  : <String, dynamic>{},
+            ));
           }
         }
       }
@@ -623,7 +655,7 @@ class ShopCatalog extends ChangeNotifier {
         'shop_bag',
         jsonEncode(bag
             .map((line) =>
-                {'productId': line.productId, 'quantity': line.quantity})
+                {'productId': line.productId, 'quantity': line.quantity, 'customization': line.customization})
             .toList()));
     await prefs.setString('shop_orders',
         jsonEncode(orders.map((order) => order.toJson()).toList()));
@@ -878,6 +910,7 @@ class ShopCatalog extends ChangeNotifier {
     bool featured = false,
     List<String>? imageUrls,
     List<ShopAssociation>? associations,
+    List<ShopCustomizationGroup>? customizationGroups,
   }) {
     final store = storeById(storeId);
     if (store == null) throw Exception('Store not found.');
@@ -897,6 +930,7 @@ class ShopCatalog extends ChangeNotifier {
       featured: featured,
       imageUrls: imageUrls,
       associations: associations,
+      customizationGroups: customizationGroups,
     );
     products.add(product);
     notifyListeners();
@@ -911,7 +945,8 @@ class ShopCatalog extends ChangeNotifier {
       double? price,
       int? inventoryQuantity,
       bool? featured,
-      bool? active}) {
+      bool? active,
+      List<ShopCustomizationGroup>? customizationGroups}) {
     final accountId = AppController.instance.currentAccount?.id;
     final store = storeById(product.storeId);
     if (store == null || store.ownerAccountId != accountId) return;
@@ -923,6 +958,7 @@ class ShopCatalog extends ChangeNotifier {
     }
     if (featured != null) product.featured = featured;
     if (active != null) product.active = active;
+    if (customizationGroups != null) product.customizationGroups = customizationGroups;
     notifyListeners();
     _save();
   }
@@ -1098,20 +1134,20 @@ class ShopCatalog extends ChangeNotifier {
     return 0;
   }
 
-  void addToBag(String productId, {int quantity = 1}) {
+  void addToBag(String productId, {int quantity = 1, Map<String, dynamic>? customization}) {
     final product = productById(productId);
-    if (product == null || !product.active || product.inventoryQuantity <= 0) {
-      return;
-    }
-    final existing = bag.where((line) => line.productId == productId).toList();
+    if (product == null || !product.active || product.inventoryQuantity <= 0) return;
+    final selectedCustomization = customization ?? <String, dynamic>{};
+    final key = customizationKey(selectedCustomization);
+    final existing = bag.where((line) => line.productId == productId && customizationKey(line.customization) == key).toList();
     if (existing.isEmpty) {
       bag.add(ShopBagLine(
-          productId: productId,
-          quantity: quantity.clamp(1, product.inventoryQuantity).toInt()));
+        productId: productId,
+        quantity: quantity.clamp(1, product.inventoryQuantity).toInt(),
+        customization: copyCustomizationMap(selectedCustomization),
+      ));
     } else {
-      existing.first.quantity = (existing.first.quantity + quantity)
-          .clamp(1, product.inventoryQuantity)
-          .toInt();
+      existing.first.quantity = (existing.first.quantity + quantity).clamp(1, product.inventoryQuantity).toInt();
     }
     notifyListeners();
     _save();
@@ -1143,14 +1179,18 @@ class ShopCatalog extends ChangeNotifier {
   List<ShopBagLine> linesForStore(String storeId) => bag
       .where((line) => productById(line.productId)?.storeId == storeId)
       .map((line) =>
-          ShopBagLine(productId: line.productId, quantity: line.quantity))
+          ShopBagLine(productId: line.productId, quantity: line.quantity, customization: copyCustomizationMap(line.customization)))
       .toList();
 
   double subtotal([Iterable<ShopBagLine>? lines]) {
     final source = lines ?? bag;
     return source.fold<double>(0, (total, line) {
       final product = productById(line.productId);
-      return total + (product?.price ?? 0) * line.quantity;
+      final base = (product?.price ?? 0) * line.quantity;
+      final adjustments = line.customization['selections'] is Map
+          ? (line.customization['selections'] as Map).values.whereType<Map>().fold<double>(0, (sum, item) => sum + ((item['priceAdjustment'] as num?)?.toDouble() ?? 0)) * line.quantity
+          : 0;
+      return total + base + adjustments;
     });
   }
 
@@ -1167,7 +1207,9 @@ class ShopCatalog extends ChangeNotifier {
           id: 'order_${DateTime.now().microsecondsSinceEpoch}',
           lines: lines
               .map((line) => ShopBagLine(
-                  productId: line.productId, quantity: line.quantity))
+                  productId: line.productId,
+                  quantity: line.quantity,
+                  customization: copyCustomizationMap(line.customization)))
               .toList(),
           total: total,
           transactionId: transactionId,
@@ -1187,9 +1229,10 @@ class ShopCatalog extends ChangeNotifier {
                 .clamp(0, product.inventoryQuantity)
                 .toInt();
       }
-      final line = bag.where((x) => x.productId == purchased.productId).isEmpty
-          ? null
-          : bag.where((x) => x.productId == purchased.productId).first;
+      final lineMatches = bag.where((x) =>
+          x.productId == purchased.productId &&
+          customizationKey(x.customization) == customizationKey(purchased.customization));
+      final line = lineMatches.isEmpty ? null : lineMatches.first;
       if (line == null) continue;
       line.quantity -= purchased.quantity;
       if (line.quantity <= 0) bag.remove(line);
@@ -1205,6 +1248,40 @@ class ShopProductDetailsScreen extends StatelessWidget {
 
   final ShopProduct product;
   final VoidCallback? onHome;
+
+  Future<Map<String, dynamic>> _customize(BuildContext context) async {
+    if (product.customizationGroups.isEmpty) return <String, dynamic>{};
+    return await Navigator.push<Map<String, dynamic>>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ShopProductCustomizerScreen(product: product),
+          ),
+        ) ??
+        <String, dynamic>{};
+  }
+
+  Future<void> _add(BuildContext context) async {
+    final customization = await _customize(context);
+    if (!context.mounted) return;
+    ShopCatalog.instance.addToBag(product.id, customization: customization);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to bag')));
+  }
+
+  Future<void> _buy(BuildContext context) async {
+    final customization = await _customize(context);
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ShopCheckoutScreen(
+          lines: [ShopBagLine(productId: product.id, customization: customization)],
+          title: 'Checkout • ${product.name}',
+          storeSpecific: false,
+          onHome: onHome,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1332,6 +1409,18 @@ class ShopProductDetailsScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (product.customizationGroups.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.tune_rounded),
+                title: const Text('This product is customizable'),
+                subtitle: Text('${product.customizationGroups.length} customization group${product.customizationGroups.length == 1 ? '' : 's'} available before checkout.'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _customize(context),
+              ),
+            ),
+          ],
           if (product.description.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
             const Text('About this product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
@@ -1355,14 +1444,7 @@ class ShopProductDetailsScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: product.inventoryQuantity <= 0
-                      ? null
-                      : () {
-                          catalog.addToBag(product.id);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Added to bag')),
-                          );
-                        },
+                  onPressed: product.inventoryQuantity <= 0 ? null : () => _add(context),
                   icon: const Icon(Icons.add_shopping_cart),
                   label: const UniversalText('Add to bag'),
                 ),
@@ -1370,19 +1452,7 @@ class ShopProductDetailsScreen extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: product.inventoryQuantity <= 0
-                      ? null
-                      : () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ShopCheckoutScreen(
-                                lines: [ShopBagLine(productId: product.id)],
-                                title: 'Checkout • ${product.name}',
-                                storeSpecific: false,
-                                onHome: onHome,
-                              ),
-                            ),
-                          ),
+                  onPressed: product.inventoryQuantity <= 0 ? null : () => _buy(context),
                   icon: const Icon(Icons.bolt_rounded),
                   label: const UniversalText('Buy now'),
                 ),
@@ -2354,7 +2424,9 @@ class ShopStoreScreen extends StatelessWidget {
   Widget _productGrid(BuildContext context, List<ShopProduct> products,
       StorefrontDesign design) {
     final width = MediaQuery.sizeOf(context).width;
-    final count = width < 600 ? design.mobileColumns : design.desktopColumns;
+    final personal = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final baseCount = width < 600 ? design.mobileColumns : design.desktopColumns;
+    final count = personal.shopColumns > 0 ? personal.shopColumns : baseCount;
     return GridView.count(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -2659,6 +2731,8 @@ class SellerDashboardScreen extends StatelessWidget {
                                   } else if (value == 'feature') {
                                     catalog.updateProduct(product,
                                         featured: !product.featured);
+                                  } else if (value == 'customize') {
+                                    _customizeProduct(context, product);
                                   }
                                 },
                                 itemBuilder: (_) => [
@@ -2666,6 +2740,9 @@ class SellerDashboardScreen extends StatelessWidget {
                                           value: 'edit',
                                           child: const UniversalText(
                                               'Edit Product')),
+                                      const PopupMenuItem(
+                                          value: 'customize',
+                                          child: UniversalText('Customize Product')),
                                       PopupMenuItem(
                                           value: 'feature',
                                           child: UniversalText(product.featured
@@ -2686,6 +2763,19 @@ class SellerDashboardScreen extends StatelessWidget {
       context: context,
       builder: (_) => _EditShopProductDialog(product: product),
     );
+  }
+
+  Future<void> _customizeProduct(BuildContext context, ShopProduct product) async {
+    final result = await Navigator.push<List<ShopCustomizationGroup>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ShopProductCustomizationEditor(
+          initialGroups: product.customizationGroups,
+        ),
+      ),
+    );
+    if (result == null) return;
+    ShopCatalog.instance.updateProduct(product, customizationGroups: result);
   }
 
   Widget _metric(String label, String value, IconData icon) => Card(
@@ -3762,6 +3852,7 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
   final inventory = TextEditingController();
   final List<String> imageDataUris = <String>[];
   final List<ShopAssociation> associations = <ShopAssociation>[];
+  final List<ShopCustomizationGroup> customizationGroups = <ShopCustomizationGroup>[];
   String productType = 'Merchandise';
   String category = 'Other';
   bool featured = false;
@@ -4011,6 +4102,23 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
               onRemoved: _removeAssociation,
             ),
             const SizedBox(height: 10),
+            const SizedBox(height: 16),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.tune_rounded),
+                title: const Text('Customize Product'),
+                subtitle: Text(customizationGroups.isEmpty ? 'Add buyer controls such as size, color, text, image, font, icon, or character options.' : '${customizationGroups.length} buyer customization groups configured.'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () async {
+                  final result = await Navigator.push<List<ShopCustomizationGroup>>(
+                    context,
+                    MaterialPageRoute(builder: (_) => ShopProductCustomizationEditor(initialGroups: customizationGroups)),
+                  );
+                  if (result != null) setState(() { customizationGroups..clear()..addAll(result); });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
             SwitchListTile(
               value: featured,
               onChanged: (value) => setState(() => featured = value),
@@ -4056,6 +4164,7 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
       featured: featured,
       imageUrls: imageDataUris,
       associations: associations,
+      customizationGroups: customizationGroups,
     );
     Navigator.pop(context);
   }
@@ -4141,10 +4250,18 @@ class ShopBagScreen extends StatelessWidget {
     final catalog = ShopCatalog.instance;
     final product = catalog.productById(line.productId);
     if (product == null) return const SizedBox.shrink();
+    final selectionText = line.customization['selections'] is Map
+        ? (line.customization['selections'] as Map).values
+            .whereType<Map>()
+            .map((item) => item['label']?.toString())
+            .whereType<String>()
+            .where((value) => value.isNotEmpty)
+            .join(' • ')
+        : '';
     return Card(
         child: ListTile(
       title: Text(product.name),
-      subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency}'),
+      subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency}${selectionText.isEmpty ? '' : '\n$selectionText'}'),
       trailing: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
         IconButton(
             onPressed: () => catalog.changeQuantity(product.id, -1),
@@ -4656,14 +4773,28 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
   Widget _summaryLine(ShopBagLine line) {
     final product = ShopCatalog.instance.productById(line.productId);
     if (product == null) return const SizedBox.shrink();
+    final selectionText = line.customization['selections'] is Map
+        ? (line.customization['selections'] as Map).values
+            .whereType<Map>()
+            .map((item) => item['label']?.toString())
+            .whereType<String>()
+            .where((value) => value.isNotEmpty)
+            .join(' • ')
+        : '';
+    final lineTotal = (product.price * line.quantity) +
+        (line.customization['selections'] is Map
+            ? (line.customization['selections'] as Map).values.whereType<Map>().fold<double>(0, (sum, item) => sum + ((item['priceAdjustment'] as num?)?.toDouble() ?? 0)) * line.quantity
+            : 0);
     return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(children: [
-          Expanded(child: Text(product.name)),
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(product.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+            if (selectionText.isNotEmpty) Text(selectionText, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+          ])),
           Text('× ${line.quantity}'),
           const SizedBox(width: 14),
-          Text(
-              '${(product.price * line.quantity).toStringAsFixed(2)} ${product.currency}')
+          Text('${lineTotal.toStringAsFixed(2)} ${product.currency}')
         ]));
   }
 

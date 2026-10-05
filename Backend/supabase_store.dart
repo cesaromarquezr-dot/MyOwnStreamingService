@@ -2369,6 +2369,314 @@ class SupabaseStore {
     return incoming != null;
   }
 
+  Future<Map<String, dynamic>> _getSocialStoryForInteraction({
+    required dynamic client,
+    required String accountId,
+    required String profileExternalId,
+    required String storyId,
+    required bool allowExpiredForOwner,
+  }) async {
+    final row = await client
+        .from('social_stories')
+        .select()
+        .eq('id', storyId)
+        .maybeSingle();
+    if (row == null) throw StateError('Story not found.');
+    final story = Map<String, dynamic>.from(row);
+    final authorAccountId = story['author_account_id'].toString();
+    final authorProfileId = story['author_profile_id'].toString();
+    final mine = authorAccountId == accountId && authorProfileId == profileExternalId;
+    if (!mine && !allowExpiredForOwner) {
+      final expires = DateTime.tryParse(story['expires_at']?.toString() ?? '');
+      if (expires != null && !expires.toUtc().isAfter(DateTime.now().toUtc())) {
+        throw StateError('This Story has expired.');
+      }
+    }
+    if (mine) return story;
+    var allowed = false;
+    if (story['visibility'] == 'community') {
+      final communityId = story['community_id']?.toString();
+      if (communityId != null && communityId.isNotEmpty) {
+        final membership = await client
+            .from('social_community_memberships')
+            .select('community_id')
+            .eq('community_id', communityId)
+            .eq('account_id', accountId)
+            .eq('profile_id', profileExternalId)
+            .maybeSingle();
+        allowed = membership != null;
+      }
+    } else {
+      final friendship = await client
+          .from('social_friendships')
+          .select('id')
+          .eq('status', 'accepted')
+          .or(
+            'and(requester_account_id.eq.$accountId,recipient_account_id.eq.$authorAccountId),'
+            'and(requester_account_id.eq.$authorAccountId,recipient_account_id.eq.$accountId)',
+          )
+          .limit(1);
+      allowed = friendship.isNotEmpty;
+    }
+    if (!allowed) throw StateError('You cannot interact with this Story.');
+    return story;
+  }
+
+  Future<Map<String, dynamic>> recordSocialStoryView({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String storyId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final story = await _getSocialStoryForInteraction(
+      client: c,
+      accountId: me['id'].toString(),
+      profileExternalId: profileExternalId,
+      storyId: storyId,
+      allowExpiredForOwner: false,
+    );
+    final current = await c
+        .from('social_story_views')
+        .select('view_count,first_viewed_at')
+        .eq('story_id', story['id'].toString())
+        .eq('viewer_account_id', me['id'].toString())
+        .eq('viewer_profile_id', profileExternalId)
+        .maybeSingle();
+    final count = (current?['view_count'] as num?)?.toInt() ?? 0;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final saved = await c
+        .from('social_story_views')
+        .upsert({
+          'story_id': story['id'],
+          'viewer_account_id': me['id'],
+          'viewer_profile_id': profileExternalId,
+          'view_count': count + 1,
+          'first_viewed_at': current?['first_viewed_at'] ?? now,
+          'last_viewed_at': now,
+        }, onConflict: 'story_id,viewer_account_id,viewer_profile_id')
+        .select()
+        .single();
+    return Map<String, dynamic>.from(saved);
+  }
+
+  Future<Map<String, dynamic>> getSocialStoryInsights({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String storyId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final story = await _getSocialStoryForInteraction(
+      client: c,
+      accountId: me['id'].toString(),
+      profileExternalId: profileExternalId,
+      storyId: storyId,
+      allowExpiredForOwner: true,
+    );
+    if (story['author_account_id'].toString() != me['id'].toString() ||
+        story['author_profile_id'].toString() != profileExternalId) {
+      throw StateError('Only the Story owner can view Story analytics.');
+    }
+    final views = await c
+        .from('social_story_views')
+        .select('viewer_account_id,viewer_profile_id,view_count,last_viewed_at')
+        .eq('story_id', storyId)
+        .order('view_count', ascending: false);
+    final reactions = await c
+        .from('social_story_reactions')
+        .select('account_id,profile_id,reaction')
+        .eq('story_id', storyId);
+    final reactionKeys = <String>{
+      for (final row in reactions) '${row['account_id']}:${row['profile_id']}',
+    };
+    final accountIds = views.map((row) => row['viewer_account_id'].toString()).toSet();
+    final accounts = <String, Map<String, dynamic>>{};
+    for (final accountId in accountIds) {
+      final account = await c
+          .from('accounts')
+          .select('id,username,display_name,avatar_url')
+          .eq('id', accountId)
+          .maybeSingle();
+      if (account != null) accounts[accountId] = Map<String, dynamic>.from(account);
+    }
+    final viewers = <Map<String, dynamic>>[];
+    for (final row in views) {
+      final accountId = row['viewer_account_id'].toString();
+      final profileId = row['viewer_profile_id'].toString();
+      final account = accounts[accountId] ?? <String, dynamic>{};
+      viewers.add({
+        'accountId': accountId,
+        'profileId': profileId,
+        'username': account['username'],
+        'displayName': account['display_name'] ?? account['username'] ?? 'User',
+        'avatarUrl': account['avatar_url'],
+        'viewCount': (row['view_count'] as num?)?.toInt() ?? 0,
+        'lastViewedAt': row['last_viewed_at'],
+        'liked': reactionKeys.contains('$accountId:$profileId'),
+      });
+    }
+    final totalViews = viewers.fold<int>(0, (sum, item) => sum + ((item['viewCount'] as num?)?.toInt() ?? 0));
+    return {
+      'storyId': storyId,
+      'totalViews': totalViews,
+      'uniqueViewers': viewers.length,
+      'likes': reactions.length,
+      'viewers': viewers,
+    };
+  }
+
+  Future<Map<String, dynamic>> reactToSocialStory({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String storyId,
+    required String reaction,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    await _getSocialStoryForInteraction(
+      client: c,
+      accountId: me['id'].toString(),
+      profileExternalId: profileExternalId,
+      storyId: storyId,
+      allowExpiredForOwner: false,
+    );
+    if (reaction.trim().toLowerCase() == 'remove') {
+      await c
+          .from('social_story_reactions')
+          .delete()
+          .eq('story_id', storyId)
+          .eq('account_id', me['id'].toString())
+          .eq('profile_id', profileExternalId);
+      return {'removed': true, 'storyId': storyId};
+    }
+    return Map<String, dynamic>.from(await c
+        .from('social_story_reactions')
+        .upsert({
+          'story_id': storyId,
+          'account_id': me['id'],
+          'profile_id': profileExternalId,
+          'reaction': reaction.trim(),
+        }, onConflict: 'story_id,account_id,profile_id')
+        .select()
+        .single());
+  }
+
+  Future<Map<String, dynamic>> voteSocialStoryPoll({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String storyId,
+    required int optionIndex,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final story = await _getSocialStoryForInteraction(
+      client: c,
+      accountId: me['id'].toString(),
+      profileExternalId: profileExternalId,
+      storyId: storyId,
+      allowExpiredForOwner: false,
+    );
+    final reference = story['media_reference'];
+    final storyData = reference is Map ? reference['storyData'] : null;
+    final poll = storyData is Map ? storyData['poll'] : null;
+    final options = poll is Map ? poll['options'] : null;
+    if (options is! List || optionIndex < 0 || optionIndex >= options.length) {
+      throw ArgumentError('That Story poll option is not available.');
+    }
+    final vote = await c
+        .from('social_story_poll_votes')
+        .upsert({
+          'story_id': storyId,
+          'account_id': me['id'],
+          'profile_id': profileExternalId,
+          'option_index': optionIndex,
+        }, onConflict: 'story_id,account_id,profile_id')
+        .select()
+        .single();
+    return Map<String, dynamic>.from(vote);
+  }
+
+  Future<Map<String, dynamic>> reshareSocialStory({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String storyId,
+    int expiresInHours = 24,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    if (expiresInHours < 24 || expiresInHours > 168) throw ArgumentError('Story duration must be between 24 and 168 hours.');
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final original = await _getSocialStoryForInteraction(
+      client: c,
+      accountId: me['id'].toString(),
+      profileExternalId: profileExternalId,
+      storyId: storyId,
+      allowExpiredForOwner: false,
+    );
+    final author = await c
+        .from('accounts')
+        .select('username,display_name')
+        .eq('id', original['author_account_id'].toString())
+        .maybeSingle();
+
+    final rawReference = original['media_reference'];
+
+    final reference = rawReference is Map
+        ? Map<String, dynamic>.from(rawReference)
+        : <String, dynamic>{};
+
+    reference['attachmentOwnerAccountId'] =
+        original['author_account_id'].toString();
+
+    reference['attachmentOwnerProfileId'] =
+        original['author_profile_id'].toString();
+
+    final storyData = reference['storyData'] is Map
+        ? Map<String, dynamic>.from(reference['storyData'])
+        : <String, dynamic>{};
+    storyData['originalStoryId'] = storyId;
+    storyData['originalAuthor'] = author?['username'] ?? author?['display_name'] ?? 'Friend';
+    reference['storyData'] = storyData;
+    return Map<String, dynamic>.from(await c
+        .from('social_stories')
+        .insert({
+          'author_account_id': me['id'],
+          'author_profile_id': profileExternalId,
+          'body': 'Shared ${author?['display_name'] ?? author?['username'] ?? 'a friend'}\'s Story',
+          'visibility': 'friends',
+          'community_id': null,
+          'media_reference': reference,
+          'expires_at': DateTime.now().toUtc().add(Duration(hours: expiresInHours)).toIso8601String(),
+        })
+        .select()
+        .single());
+  }
+
   Future<Map<String, dynamic>> createSocialStory({
     required String accountExternalId,
     required String profileExternalId,
@@ -2493,16 +2801,13 @@ class SupabaseStore {
     required String profileId,
   }) {
     if (value == null) return null;
-    if (value.length > 8) throw ArgumentError('Invalid social attachment.');
+    if (value.length > 12) throw ArgumentError('Invalid social attachment.');
     final ownerPrefix = '$accountId/${Uri.encodeComponent(profileId)}/';
     String? ownedPath(String key, String label) {
       final path = value[key]?.toString().trim();
       if (path == null || path.isEmpty) return null;
-      if (!path.startsWith(ownerPrefix) ||
-          path.length > 512 ||
-          path.contains('..')) {
-        throw ArgumentError(
-            '$label attachment does not belong to this profile.');
+      if (!path.startsWith(ownerPrefix) || path.length > 512 || path.contains('..')) {
+        throw ArgumentError('$label attachment does not belong to this profile.');
       }
       return path;
     }
@@ -2510,95 +2815,100 @@ class SupabaseStore {
     final photoPath = ownedPath('photoPath', 'Photo');
     final videoPath = ownedPath('videoPath', 'Video');
     final coverPath = ownedPath('coverPath', 'Cover');
-    final type = value['type']?.toString();
+    final type = value['type']?.toString().trim();
+    final storyData = value['storyData'];
+    final cleanStoryData = storyData is Map
+        ? _sanitizeStoryData(Map<String, dynamic>.from(storyData))
+        : null;
+
     if (type == 'video') {
-      if (videoPath == null || coverPath == null) {
-        throw ArgumentError('Short videos require a video and cover image.');
-      }
+      if (videoPath == null) throw ArgumentError('Story video is missing.');
       final relatedMediaId = value['relatedMediaId']?.toString().trim() ?? '';
-      final relatedMediaTitle =
-          value['relatedMediaTitle']?.toString().trim() ?? '';
-      final relatedMediaType =
-          value['relatedMediaType']?.toString().trim() ?? '';
+      final relatedMediaTitle = value['relatedMediaTitle']?.toString().trim() ?? '';
+      final relatedMediaType = value['relatedMediaType']?.toString().trim() ?? '';
       final contentMode = value['contentMode']?.toString().trim() ?? 'short';
-      if (relatedMediaId.isEmpty ||
-          relatedMediaId.length > 200 ||
-          relatedMediaTitle.isEmpty ||
-          relatedMediaTitle.length > 300 ||
-          (relatedMediaType != 'movie' &&
-              relatedMediaType != 'show' &&
-              relatedMediaType != 'song') ||
-          !{'short', 'review', 'skit'}.contains(contentMode)) {
-        throw ArgumentError(
-            'Short videos must be linked to a movie, show, or song.');
+      final hasShortMetadata = relatedMediaId.isNotEmpty || relatedMediaTitle.isNotEmpty || relatedMediaType.isNotEmpty;
+      if (hasShortMetadata &&
+          (relatedMediaId.isEmpty || relatedMediaId.length > 200 ||
+              relatedMediaTitle.isEmpty || relatedMediaTitle.length > 300 ||
+              !{'movie', 'show', 'song'}.contains(relatedMediaType) ||
+              !{'short', 'review', 'skit'}.contains(contentMode))) {
+        throw ArgumentError('Short videos must be linked to a movie, show, or song.');
       }
       return <String, dynamic>{
         'type': 'video',
         'videoPath': videoPath,
-        'coverPath': coverPath,
-        'relatedMediaId': relatedMediaId,
-        'relatedMediaTitle': relatedMediaTitle,
-        'relatedMediaType': relatedMediaType,
-        'contentMode': contentMode,
+        if (coverPath != null) 'coverPath': coverPath,
+        if (hasShortMetadata) ...{
+          'relatedMediaId': relatedMediaId,
+          'relatedMediaTitle': relatedMediaTitle,
+          'relatedMediaType': relatedMediaType,
+          'contentMode': contentMode,
+        },
+        if (cleanStoryData != null && cleanStoryData.isNotEmpty) 'storyData': cleanStoryData,
+        if (value['fileName'] != null) 'fileName': value['fileName'].toString().substring(0, min(180, value['fileName'].toString().length)),
+      };
+    }
+    if (type == 'photo') {
+      if (photoPath == null) throw ArgumentError('Story photo is missing.');
+      return <String, dynamic>{
+        'type': 'photo',
+        'photoPath': photoPath,
+        if (cleanStoryData != null && cleanStoryData.isNotEmpty) 'storyData': cleanStoryData,
+        if (value['fileName'] != null) 'fileName': value['fileName'].toString().substring(0, min(180, value['fileName'].toString().length)),
+      };
+    }
+    if (type == 'story') {
+      if (photoPath != null || videoPath != null || coverPath != null) {
+        throw ArgumentError('Text-only Stories cannot contain attachment paths.');
+      }
+      return {
+        'type': 'story',
+        if (cleanStoryData != null && cleanStoryData.isNotEmpty) 'storyData': cleanStoryData,
       };
     }
     if (type == 'product') {
       final productId = value['productId']?.toString().trim() ?? '';
-      if (productId.isEmpty || productId.length > 200) {
-        throw ArgumentError('Product shares require a valid product.');
-      }
+      if (productId.isEmpty || productId.length > 200) throw ArgumentError('Product shares require a valid product.');
       final title = value['title']?.toString().trim() ?? '';
       final description = value['description']?.toString().trim() ?? '';
-      if (title.length > 300 || description.length > 2000) {
-        throw ArgumentError('Product share text is too long.');
-      }
-      return <String, dynamic>{
+      if (title.length > 300 || description.length > 2000) throw ArgumentError('Product share text is too long.');
+      return {
         'type': 'product',
         'productId': productId,
         if (title.isNotEmpty) 'title': title,
         if (description.isNotEmpty) 'description': description,
       };
     }
-    if (type != 'photo' && type != 'review') {
-      throw ArgumentError('Unsupported social attachment.');
+    if (type == 'review') {
+      if (photoPath == null) throw ArgumentError('Review attachment requires a photo.');
+      return {
+        'type': 'review',
+        'photoPath': photoPath,
+        if (value['reviewId'] != null) 'reviewId': value['reviewId'].toString(),
+        if (value['score'] is num) 'score': (value['score'] as num).clamp(0, 10).toDouble(),
+        if (value['label'] != null) 'label': value['label'].toString().substring(0, min(100, value['label'].toString().length)),
+        if (value['spoiler'] == true) 'spoiler': true,
+      };
     }
-    if (photoPath != null) {
-      if (photoPath.length > 512) {
-        throw ArgumentError(
-            'Photo attachment does not belong to this profile.');
+    throw ArgumentError('Unsupported social attachment.');
+  }
+
+  Map<String, dynamic> _sanitizeStoryData(Map<String, dynamic> data) {
+    final encoded = jsonEncode(data);
+    if (encoded.length > 20000) throw ArgumentError('Story customization data is too large.');
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      if (entry.key.length > 64) continue;
+      if (entry.key == 'mentions' && entry.value is List) {
+        result['mentions'] = (entry.value as List).whereType<Map>().take(20).map((item) => Map<String, dynamic>.from(item)).toList();
+      } else if (entry.key == 'lyrics' && entry.value is String) {
+        result['lyrics'] = entry.value.toString().substring(0, min(8000, entry.value.toString().length));
+      } else {
+        result[entry.key] = entry.value;
       }
     }
-    if (videoPath != null || coverPath != null) {
-      throw ArgumentError('Unsupported social attachment path.');
-    }
-    if (photoPath != null && photoPath.isNotEmpty) {
-      final ownerPrefix = '$accountId/${Uri.encodeComponent(profileId)}/';
-      if (!photoPath.startsWith(ownerPrefix) ||
-          photoPath.length > 512 ||
-          photoPath.contains('..')) {
-        throw ArgumentError(
-            'Photo attachment does not belong to this profile.');
-      }
-    }
-    return <String, dynamic>{
-      'type': type,
-      if (photoPath != null && photoPath.isNotEmpty) 'photoPath': photoPath,
-      if (value['mediaId'] != null) 'mediaId': value['mediaId'].toString(),
-      if (value['mediaTitle'] != null)
-        'mediaTitle': value['mediaTitle'].toString().substring(
-              0,
-              min(300, value['mediaTitle'].toString().length),
-            ),
-      if (value['reviewId'] != null) 'reviewId': value['reviewId'].toString(),
-      if (value['score'] is num)
-        'score': (value['score'] as num).clamp(0, 10).toDouble(),
-      if (value['label'] != null)
-        'label': value['label'].toString().substring(
-              0,
-              min(100, value['label'].toString().length),
-            ),
-      if (value['spoiler'] == true) 'spoiler': true,
-    };
+    return result;
   }
 
   Future<Map<String, dynamic>> createSocialMediaNote({

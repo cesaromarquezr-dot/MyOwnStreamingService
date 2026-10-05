@@ -37,6 +37,7 @@ class MusicTrack {
   final bool explicit;
   /// Mature-theme flag supplied by licensed/import metadata.
   final bool matureTheme;
+  final String lyrics;
 
   const MusicTrack({
     required this.id,
@@ -51,6 +52,7 @@ class MusicTrack {
     this.subgenres = const <String>[],
     this.explicit = false,
     this.matureTheme = false,
+    this.lyrics = '',
   });
 }
 

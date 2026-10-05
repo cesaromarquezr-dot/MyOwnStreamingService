@@ -39,17 +39,21 @@ import 'hey_media.dart';
 import 'media_universe.dart';
 import 'personal_streaming.dart';
 import 'my_tv.dart';
+import 'social_story_experience.dart';
+import 'app_customization.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await PageContentCustomizationStore.initialize();
+  await AppSectionCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
   await MusicPageCustomizationStore.initialize();
   await AppController.instance.initializeBadges();
   await PlatformPreferenceStore.initialize();
   await ShopCatalog.instance.initialize();
+  await StoryPlacementStore.load(AppController.instance.currentProfile);
   runApp(const MyStreamingService());
 }
 
@@ -591,6 +595,7 @@ class _PageCustomizationScreen extends StatefulWidget {
 class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   late _PageAppearance draft;
   late PageContentCustomization contentDraft;
+  late AppSectionCustomization sectionDraft;
 
   static const _colors = <String, int>{
     'Red': 0xFFE53935,
@@ -606,6 +611,8 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     super.initState();
     draft = _PageAppearanceStore.forPage(widget.pageId);
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
+    sectionDraft = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    StoryPlacementStore.load(AppController.instance.currentProfile);
   }
 
   @override
@@ -621,6 +628,72 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             'These settings apply only to this page.',
             style: TextStyle(color: Colors.white70),
           ),
+          if (widget.pageId == 'shop' || widget.pageId == 'library' || widget.pageId == 'friends') ...[
+            const SizedBox(height: 4),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('$title layout', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 10),
+                    if (widget.pageId == 'shop') ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.shopCardStyle,
+                        decoration: const InputDecoration(labelText: 'Product card style'),
+                        items: const ['Compact', 'Comfortable', 'Large'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.shopCardStyle = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        initialValue: sectionDraft.shopColumns,
+                        decoration: const InputDecoration(labelText: 'Products per row'),
+                        items: const [1,2,3,4].map((v) => DropdownMenuItem(value: v, child: Text('$v'))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.shopColumns = v); },
+                      ),
+                      SwitchListTile(contentPadding: EdgeInsets.zero, value: sectionDraft.showShopPrices, onChanged: (v) => setState(() => sectionDraft.showShopPrices = v), title: const Text('Show prices')),
+                      SwitchListTile(contentPadding: EdgeInsets.zero, value: sectionDraft.showShopInventory, onChanged: (v) => setState(() => sectionDraft.showShopInventory = v), title: const Text('Show inventory counts')),
+                    ] else if (widget.pageId == 'library') ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.libraryCardStyle,
+                        decoration: const InputDecoration(labelText: 'Library card style'),
+                        items: const ['Poster', 'Landscape', 'Compact'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryCardStyle = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        initialValue: sectionDraft.libraryColumns,
+                        decoration: const InputDecoration(labelText: 'Library columns'),
+                        items: const [1,2,3,4,5,6].map((v) => DropdownMenuItem(value: v, child: Text('$v'))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryColumns = v); },
+                      ),
+                    ] else ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.friendsDisplayStyle,
+                        decoration: const InputDecoration(labelText: 'Friends display'),
+                        items: const ['Cards', 'List', 'Compact'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.friendsDisplayStyle = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: StoryPlacementStore.forProfile(AppController.instance.currentProfile),
+                        decoration: const InputDecoration(labelText: 'Friends’ Stories placement'),
+                        items: const [
+                          DropdownMenuItem(value: 'none', child: Text('Don’t show')),
+                          DropdownMenuItem(value: 'home', child: Text('Home only')),
+                          DropdownMenuItem(value: 'friends', child: Text('Friends only')),
+                          DropdownMenuItem(value: 'both', child: Text('Home + Friends')),
+                        ],
+                        onChanged: (v) { if (v != null) StoryPlacementStore.setForProfile(AppController.instance.currentProfile, v); },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           const SizedBox(height: 20),
           DropdownButtonFormField<int>(
             initialValue: _colors.values.contains(draft.accentColor)
@@ -740,6 +813,10 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
               await PageContentCustomizationStore.apply(
                 widget.pageId,
                 contentDraft,
+              );
+              await AppSectionCustomizationStore.save(
+                AppController.instance.currentProfile,
+                sectionDraft,
               );
               if (!mounted) return;
               navigator.pop();
@@ -1729,6 +1806,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
   bool detailsPreviewTvShow = true;
   _PreviewDeviceCategory _previewCategory = _PreviewDeviceCategory.phone;
   String _previewDeviceName = 'iPhone';
+  String storyPlacement = 'friends';
 
   // Prevent repeated taps while an async save/navigation operation is in
   // progress. This avoids Flutter Navigator's !_debugLocked assertion.
@@ -1754,7 +1832,18 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     );
     draft.sectionOrder.removeWhere(
         (section) => section == 'Sports' || section == 'Live Sports');
+    storyPlacement = StoryPlacementStore.forProfile(AppController.instance.currentProfile);
+    unawaited(_loadStoryPlacementPreference());
     _normalizeHomePositions();
+  }
+
+  Future<void> _loadStoryPlacementPreference() async {
+    await StoryPlacementStore.load(AppController.instance.currentProfile);
+    if (mounted) {
+      setState(() {
+        storyPlacement = StoryPlacementStore.forProfile(AppController.instance.currentProfile);
+      });
+    }
   }
 
   void _normalizeHomePositions() {
@@ -1781,6 +1870,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     });
 
     final profile = AppController.instance.currentProfile;
+    await StoryPlacementStore.setForProfile(profile, storyPlacement);
 
     // First setup is a strict forward-only sequence: Home -> Details -> Music.
     // Each step saves before advancing, so a crash or app
@@ -1929,6 +2019,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     required String label,
     required String value,
     required List<String> values,
+    List<String>? labels,
     required ValueChanged<String> onChanged,
   }) {
     final safeValue = values.contains(value) ? value : values.first;
@@ -1937,10 +2028,10 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       initialValue: safeValue,
       decoration: InputDecoration(labelText: label),
       items: [
-        for (final item in values)
+        for (var index = 0; index < values.length; index++)
           DropdownMenuItem<String>(
-            value: item,
-            child: Text(item),
+            value: values[index],
+            child: Text(labels != null && index < labels.length ? labels[index] : values[index]),
           ),
       ],
       onChanged: (next) {
@@ -2279,6 +2370,24 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             'Show the calendar-based collection for the current month.',
             draft.showSeasonalCollections,
             (v) => setState(() => draft.showSeasonalCollections = v)),
+        const SizedBox(height: 24),
+        const UniversalText(
+          'FRIENDS STORIES',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _dropdown(
+          label: 'Show friends’ Stories',
+          value: storyPlacement,
+          values: const ['none', 'home', 'friends', 'both'],
+          labels: const ["Don't show", 'Home only', 'Friends only', 'Home + Friends'],
+          onChanged: (value) => setState(() => storyPlacement = value),
+        ),
         const SizedBox(height: 24),
         _sectionOrder(
           title: tr('SECTION ORDER'),
@@ -4619,16 +4728,28 @@ class _HomeScreenState extends State<HomeScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
+    unawaited(_loadStoryPlacement());
     _heroController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
   }
 
+  Future<void> _loadStoryPlacement() async {
+    await StoryPlacementStore.load(AppController.instance.currentProfile);
+    if (mounted) setState(() {});
+  }
+
+  void _onStoryPlacementChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
 
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
     _heroController.dispose();
     super.dispose();
   }
@@ -4708,6 +4829,10 @@ class _HomeScreenState extends State<HomeScreen>
                   ActivityButton(onPressed: widget.onNotifications),
                   const SizedBox(width: 8),
                 ],
+              ),
+            if (StoryPlacementStore.showsOnHome(profile))
+              SliverToBoxAdapter(
+                child: FriendsStoriesStrip(profileId: profile.id),
               ),
             if (settings.showHero && library.isNotEmpty)
               SliverToBoxAdapter(

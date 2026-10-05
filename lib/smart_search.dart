@@ -44,6 +44,10 @@ class SmartSearch {
     final isTvQuery = tvQueries.contains(normalizedQuery);
 
     final scored = <_SearchMatch>[];
+    final recommendationIds = <String, int>{
+      for (var i = 0; i < AppController.instance.recommendations.length; i++)
+        AppController.instance.recommendations[i].id: (50 - i).clamp(5, 50),
+    };
 
     for (final media in library) {
       final title = media.title.toLowerCase();
@@ -109,6 +113,8 @@ class SmartSearch {
         score += 70;
       }
 
+      score += recommendationIds[media.id] ?? 0;
+
       if (score > 0) {
         scored.add(
           _SearchMatch(
@@ -137,6 +143,18 @@ class SmartSearch {
     return scored
         .map((match) => match.media)
         .toList();
+  }
+
+  static List<MediaItem> recommendations(List<MediaItem> library, {int limit = 12}) {
+    final allowed = library.map((m) => m.id).toSet();
+    final recommended = AppController.instance.recommendations
+        .where((media) => allowed.contains(media.id))
+        .toList();
+    final fallback = library
+        .where((media) => !recommended.any((item) => item.id == media.id))
+        .toList()
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    return [...recommended, ...fallback].take(limit).toList();
   }
 
   static String _normalize(String value) {
@@ -598,22 +616,40 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   /// Performs `_buildResultsList` for this feature. Update this documentation when its contract changes.
   Widget _buildResultsList(bool isDesktop) {
     if (controller.text.trim().isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            22,
-            80,
-            22,
-            40,
-          ),
-          child: _EmptySearchState(
-            icon: Icons.search_rounded,
-            title: tr('Search your library'),
-            message: tr(
-              'Look through your ripped movies and TV shows by title, type, year, or rating.',
+      final recommended = SmartSearch.recommendations(AppController.instance.library);
+      return SliverList(
+        delegate: SliverChildListDelegate([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 30, 22, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Recommended for you', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Text('Based on your watch history, likes, genres, and the recommendation engine.', style: TextStyle(color: Colors.white.withValues(alpha: .58))),
+              ],
             ),
           ),
-        ),
+          if (recommended.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(22, 60, 22, 40),
+              child: _EmptySearchState(
+                icon: Icons.search_rounded,
+                title: 'Search your library',
+                message: 'Look through your ripped movies and TV shows by title, type, year, or rating.',
+              ),
+            ),
+          for (var index = 0; index < recommended.length; index++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 5),
+              child: _SearchResultCard(
+                media: recommended[index],
+                typeLabel: _typeLabel(recommended[index]),
+                index: index,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: recommended[index]))),
+              ),
+            ),
+        ]),
       );
     }
 
