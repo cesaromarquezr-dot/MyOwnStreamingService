@@ -16,6 +16,7 @@ import 'media_actions.dart';
 import 'media_continuity.dart';
 import 'media_knowledge.dart';
 import 'widgets/like_toggle_button.dart';
+import 'social_sharing.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -84,6 +85,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              actions: [
+                IconButton(
+                  tooltip: 'Share to chats',
+                  onPressed: () => showSocialShareDialog(
+                    context,
+                    title: media.title,
+                    message: 'Recommendation: ${media.title}',
+                    mediaReference: {
+                      'type': 'recommendation',
+                      'title': media.title,
+                      'mediaId': media.id,
+                      'mediaType': media.type,
+                    },
+                  ),
+                  icon: const Icon(Icons.share_outlined),
+                ),
+              ],
             ),
             SliverToBoxAdapter(
               child: _buildDetailsPage(),
@@ -560,6 +578,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: '/app/player'),
         builder: (_) {
           return PlayerScreen(
             media: episodeMedia,
@@ -1749,7 +1768,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     Navigator.of(context)
         .push(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) {
+          settings: const RouteSettings(name: '/app/player'),
+          pageBuilder: (_, __, ___) {
           return PlayerScreen(
             media: media,
           );

@@ -223,7 +223,13 @@ class _SmartDiscoverPanelState extends State<SmartDiscoverPanel> {
               Expanded(child: _QuickAction(icon: Icons.history, title: tr('Continue'), onTap: () {
                 final items = all.where((m) => controller.getPlaybackProgress(m.id) > 0 && controller.getPlaybackProgress(m.id) < 1).toList();
                 if (items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Nothing is waiting to be continued.'))); return; }
-                Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: items.first)));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    settings: const RouteSettings(name: '/app/player'),
+                    builder: (_) => PlayerScreen(media: items.first),
+                  ),
+                );
               })),
             ]),
           ],
@@ -495,7 +501,16 @@ class _MediaRow extends StatelessWidget {
   }
   /// Performs `_action` for this feature. Update this documentation when its contract changes.
   void _action(BuildContext context, String action) {
-    if (action == 'play') { Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(media: media))); return; }
+    if (action == 'play') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/app/player'),
+          builder: (_) => PlayerScreen(media: media),
+        ),
+      );
+      return;
+    }
     if (action == 'download') { PersonalStreamingStore.downloads.add(media.id); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('${media.title} added to downloads.'))); return; }
     if (action == 'playlist') {
       if (PersonalStreamingStore.playlists.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Create a playlist in My Stuff first.'))); return; }

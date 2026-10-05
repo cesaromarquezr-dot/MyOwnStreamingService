@@ -242,7 +242,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
     final terms = channel.filterText
-        .split(',')
+        .split(RegExp(r'[,;\n]'))
         .map((term) => term.trim().toLowerCase())
         .where((term) => term.isNotEmpty)
         .toList();
@@ -252,36 +252,54 @@ class _MyTvScreenState extends State<MyTvScreen> {
       return terms.any(text.contains);
     }
 
-    var eligible = controller.library
+    final matchingMedia = controller.library
         .where((media) =>
             media.isAccessibleTo(profile) &&
             _isPlayable(media) &&
             media.type.toLowerCase() != 'extra' &&
-            _channelAcceptsVideoType(channel, media.type) &&
             matches([
               media.title,
               media.type,
+              media.description ?? '',
               media.franchiseName ?? '',
+              ...media.actors,
+              ...media.directors,
+              ...media.writers,
+              ...media.music,
               ...media.genres,
               ...media.tags,
             ]) &&
             (!channel.favoritesOnly || controller.isLiked(media.id)))
+        .toList();
+    var eligible = matchingMedia
+        .where((media) => _channelAcceptsVideoType(channel, media.type))
         .map(_ChannelEntry.media)
         .toList();
-    final tracks = MusicLibraryStore.instance.tracks.where((track) =>
-        channel.contentTypes.contains('Music') &&
-        track.audioUrl?.trim().isNotEmpty == true &&
-        !(profileBlocksExplicitMusic(profile) && track.explicit) &&
-        !(profileBlocksMatureMusic(profile) && track.matureTheme) &&
-        (!channel.favoritesOnly ||
-            MusicFavoritesBridge.likedTracks().contains(track.id)) &&
-        matches([
-          track.title,
-          track.artist,
-          track.album,
-          ...track.genres,
-          ...track.subgenres
-        ]));
+    final tracks = MusicLibraryStore.instance.tracks.where((track) {
+      if (!channel.contentTypes.contains('Music') ||
+          track.audioUrl?.trim().isNotEmpty != true ||
+          (profileBlocksExplicitMusic(profile) && track.explicit) ||
+          (profileBlocksMatureMusic(profile) && track.matureTheme) ||
+          (channel.favoritesOnly &&
+              !MusicFavoritesBridge.likedTracks().contains(track.id))) {
+        return false;
+      }
+      final trackMatches = matches([
+        track.title,
+        track.artist,
+        track.album,
+        ...track.featuredArtists,
+        ...track.genres,
+        ...track.subgenres,
+      ]);
+      final trackTitle = track.title.trim().toLowerCase();
+      final soundtrackMatches = terms.isNotEmpty &&
+          trackTitle.isNotEmpty &&
+          matchingMedia.any((media) => media.music.any(
+                (song) => song.toLowerCase().contains(trackTitle),
+              ));
+      return terms.isEmpty || trackMatches || soundtrackMatches;
+    });
     eligible.addAll(tracks.map(_ChannelEntry.track));
     if (eligible.isEmpty) return const [];
     final recent = _recentlyPlayed[channel.id] ?? const <String>[];
@@ -352,66 +370,73 @@ class _MyTvScreenState extends State<MyTvScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Create a channel'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'Channel name')),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () async {
-                  final selected = await showTimePicker(
-                    context: context,
-                    initialTime: startTime,
-                  );
-                  if (selected != null) {
-                    setDialogState(() => startTime = selected);
-                  }
-                },
-                icon: const Icon(Icons.schedule_rounded),
-                label:
-                    Text('Daily guide starts at ${startTime.format(context)}'),
-              ),
-            ),
-            const Align(
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Channel name')),
+              Align(
                 alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text('Include in channel'),
-                )),
-            Wrap(
-              spacing: 8,
-              children: _channelContentTypes
-                  .map((type) => FilterChip(
-                        label: Text(type),
-                        selected: selectedTypes.contains(type),
-                        onSelected: (selected) => setDialogState(() {
-                          if (selected) {
-                            selectedTypes.add(type);
-                          } else {
-                            selectedTypes.remove(type);
-                          }
-                        }),
-                      ))
-                  .toList(),
-            ),
-            TextField(
-              controller: filterText,
-              decoration: const InputDecoration(
-                labelText: 'Optional genres, tags, franchise, or titles',
-                hintText: 'horror, Halloween, Marvel',
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final selected = await showTimePicker(
+                      context: context,
+                      initialTime: startTime,
+                    );
+                    if (selected != null) {
+                      setDialogState(() => startTime = selected);
+                    }
+                  },
+                  icon: const Icon(Icons.schedule_rounded),
+                  label: Text(
+                      'Daily guide starts at ${startTime.format(context)}'),
+                ),
               ),
-            ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Only include liked items'),
-              value: favoritesOnly,
-              onChanged: (value) =>
-                  setDialogState(() => favoritesOnly = value ?? false),
-            ),
-            const Text(
-                'Matching uses metadata already in your library. Review channel contents and media ratings before watching.'),
-          ]),
+              const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Text('Include in channel'),
+                  )),
+              Wrap(
+                spacing: 8,
+                children: _channelContentTypes
+                    .map((type) => FilterChip(
+                          label: Text(type),
+                          selected: selectedTypes.contains(type),
+                          onSelected: (selected) => setDialogState(() {
+                            if (selected) {
+                              selectedTypes.add(type);
+                            } else {
+                              selectedTypes.remove(type);
+                            }
+                          }),
+                        ))
+                    .toList(),
+              ),
+              TextField(
+                controller: filterText,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'What belongs in this channel?',
+                  hintText:
+                      'Add your own genres, series, artists, people, or keywords',
+                  helperText:
+                      'Separate themes, titles, artists, actors, or genres with commas or new lines.',
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Only include liked items'),
+                value: favoritesOnly,
+                onChanged: (value) =>
+                    setDialogState(() => favoritesOnly = value ?? false),
+              ),
+              const Text(
+                  'Channels use media available to this profile. Music can also match soundtrack titles linked to matching movies or shows in your library.'),
+            ]),
+          ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
@@ -457,8 +482,13 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (entry.track != null) {
       await MusicPlaybackController.instance.play(entry.track!);
     } else {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => PlayerScreen(media: entry.media!)));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/app/player'),
+          builder: (_) => PlayerScreen(media: entry.media!),
+        ),
+      );
     }
   }
 
@@ -540,6 +570,20 @@ class _MyTvScreenState extends State<MyTvScreen> {
                       ),
                   ]),
                   const SizedBox(height: 18),
+                  if (channel != null) ...[
+                    Text(
+                      [
+                        channel.contentTypes.join(' · '),
+                        if (channel.filterText.trim().isNotEmpty)
+                          channel.filterText.trim().replaceAll(
+                                RegExp(r'[,;\n]+'),
+                                ' · ',
+                              ),
+                      ].join('  |  '),
+                      style: const TextStyle(color: Colors.white54),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   if (schedule.isEmpty)
                     const Card(
                         child: ListTile(

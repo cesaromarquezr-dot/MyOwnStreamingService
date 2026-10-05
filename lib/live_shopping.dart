@@ -49,12 +49,47 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
       Row(children: [Expanded(child: Text(event['storeName']?.toString() ?? 'Store', style: Theme.of(context).textTheme.titleMedium)), Chip(label: Text(status.toUpperCase()), avatar: Icon(status == 'live' ? Icons.circle : Icons.schedule, size: 14))]),
       Text(event['title']?.toString() ?? 'Product event', style: Theme.of(context).textTheme.headlineSmall),
       if ((event['description']?.toString() ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(event['description'].toString())),
-      if (status == 'live' && event['streamUrl'] is String) _EventVideo(url: event['streamUrl'].toString()),
-      if (status == 'ended' && event['replayUrl'] is String) _EventVideo(url: event['replayUrl'].toString()),
+      if (status == 'live' && event['streamUrl'] is String)
+        _eventVideoWithFeaturedProduct(context, event, event['streamUrl'].toString()),
+      if (status == 'ended' && event['replayUrl'] is String)
+        _eventVideoWithFeaturedProduct(context, event, event['replayUrl'].toString()),
       if (status == 'scheduled' && event['scheduledAt'] != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Starts ${event['scheduledAt']}')),
       if (products.isNotEmpty) ...[
         const SizedBox(height: 12), const Text('Products', style: TextStyle(fontWeight: FontWeight.bold)),
-        for (final product in products) Card(child: ListTile(leading: product.imageUrls.isEmpty ? const Icon(Icons.shopping_bag_outlined) : Image.network(product.imageUrls.first, width: 48, height: 48, fit: BoxFit.cover), title: Text(product.name), subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'), trailing: product.inventoryQuantity > 0 ? IconButton(tooltip: 'Add to bag', onPressed: () { ShopCatalog.instance.addToBag(product.id); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to bag'))); }, icon: const Icon(Icons.add_shopping_cart)) : const Text('Sold out'))),
+        for (final product in products) Card(
+          child: ListTile(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ShopProductDetailsScreen(product: product),
+              ),
+            ),
+            leading: product.imageUrls.isEmpty
+                ? const Icon(Icons.shopping_bag_outlined)
+                : Image.network(
+                    product.imageUrls.first,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
+            title: Text(product.name),
+            subtitle: Text(
+              '${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock',
+            ),
+            trailing: product.inventoryQuantity > 0
+                ? IconButton(
+                    tooltip: 'Add to bag',
+                    onPressed: () {
+                      ShopCatalog.instance.addToBag(product.id);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Added to bag')),
+                      );
+                    },
+                    icon: const Icon(Icons.add_shopping_cart),
+                  )
+                : const Text('Sold out'),
+          ),
+        ),
       ],
       if (status == 'live') ...[
         if (poll != null) _pollWidget(event, poll),
@@ -62,6 +97,38 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
         Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _ask(context, event), icon: const Icon(Icons.help_outline), label: const Text('Ask a question'))),
       ],
     ])));
+  }
+
+  Widget _eventVideoWithFeaturedProduct(
+    BuildContext context,
+    Map<String, dynamic> event,
+    String url,
+  ) {
+    final pinnedId = event['pinnedProductId']?.toString();
+    final product = pinnedId == null || pinnedId.isEmpty
+        ? null
+        : ShopCatalog.instance.productById(pinnedId);
+
+    return Stack(
+      children: [
+        _EventVideo(url: url),
+        if (product != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 16,
+            child: _LiveFeaturedProductCard(
+              product: product,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ShopProductDetailsScreen(product: product),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _pollWidget(Map<String, dynamic> event, Map<String, dynamic> poll) {
@@ -80,6 +147,83 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
   }
 
   void _notice(String text) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text))); }
+}
+
+class _LiveFeaturedProductCard extends StatelessWidget {
+  const _LiveFeaturedProductCard({required this.product, required this.onTap});
+
+  final ShopProduct product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: .88),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: product.imageUrls.isEmpty
+                    ? Container(
+                        width: 58,
+                        height: 58,
+                        color: Colors.white10,
+                        child: const Icon(Icons.shopping_bag_outlined),
+                      )
+                    : Image.network(
+                        product.imageUrls.first,
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 58,
+                          height: 58,
+                          color: Colors.white10,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'FEATURED PRODUCT',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      '${product.price.toStringAsFixed(2)} ${product.currency}',
+                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Seller controls for scheduling, starting, and ending a store live event.

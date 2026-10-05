@@ -737,6 +737,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: '/app/player'),
         builder: (_) => PlayerScreen(
           media: media[index],
         ),

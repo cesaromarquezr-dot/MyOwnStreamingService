@@ -431,6 +431,7 @@ class MusicPlaybackController extends ChangeNotifier {
   bool loading = false;
   bool _resumeAfterVideo = false;
   bool _advancing = false;
+  Timer? _presenceHeartbeat;
 
   VideoPlayerController? get videoController => _controller;
   bool get isReady => _controller?.value.isInitialized == true;
@@ -452,6 +453,7 @@ class MusicPlaybackController extends ChangeNotifier {
     if (url == null || url.isEmpty) {
       isPlaying = false;
       notifyListeners();
+      unawaited(_updateSocialListeningActivity(null));
       return;
     }
 
@@ -473,6 +475,11 @@ class MusicPlaybackController extends ChangeNotifier {
       await controller.initialize();
       await controller.play();
       isPlaying = true;
+      unawaited(
+        _updateSocialListeningActivity(
+          'Listening to ${track.title} by ${track.artist}',
+        ),
+      );
     } catch (_) {
       isPlaying = false;
     } finally {
@@ -527,6 +534,7 @@ class MusicPlaybackController extends ChangeNotifier {
       _controller?.pause();
       isPlaying = false;
       notifyListeners();
+      unawaited(_updateSocialListeningActivity(null));
     }
     return _resumeAfterVideo;
   }
@@ -538,6 +546,14 @@ class MusicPlaybackController extends ChangeNotifier {
     await _controller!.play();
     isPlaying = true;
     notifyListeners();
+    final track = currentTrack;
+    if (track != null) {
+      unawaited(
+        _updateSocialListeningActivity(
+          'Listening to ${track.title} by ${track.artist}',
+        ),
+      );
+    }
   }
 
   /// Toggles play/pause for the active track.
@@ -547,11 +563,75 @@ class MusicPlaybackController extends ChangeNotifier {
     if (controller.value.isPlaying) {
       await controller.pause();
       isPlaying = false;
+      unawaited(_updateSocialListeningActivity(null));
     } else {
       await controller.play();
       isPlaying = true;
+      final track = currentTrack;
+      if (track != null) {
+        unawaited(
+          _updateSocialListeningActivity(
+            'Listening to ${track.title} by ${track.artist}',
+          ),
+        );
+      }
     }
     notifyListeners();
+  }
+
+  Future<void> _updateSocialListeningActivity(String? activity) async {
+    final profile = AppController.instance.currentProfile;
+    final api = AppController.instance.backendApi;
+
+    _presenceHeartbeat?.cancel();
+    _presenceHeartbeat = null;
+
+    if (activity == null) {
+      if (profile != null && api.isAuthenticated) {
+        try {
+          await api.setSocialProfilePresence(
+            profileId: profile.id,
+            clearActivity: true,
+          );
+        } catch (error) {
+          debugPrint(
+            'Unable to update music presence: '
+            '${error.toString().replaceFirst('Exception: ', '')}',
+          );
+        }
+      }
+      return;
+    }
+
+    if (profile == null || !api.isAuthenticated) return;
+
+    try {
+      await api.setSocialProfilePresence(
+        profileId: profile.id,
+        activityType: 'listening',
+        activityText: activity,
+        clearActivity: false,
+      );
+    } catch (error) {
+      debugPrint(
+        'Unable to update music presence: '
+        '${error.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
+
+    _presenceHeartbeat = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) {
+        final track = currentTrack;
+        unawaited(
+          _updateSocialListeningActivity(
+            isPlaying && track != null
+                ? 'Listening to ${track.title} by ${track.artist}'
+                : null,
+          ),
+        );
+      },
+    );
   }
 }
 

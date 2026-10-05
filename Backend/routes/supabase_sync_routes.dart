@@ -45,17 +45,13 @@ class SupabaseSyncRoutes {
 
       final path = request.uri.path;
 
-      final isAccountSync =
-          path == '/api/v1/supabase/sync/account';
+      final isAccountSync = path == '/api/v1/supabase/sync/account';
 
-      const profilePrefix =
-          '/api/v1/supabase/sync/profile/';
+      const profilePrefix = '/api/v1/supabase/sync/profile/';
 
-      final isProfileSync =
-          path.startsWith(profilePrefix);
+      final isProfileSync = path.startsWith(profilePrefix);
 
-      final isPlatformData =
-          path == '/api/v1/features/status' ||
+      final isPlatformData = path == '/api/v1/features/status' ||
           path.startsWith('/api/v1/social/') ||
           path == '/api/v1/media-action' ||
           path == '/api/v1/activity' ||
@@ -215,8 +211,7 @@ class SupabaseSyncRoutes {
         HttpStatus.internalServerError,
         {
           'success': false,
-          'error':
-              'An internal synchronization error occurred.',
+          'error': 'An internal synchronization error occurred.',
         },
       );
     }
@@ -225,41 +220,508 @@ class SupabaseSyncRoutes {
   Future<void> _handleMediaGraph(HttpRequest request, Account account) async {
     final path = request.uri.path;
     if (path.startsWith('/api/v1/social/')) {
-      if (!store.enabled) return _json(request.response, HttpStatus.serviceUnavailable, {'success': false, 'error': 'Social persistence is not configured.'});
-      final body = request.method == 'GET' ? <String,dynamic>{} : await _body(request);
-      final profileId = request.method == 'GET' ? request.uri.queryParameters['profileId'] : body['profileId']?.toString();
+      if (!store.enabled)
+        return _json(request.response, HttpStatus.serviceUnavailable, {
+          'success': false,
+          'error': 'Social persistence is not configured.'
+        });
+      final isSocialUpload = const {
+            '/api/v1/social/photos',
+            '/api/v1/social/attachments',
+          }.contains(path) &&
+          request.method == 'POST';
+      final body = request.method == 'GET' || isSocialUpload
+          ? <String, dynamic>{}
+          : await _body(request);
+      final profileId = request.method == 'GET' || isSocialUpload
+          ? request.uri.queryParameters['profileId']
+          : body['profileId']?.toString();
       final profile = _ownedProfile(account, profileId);
-      if (profile == null) throw const FormatException('A profile ID is required.');
-      final bits = path.substring('/api/v1/social/'.length).split('/').map(Uri.decodeComponent).toList();
+      if (profile == null)
+        throw const FormatException('A profile ID is required.');
+      final bits = path
+          .substring('/api/v1/social/'.length)
+          .split('/')
+          .map(Uri.decodeComponent)
+          .toList();
+      if (bits.length == 1 &&
+          {'photos', 'attachments'}.contains(bits[0]) &&
+          isSocialUpload) {
+        final contentType = request.headers
+            .value(HttpHeaders.contentTypeHeader)
+            ?.split(';')
+            .first
+            .trim()
+            .toLowerCase();
+        if (!const {
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'video/mp4',
+          'video/webm',
+          'video/quicktime',
+          'audio/mp4',
+          'audio/aac',
+          'audio/mpeg',
+          'audio/ogg',
+          'audio/webm',
+        }.contains(contentType)) {
+          throw const FormatException(
+              'This attachment format is not supported.');
+        }
+        final bytes = await _boundedBytes(
+            request, SupabaseStore.maxSocialAttachmentBytes);
+        final attachmentPath = await store.uploadSocialAttachment(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          bytes: bytes,
+          contentType: contentType!,
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'attachmentPath': attachmentPath,
+        });
+      }
       if (bits.length == 1 && bits[0] == 'home' && request.method == 'GET') {
-        return _json(request.response, HttpStatus.ok, {'success': true, ...await store.loadSocialHome(accountExternalId: account.id, profileExternalId: profile)});
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...await store.loadSocialHome(
+              accountExternalId: account.id, profileExternalId: profile)
+        });
       }
-      if (bits.length == 1 && bits[0] == 'friend-request' && request.method == 'POST') {
-        final friendship = await store.sendSocialFriendRequest(accountExternalId: account.id, profileExternalId: profile, username: _requiredText(body, 'username', 80));
-        return _json(request.response, HttpStatus.created, {'success': true, 'friendship': friendship});
+      if (bits.length == 1 && bits[0] == 'center' && request.method == 'GET') {
+        return _json(
+          request.response,
+          HttpStatus.ok,
+          {
+            'success': true,
+            ...await store.loadSocialCenter(
+              accountExternalId: account.id,
+              profileExternalId: profile,
+            ),
+          },
+        );
       }
-      if (bits.length == 2 && bits[0] == 'friend-request' && request.method == 'PATCH') {
-        final friendship = await store.answerSocialFriendRequest(accountExternalId: account.id, profileExternalId: profile, friendshipId: bits[1], action: _requiredText(body, 'action', 20));
-        return _json(request.response, HttpStatus.ok, {'success': true, 'friendship': friendship});
+
+      if (bits.length == 1 &&
+          bits[0] == 'presence' &&
+          request.method == 'POST') {
+        await store.setSocialProfilePresence(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          availability: _optionalText(body, 'availability', 16),
+          activityType: _optionalText(body, 'activityType', 16),
+          activityText: _optionalText(body, 'activityText', 160),
+          nickname: _optionalText(body, 'nickname', 48),
+          clearActivity: body['clearActivity'] == true,
+          clearNickname: body['clearNickname'] == true,
+        );
+        return _json(request.response, HttpStatus.ok, {'success': true});
+      }
+
+      if (bits.length == 1 &&
+          bits[0] == 'conversations' &&
+          request.method == 'GET') {
+        return _json(
+          request.response,
+          HttpStatus.ok,
+          {
+            'success': true,
+            'conversations': await store
+                .loadSocialCenter(
+                  accountExternalId: account.id,
+                  profileExternalId: profile,
+                )
+                .then((value) => value['conversations'] ?? const []),
+          },
+        );
+      }
+
+      if (bits.length == 1 &&
+          bits[0] == 'conversations' &&
+          request.method == 'POST') {
+        if (body['usernames'] is List) {
+          final conversation = await store.createSocialGroupConversation(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            title: _optionalText(body, 'title', 100) ?? 'Group chat',
+            usernames: (body['usernames'] as List)
+                .map((item) => item.toString())
+                .toList(),
+          );
+          return _json(request.response, HttpStatus.created, {
+            'success': true,
+            ...conversation,
+          });
+        }
+        final conversation = await store.createSocialConversation(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          username: _requiredText(body, 'username', 80),
+        );
+        return _json(
+          request.response,
+          HttpStatus.created,
+          {'success': true, ...conversation},
+        );
+      }
+
+      if (bits.length == 2 &&
+          bits[0] == 'conversations' &&
+          request.method == 'PATCH') {
+        final conversation = await store.setSocialGroupSendPolicy(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          policy: _requiredText(body, 'sendPolicy', 40),
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'conversation': conversation,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'conversations' &&
+          bits[2] == 'appearance' &&
+          request.method == 'POST') {
+        await store.setSocialConversationAppearance(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          backgroundColor: _optionalText(body, 'backgroundColor', 7),
+          backgroundImagePath:
+              _optionalText(body, 'backgroundImagePath', 512),
+          clearBackgroundColor: body['clearBackgroundColor'] == true,
+          clearBackgroundImage: body['clearBackgroundImage'] == true,
+        );
+        return _json(request.response, HttpStatus.ok, {'success': true});
+      }
+
+      if (bits.length == 2 &&
+          bits[0] == 'conversations' &&
+          bits[1] != 'messages' &&
+          request.method == 'GET') {
+        final conversation = await store.loadSocialConversation(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          after: request.uri.queryParameters['after'],
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...conversation,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'conversations' &&
+          bits[2] == 'typing' &&
+          request.method == 'POST') {
+        if (body['isTyping'] is! bool) {
+          throw const FormatException('Typing status must be a boolean.');
+        }
+        await store.setSocialConversationTyping(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          isTyping: body['isTyping'] as bool,
+        );
+        return _json(request.response, HttpStatus.ok, {'success': true});
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'conversations' &&
+          bits[2] == 'messages' &&
+          request.method == 'POST') {
+        final message = await store.sendSocialMessage(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          body: _requiredText(body, 'body', 4000),
+          replyToMessageId: _optionalText(body, 'replyToMessageId', 100),
+          messageType: _optionalText(body, 'messageType', 32) ?? 'text',
+          mediaReference: body['mediaReference'] is Map
+              ? Map<String, dynamic>.from(body['mediaReference'] as Map)
+              : null,
+          textFormat: body['textFormat'] is Map
+              ? Map<String, dynamic>.from(body['textFormat'] as Map)
+              : null,
+          viewOnce: body['viewOnce'] == true,
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'message': message,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'messages' &&
+          bits[2] == 'forward' &&
+          request.method == 'POST') {
+        final message = await store.forwardSocialVideoMessage(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          sourceMessageId: bits[1],
+          conversationId: _requiredText(body, 'conversationId', 100),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'message': message,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'posts' &&
+          bits[2] == 'share' &&
+          request.method == 'POST') {
+        final message = await store.forwardSocialVideoPost(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          sourcePostId: bits[1],
+          conversationId: _requiredText(body, 'conversationId', 100),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'message': message,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'conversations' &&
+          bits[2] == 'polls' &&
+          request.method == 'POST') {
+        final options = body['options'];
+        if (options is! List)
+          throw const FormatException('Poll options are required.');
+        final result = await store.createSocialChatPoll(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          question: _requiredText(body, 'question', 500),
+          options: options.map((item) => item.toString()).toList(),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          ...result,
+        });
+      }
+
+      if (bits.length == 5 &&
+          bits[0] == 'conversations' &&
+          bits[2] == 'polls' &&
+          bits[4] == 'vote' &&
+          request.method == 'POST') {
+        final optionIndex = body['optionIndex'];
+        if (optionIndex is! int) {
+          throw const FormatException('A poll option is required.');
+        }
+        final vote = await store.voteSocialChatPoll(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+          pollId: bits[3],
+          optionIndex: optionIndex,
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'vote': vote,
+        });
+      }
+
+      if (bits.length == 2 &&
+          bits[0] == 'messages' &&
+          bits[1] != 'view' &&
+          request.method == 'POST') {
+        final reaction = await store.reactToSocialMessage(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          messageId: bits[1],
+          reaction: _requiredText(body, 'reaction', 32),
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'reaction': reaction,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'messages' &&
+          bits[2] == 'view' &&
+          request.method == 'POST') {
+        final result = await store.viewSocialOnceMessage(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          messageId: bits[1],
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...result,
+        });
+      }
+
+      if (bits.length == 2 &&
+          bits[0] == 'posts' &&
+          bits[1] == 'react' &&
+          request.method == 'POST') {
+        final reaction = await store.reactToSocialPost(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          postId: _requiredText(body, 'postId', 100),
+          reaction: _requiredText(body, 'reaction', 32),
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'reaction': reaction,
+        });
+      }
+
+      if (bits.length == 2 &&
+          bits[0] == 'posts' &&
+          bits[1] == 'comment' &&
+          request.method == 'POST') {
+        final comment = await store.commentOnSocialPost(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          postId: _requiredText(body, 'postId', 100),
+          body: _requiredText(body, 'body', 2000),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'comment': comment,
+        });
+      }
+
+      if (bits.length == 1 &&
+          bits[0] == 'stories' &&
+          request.method == 'POST') {
+        final story = await store.createSocialStory(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          body: _requiredText(body, 'body', 1000),
+          communityId: _optionalText(body, 'communityId', 80),
+          expiresInHours: int.tryParse('${body['expiresInHours'] ?? 24}') ??
+              (throw const FormatException(
+                  'Story duration must be an integer.')),
+          mediaReference: _mapOrNull(body['mediaReference']),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'story': story,
+        });
+      }
+
+      if (bits.length == 1 && bits[0] == 'notes' && request.method == 'GET') {
+        final notes = await store.getSocialMediaNotes(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          mediaId: _requiredText(
+            <String, dynamic>{
+              'mediaId': request.uri.queryParameters['mediaId'],
+            },
+            'mediaId',
+            256,
+          ),
+          mediaVersionId: request.uri.queryParameters['mediaVersionId'],
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'notes': notes,
+        });
+      }
+
+      if (bits.length == 1 && bits[0] == 'notes' && request.method == 'POST') {
+        final note = await store.createSocialMediaNote(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          mediaId: _requiredText(body, 'mediaId', 256),
+          mediaVersionId: _requiredText(body, 'mediaVersionId', 256),
+          positionMilliseconds: (body['positionMilliseconds'] is num)
+              ? (body['positionMilliseconds'] as num).toInt()
+              : int.tryParse('${body['positionMilliseconds'] ?? 0}') ?? 0,
+          text: _requiredText(body, 'text', 1000),
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          'note': note,
+        });
+      }
+
+      if (bits.length == 1 &&
+          bits[0] == 'friend-request' &&
+          request.method == 'POST') {
+        final friendship = await store.sendSocialFriendRequest(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            username: _requiredText(body, 'username', 80));
+        return _json(request.response, HttpStatus.created,
+            {'success': true, 'friendship': friendship});
+      }
+      if (bits.length == 2 &&
+          bits[0] == 'friend-request' &&
+          request.method == 'PATCH') {
+        final friendship = await store.answerSocialFriendRequest(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            friendshipId: bits[1],
+            action: _requiredText(body, 'action', 20));
+        return _json(request.response, HttpStatus.ok,
+            {'success': true, 'friendship': friendship});
       }
       if (bits.length == 1 && bits[0] == 'posts' && request.method == 'POST') {
-        final profileName = account.profiles.firstWhere((item) => item.id == profile).name;
-        final post = await store.createSocialPost(accountExternalId: account.id, profileExternalId: profile, profileName: profileName, body: _requiredText(body, 'body', 4000), communityId: _optionalText(body, 'communityId', 80));
-        return _json(request.response, HttpStatus.created, {'success': true, 'post': post});
+        final profileName =
+            account.profiles.firstWhere((item) => item.id == profile).name;
+        final rawCommunityIds = body['communityIds'];
+        final communityIds = rawCommunityIds is List
+            ? rawCommunityIds.map((item) => item.toString()).toList()
+            : const <String>[];
+        final post = await store.createSocialPost(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          profileName: profileName,
+          body: _requiredText(body, 'body', 4000),
+          communityId: _optionalText(body, 'communityId', 80),
+          communityIds: communityIds,
+          mediaReference: _mapOrNull(body['mediaReference']),
+        );
+        return _json(request.response, HttpStatus.created,
+            {'success': true, 'post': post});
       }
-      if (bits.length == 1 && bits[0] == 'communities' && request.method == 'POST') {
-        final community = await store.createSocialCommunity(accountExternalId: account.id, profileExternalId: profile, name: _requiredText(body, 'name', 80), description: _optionalText(body, 'description', 500) ?? '');
-        return _json(request.response, HttpStatus.created, {'success': true, 'community': community});
+      if (bits.length == 1 &&
+          bits[0] == 'communities' &&
+          request.method == 'POST') {
+        final community = await store.createSocialCommunity(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            name: _requiredText(body, 'name', 80),
+            description: _optionalText(body, 'description', 500) ?? '');
+        return _json(request.response, HttpStatus.created,
+            {'success': true, 'community': community});
       }
-      if (bits.length == 2 && bits[0] == 'communities' && bits[1] == 'join' && request.method == 'POST') {
-        await store.joinSocialCommunity(accountExternalId: account.id, profileExternalId: profile, communityId: _requiredText(body, 'communityId', 80));
+      if (bits.length == 2 &&
+          bits[0] == 'communities' &&
+          bits[1] == 'join' &&
+          request.method == 'POST') {
+        await store.joinSocialCommunity(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            communityId: _requiredText(body, 'communityId', 80));
         return _json(request.response, HttpStatus.ok, {'success': true});
       }
     }
     if (request.method == 'GET' && path == '/api/v1/features/status') {
       return _json(request.response, HttpStatus.ok, {
         'success': true,
-        'features': ['records', 'media_actions', 'activity_timeline', 'collaborative_queues', 'share_cards', 'payment_methods', 'seller_payout_destinations', 'social_home'],
+        'features': [
+          'records',
+          'media_actions',
+          'activity_timeline',
+          'collaborative_queues',
+          'share_cards',
+          'payment_methods',
+          'seller_payout_destinations',
+          'social_home'
+        ],
       });
     }
     if (path == '/api/v1/media-action' && request.method == 'POST') {
@@ -297,7 +759,8 @@ class SupabaseSyncRoutes {
         'remove_from_collection',
       };
       if (targetActions.contains(action) && targetId == null) {
-        throw const FormatException('A destination ID is required for this action.');
+        throw const FormatException(
+            'A destination ID is required for this action.');
       }
       final versionId = _optionalText(body, 'mediaVersionId', 256);
       final record = await _saveRecord(
@@ -320,59 +783,71 @@ class SupabaseSyncRoutes {
       });
     }
 
-      if (path == '/api/v1/activity' && request.method == 'GET') {
-        final profile = _ownedProfile(
-          account,
-          request.uri.queryParameters['profileId'],
-        );
-        if (profile == null) {
-          throw const FormatException('A profile ID is required.');
-        }
-        final requestedLimit = int.tryParse(
-          request.uri.queryParameters['limit'] ?? '',
-        ) ?? 50;
-        final records = await _records(
-          account.id,
-          profile,
-          'universal_media_action',
-        );
-        final activities = _activityService.projectMediaActions(
-          records,
-          limit: requestedLimit,
-        );
-        return _json(request.response, HttpStatus.ok, {
-          'success': true,
-          'activities': activities,
-        });
+    if (path == '/api/v1/activity' && request.method == 'GET') {
+      final profile = _ownedProfile(
+        account,
+        request.uri.queryParameters['profileId'],
+      );
+      if (profile == null) {
+        throw const FormatException('A profile ID is required.');
       }
+      final requestedLimit = int.tryParse(
+            request.uri.queryParameters['limit'] ?? '',
+          ) ??
+          50;
+      final records = await _records(
+        account.id,
+        profile,
+        'universal_media_action',
+      );
+      final activities = _activityService.projectMediaActions(
+        records,
+        limit: requestedLimit,
+      );
+      return _json(request.response, HttpStatus.ok, {
+        'success': true,
+        'activities': activities,
+      });
+    }
 
-      if (path == '/api/v1/records') {
+    if (path == '/api/v1/records') {
       if (request.method == 'GET') {
-        final profile = _ownedProfile(account, request.uri.queryParameters['profileId']);
+        final profile =
+            _ownedProfile(account, request.uri.queryParameters['profileId']);
         final type = request.uri.queryParameters['recordType'];
         final records = await _records(account.id, profile, type);
         records.removeWhere((record) =>
             const {'xray_private_note', 'xray_profile_settings'}
                 .contains(record['recordType']) &&
             (profile == null || record['profileId'] != profile));
-        return _json(request.response, HttpStatus.ok, {'success': true, 'records': records});
+        return _json(request.response, HttpStatus.ok,
+            {'success': true, 'records': records});
       }
       if (request.method == 'POST') {
         final body = await _body(request);
         final profile = _ownedProfile(account, body['profileId']?.toString());
         final type = _requiredText(body, 'recordType', 120);
         final key = _requiredText(body, 'recordKey', 240);
-        final data = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : <String, dynamic>{};
+        final data = body['data'] is Map
+            ? Map<String, dynamic>.from(body['data'] as Map)
+            : <String, dynamic>{};
         _validateProfileRecord(type, key, profile, data);
         final record = await _saveRecord(account.id, profile, type, key, data);
-        return _json(request.response, HttpStatus.ok, {'success': true, 'record': record});
+        return _json(request.response, HttpStatus.ok,
+            {'success': true, 'record': record});
       }
       if (request.method == 'DELETE') {
-        final profile = _ownedProfile(account, request.uri.queryParameters['profileId']);
+        final profile =
+            _ownedProfile(account, request.uri.queryParameters['profileId']);
         final type = request.uri.queryParameters['recordType']?.trim() ?? '';
         final key = request.uri.queryParameters['recordKey']?.trim() ?? '';
-        if (type.isEmpty || key.isEmpty) throw const FormatException('recordType and recordKey are required.');
-        await store.deleteAppRecord(accountExternalId: account.id, profileExternalId: profile, recordType: type, recordKey: key);
+        if (type.isEmpty || key.isEmpty)
+          throw const FormatException('recordType and recordKey are required.');
+        await store.deleteAppRecord(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            recordType: type,
+            recordKey: key);
         _memoryRecords.remove(_recordId(account.id, profile, type, key));
         return _json(request.response, HttpStatus.ok, {'success': true});
       }
@@ -380,97 +855,175 @@ class SupabaseSyncRoutes {
     if (path == '/api/v1/share-card' && request.method == 'POST') {
       final body = await _body(request);
       final profile = _ownedProfile(account, body['profileId']?.toString());
-      final metadata = body['metadata'] is Map ? Map<String, dynamic>.from(body['metadata'] as Map) : <String, dynamic>{};
-      final record = await _saveRecord(account.id, profile, 'share_card', DateTime.now().microsecondsSinceEpoch.toString(), {
+      final metadata = body['metadata'] is Map
+          ? Map<String, dynamic>.from(body['metadata'] as Map)
+          : <String, dynamic>{};
+      final record = await _saveRecord(account.id, profile, 'share_card',
+          DateTime.now().microsecondsSinceEpoch.toString(), {
         'contentType': _requiredText(body, 'contentType', 80),
         'contentId': _requiredText(body, 'contentId', 256),
         'title': _requiredText(body, 'title', 500),
         'metadata': metadata,
       });
-      return _json(request.response, HttpStatus.created, {'success': true, 'shareCard': record});
+      return _json(request.response, HttpStatus.created,
+          {'success': true, 'shareCard': record});
     }
     if (path == '/api/v1/queue' && request.method == 'POST') {
       final body = await _body(request);
       final profile = _ownedProfile(account, body['profileId']?.toString());
       final id = 'queue_${DateTime.now().microsecondsSinceEpoch}';
-      final record = await _saveRecord(account.id, profile, 'collaborative_queue', id, {
-        'queueId': id, 'profileId': profile,
+      final record =
+          await _saveRecord(account.id, profile, 'collaborative_queue', id, {
+        'queueId': id,
+        'profileId': profile,
         'name': _optionalText(body, 'name', 120) ?? 'Shared Queue',
-        'mode': _optionalText(body, 'mode', 40) ?? 'party', 'items': <dynamic>[],
+        'mode': _optionalText(body, 'mode', 40) ?? 'party',
+        'items': <dynamic>[],
       });
-      return _json(request.response, HttpStatus.created, {'success': true, 'queue': record['data']});
+      return _json(request.response, HttpStatus.created,
+          {'success': true, 'queue': record['data']});
     }
     if (path.startsWith('/api/v1/queue/')) {
       return _handleQueue(request, account);
     }
-    return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Route not found.'});
+    return _json(request.response, HttpStatus.notFound,
+        {'success': false, 'error': 'Route not found.'});
   }
 
-  Future<List<Map<String, dynamic>>> _records(String accountId, String? profileId, String? type) async {
-    final saved = await store.loadAppRecords(accountExternalId: accountId, profileExternalId: profileId, recordType: type);
+  Future<List<Map<String, dynamic>>> _records(
+      String accountId, String? profileId, String? type) async {
+    final saved = await store.loadAppRecords(
+        accountExternalId: accountId,
+        profileExternalId: profileId,
+        recordType: type);
     final prefix = profileId == null ? '$accountId|' : '$accountId|$profileId|';
     final combined = <String, Map<String, dynamic>>{
-      for (final record in saved) '${record['recordType']}|${record['recordKey']}': record,
-      for (final entry in _memoryRecords.entries.where((entry) => entry.key.startsWith(prefix)))
-        if (type == null || entry.value['recordType'] == type) '${entry.value['recordType']}|${entry.value['recordKey']}': entry.value,
+      for (final record in saved)
+        '${record['recordType']}|${record['recordKey']}': record,
+      for (final entry in _memoryRecords.entries
+          .where((entry) => entry.key.startsWith(prefix)))
+        if (type == null || entry.value['recordType'] == type)
+          '${entry.value['recordType']}|${entry.value['recordKey']}':
+              entry.value,
     };
-    return combined.values.toList()..sort((a, b) => '${b['updatedAt']}'.compareTo('${a['updatedAt']}'));
+    return combined.values.toList()
+      ..sort((a, b) => '${b['updatedAt']}'.compareTo('${a['updatedAt']}'));
   }
 
-  Future<Map<String, dynamic>> _saveRecord(String accountId, String? profileId, String type, String key, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> _saveRecord(String accountId, String? profileId,
+      String type, String key, Map<String, dynamic> data) async {
     final id = _recordId(accountId, profileId, type, key);
     final previous = _memoryRecords[id];
     final record = <String, dynamic>{
-      'id': previous?['id'] ?? _uuid(), 'accountId': accountId, 'profileId': profileId,
-      'recordType': type, 'recordKey': key, 'data': Map<String, dynamic>.from(data),
-      'createdAt': previous?['createdAt'] ?? DateTime.now().toUtc().toIso8601String(),
+      'id': previous?['id'] ?? _uuid(),
+      'accountId': accountId,
+      'profileId': profileId,
+      'recordType': type,
+      'recordKey': key,
+      'data': Map<String, dynamic>.from(data),
+      'createdAt':
+          previous?['createdAt'] ?? DateTime.now().toUtc().toIso8601String(),
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
     };
-    await store.upsertAppRecord(accountExternalId: accountId, profileExternalId: profileId, recordType: type, recordKey: key, recordId: record['id'] as String, data: record['data'] as Map<String, dynamic>);
+    await store.upsertAppRecord(
+        accountExternalId: accountId,
+        profileExternalId: profileId,
+        recordType: type,
+        recordKey: key,
+        recordId: record['id'] as String,
+        data: record['data'] as Map<String, dynamic>);
     _memoryRecords[id] = record;
     return record;
   }
 
   Future<void> _handleQueue(HttpRequest request, dynamic account) async {
     const prefix = '/api/v1/queue/';
-    final parts = request.uri.path.substring(prefix.length).split('/').map(Uri.decodeComponent).toList();
-    if (parts.isEmpty || parts.first.isEmpty) return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Queue not found.'});
+    final parts = request.uri.path
+        .substring(prefix.length)
+        .split('/')
+        .map(Uri.decodeComponent)
+        .toList();
+    if (parts.isEmpty || parts.first.isEmpty)
+      return _json(request.response, HttpStatus.notFound,
+          {'success': false, 'error': 'Queue not found.'});
     final id = parts.first;
     final records = await _records(account.id, null, 'collaborative_queue');
     final index = records.indexWhere((record) => record['recordKey'] == id);
-    if (index < 0) return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Queue not found.'});
+    if (index < 0)
+      return _json(request.response, HttpStatus.notFound,
+          {'success': false, 'error': 'Queue not found.'});
     final record = records[index];
     final data = Map<String, dynamic>.from(record['data'] as Map);
-    final items = (data['items'] as List? ?? const []).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
-    if (parts.length == 1 && request.method == 'GET') return _json(request.response, HttpStatus.ok, {'success': true, 'queue': {...data, 'items': items}});
+    final items = (data['items'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    if (parts.length == 1 && request.method == 'GET')
+      return _json(request.response, HttpStatus.ok, {
+        'success': true,
+        'queue': {...data, 'items': items}
+      });
     if (parts.length == 2 && parts[1] == 'items' && request.method == 'POST') {
       final body = await _body(request);
       final profile = _ownedProfile(account, body['profileId']?.toString());
-      if (data['profileId'] != profile) return _json(request.response, HttpStatus.forbidden, {'success': false, 'error': 'Queue belongs to another profile.'});
+      if (data['profileId'] != profile)
+        return _json(request.response, HttpStatus.forbidden,
+            {'success': false, 'error': 'Queue belongs to another profile.'});
       final mediaId = _requiredText(body, 'mediaId', 256);
-      if (items.any((item) => item['mediaId'] == mediaId)) return _json(request.response, HttpStatus.conflict, {'success': false, 'error': 'Media is already in this queue.'});
-      items.add({'mediaId': mediaId, 'mediaType': _requiredText(body, 'mediaType', 80), 'title': _requiredText(body, 'title', 500), 'sourceVersionKey': _optionalText(body, 'sourceVersionKey', 256), 'position': items.length, 'skipped': false, 'addedByProfileId': profile});
+      if (items.any((item) => item['mediaId'] == mediaId))
+        return _json(request.response, HttpStatus.conflict,
+            {'success': false, 'error': 'Media is already in this queue.'});
+      items.add({
+        'mediaId': mediaId,
+        'mediaType': _requiredText(body, 'mediaType', 80),
+        'title': _requiredText(body, 'title', 500),
+        'sourceVersionKey': _optionalText(body, 'sourceVersionKey', 256),
+        'position': items.length,
+        'skipped': false,
+        'addedByProfileId': profile
+      });
     } else if (parts.length == 3 && parts[1] == 'items') {
-      final i = items.indexWhere((item) => item['mediaId']?.toString() == parts[2]);
-      if (i < 0) return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Queue item not found.'});
-      if (request.method == 'DELETE') { items.removeAt(i); }
-      else if (request.method == 'PATCH') {
+      final i =
+          items.indexWhere((item) => item['mediaId']?.toString() == parts[2]);
+      if (i < 0)
+        return _json(request.response, HttpStatus.notFound,
+            {'success': false, 'error': 'Queue item not found.'});
+      if (request.method == 'DELETE') {
+        items.removeAt(i);
+      } else if (request.method == 'PATCH') {
         final body = await _body(request);
-        if (body['position'] is num) { final item = items.removeAt(i); items.insert((body['position'] as num).toInt().clamp(0, items.length), item); }
-        final moved = items.indexWhere((item) => item['mediaId']?.toString() == parts[2]);
-        if (body['skipped'] is bool && moved >= 0) items[moved]['skipped'] = body['skipped'];
-      } else { return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Route not found.'}); }
-    } else { return _json(request.response, HttpStatus.notFound, {'success': false, 'error': 'Route not found.'}); }
-    for (var i = 0; i < items.length; i++) { items[i]['position'] = i; }
+        if (body['position'] is num) {
+          final item = items.removeAt(i);
+          items.insert(
+              (body['position'] as num).toInt().clamp(0, items.length), item);
+        }
+        final moved =
+            items.indexWhere((item) => item['mediaId']?.toString() == parts[2]);
+        if (body['skipped'] is bool && moved >= 0)
+          items[moved]['skipped'] = body['skipped'];
+      } else {
+        return _json(request.response, HttpStatus.notFound,
+            {'success': false, 'error': 'Route not found.'});
+      }
+    } else {
+      return _json(request.response, HttpStatus.notFound,
+          {'success': false, 'error': 'Route not found.'});
+    }
+    for (var i = 0; i < items.length; i++) {
+      items[i]['position'] = i;
+    }
     data['items'] = items;
-    await _saveRecord(account.id, data['profileId']?.toString(), 'collaborative_queue', id, data);
-    return _json(request.response, HttpStatus.ok, {'success': true, 'queue': data});
+    await _saveRecord(account.id, data['profileId']?.toString(),
+        'collaborative_queue', id, data);
+    return _json(
+        request.response, HttpStatus.ok, {'success': true, 'queue': data});
   }
 
   String? _ownedProfile(Account account, String? value) {
     final id = value?.trim();
     if (id == null || id.isEmpty) return null;
-    if (!account.profiles.any((profile) => profile.id == id)) throw ArgumentError('Profile does not belong to this account.');
+    if (!account.profiles.any((profile) => profile.id == id))
+      throw ArgumentError('Profile does not belong to this account.');
     return id;
   }
 
@@ -482,37 +1035,51 @@ class SupabaseSyncRoutes {
   ) {
     if (type == 'xray_private_note') {
       if (profileId == null || data['profileId']?.toString() != profileId) {
-        throw ArgumentError('X-Ray notes must belong to the authenticated profile.');
+        throw ArgumentError(
+            'X-Ray notes must belong to the authenticated profile.');
       }
       final noteId = _requiredText(data, 'id', 240);
-      if (noteId != key) throw const FormatException('X-Ray note ID must match its record key.');
+      if (noteId != key)
+        throw const FormatException('X-Ray note ID must match its record key.');
       _requiredText(data, 'mediaId', 256);
       _requiredText(data, 'mediaVersionId', 256);
       final position = data['positionMilliseconds'];
       if (position is! num || !position.isFinite || position < 0) {
-        throw const FormatException('X-Ray note position must be a non-negative number.');
+        throw const FormatException(
+            'X-Ray note position must be a non-negative number.');
       }
       final text = _requiredText(data, 'text', 1000);
-      if (text.length > 1000) throw const FormatException('X-Ray note text is too long.');
+      if (text.length > 1000)
+        throw const FormatException('X-Ray note text is too long.');
       if (DateTime.tryParse(data['createdAt']?.toString() ?? '') == null) {
-        throw const FormatException('X-Ray note createdAt must be a valid timestamp.');
+        throw const FormatException(
+            'X-Ray note createdAt must be a valid timestamp.');
       }
     }
 
     if (type == 'xray_profile_settings') {
       if (profileId == null || key != 'settings') {
-        throw ArgumentError('X-Ray settings must be saved to an authenticated profile.');
+        throw ArgumentError(
+            'X-Ray settings must be saved to an authenticated profile.');
       }
-      const spoilerLevels = {'noSpoilers', 'currentScene', 'currentMovie', 'franchise', 'everything'};
+      const spoilerLevels = {
+        'noSpoilers',
+        'currentScene',
+        'currentMovie',
+        'franchise',
+        'everything'
+      };
       if (!spoilerLevels.contains(data['spoilerLevel'])) {
         throw const FormatException('Invalid X-Ray spoiler level.');
       }
       for (final field in ['visibleSections', 'followedEntities']) {
         final values = data[field];
         if (values is! List || values.length > 100) {
-          throw FormatException('X-Ray $field must be a list of at most 100 values.');
+          throw FormatException(
+              'X-Ray $field must be a list of at most 100 values.');
         }
-        if (values.any((value) => value is! String || value.trim().isEmpty || value.length > 240)) {
+        if (values.any((value) =>
+            value is! String || value.trim().isEmpty || value.length > 240)) {
           throw FormatException('X-Ray $field contains an invalid value.');
         }
       }
@@ -521,24 +1088,50 @@ class SupabaseSyncRoutes {
 
   String _requiredText(Map<String, dynamic> body, String key, int max) {
     final value = body[key]?.toString().trim() ?? '';
-    if (value.isEmpty || value.length > max || value.contains('\u0000')) throw FormatException('$key is required and must be at most $max characters.');
+    if (value.isEmpty || value.length > max || value.contains('\u0000'))
+      throw FormatException(
+          '$key is required and must be at most $max characters.');
     return value;
   }
 
   String? _optionalText(Map<String, dynamic> body, String key, int max) {
     final value = body[key]?.toString().trim();
     if (value == null || value.isEmpty) return null;
-    if (value.length > max || value.contains('\u0000')) throw FormatException('$key must be at most $max characters.');
+    if (value.length > max || value.contains('\u0000'))
+      throw FormatException('$key must be at most $max characters.');
     return value;
   }
 
-  String _recordId(String accountId, String? profile, String type, String key) => '$accountId|${profile ?? ''}|$type|$key';
+  String _recordId(
+          String accountId, String? profile, String type, String key) =>
+      '$accountId|${profile ?? ''}|$type|$key';
 
   String _uuid() {
     final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex =
+        bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
+  Future<List<int>> _boundedBytes(HttpRequest request, int maxBytes) async {
+    if (request.contentLength > maxBytes) {
+      throw const FormatException('Photo is larger than 5 MB.');
+    }
+    final bytes = <int>[];
+    var totalBytes = 0;
+    await for (final chunk in request) {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
+        throw const FormatException('Photo is larger than 5 MB.');
+      }
+      bytes.addAll(chunk);
+    }
+    if (bytes.isEmpty) {
+      throw const FormatException('Photo cannot be empty.');
+    }
+    return Uint8List.fromList(bytes);
   }
 
   /// Reads and validates a bounded JSON request body.

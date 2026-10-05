@@ -53,6 +53,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Timer? groupWatchTimer;
   Timer? groupWatchPositionTimer;
   Timer? controlsTimer;
+  Timer? _socialActivityHeartbeat;
 
   String selectedAudio = '';
   bool subtitlesEnabled = false;
@@ -93,6 +94,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _initializeYoutubePlayer();
     _initializeGroupWatch();
     _startControlsTimer();
+    unawaited(_setSocialWatchActivity('Watching ${widget.media.title}'));
+  }
+
+  Future<void> _setSocialWatchActivity(String? activity) async {
+    final profile = AppController.instance.currentProfile;
+    final api = AppController.instance.backendApi;
+    _socialActivityHeartbeat?.cancel();
+    _socialActivityHeartbeat = null;
+    if (profile == null || !api.isAuthenticated) return;
+    try {
+      if (activity == null) {
+        await api.setSocialProfilePresence(
+          profileId: profile.id,
+          clearActivity: true,
+        );
+      } else {
+        await api.setSocialProfilePresence(
+          profileId: profile.id,
+          activityType: 'watching',
+          activityText: activity,
+        );
+        _socialActivityHeartbeat = Timer.periodic(
+          const Duration(minutes: 1),
+          (_) => unawaited(_setSocialWatchActivity(activity)),
+        );
+      }
+    } catch (error) {
+      debugPrint(
+        'Unable to update viewing presence: ${error.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
   }
 
   /// Performs `_initializeYoutubePlayer` for this feature. Update this documentation when its contract changes.
@@ -268,12 +300,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     groupWatchTimer?.cancel();
     groupWatchPositionTimer?.cancel();
     controlsTimer?.cancel();
+    _socialActivityHeartbeat?.cancel();
+    _socialActivityHeartbeat = null;
 
     youtubeVideoStateSubscription?.cancel();
     youtubeController?.close();
     xrayPlaybackPosition.dispose();
     if (musicWasPlayingBeforeVideo) {
       MusicPlaybackController.instance.resumeAfterVideo();
+    } else {
+      unawaited(_setSocialWatchActivity(null));
     }
 
     super.dispose();

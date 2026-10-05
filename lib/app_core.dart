@@ -539,6 +539,142 @@ class UserAccount {
   }
 }
 
+class PageContentCustomization {
+  final List<String> sectionOrder;
+  final Set<String> hiddenSections;
+
+  PageContentCustomization({
+    required List<String> sectionOrder,
+    Set<String>? hiddenSections,
+  })  : sectionOrder = List<String>.from(sectionOrder),
+        hiddenSections = Set<String>.from(hiddenSections ?? const <String>{});
+
+  List<String> get visibleSections =>
+      sectionOrder.where((section) => !hiddenSections.contains(section)).toList();
+
+  PageContentCustomization copy() => PageContentCustomization(
+        sectionOrder: sectionOrder,
+        hiddenSections: hiddenSections,
+      );
+}
+
+class PageContentCustomizationStore {
+  static const Map<String, List<String>> _defaults = {
+    'discover': [
+      'search',
+      'movies',
+      'tv-shows',
+      'reviews',
+      'people',
+      'music',
+      'radio',
+    ],
+    'library': [
+      'summary',
+      'movies',
+      'tv-shows',
+      'music',
+      'radio',
+      'collections',
+      'my-tv',
+      'favorites',
+      'coming-soon',
+      'storage',
+    ],
+    'shop': ['featured', 'related', 'stores', 'media', 'products'],
+    'friends': ['feed', 'reels', 'messages', 'friends', 'communities', 'my-page'],
+  };
+
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+  static final Map<String, PageContentCustomization> _cache = {};
+  static SharedPreferences? _preferences;
+
+  static Future<void> initialize() async {
+    _preferences ??= await SharedPreferences.getInstance();
+  }
+
+  static List<String> sectionsFor(String pageId) =>
+      List<String>.from(_defaults[pageId] ?? const <String>[]);
+
+  static PageContentCustomization settingsFor(
+    String pageId, {
+    Profile? profile,
+  }) {
+    final defaults = sectionsFor(pageId);
+    if (defaults.isEmpty) {
+      return PageContentCustomization(sectionOrder: const <String>[]);
+    }
+    final profileId = profile?.id ??
+        AppController.instance.currentProfile?.id ??
+        'default';
+    final cacheKey = '$profileId:$pageId';
+    return _cache.putIfAbsent(cacheKey, () {
+      final raw = _preferences?.getString('page_content_$cacheKey');
+      if (raw == null) {
+        return PageContentCustomization(sectionOrder: defaults);
+      }
+      try {
+        final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+        final storedOrder = (map['sectionOrder'] as List? ?? const [])
+            .map((item) => item.toString())
+            .where(defaults.contains)
+            .toSet();
+        final order = <String>[
+          ...storedOrder,
+          ...defaults.where((item) => !storedOrder.contains(item)),
+        ];
+        final hidden = (map['hiddenSections'] as List? ?? const [])
+            .map((item) => item.toString())
+            .where(defaults.contains)
+            .toSet();
+        if (hidden.length == defaults.length) hidden.remove(hidden.first);
+        return PageContentCustomization(
+          sectionOrder: order,
+          hiddenSections: hidden,
+        );
+      } catch (_) {
+        return PageContentCustomization(sectionOrder: defaults);
+      }
+    }).copy();
+  }
+
+  static Future<void> apply(
+    String pageId,
+    PageContentCustomization customization, {
+    Profile? profile,
+  }) async {
+    final defaults = sectionsFor(pageId);
+    if (defaults.isEmpty) return;
+    final profileId = profile?.id ??
+        AppController.instance.currentProfile?.id ??
+        'default';
+    final allowed = defaults.toSet();
+    final order = <String>{
+      ...customization.sectionOrder.where(allowed.contains),
+      ...defaults,
+    }.toList();
+    final hidden = customization.hiddenSections
+        .where(allowed.contains)
+        .toSet();
+    if (hidden.length == order.length) hidden.remove(hidden.first);
+
+    final normalized = PageContentCustomization(
+      sectionOrder: order,
+      hiddenSections: hidden,
+    );
+    final cacheKey = '$profileId:$pageId';
+    _cache[cacheKey] = normalized;
+    await _preferences?.setString(
+      'page_content_$cacheKey',
+      jsonEncode({
+        'sectionOrder': normalized.sectionOrder,
+        'hiddenSections': normalized.hiddenSections.toList(),
+      }),
+    );
+    revision.value++;
+  }
+}
+
 /// Implements the `MediaCollection` class for this feature or UI component.
 class MediaCollection {
   final String id;

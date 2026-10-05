@@ -44,6 +44,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
+  await PageContentCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
   await MusicPageCustomizationStore.initialize();
   await AppController.instance.initializeBadges();
@@ -119,6 +120,7 @@ class _AppPageRouteObserver extends NavigatorObserver {
   }
 
   String _pageIdForRoute(String? name, Route<dynamic> route) {
+    if (name == '/app/player') return 'player';
     if (name != null && name.startsWith('/app/page/')) {
       return name.substring('/app/page/'.length);
     }
@@ -241,11 +243,19 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
       builder: (context) => Positioned(
         right: 12,
         bottom: 12,
-        child: SafeArea(
-          child: Material(
-            color: Colors.transparent,
-            child: const LanguagePicker(),
-          ),
+        child: AnimatedBuilder(
+          animation: _appPageState,
+          builder: (context, _) {
+            if (_appPageState.pageId == 'player') {
+              return const SizedBox.shrink();
+            }
+            return SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: const LanguagePicker(),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -580,6 +590,7 @@ class _PageCustomizationScreen extends StatefulWidget {
 
 class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   late _PageAppearance draft;
+  late PageContentCustomization contentDraft;
 
   static const _colors = <String, int>{
     'Red': 0xFFE53935,
@@ -594,11 +605,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   void initState() {
     super.initState();
     draft = _PageAppearanceStore.forPage(widget.pageId);
+    contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
   }
 
   @override
   Widget build(BuildContext context) {
     final title = _pageTitleFor(widget.pageId);
+    final sections = PageContentCustomizationStore.sectionsFor(widget.pageId);
     return Scaffold(
       appBar: AppBar(title: Text('Customize $title')),
       body: ListView(
@@ -667,11 +680,67 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
               }
             },
           ),
+          if (sections.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text(
+              'Page sections',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Choose what appears and use the arrows to change its order.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 8),
+            for (var index = 0;
+                index < contentDraft.sectionOrder.length;
+                index++)
+              Card(
+                child: ListTile(
+                  title: Text(_customizationSectionName(
+                    widget.pageId,
+                    contentDraft.sectionOrder[index],
+                  )),
+                  leading: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Move up',
+                        onPressed: index == 0
+                            ? null
+                            : () => _moveContentSection(index, index - 1),
+                        icon: const Icon(Icons.keyboard_arrow_up_rounded),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Move down',
+                        onPressed:
+                            index == contentDraft.sectionOrder.length - 1
+                                ? null
+                                : () => _moveContentSection(index, index + 1),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                      ),
+                    ],
+                  ),
+                  trailing: Switch(
+                    value: !contentDraft.hiddenSections
+                        .contains(contentDraft.sectionOrder[index]),
+                    onChanged: (visible) =>
+                        _setContentSectionVisible(index, visible),
+                  ),
+                ),
+              ),
+          ],
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: () async {
               final navigator = Navigator.of(context);
               await _PageAppearanceStore.save(widget.pageId, draft);
+              await PageContentCustomizationStore.apply(
+                widget.pageId,
+                contentDraft,
+              );
               if (!mounted) return;
               navigator.pop();
             },
@@ -682,7 +751,69 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
       ),
     );
   }
+
+  void _moveContentSection(int from, int to) {
+    setState(() {
+      final order = List<String>.from(contentDraft.sectionOrder);
+      final moved = order.removeAt(from);
+      order.insert(to, moved);
+      contentDraft = PageContentCustomization(
+        sectionOrder: order,
+        hiddenSections: contentDraft.hiddenSections,
+      );
+    });
+  }
+
+  void _setContentSectionVisible(int index, bool visible) {
+    final section = contentDraft.sectionOrder[index];
+    final hidden = Set<String>.from(contentDraft.hiddenSections);
+    if (visible) {
+      hidden.remove(section);
+    } else {
+      if (contentDraft.visibleSections.length <= 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Keep at least one page section visible.')),
+        );
+        return;
+      }
+      hidden.add(section);
+    }
+    setState(() {
+      contentDraft = PageContentCustomization(
+        sectionOrder: contentDraft.sectionOrder,
+        hiddenSections: hidden,
+      );
+    });
+  }
 }
+
+String _customizationSectionName(String pageId, String id) => switch (id) {
+      'search' => 'Universal search',
+      'movies' => 'Movies',
+      'tv-shows' => 'TV shows',
+      'reviews' => 'Reviews',
+      'people' => 'People',
+      'music' => 'Music',
+      'radio' => 'Radio',
+      'summary' => 'Library summary',
+      'collections' => 'Collections',
+      'my-tv' => 'My TV',
+      'favorites' => 'Favorites',
+      'coming-soon' => 'Coming soon',
+      'storage' => 'Account storage',
+      'featured' => 'Featured products',
+      'related' => 'Related to your library',
+      'stores' => 'Stores',
+      'products' => 'Products',
+      'media' => 'Matching media results',
+      'feed' => 'Feed',
+      'reels' => 'Reels',
+      'messages' => 'Messages',
+      'friends' => 'Friends',
+      'communities' => 'Communities',
+      'my-page' => 'My Page',
+      _ => '$pageId section',
+    };
 
 // ============================================================
 // SPLASH SCREEN
@@ -4125,10 +4256,6 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    _appPageState.setPage(
-      selected.name,
-      selectedPrimaryIndex: selected.index,
-    );
     LanguageController.instance.loadForCurrentProfile();
   }
 

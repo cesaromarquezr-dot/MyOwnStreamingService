@@ -17,6 +17,7 @@ import 'localization.dart';
 import 'worldwide_location.dart';
 import 'live_shopping.dart';
 import 'page_presentation.dart';
+import 'social_sharing.dart';
 
 /// A globally searchable entity that a seller can associate with a product.
 ///
@@ -1197,6 +1198,203 @@ class ShopCatalog extends ChangeNotifier {
   }
 }
 
+/// Customer-facing product details page used by shop cards, social shares,
+/// and live-shopping featured products.
+class ShopProductDetailsScreen extends StatelessWidget {
+  const ShopProductDetailsScreen({super.key, required this.product, this.onHome});
+
+  final ShopProduct product;
+  final VoidCallback? onHome;
+
+  @override
+  Widget build(BuildContext context) {
+    final catalog = ShopCatalog.instance;
+    final matchingStores = catalog.stores.where((item) => item.id == product.storeId);
+    final store = matchingStores.isEmpty ? null : matchingStores.first;
+    return Scaffold(
+      appBar: AppBar(
+        title: const UniversalText('Product'),
+        actions: [
+          IconButton(
+            tooltip: 'Share product',
+            onPressed: () => showSocialShareDialog(
+              context,
+              title: product.name,
+              message:
+                  'Product: ${product.name} · ${product.price.toStringAsFixed(2)} ${product.currency}',
+              mediaReference: {
+                'type': 'product',
+                'productId': product.id,
+                'title': product.name,
+                'description': product.description,
+              },
+            ),
+            icon: const Icon(Icons.share_outlined),
+          ),
+          IconButton(
+            tooltip: 'Wishlist',
+            onPressed: () => catalog.toggleWishlist(product.id),
+            icon: Icon(
+              catalog.isWishlisted(product.id)
+                  ? Icons.favorite
+                  : Icons.favorite_border,
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
+        children: [
+          if (product.imageUrls.isNotEmpty)
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * .38,
+              child: PageView.builder(
+                itemCount: product.imageUrls.length,
+                itemBuilder: (context, index) => ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.network(
+                    product.imageUrls[index],
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Icon(Icons.broken_image_outlined, size: 54),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
+              height: 260,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .045),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Center(
+                child: Icon(Icons.shopping_bag_outlined, size: 64),
+              ),
+            ),
+          const SizedBox(height: 18),
+          Text(
+            product.name,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${product.price.toStringAsFixed(2)} ${product.currency}',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          if (store != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundImage: store.logoUrl?.isNotEmpty == true
+                      ? NetworkImage(store.logoUrl!)
+                      : null,
+                  child: store.logoUrl?.isNotEmpty == true
+                      ? null
+                      : Text(store.name.isEmpty ? '?' : store.name[0].toUpperCase()),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    store.name,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(label: Text(product.category)),
+              Chip(label: Text(product.productType)),
+              Chip(
+                avatar: Icon(
+                  product.inventoryQuantity > 0
+                      ? Icons.check_circle_outline
+                      : Icons.remove_circle_outline,
+                  size: 18,
+                ),
+                label: Text(
+                  product.inventoryQuantity > 0
+                      ? '${product.inventoryQuantity} in stock'
+                      : 'Sold out',
+                ),
+              ),
+            ],
+          ),
+          if (product.description.trim().isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const Text('About this product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            Text(product.description, style: const TextStyle(height: 1.45)),
+          ],
+          if (product.associations.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            const Text('Related to', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            for (final association in product.associations)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.link_outlined),
+                title: Text(association.name),
+                subtitle: Text(association.type),
+              ),
+          ],
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: product.inventoryQuantity <= 0
+                      ? null
+                      : () {
+                          catalog.addToBag(product.id);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Added to bag')),
+                          );
+                        },
+                  icon: const Icon(Icons.add_shopping_cart),
+                  label: const UniversalText('Add to bag'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: product.inventoryQuantity <= 0
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ShopCheckoutScreen(
+                                lines: [ShopBagLine(productId: product.id)],
+                                title: 'Checkout • ${product.name}',
+                                storeSpecific: false,
+                                onHome: onHome,
+                              ),
+                            ),
+                          ),
+                  icon: const Icon(Icons.bolt_rounded),
+                  label: const UniversalText('Buy now'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Top-level marketplace. Search covers products, stores, and entertainment relationships.
 class ShopScreen extends StatefulWidget {
   final VoidCallback? onHome;
@@ -1289,9 +1487,14 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: catalog,
+      animation: Listenable.merge([
+        catalog,
+        PageContentCustomizationStore.revision,
+      ]),
       builder: (context, _) {
         final products = visibleProducts;
+        final visibleSections =
+            PageContentCustomizationStore.settingsFor('shop').visibleSections;
         final stores = catalog.stores
             .where((s) =>
                 s.active &&
@@ -1359,10 +1562,11 @@ class _ShopScreenState extends State<ShopScreen> {
                               builder: (_) => const _AskShopAssistantDialog()),
                           icon: const Icon(Icons.auto_awesome),
                           label: const UniversalText('Ask Shop')),
-                      OutlinedButton.icon(
-                          onPressed: _createStore,
-                          icon: const Icon(Icons.storefront_outlined),
-                          label: const UniversalText('Create Store')),
+                      if (!catalog.hasCurrentAccountStore)
+                        OutlinedButton.icon(
+                            onPressed: _createStore,
+                            icon: const Icon(Icons.storefront_outlined),
+                            label: const UniversalText('Create Store')),
                       if (catalog.currentAccountStores.isNotEmpty)
                         OutlinedButton.icon(
                           onPressed: () => Navigator.push(
@@ -1415,57 +1619,72 @@ class _ShopScreenState extends State<ShopScreen> {
               if (widget.contextAssociationName == null) ...[
                 const SizedBox(height: 10),
                 _shopCategoryRow(),
-                if (search.isEmpty && featuredProducts.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  _sectionTitle(
-                      'Featured Products', Icons.star_outline_rounded),
-                  const SizedBox(height: 8),
-                  for (final product in featuredProducts)
-                    _productCard(context, product),
-                ],
-                if (search.isEmpty && libraryRelatedProducts.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  _sectionTitle(
-                      'Related to Your Library', Icons.library_music_outlined),
-                  const SizedBox(height: 8),
-                  for (final product in libraryRelatedProducts)
-                    _productCard(context, product),
-                ],
-                const SizedBox(height: 20),
-                _sectionTitle('Stores', Icons.storefront_outlined),
-                const SizedBox(height: 8),
-                if (stores.isEmpty) _empty('No stores match this search yet.'),
-                for (final store in stores.take(8)) _storeTile(context, store),
-                if (search.trim().isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  _sectionTitle('Media', Icons.movie_filter_outlined),
-                  const SizedBox(height: 8),
-                  if (mediaMatches.isEmpty)
-                    _empty('No library media matches this search.'),
-                  for (final media in mediaMatches)
-                    Card(
-                      child: ListTile(
-                        title: Text(media.title),
-                        subtitle: Text(media.franchiseName == null
-                            ? media.type
-                            : '${media.type} • ${media.franchiseName}'),
-                        trailing: ContextualShopButton.forMedia(context, media),
-                      ),
+                for (final section in visibleSections)
+                  if (section == 'featured' &&
+                      search.isEmpty &&
+                      featuredProducts.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _sectionTitle(
+                      'Featured Products',
+                      Icons.star_outline_rounded,
                     ),
-                ],
+                    const SizedBox(height: 8),
+                    for (final product in featuredProducts)
+                      _productCard(context, product),
+                  ] else if (section == 'related' &&
+                      search.isEmpty &&
+                      libraryRelatedProducts.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _sectionTitle(
+                      'Related to Your Library',
+                      Icons.library_music_outlined,
+                    ),
+                    const SizedBox(height: 8),
+                    for (final product in libraryRelatedProducts)
+                      _productCard(context, product),
+                  ] else if (section == 'stores') ...[
+                    const SizedBox(height: 20),
+                    _sectionTitle('Stores', Icons.storefront_outlined),
+                    const SizedBox(height: 8),
+                    if (stores.isEmpty)
+                      _empty('No stores match this search yet.'),
+                    for (final store in stores.take(8))
+                      _storeTile(context, store),
+                  ] else if (section == 'media' &&
+                      search.trim().isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    _sectionTitle('Media', Icons.movie_filter_outlined),
+                    const SizedBox(height: 8),
+                    if (mediaMatches.isEmpty)
+                      _empty('No library media matches this search.'),
+                    for (final media in mediaMatches)
+                      Card(
+                        child: ListTile(
+                          title: Text(media.title),
+                          subtitle: Text(media.franchiseName == null
+                              ? media.type
+                              : '${media.type} • ${media.franchiseName}'),
+                          trailing:
+                              ContextualShopButton.forMedia(context, media),
+                        ),
+                      ),
+                  ],
               ],
-              const SizedBox(height: 20),
-              _sectionTitle(
+              if (visibleSections.contains('products')) ...[
+                const SizedBox(height: 20),
+                _sectionTitle(
                   widget.contextAssociationName == null
                       ? 'Products'
                       : 'Shop this title',
-                  Icons.shopping_bag_outlined),
-              const SizedBox(height: 8),
-              if (products.isEmpty)
-                _empty(widget.contextAssociationName == null
-                    ? 'No real seller products are listed yet.'
-                    : 'No seller product is currently associated with this title.'),
-              for (final product in products) _productCard(context, product),
+                  Icons.shopping_bag_outlined,
+                ),
+                const SizedBox(height: 8),
+                if (products.isEmpty)
+                  _empty(widget.contextAssociationName == null
+                      ? 'No real seller products are listed yet.'
+                      : 'No seller product is currently associated with this title.'),
+                for (final product in products) _productCard(context, product),
+              ],
             ],
           ),
         );
@@ -1553,7 +1772,28 @@ class _ShopScreenState extends State<ShopScreen> {
               '${catalog.productsForStore(store.id).length} active product(s)${store.description.isEmpty ? '' : ' • ${store.description}'}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Share store to chats',
+                onPressed: () => showSocialShareDialog(
+                  context,
+                  title: store.name,
+                  message: 'Store: ${store.name}',
+                  mediaReference: {
+                    'type': 'recommendation',
+                    'title': store.name,
+                    'description': store.description,
+                    'mediaId': store.id,
+                    'mediaType': 'store',
+                  },
+                ),
+                icon: const Icon(Icons.share_outlined),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
           onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -1969,6 +2209,22 @@ class ShopStoreScreen extends StatelessWidget {
               data: _storefrontTheme(context, design),
               child: Scaffold(
                 appBar: AppBar(title: Text(store.name), actions: [
+                  IconButton(
+                    tooltip: 'Share store to chats',
+                    onPressed: () => showSocialShareDialog(
+                      context,
+                      title: store.name,
+                      message: 'Store: ${store.name}',
+                      mediaReference: {
+                        'type': 'recommendation',
+                        'title': store.name,
+                        'description': store.description,
+                        'mediaId': store.id,
+                        'mediaType': 'store',
+                      },
+                    ),
+                    icon: const Icon(Icons.share_outlined),
+                  ),
                   _BagButton(
                       onPressed: () => Navigator.push(
                           context,
@@ -2137,15 +2393,36 @@ class ShopStoreScreen extends StatelessWidget {
                                         fontWeight: FontWeight.bold)),
                                 Text(
                                     '${product.price.toStringAsFixed(2)} ${product.currency}'),
-                                SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton(
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: FilledButton(
                                         onPressed:
                                             product.inventoryQuantity <= 0
                                                 ? null
                                                 : () => ShopCatalog.instance
                                                     .addToBag(product.id),
-                                        child: const Text('Add')))
+                                        child: const Text('Add'),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Share product to chats',
+                                      onPressed: () => showSocialShareDialog(
+                                        context,
+                                        title: product.name,
+                                        message:
+                                            'Product: ${product.name} · ${product.price.toStringAsFixed(2)} ${product.currency}',
+                                        mediaReference: {
+                                          'type': 'product',
+                                          'title': product.name,
+                                          'description': product.description,
+                                          'productId': product.id,
+                                        },
+                                      ),
+                                      icon: const Icon(Icons.share_outlined),
+                                    ),
+                                  ],
+                                )
                               ]))
                     ])),
         ]);
@@ -2167,6 +2444,21 @@ class ShopStoreScreen extends StatelessWidget {
           subtitle: Text(
               '${product.category} • ${product.price.toStringAsFixed(2)} ${product.currency} • ${product.inventoryQuantity} in stock'),
           trailing: Wrap(children: [
+            IconButton(
+                tooltip: 'Share product to chats',
+                onPressed: () => showSocialShareDialog(
+                      context,
+                      title: product.name,
+                      message:
+                          'Product: ${product.name} · ${product.price.toStringAsFixed(2)} ${product.currency}',
+                      mediaReference: {
+                        'type': 'product',
+                        'title': product.name,
+                        'description': product.description,
+                        'productId': product.id,
+                      },
+                    ),
+                icon: const Icon(Icons.share_outlined)),
             IconButton(
                 onPressed: () => catalog.toggleWishlist(product.id),
                 icon: Icon(catalog.isWishlisted(product.id)

@@ -101,9 +101,7 @@ class ReviewService {
           ? _defaultLabel(score)
           : normalizedLabel,
       text: normalizedText,
-      globalUsername: normalizedGlobalUsername.isEmpty
-          ? 'AnonymousViewer'
-          : normalizedGlobalUsername,
+      globalUsername: normalizedGlobalUsername,
       reviewType: reviewType == 'video' ? 'video' : 'written',
       videoUrl: videoUrl?.trim().isEmpty == true ? null : videoUrl?.trim(),
       spoiler: spoiler,
@@ -158,7 +156,10 @@ class ReviewService {
     );
 
     final reviews = database.reviewsById.values
-        .where((review) => review.mediaId == normalizedMediaId)
+        .where(
+          (review) =>
+              review.mediaId == normalizedMediaId && review.hasGlobalUsername,
+        )
         .map(_publicReviewCopy)
         .toList();
 

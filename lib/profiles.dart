@@ -1,4 +1,4 @@
-// FILE: `lib/profiles.dart`.
+//at you can  FILE: `lib/profiles.dart`.
 // Purpose: Implements the profiles portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
@@ -12,6 +12,46 @@ import 'music_achievements.dart';
 import 'profile_content_safety.dart';
 import 'profile_administration.dart';
 import 'localization.dart';
+
+class _AvatarOption {
+  const _AvatarOption(this.label, {this.icon, this.symbol});
+
+  final String label;
+  final IconData? icon;
+  final String? symbol;
+}
+
+const _avatarOptions = <_AvatarOption>[
+  _AvatarOption('Person', icon: Icons.person),
+  _AvatarOption('Face', icon: Icons.face),
+  _AvatarOption('Star', icon: Icons.star),
+  _AvatarOption('Heart', icon: Icons.favorite),
+  _AvatarOption('Pet', icon: Icons.pets),
+  _AvatarOption('Game', icon: Icons.sports_esports),
+  _AvatarOption('Music', icon: Icons.music_note),
+  _AvatarOption('Movie', icon: Icons.movie),
+  _AvatarOption('Magic', icon: Icons.auto_awesome),
+  _AvatarOption('Rocket', icon: Icons.rocket_launch),
+  _AvatarOption('Smile', icon: Icons.emoji_emotions),
+  _AvatarOption('World', icon: Icons.public),
+  _AvatarOption('Web Hero', icon: Icons.web),
+  _AvatarOption('Hero Alliance', icon: Icons.shield),
+  _AvatarOption('Lightning Scar', icon: Icons.bolt),
+  _AvatarOption('Mouse Ears', symbol: 'ears'),
+  _AvatarOption('Light Saber', icon: Icons.flashlight_on),
+  _AvatarOption('T-Rex', icon: Icons.pets),
+  _AvatarOption('Pirate', icon: Icons.sailing),
+  _AvatarOption('Monster G', symbol: 'G'),
+  _AvatarOption('Agent 007', symbol: '007'),
+];
+
+int? _avatarIndexFromValue(String? value) {
+  if (value == null || !value.startsWith('avatar:')) return null;
+  final index = int.tryParse(value.substring('avatar:'.length));
+  return index != null && index >= 0 && index < _avatarOptions.length
+      ? index
+      : null;
+}
 
 /// ============================================================
 /// PROFILE SELECTION SCREEN
@@ -568,39 +608,6 @@ class _ProfileAvatar extends StatelessWidget {
     required this.size,
   });
 
-  IconData? _iconFromAvatarKey(String value) {
-    if (!value.startsWith('avatar:')) {
-      return null;
-    }
-
-    final index = int.tryParse(
-      value.substring('avatar:'.length),
-    );
-
-    const icons = [
-      Icons.person,
-      Icons.face,
-      Icons.star,
-      Icons.favorite,
-      Icons.pets,
-      Icons.sports_esports,
-      Icons.music_note,
-      Icons.movie,
-      Icons.auto_awesome,
-      Icons.rocket_launch,
-      Icons.emoji_emotions,
-      Icons.public,
-    ];
-
-    if (index == null ||
-        index < 0 ||
-        index >= icons.length) {
-      return null;
-    }
-
-    return icons[index];
-  }
-
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
@@ -608,11 +615,10 @@ class _ProfileAvatar extends StatelessWidget {
         profile.avatarUrl?.trim() ?? '';
 
     if (avatarValue.startsWith('avatar:')) {
-      final icon = _iconFromAvatarKey(avatarValue);
-
-      if (icon != null) {
+      final index = _avatarIndexFromValue(avatarValue);
+      if (index != null) {
         return _IconAvatar(
-          icon: icon,
+          option: _avatarOptions[index],
           size: size,
         );
       }
@@ -682,11 +688,11 @@ class _ProfileAvatar extends StatelessWidget {
 /// ============================================================
 
 class _IconAvatar extends StatelessWidget {
-  final IconData icon;
+  final _AvatarOption option;
   final double size;
 
   const _IconAvatar({
-    required this.icon,
+    required this.option,
     required this.size,
   });
 
@@ -711,11 +717,52 @@ class _IconAvatar extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: Icon(
-        icon,
-        size: size * 0.38,
-        color: Colors.white,
-      ),
+      child: option.symbol == 'ears'
+          ? SizedBox(
+              width: size * 0.54,
+              height: size * 0.54,
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: CircleAvatar(
+                      radius: size * 0.14,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: CircleAvatar(
+                      radius: size * 0.14,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: CircleAvatar(
+                      radius: size * 0.19,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : option.symbol != null
+              ? Text(
+                  option.symbol!,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize:
+                        size * (option.symbol!.length > 1 ? 0.28 : 0.42),
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: option.symbol == '007' ? -1 : 0,
+                  ),
+                )
+              : Icon(
+                  option.icon,
+                  size: size * 0.38,
+                  color: Colors.white,
+                ),
     );
   }
 }
@@ -796,6 +843,7 @@ class _EditProfileSheetState
   final ImagePicker _imagePicker = ImagePicker();
 
   XFile? _selectedPhoto;
+  int? _selectedAvatarIndex;
 
   bool _saving = false;
 
@@ -807,6 +855,7 @@ class _EditProfileSheetState
     _nameController = TextEditingController(
       text: widget.profile.name,
     );
+    _selectedAvatarIndex = _avatarIndexFromValue(widget.profile.avatarUrl);
   }
 
   @override
@@ -964,10 +1013,11 @@ class _EditProfileSheetState
     });
 
     try {
-      String? avatarUrl = widget.profile.avatarUrl;
-      if (_selectedPhoto != null) {
-        avatarUrl = _selectedPhoto!.path;
-      }
+      final avatarUrl = _selectedPhoto != null
+          ? _selectedPhoto!.path
+          : _selectedAvatarIndex == null
+              ? widget.profile.avatarUrl
+              : 'avatar:$_selectedAvatarIndex';
 
       final api = AppController.instance.backendApi;
       if (api.isAuthenticated) {
@@ -1079,6 +1129,7 @@ class _EditProfileSheetState
                 child: _EditableProfileAvatar(
                   profile: widget.profile,
                   selectedPhoto: _selectedPhoto,
+                  selectedAvatarIndex: _selectedAvatarIndex,
                 ),
               ),
 
@@ -1113,6 +1164,25 @@ class _EditProfileSheetState
                 ),
               ),
 
+              const SizedBox(height: 22),
+
+              const UniversalText(
+                'Choose an avatar',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _AvatarOptionsGrid(
+                selectedIndex:
+                    _selectedPhoto == null ? _selectedAvatarIndex : null,
+                enabled: !_saving,
+                onSelected: (index) => setState(() {
+                  _selectedPhoto = null;
+                  _selectedAvatarIndex = index;
+                }),
+              ),
               const SizedBox(height: 22),
 
               const UniversalText('Change profile picture',
@@ -1274,10 +1344,12 @@ class _EditableProfileAvatar
     extends StatelessWidget {
   final Profile profile;
   final XFile? selectedPhoto;
+  final int? selectedAvatarIndex;
 
   const _EditableProfileAvatar({
     required this.profile,
     required this.selectedPhoto,
+    required this.selectedAvatarIndex,
   });
 
   @override
@@ -1295,10 +1367,13 @@ class _EditableProfileAvatar
       );
     }
 
-    return _ProfileAvatar(
-      profile: profile,
-      size: 130,
-    );
+    if (selectedAvatarIndex != null) {
+      return _IconAvatar(
+        option: _avatarOptions[selectedAvatarIndex!],
+        size: 130,
+      );
+    }
+    return _ProfileAvatar(profile: profile, size: 130);
   }
 }
 
@@ -1731,21 +1806,6 @@ class _CreateProfileSheetState
 
   bool _saving = false;
 
-  final List<IconData> _avatarIcons = const [
-    Icons.person,
-    Icons.face,
-    Icons.star,
-    Icons.favorite,
-    Icons.pets,
-    Icons.sports_esports,
-    Icons.music_note,
-    Icons.movie,
-    Icons.auto_awesome,
-    Icons.rocket_launch,
-    Icons.emoji_emotions,
-    Icons.public,
-  ];
-
   int _selectedAvatarIndex = 0;
 
   @override
@@ -1984,8 +2044,7 @@ class _CreateProfileSheetState
                 child:
                     _CreateProfileAvatarPreview(
                   selectedPhoto: _selectedPhoto,
-                  icon: _avatarIcons[
-                      _selectedAvatarIndex],
+                  option: _avatarOptions[_selectedAvatarIndex],
                 ),
               ),
 
@@ -2031,69 +2090,14 @@ class _CreateProfileSheetState
 
               const SizedBox(height: 14),
 
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: List.generate(
-                  _avatarIcons.length,
-                  (index) {
-                    final selected =
-                        _selectedPhoto == null &&
-                            _selectedAvatarIndex ==
-                                index;
-
-                    return GestureDetector(
-                      onTap: _saving
-                          ? null
-                          : () {
-                              setState(() {
-                                _selectedPhoto =
-                                    null;
-                                _selectedAvatarIndex =
-                                    index;
-                              });
-                            },
-                      child: AnimatedContainer(
-                        duration:
-                            const Duration(
-                          milliseconds: 160,
-                        ),
-                        width: 50,
-                        height: 50,
-                        decoration:
-                            BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(
-                            14,
-                          ),
-                          gradient:
-                              const LinearGradient(
-                            begin:
-                                Alignment.topLeft,
-                            end:
-                                Alignment.bottomRight,
-                            colors: [
-                              Color(0xFF343434),
-                              Color(0xFF151515),
-                            ],
-                          ),
-                          border: Border.all(
-                            color: selected
-                                ? Colors.white
-                                : Colors.white12,
-                            width:
-                                selected ? 2 : 1,
-                          ),
-                        ),
-                        child: Icon(
-                          _avatarIcons[index],
-                          color: Colors.white,
-                          size: 23,
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              _AvatarOptionsGrid(
+                selectedIndex:
+                    _selectedPhoto == null ? _selectedAvatarIndex : null,
+                enabled: !_saving,
+                onSelected: (index) => setState(() {
+                  _selectedPhoto = null;
+                  _selectedAvatarIndex = index;
+                }),
               ),
 
               const SizedBox(height: 20),
@@ -2175,11 +2179,11 @@ class _CreateProfileSheetState
 class _CreateProfileAvatarPreview
     extends StatelessWidget {
   final XFile? selectedPhoto;
-  final IconData icon;
+  final _AvatarOption option;
 
   const _CreateProfileAvatarPreview({
     required this.selectedPhoto,
-    required this.icon,
+    required this.option,
   });
 
   @override
@@ -2197,11 +2201,76 @@ class _CreateProfileAvatarPreview
       );
     }
 
-    return _IconAvatar(
-      icon: icon,
-      size: 130,
-    );
+    return _IconAvatar(option: option, size: 130);
   }
+}
+
+class _AvatarOptionsGrid extends StatelessWidget {
+  const _AvatarOptionsGrid({
+    required this.selectedIndex,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final int? selectedIndex;
+  final bool enabled;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) => GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _avatarOptions.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisExtent: 88,
+          crossAxisSpacing: 6,
+          mainAxisSpacing: 6,
+        ),
+        itemBuilder: (context, index) {
+          final option = _avatarOptions[index];
+          final selected = index == selectedIndex;
+          return Tooltip(
+            message: option.label,
+            child: InkWell(
+              onTap: enabled ? () => onSelected(index) : null,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .04),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: selected ? Colors.white : Colors.white12,
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: _IconAvatar(option: option, size: 48),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      option.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
 }
 
 /// ============================================================
