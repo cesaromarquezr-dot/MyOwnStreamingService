@@ -6507,4 +6507,230 @@ class SupabaseStore {
         return 'movie';
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // PLATFORM SERVERS
+  // ---------------------------------------------------------------------------
+
+  Future<String?> _accountInternalId(String externalId) async {
+    final c = _db;
+    if (c == null) return null;
+    final byExternal = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', externalId)
+        .maybeSingle();
+    if (byExternal != null && byExternal['id'] != null) {
+      return byExternal['id'].toString();
+    }
+    final byId = await c.from('accounts').select('id').eq('id', externalId).maybeSingle();
+    return byId?['id']?.toString();
+  }
+
+  Future<Map<String, dynamic>?> loadPlatformServerContext({
+    required String accountExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) return null;
+    final accountId = await _accountInternalId(accountExternalId);
+    if (accountId == null) return null;
+
+    final current = await c
+        .from('platform_server_assignments')
+        .select('display_name, role, assigned_at, server:platform_servers(id,warehouse_id,name,status,storage_total_bytes,storage_used_bytes,ram_gb,cpu_cores,ssh_enabled,endpoint,warehouse:platform_warehouses(id,name))')
+        .eq('account_id', accountId)
+        .isFilter('released_at', null)
+        .maybeSingle();
+
+    final availableRows = await c
+        .from('platform_servers')
+        .select('id,warehouse_id,name,status,storage_total_bytes,storage_used_bytes,ram_gb,cpu_cores,ssh_enabled,endpoint,warehouse:platform_warehouses(id,name)')
+        .eq('status', 'available')
+        .isFilter('claimed_account_id', null)
+        .order('name');
+
+    Map<String, dynamic>? normalize(dynamic row, {String? displayName, bool assigned = false}) {
+      if (row is! Map) return null;
+      final data = Map<String, dynamic>.from(row);
+      final warehouse = data['warehouse'];
+      if (warehouse is Map) {
+        data['warehouseName'] = warehouse['name']?.toString() ?? '';
+      }
+      data['customName'] = displayName;
+      data['assignedToCurrentAccount'] = assigned;
+      return data;
+    }
+
+    final currentServer = current?['server'];
+    return {
+      'currentServer': normalize(
+        currentServer,
+        displayName: current?['display_name']?.toString(),
+        assigned: true,
+      ),
+      'availableServers': availableRows
+          .map((row) => normalize(row))
+          .whereType<Map<String, dynamic>>()
+          .toList(growable: false),
+    };
+  }
+
+  Future<Map<String, dynamic>> claimPlatformServer({
+    required String accountExternalId,
+    required String serverId,
+    required String displayName,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+    final accountId = await _accountInternalId(accountExternalId);
+    if (accountId == null) throw StateError('Account not found.');
+
+    final existing = await c
+        .from('platform_server_assignments')
+        .select('display_name, server:platform_servers(id,warehouse_id,name,status,storage_total_bytes,storage_used_bytes,ram_gb,cpu_cores,ssh_enabled,endpoint,warehouse:platform_warehouses(id,name))')
+        .eq('account_id', accountId)
+        .isFilter('released_at', null)
+        .maybeSingle();
+    if (existing != null) {
+      final current = existing['server'];
+      if (current is Map) {
+        final normalized = Map<String, dynamic>.from(current);
+        final warehouse = normalized['warehouse'];
+        normalized['warehouseName'] = warehouse is Map ? warehouse['name']?.toString() ?? '' : '';
+        normalized['customName'] = existing['display_name']?.toString();
+        normalized['assignedToCurrentAccount'] = true;
+        return {'server': normalized};
+      }
+      throw StateError('This account already has a server assignment.');
+    }
+
+    final claimed = await c
+        .from('platform_servers')
+        .update({
+          'claimed_account_id': accountId,
+          'claimed_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'claimed',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', serverId)
+        .eq('status', 'available')
+        .isFilter('claimed_account_id', null)
+        .select('id,warehouse_id,name,status,storage_total_bytes,storage_used_bytes,ram_gb,cpu_cores,ssh_enabled,endpoint,warehouse:platform_warehouses(id,name)')
+        .maybeSingle();
+
+    if (claimed == null) {
+      throw StateError('Server is no longer available.');
+    }
+
+    await c.from('platform_server_assignments').insert({
+      'account_id': accountId,
+      'server_id': serverId,
+      'display_name': displayName,
+      'role': 'owner',
+    });
+
+    final normalized = Map<String, dynamic>.from(claimed);
+    final warehouse = normalized['warehouse'];
+    normalized['warehouseName'] = warehouse is Map ? warehouse['name']?.toString() ?? '' : '';
+    normalized['customName'] = displayName;
+    normalized['assignedToCurrentAccount'] = true;
+    return {'server': normalized};
+  }
+
+  Future<Map<String, dynamic>> renamePlatformServer({
+    required String accountExternalId,
+    required String displayName,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+    final accountId = await _accountInternalId(accountExternalId);
+    if (accountId == null) throw StateError('Account not found.');
+    final row = await c
+        .from('platform_server_assignments')
+        .update({'display_name': displayName})
+        .eq('account_id', accountId)
+        .isFilter('released_at', null)
+        .select('display_name,server:platform_servers(id,warehouse_id,name,status,storage_total_bytes,storage_used_bytes,ram_gb,cpu_cores,ssh_enabled,endpoint,warehouse:platform_warehouses(id,name))')
+        .maybeSingle();
+    if (row == null) throw StateError('No active server assignment exists.');
+    final server = Map<String, dynamic>.from(row['server'] as Map);
+    final warehouse = server['warehouse'];
+    server['warehouseName'] = warehouse is Map ? warehouse['name']?.toString() ?? '' : '';
+    server['customName'] = row['display_name']?.toString();
+    server['assignedToCurrentAccount'] = true;
+    return {'server': server};
+  }
+
+  Future<void> releasePlatformServer({required String accountExternalId}) async {
+    final c = _db;
+    if (c == null) throw StateError('Supabase is not configured.');
+    final accountId = await _accountInternalId(accountExternalId);
+    if (accountId == null) throw StateError('Account not found.');
+    final assignment = await c
+        .from('platform_server_assignments')
+        .select('server_id')
+        .eq('account_id', accountId)
+        .isFilter('released_at', null)
+        .maybeSingle();
+    if (assignment == null) return;
+    final serverId = assignment['server_id']?.toString();
+    await c.from('platform_server_assignments').update({
+      'released_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('account_id', accountId).isFilter('released_at', null);
+    if (serverId != null && serverId.isNotEmpty) {
+      await c.from('platform_servers').update({
+        'claimed_account_id': null,
+        'claimed_at': null,
+        'status': 'available',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', serverId);
+    }
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // GAME RATINGS
+  // ---------------------------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> loadGameRatings({
+    required String accountExternalId,
+    required String profileId,
+  }) async {
+    final c = _db;
+    if (c == null) return const <Map<String, dynamic>>[];
+    final accountId = await _accountInternalId(accountExternalId);
+    if (accountId == null) return const <Map<String, dynamic>>[];
+    final rows = await c
+        .from('game_ratings')
+        .select('profile_id,game_id,mode,rating,games_played,wins,losses,draws,xp,current_streak,best_streak')
+        .eq('account_id', accountId)
+        .eq('profile_id', profileId);
+    return rows.map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+  }
+
+  Future<void> upsertGameRating({
+    required String accountExternalId,
+    required Map<String, dynamic> rating,
+  }) async {
+    final c = _db;
+    if (c == null) return;
+    final accountId = await _accountInternalId(accountExternalId);
+    if (accountId == null) return;
+    await c.from('game_ratings').upsert({
+      'account_id': accountId,
+      'profile_id': rating['profileId']?.toString() ?? '',
+      'game_id': rating['gameId']?.toString() ?? '',
+      'mode': rating['mode']?.toString() ?? 'ranked',
+      'rating': rating['rating'] ?? 500,
+      'games_played': rating['gamesPlayed'] ?? 0,
+      'wins': rating['wins'] ?? 0,
+      'losses': rating['losses'] ?? 0,
+      'draws': rating['draws'] ?? 0,
+      'xp': rating['xp'] ?? 0,
+      'current_streak': rating['currentStreak'] ?? 0,
+      'best_streak': rating['bestStreak'] ?? 0,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'account_id,profile_id,game_id,mode');
+  }
+
 }

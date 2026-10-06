@@ -9,6 +9,9 @@ import 'music.dart';
 import 'music_favorites.dart';
 import 'player.dart';
 import 'profile_content_safety.dart';
+import 'core/services/tv_programming_service.dart';
+import 'core/models/tv_channel.dart';
+import 'core/services/tv_channel_engine.dart';
 
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
 
@@ -21,6 +24,7 @@ class _MyTvChannel {
   final bool favoritesOnly;
   final bool isFavorite;
   final int startTimeMinutes;
+  final List<TvProgrammingRule> programmingRules;
 
   const _MyTvChannel({
     required this.id,
@@ -31,6 +35,7 @@ class _MyTvChannel {
     this.favoritesOnly = false,
     this.isFavorite = false,
     this.startTimeMinutes = 420,
+    this.programmingRules = const [],
   });
 
   factory _MyTvChannel.fromJson(Map<String, dynamic> json) => _MyTvChannel(
@@ -54,6 +59,12 @@ class _MyTvChannel {
         startTimeMinutes: ((json['startTimeMinutes'] as num?)?.toInt() ?? 420)
             .clamp(0, 1439)
             .toInt(),
+        programmingRules: json['programmingRules'] is List
+            ? (json['programmingRules'] as List)
+                .whereType<Map>()
+                .map((e) => TvProgrammingRule.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+            : const [],
       );
 
   Map<String, dynamic> toJson() => {
@@ -65,6 +76,7 @@ class _MyTvChannel {
         'favoritesOnly': favoritesOnly,
         'isFavorite': isFavorite,
         'startTimeMinutes': startTimeMinutes,
+        'programmingRules': programmingRules.map((rule) => rule.toJson()).toList(),
       };
 }
 
@@ -110,7 +122,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
 
   String get _profileId =>
       AppController.instance.currentProfile?.id ?? 'default';
-  String get _preferenceKey => 'my_tv_settings_$_profileId';
+  String get _accountId => AppController.instance.currentAccount?.id ?? 'local';
+  String get _preferenceKey => 'my_tv_settings_account_$_accountId';
 
   @override
   void initState() {
@@ -125,11 +138,10 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (api.isAuthenticated && _profileId != 'default') {
       try {
         final records = await api.getAppRecords(
-          profileId: _profileId,
           recordType: 'my_tv_settings',
         );
         for (final record in records) {
-          if (record['recordKey'] == 'settings' && record['data'] is Map) {
+          if (record['recordKey'] == 'account_settings' && record['data'] is Map) {
             data = Map<String, dynamic>.from(record['data'] as Map);
             break;
           }
@@ -150,8 +162,13 @@ class _MyTvScreenState extends State<MyTvScreen> {
             .where((channel) => channel.id.isNotEmpty)
             .toList()
         : <_MyTvChannel>[];
-    if (channels.isEmpty) {
-      channels.add(const _MyTvChannel(id: 'variety-channel', name: 'Variety'));
+    final channelsInitialized = data?['channelsInitialized'] == true;
+    if (channels.isEmpty && !channelsInitialized) {
+      channels.add(const _MyTvChannel(
+        id: 'variety-channel',
+        name: 'Variety',
+        startTimeMinutes: 0,
+      ));
     }
     final rawRecent = data?['recentlyPlayed'];
     final recent = <String, List<String>>{};
@@ -185,6 +202,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
   Future<void> _save() async {
     final data = <String, dynamic>{
       'channels': _channels.map((channel) => channel.toJson()).toList(),
+      'channelsInitialized': true,
       'recentlyPlayed': _recentlyPlayed,
     };
     final prefs = await SharedPreferences.getInstance();
@@ -193,9 +211,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
     if (api.isAuthenticated && _profileId != 'default') {
       try {
         await api.saveAppRecord(
-          profileId: _profileId,
           recordType: 'my_tv_settings',
-          recordKey: 'settings',
+          recordKey: 'account_settings',
           data: data,
         );
       } catch (_) {
@@ -224,6 +241,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   favoritesOnly: item.favoritesOnly,
                   isFavorite: !item.isFavorite,
                   startTimeMinutes: item.startTimeMinutes,
+                  programmingRules: item.programmingRules,
                 )
               : item)
           .toList();
@@ -254,7 +272,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
 
     final matchingMedia = controller.library
         .where((media) =>
-            media.isAccessibleTo(profile) &&
+            TvProgrammingService.eligibleForProfile(media, profile) &&
             _isPlayable(media) &&
             media.type.toLowerCase() != 'extra' &&
             matches([
@@ -268,10 +286,20 @@ class _MyTvScreenState extends State<MyTvScreen> {
               ...media.music,
               ...media.genres,
               ...media.tags,
+              ...media.studios,
+              ...media.companies,
             ]) &&
             (!channel.favoritesOnly || controller.isLiked(media.id)))
         .toList();
-    var eligible = matchingMedia
+    final sortedMedia = matchingMedia.toList()
+      ..sort((a, b) {
+        final aScore = TvProgrammingService.scoreMedia(a, channelFilter: channel.filterText, profile: profile) +
+            _engineScore(a, channel) + _ruleScore(a, channel, DateTime.now());
+        final bScore = TvProgrammingService.scoreMedia(b, channelFilter: channel.filterText, profile: profile) +
+            _engineScore(b, channel) + _ruleScore(b, channel, DateTime.now());
+        return bScore.compareTo(aScore);
+      });
+    var eligible = sortedMedia
         .where((media) => _channelAcceptsVideoType(channel, media.type))
         .map(_ChannelEntry.media)
         .toList();
@@ -307,8 +335,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
         eligible.where((entry) => !recent.take(8).contains(entry.id)).toList();
     if (unseen.isNotEmpty) eligible = unseen;
 
-    if (channel.shuffle) {
-      // Keep the same guide ordering while rebuilding the screen.
+    if (channel.shuffle && TvProgrammingService.activeSeason() == null) {
+      // Outside seasonal windows, user shuffle remains the dominant ordering.
       eligible.shuffle(Random(channel.id.hashCode));
     }
     return eligible.take(24).toList(growable: false);
@@ -321,6 +349,22 @@ class _MyTvScreenState extends State<MyTvScreen> {
         normalized.contains('series') ||
         normalized.contains('episode');
     return channel.contentTypes.contains(isShow ? 'Shows' : 'Movies');
+  }
+
+  int _engineScore(MediaItem media, _MyTvChannel channel) {
+    // Channels are user-owned. The intelligence layer only helps order the
+    // content that is actually inside this channel; it never creates a
+    // channel or assigns media to another channel.
+    final intelligence = TvChannelEngine.instance.classify(media);
+    var score = 0;
+    final season = TvProgrammingService.activeSeason();
+    if (season != null && intelligence.holidays.contains(season)) score += 60;
+    if (intelligence.audiences.contains('family') &&
+        AppController.instance.currentProfile != null &&
+        ['littleKids', 'kids', 'olderKids'].contains(AppController.instance.currentProfile!.governance.contentLevel.name)) {
+      score += 35;
+    }
+    return score;
   }
 
   bool _isPlayable(MediaItem media) {
@@ -375,6 +419,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
               TextField(
                   controller: name,
                   decoration: const InputDecoration(labelText: 'Channel name')),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
@@ -468,6 +513,152 @@ class _MyTvScreenState extends State<MyTvScreen> {
     await _save();
   }
 
+  Future<void> _deleteChannel(_MyTvChannel channel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete ${channel.name}?'),
+        content: const Text(
+          'This removes the channel from your account. Your library and media are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete channel'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _channels = _channels.where((item) => item.id != channel.id).toList();
+      if (_selectedChannelId == channel.id) {
+        _selectedChannelId = _channels.isEmpty ? null : _channels.first.id;
+      }
+    });
+    await _save();
+  }
+
+  int _ruleScore(MediaItem media, _MyTvChannel channel, DateTime now) {
+    if (channel.programmingRules.isEmpty) return 0;
+    final fields = <String>[
+      media.title,
+      media.description ?? '',
+      media.franchiseName ?? '',
+      media.franchiseType ?? '',
+      ...media.genres,
+      ...media.tags,
+      ...media.studios,
+      ...media.companies,
+      ...media.relationshipTypes,
+      ...media.actors,
+      ...media.directors,
+      ...media.writers,
+    ].join(' ').toLowerCase();
+    var best = 0;
+    for (final rule in channel.programmingRules) {
+      if (rule.months.isNotEmpty && !rule.months.contains(now.month)) continue;
+      if (rule.daysOfWeek.isNotEmpty && !rule.daysOfWeek.contains(now.weekday)) continue;
+      final matches = rule.terms.where(fields.contains).length;
+      if (matches == 0) continue;
+      best = max(best, rule.priority * matches * (rule.nightly ? 2 : 1));
+    }
+    return best;
+  }
+
+  Future<void> _addProgrammingRule(_MyTvChannel channel) async {
+    final name = TextEditingController();
+    final terms = TextEditingController();
+    var nightly = false;
+    final months = <int>{};
+    final selected = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add programming rule'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'Rule name', hintText: 'October Horror Nights')),
+                TextField(
+                  controller: terms,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Match your library metadata',
+                    hintText: 'horror, slasher, halloween',
+                    helperText: 'Matches title, themes, tags, franchise, studio, company, genre, actors, directors and writers.',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Align(alignment: Alignment.centerLeft, child: Text('Active months')),
+                Wrap(
+                  spacing: 4,
+                  children: List.generate(12, (index) {
+                    final month = index + 1;
+                    return FilterChip(
+                      label: Text(month.toString()),
+                      selected: months.contains(month),
+                      onSelected: (value) => setDialogState(() => value ? months.add(month) : months.remove(month)),
+                    );
+                  }),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Program this as a nightly priority'),
+                  subtitle: const Text('For example, every night in October.'),
+                  value: nightly,
+                  onChanged: (value) => setDialogState(() => nightly = value ?? false),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Add rule')),
+          ],
+        ),
+      ),
+    );
+    final ruleName = name.text.trim();
+    final ruleTerms = terms.text
+        .split(RegExp(r'[,;\n]'))
+        .map((e) => e.trim().toLowerCase())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    name.dispose();
+    terms.dispose();
+    if (selected != true || ruleName.isEmpty || ruleTerms.isEmpty) return;
+    final rule = TvProgrammingRule(
+      id: 'tv-rule-${DateTime.now().microsecondsSinceEpoch}',
+      name: ruleName,
+      terms: ruleTerms,
+      months: months.toList()..sort(),
+      nightly: nightly,
+    );
+    setState(() {
+      _channels = _channels.map((item) => item.id == channel.id
+          ? _MyTvChannel(
+              id: item.id,
+              name: item.name,
+              contentTypes: item.contentTypes,
+              shuffle: item.shuffle,
+              filterText: item.filterText,
+              favoritesOnly: item.favoritesOnly,
+              isFavorite: item.isFavorite,
+              startTimeMinutes: item.startTimeMinutes,
+              programmingRules: [...item.programmingRules, rule],
+            )
+          : item).toList();
+    });
+    await _save();
+  }
+
   Future<void> _play(_ChannelEntry entry, {String? channelId}) async {
     final targetChannelId = channelId ?? _selected?.id;
     if (targetChannelId != null) {
@@ -557,7 +748,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                           setState(() => _selectedChannelId = value),
                       decoration: const InputDecoration(labelText: 'Channel'),
                     )),
-                    if (channel != null)
+                    if (channel != null) ...[
                       IconButton(
                         tooltip: channel.isFavorite
                             ? 'Remove favorite channel'
@@ -568,29 +759,57 @@ class _MyTvScreenState extends State<MyTvScreen> {
                             : Icons.star_outline_rounded),
                         color: channel.isFavorite ? Colors.amber : null,
                       ),
+                      IconButton(
+                        tooltip: 'Delete channel',
+                        onPressed: () => _deleteChannel(channel),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ],
                   ]),
                   const SizedBox(height: 18),
                   if (channel != null) ...[
-                    Text(
-                      [
-                        channel.contentTypes.join(' · '),
-                        if (channel.filterText.trim().isNotEmpty)
-                          channel.filterText.trim().replaceAll(
-                                RegExp(r'[,;\n]+'),
-                                ' · ',
-                              ),
-                      ].join('  |  '),
-                      style: const TextStyle(color: Colors.white54),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            [
+                              channel.contentTypes.join(' · '),
+                              if (channel.filterText.trim().isNotEmpty)
+                                channel.filterText.trim().replaceAll(
+                                      RegExp(r'[,;\n]+'),
+                                      ' · ',
+                                    ),
+                            ].join('  |  '),
+                            style: const TextStyle(color: Colors.white54),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Programming rules',
+                          onPressed: () => _addProgrammingRule(channel),
+                          icon: const Icon(Icons.auto_awesome_rounded),
+                        ),
+                      ],
                     ),
+                    if (channel.programmingRules.isNotEmpty)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: channel.programmingRules
+                            .map((rule) => Chip(
+                                  avatar: Icon(rule.nightly ? Icons.nightlight_round : Icons.tune_rounded, size: 16),
+                                  label: Text(rule.name),
+                                ))
+                            .toList(),
+                      ),
                     const SizedBox(height: 10),
                   ],
                   if (schedule.isEmpty)
                     const Card(
                         child: ListTile(
                             leading: Icon(Icons.tv_off_outlined),
-                            title: Text('No matching library items yet'),
+                            title: Text('No programs in this channel yet'),
                             subtitle: Text(
-                                'Add matching movies, shows, episodes, or music to this profile library.')))
+                                'Add content to this channel, or create another channel. The TV Guide is generated from this channel’s contents.')))
                   else ...[
                     _scheduleCard(
                       context,

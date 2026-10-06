@@ -15,6 +15,8 @@ enum ProfileContentLevel {
 
 enum ProfileAdminMode { ownerManaged, selfManaged }
 
+enum SharedProfileChildAccessMode { sharedAllowed, separatePreferred, separateRequired }
+
 enum ProfilePermission {
   editIdentity,
   editTheme,
@@ -35,6 +37,7 @@ class ProfileGovernance {
   final bool socialRestricted;
   final bool purchasesRestricted;
   final bool profilePinEnabled;
+  final SharedProfileChildAccessMode childAccessMode;
 
   const ProfileGovernance({
     this.contentLevel = ProfileContentLevel.teen,
@@ -51,6 +54,7 @@ class ProfileGovernance {
     this.socialRestricted = false,
     this.purchasesRestricted = true,
     this.profilePinEnabled = false,
+    this.childAccessMode = SharedProfileChildAccessMode.separatePreferred,
   });
 
   bool hasPermission(ProfilePermission permission) => permissions.contains(permission);
@@ -64,6 +68,7 @@ class ProfileGovernance {
         'socialRestricted': socialRestricted,
         'purchasesRestricted': purchasesRestricted,
         'profilePinEnabled': profilePinEnabled,
+        'childAccessMode': childAccessMode.name,
       };
 
   factory ProfileGovernance.fromJson(Map<String, dynamic>? json) {
@@ -80,6 +85,14 @@ class ProfileGovernance {
     for (final value in ProfileAdminMode.values) {
       if (value.name == (data['adminMode'] ?? data['admin_mode'])?.toString()) {
         adminMode = value;
+        break;
+      }
+    }
+
+    var childAccessMode = SharedProfileChildAccessMode.separatePreferred;
+    for (final value in SharedProfileChildAccessMode.values) {
+      if (value.name == (data['childAccessMode'] ?? data['child_access_mode'])?.toString()) {
+        childAccessMode = value;
         break;
       }
     }
@@ -112,6 +125,7 @@ class ProfileGovernance {
       socialRestricted: data['socialRestricted'] == true || data['social_restricted'] == true,
       purchasesRestricted: data['purchasesRestricted'] != false && data['purchases_restricted'] != false,
       profilePinEnabled: data['profilePinEnabled'] == true || data['profile_pin_enabled'] == true,
+      childAccessMode: childAccessMode,
     );
   }
 
@@ -124,6 +138,7 @@ class ProfileGovernance {
     bool? socialRestricted,
     bool? purchasesRestricted,
     bool? profilePinEnabled,
+    SharedProfileChildAccessMode? childAccessMode,
   }) => ProfileGovernance(
         contentLevel: contentLevel ?? this.contentLevel,
         adminMode: adminMode ?? this.adminMode,
@@ -133,5 +148,6 @@ class ProfileGovernance {
         socialRestricted: socialRestricted ?? this.socialRestricted,
         purchasesRestricted: purchasesRestricted ?? this.purchasesRestricted,
         profilePinEnabled: profilePinEnabled ?? this.profilePinEnabled,
+        childAccessMode: childAccessMode ?? this.childAccessMode,
       );
 }

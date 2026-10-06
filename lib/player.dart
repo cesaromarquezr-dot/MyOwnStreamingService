@@ -60,6 +60,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? selectedSubtitle;
 
   String? groupWatchSessionId;
+  String? _playbackSessionId;
   bool groupWatchActionInProgress = false;
   bool groupWatchSyncing = false;
 
@@ -93,8 +94,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     _initializeYoutubePlayer();
     _initializeGroupWatch();
+    unawaited(_startIndependentPlaybackSession());
     _startControlsTimer();
     unawaited(_setSocialWatchActivity('Watching ${widget.media.title}'));
+  }
+
+  Future<void> _startIndependentPlaybackSession() async {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final api = controller.backendApi;
+    if (profile == null || !api.isAuthenticated) return;
+    try {
+      final deviceId = await controller.ensureDeviceId();
+      final result = await api.createPlaybackSession(
+        profileId: profile.id,
+        deviceId: deviceId,
+        mediaId: widget.media.id,
+        state: 'playing',
+        positionSeconds: 0,
+      );
+      _playbackSessionId = result['session'] is Map
+          ? (result['session'] as Map)['id']?.toString()
+          : null;
+      await _syncIndependentPlaybackSession(state: 'playing');
+    } catch (_) {
+      // Playback remains local if the optional session telemetry is unavailable.
+    }
+  }
+
+  Future<void> _syncIndependentPlaybackSession({String? state}) async {
+    final sessionId = _playbackSessionId;
+    if (sessionId == null || sessionId.isEmpty) return;
+    final duration = youtubeController == null ? 0.0 : await youtubeController!.duration;
+    final seconds = duration > 0 ? (position * duration).clamp(0.0, duration) : 0.0;
+    try {
+      await AppController.instance.backendApi.updatePlaybackSession(
+        sessionId: sessionId,
+        mediaId: widget.media.id,
+        state: state,
+        positionSeconds: seconds,
+      );
+    } catch (_) {}
   }
 
   Future<void> _setSocialWatchActivity(String? activity) async {
@@ -279,6 +319,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         widget.media.id,
         normalizedPosition,
       );
+      unawaited(_syncIndependentPlaybackSession());
 
       if (mounted) {
         setState(() {});
@@ -302,6 +343,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     controlsTimer?.cancel();
     _socialActivityHeartbeat?.cancel();
     _socialActivityHeartbeat = null;
+
+    unawaited(_syncIndependentPlaybackSession(state: 'stopped'));
+    _playbackSessionId = null;
 
     youtubeVideoStateSubscription?.cancel();
     youtubeController?.close();
@@ -854,6 +898,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       widget.media.id,
       newPosition,
     );
+    unawaited(_syncIndependentPlaybackSession());
 
     _seekYoutubeByNormalizedPosition(
       newPosition,
@@ -926,6 +971,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       widget.media.id,
       1.0,
     );
+    unawaited(_syncIndependentPlaybackSession(state: 'completed'));
 
     if (groupWatchSessionId != null) {
       _sendGroupWatchActualPosition(

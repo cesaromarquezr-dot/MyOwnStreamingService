@@ -41,6 +41,10 @@ import 'personal_streaming.dart';
 import 'my_tv.dart';
 import 'social_story_experience.dart';
 import 'app_customization.dart';
+import 'server_selection.dart';
+import 'games.dart';
+import 'tv_controller.dart';
+import 'tv_host.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -919,10 +923,14 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (restored) {
+      final serverContext = await AppController.instance.loadServerContext();
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          settings: const RouteSettings(name: '/app/profiles'),
-          builder: (_) => const ProfileSelectionScreen(),
+          settings: RouteSettings(name: serverContext.needsServerSelection ? '/app/server-selection' : '/app/profiles'),
+          builder: (_) => serverContext.needsServerSelection
+              ? const ServerSelectionScreen()
+              : const ProfileSelectionScreen(),
         ),
       );
       return;
@@ -1143,6 +1151,19 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (!mounted) return;
+
+      final serverContext = await controller.loadServerContext();
+      if (!mounted) return;
+      if (serverContext.needsServerSelection) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/app/server-selection'),
+            builder: (_) => const ServerSelectionScreen(),
+          ),
+        );
+        return;
+      }
 
       Navigator.pushReplacement(
         context,
@@ -4299,6 +4320,18 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const MyTvScreen(), routeName: '/app/page/my-tv');
       },
+      onGames: () {
+        Navigator.of(sheetContext).pop();
+        push(const GamesScreen(), routeName: '/app/page/games');
+      },
+      onTvController: () {
+        Navigator.of(sheetContext).pop();
+        push(const TvControllerScreen(), routeName: '/app/page/tv-controller');
+      },
+      onTvHost: () {
+        Navigator.of(sheetContext).pop();
+        push(const TvHostScreen(), routeName: '/app/page/tv-host');
+      },
     ),
   );
 }
@@ -4613,6 +4646,9 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onGroupWatch;
   final VoidCallback onShop;
   final VoidCallback onMyTv;
+  final VoidCallback onGames;
+  final VoidCallback onTvController;
+  final VoidCallback onTvHost;
 
   const _MoreActionsSheet({
     required this.onImport,
@@ -4625,6 +4661,9 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onGroupWatch,
     required this.onShop,
     required this.onMyTv,
+    required this.onGames,
+    required this.onTvController,
+    required this.onTvHost,
   });
 
   @override
@@ -4658,6 +4697,12 @@ class _MoreActionsSheet extends StatelessWidget {
           _moreCard(Icons.shopping_bag_outlined, 'Shop', 'Marketplace', onShop),
           _moreCard(Icons.live_tv_rounded, 'My TV',
               'Create ad-free channels and view your guide', onMyTv),
+          _moreCard(Icons.sports_esports_rounded, 'Games',
+              'Board, cards, puzzles and multiplayer', onGames),
+          _moreCard(Icons.settings_remote_rounded, 'TV Controller',
+              'Use your phone as the TV remote', onTvController),
+          _moreCard(Icons.tv_rounded, 'TV Host',
+              'Show a pairing code on this TV', onTvHost),
         ],
       ),
     );

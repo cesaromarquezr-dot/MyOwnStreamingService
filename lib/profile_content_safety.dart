@@ -81,6 +81,22 @@ class _ProfileContentSafetyScreenState
     if (mounted) setState(() {});
   }
 
+  Future<void> _setChildAccessMode(SharedProfileChildAccessMode value) async {
+    try {
+      final next = _serverGovernance.copyWith(childAccessMode: value);
+      _serverGovernance = await ProfileGovernanceApi(
+        AppController.instance.backendApi,
+      ).updateGovernance(
+        profileId: widget.profile.id,
+        governance: next,
+      );
+      widget.profile.governance = _serverGovernance;
+    } catch (error) {
+      _serverError = error.toString().replaceFirst('Exception: ', '');
+    }
+    if (mounted) setState(() {});
+  }
+
   String _label(ProfileContentLevel value) {
     switch (value) {
       case ProfileContentLevel.littleKids: return 'Little Kids';
@@ -165,6 +181,42 @@ class _ProfileContentSafetyScreenState
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 14),
+          _section(
+            'Shared Profile & Kids',
+            [
+              DropdownButtonFormField<SharedProfileChildAccessMode>(
+                initialValue: _serverGovernance.childAccessMode,
+                decoration: const InputDecoration(
+                  labelText: 'Children using this shared profile',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: SharedProfileChildAccessMode.sharedAllowed,
+                    child: Text('Allow shared profile use'),
+                  ),
+                  DropdownMenuItem(
+                    value: SharedProfileChildAccessMode.separatePreferred,
+                    child: Text('Prefer a separate child profile'),
+                  ),
+                  DropdownMenuItem(
+                    value: SharedProfileChildAccessMode.separateRequired,
+                    child: Text('Require a separate child profile'),
+                  ),
+                ],
+                onChanged: _serverLoading ? null : (value) {
+                  if (value == null) return;
+                  _setChildAccessMode(value);
+                },
+              ),
+              const SizedBox(height: 8),
+              const UniversalText(
+                'The account owner can decide whether children may use the shared profile or must use their own child profile.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           _section(

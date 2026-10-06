@@ -11,6 +11,7 @@ import 'backend_api.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
 import 'core/models/profile_governance.dart';
+import 'core/models/platform_server.dart';
 
 enum SubscriptionPlan {
   monthly,
@@ -116,6 +117,9 @@ class MediaItem {
   final List<String> music;
   final List<String> genres;
   final List<String> tags;
+  /// Production studios and companies discovered by the content intelligence/import pipeline.
+  final List<String> studios;
+  final List<String> companies;
   final List<String> chapters;
   final List<String> audioTracks;
   final List<String> subtitles;
@@ -161,6 +165,8 @@ class MediaItem {
     List<String>? music,
     List<String>? genres,
     List<String>? tags,
+    List<String>? studios,
+    List<String>? companies,
     List<String>? chapters,
     List<String>? audioTracks,
     List<String>? subtitles,
@@ -189,6 +195,8 @@ class MediaItem {
         music = music ?? <String>[],
         genres = genres ?? <String>[],
         tags = tags ?? <String>[],
+        studios = studios ?? <String>[],
+        companies = companies ?? <String>[],
         chapters = chapters ?? <String>[],
         audioTracks = audioTracks ?? <String>[],
         subtitles = subtitles ?? <String>[],
@@ -281,6 +289,8 @@ class MediaItem {
       music: _stringList(json['music']),
       genres: _stringList(json['genres']),
       tags: _stringList(json['tags']),
+      studios: _stringList(json['studios'] ?? json['productionStudios']),
+      companies: _stringList(json['companies'] ?? json['productionCompanies']),
       chapters: _stringList(json['chapters']),
       audioTracks: _stringList(json['audioTracks']),
       subtitles: _stringList(json['subtitles']),
@@ -364,6 +374,8 @@ class MediaItem {
       'music': music,
       'genres': genres,
       'tags': tags,
+      'studios': studios,
+      'companies': companies,
       'chapters': chapters,
       'audioTracks': audioTracks,
       'subtitles': subtitles,
@@ -1255,6 +1267,9 @@ class AppController extends ChangeNotifier {
 
   UserAccount? currentAccount;
   Profile? currentProfile;
+  PlatformServer? currentServer;
+  String? currentDeviceId;
+  String? activePlaybackSessionId;
 
   final List<MediaItem> library = <MediaItem>[];
 
@@ -1693,6 +1708,60 @@ class AppController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // SERVER / DEVICE CONTEXT
+  // ---------------------------------------------------------------------------
+
+  Future<ServerContext> loadServerContext() async {
+    if (!backendApi.isAuthenticated) {
+      throw BackendApiException('You are not logged in.');
+    }
+    final data = await backendApi.getServerContext();
+    final context = ServerContext.fromJson(data);
+    currentServer = context.currentServer;
+    notifyListeners();
+    return context;
+  }
+
+  Future<void> claimServer({required String serverId, required String displayName}) async {
+    final data = await backendApi.claimServer(serverId: serverId, displayName: displayName);
+    final server = data['server'];
+    if (server is! Map) throw BackendApiException('The server assignment response was invalid.');
+    currentServer = PlatformServer.fromJson(Map<String, dynamic>.from(server));
+    notifyListeners();
+  }
+
+  Future<void> renameCurrentServer(String displayName) async {
+    final data = await backendApi.renameServer(displayName: displayName);
+    final server = data['server'];
+    if (server is Map) currentServer = PlatformServer.fromJson(Map<String, dynamic>.from(server));
+    notifyListeners();
+  }
+
+  Future<String> ensureDeviceId() async {
+    if (currentDeviceId != null && currentDeviceId!.isNotEmpty) return currentDeviceId!;
+    final prefs = await SharedPreferences.getInstance();
+    currentDeviceId = prefs.getString('platform_device_id');
+    if (currentDeviceId == null || currentDeviceId!.isEmpty) {
+      currentDeviceId = 'device_${DateTime.now().microsecondsSinceEpoch}_${DateTime.now().millisecondsSinceEpoch}';
+      await prefs.setString('platform_device_id', currentDeviceId!);
+    }
+    return currentDeviceId!;
+  }
+
+  Future<void> activateProfile(String profileId) async {
+    switchProfile(profileId);
+    final profile = currentProfile;
+    if (profile == null || !backendApi.isAuthenticated) return;
+    final deviceId = await ensureDeviceId();
+    await backendApi.registerMediaDevice(
+      profileId: profile.id,
+      deviceId: deviceId,
+      name: 'This device',
+      type: kIsWeb ? 'web' : 'mobile',
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // BACKEND SESSION RESTORE
   // ---------------------------------------------------------------------------
 
@@ -1904,6 +1973,8 @@ class AppController extends ChangeNotifier {
 
       currentAccount = null;
       currentProfile = null;
+      currentServer = null;
+      activePlaybackSessionId = null;
 
       activeProfileIds.clear();
 

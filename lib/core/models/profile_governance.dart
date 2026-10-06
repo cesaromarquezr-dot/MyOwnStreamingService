@@ -20,6 +20,12 @@ enum ProfileAdminMode {
   selfManaged,
 }
 
+enum SharedProfileChildAccessMode {
+  sharedAllowed,
+  separatePreferred,
+  separateRequired,
+}
+
 enum ProfilePermission {
   editIdentity,
   editTheme,
@@ -41,6 +47,7 @@ class ProfileGovernance {
   final bool purchasesRestricted;
   final bool profilePinEnabled;
   final String? pinHint;
+  final SharedProfileChildAccessMode childAccessMode;
 
   const ProfileGovernance({
     this.contentLevel = ProfileContentLevel.teen,
@@ -58,6 +65,7 @@ class ProfileGovernance {
     this.purchasesRestricted = true,
     this.profilePinEnabled = false,
     this.pinHint,
+    this.childAccessMode = SharedProfileChildAccessMode.separatePreferred,
   });
 
   bool hasPermission(ProfilePermission permission) => permissions.contains(permission);
@@ -74,6 +82,7 @@ class ProfileGovernance {
     bool? purchasesRestricted,
     bool? profilePinEnabled,
     String? pinHint,
+    SharedProfileChildAccessMode? childAccessMode,
     bool clearPinHint = false,
   }) {
     return ProfileGovernance(
@@ -86,6 +95,7 @@ class ProfileGovernance {
       purchasesRestricted: purchasesRestricted ?? this.purchasesRestricted,
       profilePinEnabled: profilePinEnabled ?? this.profilePinEnabled,
       pinHint: clearPinHint ? null : (pinHint ?? this.pinHint),
+      childAccessMode: childAccessMode ?? this.childAccessMode,
     );
   }
 
@@ -99,6 +109,7 @@ class ProfileGovernance {
         'purchasesRestricted': purchasesRestricted,
         'profilePinEnabled': profilePinEnabled,
         if (pinHint != null && pinHint!.trim().isNotEmpty) 'pinHint': pinHint,
+        'childAccessMode': childAccessMode.name,
       };
 
   factory ProfileGovernance.fromJson(Map<String, dynamic>? json) {
@@ -140,6 +151,11 @@ class ProfileGovernance {
       });
     }
 
+    final childAccessMode = SharedProfileChildAccessMode.values.firstWhere(
+      (item) => item.name == (data['childAccessMode'] ?? data['child_access_mode'])?.toString(),
+      orElse: () => SharedProfileChildAccessMode.separatePreferred,
+    );
+
     return ProfileGovernance(
       contentLevel: parseContentLevel(data['contentLevel'] ?? data['content_level']),
       adminMode: parseAdminMode(data['adminMode'] ?? data['admin_mode']),
@@ -150,6 +166,7 @@ class ProfileGovernance {
       purchasesRestricted: data['purchasesRestricted'] != false && data['purchases_restricted'] != false,
       profilePinEnabled: data['profilePinEnabled'] == true || data['profile_pin_enabled'] == true,
       pinHint: data['pinHint']?.toString() ?? data['pin_hint']?.toString(),
+      childAccessMode: childAccessMode,
     );
   }
 

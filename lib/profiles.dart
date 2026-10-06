@@ -113,7 +113,7 @@ class _ProfileSelectionScreenState
     if (profiles.isEmpty) return;
 
     final profile = profiles.last;
-    AppController.instance.switchProfile(profile.id);
+    await AppController.instance.activateProfile(profile.id);
     await LanguageController.instance.loadForCurrentProfile();
     if (!mounted) return;
     _finishProfileSelection(context);
@@ -160,7 +160,7 @@ class _ProfileSelectionScreenState
     final controller = AppController.instance;
 
     try {
-      controller.switchProfile(profile.id);
+      await controller.activateProfile(profile.id);
       await LanguageController.instance.loadForCurrentProfile();
     } catch (error) {
       if (!mounted) return;

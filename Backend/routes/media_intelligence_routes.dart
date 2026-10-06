@@ -214,6 +214,12 @@ class MediaIntelligenceRoutes {
         return;
       }
 
+      if (request.method == 'PUT' &&
+          path == '$_prefix/session') {
+        await _updateSession(request, account);
+        return;
+      }
+
       await _json(request.response, 404, {
         'success': false,
         'error': 'Media intelligence route not found.',
@@ -529,6 +535,35 @@ class MediaIntelligenceRoutes {
       'success': true,
       'device': device.toJson(),
     });
+  }
+
+  Future<void> _updateSession(
+    HttpRequest request,
+    dynamic account,
+  ) async {
+    final body = await _body(request);
+    final id = _requiredString(body['id'], field: 'id', maxLength: _maxIdLength);
+    final existing = service.sessions[id];
+    if (existing == null) {
+      await _json(request.response, 404, {'success': false, 'error': 'Playback session not found.'});
+      return;
+    }
+    if (!_profileBelongsToAccount(account, existing.profileId)) {
+      await _json(request.response, 403, {'success': false, 'error': 'Playback session does not belong to the authenticated account.'});
+      return;
+    }
+    final position = body.containsKey('positionSeconds')
+        ? _double(body['positionSeconds'], defaultValue: existing.positionSeconds)
+        : existing.positionSeconds;
+    if (position < 0) throw const FormatException('positionSeconds cannot be negative.');
+    final updated = existing.copyWith(
+      mediaId: body.containsKey('mediaId') ? _optionalId(body['mediaId']) : existing.mediaId,
+      state: body['state']?.toString() ?? existing.state,
+      positionSeconds: position,
+      lastActivityAt: DateTime.now(),
+    );
+    service.upsertSession(updated);
+    await _json(request.response, 200, {'success': true, 'session': updated.toJson()});
   }
 
   Future<void> _createSession(
