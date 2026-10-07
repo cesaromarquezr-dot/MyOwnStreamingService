@@ -21,6 +21,7 @@ class _MyTvChannel {
   final List<String> contentTypes;
   final bool shuffle;
   final String filterText;
+  final List<String> metadataFilters;
   final bool favoritesOnly;
   final bool isFavorite;
   final int startTimeMinutes;
@@ -32,6 +33,7 @@ class _MyTvChannel {
     this.contentTypes = _channelContentTypes,
     this.shuffle = true,
     this.filterText = '',
+    this.metadataFilters = const [],
     this.favoritesOnly = false,
     this.isFavorite = false,
     this.startTimeMinutes = 420,
@@ -53,6 +55,12 @@ class _MyTvChannel {
             json['genre']?.toString() ??
             _legacyFilter(
                 json['template']?.toString(), json['mode']?.toString()),
+        metadataFilters: json['metadataFilters'] is List
+            ? (json['metadataFilters'] as List)
+                .map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false)
+            : const [],
         favoritesOnly: json['favoritesOnly'] == true ||
             json['mode']?.toString() == 'Favorites',
         isFavorite: json['isFavorite'] == true,
@@ -73,6 +81,7 @@ class _MyTvChannel {
         'contentTypes': contentTypes,
         'shuffle': shuffle,
         'filterText': filterText,
+        'metadataFilters': metadataFilters,
         'favoritesOnly': favoritesOnly,
         'isFavorite': isFavorite,
         'startTimeMinutes': startTimeMinutes,
@@ -238,6 +247,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   contentTypes: item.contentTypes,
                   shuffle: item.shuffle,
                   filterText: item.filterText,
+                  metadataFilters: item.metadataFilters,
                   favoritesOnly: item.favoritesOnly,
                   isFavorite: !item.isFavorite,
                   startTimeMinutes: item.startTimeMinutes,
@@ -259,11 +269,15 @@ class _MyTvScreenState extends State<MyTvScreen> {
   List<_ChannelEntry> _schedule(_MyTvChannel channel) {
     final controller = AppController.instance;
     final profile = controller.currentProfile;
-    final terms = channel.filterText
-        .split(RegExp(r'[,;\n]'))
-        .map((term) => term.trim().toLowerCase())
-        .where((term) => term.isNotEmpty)
-        .toList();
+    final terms = <String>[
+      ...channel.filterText
+          .split(RegExp(r'[,;\n]'))
+          .map((term) => term.trim().toLowerCase())
+          .where((term) => term.isNotEmpty),
+      ...channel.metadataFilters
+          .map((term) => term.trim().toLowerCase())
+          .where((term) => term.isNotEmpty),
+    ];
     bool matches(List<String> fields) {
       if (terms.isEmpty) return true;
       final text = fields.join(' ').toLowerCase();
@@ -403,113 +417,226 @@ class _MyTvScreenState extends State<MyTvScreen> {
     return TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60).format(context);
   }
 
+  Map<String, List<String>> _availableMetadataChoices() {
+    final values = <String, Set<String>>{
+      'Genres': <String>{},
+      'Tags': <String>{},
+      'Studios': <String>{},
+      'Franchises': <String>{},
+      'People': <String>{},
+      'Holidays & Themes': <String>{},
+    };
+
+    for (final media in AppController.instance.library) {
+      values['Genres']!.addAll(media.genres);
+      values['Tags']!.addAll(media.tags);
+      values['Studios']!.addAll(media.studios);
+      if ((media.franchiseName ?? '').trim().isNotEmpty) {
+        values['Franchises']!.add(media.franchiseName!.trim());
+      }
+      values['People']!
+        ..addAll(media.actors)
+        ..addAll(media.directors)
+        ..addAll(media.writers);
+    }
+
+    return values.map(
+      (key, set) => MapEntry(
+        key,
+        set
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())),
+      ),
+    );
+  }
+
   Future<void> _addChannel() async {
     final name = TextEditingController();
     final filterText = TextEditingController();
     final selectedTypes = _channelContentTypes.toSet();
+    final selectedMetadata = <String>{};
     var favoritesOnly = false;
     var startTime = const TimeOfDay(hour: 7, minute: 0);
+    final metadataChoices = _availableMetadataChoices();
+
     final added = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Create a channel'),
-          content: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(
-                  controller: name,
-                  decoration: const InputDecoration(labelText: 'Channel name')),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () async {
-                    final selected = await showTimePicker(
-                      context: context,
-                      initialTime: startTime,
-                    );
-                    if (selected != null) {
-                      setDialogState(() => startTime = selected);
-                    }
-                  },
-                  icon: const Icon(Icons.schedule_rounded),
-                  label: Text(
-                      'Daily guide starts at ${startTime.format(context)}'),
-                ),
+          content: SizedBox(
+            width: 720,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Channel name',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final selected = await showTimePicker(
+                          context: context,
+                          initialTime: startTime,
+                        );
+                        if (selected != null) {
+                          setDialogState(() => startTime = selected);
+                        }
+                      },
+                      icon: const Icon(Icons.schedule_rounded),
+                      label: Text(
+                        'Daily guide starts at ${startTime.format(context)}',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Content types',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _channelContentTypes
+                        .map(
+                          (type) => FilterChip(
+                            label: Text(type),
+                            selected: selectedTypes.contains(type),
+                            onSelected: (selected) => setDialogState(() {
+                              if (selected) {
+                                selectedTypes.add(type);
+                              } else {
+                                selectedTypes.remove(type);
+                              }
+                            }),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Channel metadata',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'These choices come from your library metadata plus common channel themes. Select as many as you want. A title matching any selected item can be programmed into the channel.',
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final entry in metadataChoices.entries) ...[
+                    if (entry.value.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 7),
+                        child: Text(
+                          entry.key,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: entry.value.take(36).map((value) {
+                          return FilterChip(
+                            label: Text(value),
+                            selected: selectedMetadata.contains(value),
+                            onSelected: (selected) {
+                              setDialogState(() {
+                                if (selected) {
+                                  selectedMetadata.add(value);
+                                } else {
+                                  selectedMetadata.remove(value);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+                  TextField(
+                    controller: filterText,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom keywords',
+                      hintText:
+                          'Add your own titles, people, genres, themes or tags',
+                      helperText:
+                          'Separate custom terms with commas or new lines.',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Only include liked items'),
+                    value: favoritesOnly,
+                    onChanged: (value) => setDialogState(
+                      () => favoritesOnly = value ?? false,
+                    ),
+                  ),
+                ],
               ),
-              const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Text('Include in channel'),
-                  )),
-              Wrap(
-                spacing: 8,
-                children: _channelContentTypes
-                    .map((type) => FilterChip(
-                          label: Text(type),
-                          selected: selectedTypes.contains(type),
-                          onSelected: (selected) => setDialogState(() {
-                            if (selected) {
-                              selectedTypes.add(type);
-                            } else {
-                              selectedTypes.remove(type);
-                            }
-                          }),
-                        ))
-                    .toList(),
-              ),
-              TextField(
-                controller: filterText,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'What belongs in this channel?',
-                  hintText:
-                      'Add your own genres, series, artists, people, or keywords',
-                  helperText:
-                      'Separate themes, titles, artists, actors, or genres with commas or new lines.',
-                ),
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Only include liked items'),
-                value: favoritesOnly,
-                onChanged: (value) =>
-                    setDialogState(() => favoritesOnly = value ?? false),
-              ),
-              const Text(
-                  'Channels use media available to this profile. Music can also match soundtrack titles linked to matching movies or shows in your library.'),
-            ]),
+            ),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Create')),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Create'),
+            ),
           ],
         ),
       ),
     );
+
     final channelName = name.text.trim();
     final channelFilter = filterText.text.trim();
     name.dispose();
     filterText.dispose();
-    if (added != true || channelName.isEmpty || selectedTypes.isEmpty) return;
+
+    if (added != true ||
+        channelName.isEmpty ||
+        selectedTypes.isEmpty) {
+      return;
+    }
+
     final channel = _MyTvChannel(
       id: 'my_tv_${DateTime.now().microsecondsSinceEpoch}',
       name: channelName,
-      contentTypes: _channelContentTypes.where(selectedTypes.contains).toList(),
+      contentTypes: _channelContentTypes
+          .where(selectedTypes.contains)
+          .toList(),
       filterText: channelFilter,
+      metadataFilters: selectedMetadata.toList(growable: false),
       favoritesOnly: favoritesOnly,
       startTimeMinutes: startTime.hour * 60 + startTime.minute,
     );
+
     setState(() {
       _channels = [..._channels, channel];
       _selectedChannelId = channel.id;
     });
+
     await _save();
   }
 
@@ -649,6 +776,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
               contentTypes: item.contentTypes,
               shuffle: item.shuffle,
               filterText: item.filterText,
+              metadataFilters: item.metadataFilters,
               favoritesOnly: item.favoritesOnly,
               isFavorite: item.isFavorite,
               startTimeMinutes: item.startTimeMinutes,
@@ -779,7 +907,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                                       RegExp(r'[,;\n]+'),
                                       ' · ',
                                     ),
-                            ].join('  |  '),
+                            ].where((value) => value.trim().isNotEmpty).join('  |  '),
                             style: const TextStyle(color: Colors.white54),
                           ),
                         ),
@@ -790,6 +918,19 @@ class _MyTvScreenState extends State<MyTvScreen> {
                         ),
                       ],
                     ),
+                    if (channel.metadataFilters.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: channel.metadataFilters
+                            .map((value) => Chip(
+                                  avatar: const Icon(Icons.sell_outlined, size: 15),
+                                  label: Text(value),
+                                ))
+                            .toList(),
+                      ),
+                    ],
                     if (channel.programmingRules.isNotEmpty)
                       Wrap(
                         spacing: 6,

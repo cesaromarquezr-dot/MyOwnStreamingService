@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
-import 'main.dart';
 import 'profiles.dart';
 import 'core/models/platform_server.dart';
 import 'localization.dart';
 
 class ServerSelectionScreen extends StatefulWidget {
-  const ServerSelectionScreen({super.key});
+  final VoidCallback? onProfileReady;
+
+  const ServerSelectionScreen({
+    super.key,
+    this.onProfileReady,
+  });
 
   @override
   State<ServerSelectionScreen> createState() => _ServerSelectionScreenState();
@@ -100,14 +104,7 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/profiles'),
         builder: (_) => ProfileSelectionScreen(
-          onProfileSelected: (profileContext) {
-            Navigator.of(profileContext).pushReplacement(
-              MaterialPageRoute(
-                settings: const RouteSettings(name: '/main'),
-                builder: (_) => const MainScreen(),
-              ),
-            );
-          },
+          onProfileSelected: (_) => widget.onProfileReady?.call(),
         ),
       ),
     );

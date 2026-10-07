@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'widgets/like_toggle_button.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -630,6 +631,30 @@ class _MoviesScreenState extends State<MoviesScreen>
                 ),
 
                 Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: LikeToggleButton(
+                      liked: AppController.instance.isLiked(movie.id),
+                      compact: true,
+                      onPressed: () {
+                        setState(() {
+                          if (AppController.instance.isLiked(movie.id)) {
+                            AppController.instance.clearReaction(movie.id);
+                          } else {
+                            AppController.instance.likeMedia(movie);
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                ),
+
+                Positioned(
                   left: 20,
                   right: 20,
                   bottom: 19,
@@ -1118,6 +1143,31 @@ class _MovieCardState extends State<_MovieCard> {
                                   size: 32,
                                 ),
                               ),
+                            ),
+                          ),
+                        ),
+
+                        // Favorite / like button.
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.52),
+                              shape: BoxShape.circle,
+                            ),
+                            child: LikeToggleButton(
+                              liked: AppController.instance.isLiked(movie.id),
+                              compact: true,
+                              onPressed: () {
+                                setState(() {
+                                  if (AppController.instance.isLiked(movie.id)) {
+                                    AppController.instance.clearReaction(movie.id);
+                                  } else {
+                                    AppController.instance.likeMedia(movie);
+                                  }
+                                });
+                              },
                             ),
                           ),
                         ),

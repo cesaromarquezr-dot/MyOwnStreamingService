@@ -82,9 +82,11 @@ int? _primaryIndexForPage(String pageId) => switch (pageId) {
     };
 
 class _AppPageState extends ChangeNotifier {
-  String pageId = 'home';
+  String pageId = 'profiles';
   int primaryIndex = 0;
   bool isCustomizing = false;
+  // Global navigation is unavailable until the /main shell is actually entered.
+  bool shellVisible = false;
 
   void setPage(
     String value, {
@@ -104,31 +106,44 @@ class _AppPageState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setShellVisible(bool value) {
+    if (shellVisible == value) return;
+    shellVisible = value;
+    notifyListeners();
+  }
+
   void refresh() => notifyListeners();
 }
 
 class _AppPageRouteObserver extends NavigatorObserver {
   final Map<Route<dynamic>, String> _pageIds = <Route<dynamic>, String>{};
-  int _pendingPageUpdate = 0;
 
   void _schedulePageUpdate(
     String pageId, {
     int? selectedPrimaryIndex,
     required bool customizing,
   }) {
-    final updateId = ++_pendingPageUpdate;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (updateId != _pendingPageUpdate) return;
-      _appPageState.setPage(
-        pageId,
-        selectedPrimaryIndex: selectedPrimaryIndex,
-        customizing: customizing,
-      );
-    });
+    _appPageState.setPage(
+      pageId,
+      selectedPrimaryIndex: selectedPrimaryIndex,
+      customizing: customizing,
+    );
+  }
+
+  bool _isPreShellRoute(String? name) {
+    return name == '/app/profiles' ||
+        name == '/app/server-selection' ||
+        name == '/login' ||
+        name == '/signup' ||
+        name == '/app/login' ||
+        name == '/app/signup';
   }
 
   String _pageIdForRoute(String? name, Route<dynamic> route) {
-    if (name == '/app/player') return 'player';
+    if (name == '/app/player' ||
+        (name != null && name.startsWith('/app/games/'))) {
+      return 'player';
+    }
     if (name != null && name.startsWith('/app/page/')) {
       return name.substring('/app/page/'.length);
     }
@@ -138,12 +153,16 @@ class _AppPageRouteObserver extends NavigatorObserver {
       return _appPageState.pageId;
     }
     if (name == '/app/profiles') return 'profiles';
+    if (name == '/app/server-selection') return 'server-selection';
     if (name == '/main') return 'home';
     return 'page_${identityHashCode(route)}';
   }
 
   void setPageForRoute(Route<dynamic>? route, String pageId, int primaryIndex) {
     if (route != null) _pageIds[route] = pageId;
+    if (route?.settings.name == '/main') {
+      _appPageState.setShellVisible(true);
+    }
     _appPageState.setPage(
       pageId,
       selectedPrimaryIndex: primaryIndex,
@@ -157,6 +176,11 @@ class _AppPageRouteObserver extends NavigatorObserver {
     final name = route.settings.name;
     final pageId = _pageIdForRoute(name, route);
     _pageIds[route] = pageId;
+    if (name == '/main') {
+      _appPageState.setShellVisible(true);
+    } else if (_isPreShellRoute(name)) {
+      _appPageState.setShellVisible(false);
+    }
     _schedulePageUpdate(
       pageId,
       selectedPrimaryIndex: _primaryIndexForPage(pageId),
@@ -169,6 +193,12 @@ class _AppPageRouteObserver extends NavigatorObserver {
     super.didPop(route, previousRoute);
     _pageIds.remove(route);
     if (previousRoute != null) {
+      final previousName = previousRoute.settings.name;
+      if (previousName == '/main') {
+        _appPageState.setShellVisible(true);
+      } else if (_isPreShellRoute(previousName)) {
+        _appPageState.setShellVisible(false);
+      }
       final previousPageId = _pageIds[previousRoute] ?? 'home';
       _schedulePageUpdate(
         previousPageId,
@@ -183,15 +213,6 @@ class _AppPageRouteObserver extends NavigatorObserver {
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
     _pageIds.remove(route);
-    if (previousRoute != null) {
-      final previousPageId = _pageIds[previousRoute] ?? 'home';
-      _schedulePageUpdate(
-        previousPageId,
-        selectedPrimaryIndex: _primaryIndexForPage(previousPageId),
-        customizing: previousRoute.settings.name == '/app/customize' ||
-            previousRoute.settings.name == '/app/more',
-      );
-    }
   }
 
   @override
@@ -200,6 +221,11 @@ class _AppPageRouteObserver extends NavigatorObserver {
     if (oldRoute != null) _pageIds.remove(oldRoute);
     if (newRoute != null) {
       final name = newRoute.settings.name;
+      if (name == '/main') {
+        _appPageState.setShellVisible(true);
+      } else if (_isPreShellRoute(name)) {
+        _appPageState.setShellVisible(false);
+      }
       final pageId = _pageIdForRoute(name, newRoute);
       _pageIds[newRoute] = pageId;
       _schedulePageUpdate(
@@ -248,18 +274,35 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
     }
 
     _languagePickerEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        right: 12,
-        bottom: 12,
+      builder: (context) => Positioned.fill(
         child: AnimatedBuilder(
           animation: _appPageState,
           builder: (context, _) {
-            if (_appPageState.pageId == 'player') {
+            final profileSelected =
+                AppController.instance.currentProfile != null;
+            final showNavigation =
+                _appPageState.shellVisible &&
+                profileSelected &&
+                _appPageState.pageId != 'profiles' &&
+                _appPageState.pageId != 'server-selection' &&
+                _appPageState.pageId != 'import' &&
+                _appPageState.pageId != 'player';
+
+            if (_appPageState.pageId == 'player' ||
+                !_appPageState.shellVisible ||
+                !profileSelected) {
               return const SizedBox.shrink();
             }
-            return SafeArea(
-              child: Material(
-                color: Colors.transparent,
+
+            return Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  bottom: (showNavigation ? 84.0 : 0.0) +
+                      MediaQuery.paddingOf(context).bottom +
+                      12,
+                ),
                 child: const LanguagePicker(),
               ),
             );
@@ -474,11 +517,15 @@ class _AppPageSurface extends StatelessWidget {
           visualDensity: density,
         );
         final showGlobalNavigation =
+            _appPageState.shellVisible &&
             AppController.instance.currentProfile != null &&
-                _appPageState.pageId != 'profiles' &&
-                _appPageState.pageId != 'import';
+            _appPageState.pageId != 'profiles' &&
+            _appPageState.pageId != 'server-selection' &&
+            _appPageState.pageId != 'import' &&
+            _appPageState.pageId != 'player';
+        const globalNavigationHeight = 84.0;
         final bottomInset = showGlobalNavigation
-            ? 82.0 + MediaQuery.paddingOf(context).bottom
+            ? globalNavigationHeight + MediaQuery.paddingOf(context).bottom
             : 0.0;
         return Theme(
           data: theme,
@@ -499,7 +546,9 @@ class _AppPageSurface extends StatelessWidget {
                     child: _GlobalPrimaryNavigationBar(),
                   ),
                 ),
-              if (showGlobalNavigation && !_appPageState.isCustomizing)
+              if (showGlobalNavigation &&
+                  !_appPageState.isCustomizing &&
+                  _appPageState.pageId != 'player')
                 Positioned(
                   right: 14,
                   bottom: bottomInset + 10,
@@ -897,6 +946,24 @@ String _customizationSectionName(String pageId, String id) => switch (id) {
     };
 
 // ============================================================
+void _enterMainHome() {
+  final navigator = _appNavigatorKey.currentState;
+  if (navigator == null) return;
+  navigator.pushAndRemoveUntil<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/main'),
+      builder: (_) => const MainScreen(),
+    ),
+    (route) => false,
+  );
+  _appPageState.setShellVisible(true);
+  _appPageState.setPage(
+    'home',
+    selectedPrimaryIndex: 0,
+    customizing: false,
+  );
+}
+
 // SPLASH SCREEN
 // ============================================================
 class SplashScreen extends StatefulWidget {
@@ -925,12 +992,13 @@ class _SplashScreenState extends State<SplashScreen> {
     if (restored) {
       final serverContext = await AppController.instance.loadServerContext();
       if (!mounted) return;
+      _appPageState.setShellVisible(false);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           settings: RouteSettings(name: serverContext.needsServerSelection ? '/app/server-selection' : '/app/profiles'),
           builder: (_) => serverContext.needsServerSelection
-              ? const ServerSelectionScreen()
-              : const ProfileSelectionScreen(),
+              ? ServerSelectionScreen(onProfileReady: _enterMainHome)
+              : ProfileSelectionScreen(onProfileSelected: (_) => _enterMainHome()),
         ),
       );
       return;
@@ -1155,6 +1223,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final serverContext = await controller.loadServerContext();
       if (!mounted) return;
       if (serverContext.needsServerSelection) {
+        _appPageState.setShellVisible(false);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -1165,6 +1234,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      _appPageState.setShellVisible(false);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -4230,7 +4300,7 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
           ),
         ];
         return NavigationBar(
-          height: 70,
+          height: 84,
           selectedIndex: selectedIndex,
           destinations: destinations,
           onDestinationSelected: (index) {

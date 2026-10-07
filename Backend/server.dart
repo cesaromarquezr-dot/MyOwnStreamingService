@@ -1,13 +1,8 @@
-// FILE: Backend/server.dart
-//
-// Purpose:
-//   Implements the HTTP/HTTPS server portion of the streaming service.
-//
+// FILE: `Backend/server.dart`.
+// Purpose: Implements the HTTP/HTTPS server portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 //
-// -----------------------------------------------------------------------------
-// DEPLOYMENT
-// -----------------------------------------------------------------------------
+// Deployment:
 //
 //   Internet
 //      ↓
@@ -19,50 +14,36 @@
 //      ↓
 //   Dart backend
 //
-// -----------------------------------------------------------------------------
-// TLS
-// -----------------------------------------------------------------------------
+// TLS:
+// - BACKEND_TLS_ENABLED=true: Dart terminates TLS.
+// - BACKEND_TLS_ENABLED=false: NGINX Proxy Manager terminates public TLS
+//   and forwards internal HTTP traffic to the Dart backend.
 //
-// BACKEND_TLS_ENABLED=true:
-//   Dart terminates TLS.
+// Supported environment variables:
+//     SERVER_HOST
+//     SERVER_PUBLIC_URL
+//     BACKEND_TLS_ENABLED
+//     REQUIRE_TRUSTED_PROXY
+//     PROXY_SHARED_SECRET
+//     TRUSTED_PROXY_CIDRS
+//     VPN_CIDRS
+//     RATE_LIMIT_PER_MINUTE
+//     ALLOWED_ORIGINS
+//     TLS_CERTIFICATE_PATH
+//     TLS_PRIVATE_KEY_PATH
+//     TLS_PRIVATE_KEY_PASSWORD
+//     ARM_MOCK
+//     ARM_MOCK_VERIFY_FAIL
+//     ARM_SERVER_URL
+//     ARM_USERNAME
+//     ARM_PASSWORD
 //
-// BACKEND_TLS_ENABLED=false:
-//   NGINX Proxy Manager terminates public TLS and forwards internal HTTP
-//   traffic to the Dart backend.
+// Local development certificate fallback:
+//     Backend/certs/127.0.0.1+2.pem
+//     Backend/certs/127.0.0.1+2-key.pem
 //
-// -----------------------------------------------------------------------------
-// SUPPORTED ENVIRONMENT VARIABLES
-// -----------------------------------------------------------------------------
-//
-//   SERVER_HOST
-//   SERVER_PUBLIC_URL
-//   BACKEND_TLS_ENABLED
-//   REQUIRE_TRUSTED_PROXY
-//   PROXY_SHARED_SECRET
-//   TRUSTED_PROXY_CIDRS
-//   VPN_CIDRS
-//   RATE_LIMIT_PER_MINUTE
-//   ALLOWED_ORIGINS
-//   TLS_CERTIFICATE_PATH
-//   TLS_PRIVATE_KEY_PATH
-//   TLS_PRIVATE_KEY_PASSWORD
-//   ARM_MOCK
-//   ARM_MOCK_VERIFY_FAIL
-//   ARM_SERVER_URL
-//   ARM_USERNAME
-//   ARM_PASSWORD
-//
-// -----------------------------------------------------------------------------
-// LOCAL DEVELOPMENT CERTIFICATE FALLBACK
-// -----------------------------------------------------------------------------
-//
-//   Backend/certs/127.0.0.1+2.pem
-//   Backend/certs/127.0.0.1+2-key.pem
-//
-// Flutter development client:
-//
-//   https://127.0.0.1:8080
-//
+// The Flutter development client should connect to:
+//     https://127.0.0.1:8080
 
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -132,15 +113,11 @@ import 'services/shop_service.dart';
 import 'services/sports_service.dart';
 import 'services/storage_manager_service.dart';
 import 'services/subscription_service.dart';
-import 'supabase_store.dart';
-import 'services/transcode_cache_service.dart';
-import 'services/transcoding_service.dart';
 import 'services/tv_channel_service.dart';
 import 'services/tv_pairing_service.dart';
-
-// =============================================================================
-// PAYMENT PROCESSOR
-// =============================================================================
+import 'services/transcode_cache_service.dart';
+import 'services/transcoding_service.dart';
+import 'supabase_store.dart';
 
 PaymentProcessorVerifier? _createPaymentProcessorVerifier() {
   final mockEnabled =
@@ -151,7 +128,6 @@ PaymentProcessorVerifier? _createPaymentProcessorVerifier() {
       'Payment processor: real provider verifier not configured.',
       name: 'Payment',
     );
-
     return null;
   }
 
@@ -163,25 +139,17 @@ PaymentProcessorVerifier? _createPaymentProcessorVerifier() {
   return createMockPaymentProcessorVerifier();
 }
 
-// =============================================================================
-// MAIN
-// =============================================================================
-
 Future<void> main() async {
   _validateStartupConfiguration();
-
-  // ---------------------------------------------------------------------------
-  // DATABASE / SUPABASE
-  // ---------------------------------------------------------------------------
 
   SupabaseStore.instance.initialize();
 
   final database = Database.instance;
   await database.initializePersistent();
 
-  // ---------------------------------------------------------------------------
-  // SERVICES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // CORE SERVICES
+  // ------------------------------------------------------------
 
   final subscriptionService = SubscriptionService();
   final emailService = EmailService.fromEnvironment();
@@ -214,9 +182,9 @@ Future<void> main() async {
 
   final paymentProviderService = PaymentProviderService();
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // PAYMENT SERVICE
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final paymentService = PaymentService(
     database: database,
@@ -224,9 +192,9 @@ Future<void> main() async {
     processorVerifier: _createPaymentProcessorVerifier(),
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // GROUP SERVICES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final groupRecommendationService = GroupRecommendationService(
     database,
@@ -236,23 +204,17 @@ Future<void> main() async {
     database: database,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // AUTHENTICATION
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final authentication = AuthenticationMiddleware(
     authService: authService,
   );
 
-  // ---------------------------------------------------------------------------
-  // ADDITIONAL SERVICES
-  // ---------------------------------------------------------------------------
-
-  final physicalItemRoutes = PhysicalItemRoutes(
-    authentication: authentication,
-    database: database,
-    store: SupabaseStore.instance,
-  );
+  // ------------------------------------------------------------
+  // ACCOUNT / PROFILE SERVICES
+  // ------------------------------------------------------------
 
   final profileGovernanceService = ProfileGovernanceService(
     database,
@@ -270,54 +232,63 @@ Future<void> main() async {
 
   final tvPairingService = TvPairingService();
 
-  // ---------------------------------------------------------------------------
-  // PROFILE GOVERNANCE
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // PROFILE GOVERNANCE ROUTES
+  // ------------------------------------------------------------
 
   final profileGovernanceRoutes = ProfileGovernanceRoutes(
     authentication: authentication,
     service: profileGovernanceService,
   );
 
-  // ---------------------------------------------------------------------------
-  // SERVER AGENT
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // SERVER AGENT ROUTES
+  // ------------------------------------------------------------
 
   final serverAgentRoutes = ServerAgentRoutes(
     authentication: authentication,
     service: mediaServerAgentService,
   );
 
-  // ---------------------------------------------------------------------------
-  // PLATFORM SERVER
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // PLATFORM SERVER ROUTES
+  // ------------------------------------------------------------
 
   final platformServerRoutes = PlatformServerRoutes(
     authentication: authentication,
     service: platformServerService,
   );
 
-  // ---------------------------------------------------------------------------
-  // GAMES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // GAME ROUTES
+  // ------------------------------------------------------------
 
   final gameRoutes = GameRoutes(
     authentication: authentication,
     service: gameService,
   );
 
-  // ---------------------------------------------------------------------------
-  // TV DEVICE CONTROL
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // TV PAIRING ROUTES
+  // ------------------------------------------------------------
 
   final tvPairingRoutes = TvPairingRoutes(
     authentication: authentication,
     service: tvPairingService,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // TV CHANNEL ROUTES
+  // ------------------------------------------------------------
+
+  final tvChannelRoutes = TvChannelRoutes(
+    authentication: authentication,
+    service: TvChannelService(),
+  );
+
+  // ------------------------------------------------------------
   // AUTH ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final authRoutes = AuthRoutes(
     authService: authService,
@@ -327,9 +298,9 @@ Future<void> main() async {
     profileGovernanceService: profileGovernanceService,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // RECOMMENDATION ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final recommendationsRoutes = RecommendationsRoutes(
     authenticationMiddleware: authentication,
@@ -337,18 +308,18 @@ Future<void> main() async {
     database: database,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // SEARCH ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final searchRoutes = SearchRoutes(
     authenticationMiddleware: authentication,
     searchService: searchService,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // SHOP ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final shopRoutes = ShopRoutes(
     authenticationMiddleware: authentication,
@@ -369,9 +340,9 @@ Future<void> main() async {
     authentication: authentication,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // PAYMENT ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final paymentRoutes = PaymentRoutes(
     authenticationMiddleware: authentication,
@@ -381,9 +352,9 @@ Future<void> main() async {
     providerService: paymentProviderService,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // GROUP ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final groupRoutes = GroupRoutes(
     database: database,
@@ -392,18 +363,18 @@ Future<void> main() async {
     watchService: groupWatchService,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // ARM CONNECTION
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final armMockEnabled =
       (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() == 'true';
 
   final armVerificationPasses =
       (Platform.environment['ARM_MOCK_VERIFY_FAIL'] ?? '')
-              .trim()
-              .toLowerCase() !=
-          'true';
+          .trim()
+          .toLowerCase() !=
+      'true';
 
   final armService = armMockEnabled
       ? MockArmService(
@@ -418,7 +389,9 @@ Future<void> main() async {
         );
 
   _log(
-    armMockEnabled ? 'ARM mode: MOCK (Phase 1)' : 'ARM mode: REAL',
+    armMockEnabled
+        ? 'ARM mode: MOCK (Phase 1)'
+        : 'ARM mode: REAL',
   );
 
   final armRoutes = ArmRoutes(
@@ -426,9 +399,9 @@ Future<void> main() async {
     authentication: authentication,
   );
 
-  // ---------------------------------------------------------------------------
-  // ADDITIONAL ROUTES
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
+  // ADDITIONAL SERVICES / ROUTES
+  // ------------------------------------------------------------
 
   final remoteAccessService = RemoteAccessService(
     database,
@@ -504,9 +477,10 @@ Future<void> main() async {
     store: SupabaseStore.instance,
   );
 
-  final tvChannelRoutes = TvChannelRoutes(
+  final physicalItemRoutes = PhysicalItemRoutes(
     authentication: authentication,
-    service: TvChannelService(),
+    database: database,
+    store: SupabaseStore.instance,
   );
 
   final remoteAccessRoutes = RemoteAccessRoutes(
@@ -515,25 +489,28 @@ Future<void> main() async {
     email: emailService,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // START HTTP / HTTPS SERVER
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   final securityContext = await _buildSecurityContext();
-  final server = await _bindServer(securityContext);
 
-  // ---------------------------------------------------------------------------
+  final server = await _bindServer(
+    securityContext,
+  );
+
+  // ------------------------------------------------------------
   // STARTUP BANNER
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   _printStartupBanner(
     server,
     armMockEnabled: armMockEnabled,
   );
 
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
   // REQUEST LOOP
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   await for (final request in server) {
     _handleRequest(
@@ -583,9 +560,9 @@ Future<void> main() async {
   }
 }
 
-// =============================================================================
+// ============================================================
 // REQUEST ROUTER
-// =============================================================================
+// ============================================================
 
 Future<void> _handleRequest(
   HttpRequest request,
@@ -625,9 +602,9 @@ Future<void> _handleRequest(
   var responseStarted = false;
 
   try {
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // REVERSE-PROXY TRUST
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (!selfHostingSecurity.proxyRequirementSatisfied(request)) {
       responseStarted = true;
@@ -635,7 +612,7 @@ Future<void> _handleRequest(
       await _sendJson(
         request.response,
         HttpStatus.forbidden,
-        {
+        <String, dynamic>{
           'success': false,
           'error':
               'Direct backend access is disabled; use the configured reverse proxy.',
@@ -645,9 +622,9 @@ Future<void> _handleRequest(
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // CLIENT IDENTIFICATION / RATE LIMIT
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     final clientIp = selfHostingSecurity.clientIp(request);
 
@@ -661,7 +638,7 @@ Future<void> _handleRequest(
       await _sendJson(
         request.response,
         HttpStatus.tooManyRequests,
-        {
+        <String, dynamic>{
           'success': false,
           'error': 'Rate limit exceeded.',
         },
@@ -670,19 +647,21 @@ Future<void> _handleRequest(
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // RESPONSE SECURITY HEADERS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // SECURITY HEADERS / CORS
+    // ----------------------------------------------------------
 
     _addSecurityHeaders(
       request.response,
     );
 
-    _addCorsHeaders(request);
+    _addCorsHeaders(
+      request,
+    );
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // CORS PREFLIGHT
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (request.method == 'OPTIONS') {
       responseStarted = true;
@@ -701,210 +680,276 @@ Future<void> _handleRequest(
 
     final path = request.uri.path;
 
-    // -------------------------------------------------------------------------
-    // HEALTH CHECK
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // HEALTH
+    // ----------------------------------------------------------
 
-    if (request.method == 'GET' && path == '/api/v1/health') {
-      await _health(request);
+    if (request.method == 'GET' &&
+        path == '/api/v1/health') {
+      await _health(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // PROFILE GOVERNANCE
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/profile-governance/')) {
-      await profileGovernanceRoutes.handle(request);
+      await profileGovernanceRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // SERVER AGENT
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/server-agent/')) {
-      await serverAgentRoutes.handle(request);
+      await serverAgentRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // PLATFORM SERVER ASSIGNMENT
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // PLATFORM SERVERS
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/platform-servers/')) {
-      await platformServerRoutes.handle(request);
+      await platformServerRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // GAMES
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/games/')) {
-      await gameRoutes.handle(request);
+      await gameRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // TV DEVICE CONTROL
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // TV CONTROL
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/tv-control/')) {
-      await tvPairingRoutes.handle(request);
+      await tvPairingRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // AUTHENTICATION AND PROFILE ROUTES
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // AUTH / PROFILES
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/auth/') ||
         path == '/api/v1/profiles' ||
         path.startsWith('/api/v1/profiles/')) {
-      await authRoutes.handle(request);
+      await authRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // TV CHANNELS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/tv-channels/')) {
-      await tvChannelRoutes.handle(request);
+      await tvChannelRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // MEDIA INTELLIGENCE
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/media-intelligence/')) {
-      await mediaIntelligenceRoutes.handle(request);
+      await mediaIntelligenceRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // SELF-HOSTING
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/self-hosting/')) {
-      await selfHostingRoutes.handle(request);
+      await selfHostingRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // RADIO
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path == '/api/v1/radio/stations') {
-      await radioRoutes.handle(request);
+      await radioRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // LOCATION / POSTAL CODE
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // LOCATION
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/location/')) {
-      await locationRoutes.handle(request);
+      await locationRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // RECOMMENDATIONS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path == '/api/v1/recommendations') {
-      await recommendationsRoutes.handle(request);
+      await recommendationsRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // SMART SEARCH
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // SEARCH
+    // ----------------------------------------------------------
 
     if (path == '/api/v1/search') {
-      await searchRoutes.handle(request);
+      await searchRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // RATINGS / EXTERNAL PROVIDER AGGREGATION
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // RATINGS
+    // ----------------------------------------------------------
 
-    if (path == '/api/v1/ratings' || path == '/api/v1/ratings/user') {
-      await ratingRoutes.handle(request);
+    if (path == '/api/v1/ratings' ||
+        path == '/api/v1/ratings/user') {
+      await ratingRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // SHOP ASSOCIATIONS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // LIVE SHOPPING
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/shop/live-events')) {
-      await liveShoppingRoutes.handle(request);
+      await liveShoppingRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
+
+    // ----------------------------------------------------------
+    // SHOP ENTITIES
+    // ----------------------------------------------------------
 
     if (path == '/api/v1/shop/entities' ||
         path == '/api/v1/shop/entities/sync') {
-      await shopRoutes.handle(request);
+      await shopRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // PAYMENTS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/payment/') ||
         path == '/api/v1/seller/payout-destinations' ||
         path.startsWith('/api/v1/payment-methods')) {
-      await paymentRoutes.handle(request);
+      await paymentRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // GROUP
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/group/')) {
-      await groupRoutes.handle(request);
+      await groupRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // REMOTE ACCESS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/remote/')) {
-      await remoteAccessRoutes.handle(request);
+      await remoteAccessRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // SUPABASE SYNC / SOCIAL / ACTIVITY
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // SUPABASE SYNC
+    // ----------------------------------------------------------
 
     if (path == '/api/v1/supabase/sync/account' ||
         path.startsWith('/api/v1/supabase/sync/profile/') ||
@@ -916,127 +961,167 @@ Future<void> _handleRequest(
         path == '/api/v1/share-card' ||
         path == '/api/v1/queue' ||
         path.startsWith('/api/v1/queue/')) {
-      await supabaseSyncRoutes.handle(request);
+      await supabaseSyncRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // STORAGE
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/storage')) {
-      await storageRoutes.handle(request);
+      await storageRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // PLATFORM
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/platform/')) {
-      await platformRoutes.handle(request);
+      await platformRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // PLAYBACK
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/playback/')) {
-      await playbackRoutes.handle(request);
+      await playbackRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // LIBRARY
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
+    // LIBRARY RELEASES
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/library/releases')) {
-      await libraryReleaseRoutes.handle(request);
+      await libraryReleaseRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
+
+    // ----------------------------------------------------------
+    // LIBRARY
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/library/')) {
-      await libraryRoutes.handle(request);
+      await libraryRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // LEGAL
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/legal/')) {
-      await legalRoutes.handle(request);
+      await legalRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // REVIEWS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/reviews')) {
-      await reviewRoutes.handle(request);
+      await reviewRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // HOME SERVER
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/server/')) {
-      await homeServerRoutes.handle(request);
+      await homeServerRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // SPORTS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/sports')) {
-      await sportsRoutes.handle(request);
+      await sportsRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // PHYSICAL ITEMS
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/physical-items')) {
-      await physicalItemRoutes.handle(request);
+      await physicalItemRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // ARM
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (path.startsWith('/api/v1/arm/')) {
-      await armRoutes.handle(request);
+      await armRoutes.handle(
+        request,
+      );
+
       responseStarted = true;
       return;
     }
 
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
     // ROUTE NOT FOUND
-    // -------------------------------------------------------------------------
+    // ----------------------------------------------------------
 
     responseStarted = true;
 
     await _sendJson(
       request.response,
       HttpStatus.notFound,
-      {
+      <String, dynamic>{
         'success': false,
         'error': 'Route not found.',
         'path': path,
@@ -1060,7 +1145,7 @@ Future<void> _handleRequest(
       await _sendJson(
         request.response,
         HttpStatus.internalServerError,
-        {
+        <String, dynamic>{
           'success': false,
           'error': 'Internal server error.',
         },
@@ -1076,9 +1161,9 @@ Future<void> _handleRequest(
   }
 }
 
-// =============================================================================
+// ============================================================
 // HEALTH
-// =============================================================================
+// ============================================================
 
 Future<void> _health(
   HttpRequest request,
@@ -1086,7 +1171,7 @@ Future<void> _health(
   await _sendJson(
     request.response,
     HttpStatus.ok,
-    {
+    <String, dynamic>{
       'success': true,
       'status': 'online',
       'service': 'Personal Streaming Service',
@@ -1095,9 +1180,9 @@ Future<void> _health(
   );
 }
 
-// =============================================================================
-// SERVER BINDING / TLS
-// =============================================================================
+// ============================================================
+// SECURITY CONTEXT
+// ============================================================
 
 Future<SecurityContext?> _buildSecurityContext() async {
   if (!AppConfig.backendTlsEnabled) {
@@ -1107,11 +1192,13 @@ Future<SecurityContext?> _buildSecurityContext() async {
   final backendDirectory = Directory.current.path;
 
   final defaultCertificatePath =
-      '$backendDirectory${Platform.pathSeparator}certs'
+      '$backendDirectory'
+      '${Platform.pathSeparator}certs'
       '${Platform.pathSeparator}127.0.0.1+2.pem';
 
   final defaultPrivateKeyPath =
-      '$backendDirectory${Platform.pathSeparator}certs'
+      '$backendDirectory'
+      '${Platform.pathSeparator}certs'
       '${Platform.pathSeparator}127.0.0.1+2-key.pem';
 
   final configuredCertificate =
@@ -1121,20 +1208,27 @@ Future<SecurityContext?> _buildSecurityContext() async {
       Platform.environment['TLS_PRIVATE_KEY_PATH']?.trim();
 
   final certificatePath =
-      configuredCertificate == null || configuredCertificate.isEmpty
-          ? defaultCertificatePath
-          : configuredCertificate;
+      configuredCertificate == null ||
+          configuredCertificate.isEmpty
+      ? defaultCertificatePath
+      : configuredCertificate;
 
   final privateKeyPath =
-      configuredPrivateKey == null || configuredPrivateKey.isEmpty
-          ? defaultPrivateKeyPath
-          : configuredPrivateKey;
+      configuredPrivateKey == null ||
+          configuredPrivateKey.isEmpty
+      ? defaultPrivateKeyPath
+      : configuredPrivateKey;
 
   final privateKeyPassword =
       Platform.environment['TLS_PRIVATE_KEY_PASSWORD'];
 
-  final certificateFile = File(certificatePath);
-  final privateKeyFile = File(privateKeyPath);
+  final certificateFile = File(
+    certificatePath,
+  );
+
+  final privateKeyFile = File(
+    privateKeyPath,
+  );
 
   if (!certificateFile.existsSync()) {
     throw StateError(
@@ -1157,7 +1251,8 @@ Future<SecurityContext?> _buildSecurityContext() async {
       certificatePath,
     );
 
-    if (privateKeyPassword != null && privateKeyPassword.isNotEmpty) {
+    if (privateKeyPassword != null &&
+        privateKeyPassword.isNotEmpty) {
       context.usePrivateKey(
         privateKeyPath,
         password: privateKeyPassword,
@@ -1179,6 +1274,10 @@ Future<SecurityContext?> _buildSecurityContext() async {
 
   return context;
 }
+
+// ============================================================
+// SERVER BINDING
+// ============================================================
 
 Future<HttpServer> _bindServer(
   SecurityContext? securityContext,
@@ -1203,13 +1302,16 @@ Future<HttpServer> _bindServer(
   );
 }
 
-// =============================================================================
+// ============================================================
 // STARTUP VALIDATION
-// =============================================================================
+// ============================================================
 
 void _validateStartupConfiguration() {
   final publicUrl = AppConfig.publicUrl;
-  final parsedUrl = Uri.tryParse(publicUrl);
+
+  final parsedUrl = Uri.tryParse(
+    publicUrl,
+  );
 
   if (parsedUrl == null ||
       parsedUrl.scheme.isEmpty ||
@@ -1219,7 +1321,8 @@ void _validateStartupConfiguration() {
     );
   }
 
-  if (AppConfig.backendTlsEnabled && parsedUrl.scheme != 'https') {
+  if (AppConfig.backendTlsEnabled &&
+      parsedUrl.scheme != 'https') {
     throw StateError(
       'BACKEND_TLS_ENABLED=true requires SERVER_PUBLIC_URL to use HTTPS.',
     );
@@ -1239,16 +1342,17 @@ void _validateStartupConfiguration() {
     }
   }
 
-  if (AppConfig.backendTlsEnabled && AppConfig.port <= 0) {
+  if (AppConfig.backendTlsEnabled &&
+      AppConfig.port <= 0) {
     throw StateError(
       'The configured backend port is invalid.',
     );
   }
 }
 
-// =============================================================================
+// ============================================================
 // STARTUP LOGGING
-// =============================================================================
+// ============================================================
 
 void _printStartupBanner(
   HttpServer server, {
@@ -1341,16 +1445,18 @@ void _printStartupBanner(
   _log('');
 }
 
-void _log(String message) {
+void _log(
+  String message,
+) {
   developer.log(
     message,
     name: 'Server',
   );
 }
 
-// =============================================================================
+// ============================================================
 // JSON RESPONSE
-// =============================================================================
+// ============================================================
 
 Future<void> _sendJson(
   HttpResponse response,
@@ -1380,9 +1486,9 @@ Future<void> _sendJson(
   await response.close();
 }
 
-// =============================================================================
+// ============================================================
 // SECURITY HEADERS
-// =============================================================================
+// ============================================================
 
 void _addSecurityHeaders(
   HttpResponse response,
@@ -1421,39 +1527,49 @@ void _addSecurityHeaders(
   }
 }
 
-// =============================================================================
+// ============================================================
 // CORS
-// =============================================================================
+// ============================================================
 
 void _addCorsHeaders(
   HttpRequest request,
 ) {
-  final origin = request.headers.value('Origin');
+  final origin = request.headers.value(
+    'Origin',
+  );
+
   final allowed = AppConfig.allowedOrigins;
 
-  if (origin != null && origin.isNotEmpty) {
-    var originAllowed = allowed.contains('*') || allowed.contains(origin);
+  if (origin != null &&
+      origin.isNotEmpty) {
+    var originAllowed =
+        allowed.contains('*') ||
+        allowed.contains(origin);
 
-    // Development convenience:
-    //
-    // If localhost or 127.0.0.1 has explicitly been allowed, permit
-    // arbitrary development ports on that same hostname.
-    if (!originAllowed && allowed.isNotEmpty) {
+    if (!originAllowed &&
+        allowed.isNotEmpty) {
       try {
-        final uri = Uri.parse(origin);
+        final uri = Uri.parse(
+          origin,
+        );
 
         final isLocalHost =
             uri.scheme == 'http' &&
-            (uri.host == 'localhost' || uri.host == '127.0.0.1');
+            (uri.host == 'localhost' ||
+                uri.host == '127.0.0.1');
 
         if (isLocalHost) {
           originAllowed = allowed.any(
             (configured) {
               try {
-                final configuredUri = Uri.parse(configured);
+                final configuredUri = Uri.parse(
+                  configured,
+                );
 
-                return configuredUri.scheme == uri.scheme &&
-                    configuredUri.host == uri.host;
+                return configuredUri.scheme ==
+                        uri.scheme &&
+                    configuredUri.host ==
+                        uri.host;
               } catch (_) {
                 return false;
               }

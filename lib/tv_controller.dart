@@ -90,15 +90,18 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
                     onChanged: (value) => setState(() => _selectedTvId = value),
                   ),
                   const SizedBox(height: 16),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'remote', label: Text('Remote'), icon: Icon(Icons.settings_remote_rounded)),
-                      ButtonSegment(value: 'controller', label: Text('Gamepad'), icon: Icon(Icons.sports_esports_outlined)),
-                      ButtonSegment(value: 'second-screen', label: Text('Second Screen'), icon: Icon(Icons.phone_android)),
-                      ButtonSegment(value: 'keyboard', label: Text('Keyboard'), icon: Icon(Icons.keyboard_outlined)),
-                    ],
-                    selected: {_mode},
-                    onSelectionChanged: (selection) => setState(() => _mode = selection.first),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'remote', label: Text('Remote'), icon: Icon(Icons.settings_remote_rounded)),
+                        ButtonSegment(value: 'controller', label: Text('Gamepad'), icon: Icon(Icons.sports_esports_outlined)),
+                        ButtonSegment(value: 'second-screen', label: Text('Second Screen'), icon: Icon(Icons.phone_android)),
+                        ButtonSegment(value: 'keyboard', label: Text('Keyboard'), icon: Icon(Icons.keyboard_outlined)),
+                      ],
+                      selected: {_mode},
+                      onSelectionChanged: (selection) => setState(() => _mode = selection.first),
+                    ),
                   ),
                   const SizedBox(height: 18),
                   _mode == 'remote'

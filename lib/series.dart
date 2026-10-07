@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'widgets/like_toggle_button.dart';
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -984,6 +985,29 @@ class _ShowCardState extends State<_ShowCard> {
                             ),
                           ),
                         ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.52),
+                        shape: BoxShape.circle,
+                      ),
+                      child: LikeToggleButton(
+                        liked: AppController.instance.isLiked(show.id),
+                        compact: true,
+                        onPressed: () {
+                          setState(() {
+                            if (AppController.instance.isLiked(show.id)) {
+                              AppController.instance.clearReaction(show.id);
+                            } else {
+                              AppController.instance.likeMedia(show);
+                            }
+                          });
+                        },
                       ),
                     ),
                   ),

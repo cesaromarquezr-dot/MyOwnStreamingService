@@ -9,12 +9,12 @@ class TvContentIntelligence {
   final bool isMovie;
 
   const TvContentIntelligence({
-    this.genres = const {},
-    this.tags = const {},
-    this.franchises = const {},
-    this.holidays = const {},
-    this.audiences = const {},
-    this.themes = const {},
+    this.genres = const <String>{},
+    this.tags = const <String>{},
+    this.franchises = const <String>{},
+    this.holidays = const <String>{},
+    this.audiences = const <String>{},
+    this.themes = const <String>{},
     this.isEpisode = false,
     this.isMovie = false,
   });
@@ -31,7 +31,6 @@ class TvContentIntelligence {
       };
 }
 
-
 class TvProgrammingRule {
   final String id;
   final String name;
@@ -44,22 +43,24 @@ class TvProgrammingRule {
   const TvProgrammingRule({
     required this.id,
     required this.name,
-    this.terms = const [],
-    this.months = const [],
-    this.daysOfWeek = const [],
+    this.terms = const <String>[],
+    this.months = const <int>[],
+    this.daysOfWeek = const <int>[],
     this.nightly = false,
     this.priority = 500,
   });
 
-  factory TvProgrammingRule.fromJson(Map<String, dynamic> json) => TvProgrammingRule(
-        id: json['id']?.toString() ?? '',
-        name: json['name']?.toString() ?? 'Programming rule',
-        terms: json['terms'] is List ? (json['terms'] as List).map((e) => e.toString().trim().toLowerCase()).where((e) => e.isNotEmpty).toList() : const [],
-        months: json['months'] is List ? (json['months'] as List).map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e >= 1 && e <= 12).toList() : const [],
-        daysOfWeek: json['daysOfWeek'] is List ? (json['daysOfWeek'] as List).map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e >= 1 && e <= 7).toList() : const [],
-        nightly: json['nightly'] == true,
-        priority: (json['priority'] as num?)?.toInt() ?? 500,
-      );
+  factory TvProgrammingRule.fromJson(Map<String, dynamic> json) {
+    return TvProgrammingRule(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Programming rule',
+      terms: _stringList(json['terms']),
+      months: _intList(json['months'], min: 1, max: 12),
+      daysOfWeek: _intList(json['daysOfWeek'], min: 1, max: 7),
+      nightly: json['nightly'] == true,
+      priority: (json['priority'] as num?)?.toInt() ?? 500,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -70,6 +71,22 @@ class TvProgrammingRule {
         'nightly': nightly,
         'priority': priority,
       };
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return const <String>[];
+    return value
+        .map((item) => item.toString().trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static List<int> _intList(dynamic value, {required int min, required int max}) {
+    if (value is! List) return const <int>[];
+    return value
+        .map((item) => int.tryParse(item.toString()) ?? 0)
+        .where((item) => item >= min && item <= max)
+        .toList(growable: false);
+  }
 }
 
 class TvChannelDefinition {
@@ -86,12 +103,31 @@ class TvChannelDefinition {
     required this.id,
     required this.name,
     this.description = '',
-    this.filters = const [],
-    this.contentTypes = const ['Movies', 'Shows'],
+    this.filters = const <String>[],
+    this.contentTypes = const <String>['Movies', 'Shows'],
     this.seasonal = false,
     this.priority = 0,
-    this.programmingRules = const [],
+    this.programmingRules = const <TvProgrammingRule>[],
   });
+
+  factory TvChannelDefinition.fromJson(Map<String, dynamic> json) {
+    final rawRules = json['programmingRules'];
+    return TvChannelDefinition(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'My Channel',
+      description: json['description']?.toString() ?? '',
+      filters: _stringList(json['filters']),
+      contentTypes: _stringList(json['contentTypes']),
+      seasonal: json['seasonal'] == true,
+      priority: (json['priority'] as num?)?.toInt() ?? 0,
+      programmingRules: rawRules is List
+          ? rawRules
+              .whereType<Map>()
+              .map((item) => TvProgrammingRule.fromJson(Map<String, dynamic>.from(item)))
+              .toList(growable: false)
+          : const <TvProgrammingRule>[],
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -101,7 +137,16 @@ class TvChannelDefinition {
         'contentTypes': contentTypes,
         'seasonal': seasonal,
         'priority': priority,
+        'programmingRules': programmingRules.map((rule) => rule.toJson()).toList(),
       };
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return const <String>[];
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
 }
 
 class TvProgramItem {
