@@ -33,7 +33,7 @@ class GameRoutes {
         final mode = body['mode']?.toString().trim() ?? 'casual';
         if (profileId.isEmpty || gameId.isEmpty) throw const FormatException('profileId and gameId are required.');
         if (!_profileBelongsToAccount(account, profileId)) throw StateError('Profile does not belong to this account.');
-        final match = await service.createMatch(account: account, profileId: profileId, gameId: gameId, mode: mode, opponentProfileId: body['opponentProfileId']?.toString());
+        final match = await service.createMatch(account: account, profileId: profileId, gameId: gameId, mode: mode, opponentProfileId: body['opponentProfileId']?.toString(), difficulty: body['difficulty']?.toString() ?? 'medium', variant: body['variant']?.toString() ?? 'standard');
         await _json(request.response, 201, {'success': true, 'match': match});
         return;
       }

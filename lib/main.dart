@@ -24,6 +24,7 @@ import 'film.dart';
 import 'how_it_works.dart';
 import 'group_chat.dart';
 import 'shop.dart';
+import 'food_delivery.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
@@ -82,11 +83,9 @@ int? _primaryIndexForPage(String pageId) => switch (pageId) {
     };
 
 class _AppPageState extends ChangeNotifier {
-  String pageId = 'profiles';
+  String pageId = 'boot';
   int primaryIndex = 0;
   bool isCustomizing = false;
-  // Global navigation is unavailable until the /main shell is actually entered.
-  bool shellVisible = false;
 
   void setPage(
     String value, {
@@ -106,48 +105,50 @@ class _AppPageState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setShellVisible(bool value) {
-    if (shellVisible == value) return;
-    shellVisible = value;
-    notifyListeners();
-  }
-
   void refresh() => notifyListeners();
 }
 
 class _AppPageRouteObserver extends NavigatorObserver {
   final Map<Route<dynamic>, String> _pageIds = <Route<dynamic>, String>{};
+  int _pendingPageUpdate = 0;
 
   void _schedulePageUpdate(
     String pageId, {
     int? selectedPrimaryIndex,
     required bool customizing,
   }) {
-    _appPageState.setPage(
-      pageId,
-      selectedPrimaryIndex: selectedPrimaryIndex,
-      customizing: customizing,
-    );
-  }
+    // The onboarding routes must update the shell state immediately.
+    // Otherwise a previously selected profile can leave the main navbar
+    // visible for a frame (or longer if another route update supersedes the
+    // pending callback).
+    if (pageId == 'server-selection' || pageId == 'profiles') {
+      _pendingPageUpdate++;
+      _appPageState.setPage(
+        pageId,
+        selectedPrimaryIndex: selectedPrimaryIndex,
+        customizing: customizing,
+      );
+      return;
+    }
 
-  bool _isPreShellRoute(String? name) {
-    return name == '/app/profiles' ||
-        name == '/app/server-selection' ||
-        name == '/login' ||
-        name == '/signup' ||
-        name == '/app/login' ||
-        name == '/app/signup';
+    final updateId = ++_pendingPageUpdate;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (updateId != _pendingPageUpdate) return;
+      _appPageState.setPage(
+        pageId,
+        selectedPrimaryIndex: selectedPrimaryIndex,
+        customizing: customizing,
+      );
+    });
   }
 
   String _pageIdForRoute(String? name, Route<dynamic> route) {
-    if (name == '/app/player' ||
-        (name != null && name.startsWith('/app/games/'))) {
-      return 'player';
-    }
+    if (name == '/app/player') return 'player';
     if (name != null && name.startsWith('/app/page/')) {
       return name.substring('/app/page/'.length);
     }
     if (name == '/app/shop') return 'shop';
+    if (name == '/app/page/food-delivery') return 'food-delivery';
     if (name == '/app/details') return 'details';
     if (name == '/app/customize' || name == '/app/more') {
       return _appPageState.pageId;
@@ -160,9 +161,6 @@ class _AppPageRouteObserver extends NavigatorObserver {
 
   void setPageForRoute(Route<dynamic>? route, String pageId, int primaryIndex) {
     if (route != null) _pageIds[route] = pageId;
-    if (route?.settings.name == '/main') {
-      _appPageState.setShellVisible(true);
-    }
     _appPageState.setPage(
       pageId,
       selectedPrimaryIndex: primaryIndex,
@@ -176,11 +174,6 @@ class _AppPageRouteObserver extends NavigatorObserver {
     final name = route.settings.name;
     final pageId = _pageIdForRoute(name, route);
     _pageIds[route] = pageId;
-    if (name == '/main') {
-      _appPageState.setShellVisible(true);
-    } else if (_isPreShellRoute(name)) {
-      _appPageState.setShellVisible(false);
-    }
     _schedulePageUpdate(
       pageId,
       selectedPrimaryIndex: _primaryIndexForPage(pageId),
@@ -193,12 +186,6 @@ class _AppPageRouteObserver extends NavigatorObserver {
     super.didPop(route, previousRoute);
     _pageIds.remove(route);
     if (previousRoute != null) {
-      final previousName = previousRoute.settings.name;
-      if (previousName == '/main') {
-        _appPageState.setShellVisible(true);
-      } else if (_isPreShellRoute(previousName)) {
-        _appPageState.setShellVisible(false);
-      }
       final previousPageId = _pageIds[previousRoute] ?? 'home';
       _schedulePageUpdate(
         previousPageId,
@@ -213,6 +200,15 @@ class _AppPageRouteObserver extends NavigatorObserver {
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
     _pageIds.remove(route);
+    if (previousRoute != null) {
+      final previousPageId = _pageIds[previousRoute] ?? 'home';
+      _schedulePageUpdate(
+        previousPageId,
+        selectedPrimaryIndex: _primaryIndexForPage(previousPageId),
+        customizing: previousRoute.settings.name == '/app/customize' ||
+            previousRoute.settings.name == '/app/more',
+      );
+    }
   }
 
   @override
@@ -221,11 +217,6 @@ class _AppPageRouteObserver extends NavigatorObserver {
     if (oldRoute != null) _pageIds.remove(oldRoute);
     if (newRoute != null) {
       final name = newRoute.settings.name;
-      if (name == '/main') {
-        _appPageState.setShellVisible(true);
-      } else if (_isPreShellRoute(name)) {
-        _appPageState.setShellVisible(false);
-      }
       final pageId = _pageIdForRoute(name, newRoute);
       _pageIds[newRoute] = pageId;
       _schedulePageUpdate(
@@ -250,92 +241,17 @@ class MyStreamingService extends StatefulWidget {
 
 /// State for [MyStreamingService], including the global language picker overlay.
 class _MyStreamingServiceState extends State<MyStreamingService> {
-  OverlayEntry? _languagePickerEntry;
-
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _installLanguagePicker();
-    });
-  }
-
-  void _installLanguagePicker() {
-    if (!mounted || _languagePickerEntry != null) {
-      return;
-    }
-
-    final overlay = _appNavigatorKey.currentState?.overlay;
-    if (overlay == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _installLanguagePicker();
-      });
-      return;
-    }
-
-    _languagePickerEntry = OverlayEntry(
-      builder: (context) => Positioned.fill(
-        child: AnimatedBuilder(
-          animation: _appPageState,
-          builder: (context, _) {
-            final profileSelected =
-                AppController.instance.currentProfile != null;
-            final showNavigation =
-                _appPageState.shellVisible &&
-                profileSelected &&
-                _appPageState.pageId != 'profiles' &&
-                _appPageState.pageId != 'server-selection' &&
-                _appPageState.pageId != 'import' &&
-                _appPageState.pageId != 'player';
-
-            if (_appPageState.pageId == 'player' ||
-                !_appPageState.shellVisible ||
-                !profileSelected) {
-              return const SizedBox.shrink();
-            }
-
-            return Align(
-              alignment: Alignment.bottomLeft,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 12,
-                  bottom: (showNavigation ? 84.0 : 0.0) +
-                      MediaQuery.paddingOf(context).bottom +
-                      12,
-                ),
-                child: const LanguagePicker(),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-
-    overlay.insert(_languagePickerEntry!);
-  }
-
-  @override
-  void dispose() {
-    _languagePickerEntry?.remove();
-    _languagePickerEntry?.dispose();
-    _languagePickerEntry = null;
-    super.dispose();
-  }
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: _appNavigatorKey,
       navigatorObservers: <NavigatorObserver>[_appPageRouteObserver],
       title: tr('My Personal Streaming Service'),
       builder: (context, child) {
-        // MaterialApp provides the Navigator, but widgets placed directly
-        // above that Navigator do not automatically have an Overlay.
-        // LanguagePicker uses PopupMenuButton, which requires an Overlay
-        // ancestor. Create one here so the picker is available globally
-        // without causing the "No Overlay widget found" red screen.
+        // Keep one Overlay above the app Navigator. The Navigator itself
+        // owns its route overlay, but the language picker also needs an
+        // Overlay ancestor. Keeping both here avoids a second overlay being
+        // installed dynamically during login/route replacement.
         return Overlay(
           initialEntries: [
             OverlayEntry(
@@ -365,6 +281,45 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
                 );
               },
             ),
+            OverlayEntry(
+              builder: (overlayContext) => Positioned.fill(
+                child: AnimatedBuilder(
+                    animation: _appPageState,
+                    builder: (context, _) {
+                      final profileSelected =
+                          AppController.instance.currentProfile != null;
+                      final routeIsOnboarding =
+                          _appPageState.pageId == 'boot' ||
+                          _appPageState.pageId == 'profiles' ||
+                          _appPageState.pageId == 'server-selection' ||
+                          _appPageState.pageId == 'import';
+
+                      if (!profileSelected ||
+                          routeIsOnboarding ||
+                          _appPageState.pageId == 'player') {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Align(
+                        alignment: Alignment.bottomLeft,
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            left: 12,
+                            bottom: MediaQuery.paddingOf(context).bottom + 12,
+                          ),
+                          child: const IgnorePointer(
+                            ignoring: false,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: LanguagePicker(),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -517,12 +472,12 @@ class _AppPageSurface extends StatelessWidget {
           visualDensity: density,
         );
         final showGlobalNavigation =
-            _appPageState.shellVisible &&
             AppController.instance.currentProfile != null &&
-            _appPageState.pageId != 'profiles' &&
-            _appPageState.pageId != 'server-selection' &&
-            _appPageState.pageId != 'import' &&
-            _appPageState.pageId != 'player';
+                _appPageState.pageId != 'boot' &&
+                _appPageState.pageId != 'profiles' &&
+                _appPageState.pageId != 'server-selection' &&
+                _appPageState.pageId != 'import' &&
+                _appPageState.pageId != 'player';
         const globalNavigationHeight = 84.0;
         final bottomInset = showGlobalNavigation
             ? globalNavigationHeight + MediaQuery.paddingOf(context).bottom
@@ -546,9 +501,7 @@ class _AppPageSurface extends StatelessWidget {
                     child: _GlobalPrimaryNavigationBar(),
                   ),
                 ),
-              if (showGlobalNavigation &&
-                  !_appPageState.isCustomizing &&
-                  _appPageState.pageId != 'player')
+              if (showGlobalNavigation && !_appPageState.isCustomizing)
                 Positioned(
                   right: 14,
                   bottom: bottomInset + 10,
@@ -956,12 +909,6 @@ void _enterMainHome() {
     ),
     (route) => false,
   );
-  _appPageState.setShellVisible(true);
-  _appPageState.setPage(
-    'home',
-    selectedPrimaryIndex: 0,
-    customizing: false,
-  );
 }
 
 // SPLASH SCREEN
@@ -992,7 +939,6 @@ class _SplashScreenState extends State<SplashScreen> {
     if (restored) {
       final serverContext = await AppController.instance.loadServerContext();
       if (!mounted) return;
-      _appPageState.setShellVisible(false);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           settings: RouteSettings(name: serverContext.needsServerSelection ? '/app/server-selection' : '/app/profiles'),
@@ -1223,18 +1169,16 @@ class _LoginScreenState extends State<LoginScreen> {
       final serverContext = await controller.loadServerContext();
       if (!mounted) return;
       if (serverContext.needsServerSelection) {
-        _appPageState.setShellVisible(false);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             settings: const RouteSettings(name: '/app/server-selection'),
-            builder: (_) => const ServerSelectionScreen(),
+            builder: (_) => ServerSelectionScreen(onProfileReady: _enterMainHome),
           ),
         );
         return;
       }
 
-      _appPageState.setShellVisible(false);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -4386,6 +4330,13 @@ void _showGlobalMore() {
           routeName: '/app/shop',
         );
       },
+      onFoodDelivery: () {
+        Navigator.of(sheetContext).pop();
+        push(
+          const FoodOrderingScreen(),
+          routeName: '/app/page/food-delivery',
+        );
+      },
       onMyTv: () {
         Navigator.of(sheetContext).pop();
         push(const MyTvScreen(), routeName: '/app/page/my-tv');
@@ -4715,6 +4666,7 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onPersonalStreaming;
   final VoidCallback onGroupWatch;
   final VoidCallback onShop;
+  final VoidCallback onFoodDelivery;
   final VoidCallback onMyTv;
   final VoidCallback onGames;
   final VoidCallback onTvController;
@@ -4730,6 +4682,7 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onPersonalStreaming,
     required this.onGroupWatch,
     required this.onShop,
+    required this.onFoodDelivery,
     required this.onMyTv,
     required this.onGames,
     required this.onTvController,
@@ -4746,7 +4699,8 @@ class _MoreActionsSheet extends StatelessWidget {
         crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 3 : 2,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
-        childAspectRatio: 1.7,
+        physics: const NeverScrollableScrollPhysics(),
+        childAspectRatio: 1.25,
         children: [
           _moreCard(Icons.library_add_outlined, 'Import / Rip',
               'Add physical media', onImport),
@@ -4765,6 +4719,8 @@ class _MoreActionsSheet extends StatelessWidget {
           _moreCard(Icons.group_rounded, 'Group Watch / Chat',
               'Watch and chat together', onGroupWatch),
           _moreCard(Icons.shopping_bag_outlined, 'Shop', 'Marketplace', onShop),
+          _moreCard(Icons.delivery_dining_rounded, 'Food Delivery',
+              'Find nearby restaurants and order food', onFoodDelivery),
           _moreCard(Icons.live_tv_rounded, 'My TV',
               'Create ad-free channels and view your guide', onMyTv),
           _moreCard(Icons.sports_esports_rounded, 'Games',
@@ -5437,7 +5393,7 @@ class _PremiumSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.sizeOf(context).height * .82;
+    final maxHeight = MediaQuery.sizeOf(context).height * .78;
 
     return SafeArea(
       child: Align(

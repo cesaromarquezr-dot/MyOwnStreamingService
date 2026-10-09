@@ -66,8 +66,12 @@ class GameService {
     required String gameId,
     required String mode,
     String? opponentProfileId,
+    String difficulty = 'medium',
+    String variant = 'standard',
   }) async {
     final rating = _rating(profileId: profileId, gameId: gameId, mode: mode);
+    final cleanDifficulty = difficulty.trim().isEmpty ? 'medium' : difficulty.trim().toLowerCase();
+    final cleanVariant = variant.trim().isEmpty ? 'standard' : variant.trim();
     final currentRating = (rating['rating'] as num).toDouble();
     if (mode == 'ranked' && (opponentProfileId == null || opponentProfileId.isEmpty)) {
       final queueKey = '$gameId|$mode';
@@ -93,6 +97,8 @@ class GameService {
           'id': id,
           'gameId': gameId,
           'mode': mode,
+          'difficulty': cleanDifficulty,
+          'variant': cleanVariant,
           'status': 'matched',
           'profileId': profileId,
           'opponentProfileId': opponent['profileId'],
@@ -112,6 +118,8 @@ class GameService {
         'id': 'queue_${DateTime.now().microsecondsSinceEpoch}',
         'gameId': gameId,
         'mode': mode,
+        'difficulty': cleanDifficulty,
+        'variant': cleanVariant,
         'status': 'queued',
         'profileId': profileId,
         'rating': currentRating,
@@ -125,6 +133,8 @@ class GameService {
       'id': id,
       'gameId': gameId,
       'mode': mode,
+      'difficulty': cleanDifficulty,
+      'variant': cleanVariant,
       'status': 'created',
       'profileId': profileId,
       'opponentProfileId': opponentProfileId,

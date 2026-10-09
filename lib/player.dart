@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'device_features.dart';
+import 'food_delivery.dart';
 import 'app_core.dart';
 import 'music.dart';
 import 'xray.dart';
@@ -1832,6 +1833,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
               _PlayerIconButton(
                 icon: Icons.audiotrack_rounded,
                 onPressed: openAudioSubtitleOptions,
+              ),
+              _PlayerIconButton(
+                icon: Icons.delivery_dining_rounded,
+                onPressed: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => FoodOrderingScreen(
+                      viewingContext: widget.media.title,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

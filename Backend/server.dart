@@ -37,6 +37,7 @@
 //     ARM_SERVER_URL
 //     ARM_USERNAME
 //     ARM_PASSWORD
+//     FOOD_PAYMENT_MOCK (development only)
 //
 // Local development certificate fallback:
 //     Backend/certs/127.0.0.1+2.pem
@@ -58,6 +59,7 @@ import 'middleware/authentication.dart';
 import 'routes/arm_routes.dart';
 import 'routes/auth_routes.dart';
 import 'routes/game_routes.dart';
+import 'routes/food_delivery_routes.dart';
 import 'routes/group_routes.dart';
 import 'routes/home_server_routes.dart';
 import 'routes/legal_routes.dart';
@@ -90,6 +92,7 @@ import 'self_hosting_security.dart';
 import 'services/auth_service.dart';
 import 'services/email_service.dart';
 import 'services/game_service.dart';
+import 'services/food_delivery_service.dart';
 import 'services/group_recommendation_service.dart';
 import 'services/group_watch_service.dart';
 import 'services/home_server_service.dart';
@@ -181,6 +184,10 @@ Future<void> main() async {
   );
 
   final paymentProviderService = PaymentProviderService();
+
+  final foodDeliveryService = FoodDeliveryService(
+    paymentMethods: paymentMethodService,
+  );
 
   // ------------------------------------------------------------
   // PAYMENT SERVICE
@@ -284,6 +291,11 @@ Future<void> main() async {
   final tvChannelRoutes = TvChannelRoutes(
     authentication: authentication,
     service: TvChannelService(),
+  );
+
+  final foodDeliveryRoutes = FoodDeliveryRoutes(
+    authentication: authentication,
+    service: foodDeliveryService,
   );
 
   // ------------------------------------------------------------
@@ -545,6 +557,7 @@ Future<void> main() async {
       serverAgentRoutes,
       platformServerRoutes,
       gameRoutes,
+      foodDeliveryRoutes,
       tvPairingRoutes,
       tvChannelRoutes,
     ).catchError(
@@ -596,6 +609,7 @@ Future<void> _handleRequest(
   ServerAgentRoutes serverAgentRoutes,
   PlatformServerRoutes platformServerRoutes,
   GameRoutes gameRoutes,
+  FoodDeliveryRoutes foodDeliveryRoutes,
   TvPairingRoutes tvPairingRoutes,
   TvChannelRoutes tvChannelRoutes,
 ) async {
@@ -822,6 +836,16 @@ Future<void> _handleRequest(
         request,
       );
 
+      responseStarted = true;
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // FOOD DELIVERY
+    // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/food/')) {
+      await foodDeliveryRoutes.handle(request);
       responseStarted = true;
       return;
     }

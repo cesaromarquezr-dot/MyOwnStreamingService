@@ -77,7 +77,7 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Continue')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save & Continue')),
           ],
         ),
       );
@@ -100,7 +100,7 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
 
   void _finish() {
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context, rootNavigator: true).pushReplacement(
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/profiles'),
         builder: (_) => ProfileSelectionScreen(

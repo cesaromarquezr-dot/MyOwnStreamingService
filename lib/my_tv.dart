@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'dart:math';
 
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
+import 'food_delivery.dart';
 import 'music.dart';
 import 'music_favorites.dart';
 import 'player.dart';
@@ -14,6 +16,53 @@ import 'core/models/tv_channel.dart';
 import 'core/services/tv_channel_engine.dart';
 
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
+
+/// Per-profile music placement rules for My TV. My TV is always commercial-free;
+/// these settings only decide when personal music is scheduled around content.
+class _TvMusicBreakSettings {
+  final String mode; // none, per_program, every_minutes
+  final int songsPerProgram;
+  final int intervalMinutes;
+  final String placement; // before, after, before_after, between, throughout
+  final bool naturalBreaksOnly;
+  final bool avoidRecentTracks;
+  final String source; // all or favorites
+  final String musicFilter; // artist, genre, album, title, etc.
+
+  const _TvMusicBreakSettings({
+    this.mode = 'none',
+    this.songsPerProgram = 1,
+    this.intervalMinutes = 30,
+    this.placement = 'between',
+    this.naturalBreaksOnly = true,
+    this.avoidRecentTracks = true,
+    this.source = 'all',
+    this.musicFilter = '',
+  });
+
+  factory _TvMusicBreakSettings.fromJson(Map<String, dynamic> json) =>
+      _TvMusicBreakSettings(
+        mode: json['mode']?.toString() ?? 'none',
+        songsPerProgram: (((json['songsPerProgram'] as num?)?.toInt() ?? 1).clamp(1, 10)).toInt(),
+        intervalMinutes: (((json['intervalMinutes'] as num?)?.toInt() ?? 30).clamp(5, 180)).toInt(),
+        placement: json['placement']?.toString() ?? 'between',
+        naturalBreaksOnly: json['naturalBreaksOnly'] != false,
+        avoidRecentTracks: json['avoidRecentTracks'] != false,
+        source: json['source']?.toString() == 'favorites' ? 'favorites' : 'all',
+        musicFilter: json['musicFilter']?.toString() ?? '',
+      );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'mode': mode,
+        'songsPerProgram': songsPerProgram,
+        'intervalMinutes': intervalMinutes,
+        'placement': placement,
+        'naturalBreaksOnly': naturalBreaksOnly,
+        'avoidRecentTracks': avoidRecentTracks,
+        'source': source,
+        'musicFilter': musicFilter,
+      };
+}
 
 class _MyTvChannel {
   final String id;
@@ -128,6 +177,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
   bool _loading = true;
   bool _showGuide = false;
   String? _error;
+  _TvMusicBreakSettings _musicBreaks = const _TvMusicBreakSettings();
+  Map<String, dynamic> _musicBreakSettingsByProfile = <String, dynamic>{};
 
   String get _profileId =>
       AppController.instance.currentProfile?.id ?? 'default';
@@ -161,6 +212,28 @@ class _MyTvScreenState extends State<MyTvScreen> {
       }
     }
     data ??= _decode(prefs.getString(_preferenceKey));
+    final rawMusicBreakProfiles = data?['musicBreakSettingsByProfile'];
+    final musicBreakProfiles = <String, dynamic>{};
+    if (rawMusicBreakProfiles is Map) {
+      for (final entry in rawMusicBreakProfiles.entries) {
+        if (entry.value is Map) {
+          musicBreakProfiles[entry.key.toString()] =
+              Map<String, dynamic>.from(entry.value as Map);
+        }
+      }
+    }
+    final profileMusicJson = musicBreakProfiles[_profileId];
+    final legacyMusicJson = data?['musicBreakSettings'];
+    final selectedMusicJson = profileMusicJson is Map
+        ? profileMusicJson
+        : legacyMusicJson is Map
+            ? legacyMusicJson
+            : null;
+    final musicBreaks = selectedMusicJson != null
+        ? _TvMusicBreakSettings.fromJson(
+            Map<String, dynamic>.from(selectedMusicJson),
+          )
+        : const _TvMusicBreakSettings();
     final rawChannels = data?['channels'];
     final channels = rawChannels is List
         ? rawChannels
@@ -193,6 +266,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
     setState(() {
       _channels = channels;
       _recentlyPlayed = recent;
+      _musicBreaks = musicBreaks;
+      _musicBreakSettingsByProfile = musicBreakProfiles;
       _selectedChannelId ??= channels.first.id;
       _loading = false;
     });
@@ -209,10 +284,18 @@ class _MyTvScreenState extends State<MyTvScreen> {
   }
 
   Future<void> _save() async {
+    final profileSettings = <String, dynamic>{
+      ..._musicBreakSettingsByProfile,
+    };
+    profileSettings[_profileId] = _musicBreaks.toJson();
+    _musicBreakSettingsByProfile = profileSettings;
     final data = <String, dynamic>{
       'channels': _channels.map((channel) => channel.toJson()).toList(),
       'channelsInitialized': true,
       'recentlyPlayed': _recentlyPlayed,
+      'musicBreakSettingsByProfile': profileSettings,
+      // Keep this legacy field synchronized for older clients.
+      'musicBreakSettings': _musicBreaks.toJson(),
     };
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_preferenceKey, jsonEncode(data));
@@ -313,17 +396,24 @@ class _MyTvScreenState extends State<MyTvScreen> {
             _engineScore(b, channel) + _ruleScore(b, channel, DateTime.now());
         return bScore.compareTo(aScore);
       });
-    var eligible = sortedMedia
+    var videos = sortedMedia
         .where((media) => _channelAcceptsVideoType(channel, media.type))
         .map(_ChannelEntry.media)
         .toList();
-    final tracks = MusicLibraryStore.instance.tracks.where((track) {
+
+    final likedTracks = MusicFavoritesBridge.likedTracks();
+    final musicTerms = _musicBreaks.musicFilter
+        .split(RegExp(r'[,;\n]'))
+        .map((term) => term.trim().toLowerCase())
+        .where((term) => term.isNotEmpty)
+        .toList();
+    var music = MusicLibraryStore.instance.tracks.where((track) {
       if (!channel.contentTypes.contains('Music') ||
           track.audioUrl?.trim().isNotEmpty != true ||
           (profileBlocksExplicitMusic(profile) && track.explicit) ||
           (profileBlocksMatureMusic(profile) && track.matureTheme) ||
-          (channel.favoritesOnly &&
-              !MusicFavoritesBridge.likedTracks().contains(track.id))) {
+          (_musicBreaks.source == 'favorites' && !likedTracks.contains(track.id)) ||
+          (channel.favoritesOnly && !likedTracks.contains(track.id))) {
         return false;
       }
       final trackMatches = matches([
@@ -335,25 +425,128 @@ class _MyTvScreenState extends State<MyTvScreen> {
         ...track.subgenres,
       ]);
       final trackTitle = track.title.trim().toLowerCase();
+      final musicPreferenceMatches = musicTerms.isEmpty ||
+          musicTerms.any((term) => [
+                track.title,
+                track.artist,
+                track.album,
+                ...track.featuredArtists,
+                ...track.genres,
+                ...track.subgenres,
+              ].join(' ').toLowerCase().contains(term));
       final soundtrackMatches = terms.isNotEmpty &&
           trackTitle.isNotEmpty &&
           matchingMedia.any((media) => media.music.any(
                 (song) => song.toLowerCase().contains(trackTitle),
               ));
-      return terms.isEmpty || trackMatches || soundtrackMatches;
-    });
-    eligible.addAll(tracks.map(_ChannelEntry.track));
-    if (eligible.isEmpty) return const [];
+      return musicPreferenceMatches && (terms.isEmpty || trackMatches || soundtrackMatches);
+    }).toList();
+
     final recent = _recentlyPlayed[channel.id] ?? const <String>[];
-    final unseen =
-        eligible.where((entry) => !recent.take(8).contains(entry.id)).toList();
-    if (unseen.isNotEmpty) eligible = unseen;
+    if (_musicBreaks.avoidRecentTracks) {
+      final unseen = music.where((track) =>
+          !recent.take(8).contains('music:${track.id}')).toList();
+      if (unseen.isNotEmpty) music = unseen;
+    }
+
+    if (videos.isEmpty && music.isEmpty) return const [];
 
     if (channel.shuffle && TvProgrammingService.activeSeason() == null) {
-      // Outside seasonal windows, user shuffle remains the dominant ordering.
-      eligible.shuffle(Random(channel.id.hashCode));
+      videos.shuffle(Random(channel.id.hashCode));
+      music.shuffle(Random('${channel.id}:music'.hashCode));
     }
-    return eligible.take(24).toList(growable: false);
+
+    // With music breaks disabled, retain the original My TV behavior: music is
+    // simply another channel entry. Once enabled, music becomes intentional
+    // programming around the movies/episodes instead of a commercial block.
+    if (_musicBreaks.mode == 'none') {
+      final entries = <_ChannelEntry>[...videos, ...music.map(_ChannelEntry.track)];
+      return entries.take(24).toList(growable: false);
+    }
+
+    final musicEntries = music.map(_ChannelEntry.track).toList();
+    return _insertMusicBreaks(videos, musicEntries).take(24).toList(growable: false);
+  }
+
+  List<_ChannelEntry> _insertMusicBreaks(
+    List<_ChannelEntry> videos,
+    List<_ChannelEntry> music,
+  ) {
+    if (music.isEmpty) return List<_ChannelEntry>.from(videos);
+    if (videos.isEmpty) return music.take(24).toList();
+
+    var musicIndex = 0;
+    _ChannelEntry nextMusic() {
+      final entry = music[musicIndex % music.length];
+      musicIndex++;
+      return entry;
+    }
+
+    final result = <_ChannelEntry>[];
+    final songs = _musicBreaks.songsPerProgram.clamp(1, 10).toInt();
+
+    void addSongs(int count) {
+      for (var i = 0; i < count; i++) {
+        result.add(nextMusic());
+      }
+    }
+
+    if (_musicBreaks.mode == 'per_program') {
+      switch (_musicBreaks.placement) {
+        case 'before':
+          for (final video in videos) {
+            addSongs(songs);
+            result.add(video);
+          }
+          break;
+        case 'after':
+          for (final video in videos) {
+            result.add(video);
+            addSongs(songs);
+          }
+          break;
+        case 'before_after':
+          for (final video in videos) {
+            addSongs((songs + 1) ~/ 2);
+            result.add(video);
+            addSongs(songs ~/ 2);
+          }
+          break;
+        case 'between':
+        case 'throughout':
+          for (var i = 0; i < videos.length; i++) {
+            result.add(videos[i]);
+            if (i < videos.length - 1) addSongs(songs);
+          }
+          break;
+        default:
+          result.addAll(videos);
+      }
+      return result;
+    }
+
+    // every_minutes / throughout: use the same estimated runtimes as the guide,
+    // but only place songs between completed programs. This keeps music from
+    // interrupting a movie or episode in the middle of playback.
+    var elapsed = 0;
+    if (_musicBreaks.placement == 'before' ||
+        _musicBreaks.placement == 'before_after') {
+      addSongs(songs);
+    }
+    for (var i = 0; i < videos.length; i++) {
+      final video = videos[i];
+      result.add(video);
+      elapsed += _durationMinutes(video);
+      if (elapsed >= _musicBreaks.intervalMinutes && i < videos.length - 1) {
+        addSongs(songs);
+        elapsed = 0;
+      }
+    }
+    if (_musicBreaks.placement == 'after' ||
+        _musicBreaks.placement == 'before_after') {
+      addSongs(songs);
+    }
+    return result;
   }
 
   bool _channelAcceptsVideoType(_MyTvChannel channel, String type) {
@@ -424,9 +617,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       'Studios': <String>{},
       'Franchises': <String>{},
       'People': <String>{},
-      'Holidays & Themes': <String>{},
     };
-
     for (final media in AppController.instance.library) {
       values['Genres']!.addAll(media.genres);
       values['Tags']!.addAll(media.tags);
@@ -434,12 +625,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
       if ((media.franchiseName ?? '').trim().isNotEmpty) {
         values['Franchises']!.add(media.franchiseName!.trim());
       }
-      values['People']!
-        ..addAll(media.actors)
-        ..addAll(media.directors)
-        ..addAll(media.writers);
+      values['People']!..addAll(media.actors)..addAll(media.directors)..addAll(media.writers);
     }
-
     return values.map(
       (key, set) => MapEntry(
         key,
@@ -458,185 +645,154 @@ class _MyTvScreenState extends State<MyTvScreen> {
     final selectedTypes = _channelContentTypes.toSet();
     final selectedMetadata = <String>{};
     var favoritesOnly = false;
-    var startTime = const TimeOfDay(hour: 7, minute: 0);
     final metadataChoices = _availableMetadataChoices();
-
+    var startTime = const TimeOfDay(hour: 7, minute: 0);
     final added = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Create a channel'),
-          content: SizedBox(
-            width: 720,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: name,
-                    decoration: const InputDecoration(
-                      labelText: 'Channel name',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        final selected = await showTimePicker(
-                          context: context,
-                          initialTime: startTime,
-                        );
-                        if (selected != null) {
-                          setDialogState(() => startTime = selected);
-                        }
-                      },
-                      icon: const Icon(Icons.schedule_rounded),
-                      label: Text(
-                        'Daily guide starts at ${startTime.format(context)}',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Content types',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 5),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _channelContentTypes
-                        .map(
-                          (type) => FilterChip(
-                            label: Text(type),
-                            selected: selectedTypes.contains(type),
-                            onSelected: (selected) => setDialogState(() {
-                              if (selected) {
-                                selectedTypes.add(type);
-                              } else {
-                                selectedTypes.remove(type);
-                              }
-                            }),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Channel metadata',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'These choices come from your library metadata plus common channel themes. Select as many as you want. A title matching any selected item can be programmed into the channel.',
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                  const SizedBox(height: 12),
-                  for (final entry in metadataChoices.entries) ...[
-                    if (entry.value.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 7),
-                        child: Text(
-                          entry.key,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      Wrap(
-                        spacing: 7,
-                        runSpacing: 7,
-                        children: entry.value.take(36).map((value) {
-                          return FilterChip(
-                            label: Text(value),
-                            selected: selectedMetadata.contains(value),
-                            onSelected: (selected) {
-                              setDialogState(() {
-                                if (selected) {
-                                  selectedMetadata.add(value);
-                                } else {
-                                  selectedMetadata.remove(value);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ],
-                  TextField(
-                    controller: filterText,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Custom keywords',
-                      hintText:
-                          'Add your own titles, people, genres, themes or tags',
-                      helperText:
-                          'Separate custom terms with commas or new lines.',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Only include liked items'),
-                    value: favoritesOnly,
-                    onChanged: (value) => setDialogState(
-                      () => favoritesOnly = value ?? false,
-                    ),
-                  ),
-                ],
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Channel name')),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final selected = await showTimePicker(
+                      context: context,
+                      initialTime: startTime,
+                    );
+                    if (selected != null) {
+                      setDialogState(() => startTime = selected);
+                    }
+                  },
+                  icon: const Icon(Icons.schedule_rounded),
+                  label: Text(
+                      'Daily guide starts at ${startTime.format(context)}'),
+                ),
               ),
-            ),
+              const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Text('Include in channel'),
+                  )),
+              Wrap(
+                spacing: 8,
+                children: _channelContentTypes
+                    .map((type) => FilterChip(
+                          label: Text(type),
+                          selected: selectedTypes.contains(type),
+                          onSelected: (selected) => setDialogState(() {
+                            if (selected) {
+                              selectedTypes.add(type);
+                            } else {
+                              selectedTypes.remove(type);
+                            }
+                          }),
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 14),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Channel metadata',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Choose genres, tags, studios, franchises, or people from this profile's library.",
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 10),
+              for (final metadataEntry in metadataChoices.entries) ...[
+                if (metadataEntry.value.isNotEmpty) ...[
+                  Text(
+                    metadataEntry.key,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: metadataEntry.value.take(36).map((value) {
+                      return FilterChip(
+                        label: Text(value),
+                        selected: selectedMetadata.contains(value),
+                        onSelected: (selected) => setDialogState(() {
+                          if (selected) {
+                            selectedMetadata.add(value);
+                          } else {
+                            selectedMetadata.remove(value);
+                          }
+                        }),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ],
+              TextField(
+                controller: filterText,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'What belongs in this channel?',
+                  hintText:
+                      'Add your own genres, series, artists, people, or keywords',
+                  helperText:
+                      'Separate themes, titles, artists, actors, or genres with commas or new lines.',
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Only include liked items'),
+                value: favoritesOnly,
+                onChanged: (value) =>
+                    setDialogState(() => favoritesOnly = value ?? false),
+              ),
+              const Text(
+                  'Channels use media available to this profile. Music can also match soundtrack titles linked to matching movies or shows in your library.'),
+            ]),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel')),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Create'),
-            ),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Create')),
           ],
         ),
       ),
     );
-
     final channelName = name.text.trim();
     final channelFilter = filterText.text.trim();
     name.dispose();
     filterText.dispose();
-
-    if (added != true ||
-        channelName.isEmpty ||
-        selectedTypes.isEmpty) {
-      return;
-    }
-
+    if (added != true || channelName.isEmpty || selectedTypes.isEmpty) return;
     final channel = _MyTvChannel(
       id: 'my_tv_${DateTime.now().microsecondsSinceEpoch}',
       name: channelName,
-      contentTypes: _channelContentTypes
-          .where(selectedTypes.contains)
-          .toList(),
+      contentTypes: _channelContentTypes.where(selectedTypes.contains).toList(),
       filterText: channelFilter,
       metadataFilters: selectedMetadata.toList(growable: false),
       favoritesOnly: favoritesOnly,
       startTimeMinutes: startTime.hour * 60 + startTime.minute,
     );
-
     setState(() {
       _channels = [..._channels, channel];
       _selectedChannelId = channel.id;
     });
-
     await _save();
   }
 
@@ -695,6 +851,155 @@ class _MyTvScreenState extends State<MyTvScreen> {
       best = max(best, rule.priority * matches * (rule.nightly ? 2 : 1));
     }
     return best;
+  }
+
+  Future<void> _openMusicBreakSettings() async {
+    var mode = _musicBreaks.mode;
+    var songs = _musicBreaks.songsPerProgram;
+    var interval = _musicBreaks.intervalMinutes;
+    var placement = _musicBreaks.placement;
+    var natural = _musicBreaks.naturalBreaksOnly;
+    var avoidRecent = _musicBreaks.avoidRecentTracks;
+    var source = _musicBreaks.source;
+    final musicFilterController = TextEditingController(text: _musicBreaks.musicFilter);
+    var musicFilter = _musicBreaks.musicFilter;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('My TV Music'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'My TV never inserts commercial breaks. These settings belong to ${AppController.instance.currentProfile?.name ?? 'this profile'} and add your music as intentional programming around your movies and episodes.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: mode,
+                    decoration: const InputDecoration(labelText: 'Music schedule'),
+                    items: const [
+                      DropdownMenuItem(value: 'none', child: Text('No music breaks')),
+                      DropdownMenuItem(value: 'per_program', child: Text('X songs per movie / episode')),
+                      DropdownMenuItem(value: 'every_minutes', child: Text('X songs every Y minutes')),
+                    ],
+                    onChanged: (value) => setDialogState(() => mode = value ?? 'none'),
+                  ),
+                  if (mode != 'none') ...[
+                    const SizedBox(height: 12),
+                    if (mode == 'per_program')
+                      DropdownButtonFormField<int>(
+                        initialValue: songs,
+                        decoration: const InputDecoration(labelText: 'Songs per movie / episode'),
+                        items: [
+                          for (var value = 1; value <= 10; value++)
+                            DropdownMenuItem(value: value, child: Text('$value ${value == 1 ? 'song' : 'songs'}')),
+                        ],
+                        onChanged: (value) => setDialogState(() => songs = value ?? 1),
+                      ),
+                    if (mode == 'every_minutes') ...[
+                      DropdownButtonFormField<int>(
+                        initialValue: songs,
+                        decoration: const InputDecoration(labelText: 'Songs each time'),
+                        items: [
+                          for (var value = 1; value <= 10; value++)
+                            DropdownMenuItem(value: value, child: Text('$value ${value == 1 ? 'song' : 'songs'}')),
+                        ],
+                        onChanged: (value) => setDialogState(() => songs = value ?? 1),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: interval,
+                        decoration: const InputDecoration(labelText: 'Every'),
+                        items: [
+                          for (final value in [5, 10, 15, 20, 30, 45, 60, 90, 120])
+                            DropdownMenuItem(value: value, child: Text('$value minutes')),
+                        ],
+                        onChanged: (value) => setDialogState(() => interval = value ?? 30),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: source,
+                      decoration: const InputDecoration(labelText: 'Music source'),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('All music available to this profile')),
+                        DropdownMenuItem(value: 'favorites', child: Text('Favorite songs')),
+                      ],
+                      onChanged: (value) => setDialogState(() => source = value ?? 'all'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: musicFilterController,
+                      onChanged: (value) => musicFilter = value,
+                      decoration: const InputDecoration(
+                        labelText: 'Music preference',
+                        hintText: 'Artist, genre, album, title, or subgenre',
+                        helperText: 'Separate multiple preferences with commas or new lines.',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: placement,
+                      decoration: const InputDecoration(labelText: 'Place music'),
+                      items: const [
+                        DropdownMenuItem(value: 'before', child: Text('Before the episode / movie')),
+                        DropdownMenuItem(value: 'after', child: Text('After the episode / movie')),
+                        DropdownMenuItem(value: 'before_after', child: Text('Before and after')),
+                        DropdownMenuItem(value: 'between', child: Text('Between episodes / movies')),
+                        DropdownMenuItem(value: 'throughout', child: Text('Throughout the scheduled programming')),
+                      ],
+                      onChanged: (value) => setDialogState(() => placement = value ?? 'between'),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Prefer natural break points'),
+                      subtitle: const Text('Keep music between programs instead of pretending there are commercial breaks.'),
+                      value: natural,
+                      onChanged: (value) => setDialogState(() => natural = value),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Avoid recently played songs'),
+                      value: avoidRecent,
+                      onChanged: (value) => setDialogState(() => avoidRecent = value),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save music settings')),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) {
+      musicFilterController.dispose();
+      return;
+    }
+    musicFilterController.dispose();
+    setState(() {
+      _musicBreaks = _TvMusicBreakSettings(
+        mode: mode,
+        songsPerProgram: songs,
+        intervalMinutes: interval,
+        placement: placement,
+        naturalBreaksOnly: natural,
+        avoidRecentTracks: avoidRecent,
+        source: source,
+        musicFilter: musicFilter.trim(),
+      );
+    });
+    await _save();
   }
 
   Future<void> _addProgrammingRule(_MyTvChannel channel) async {
@@ -814,24 +1119,43 @@ class _MyTvScreenState extends State<MyTvScreen> {
   @override
   Widget build(BuildContext context) {
     final channel = _selected;
-    final schedule =
-        channel == null ? const <_ChannelEntry>[] : _schedule(channel);
+    final schedule = channel == null ? const <_ChannelEntry>[] : _schedule(channel);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My TV'),
         actions: [
           IconButton(
-              onPressed: _loading
-                  ? null
-                  : () => setState(() => _showGuide = !_showGuide),
-              tooltip: 'TV Guide',
-              icon: Icon(_showGuide
-                  ? Icons.live_tv_rounded
-                  : Icons.calendar_view_week_rounded)),
+            onPressed: _loading ? null : () => setState(() => _showGuide = !_showGuide),
+            tooltip: 'TV Guide',
+            icon: Icon(
+              _showGuide ? Icons.live_tv_rounded : Icons.calendar_view_week_rounded,
+            ),
+          ),
           IconButton(
-              onPressed: _loading ? null : _addChannel,
-              tooltip: 'Create channel',
-              icon: const Icon(Icons.add)),
+            onPressed: _loading ? null : _openMusicBreakSettings,
+            tooltip: 'Music breaks',
+            icon: const Icon(Icons.music_note_rounded),
+          ),
+          IconButton(
+            onPressed: _loading
+                ? null
+                : () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => FoodOrderingScreen(
+                          viewingContext: channel?.name ?? 'My TV viewing',
+                        ),
+                      ),
+                    ),
+            tooltip: 'Order food',
+            icon: const Icon(Icons.delivery_dining_rounded),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _addChannel,
+            tooltip: 'Create channel',
+            icon: const Icon(Icons.add),
+          ),
         ],
       ),
       body: _loading
@@ -842,17 +1166,24 @@ class _MyTvScreenState extends State<MyTvScreen> {
                 if (_error != null)
                   Text(_error!, style: const TextStyle(color: Colors.amber)),
                 Text(
-                    _showGuide
-                        ? 'TV Guide'
-                        : 'Your library, programmed as a channel',
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w900)),
+                  _showGuide ? 'TV Guide' : 'Your library, programmed as a channel',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 6),
                 Text(
-                    _showGuide
-                        ? 'Today’s channel schedules · no commercial ads'
-                        : 'Personal programming uses media available to this profile. No commercial ads are inserted.',
-                    style: const TextStyle(color: Colors.white60)),
+                  _showGuide
+                      ? 'Today’s channel schedules · no commercial ads'
+                      : 'Personal programming uses media available to this profile. No commercial ads are inserted.',
+                  style: const TextStyle(color: Colors.white60),
+                ),
+                if (!_showGuide && _musicBreaks.mode != 'none')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _musicBreakSummary(),
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ),
                 if (_showGuide)
                   const Padding(
                     padding: EdgeInsets.only(top: 4),
@@ -863,28 +1194,34 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   ),
                 const SizedBox(height: 16),
                 if (_showGuide) ..._guideCards(context),
-                if (!_showGuide) ...[
-                  Row(children: [
-                    Expanded(
+                if (!_showGuide && channel != null) ...[
+                  Row(
+                    children: [
+                      Expanded(
                         child: DropdownButtonFormField<String>(
-                      initialValue: _selectedChannelId,
-                      items: _channels
-                          .map((item) => DropdownMenuItem(
-                              value: item.id, child: Text(item.name)))
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedChannelId = value),
-                      decoration: const InputDecoration(labelText: 'Channel'),
-                    )),
-                    if (channel != null) ...[
+                          initialValue: _selectedChannelId,
+                          items: _channels
+                              .map(
+                                (item) => DropdownMenuItem<String>(
+                                  value: item.id,
+                                  child: Text(item.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) => setState(() => _selectedChannelId = value),
+                          decoration: const InputDecoration(labelText: 'Channel'),
+                        ),
+                      ),
                       IconButton(
                         tooltip: channel.isFavorite
                             ? 'Remove favorite channel'
                             : 'Favorite channel',
                         onPressed: () => _toggleFavorite(channel),
-                        icon: Icon(channel.isFavorite
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded),
+                        icon: Icon(
+                          channel.isFavorite
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                        ),
                         color: channel.isFavorite ? Colors.amber : null,
                       ),
                       IconButton(
@@ -893,69 +1230,77 @@ class _MyTvScreenState extends State<MyTvScreen> {
                         icon: const Icon(Icons.delete_outline_rounded),
                       ),
                     ],
-                  ]),
+                  ),
                   const SizedBox(height: 18),
-                  if (channel != null) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            [
-                              channel.contentTypes.join(' · '),
-                              if (channel.filterText.trim().isNotEmpty)
-                                channel.filterText.trim().replaceAll(
-                                      RegExp(r'[,;\n]+'),
-                                      ' · ',
-                                    ),
-                            ].where((value) => value.trim().isNotEmpty).join('  |  '),
-                            style: const TextStyle(color: Colors.white54),
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          [
+                            channel.contentTypes.join(' · '),
+                            if (channel.filterText.trim().isNotEmpty)
+                              channel.filterText.trim().replaceAll(
+                                    RegExp(r'[,;\n]+'),
+                                    ' · ',
+                                  ),
+                          ].join('  |  '),
+                          style: const TextStyle(color: Colors.white54),
                         ),
-                        IconButton(
-                          tooltip: 'Programming rules',
-                          onPressed: () => _addProgrammingRule(channel),
-                          icon: const Icon(Icons.auto_awesome_rounded),
-                        ),
-                      ],
-                    ),
-                    if (channel.metadataFilters.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: channel.metadataFilters
-                            .map((value) => Chip(
-                                  avatar: const Icon(Icons.sell_outlined, size: 15),
-                                  label: Text(value),
-                                ))
-                            .toList(),
+                      ),
+                      IconButton(
+                        tooltip: 'Programming rules',
+                        onPressed: () => _addProgrammingRule(channel),
+                        icon: const Icon(Icons.auto_awesome_rounded),
                       ),
                     ],
-                    if (channel.programmingRules.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: channel.programmingRules
-                            .map((rule) => Chip(
-                                  avatar: Icon(rule.nightly ? Icons.nightlight_round : Icons.tune_rounded, size: 16),
-                                  label: Text(rule.name),
-                                ))
-                            .toList(),
-                      ),
-                    const SizedBox(height: 10),
+                  ),
+                  if (channel.metadataFilters.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: channel.metadataFilters
+                          .map((value) => Chip(
+                                avatar: const Icon(Icons.sell_outlined, size: 15),
+                                label: Text(value),
+                              ))
+                          .toList(),
+                    ),
                   ],
+                  if (channel.programmingRules.isNotEmpty)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: channel.programmingRules
+                          .map(
+                            (rule) => Chip(
+                              avatar: Icon(
+                                rule.nightly
+                                    ? Icons.nightlight_round
+                                    : Icons.tune_rounded,
+                                size: 16,
+                              ),
+                              label: Text(rule.name),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  const SizedBox(height: 10),
                   if (schedule.isEmpty)
                     const Card(
-                        child: ListTile(
-                            leading: Icon(Icons.tv_off_outlined),
-                            title: Text('No programs in this channel yet'),
-                            subtitle: Text(
-                                'Add content to this channel, or create another channel. The TV Guide is generated from this channel’s contents.')))
+                      child: ListTile(
+                        leading: Icon(Icons.tv_off_outlined),
+                        title: Text('No programs in this channel yet'),
+                        subtitle: Text(
+                          'Add content to this channel, or create another channel. The TV Guide is generated from this channel’s contents.',
+                        ),
+                      ),
+                    )
                   else ...[
                     _scheduleCard(
                       context,
-                      '${_scheduleTime(context, channel!, schedule, 0)} · Now',
-                      schedule[0],
+                      '${_scheduleTime(context, channel, schedule, 0)} · Now',
+                      schedule.first,
                       'Play now',
                       channelId: channel.id,
                     ),
@@ -968,13 +1313,39 @@ class _MyTvScreenState extends State<MyTvScreen> {
                         channelId: channel.id,
                       ),
                     const SizedBox(height: 12),
-                    Text('${channel.name} · ${schedule.length} items queued',
-                        style: const TextStyle(color: Colors.white54)),
+                    Text(
+                      '${channel.name} · ${schedule.length} items queued',
+                      style: const TextStyle(color: Colors.white54),
+                    ),
                   ],
-                ],
+                ] else if (!_showGuide && _channels.isEmpty)
+                  const Card(
+                    child: ListTile(
+                      leading: Icon(Icons.tv_off_outlined),
+                      title: Text('No channels'),
+                      subtitle: Text('Create a channel to build your TV Guide.'),
+                    ),
+                  ),
               ],
             ),
     );
+  }
+
+  String _musicBreakSummary() {
+    if (_musicBreaks.mode == 'per_program') {
+      final placement = switch (_musicBreaks.placement) {
+        'before' => 'before each program',
+        'after' => 'after each program',
+        'before_after' => 'before and after each program',
+        'throughout' => 'throughout each program',
+        _ => 'between programs',
+      };
+      return 'Music: ${_musicBreaks.songsPerProgram} ${_musicBreaks.songsPerProgram == 1 ? 'song' : 'songs'} $placement · no commercials.';
+    }
+    if (_musicBreaks.mode == 'every_minutes') {
+      return 'Music: ${_musicBreaks.songsPerProgram} ${_musicBreaks.songsPerProgram == 1 ? 'song' : 'songs'} every ${_musicBreaks.intervalMinutes} minutes · no commercials.';
+    }
+    return 'Music breaks are off · no commercials.';
   }
 
   List<Widget> _guideCards(BuildContext context) {

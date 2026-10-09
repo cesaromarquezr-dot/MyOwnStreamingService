@@ -4428,7 +4428,14 @@ class BackendApi {
         : <Map<String, dynamic>>[];
   }
 
-  Future<Map<String, dynamic>> createGameMatch({required String profileId, required String gameId, required String mode, String? opponentProfileId}) async {
+  Future<Map<String, dynamic>> createGameMatch({
+    required String profileId,
+    required String gameId,
+    required String mode,
+    String? opponentProfileId,
+    String? difficulty,
+    String? variant,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/games/matches'),
       headers: _headers,
@@ -4437,6 +4444,8 @@ class BackendApi {
         'gameId': gameId,
         'mode': mode,
         if (opponentProfileId != null) 'opponentProfileId': opponentProfileId,
+        if (difficulty != null) 'difficulty': difficulty,
+        if (variant != null) 'variant': variant,
       }),
     );
     return _requireSuccess(response, 'Unable to create game match.');

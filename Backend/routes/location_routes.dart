@@ -286,6 +286,14 @@ class LocationRoutes {
     final postalCode = firstValue(const ['postcode']);
     final country = firstValue(const ['country']);
     final countryCode = firstValue(const ['countrycode'])?.toUpperCase();
+    final geometry = feature['geometry'];
+    final coordinates = geometry is Map ? geometry['coordinates'] : null;
+    final longitude = coordinates is List && coordinates.length >= 2
+        ? double.tryParse(coordinates[0].toString())
+        : null;
+    final latitude = coordinates is List && coordinates.length >= 2
+        ? double.tryParse(coordinates[1].toString())
+        : null;
     final label = [
       if (addressLine1.isNotEmpty) addressLine1,
       if (city != null) city,
@@ -304,6 +312,11 @@ class LocationRoutes {
       'postalCode': postalCode ?? '',
       'country': country ?? '',
       'countryCode': countryCode ?? '',
+      if (latitude != null && longitude != null &&
+          latitude.isFinite && longitude.isFinite) ...{
+        'latitude': latitude,
+        'longitude': longitude,
+      },
     };
   }
 

@@ -42,6 +42,7 @@ class SupabaseStore {
   static const int _maxShopEntities = 500;
   static const int maxSocialAttachmentBytes = 50 * 1024 * 1024;
   static const String _socialPhotoBucket = 'social-media';
+  static const String _foodRestaurantImageBucket = 'food-restaurant-images';
 
   SupabaseClient? _client;
 
@@ -5551,6 +5552,441 @@ class SupabaseStore {
           rows,
           onConflict: 'entity_key',
         );
+  }
+
+  // ---------------------------------------------------------------------------
+  // FOOD DELIVERY
+  // ---------------------------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> searchFoodRestaurants({
+    required double latitude,
+    required double longitude,
+    required double radiusKm,
+    required String query,
+    required int limit,
+  }) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+
+    final safeLat = latitude.clamp(-90.0, 90.0).toDouble();
+    final safeLon = longitude.clamp(-180.0, 180.0).toDouble();
+    final safeRadius = radiusKm.clamp(0.5, 50.0).toDouble();
+    final latDelta = safeRadius / 111.0;
+    final lonCos = cos(safeLat * pi / 180.0).abs().clamp(0.1, 1.0);
+    final lonDelta = safeRadius / (111.0 * lonCos);
+
+    final rows = await c
+        .from('food_restaurants')
+        .select()
+        .gte('latitude', safeLat - latDelta)
+        .lte('latitude', safeLat + latDelta)
+        .gte('longitude', safeLon - lonDelta)
+        .lte('longitude', safeLon + lonDelta)
+        .limit(limit.clamp(1, 100));
+
+    final candidates = rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return candidates;
+
+    final matched = <Map<String, dynamic>>[];
+    for (final row in candidates) {
+      final text = <String>[
+        row['name']?.toString() ?? '',
+        row['cuisine']?.toString() ?? '',
+        row['address']?.toString() ?? '',
+        if (row['tags'] is List)
+          ...(row['tags'] as List).map((value) => value.toString()),
+      ].join(' ').toLowerCase();
+      if (text.contains(q)) {
+        matched.add(row);
+        continue;
+      }
+
+      final restaurantId = row['id']?.toString();
+      if (restaurantId == null || restaurantId.isEmpty) continue;
+      final menuRows = await c
+          .from('food_menu_items')
+          .select('name,description,category,tags')
+          .eq('restaurant_id', restaurantId)
+          .eq('available', true)
+          .limit(100);
+      final menuMatch = menuRows.any((menu) {
+        final menuText = <String>[
+          menu['name']?.toString() ?? '',
+          menu['description']?.toString() ?? '',
+          menu['category']?.toString() ?? '',
+          if (menu['tags'] is List)
+            ...(menu['tags'] as List).map((value) => value.toString()),
+        ].join(' ').toLowerCase();
+        return menuText.contains(q);
+      });
+      if (menuMatch) matched.add(row);
+    }
+
+    return matched;
+  }
+
+  Future<Map<String, dynamic>?> getFoodRestaurant(String id) async {
+    final c = _db;
+    if (c == null) return null;
+    final row = await c.from('food_restaurants').select().eq('id', id).maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<List<Map<String, dynamic>>> getFoodMenu(String restaurantId) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+    final rows = await c
+        .from('food_menu_items')
+        .select()
+        .eq('restaurant_id', restaurantId)
+        .order('category')
+        .order('name');
+    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<Map<String, dynamic>> createFoodOrder({
+    required String accountExternalId,
+    required String profileId,
+    required String restaurantId,
+    required String paymentMethodId,
+    required String status,
+    required String paymentStatus,
+    required int subtotalCents,
+    required int deliveryFeeCents,
+    required int taxCents,
+    required int serviceFeeCents,
+    required int discountCents,
+    required String? couponCode,
+    required String fulfillmentMethod,
+    required int pointsEarned,
+    required int totalCents,
+    required String currencyCode,
+    required Map<String, dynamic> deliveryAddress,
+    required String deliveryNotes,
+    required String? viewingContext,
+    required DateTime estimatedDeliveryAt,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Food ordering requires Supabase persistence.');
+    }
+
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+
+    final internalAccountId = account['id']?.toString();
+    if (internalAccountId == null || internalAccountId.isEmpty) {
+      throw StateError('Account identity could not be resolved.');
+    }
+
+    final created = await c.from('food_orders').insert({
+      'account_id': internalAccountId,
+      'profile_id': profileId,
+      'restaurant_id': restaurantId,
+      'status': status,
+      'payment_method_id': paymentMethodId,
+      'payment_status': paymentStatus,
+      'subtotal_cents': subtotalCents,
+      'delivery_fee_cents': deliveryFeeCents,
+      'tax_cents': taxCents,
+      'service_fee_cents': serviceFeeCents,
+      'discount_cents': discountCents,
+      'coupon_code': couponCode,
+      'fulfillment_method': fulfillmentMethod,
+      'points_earned': pointsEarned,
+      'total_cents': totalCents,
+      'currency_code': currencyCode,
+      'delivery_address': deliveryAddress,
+      'delivery_notes': deliveryNotes,
+      'viewing_context': viewingContext,
+      'estimated_delivery_at': estimatedDeliveryAt.toIso8601String(),
+    }).select().single();
+
+    final order = Map<String, dynamic>.from(created);
+    final orderId = order['id']?.toString() ?? '';
+    if (orderId.isEmpty) throw StateError('Food order ID was not created.');
+
+    final lineRows = items.map((item) => {
+      'order_id': orderId,
+      'menu_item_id': item['menuItemId'],
+      'item_name': item['itemName'],
+      'quantity': item['quantity'],
+      'unit_price_cents': item['unitPriceCents'],
+      'modifiers': item['modifiers'] ?? const [],
+      'line_total_cents': item['lineTotalCents'],
+    }).toList();
+    await c.from('food_order_items').insert(lineRows);
+    await c.from('food_order_events').insert({
+      'order_id': orderId,
+      'status': status,
+      'message': fulfillmentMethod == 'pickup' ? 'Pickup order placed.' : 'Delivery order placed.',
+    });
+    if (pointsEarned > 0 && paymentStatus == 'succeeded') {
+      await c.from('food_loyalty_ledger').insert({
+        'account_external_id': accountExternalId,
+        'restaurant_id': restaurantId,
+        'order_id': orderId,
+        'points_delta': pointsEarned,
+        'reason': 'order_reward',
+      });
+    }
+    return order;
+  }
+
+  Future<Map<String, dynamic>?> getFoodOrder({
+    required String accountExternalId,
+    required String orderId,
+  }) async {
+    final c = _db;
+    if (c == null) return null;
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) return null;
+    final internalId = account['id']?.toString();
+    if (internalId == null || internalId.isEmpty) return null;
+    final row = await c
+        .from('food_orders')
+        .select()
+        .eq('id', orderId)
+        .eq('account_id', internalId)
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<bool> ownsFoodRestaurant({
+    required String accountExternalId,
+    required String restaurantId,
+  }) async {
+    final c = _db;
+    if (c == null) return false;
+    final row = await c
+        .from('food_restaurant_owners')
+        .select('id')
+        .eq('account_external_id', accountExternalId)
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+    return row != null;
+  }
+
+  Future<List<Map<String, dynamic>>> getOwnedFoodRestaurants(
+    String accountExternalId,
+  ) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+    final memberships = await c
+        .from('food_restaurant_owners')
+        .select('restaurant_id,role')
+        .eq('account_external_id', accountExternalId)
+        .order('created_at', ascending: false);
+    final results = <Map<String, dynamic>>[];
+    for (final membership in memberships.whereType<Map>()) {
+      final id = membership['restaurant_id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      final restaurant = await c
+          .from('food_restaurants')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+      if (restaurant != null) {
+        results.add({
+          ...Map<String, dynamic>.from(restaurant),
+          'ownerRole': membership['role']?.toString() ?? 'owner',
+        });
+      }
+    }
+    return results;
+  }
+
+  Future<Map<String, dynamic>> createFoodRestaurant({
+    required String accountExternalId,
+    required Map<String, dynamic> restaurant,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Restaurant registration requires Supabase persistence.');
+    final created = await c.from('food_restaurants').insert({
+      'name': restaurant['name'],
+      'cuisine': restaurant['cuisine'],
+      'description': restaurant['description'] ?? '',
+      'phone': restaurant['phone'] ?? '',
+      'address': restaurant['address'],
+      'city': restaurant['city'] ?? '',
+      'state_region': restaurant['stateRegion'] ?? '',
+      'postal_code': restaurant['postalCode'] ?? '',
+      'country_code': restaurant['countryCode'] ?? '',
+      'latitude': restaurant['latitude'],
+      'longitude': restaurant['longitude'],
+      'hero_image_url': restaurant['heroImageUrl'],
+      'delivery_fee_cents': restaurant['deliveryFeeCents'] ?? 0,
+      'service_fee_cents': restaurant['serviceFeeCents'] ?? 199,
+      'tax_rate_basis_points': restaurant['taxRateBasisPoints'] ?? 0,
+      'minimum_order_cents': restaurant['minimumOrderCents'] ?? 0,
+      'allows_delivery': restaurant['allowsDelivery'] ?? true,
+      'allows_pickup': restaurant['allowsPickup'] ?? true,
+      'loyalty_points_per_currency': restaurant['loyaltyPointsPerCurrency'] ?? 1,
+      'currency_code': restaurant['currencyCode'] ?? 'USD',
+      'source': 'merchant',
+    }).select().single();
+    final row = Map<String, dynamic>.from(created);
+    final restaurantId = row['id']?.toString() ?? '';
+    try {
+      await c.from('food_restaurant_owners').insert({
+        'restaurant_id': restaurantId,
+        'account_external_id': accountExternalId,
+        'role': 'owner',
+      });
+    } catch (_) {
+      if (restaurantId.isNotEmpty) {
+        await c.from('food_restaurants').delete().eq('id', restaurantId);
+      }
+      rethrow;
+    }
+    return row;
+  }
+
+  Future<String> uploadFoodRestaurantImage({
+    required String restaurantId,
+    required Uint8List bytes,
+    required String extension,
+    required String contentType,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Restaurant photo storage requires Supabase persistence.');
+    final random = Random.secure();
+    final token = List<int>.generate(12, (_) => random.nextInt(256))
+        .map((value) => value.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final path = '$restaurantId/${DateTime.now().toUtc().microsecondsSinceEpoch}-$token.$extension';
+    await c.storage.from(_foodRestaurantImageBucket).uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(contentType: contentType, upsert: false),
+    );
+    return c.storage.from(_foodRestaurantImageBucket).getPublicUrl(path);
+  }
+
+  Future<void> setFoodRestaurantHeroImage({
+    required String restaurantId,
+    required String imageUrl,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Restaurant photo storage requires Supabase persistence.');
+    await c.from('food_restaurants').update({
+      'hero_image_url': imageUrl,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', restaurantId);
+  }
+
+  Future<void> setFoodMenuItemImage({
+    required String restaurantId,
+    required String menuItemId,
+    required String imageUrl,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Menu photo storage requires Supabase persistence.');
+    final updated = await c.from('food_menu_items').update({
+      'image_url': imageUrl,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('restaurant_id', restaurantId).eq('id', menuItemId).select('id').maybeSingle();
+    if (updated == null) throw StateError('Menu item not found for this restaurant.');
+  }
+
+  Future<Map<String, dynamic>> createFoodMenuItem({
+    required String restaurantId,
+    required Map<String, dynamic> item,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Menu management requires Supabase persistence.');
+    final created = await c.from('food_menu_items').insert({
+      'restaurant_id': restaurantId,
+      'category': item['category'] ?? 'Menu',
+      'name': item['name'],
+      'description': item['description'] ?? '',
+      'price_cents': item['priceCents'],
+      'image_url': item['imageUrl'],
+      'available': item['available'] ?? true,
+      'tags': item['tags'] ?? const <String>[],
+      'modifier_groups': item['modifierGroups'] ?? const <Map<String, dynamic>>[],
+    }).select().single();
+    return Map<String, dynamic>.from(created);
+  }
+
+  Future<Map<String, dynamic>> createFoodCoupon({
+    required String restaurantId,
+    required Map<String, dynamic> coupon,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Coupon management requires Supabase persistence.');
+    final created = await c.from('food_restaurant_coupons').insert({
+      'restaurant_id': restaurantId,
+      'coupon_code': coupon['code'],
+      'description': coupon['description'] ?? '',
+      'discount_percent': coupon['discountPercent'],
+      'minimum_subtotal_cents': coupon['minimumSubtotalCents'] ?? 0,
+      'max_redemptions': coupon['maxRedemptions'],
+      'starts_at': coupon['startsAt'],
+      'expires_at': coupon['expiresAt'],
+      'active': coupon['active'] ?? true,
+    }).select().single();
+    return Map<String, dynamic>.from(created);
+  }
+
+  Future<Map<String, dynamic>?> getFoodCoupon({
+    required String restaurantId,
+    required String code,
+  }) async {
+    final c = _db;
+    if (c == null) return null;
+    final row = await c
+        .from('food_restaurant_coupons')
+        .select()
+        .eq('restaurant_id', restaurantId)
+        .eq('coupon_code', code.toUpperCase())
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<void> incrementFoodCouponRedemption(String couponId) async {
+    final c = _db;
+    if (c == null) return;
+    final row = await c
+        .from('food_restaurant_coupons')
+        .select('redemption_count,max_redemptions')
+        .eq('id', couponId)
+        .maybeSingle();
+    if (row == null) return;
+    final count = (row['redemption_count'] as num?)?.toInt() ?? 0;
+    final maximum = (row['max_redemptions'] as num?)?.toInt();
+    if (maximum != null && count >= maximum) return;
+    await c.from('food_restaurant_coupons').update({
+      'redemption_count': count + 1,
+    }).eq('id', couponId);
+  }
+
+  Future<List<Map<String, dynamic>>> getFoodLoyaltyLedger(
+    String accountExternalId,
+  ) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+    final rows = await c
+        .from('food_loyalty_ledger')
+        .select('restaurant_id,points_delta,reason,created_at,food_restaurants(name)')
+        .eq('account_external_id', accountExternalId)
+        .order('created_at', ascending: false)
+        .limit(500);
+    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
   }
 
   // ---------------------------------------------------------------------------
