@@ -25,7 +25,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Your location is used to find nearby restaurants, delivery options, and radio stations.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access is used to record voice messages in chats.</string>
+	<string>Microphone access lets you ask Hey Media questions by voice and record voice messages in chats.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition lets you ask Hey Media questions about your library and Store catalog.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -38,6 +38,9 @@ class MusicTrack {
   /// Mature-theme flag supplied by licensed/import metadata.
   final bool matureTheme;
   final String lyrics;
+  /// Filesystem modification time supplied by the home-server scanner. This
+  /// is a freshness signal, not the official album release date.
+  final DateTime? modifiedAt;
 
   const MusicTrack({
     required this.id,
@@ -53,6 +56,7 @@ class MusicTrack {
     this.explicit = false,
     this.matureTheme = false,
     this.lyrics = '',
+    this.modifiedAt,
   });
 }
 

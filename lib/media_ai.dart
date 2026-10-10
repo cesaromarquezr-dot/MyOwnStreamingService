@@ -14,5 +14,7 @@ class MediaAiPolicy {
   static const List<String> supportedIntents = [
     'recommend', 'explain-similarity', 'search-library', 'complete-collection',
     'build-media-session', 'discover-connections', 'surprise-me', 'summarize-history',
+    'find-unwatched', 'plan-movie-marathon', 'plan-christmas-marathon',
+    'find-gift-products', 'find-latest-album', 'voice-query',
   ];
 }

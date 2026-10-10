@@ -117,8 +117,9 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       final music = raw.whereType<Map>().where((m) => m['type']?.toString() == 'music').map((m) => MusicTrack(
         id: m['id']?.toString() ?? '',
         title: m['title']?.toString() ?? 'Imported Song',
-        artist: m['artist']?.toString() ?? 'Imported Artist',
-        album: m['album']?.toString() ?? 'Server Library',
+        artist: m['artist']?.toString() ?? 'Unknown Artist',
+        album: m['album']?.toString() ?? 'Unknown Album',
+        modifiedAt: DateTime.tryParse(m['modifiedAt']?.toString() ?? ''),
         genres: (m['genres'] is List)
             ? List<String>.from((m['genres'] as List).map((e) => e.toString()))
             : const <String>[],

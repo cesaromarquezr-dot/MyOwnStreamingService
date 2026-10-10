@@ -35,6 +35,9 @@ dependencies:
   geolocator: ^14.1.1
   country_picker: ^2.0.28
   record: ^7.1.1
+  # Push-to-talk speech recognition and spoken replies for Hey Media.
+  speech_to_text: ^7.4.0
+  flutter_tts: ^4.2.5
   path_provider: ^2.1.6
   share_plus: ^13.3.1
   pro_video_editor: ^2.21.0

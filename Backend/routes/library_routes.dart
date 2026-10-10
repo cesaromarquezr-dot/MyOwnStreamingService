@@ -672,13 +672,21 @@ class LibraryRoutes {
 
         final title = _cleanTitle(fileName);
         final fileSize = entity.lengthSync();
+        final modifiedAt = entity.lastModifiedSync().toUtc().toIso8601String();
 
         final item = <String, dynamic>{
           'id': relative,
           'title': title,
           'type': type,
           'fileSize': fileSize,
+          'modifiedAt': modifiedAt,
         };
+        if (type == 'music') {
+          final album = _inferMusicAlbum(segments);
+          final artist = _inferMusicArtist(segments);
+          if (album != null) item['album'] = album;
+          if (artist != null) item['artist'] = artist;
+        }
 
         try {
           await store.upsertServerMedia(
@@ -689,6 +697,9 @@ class LibraryRoutes {
             metadata: <String, dynamic>{
               'source': 'home-server-scanner',
               'relativeMediaId': relative,
+              'modifiedAt': modifiedAt,
+              if (item['album'] != null) 'album': item['album'],
+              if (item['artist'] != null) 'artist': item['artist'],
             },
             fileSizeBytes: fileSize,
           );
@@ -1014,6 +1025,32 @@ class LibraryRoutes {
         );
     }
   }
+
+
+  /// Uses a conventional Artist/Album/Track folder layout when available.
+  /// Generic roots such as Music or Audio are never promoted to album names.
+  String? _inferMusicAlbum(List<String> segments) {
+    if (segments.length < 3) return null;
+    final folder = _cleanTitle(segments[segments.length - 2]);
+    if (_isGenericMusicFolder(folder)) return null;
+    return folder;
+  }
+
+  String? _inferMusicArtist(List<String> segments) {
+    if (segments.length < 3) return null;
+    final folder = _cleanTitle(segments[segments.length - 3]);
+    if (_isGenericMusicFolder(folder)) return null;
+    final album = _inferMusicAlbum(segments);
+    if (album != null && folder.toLowerCase() == album.toLowerCase()) {
+      return null;
+    }
+    return folder;
+  }
+
+  bool _isGenericMusicFolder(String value) => const <String>{
+        'music', 'audio', 'songs', 'song', 'media', 'library',
+        'soundtracks', 'albums', 'album', 'unknown album', 'unknown artist',
+      }.contains(value.trim().toLowerCase());
 
   String _cleanTitle(String value) {
     final name = value

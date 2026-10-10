@@ -26,6 +26,10 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Your location is used to find radio stations near you.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access lets you ask Hey Media questions by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition lets you ask Hey Media questions about your library and Store catalog.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
