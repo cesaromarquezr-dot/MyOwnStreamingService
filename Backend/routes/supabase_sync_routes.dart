@@ -398,6 +398,36 @@ class SupabaseSyncRoutes {
         return _json(request.response, HttpStatus.ok, {'success': true});
       }
 
+      if (bits.length == 3 &&
+          bits[0] == 'conversations' &&
+          bits[2] == 'invites' &&
+          request.method == 'POST') {
+        final invite = await store.createSocialConversationInvite(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          conversationId: bits[1],
+        );
+        return _json(request.response, HttpStatus.created, {
+          'success': true,
+          ...invite,
+        });
+      }
+
+      if (bits.length == 3 &&
+          bits[0] == 'conversation-invites' &&
+          bits[2] == 'accept' &&
+          request.method == 'POST') {
+        final accepted = await store.acceptSocialConversationInvite(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          token: bits[1],
+        );
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...accepted,
+        });
+      }
+
       if (bits.length == 2 &&
           bits[0] == 'conversations' &&
           bits[1] != 'messages' &&

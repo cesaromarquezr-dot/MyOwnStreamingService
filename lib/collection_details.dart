@@ -10,6 +10,7 @@ import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
 import 'media_actions.dart';
+import 'food_delivery.dart';
 
 /// Full-screen collection details view.
 ///
@@ -147,6 +148,18 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  actions: [
+                    IconButton(
+                      tooltip: collection.isLikedByCurrentProfile ? 'Remove from favorite collections' : 'Add to favorite collections',
+                      icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite : Icons.favorite_border),
+                      onPressed: () => controller.toggleCollectionLike(collection.id),
+                    ),
+                    IconButton(
+                      tooltip: 'Food & Delivery',
+                      icon: const Icon(Icons.delivery_dining_rounded),
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const FoodOrderingScreen())),
+                    ),
+                  ],
                 ),
                 SliverToBoxAdapter(
                   child: _buildContent(),

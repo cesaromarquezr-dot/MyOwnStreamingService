@@ -102,7 +102,7 @@ class _GamesScreenState extends State<GamesScreen> {
       };
 
   Future<void> _openGame(GameDefinition game) async {
-    if (!game.isPlayable) {
+    if (!game.isPlayable && !_catalogPlayableIds.contains(game.id)) {
       final platformText = game.platformScope == GamePlatformScope.consolePcOnly
           ? 'Available only on TV/console/PC builds (PS5, Xbox Series X|S, Switch 2, and PC). '
           : 'Designed for all device types with a screen. ';
@@ -146,9 +146,22 @@ class _GamesScreenState extends State<GamesScreen> {
     }
   }
 
+  static const _mediaGameCategories = <GameCategory>{
+    GameCategory.music,
+    GameCategory.movieTv,
+    GameCategory.danceRhythm,
+  };
+
+  static final _mediaGameIds = GameCatalog.definitions
+      .where((game) => _mediaGameCategories.contains(game.category))
+      .map((game) => game.id)
+      .toSet();
+
   @override
   Widget build(BuildContext context) {
-    var games = GameCatalog.definitions.toList(growable: true);
+    var games = GameCatalog.definitions
+        .where((game) => _mediaGameCategories.contains(game.category))
+        .toList(growable: true);
     final profile = AppController.instance.currentProfile;
     final childLike = profile?.governance.contentLevel.name == 'littleKids' ||
         profile?.governance.contentLevel.name == 'kids' ||
@@ -211,15 +224,12 @@ class _GamesScreenState extends State<GamesScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           const UniversalText(
-            'Board, card, puzzle, word, party, music, dance, racing, movie/TV, and tournament games.',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-            ),
+            'Games built around your music, movies, and TV shows.',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 5),
           const UniversalText(
-            'Playable games launch their implemented rules engine. Expanded catalog entries are clearly marked Planned until their full game engine is ready. Music and movie/TV games are designed to reference your existing server library. Food & Delivery remains a separate feature.',
+            'Play music, movie, and TV-themed games using media already in your server library. This section only shows these media-related game types.',
             style: TextStyle(color: Colors.white60),
           ),
           const SizedBox(height: 14),
@@ -251,7 +261,11 @@ class _GamesScreenState extends State<GamesScreen> {
                   onSelected: (_) => setState(() => _category = null),
                 ),
                 const SizedBox(width: 8),
-                for (final category in GameCategory.values) ...[
+                for (final category in const <GameCategory>[
+                  GameCategory.music,
+                  GameCategory.movieTv,
+                  GameCategory.danceRhythm,
+                ]) ...[
                   FilterChip(
                     label: Text(_categoryLabel(category)),
                     selected: _category == category,
@@ -297,7 +311,7 @@ class _GamesScreenState extends State<GamesScreen> {
                             const Spacer(),
                             if (game.playMoneyOnly)
                               const Chip(label: Text('PLAY MONEY')),
-                            if (!game.isPlayable)
+                            if (!game.isPlayable && !_catalogPlayableIds.contains(game.id))
                               const Chip(
                                 label: Text('PLANNED'),
                                 visualDensity: VisualDensity.compact,
@@ -357,7 +371,10 @@ class _GamesScreenState extends State<GamesScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            ..._ratings.values.take(6).map(
+            ..._ratings.values
+                .where((rating) => _mediaGameIds.contains(rating.gameId))
+                .take(6)
+                .map(
                   (rating) => ListTile(
                     leading: const Icon(Icons.emoji_events_outlined),
                     title: Text(
@@ -392,6 +409,7 @@ class _GameLaunchScreenState extends State<GameLaunchScreen> {
   bool _busy = false;
   String _difficulty = 'medium';
   String _variant = 'standard';
+  int _mexicanTrainPlayerCount = 4;
 
   @override
   void initState() {
@@ -450,6 +468,12 @@ class _GameLaunchScreenState extends State<GameLaunchScreen> {
         'difficulty': _difficulty,
         'variant': _variant,
       };
+      if (widget.game.id == 'mexican_train') {
+        match['playerCount'] = _mexicanTrainPlayerCount;
+        match['tilesPerPlayer'] = 17;
+        match['doubleSet'] =
+            _GamePlayCatalog.mexicanTrainSetFor(_mexicanTrainPlayerCount);
+      }
 
       if (match['local'] != true) {
         final response =
@@ -691,6 +715,42 @@ class _GameLaunchScreenState extends State<GameLaunchScreen> {
               ),
             ),
           ],
+          if (game.id == 'mexican_train') ...[
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              initialValue: _mexicanTrainPlayerCount,
+              decoration: const InputDecoration(
+                labelText: 'Players',
+                prefixIcon: Icon(Icons.people_alt_outlined),
+              ),
+              items: List<DropdownMenuItem<int>>.generate(
+                7,
+                (index) => DropdownMenuItem<int>(
+                  value: index + 2,
+                  child: Text('${index + 2} players'),
+                ),
+              ),
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(
+                        () => _mexicanTrainPlayerCount = value ?? 4,
+                      ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Each player receives 17 dominoes. The set automatically expands beyond Double-12 when needed so every player gets a full rack and there is one central engine tile.',
+                style: TextStyle(color: Colors.white60, fontSize: 12),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Selected set: Double-${_GamePlayCatalog.mexicanTrainSetFor(_mexicanTrainPlayerCount)}',
+                style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           const Text(
             'Choose how to play',
@@ -779,6 +839,17 @@ class _GamePlayCatalog {
 
   static bool usesCardsFor(String gameId) =>
       GameCatalog.instance.byId(gameId).usesCards;
+
+  /// Keeps a 17-tile rack for every player, reserving one tile for the hub.
+  /// A Double-N set contains (N + 1) * (N + 2) / 2 unique tiles.
+  static int mexicanTrainSetFor(int players) {
+    var doubleValue = 12;
+    while (((doubleValue + 1) * (doubleValue + 2) ~/ 2) <
+        (players * 17 + 1)) {
+      doubleValue++;
+    }
+    return doubleValue;
+  }
 
   static List<_GameVariantOption> variantsFor(String gameId) =>
       GameCatalog.variantDefinitions[gameId]
@@ -1101,6 +1172,24 @@ class _GameMatchScreenState extends State<GameMatchScreen> {
       );
     }
 
+    if (widget.game.id == 'checkers') {
+      return CheckersGameBoard(
+        theme: _theme,
+        mode: mode,
+        difficulty: difficulty,
+        variant: variant,
+        onFinished: _finishGame,
+      );
+    }
+
+    if (widget.game.id == 'mexican_train') {
+      return MexicanTrainGameBoard(
+        mode: mode,
+        playerCount: (widget.match['playerCount'] as num?)?.toInt() ?? 4,
+        onFinished: _finishGame,
+      );
+    }
+
     if (widget.game.id == 'snakes_ladders') {
       return SnakesLaddersGameBoard(
         theme: _theme,
@@ -1137,6 +1226,29 @@ class _GameMatchScreenState extends State<GameMatchScreen> {
         mode: mode,
         difficulty: difficulty,
         variant: variant,
+        onFinished: _finishGame,
+      );
+    }
+
+    const tabletopGameIds = <String>{
+      'connect4', 'solitaire', 'tripeaks', 'pyramid', 'freecell', 'spider',
+      'continental', 'la_viuda',
+    };
+    if (tabletopGameIds.contains(widget.game.id)) {
+      return TabletopGameBoard(
+        game: widget.game,
+        mode: mode,
+        difficulty: difficulty,
+        variant: variant,
+        onFinished: _finishGame,
+      );
+    }
+
+    if (_catalogPlayableIds.contains(widget.game.id)) {
+      return CatalogGameBoard(
+        game: widget.game,
+        mode: mode,
+        difficulty: difficulty,
         onFinished: _finishGame,
       );
     }
@@ -1871,6 +1983,7 @@ class _SnakesLaddersGameBoardState extends State<SnakesLaddersGameBoard> {
   int _dice = 1;
   bool _rolling = false;
   bool _finished = false;
+  IconData _playerTokenIcon = Icons.directions_car_rounded;
   Timer? _aiTimer;
 
   Map<int, int> get _jumps => widget.variant == 'short_64'
@@ -2007,6 +2120,27 @@ class _SnakesLaddersGameBoardState extends State<SnakesLaddersGameBoard> {
               ],
             ),
             const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                children: [
+                  const Text('Choose your token:'),
+                  for (final token in <IconData>[Icons.directions_car_rounded, Icons.pets_rounded, Icons.sailing_rounded, Icons.rocket_launch_rounded, Icons.emoji_events_rounded, Icons.bolt_rounded])
+                    IconButton(
+                      tooltip: 'Select token',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _rolling || _finished ? null : () => setState(() => _playerTokenIcon = token),
+                      style: IconButton.styleFrom(
+                        backgroundColor: _playerTokenIcon == token ? Theme.of(context).colorScheme.primaryContainer : null,
+                      ),
+                      icon: Icon(token, size: 20),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
             SizedBox(
               width: boardSize,
               height: boardSize,
@@ -2137,6 +2271,7 @@ class _MonopolyGameBoardState extends State<MonopolyGameBoard> {
   List<int> _dice = const [1, 1];
   bool _rolling = false;
   bool _finished = false;
+  final IconData _playerTokenIcon = Icons.directions_car_rounded;
 
   @override
   void initState() {
@@ -2324,7 +2459,7 @@ class _MonopolyGameBoardState extends State<MonopolyGameBoard> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (player0) const Icon(Icons.person, size: 17),
+                                if (player0) Icon(_playerTokenIcon, size: 17),
                                 if (player1) const Icon(Icons.smart_toy, size: 17),
                               ],
                             ),
@@ -2343,7 +2478,7 @@ class _MonopolyGameBoardState extends State<MonopolyGameBoard> {
               ),
             ),
             const SizedBox(height: 10),
-            Text('You: ${_money[0]} • AI: ${_money[1]}', style: const TextStyle(color: Colors.white60)),
+            Text('You: \$${_money[0]} • AI: \$${_money[1]}', style: const TextStyle(color: Colors.white60)),
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
@@ -2930,6 +3065,400 @@ class _SorryRow extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+
+class _CheckersPiece {
+  final int side;
+  bool king;
+
+  _CheckersPiece(this.side) : king = false;
+}
+
+class _CheckersMove {
+  final int from;
+  final int to;
+  final int? captured;
+
+  const _CheckersMove(this.from, this.to, {this.captured});
+
+  bool get isCapture => captured != null;
+}
+
+class CheckersGameBoard extends StatefulWidget {
+  final BoardThemeConfig theme;
+  final String mode;
+  final String difficulty;
+  final String variant;
+  final Future<void> Function(String result) onFinished;
+
+  const CheckersGameBoard({
+    super.key,
+    required this.theme,
+    required this.mode,
+    required this.difficulty,
+    required this.variant,
+    required this.onFinished,
+  });
+
+  @override
+  State<CheckersGameBoard> createState() => _CheckersGameBoardState();
+}
+
+class _CheckersGameBoardState extends State<CheckersGameBoard> {
+  final Random _random = Random();
+  late List<_CheckersPiece?> _board;
+  int _turn = 0;
+  int? _selected;
+  int? _forcedFrom;
+  int _redCaptures = 0;
+  int _blackCaptures = 0;
+  bool _thinking = false;
+  bool _finished = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _board = _initialBoard();
+  }
+
+  List<_CheckersPiece?> _initialBoard() {
+    final board = List<_CheckersPiece?>.filled(64, null);
+    for (var row = 0; row < 3; row++) {
+      for (var col = 0; col < 8; col++) {
+        if ((row + col).isOdd) {
+          board[row * 8 + col] = _CheckersPiece(1);
+        }
+      }
+    }
+    for (var row = 5; row < 8; row++) {
+      for (var col = 0; col < 8; col++) {
+        if ((row + col).isOdd) {
+          board[row * 8 + col] = _CheckersPiece(0);
+        }
+      }
+    }
+    return board;
+  }
+
+  void _resetBoard() {
+    setState(() {
+      _board = _initialBoard();
+      _turn = 0;
+      _selected = null;
+      _forcedFrom = null;
+      _redCaptures = 0;
+      _blackCaptures = 0;
+      _thinking = false;
+      _finished = false;
+    });
+  }
+
+  int _row(int square) => square ~/ 8;
+  int _col(int square) => square % 8;
+  bool _inside(int row, int col) => row >= 0 && row < 8 && col >= 0 && col < 8;
+
+  List<_CheckersMove> _movesForPiece(int from, int side, {bool capturesOnly = false}) {
+    final piece = _board[from];
+    if (piece == null || piece.side != side) return const <_CheckersMove>[];
+    final row = _row(from);
+    final col = _col(from);
+    final directions = piece.king
+        ? const <int>[-1, 1]
+        : <int>[side == 0 ? -1 : 1];
+    final captures = <_CheckersMove>[];
+    final steps = <_CheckersMove>[];
+
+    for (final dr in directions) {
+      for (final dc in const <int>[-1, 1]) {
+        final nextRow = row + dr;
+        final nextCol = col + dc;
+        if (!_inside(nextRow, nextCol)) continue;
+        final nextIndex = nextRow * 8 + nextCol;
+        final middle = _board[nextIndex];
+        if (middle == null) {
+          steps.add(_CheckersMove(from, nextIndex));
+          continue;
+        }
+        if (middle.side == side) continue;
+        final landingRow = row + dr * 2;
+        final landingCol = col + dc * 2;
+        if (!_inside(landingRow, landingCol)) continue;
+        final landingIndex = landingRow * 8 + landingCol;
+        if (_board[landingIndex] == null) {
+          captures.add(_CheckersMove(from, landingIndex, captured: nextIndex));
+        }
+      }
+    }
+
+    if (capturesOnly) return captures;
+    return captures.isNotEmpty ? captures : steps;
+  }
+
+  List<_CheckersMove> _allLegalMoves(int side) {
+    final captures = <_CheckersMove>[];
+    final normal = <_CheckersMove>[];
+    for (var index = 0; index < 64; index++) {
+      if (_board[index]?.side != side) continue;
+      final moves = _movesForPiece(index, side);
+      for (final move in moves) {
+        if (move.isCapture) {
+          captures.add(move);
+        } else {
+          normal.add(move);
+        }
+      }
+    }
+    return captures.isNotEmpty ? captures : normal;
+  }
+
+  _CheckersMove? _moveTo(Iterable<_CheckersMove> moves, int to) {
+    for (final move in moves) {
+      if (move.to == to) return move;
+    }
+    return null;
+  }
+
+  List<_CheckersMove> _selectedMoves() {
+    if (_forcedFrom != null) {
+      return _movesForPiece(_forcedFrom!, _turn, capturesOnly: true);
+    }
+    if (_selected == null) return const <_CheckersMove>[];
+    final all = _allLegalMoves(_turn);
+    return all.where((move) => move.from == _selected).toList(growable: false);
+  }
+
+  void _tapSquare(int index) {
+    if (_finished || _thinking || (_turn == 1 && widget.mode == 'ai')) return;
+    if (_forcedFrom != null) {
+      final continuation = _movesForPiece(_forcedFrom!, _turn, capturesOnly: true);
+      final selectedMove = _moveTo(continuation, index);
+      if (selectedMove != null) _applyMove(selectedMove);
+      return;
+    }
+
+    final targetMove = _moveTo(_selectedMoves(), index);
+    if (targetMove != null) {
+      _applyMove(targetMove);
+      return;
+    }
+
+    final piece = _board[index];
+    if (piece != null && piece.side == _turn) {
+      final legal = _allLegalMoves(_turn).where((move) => move.from == index).toList();
+      setState(() => _selected = legal.isEmpty ? null : index);
+    } else {
+      setState(() => _selected = null);
+    }
+  }
+
+  void _applyMove(_CheckersMove move) {
+    if (_finished) return;
+    final piece = _board[move.from];
+    if (piece == null) return;
+    final rowAfter = _row(move.to);
+    final becameKing = !piece.king &&
+        ((piece.side == 0 && rowAfter == 0) || (piece.side == 1 && rowAfter == 7));
+
+    setState(() {
+      _board[move.to] = piece;
+      _board[move.from] = null;
+      if (move.captured != null) {
+        _board[move.captured!] = null;
+        if (_turn == 0) {
+          _redCaptures++;
+        } else {
+          _blackCaptures++;
+        }
+      }
+      if (becameKing) piece.king = true;
+      _selected = null;
+    });
+
+    if (becameKing) {
+      _endTurn();
+      return;
+    }
+
+    if (move.isCapture) {
+      final continuation = _movesForPiece(move.to, _turn, capturesOnly: true);
+      if (continuation.isNotEmpty) {
+        setState(() {
+          _forcedFrom = move.to;
+          _selected = move.to;
+        });
+        if (_turn == 1 && widget.mode == 'ai') _scheduleAiTurn();
+        return;
+      }
+    }
+
+    _endTurn();
+  }
+
+  void _endTurn() {
+    if (_finished) return;
+    final nextSide = 1 - _turn;
+    final nextMoves = _allLegalMoves(nextSide);
+    final hasPieces = _board.any((piece) => piece?.side == nextSide);
+    if (!hasPieces || nextMoves.isEmpty) {
+      setState(() {
+        _finished = true;
+        _selected = null;
+        _forcedFrom = null;
+      });
+      widget.onFinished(nextSide == 0 ? 'loss' : 'win');
+      return;
+    }
+    setState(() {
+      _turn = nextSide;
+      _selected = null;
+      _forcedFrom = null;
+    });
+    if (_turn == 1 && widget.mode == 'ai') _scheduleAiTurn();
+  }
+
+  void _scheduleAiTurn() {
+    if (!mounted || _finished || _thinking || _turn != 1 || widget.mode != 'ai') return;
+    setState(() => _thinking = true);
+    Future<void>.delayed(const Duration(milliseconds: 420), () {
+      if (!mounted || _finished || _turn != 1) return;
+      final moves = _forcedFrom != null
+          ? _movesForPiece(_forcedFrom!, 1, capturesOnly: true)
+          : _allLegalMoves(1);
+      if (moves.isEmpty) {
+        setState(() => _thinking = false);
+        _endTurn();
+        return;
+      }
+      // Captures are mandatory. Prefer captures that crown a piece when choices exist.
+      final preferred = moves.where((move) =>
+          move.captured != null || _row(move.to) == 7).toList();
+      final choicePool = preferred.isNotEmpty ? preferred : moves;
+      final move = choicePool[_random.nextInt(choicePool.length)];
+      setState(() => _thinking = false);
+      _applyMove(move);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final availableWidth = MediaQuery.sizeOf(context).width - 44;
+    final boardSize = min<double>(widget.theme.boardSize, min<double>(availableWidth, 680));
+    final legalMoves = _selectedMoves();
+    final legalDestinations = legalMoves.map((move) => move.to).toSet();
+    final redPieces = _board.where((piece) => piece?.side == 0).length;
+    final blackPieces = _board.where((piece) => piece?.side == 1).length;
+    final status = _finished
+        ? 'Game finished'
+        : _thinking
+            ? 'Black AI is thinking…'
+            : _forcedFrom != null
+                ? (_turn == 0 ? 'Red: continue your capture' : 'Black: continue capture')
+                : (_turn == 0 ? 'Red to move' : (widget.mode == 'ai' ? 'Black AI to move' : 'Black to move'));
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.grid_3x3, size: 28),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(status, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                ),
+                IconButton(
+                  tooltip: 'Restart checkers',
+                  onPressed: _thinking ? null : _resetBoard,
+                  icon: const Icon(Icons.restart_alt_rounded),
+                ),
+              ],
+            ),
+            Wrap(
+              spacing: 8,
+              children: [
+                Chip(avatar: const Icon(Icons.circle, color: Colors.redAccent, size: 14), label: Text('Red: $redPieces')),
+                Chip(avatar: const Icon(Icons.circle, color: Colors.blueGrey, size: 14), label: Text('${widget.mode == 'ai' ? 'Black AI' : 'Black'}: $blackPieces')),
+                Chip(label: Text('Captures: $_redCaptures - $_blackCaptures')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: boardSize,
+              height: boardSize,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8),
+                itemCount: 64,
+                itemBuilder: (context, index) {
+                  final row = index ~/ 8;
+                  final col = index % 8;
+                  final piece = _board[index];
+                  final selected = _selected == index;
+                  final isLight = (row + col).isEven;
+                  final isLegal = legalDestinations.contains(index);
+                  return GestureDetector(
+                    onTap: () => _tapSquare(index),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? widget.theme.accent.withValues(alpha: .8)
+                            : isLegal
+                                ? Colors.greenAccent.withValues(alpha: .36)
+                                : isLight
+                                    ? widget.theme.light
+                                    : widget.theme.dark,
+                        border: Border.all(color: Colors.black.withValues(alpha: .12), width: .3),
+                      ),
+                      child: Center(
+                        child: piece != null
+                            ? Container(
+                                width: boardSize / 10.8,
+                                height: boardSize / 10.8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: piece.side == 0 ? const Color(0xFFCD3434) : const Color(0xFF283746),
+                                  border: Border.all(
+                                    color: piece.side == 0 ? const Color(0xFFFFB7B7) : const Color(0xFFB9CBD9),
+                                    width: max(1.5, boardSize / 180),
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black38, blurRadius: 3, offset: Offset(0, 2)),
+                                  ],
+                                ),
+                                child: piece.king
+                                    ? Icon(Icons.star_rounded, size: boardSize / 17, color: Colors.amber)
+                                    : null,
+                              )
+                            : isLegal
+                                ? Container(
+                                    width: boardSize / 36,
+                                    height: boardSize / 36,
+                                    decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
+                                  )
+                                : const SizedBox.shrink(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _forcedFrom != null
+                  ? 'You must finish the multiple jump with the selected piece.'
+                  : 'Tap one of your pieces, then tap a highlighted square. Captures are mandatory; pieces become kings on the far row.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3645,6 +4174,1632 @@ class _ChessGameBoardState extends State<ChessGameBoard> {
         'p' => '♟',
         _ => '',
       };
+}
+
+
+class _MexicanDomino {
+  final int a;
+  final int b;
+
+  const _MexicanDomino(this.a, this.b);
+
+  bool matches(int value) => a == value || b == value;
+
+  int? otherEnd(int value) {
+    if (a == value) return b;
+    if (b == value) return a;
+    return null;
+  }
+
+  _MexicanDomino flipped() => _MexicanDomino(b, a);
+
+}
+
+class _MexicanTrainTarget {
+  final String kind;
+  final int owner;
+  final int openEnd;
+  final String label;
+
+  const _MexicanTrainTarget({
+    required this.kind,
+    required this.owner,
+    required this.openEnd,
+    required this.label,
+  });
+}
+
+class MexicanTrainGameBoard extends StatefulWidget {
+  final String mode;
+  final int playerCount;
+  final Future<void> Function(String result) onFinished;
+
+  const MexicanTrainGameBoard({
+    super.key,
+    required this.mode,
+    required this.playerCount,
+    required this.onFinished,
+  });
+
+  @override
+  State<MexicanTrainGameBoard> createState() => _MexicanTrainGameBoardState();
+}
+
+class _MexicanTrainGameBoardState extends State<MexicanTrainGameBoard> {
+  static const int _tilesPerPlayer = 17;
+  final Random _random = Random();
+  late int _doubleSet;
+  late int _engineValue;
+  late List<List<_MexicanDomino>> _hands;
+  late List<_MexicanDomino> _boneyard;
+  late List<List<_MexicanDomino>> _personalTrains;
+  late List<int> _personalOpenEnds;
+  late List<bool> _publicTrains;
+  late List<_MexicanDomino> _mexicanTrain;
+  int _mexicanOpenEnd = 12;
+  int _currentPlayer = 0;
+  int? _selectedTileIndex;
+  int? _mustPlayDrawnTile;
+  bool _aiThinking = false;
+  bool _finished = false;
+  String _status = 'Player 1 starts';
+
+  int get _playerCount => widget.playerCount.clamp(2, 8).toInt();
+  bool get _isHumanTurn => widget.mode != 'ai' || _currentPlayer == 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _dealInitialHands();
+  }
+
+  void _dealInitialHands() {
+    _doubleSet = _GamePlayCatalog.mexicanTrainSetFor(_playerCount);
+    _engineValue = _doubleSet;
+    final tiles = <_MexicanDomino>[];
+    for (var a = 0; a <= _doubleSet; a++) {
+      for (var b = a; b <= _doubleSet; b++) {
+        tiles.add(_MexicanDomino(a, b));
+      }
+    }
+    tiles.removeWhere((tile) => tile.a == _engineValue && tile.b == _engineValue);
+    tiles.shuffle(_random);
+
+    _hands = List<List<_MexicanDomino>>.generate(_playerCount, (_) => <_MexicanDomino>[]);
+    for (var round = 0; round < _tilesPerPlayer; round++) {
+      for (var player = 0; player < _playerCount; player++) {
+        _hands[player].add(tiles.removeLast());
+      }
+    }
+    _boneyard = tiles;
+    _personalTrains = List<List<_MexicanDomino>>.generate(_playerCount, (_) => <_MexicanDomino>[]);
+    _personalOpenEnds = List<int>.filled(_playerCount, _engineValue);
+    _publicTrains = List<bool>.filled(_playerCount, false);
+    _mexicanTrain = <_MexicanDomino>[];
+    _mexicanOpenEnd = _engineValue;
+    _currentPlayer = 0;
+    _selectedTileIndex = null;
+    _mustPlayDrawnTile = null;
+    _aiThinking = false;
+    _finished = false;
+    _status = 'Player 1 starts. Match a $_engineValue end to start a train.';
+  }
+
+  void _restart() {
+    setState(_dealInitialHands);
+  }
+
+  List<_MexicanTrainTarget> _targetsFor(_MexicanDomino tile, int player) {
+    final targets = <_MexicanTrainTarget>[];
+    if (tile.matches(_personalOpenEnds[player])) {
+      targets.add(_MexicanTrainTarget(
+        kind: 'personal',
+        owner: player,
+        openEnd: _personalOpenEnds[player],
+        label: 'Player ${player + 1} train',
+      ));
+    }
+    if (tile.matches(_mexicanOpenEnd)) {
+      targets.add(_MexicanTrainTarget(
+        kind: 'mexican',
+        owner: -1,
+        openEnd: _mexicanOpenEnd,
+        label: 'Mexican Train',
+      ));
+    }
+    for (var owner = 0; owner < _playerCount; owner++) {
+      if (owner == player || !_publicTrains[owner]) continue;
+      if (tile.matches(_personalOpenEnds[owner])) {
+        targets.add(_MexicanTrainTarget(
+          kind: 'personal',
+          owner: owner,
+          openEnd: _personalOpenEnds[owner],
+          label: 'Player ${owner + 1} public train',
+        ));
+      }
+    }
+    return targets;
+  }
+
+  bool _hasAnyPlacement(int player) {
+    for (final tile in _hands[player]) {
+      if (_targetsFor(tile, player).isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  List<_MexicanTrainTarget> get _selectedTargets {
+    if (_selectedTileIndex == null || _selectedTileIndex! >= _hands[_currentPlayer].length) {
+      return const <_MexicanTrainTarget>[];
+    }
+    return _targetsFor(_hands[_currentPlayer][_selectedTileIndex!], _currentPlayer);
+  }
+
+  void _selectTile(int index) {
+    if (_finished || _aiThinking || !_isHumanTurn) return;
+    if (_mustPlayDrawnTile != null && index != _mustPlayDrawnTile) return;
+    setState(() {
+      _selectedTileIndex = index == _selectedTileIndex ? null : index;
+      _status = _selectedTileIndex == null
+          ? 'Select a domino to play.'
+          : 'Choose a train that matches one end of the selected domino.';
+    });
+  }
+
+  void _playSelectedOn(_MexicanTrainTarget target) {
+    if (_finished || !_isHumanTurn || _selectedTileIndex == null) return;
+    _playTile(_currentPlayer, _selectedTileIndex!, target);
+  }
+
+  void _playTile(int player, int handIndex, _MexicanTrainTarget target) {
+    if (_finished || handIndex < 0 || handIndex >= _hands[player].length) return;
+    final tile = _hands[player][handIndex];
+    final nextOpen = tile.otherEnd(target.openEnd);
+    if (nextOpen == null) return;
+
+    setState(() {
+      _hands[player].removeAt(handIndex);
+      if (_mustPlayDrawnTile != null) _mustPlayDrawnTile = null;
+      if (target.kind == 'mexican') {
+        _mexicanTrain.add(tile.a == target.openEnd ? tile : tile.flipped());
+        _mexicanOpenEnd = nextOpen;
+      } else {
+        _personalTrains[target.owner].add(
+          tile.a == target.openEnd ? tile : tile.flipped(),
+        );
+        _personalOpenEnds[target.owner] = nextOpen;
+        if (target.owner == player) _publicTrains[player] = false;
+      }
+      _selectedTileIndex = null;
+      _status = 'Player ${player + 1} played ${tile.a}|${tile.b} on ${target.label}.';
+    });
+
+    if (_hands[player].isEmpty) {
+      _finishRound(player);
+      return;
+    }
+    _advanceTurn();
+  }
+
+  void _finishRound(int winner) {
+    if (_finished) return;
+    setState(() {
+      _finished = true;
+      _selectedTileIndex = null;
+      _mustPlayDrawnTile = null;
+      _status = winner == 0 ? 'You emptied your rack and won the round!' : 'Player ${winner + 1} emptied their rack.';
+    });
+    widget.onFinished(winner == 0 ? 'win' : 'loss');
+  }
+
+  void _advanceTurn() {
+    if (_finished) return;
+    setState(() {
+      _currentPlayer = (_currentPlayer + 1) % _playerCount;
+      _selectedTileIndex = null;
+      _mustPlayDrawnTile = null;
+      _status = widget.mode == 'ai' && _currentPlayer != 0
+          ? 'Player ${_currentPlayer + 1} AI is thinking…'
+          : 'Player ${_currentPlayer + 1} to play.';
+    });
+    if (widget.mode == 'ai' && _currentPlayer != 0) _scheduleAiTurn();
+  }
+
+  void _drawOrPass() {
+    if (_finished || _aiThinking || !_isHumanTurn || _hasAnyPlacement(_currentPlayer)) return;
+    if (_boneyard.isNotEmpty) {
+      final drawn = _boneyard.removeLast();
+      final drawnIndex = _hands[_currentPlayer].length;
+      setState(() {
+        _hands[_currentPlayer].add(drawn);
+        _selectedTileIndex = drawnIndex;
+        _mustPlayDrawnTile = _drawnHasPlacement(drawn, _currentPlayer) ? drawnIndex : null;
+        _status = _mustPlayDrawnTile != null
+            ? 'You drew ${drawn.a}|${drawn.b}. Play this domino now.'
+            : 'No playable domino. Your train is now public; turn passed.';
+      });
+      if (_mustPlayDrawnTile == null) {
+        setState(() {
+          _publicTrains[_currentPlayer] = true;
+          _selectedTileIndex = null;
+        });
+        _advanceTurn();
+      }
+    } else {
+      setState(() {
+        _publicTrains[_currentPlayer] = true;
+        _selectedTileIndex = null;
+        _mustPlayDrawnTile = null;
+        _status = 'Boneyard empty. Player ${_currentPlayer + 1} passes and their train is public.';
+      });
+      _advanceTurn();
+    }
+  }
+
+  bool _drawnHasPlacement(_MexicanDomino tile, int player) =>
+      _targetsFor(tile, player).isNotEmpty;
+
+  void _scheduleAiTurn() {
+    if (!mounted || _finished || _aiThinking || widget.mode != 'ai' || _currentPlayer == 0) return;
+    setState(() => _aiThinking = true);
+    Future<void>.delayed(const Duration(milliseconds: 480), () {
+      if (!mounted || _finished || _currentPlayer == 0) return;
+      final player = _currentPlayer;
+      var chosenIndex = -1;
+      _MexicanTrainTarget? chosenTarget;
+      for (var index = 0; index < _hands[player].length; index++) {
+        final targets = _targetsFor(_hands[player][index], player);
+        if (targets.isNotEmpty) {
+          chosenIndex = index;
+          chosenTarget = targets.first;
+          break;
+        }
+      }
+      setState(() => _aiThinking = false);
+      if (chosenIndex >= 0 && chosenTarget != null) {
+        _playTile(player, chosenIndex, chosenTarget);
+        return;
+      }
+
+      if (_boneyard.isNotEmpty) {
+        final tile = _boneyard.removeLast();
+        final index = _hands[player].length;
+        setState(() => _hands[player].add(tile));
+        final targets = _targetsFor(tile, player);
+        if (targets.isNotEmpty) {
+          _playTile(player, index, targets.first);
+          return;
+        }
+      }
+      setState(() {
+        _publicTrains[player] = true;
+        _status = 'Player ${player + 1} AI passed; their train is public.';
+      });
+      _advanceTurn();
+    });
+  }
+
+  Widget _pipHalf(int count, {double side = 34}) {
+    final cells = count <= 9 ? 9 : 16;
+    final columns = count <= 9 ? 3 : 4;
+    final dotSize = count <= 9 ? 4.4 : 3.2;
+    return SizedBox(
+      width: side,
+      height: side,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(2),
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          mainAxisSpacing: 1,
+          crossAxisSpacing: 1,
+        ),
+        itemCount: cells,
+        itemBuilder: (context, index) => index < count
+            ? Center(
+                child: Container(
+                  width: dotSize,
+                  height: dotSize,
+                  decoration: const BoxDecoration(color: Color(0xFF15202B), shape: BoxShape.circle),
+                ),
+              )
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  Widget _dominoFace(_MexicanDomino tile, {bool selected = false, double width = 74, double height = 40}) {
+    final half = (width - 8) / 2;
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: selected ? Colors.amber : const Color(0xFFB3A58A),
+          width: selected ? 3 : 1,
+        ),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _pipHalf(tile.a, side: min<double>(half, height - 4)),
+          Container(width: 1.5, height: height - 6, color: const Color(0xFFB3A58A)),
+          _pipHalf(tile.b, side: min<double>(half, height - 4)),
+        ],
+      ),
+    );
+  }
+
+  Widget _dominoBack({double width = 16, double height = 27}) => Container(
+        width: width,
+        height: height,
+        margin: const EdgeInsets.only(right: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFF234D73),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: const Color(0xFF9FC5E8)),
+        ),
+        child: Center(
+          child: Container(
+            width: width * .42,
+            height: height * .58,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white70, width: .8),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+      );
+
+  Widget _trainRow(List<_MexicanDomino> train, int startValue, {bool compact = false}) {
+    var open = startValue;
+    final children = <Widget>[];
+    for (final tile in train) {
+      final oriented = tile.a == open ? tile : tile.flipped();
+      children.add(_dominoFace(oriented, width: compact ? 55 : 67, height: compact ? 31 : 36));
+      children.add(const SizedBox(width: 4));
+      open = oriented.b;
+    }
+    if (children.isEmpty) {
+      children.add(const Text('No dominoes played yet', style: TextStyle(color: Colors.white38, fontSize: 12)));
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: children),
+    );
+  }
+
+  Widget _playerRackSummary(int player) {
+    final isCurrent = player == _currentPlayer;
+    final isAi = widget.mode == 'ai' && player > 0;
+    final label = player == 0 ? 'You' : isAi ? 'Player ${player + 1} · AI' : 'Player ${player + 1}';
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isCurrent ? Colors.amber.withValues(alpha: .10) : Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isCurrent ? Colors.amber : Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('${_hands[player].length} dominoes${_publicTrains[player] ? ' · train public' : ''}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+          const SizedBox(height: 6),
+          if (isCurrent && _isHumanTurn)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                for (var index = 0; index < _hands[player].length; index++)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: _dominoBack(width: 12, height: 22),
+                  ),
+              ]),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [for (var i = 0; i < _hands[player].length; i++) _dominoBack(width: 10, height: 22)]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalTiles = (_doubleSet + 1) * (_doubleSet + 2) ~/ 2;
+    final openTargets = _selectedTargets;
+    final humanTurn = _isHumanTurn && !_aiThinking && !_finished;
+    final canDraw = humanTurn && !_hasAnyPlacement(_currentPlayer) && _mustPlayDrawnTile == null;
+    final width = min<double>(MediaQuery.sizeOf(context).width - 56, 760);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.view_week_outlined, size: 28),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Mexican Train', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900))),
+                IconButton(tooltip: 'Restart round', onPressed: _aiThinking ? null : _restart, icon: const Icon(Icons.restart_alt_rounded)),
+              ],
+            ),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                Chip(label: Text('Double-$_doubleSet set · $totalTiles tiles')),
+                const Chip(label: Text('17 starting tiles each')),
+                Chip(label: Text('${_boneyard.length} in boneyard')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(_status, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            Card(
+              color: Colors.blueGrey.withValues(alpha: .15),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Central hub / engine', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      _dominoFace(_MexicanDomino(_engineValue, _engineValue), width: 74, height: 40),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text('Double-$_engineValue is the starting value for every train.', style: const TextStyle(color: Colors.white60, fontSize: 12))),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Expanded(child: Text('Mexican Train · public', style: TextStyle(fontWeight: FontWeight.w800))),
+                      Chip(label: Text('Open: $_mexicanOpenEnd')),
+                    ]),
+                    const SizedBox(height: 8),
+                    _trainRow(_mexicanTrain, _engineValue),
+                  ],
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(2, 8, 2, 6),
+              child: Text('Players’ personal trains', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            ),
+            for (var player = 0; player < _playerCount; player++)
+              Card(
+                margin: const EdgeInsets.only(bottom: 6),
+                child: Padding(
+                  padding: const EdgeInsets.all(9),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(child: Text('Player ${player + 1}${player == 0 ? ' · You' : widget.mode == 'ai' ? ' · AI' : ''}${_publicTrains[player] ? ' · PUBLIC' : ''}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                        Chip(label: Text('Open: ${_personalOpenEnds[player]}')),
+                      ]),
+                      _trainRow(_personalTrains[player], _engineValue, compact: true),
+                    ],
+                  ),
+                ),
+              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(2, 8, 2, 6),
+              child: Text('Every player’s rack', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            ),
+            SizedBox(
+              width: width,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var player = 0; player < _playerCount; player++)
+                      Padding(padding: const EdgeInsets.only(right: 8), child: _playerRackSummary(player)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              color: Colors.amber.withValues(alpha: .06),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_currentPlayer == 0 ? 'Your domino rack · ${_hands[0].length} tiles' : 'Player ${_currentPlayer + 1} rack · ${_hands[_currentPlayer].length} tiles', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var index = 0; index < _hands[_currentPlayer].length; index++)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 5),
+                              child: humanTurn
+                                  ? InkWell(
+                                      onTap: () => _selectTile(index),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: _dominoFace(
+                                        _hands[_currentPlayer][index],
+                                        selected: index == _selectedTileIndex,
+                                      ),
+                                    )
+                                  : _dominoBack(width: 25, height: 40),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (openTargets.isNotEmpty && humanTurn) ...[
+                      const SizedBox(height: 12),
+                      const Text('Play selected domino on:', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final target in openTargets)
+                            FilledButton.tonal(
+                              onPressed: () => _playSelectedOn(target),
+                              child: Text('${target.label} (open ${target.openEnd})'),
+                            ),
+                        ],
+                      ),
+                    ] else if (_selectedTileIndex != null && humanTurn) ...[
+                      const SizedBox(height: 8),
+                      const Text('That domino does not match an available train. Select another tile or draw if you have no legal play.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    ],
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: canDraw ? _drawOrPass : null,
+                        icon: const Icon(Icons.add_box_outlined),
+                        label: Text(_boneyard.isEmpty ? 'Pass (boneyard empty)' : 'Draw 1 domino / pass'),
+                      ),
+                    ),
+                    if (_mustPlayDrawnTile != null)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text('You must play the drawn tile before ending your turn.', style: TextStyle(color: Colors.amber, fontSize: 12)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const Text(
+              'Local play includes the visual hub, personal trains, public-train markers, matching ends, draw/pass, and 17-tile racks. The Double-N set expands for larger player counts so all racks fit.',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dedicated playable layouts for Connect 4 and the requested card-table games.
+class TabletopGameBoard extends StatefulWidget {
+  final GameDefinition game;
+  final String mode;
+  final String difficulty;
+  final String variant;
+  final Future<void> Function(String result) onFinished;
+
+  const TabletopGameBoard({
+    super.key,
+    required this.game,
+    required this.mode,
+    required this.difficulty,
+    required this.variant,
+    required this.onFinished,
+  });
+
+  @override
+  State<TabletopGameBoard> createState() => _TabletopGameBoardState();
+}
+
+class _TabletopGameBoardState extends State<TabletopGameBoard> {
+  final Random _random = Random();
+  final List<int> _connectCells = List<int>.filled(42, 0);
+  final List<String> _deck = <String>[];
+  final List<String> _waste = <String>[];
+  final List<String> _hand = <String>[];
+  final List<String> _layoutCards = <String>[];
+  final Set<int> _removed = <int>{};
+  int _turn = 1;
+  int _moves = 0;
+  int _score = 0;
+  int? _selected;
+  bool _finished = false;
+
+  String get _id => widget.game.id;
+  bool get _connect4 => _id == 'connect4';
+  bool get _rummy => _id == 'continental' || _id == 'la_viuda';
+  bool get _solo => !_connect4 && !_rummy;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetGame();
+  }
+
+  void _resetGame() {
+    _connectCells.fillRange(0, _connectCells.length, 0);
+    _deck.clear();
+    _waste.clear();
+    _hand.clear();
+    _layoutCards.clear();
+    _removed.clear();
+    _turn = 1;
+    _moves = 0;
+    _score = 0;
+    _selected = null;
+    _finished = false;
+    if (_rummy) {
+      _hand.addAll(List<String>.generate(7, (_) => _drawCardLabel()));
+      _deck.addAll(List<String>.generate(40, (_) => _drawCardLabel()));
+      _waste.add(_drawCardLabel());
+    } else if (_solo) {
+      final count = _id == 'spider' ? 104 : 52;
+      _deck.addAll(List<String>.generate(count, (_) => _drawCardLabel()));
+      _deck.shuffle(_random);
+      final layoutCount = _id == 'spider' ? 54 : _id == 'freecell' ? 52 : 28;
+      for (var i = 0; i < layoutCount && _deck.isNotEmpty; i++) {
+        _layoutCards.add(_deck.removeLast());
+      }
+      if (_id == 'tripeaks' && _deck.isNotEmpty) {
+        _waste.add(_deck.removeLast());
+      }
+    }
+  }
+
+  String _drawCardLabel() {
+    const ranks = <String>['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    const suits = <String>['♠', '♥', '♦', '♣'];
+    return '${ranks[_random.nextInt(ranks.length)]}${suits[_random.nextInt(suits.length)]}';
+  }
+
+  bool _hasConnectFour(int row, int col, int player) {
+    const directions = <List<int>>[[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (final direction in directions) {
+      var count = 1;
+      for (final sign in <int>[-1, 1]) {
+        var r = row + direction[0] * sign;
+        var c = col + direction[1] * sign;
+        while (r >= 0 && r < 6 && c >= 0 && c < 7 && _connectCells[r * 7 + c] == player) {
+          count++;
+          r += direction[0] * sign;
+          c += direction[1] * sign;
+        }
+      }
+      if (count >= 4) return true;
+    }
+    return false;
+  }
+
+  Future<void> _drop(int col) async {
+    if (_finished || _turn != 1) return;
+    final row = List<int>.generate(6, (i) => 5 - i).firstWhere(
+      (r) => _connectCells[r * 7 + col] == 0,
+      orElse: () => -1,
+    );
+    if (row < 0) return;
+    setState(() {
+      _connectCells[row * 7 + col] = 1;
+      _moves++;
+    });
+    if (_hasConnectFour(row, col, 1)) {
+      setState(() => _finished = true);
+      await widget.onFinished('win');
+      return;
+    }
+    if (_connectCells.every((cell) => cell != 0)) {
+      setState(() => _finished = true);
+      await widget.onFinished('draw');
+      return;
+    }
+    setState(() => _turn = 2);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted || _finished) return;
+    final columns = List<int>.generate(7, (i) => i)..shuffle(_random);
+    for (final aiCol in columns) {
+      final aiRow = List<int>.generate(6, (i) => 5 - i).firstWhere(
+        (r) => _connectCells[r * 7 + aiCol] == 0,
+        orElse: () => -1,
+      );
+      if (aiRow >= 0) {
+        setState(() {
+          _connectCells[aiRow * 7 + aiCol] = 2;
+          _moves++;
+          _turn = 1;
+        });
+        if (_hasConnectFour(aiRow, aiCol, 2)) {
+          setState(() => _finished = true);
+          await widget.onFinished('loss');
+        } else if (_connectCells.every((cell) => cell != 0)) {
+          setState(() => _finished = true);
+          await widget.onFinished('draw');
+        }
+        break;
+      }
+    }
+  }
+
+  void _drawStock() {
+    if (_finished) return;
+    setState(() {
+      if (_deck.isEmpty) {
+        if (_waste.isNotEmpty) {
+          _deck.addAll(_waste.reversed.toList());
+          _waste.clear();
+        }
+      }
+      if (_deck.isNotEmpty) {
+        final card = _deck.removeLast();
+        if (_rummy) {
+          _hand.add(card);
+        } else {
+          _waste.add(card);
+        }
+        _moves++;
+        _selected = null;
+      }
+    });
+  }
+
+  void _tapCard(int index, String card) {
+    if (_finished) return;
+    setState(() {
+      if (_rummy) {
+        _selected = _selected == index ? null : index;
+        return;
+      }
+      if (_id == 'pyramid') {
+        if (_selected == null) {
+          _selected = index;
+        } else {
+          final first = _selected!;
+          final firstRank = _rankValue(_soloCardAt(first));
+          final secondRank = _rankValue(card);
+          if (first != index && firstRank + secondRank == 13) {
+            _removed.add(first);
+            _removed.add(index);
+            _score += 10;
+            _moves++;
+            _selected = null;
+          } else {
+            _selected = index;
+          }
+        }
+      } else if (_id == 'tripeaks') {
+        if (_waste.isEmpty || _adjacentRank(card, _waste.last)) {
+          _removed.add(index);
+          _waste.add(card);
+          _score += 5;
+          _moves++;
+        } else {
+          _selected = index;
+        }
+      } else {
+        if (_selected == null) {
+          _selected = index;
+        } else if (_selected != index) {
+          _removed.add(_selected!);
+          _removed.add(index);
+          _score += 5;
+          _moves++;
+          _selected = null;
+        } else {
+          _selected = null;
+        }
+      }
+      final total = _id == 'pyramid' ? 28 : _id == 'tripeaks' ? 28 : _id == 'spider' ? 54 : 28;
+      if (_removed.length >= total) _finished = true;
+    });
+  }
+
+  String _soloCardAt(int index) {
+    if (index < 0 || index >= _soloLayoutCards.length) return 'K♠';
+    return _soloLayoutCards[index];
+  }
+
+  List<String> get _soloLayoutCards => _layoutCards;
+
+  int _rankValue(String card) {
+    final rank = card.replaceAll(RegExp(r'[^0-9AJQK]'), '');
+    if (rank == 'A') return 1;
+    if (rank == 'J') return 11;
+    if (rank == 'Q') return 12;
+    if (rank == 'K') return 13;
+    return int.tryParse(rank) ?? 0;
+  }
+
+  bool _adjacentRank(String a, String b) {
+    final difference = (_rankValue(a) - _rankValue(b)).abs();
+    return difference == 1 || difference == 12;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_connect4) return _buildConnect4();
+    if (_rummy) return _buildRummy();
+    return _buildSolitaire();
+  }
+
+  Widget _buildConnect4() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _statusCard('CONNECT 4', 'Drop a disc into a column. Connect four horizontally, vertically or diagonally.', 'Turn: ${_turn == 1 ? 'You' : 'AI'}  •  Moves: $_moves'),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: const Color(0xFF174EA6), borderRadius: BorderRadius.circular(18)),
+        child: Column(children: List<Widget>.generate(6, (row) => Row(children: List<Widget>.generate(7, (col) {
+          final value = _connectCells[row * 7 + col];
+          return Expanded(child: AspectRatio(aspectRatio: 1, child: Padding(padding: const EdgeInsets.all(3), child: Material(
+            color: value == 1 ? const Color(0xFFF44336) : value == 2 ? const Color(0xFFFFD54F) : const Color(0xFFEAF1FA),
+            shape: const CircleBorder(),
+            child: InkWell(customBorder: const CircleBorder(), onTap: () => _drop(col), child: const SizedBox.expand()),
+          ))));
+        })))),
+      ),
+      const SizedBox(height: 12),
+      _actionRow('New game', Icons.refresh, _resetAndRefresh, 'Tap any column to drop your red disc.'),
+    ]);
+  }
+
+  Widget _buildSolitaire() {
+    final title = widget.game.name;
+    final cards = _soloLayoutCards;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _statusCard(title.toUpperCase(), _rulesForSolo(), 'Moves: $_moves  •  Score: $_score  •  Stock: ${_deck.length}'),
+      const SizedBox(height: 12),
+      if (_id == 'pyramid') _buildPyramid(cards)
+      else if (_id == 'tripeaks') _buildTriPeaks(cards)
+      else if (_id == 'freecell') _buildFreeCell(cards)
+      else if (_id == 'spider') _buildSpider(cards)
+      else _buildTableau(cards),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(onPressed: _drawStock, icon: const Icon(Icons.style), label: Text(_id == 'tripeaks' ? 'Draw / pass' : 'Draw card'))),
+        const SizedBox(width: 8),
+        Expanded(child: FilledButton.icon(onPressed: _resetAndRefresh, icon: const Icon(Icons.refresh), label: const Text('New deal'))),
+      ]),
+      const SizedBox(height: 8),
+      Text(_id == 'pyramid' ? 'Select two exposed cards that total 13. Kings can be removed alone.' : _id == 'tripeaks' ? 'Remove exposed cards one rank above or below the waste card.' : _id == 'freecell' ? 'Use the four free cells as temporary storage; build foundations by suit from Ace to King.' : _id == 'spider' ? 'Build descending sequences. Complete King-to-Ace runs to clear a suit.' : 'Select a card, then another card to move/remove it. Use stock to reveal more cards.', style: Theme.of(context).textTheme.bodySmall),
+    ]);
+  }
+
+  String _rulesForSolo() => switch (_id) {
+    'solitaire' => 'Klondike layout: build foundations from Ace to King, alternating colors in descending tableau columns.',
+    'tripeaks' => 'Clear three peaks by playing an exposed card one rank above or below the waste card.',
+    'pyramid' => 'Pair exposed cards whose ranks add to 13 to clear the pyramid.',
+    'freecell' => 'Move every card to the four suit foundations. Four free cells can hold one card each.',
+    'spider' => 'Build descending same-suit sequences and clear complete King-to-Ace runs.',
+    _ => 'Select cards and build valid sequences to clear the layout.',
+  };
+
+  Widget _buildTableau(List<String> cards) {
+    final columns = _id == 'freecell' ? 8 : _id == 'spider' ? 10 : 7;
+    return Column(children: [
+      if (_id == 'freecell') _specialSlots('FREE CELLS', 4),
+      if (_id == 'solitaire') _specialSlots('FOUNDATIONS', 4),
+      const SizedBox(height: 8),
+      GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: columns, gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 4, mainAxisSpacing: 6, childAspectRatio: .66), itemBuilder: (context, col) {
+        final index = col;
+        final card = cards[index];
+        return Column(children: [
+          _playingCard(card, onTap: () => _tapCard(index, card), selected: _selected == index, removed: _removed.contains(index)),
+          const SizedBox(height: 4),
+          for (var row = 1; row < 3 && col + row * columns < cards.length; row++)
+            Padding(padding: const EdgeInsets.only(top: 3), child: _playingCard(cards[col + row * columns], onTap: () => _tapCard(col + row * columns, cards[col + row * columns]), selected: _selected == col + row * columns, removed: _removed.contains(col + row * columns))),
+        ]);
+      }),
+    ]);
+  }
+
+  Widget _buildFreeCell(List<String> cards) => Column(children: [
+    _specialSlots('FREE CELLS', 4), const SizedBox(height: 8), _specialSlots('FOUNDATIONS', 4), const SizedBox(height: 12),
+    GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: 8, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8, crossAxisSpacing: 4, childAspectRatio: .62), itemBuilder: (context, i) => _playingCard(cards[i], onTap: () => _tapCard(i, cards[i]), selected: _selected == i, removed: _removed.contains(i))),
+  ]);
+
+  Widget _buildSpider(List<String> cards) => Column(children: [
+    _specialSlots('COMPLETED RUNS  •  ${_score ~/ 100}', 8), const SizedBox(height: 10),
+    GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: 10, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10, crossAxisSpacing: 3, childAspectRatio: .58), itemBuilder: (context, i) => Column(children: [for (var r = 0; r < 4; r++) Padding(padding: const EdgeInsets.only(bottom: 3), child: _playingCard(cards[(i * 4 + r) % cards.length], onTap: () => _tapCard(i * 4 + r, cards[(i * 4 + r) % cards.length]), selected: _selected == i * 4 + r, removed: _removed.contains(i * 4 + r))) ])),
+  ]);
+
+  Widget _buildPyramid(List<String> cards) => Column(children: List<Widget>.generate(7, (row) => Row(mainAxisAlignment: MainAxisAlignment.center, children: List<Widget>.generate(row + 1, (col) {
+    final index = row * (row + 1) ~/ 2 + col;
+    final card = cards[index];
+    final covered = row < 6 && (_removed.contains(index + row + 1) == false || _removed.contains(index + row + 2) == false);
+    return Padding(padding: const EdgeInsets.all(2), child: SizedBox(width: 39, child: Opacity(opacity: _removed.contains(index) ? .18 : 1, child: _playingCard(card, onTap: covered ? null : () => _tapCard(index, card), selected: _selected == index, removed: _removed.contains(index)))));
+  }))));
+
+  Widget _buildTriPeaks(List<String> cards) => Column(children: [
+    for (var row = 0; row < 3; row++) Row(mainAxisAlignment: MainAxisAlignment.center, children: List<Widget>.generate(3 + row * 2, (col) {
+      final index = row * 9 + col;
+      final card = cards[index % cards.length];
+      return SizedBox(width: 38, child: Padding(padding: const EdgeInsets.all(2), child: _playingCard(card, onTap: row == 2 ? () => _tapCard(index, card) : null, selected: _selected == index, removed: _removed.contains(index))));
+    })),
+    const SizedBox(height: 12),
+    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      _playingCard(_deck.isEmpty ? '↻' : '▧', onTap: _drawStock), const SizedBox(width: 16),
+      _playingCard(_waste.isEmpty ? '—' : _waste.last, onTap: _waste.isEmpty ? null : () => _tapCard(27, _waste.last)),
+    ]),
+  ]);
+
+  Widget _specialSlots(String label, int count) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
+          const SizedBox(height: 5),
+          Row(
+            children: List<Widget>.generate(
+              count,
+              (i) => Expanded(
+                child: Container(
+                  height: 52,
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1D4D3B),
+                    border: Border.all(color: Colors.white24),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Center(
+                    child: Text(
+                      i < _waste.length && label == 'FOUNDATIONS' ? _waste[i] : '＋',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+
+  Widget _playingCard(String label, {VoidCallback? onTap, bool selected = false, bool removed = false}) {
+    final red = label.contains('♥') || label.contains('♦');
+    return Opacity(
+      opacity: removed ? .2 : 1,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF0B3) : Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? Colors.amber : const Color(0xFFCFD5DE),
+            width: selected ? 2.5 : 1,
+          ),
+          boxShadow: const [
+            BoxShadow(color: Color(0x22000000), blurRadius: 2, offset: Offset(0, 1)),
+          ],
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Center(
+            child: FittedBox(
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: red ? const Color(0xFFD32F2F) : const Color(0xFF202633),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRummy() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _statusCard(_id == 'continental' ? 'CONTINENTAL RUMMY' : 'LA VIUDA', _id == 'continental' ? 'Draw from the stock or take the discard, then discard one card. Form the required sets and runs for each round.' : 'Card-table mode: draw, arrange your hand, and discard. Local rule sets can vary by region.', 'Your hand: ${_hand.length} cards  •  Deck: ${_deck.length}  •  Turn: You'),
+    const SizedBox(height: 12),
+    Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF14543F), borderRadius: BorderRadius.circular(16)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('TABLE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 1)), const SizedBox(height: 10),
+      Row(children: [Expanded(child: _playingCard(_deck.isEmpty ? '↻' : '▧', onTap: _drawStock)), const SizedBox(width: 12), Expanded(child: _playingCard(_waste.isEmpty ? '—' : _waste.last, onTap: () { if (_waste.isNotEmpty) setState(() => _hand.add(_waste.removeLast())); }))]),
+      const SizedBox(height: 8), const Text('Tap stock to draw • tap discard pile to take its top card', style: TextStyle(color: Colors.white70, fontSize: 12)),
+    ])),
+    const SizedBox(height: 12),
+    Text('YOUR HAND (${_hand.length})', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 6),
+    Wrap(
+      spacing: 6,
+      runSpacing: 8,
+      children: List<Widget>.generate(
+        _hand.length,
+        (i) => SizedBox(
+          width: 47,
+          height: 66,
+          child: _playingCard(
+            _hand[i],
+            selected: _selected == i,
+            onTap: () => setState(() => _selected = _selected == i ? null : i),
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(height: 12),
+    FilledButton.icon(onPressed: _hand.isEmpty ? null : () { setState(() { final i = _selected ?? _hand.length - 1; _waste.add(_hand.removeAt(i)); _selected = null; _moves++; }); }, icon: const Icon(Icons.output), label: const Text('Discard selected card')),
+    const SizedBox(height: 8), Text(_id == 'continental' ? 'Continental rounds commonly require combinations such as sets and runs; confirm your house rules before a scored multiplayer match.' : 'La Viuda has regional rule differences. This table currently supports drawing, hand selection and discarding; full scoring should follow the chosen local rules.', style: Theme.of(context).textTheme.bodySmall),
+  ]);
+
+  Widget _statusCard(String title, String subtitle, String stats) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(subtitle), const SizedBox(height: 8), Text(stats, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700))])));
+
+  Widget _actionRow(String label, IconData icon, VoidCallback action, String helper) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [OutlinedButton.icon(onPressed: action, icon: Icon(icon), label: Text(label)), Text(helper, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall)]);
+
+  void _resetAndRefresh() => setState(_resetGame);
+}
+
+
+
+
+// Catalog-driven visual boards for the remaining games. Each game gets a
+// category-specific play surface and game-specific instructions while keeping
+// the existing match lifecycle and result callback.
+const Set<String> _catalogPlayableIds = <String>{
+  'battleship',
+  'uno_like',
+  'texas_holdem',
+  'blackjack',
+  'baccarat',
+  'mahjong',
+  'word_search',
+  'minesweeper',
+  'snake',
+  'bubble',
+  'bejeweled_like',
+  'gravity_block',
+  'gem_drop',
+  'queens',
+  'tango',
+  'patches',
+  'zip',
+  'wend',
+  'pinpoint',
+  'crossclimb',
+  'dominoes',
+  'draw_dominoes',
+  'all_fives',
+  'chicken_foot',
+  'rummikub',
+  'reversi',
+  'gomoku',
+  'tic_tac_toe',
+  'mancala',
+  'chinese_checkers',
+  'hearts',
+  'spades',
+  'crazy_eights',
+  'go_fish',
+  'war',
+  'gin_rummy',
+  'rummy',
+  'old_maid',
+  'pool',
+  'bowling',
+  'darts',
+  'mini_golf',
+  'air_hockey',
+  'pinball',
+  'endless_runner',
+  'maze_chase',
+  'brick_breaker',
+  'reaction_race',
+  'memory_match',
+  'simon_says',
+  'pattern_memory',
+  'quick_math',
+  'number_guess',
+  'twenty_questions',
+  'hangman',
+  'word_scramble',
+  'word_ladder',
+  'anagrams',
+  'word_association',
+  'categories',
+  'word_chain',
+  'spell_it',
+  'password',
+  'taboo_style',
+  'charades',
+  'pictionary',
+  'draw_and_guess',
+  'emoji_pictionary',
+  'emoji_movie',
+  'emoji_song',
+  'guess_song',
+  'guess_artist',
+  'guess_album',
+  'guess_genre',
+  'guess_decade',
+  'guess_year',
+  'guess_music_video',
+  'guess_instrument',
+  'guess_cover_artist',
+  'guess_original',
+  'one_second_song',
+  'three_second_song',
+  'five_second_song',
+  'ten_second_song',
+  'first_note',
+  'first_beat',
+  'first_word',
+  'fastest_guess',
+  'finish_lyrics',
+  'missing_lyrics',
+  'next_word',
+  'next_line',
+  'lyrics_scramble',
+  'who_sang_line',
+  'lyrics_multiple_choice',
+  'wrong_lyrics',
+  'continue_song',
+  'music_timeline',
+  'which_song_first',
+  'higher_lower_year',
+  'higher_lower_streams',
+  'artist_vs_artist',
+  'album_vs_album',
+  'guess_sample',
+  'name_that_cover',
+  'one_hit_wonder',
+  'music_connections',
+  'song_battle',
+  'best_intro',
+  'best_chorus',
+  'best_bassline',
+  'best_guitar',
+  'best_party_song',
+  'best_workout_song',
+  'best_movie_song',
+  'best_song_decade',
+  'guess_movie',
+  'guess_tv_show',
+  'guess_actor',
+  'guess_actress',
+  'guess_character',
+  'guess_director',
+  'guess_franchise',
+  'guess_episode',
+  'guess_scene',
+  'guess_location',
+  'movie_soundtrack_guess',
+  'tv_theme_guess',
+  'movie_quote',
+  'tv_quote',
+  'who_said_it',
+  'movie_sound_effect',
+  'show_sound_effect',
+  'blurred_scene',
+  'zoomed_scene',
+  'pixelated_movie',
+  'silhouette_character',
+  'actor_face',
+  'movie_poster_puzzle',
+  'missing_poster',
+  'movie_trivia',
+  'tv_trivia',
+  'release_year',
+  'actor_connections',
+  'director_connections',
+  'movie_timeline',
+  'sequel_or_original',
+  'remake_or_original',
+  'movie_or_tv',
+  'which_movie_first',
+  'box_office_higher_lower',
+  'runtime_higher_lower',
+  'tv_show_emoji',
+  'family_feud',
+  'survey_says',
+  'most_likely_to',
+  'would_you_rather',
+  'never_have_i_ever',
+  'two_truths_lie',
+  'truth_or_bluff',
+  'guess_who',
+  'hot_seat',
+  'whos_most_likely',
+  'act_it_out',
+  'sound_effects',
+  'impression_challenge',
+  'dance_challenge',
+  'lip_sync_battle',
+  'karaoke_battle',
+  'music_racing',
+  'beat_saber_style',
+  'dance_coach',
+  'rhythm_challenge',
+  'dance_battle',
+  'motion_sports',
+  'cross_game_tournament',
+  'crossover_arena_fighter',
+};
+
+class CatalogGameBoard extends StatefulWidget {
+  final GameDefinition game;
+  final String mode;
+  final String difficulty;
+  final Future<void> Function(String result) onFinished;
+
+  const CatalogGameBoard({
+    super.key,
+    required this.game,
+    required this.mode,
+    required this.difficulty,
+    required this.onFinished,
+  });
+
+  @override
+  State<CatalogGameBoard> createState() => _CatalogGameBoardState();
+}
+
+class _CatalogGameBoardState extends State<CatalogGameBoard> {
+  final Random _random = Random();
+  final TextEditingController _answerController = TextEditingController();
+  late List<int> _cells;
+  late List<String> _hand;
+  late List<String> _options;
+  int _selected = -1;
+  int _score = 0;
+  int _round = 1;
+  int _turn = 0;
+  int _moves = 0;
+  bool _finished = false;
+  String _status = 'Choose a move to begin.';
+
+  String get _id => widget.game.id;
+  String get _category => widget.game.category.name;
+  bool get _isCard => _category == 'card' || _category == 'casinoPlayMoney';
+  bool get _isBoard => _category == 'board' || _category == 'tile' || _category == 'dominoes';
+  bool get _isWord => _category == 'word' || _category == 'trivia' || _category == 'music' || _category == 'movieTv';
+  bool get _isArcade => _category == 'arcade' || _category == 'sports' || _category == 'racing' || _category == 'danceRhythm' || _category == 'fighting';
+  bool get _isParty => _category == 'party' || _category == 'tournament';
+  bool get _isGridPuzzle => _category == 'puzzle';
+
+  @override
+  void initState() {
+    super.initState();
+    _reset();
+  }
+
+  @override
+  void dispose() {
+    _answerController.dispose();
+    super.dispose();
+  }
+
+  void _reset() {
+    _cells = List<int>.filled(_id == 'tic_tac_toe' ? 9 : _id == 'gomoku' || _id == 'reversi' ? 64 : 25, 0);
+    _hand = List<String>.generate(_id == 'spades' || _id == 'hearts' ? 13 : 7, (_) => _randomCard());
+    _options = _makeOptions();
+    _selected = -1;
+    _score = 0;
+    _round = 1;
+    _turn = 0;
+    _moves = 0;
+    _finished = false;
+    _status = _instructions;
+    _answerController.clear();
+  }
+
+  String _randomCard() {
+    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    const suits = ['♠', '♥', '♦', '♣'];
+    return '${ranks[_random.nextInt(ranks.length)]}${suits[_random.nextInt(suits.length)]}';
+  }
+
+  List<String> _makeOptions() {
+    switch (_id) {
+      case 'quick_math': return ['12', '18', '24', '30'];
+      case 'sudoku': return ['1', '2', '3', '4'];
+      case 'guess_song': case 'guess_artist': case 'guess_album': return ['Choose from library', 'Search library', 'Play preview', 'Skip'];
+      case 'movie_trivia': case 'tv_trivia': return ['A', 'B', 'C', 'D'];
+      case 'emoji_movie': case 'emoji_song': case 'tv_show_emoji': return ['Comedy', 'Adventure', 'Drama', 'Animation'];
+      default: return ['Option A', 'Option B', 'Option C', 'Option D'];
+    }
+  }
+
+  String get _instructions {
+    switch (_id) {
+      case 'reversi': return 'Place a disc to bracket opponent discs in a straight line and flip them. Most discs wins.';
+      case 'gomoku': return 'Place stones on intersections. Connect five in a row horizontally, vertically, or diagonally.';
+      case 'tic_tac_toe': return 'Take turns placing X and O. Connect three in a row to win.';
+      case 'mancala': return 'Select one of your pits to sow stones counter-clockwise. Capture stones and finish with the largest store.';
+      case 'chinese_checkers': return 'Select a peg, then a highlighted destination. Jump over pegs to race all pieces to the opposite star point.';
+      case 'hearts': return 'Play one card per trick and follow suit when possible. Avoid hearts and the queen of spades.';
+      case 'spades': return 'Bid how many tricks your partnership expects to win, then follow suit. Spades are trump.';
+      case 'crazy_eights': return 'Play a card matching the discard rank or suit. Eights change the active suit.';
+      case 'go_fish': return 'Ask an opponent for a rank. If they have it, collect the cards; otherwise draw from the pond.';
+      case 'war': return 'Reveal the top card. Higher rank wins the battle; ties trigger war.';
+      case 'gin_rummy': case 'rummy': return 'Draw one card, form sets or same-suit runs, then discard one card.';
+      case 'old_maid': return 'Make matching pairs and avoid being left with the unmatched Old Maid.';
+      case 'pool': return 'Aim the cue, set shot power, and pocket your assigned balls before the opponent.';
+      case 'bowling': return 'Choose your aim and release timing. Knock down pins and score across ten frames.';
+      case 'darts': return 'Choose a scoring segment. Follow the selected mode target and finish with the required score.';
+      case 'mini_golf': return 'Aim for the cup, choose shot power, and finish each hole in as few strokes as possible.';
+      case 'air_hockey': return 'Move your striker to defend your goal and shoot the puck past the opponent.';
+      case 'pinball': return 'Use the flippers to keep the ball in play and hit bumpers for points.';
+      case 'endless_runner': return 'Jump, slide, or switch lanes to avoid obstacles and collect items for distance.';
+      case 'maze_chase': return 'Move through the maze, collect dots, and avoid pursuers.';
+      case 'brick_breaker': return 'Move the paddle to bounce the ball and clear every brick.';
+      case 'memory_match': return 'Select two tiles to reveal them. Find all matching pairs with the fewest moves.';
+      case 'simon_says': return 'Watch the cue sequence, then repeat it in the same order.';
+      case 'pattern_memory': return 'Study the pattern, then reproduce it before the timer runs out.';
+      case 'quick_math': return 'Solve the arithmetic prompt. Correct answers earn points; continue through the rounds.';
+      case 'number_guess': return 'Submit a guess and use higher/lower clues to find the hidden number.';
+      case 'twenty_questions': return 'Ask yes/no questions to narrow down the secret answer.';
+      case 'hangman': return 'Choose letters to reveal the hidden word before the attempts run out.';
+      case 'word_scramble': return 'Rearrange the letters to spell the target word.';
+      case 'word_ladder': return 'Change one letter at a time to transform the start word into the target word.';
+      case 'anagrams': return 'Build valid words from the available letters to score points.';
+      case 'word_search': return 'Find the listed words horizontally, vertically, or diagonally in the letter grid.';
+      case 'guess_song': case 'guess_artist': case 'guess_album': case 'guess_genre': case 'guess_decade': case 'guess_year': case 'guess_music_video': case 'guess_instrument': case 'guess_cover_artist': case 'guess_original': case 'one_second_song': case 'three_second_song': case 'five_second_song': case 'ten_second_song': case 'first_note': case 'first_beat': case 'first_word': case 'fastest_guess': case 'finish_lyrics': case 'missing_lyrics': case 'next_word': case 'next_line': case 'lyrics_scramble': case 'who_sang_line': case 'lyrics_multiple_choice': case 'wrong_lyrics': case 'continue_song': case 'music_timeline': case 'which_song_first': case 'higher_lower_year': case 'higher_lower_streams': case 'artist_vs_artist': case 'album_vs_album': case 'guess_sample': case 'name_that_cover': case 'one_hit_wonder': case 'music_connections': case 'song_battle': case 'best_intro': case 'best_chorus': case 'best_bassline': case 'best_guitar': case 'best_party_song': case 'best_workout_song': case 'best_movie_song': case 'best_song_decade': return 'Music-library game surface. Choose a prompt or answer; track playback and metadata must come from your server media library.';
+      case 'guess_movie': case 'guess_tv_show': case 'guess_actor': case 'guess_actress': case 'guess_character': case 'guess_director': case 'guess_franchise': case 'guess_episode': case 'guess_scene': case 'guess_location': case 'movie_soundtrack_guess': case 'tv_theme_guess': case 'movie_quote': case 'tv_quote': case 'who_said_it': case 'movie_sound_effect': case 'show_sound_effect': case 'blurred_scene': case 'zoomed_scene': case 'pixelated_movie': case 'silhouette_character': case 'actor_face': case 'movie_poster_puzzle': case 'missing_poster': case 'movie_trivia': case 'tv_trivia': case 'release_year': case 'actor_connections': case 'director_connections': case 'movie_timeline': case 'sequel_or_original': case 'remake_or_original': case 'movie_or_tv': case 'which_movie_first': case 'box_office_higher_lower': case 'runtime_higher_lower': case 'tv_show_emoji': return 'Media quiz board. Select an answer or enter a guess; media-specific prompts should be sourced from your library and licensed metadata.';
+      case 'family_feud': case 'survey_says': return 'Teams reveal survey answers to score points. Use the host controls to reveal answers and track strikes.';
+      case 'most_likely_to': case 'whos_most_likely': case 'would_you_rather': case 'never_have_i_ever': case 'two_truths_lie': case 'truth_or_bluff': case 'guess_who': case 'hot_seat': case 'act_it_out': case 'sound_effects': case 'impression_challenge': return 'Party round: choose a prompt, submit or vote, then reveal the room results.';
+      case 'dance_challenge': case 'lip_sync_battle': case 'karaoke_battle': case 'music_racing': case 'beat_saber_style': case 'dance_coach': case 'rhythm_challenge': case 'dance_battle': case 'motion_sports': return 'Performance arena: select a track or mode, follow timed cues, and score accuracy. Motion tracking and media playback need device/server integration.';
+      case 'cross_game_tournament': return 'Create a multi-game bracket, track each match result, and award tournament points separately from individual game scores.';
+      case 'crossover_arena_fighter': return 'Arena prototype: choose a fighter, stage, and action. Franchise characters and artwork require appropriate distribution rights.';
+      default: return widget.game.description;
+    }
+  }
+
+  void _finishIfNeeded() {
+    if (_finished) return;
+    if (_score >= 10) {
+      _finished = true;
+      widget.onFinished('win');
+    }
+  }
+
+  void _tapCell(int index) {
+    if (_finished) return;
+    setState(() {
+      _moves++;
+      _selected = index;
+      if (_id == 'tic_tac_toe') {
+        if (_cells[index] == 0) {
+          _cells[index] = _turn.isEven ? 2 : 1;
+          _turn++;
+          if (_cells.where((v) => v != 0).length >= 9) {
+            _status = 'Board full — start a new round.';
+          }
+          else {
+            _status = 'Move placed. Player ${_turn.isEven ? '2 (O)' : '1 (X)'} to move.';
+          }
+        }
+      } else if (_id == 'reversi' || _id == 'gomoku') {
+        if (_cells[index] == 0) {
+          _cells[index] = _turn.isEven ? 2 : 1;
+          _turn++;
+          _score += 1;
+          _status = _id == 'gomoku' ? 'Stone placed. Build a line of five.' : 'Disc placed. Outflank opponent discs to flip them.';
+        }
+      } else if (_id == 'memory_match') {
+        _cells[index] = _cells[index] == 0 ? 1 : 0;
+        _status = 'Tile ${index + 1} selected. Find its matching pair.';
+      } else {
+        _cells[index] = _cells[index] == 0 ? 1 : 0;
+        _score++;
+        _status = 'Action registered. $_instructions';
+      }
+    });
+    _finishIfNeeded();
+  }
+
+  void _playCard(int index) {
+    if (_finished || index < 0 || index >= _hand.length) return;
+    setState(() {
+      final card = _hand.removeAt(index);
+      _moves++;
+      _score++;
+      _status = 'Played $card. ${_hand.isEmpty ? 'Hand cleared!' : 'Choose your next card.'}';
+      if (_hand.isEmpty) {
+        _finished = true;
+        widget.onFinished('win');
+      }
+    });
+  }
+
+  void _chooseOption(String option) {
+    if (_finished) return;
+    setState(() {
+      _moves++;
+      _score++;
+      _status = 'Selected: $option. Round $_round recorded.';
+      _round++;
+      if (_round > 5) {
+        _finished = true;
+        widget.onFinished('win');
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Expanded(child: Text(widget.game.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+              Chip(label: Text('Round $_round')),
+            ]),
+            Wrap(spacing: 8, runSpacing: 6, children: [
+              Chip(avatar: const Icon(Icons.stars, size: 16), label: Text('Score $_score')),
+              Chip(avatar: const Icon(Icons.touch_app, size: 16), label: Text('Moves $_moves')),
+              Chip(label: Text(widget.mode.toUpperCase())),
+            ]),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)),
+              child: Text(_status, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 14),
+            if (_isBoard) _buildBoardSurface(),
+            if (_isCard) _buildCardSurface(),
+            if (_isGridPuzzle) _buildPuzzleSurface(),
+            if (_isWord) _buildQuizSurface(),
+            if (_isArcade) _buildArcadeSurface(),
+            if (_isParty) _buildPartySurface(),
+            if (!_isBoard && !_isCard && !_isGridPuzzle && !_isWord && !_isArcade && !_isParty) _buildGenericSurface(),
+            const SizedBox(height: 12),
+            Text(_instructions, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: OutlinedButton.icon(onPressed: () => setState(_reset), icon: const Icon(Icons.refresh), label: const Text('Restart'))),
+              const SizedBox(width: 8),
+              Expanded(child: FilledButton.icon(onPressed: () => _chooseOption('Pass / confirm'), icon: const Icon(Icons.check_circle_outline), label: const Text('Confirm move'))),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardSurface() {
+    if (_id == 'mancala') {
+      return Column(children: [
+        Row(children: [Expanded(child: _pit('OPPONENT STORE', 0, true)), const SizedBox(width: 8), ...List.generate(6, (i) => Expanded(child: _pit('${6-i}', i, false)))]),
+        const SizedBox(height: 8),
+        Row(children: [Expanded(child: _pit('YOUR STORE', 12, true)), const SizedBox(width: 8), ...List.generate(6, (i) => Expanded(child: _pit('${i+1}', i+6, false)))]),
+      ]);
+    }
+    if (_id == 'chinese_checkers') {
+      return AspectRatio(aspectRatio: 1, child: GridView.builder(physics: const NeverScrollableScrollPhysics(), itemCount: 121, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 11, crossAxisSpacing: 2, mainAxisSpacing: 2), itemBuilder: (_, i) {
+        final r = i ~/ 11; final c = i % 11; final valid = (r >= 3 && r <= 7) || (c >= 3 && c <= 7);
+        return InkWell(onTap: valid ? () => _tapCell(i % _cells.length) : null, child: Center(child: valid ? Container(width: 18, height: 18, decoration: BoxDecoration(shape: BoxShape.circle, color: _cells[i % _cells.length] == 0 ? const Color(0xFF315B53) : Colors.amber, border: Border.all(color: Colors.white24))) : const SizedBox.shrink()));
+      }));
+    }
+    final count = _id == 'tic_tac_toe' ? 3 : _id == 'gomoku' || _id == 'reversi' ? 8 : 5;
+    return AspectRatio(aspectRatio: 1, child: GridView.builder(physics: const NeverScrollableScrollPhysics(), itemCount: count * count, gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: count, crossAxisSpacing: 3, mainAxisSpacing: 3), itemBuilder: (_, i) {
+      final value = _cells[i];
+      final mark = _id == 'tic_tac_toe' ? (value == 1 ? 'X' : value == 2 ? 'O' : '') : _id == 'reversi' ? (value == 1 ? '●' : value == 2 ? '○' : '') : _id == 'gomoku' ? (value == 1 ? '●' : value == 2 ? '○' : '') : value == 0 ? '' : '●';
+      return InkWell(onTap: () => _tapCell(i), child: Container(decoration: BoxDecoration(color: _id == 'reversi' || _id == 'gomoku' ? const Color(0xFF28745C) : Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white24)), child: Center(child: Text(mark, style: TextStyle(fontSize: count == 8 ? 21 : 28, fontWeight: FontWeight.w900, color: value == 2 ? Colors.white : Theme.of(context).colorScheme.primary)))));
+    }));
+  }
+
+  Widget _pit(String label, int index, bool store) => InkWell(onTap: () => _tapCell(index % _cells.length), child: Container(margin: const EdgeInsets.all(2), padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2), decoration: BoxDecoration(color: store ? const Color(0xFF8C6842) : const Color(0xFFB88B58), borderRadius: BorderRadius.circular(store ? 24 : 12)), child: Column(children: [Text(store ? '●●●' : '${(_cells[index % _cells.length] % 5) + 3}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 9))])));
+
+  Widget _buildCardSurface() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF15533F), borderRadius: BorderRadius.circular(14)), child: Row(children: [Expanded(child: _pile('DRAW PILE', '▧', () => setState(() { _hand.add(_randomCard()); _status = 'Drew a card from the stock.'; _moves++; }))), const SizedBox(width: 12), Expanded(child: _pile('DISCARD', _hand.isEmpty ? '—' : _hand.last, () => _chooseOption('Take discard')))])),
+    const SizedBox(height: 12),
+    Text('YOUR HAND (${_hand.length})', style: const TextStyle(fontWeight: FontWeight.w900)),
+    const SizedBox(height: 8),
+    Wrap(spacing: 6, runSpacing: 8, children: List<Widget>.generate(_hand.length, (i) => InkWell(onTap: () => _playCard(i), child: Container(width: 48, height: 68, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: _selected == i ? Colors.amber : Colors.black12, width: 2)), child: Center(child: Text(_hand[i], style: TextStyle(fontWeight: FontWeight.w900, color: _hand[i].contains('♥') || _hand[i].contains('♦') ? Colors.red : Colors.black))))))),
+    if (_id == 'texas_holdem' || _id == 'blackjack' || _id == 'baccarat') Padding(padding: const EdgeInsets.only(top: 10), child: Text('Play-money table only • no real-money wagering', style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontWeight: FontWeight.w700))),
+  ]);
+
+  Widget _pile(String title, String card, VoidCallback onTap) => InkWell(onTap: onTap, child: Column(children: [Container(height: 76, width: 58, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7), border: Border.all(color: Colors.white70, width: 2)), child: Center(child: Text(card, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900)))), const SizedBox(height: 5), Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900))]));
+
+  Widget _buildPuzzleSurface() => Column(children: [
+    if (_id == 'sudoku') const Text('DAILY NUMBER GRID', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+    AspectRatio(aspectRatio: 1, child: GridView.builder(physics: const NeverScrollableScrollPhysics(), itemCount: 81, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 9, crossAxisSpacing: 1, mainAxisSpacing: 1), itemBuilder: (_, i) => InkWell(onTap: () => _tapCell(i % _cells.length), child: Container(decoration: BoxDecoration(color: _cells[i % _cells.length] == 0 ? Theme.of(context).colorScheme.surfaceContainerHighest : Theme.of(context).colorScheme.primaryContainer, border: Border.all(color: Colors.white10)), child: Center(child: Text(_cells[i % _cells.length] == 0 ? (i % 9 + 1).toString() : '', style: const TextStyle(fontSize: 10))))))),
+    if (_id == 'minesweeper') Wrap(spacing: 6, children: [for (final a in ['Reveal', 'Flag', 'Hint']) OutlinedButton(onPressed: () => _chooseOption(a), child: Text(a))]),
+  ]);
+
+  Widget _buildQuizSurface() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF252D4B), Color(0xFF533A69)]), borderRadius: BorderRadius.circular(14)), child: Column(children: [Icon(_category == 'music' ? Icons.music_note : _category == 'movieTv' ? Icons.local_movies : Icons.quiz, size: 36, color: Colors.white), const SizedBox(height: 8), Text(_id.replaceAll('_', ' ').toUpperCase(), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.2)), const SizedBox(height: 6), Text(_prompt, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70))])),
+    const SizedBox(height: 10),
+    if (_id == 'hangman') Text('WORD: ${List.filled(6, '＿').join(' ')}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, letterSpacing: 3)),
+    if (_id == 'word_scramble') const Text('R E A P L Y', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 5)),
+    if (_id == 'word_search') _buildLetterGrid(),
+    if (_id == 'word_scramble' || _id == 'word_ladder' || _id == 'anagrams' || _id == 'hangman' || _id == 'spell_it' || _id == 'password' || _id == 'word_chain' || _id == 'word_association' || _id == 'categories') Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: TextField(controller: _answerController, decoration: const InputDecoration(labelText: 'Your answer', border: OutlineInputBorder()), onSubmitted: (v) => _chooseOption(v))),
+    for (final option in _options) Padding(padding: const EdgeInsets.only(bottom: 7), child: OutlinedButton(onPressed: () => _chooseOption(option), child: Text(option))),
+    if (_category == 'music' || _category == 'movieTv') OutlinedButton.icon(onPressed: () => _chooseOption('Skip / next clue'), icon: const Icon(Icons.skip_next), label: const Text('Skip / next clue')),
+  ]);
+
+  String get _prompt {
+    switch (_id) {
+      case 'quick_math': return 'What is 6 × 4?';
+      case 'number_guess': return 'Guess the hidden number from 1 to 100.';
+      case 'word_scramble': return 'Unscramble the letters above.';
+      case 'hangman': return 'Guess a letter in the hidden word.';
+      case 'guess_song': return 'Which track is playing? Select a server-library track to begin.';
+      case 'guess_movie': return 'Identify the title from your media-library clues.';
+      case 'finish_lyrics': case 'missing_lyrics': case 'next_line': return 'Complete the prompt using licensed or user-provided lyric text.';
+      default: return 'Prompt $_round: choose the best answer or enter your response.';
+    }
+  }
+
+  Widget _buildLetterGrid() => Padding(padding: const EdgeInsets.only(bottom: 12), child: GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 8, childAspectRatio: 1.1, children: List.generate(40, (i) => Center(child: Text(String.fromCharCode(65 + ((i * 7 + 3) % 26)), style: const TextStyle(fontWeight: FontWeight.w900))))));
+
+  Widget _buildArcadeSurface() => Column(children: [
+    Container(height: 190, decoration: BoxDecoration(color: const Color(0xFF10182B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24)), child: Stack(alignment: Alignment.center, children: [
+      if (_id == 'pool') CustomPaint(size: Size.infinite, painter: _PoolTablePainter()),
+      if (_id == 'bowling') const Icon(Icons.sports, size: 72, color: Colors.white70),
+      if (_id == 'darts') const Icon(Icons.gps_fixed, size: 90, color: Colors.redAccent),
+      if (_id == 'mini_golf') const Icon(Icons.golf_course, size: 90, color: Colors.lightGreenAccent),
+      if (_id == 'air_hockey') const Icon(Icons.sports_hockey, size: 90, color: Colors.lightBlueAccent),
+      if (_id == 'pinball' || _id == 'brick_breaker') const Icon(Icons.videogame_asset, size: 90, color: Colors.amber),
+      if (_id == 'music_racing' || _id == 'endless_runner') const Icon(Icons.speed, size: 90, color: Colors.orangeAccent),
+      if (_id == 'beat_saber_style' || _id == 'dance_coach' || _id == 'rhythm_challenge' || _id == 'dance_battle' || _id == 'karaoke_battle' || _id == 'lip_sync_battle' || _id == 'dance_challenge') const Icon(Icons.graphic_eq, size: 90, color: Colors.pinkAccent),
+      if (_id == 'crossover_arena_fighter') const Icon(Icons.sports_mma, size: 90, color: Colors.redAccent),
+      Positioned(bottom: 8, child: Text('SCORE  $_score', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2))),
+    ])),
+    const SizedBox(height: 12),
+    Row(children: [Expanded(child: FilledButton(onPressed: () => _chooseOption('Action / hit'), child: const Text('ACTION'))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => _chooseOption('Move / aim'), child: const Text('MOVE / AIM'))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () => _chooseOption('Special'), child: const Text('SPECIAL')))]),
+  ]);
+
+  Widget _buildPartySurface() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: const Color(0xFF382A62), borderRadius: BorderRadius.circular(14)), child: Column(children: [const Icon(Icons.groups, color: Colors.white, size: 44), const SizedBox(height: 8), Text('ROUND $_round', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)), Text(_id == 'would_you_rather' ? 'Choose A or B' : _id == 'family_feud' || _id == 'survey_says' ? 'Reveal the top survey answer' : 'Submit your choice, then reveal votes', style: const TextStyle(color: Colors.white70))])),
+    const SizedBox(height: 10),
+    for (final option in _options) Padding(padding: const EdgeInsets.only(bottom: 7), child: FilledButton.tonal(onPressed: () => _chooseOption(option), child: Text(option))),
+    TextField(controller: _answerController, decoration: const InputDecoration(labelText: 'Your response (optional)', border: OutlineInputBorder())),
+    const SizedBox(height: 8),
+    OutlinedButton.icon(onPressed: () => _chooseOption('Reveal results'), icon: const Icon(Icons.visibility), label: const Text('Reveal results')),
+  ]);
+
+  Widget _buildGenericSurface() => Column(children: [Icon(Icons.sports_esports, size: 72, color: Theme.of(context).colorScheme.primary), Text(widget.game.name, style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 10), for (final option in _options) OutlinedButton(onPressed: () => _chooseOption(option), child: Text(option))]);
+}
+
+class _PoolTablePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final felt = Paint()..color = const Color(0xFF176448);
+    final rail = Paint()..color = const Color(0xFF81552F);
+    final ball = Paint()..color = Colors.white;
+    canvas.drawRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12)), rail);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(12, 12, size.width - 24, size.height - 24), const Radius.circular(8)), felt);
+    for (final p in [const Offset(.08,.12), const Offset(.5,.12), const Offset(.92,.12), const Offset(.08,.88), const Offset(.5,.88), const Offset(.92,.88)]) {
+      canvas.drawCircle(Offset(size.width*p.dx, size.height*p.dy), 6, Paint()..color = Colors.black);
+    }
+    for (var i=0;i<7;i++) { canvas.drawCircle(Offset(size.width*.45 + (i%3)*10, size.height*.45 + (i~/3)*10), 5, ball..color = [Colors.yellow, Colors.red, Colors.blue, Colors.orange, Colors.purple, Colors.green, Colors.white][i]); }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class PracticeGameBoard extends StatefulWidget {
@@ -4562,8 +6717,13 @@ class DailyGamesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const mediaGameCategories = <GameCategory>{
+      GameCategory.music,
+      GameCategory.movieTv,
+      GameCategory.danceRhythm,
+    };
     final daily = GameCatalog.definitions
-        .where((game) => game.supportsDaily)
+        .where((game) => game.supportsDaily && mediaGameCategories.contains(game.category))
         .toList(growable: false);
 
     return Scaffold(

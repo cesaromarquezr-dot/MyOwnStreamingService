@@ -246,6 +246,37 @@ class MusicLibraryStore extends ChangeNotifier {
       ..addAll(_decodePlaylists(
         _playlistPreferences!.getString('music_playlists_$_playlistProfileKey'),
       ));
+
+    // Preview-only tracks provide a realistic album page while keeping actual
+    // playback disabled: the demo entries intentionally have no audio URLs.
+    if (!tracks.any((track) => track.id == 'demo-preview-album-track-1')) {
+      tracks.addAll(const [
+        MusicTrack(
+          id: 'demo-preview-album-track-1',
+          title: 'Signal in the Dark (Preview)',
+          artist: 'The Night Archive (Demo Artist)',
+          album: 'Midnight Signals (Preview Album)',
+          duration: Duration(minutes: 3, seconds: 42),
+          genres: ['Electronic', 'Ambient'],
+        ),
+        MusicTrack(
+          id: 'demo-preview-album-track-2',
+          title: 'Neon Rain (Preview)',
+          artist: 'The Night Archive (Demo Artist)',
+          album: 'Midnight Signals (Preview Album)',
+          duration: Duration(minutes: 4, seconds: 8),
+          genres: ['Electronic', 'Ambient'],
+        ),
+        MusicTrack(
+          id: 'demo-preview-album-track-3',
+          title: 'Last Transmission (Preview)',
+          artist: 'The Night Archive (Demo Artist)',
+          album: 'Midnight Signals (Preview Album)',
+          duration: Duration(minutes: 3, seconds: 56),
+          genres: ['Electronic', 'Ambient'],
+        ),
+      ]);
+    }
     notifyListeners();
   }
 

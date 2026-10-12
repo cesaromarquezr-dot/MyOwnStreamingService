@@ -572,15 +572,6 @@ class PageContentCustomization {
 
 class PageContentCustomizationStore {
   static const Map<String, List<String>> _defaults = {
-    'discover': [
-      'search',
-      'movies',
-      'tv-shows',
-      'reviews',
-      'people',
-      'music',
-      'radio',
-    ],
     'library': [
       'summary',
       'movies',
@@ -2234,6 +2225,46 @@ class AppController extends ChangeNotifier {
     library
       ..clear()
       ..addAll(media);
+
+    // Clearly labeled local preview entries let the UI be evaluated without
+    // uploading fake content to Supabase/TrueNAS. They are re-added after each
+    // server refresh, but are never sent to the media server as imported files.
+    if (!library.any((item) => item.id == 'demo-preview-album')) {
+      library.add(MediaItem(
+        id: 'demo-preview-album',
+        title: 'Midnight Signals (Preview Album)',
+        type: 'album',
+        description: 'A fictional album used to preview album artwork, metadata, and details layouts. No audio files are attached.',
+        releaseYear: 2025,
+        genres: const ['Electronic', 'Ambient'],
+        tags: const ['demo-preview'],
+        addedSource: 'demo-preview',
+      ));
+    }
+    if (!library.any((item) => item.id == 'demo-preview-tv-show')) {
+      library.add(MediaItem(
+        id: 'demo-preview-tv-show',
+        title: 'The Last Signal (Preview Show)',
+        type: 'tvShow',
+        description: 'A fictional sci-fi mystery series used to preview show details, seasons, and episode layouts. No video files are attached.',
+        releaseYear: 2026,
+        rating: 8.1,
+        genres: const ['Science Fiction', 'Mystery'],
+        tags: const ['demo-preview'],
+        addedSource: 'demo-preview',
+        seasons: const [
+          {
+            'seasonNumber': 1,
+            'title': 'Season 1',
+            'episodes': [
+              {'episodeNumber': 1, 'title': 'The First Pulse', 'duration': 42, 'description': 'A strange signal interrupts a quiet night.'},
+              {'episodeNumber': 2, 'title': 'Dead Air', 'duration': 44, 'description': 'The team traces the signal to an abandoned relay station.'},
+              {'episodeNumber': 3, 'title': 'Echoes', 'duration': 46, 'description': 'A second transmission reveals a troubling pattern.'},
+            ],
+          },
+        ],
+      ));
+    }
     _refreshAutomaticCollections();
     notifyListeners();
   }

@@ -9,7 +9,6 @@ import 'app_core.dart';
 import 'reviews.dart';
 import 'player.dart';
 import 'group_watch.dart';
-import 'discovery_experience.dart';
 import 'localization.dart';
 import 'shop.dart';
 import 'media_actions.dart';
@@ -17,6 +16,8 @@ import 'media_continuity.dart';
 import 'media_knowledge.dart';
 import 'widgets/like_toggle_button.dart';
 import 'social_sharing.dart';
+import 'food_delivery.dart';
+import 'details_recommendations.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -86,6 +87,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
               actions: [
+                IconButton(
+                  tooltip: 'Food & Delivery',
+                  icon: const Icon(Icons.delivery_dining_rounded),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FoodOrderingScreen(viewingContext: media.title))),
+                ),
                 IconButton(
                   tooltip: 'Share to chats',
                   onPressed: () => showSocialShareDialog(

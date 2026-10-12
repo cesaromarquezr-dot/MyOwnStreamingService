@@ -1,5 +1,5 @@
 // FILE: `lib/navigation_hubs.dart`.
-// Purpose: Fixed primary-navigation hubs for Library, Discover, and Friends.
+// Purpose: Fixed primary-navigation hubs for Library and Friends.
 // The primary navbar stays intentionally small; detailed destinations live
 // inside these hubs or behind More.
 
@@ -14,9 +14,7 @@ import 'movies.dart';
 import 'music.dart';
 import 'my_tv.dart';
 import 'radio.dart';
-import 'reviews.dart';
 import 'series.dart';
-import 'smart_search.dart';
 import 'social_center.dart';
 
 class LibraryHubScreen extends StatelessWidget {
@@ -102,71 +100,94 @@ class LibraryHubScreen extends StatelessWidget {
           ),
         };
 
-        return _HubScaffold(
-          title: 'Library',
-          subtitle:
-              'Everything published to this account’s shared home-server library.',
-          icon: Icons.video_library_rounded,
-          children: [
-            for (final section in settings.visibleSections)
-              if (section == 'summary')
-                Row(
-                  children: [
-                    Expanded(
-                      child: _statCard(
-                        context,
-                        'Media',
-                        '${library.length}',
-                        Icons.library_music_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _statCard(
-                        context,
-                        'Movies',
-                        '$movies',
-                        Icons.movie_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _statCard(
-                        context,
-                        'TV',
-                        '$shows',
-                        Icons.tv_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _statCard(
-                        context,
-                        'Music',
-                        '$music',
-                        Icons.album_outlined,
-                      ),
-                    ),
-                  ],
-                )
-              else if (section == 'storage')
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.storage_rounded),
-                    title: const Text('Account-wide library storage'),
-                    subtitle: Text(
-                      'One physical copy lives on the account home NAS. ${controller.currentAccount?.profiles.length ?? 0} profiles share access while keeping their own progress, ratings and collections.',
-                    ),
+        final children = <Widget>[];
+        final visibleEntrySections = settings.visibleSections
+            .where((section) => entries.containsKey(section))
+            .toList(growable: false);
+        final availableWidth = (MediaQuery.sizeOf(context).width - 36)
+            .clamp(180.0, 4000.0)
+            .toDouble();
+        // Honor the saved column preference while keeping each shortcut wide
+        // enough to remain readable on narrow phones.
+        final responsiveMaxColumns =
+            (availableWidth / 118).floor().clamp(1, 6).toInt();
+        final gridColumns = sectionDraft.libraryColumns
+            .clamp(1, responsiveMaxColumns)
+            .toInt();
+        final gridCardWidth =
+            (availableWidth - (10 * (gridColumns - 1))) / gridColumns;
+        var gridInserted = false;
+
+        for (final section in settings.visibleSections) {
+          if (section == 'summary') {
+            children.add(
+              Row(
+                children: [
+                  Expanded(child: _statCard(context, 'Media', '${library.length}', Icons.library_music_outlined)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _statCard(context, 'Movies', '$movies', Icons.movie_outlined)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _statCard(context, 'TV', '$shows', Icons.tv_outlined)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _statCard(context, 'Music', '$music', Icons.album_outlined)),
+                ],
+              ),
+            );
+          } else if (section == 'storage') {
+            children.add(
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.storage_rounded),
+                  title: const Text('Account-wide library storage'),
+                  subtitle: Text(
+                    'One physical copy lives on the account home NAS. ${controller.currentAccount?.profiles.length ?? 0} profiles share access while keeping their own progress, ratings and collections.',
                   ),
-                )
-              else if (entries[section] case final entry?)
+                ),
+              ),
+            );
+          } else if (entries.containsKey(section)) {
+            if (sectionDraft.libraryViewMode == 'Grid') {
+              if (!gridInserted) {
+                children.add(
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final itemSection in visibleEntrySections)
+                        _hubGridCard(
+                          context,
+                          entries[itemSection]!,
+                          width: (sectionDraft.libraryWidgetSizes[itemSection] == 'Large' && gridColumns > 1)
+                              ? gridCardWidth * 2 + 10
+                              : gridCardWidth,
+                          size: sectionDraft.libraryWidgetSizes[itemSection] ?? 'Medium',
+                          compact: sectionDraft.libraryCardStyle == 'Compact',
+                          landscape: sectionDraft.libraryCardStyle == 'Landscape',
+                        ),
+                    ],
+                  ),
+                );
+                gridInserted = true;
+              }
+            } else {
+              children.add(
                 _hubCard(
                   context,
-                  entry,
+                  entries[section]!,
                   compact: sectionDraft.libraryCardStyle == 'Compact',
                   landscape: sectionDraft.libraryCardStyle == 'Landscape',
+                  size: sectionDraft.libraryWidgetSizes[section] ?? 'Medium',
                 ),
-          ],
+              );
+            }
+          }
+        }
+
+        return _HubScaffold(
+          title: 'Library',
+          subtitle: 'Everything published to this account’s shared home-server library.',
+          icon: Icons.video_library_rounded,
+          children: children,
         );
       },
     );
@@ -186,84 +207,6 @@ class LibraryHubScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class DiscoverHubScreen extends StatelessWidget {
-  const DiscoverHubScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: PageContentCustomizationStore.revision,
-      builder: (context, _) {
-        final settings = PageContentCustomizationStore.settingsFor('discover');
-        final entries = <String, _HubEntry>{
-          'movies': _HubEntry(
-            'Movies',
-            'Browse your movie catalog',
-            Icons.movie_rounded,
-            () => _push(context, const MoviesScreen()),
-          ),
-          'tv-shows': _HubEntry(
-            'TV Shows',
-            'Browse series and episodes',
-            Icons.tv_rounded,
-            () => _push(context, const SeriesScreen()),
-          ),
-          'reviews': _HubEntry(
-            'Reviews',
-            'Read and publish reviews',
-            Icons.rate_review_rounded,
-            () => _push(context, const ReviewsHubScreen()),
-          ),
-          'people': _HubEntry(
-            'People',
-            'Actors, directors and media credits',
-            Icons.people_alt_rounded,
-            () => _push(context, const LibraryActorsScreen()),
-          ),
-          'music': _HubEntry(
-            'Music',
-            'Artists, albums and songs',
-            Icons.music_note_rounded,
-            () => _push(context, const MusicScreen()),
-          ),
-          'radio': _HubEntry(
-            'Radio',
-            'Discover live radio',
-            Icons.radio_rounded,
-            () => _push(context, const RadioScreen()),
-          ),
-        };
-        return _HubScaffold(
-          title: 'Discover',
-          subtitle:
-              'Find media, people, communities, reviews and everything else in the service.',
-          icon: Icons.explore_rounded,
-          children: [
-            for (final section in settings.visibleSections)
-              if (section == 'search')
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.search_rounded, size: 30),
-                    title: const Text(
-                      'Universal Search',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: const Text(
-                      'Search movies, TV, music and the growing social catalog.',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _push(context, const SmartSearchScreen()),
-                  ),
-                )
-              else if (entries[section] case final entry?)
-                _hubCard(context, entry),
-          ],
-        );
-      },
     );
   }
 }
@@ -335,11 +278,12 @@ Widget _hubCard(
   _HubEntry entry, {
   bool compact = false,
   bool landscape = false,
+  String size = 'Medium',
 }) =>
     Card(
       child: ListTile(
-        dense: compact,
-        minVerticalPadding: compact ? 4 : 8,
+        dense: compact || size == 'Small',
+        minVerticalPadding: size == 'Large' ? 18 : (compact || size == 'Small' ? 3 : 8),
         leading: landscape
             ? CircleAvatar(child: Icon(entry.icon, size: 20))
             : Icon(entry.icon),
@@ -359,6 +303,56 @@ Widget _hubCard(
       ),
     );
 
+Widget _hubGridCard(
+  BuildContext context,
+  _HubEntry entry, {
+  required double width,
+  required String size,
+  bool compact = false,
+  bool landscape = false,
+}) {
+  final height = switch (size) {
+    'Small' => 110.0,
+    'Large' => 205.0,
+    _ => 150.0,
+  };
+  final iconSize = switch (size) {
+    'Small' => 22.0,
+    'Large' => 38.0,
+    _ => 30.0,
+  };
+  return SizedBox(
+    width: width,
+    height: height,
+    child: Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: entry.onTap,
+        child: Padding(
+          padding: EdgeInsets.all(size == 'Small' ? 10 : (size == 'Large' ? 18 : 14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(entry.icon, size: iconSize),
+              const Spacer(),
+              Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              if (size != 'Small') ...[
+                const SizedBox(height: 4),
+                Text(entry.subtitle, maxLines: size == 'Large' ? 3 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white60, fontSize: 11)),
+              ],
+              if (landscape || compact)
+                const Align(alignment: Alignment.bottomRight, child: Icon(Icons.chevron_right_rounded, size: 18)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 void _push(BuildContext context, Widget page) {
   final pageId = switch (page) {
     MoviesScreen() => 'movies',
@@ -370,8 +364,6 @@ void _push(BuildContext context, Widget page) {
     MyTvScreen() => 'my-tv',
     FavoritesScreen() => 'favorites',
     ComingSoonScreen() => 'coming-soon',
-    SmartSearchScreen() => 'search',
-    ReviewsHubScreen() => 'reviews',
     _ => null,
   };
   Navigator.push(

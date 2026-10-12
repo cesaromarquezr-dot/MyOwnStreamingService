@@ -6,11 +6,15 @@ import 'core/models/platform_server.dart';
 import 'localization.dart';
 
 class ServerSelectionScreen extends StatefulWidget {
-  final VoidCallback? onProfileReady;
+  final ValueChanged<BuildContext>? onProfileReady;
+  final VoidCallback? onOpened;
+  final VoidCallback? onServerSaved;
 
   const ServerSelectionScreen({
     super.key,
     this.onProfileReady,
+    this.onOpened,
+    this.onServerSaved,
   });
 
   @override
@@ -26,6 +30,8 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
   @override
   void initState() {
     super.initState();
+    // Explicitly hide the global navbar before the first server-selection frame.
+    widget.onOpened?.call();
     _load();
   }
 
@@ -82,11 +88,21 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
         ),
       );
       if (accepted != true) return;
+      final displayName = nameController.text.trim();
+      if (displayName.isEmpty) {
+        if (mounted) {
+          setState(() => _error = 'Enter a name for this server.');
+        }
+        return;
+      }
       await controller.claimServer(
         serverId: server.id,
-        displayName: nameController.text.trim(),
+        displayName: displayName,
       );
       if (!mounted) return;
+      // Switch the global shell to the profile-selection state before replacing
+      // this route, so a stale navbar cannot flash after saving the server name.
+      widget.onServerSaved?.call();
       _finish();
     } catch (error) {
       if (!mounted) return;
@@ -100,13 +116,19 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
 
   void _finish() {
     if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).pushReplacement(
-      MaterialPageRoute(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    // Replace the onboarding stack rather than pushing over an old login or
+    // server-selection route. The user must choose/create a profile next.
+    navigator.pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/app/profiles'),
         builder: (_) => ProfileSelectionScreen(
-          onProfileSelected: (_) => widget.onProfileReady?.call(),
+          onOpened: widget.onServerSaved,
+          onProfileSelected: (profileContext) =>
+              widget.onProfileReady?.call(profileContext),
         ),
       ),
+      (route) => false,
     );
   }
 
@@ -118,8 +140,13 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const UniversalText('Pick a Server')),
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const UniversalText('Pick a Server'),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -209,6 +236,7 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 }

@@ -52,6 +52,29 @@ class SupabaseStore {
   // INITIALIZATION
   // ---------------------------------------------------------------------------
 
+  /// Resolves a home server's owner to the application's external account ID.
+  /// Used by trusted server-agent heartbeat registration; the agent cannot
+  /// choose or spoof the account owner in its request body.
+  Future<String?> externalAccountIdForServer(String serverId) async {
+    final c = _client;
+    if (c == null) {
+      throw StateError('Supabase store is not initialized.');
+    }
+    final server = await c
+        .from('servers')
+        .select('account_id')
+        .eq('id', serverId.trim())
+        .maybeSingle();
+    if (server == null) return null;
+    final account = await c
+        .from('accounts')
+        .select('external_account_id')
+        .eq('id', server['account_id'].toString())
+        .maybeSingle();
+    final externalId = account?['external_account_id']?.toString().trim();
+    return externalId == null || externalId.isEmpty ? null : externalId;
+  }
+
   void initialize() {
     if (_client != null) return;
 
@@ -1131,6 +1154,124 @@ class SupabaseStore {
         },
     ]);
     return {'conversation': conversation, 'created': true};
+  }
+
+  Future<Map<String, dynamic>> createSocialConversationInvite({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String conversationId,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Social features require Supabase persistence.');
+    }
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final member = await c
+        .from('social_conversation_members')
+        .select('role')
+        .eq('conversation_id', conversationId)
+        .eq('account_id', me['id'].toString())
+        .eq('profile_id', profileExternalId)
+        .maybeSingle();
+    if (member == null) {
+      throw StateError('Only a member of this chat can create an invite link.');
+    }
+    final conversation = await c
+        .from('social_conversations')
+        .select('id,kind,title')
+        .eq('id', conversationId)
+        .maybeSingle();
+    if (conversation == null || conversation['kind'] != 'group') {
+      throw StateError('Invite links are available for group chats only.');
+    }
+
+    final token = base64Url
+        .encode(List<int>.generate(32, (_) => Random.secure().nextInt(256)))
+        .replaceAll('=', '');
+    final expiresAt = DateTime.now().toUtc().add(const Duration(days: 30));
+    final invite = await c.from('social_conversation_invites').insert({
+      'token': token,
+      'conversation_id': conversationId,
+      'created_by_account_id': me['id'],
+      'created_by_profile_id': profileExternalId,
+      'expires_at': expiresAt.toIso8601String(),
+      'max_uses': 100,
+      'used_count': 0,
+    }).select('token,conversation_id,expires_at,max_uses,used_count').single();
+    return {
+      'invite': Map<String, dynamic>.from(invite),
+      'conversation': Map<String, dynamic>.from(conversation),
+    };
+  }
+
+  Future<Map<String, dynamic>> acceptSocialConversationInvite({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String token,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Social features require Supabase persistence.');
+    }
+    final me = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final invite = await c
+        .from('social_conversation_invites')
+        .select('token,conversation_id,expires_at,max_uses,used_count,revoked_at')
+        .eq('token', token)
+        .maybeSingle();
+    if (invite == null || invite['revoked_at'] != null) {
+      throw StateError('This group chat invite is invalid or has been revoked.');
+    }
+    final expiresAt = DateTime.tryParse(invite['expires_at']?.toString() ?? '');
+    if (expiresAt == null || expiresAt.isBefore(DateTime.now().toUtc())) {
+      throw StateError('This group chat invite has expired.');
+    }
+    final maxUses = (invite['max_uses'] as num?)?.toInt() ?? 100;
+    final usedCount = (invite['used_count'] as num?)?.toInt() ?? 0;
+    if (usedCount >= maxUses) {
+      throw StateError('This group chat invite has reached its use limit.');
+    }
+    final conversationId = invite['conversation_id'].toString();
+    final conversation = await c
+        .from('social_conversations')
+        .select('id,kind,title,updated_at')
+        .eq('id', conversationId)
+        .maybeSingle();
+    if (conversation == null || conversation['kind'] != 'group') {
+      throw StateError('This group chat is no longer available.');
+    }
+    final existingMember = await c
+        .from('social_conversation_members')
+        .select('conversation_id')
+        .eq('conversation_id', conversationId)
+        .eq('account_id', me['id'].toString())
+        .eq('profile_id', profileExternalId)
+        .maybeSingle();
+    if (existingMember == null) {
+      await c.from('social_conversation_members').insert({
+        'conversation_id': conversationId,
+        'account_id': me['id'],
+        'profile_id': profileExternalId,
+        'role': 'member',
+      });
+      await c.from('social_conversation_invites').update({
+        'used_count': usedCount + 1,
+        'last_used_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('token', token);
+    }
+    return {
+      'conversationId': conversationId,
+      'conversation': Map<String, dynamic>.from(conversation),
+      'joined': existingMember == null,
+    };
   }
 
   Future<Map<String, dynamic>> setSocialGroupSendPolicy({
@@ -3985,6 +4126,7 @@ class SupabaseStore {
   Future<String> createMemberInvitation({
     required String accountExternalId,
     required String email,
+    String? phone,
     String role = 'member',
     required String tokenHash,
     required DateTime expiresAt,
@@ -4000,7 +4142,8 @@ class SupabaseStore {
       field: 'accountExternalId',
     );
 
-    final cleanEmail = _normalizeEmail(email);
+    final cleanEmail = email.trim().isEmpty ? '' : _normalizeEmail(email);
+    final cleanPhone = (phone ?? '').trim();
 
     final cleanTokenHash = _boundedText(
       tokenHash,
@@ -4025,7 +4168,7 @@ class SupabaseStore {
       field: 'accounts.id',
     );
 
-    final existingIdentity = await c
+    final existingIdentity = cleanEmail.isEmpty ? null : await c
         .from('member_identities')
         .select('id')
         .eq('email', cleanEmail)
@@ -4060,7 +4203,8 @@ class SupabaseStore {
         .from('account_invitations')
         .insert({
           'account_id': internalAccountId,
-          'email': cleanEmail,
+          'email': cleanEmail.isEmpty ? null : cleanEmail,
+          'phone': cleanPhone.isEmpty ? null : cleanPhone,
           'role': normalizedRole,
           'token_hash': cleanTokenHash,
           'expires_at': expiresAt.toUtc().toIso8601String(),
@@ -4128,10 +4272,8 @@ class SupabaseStore {
     final invitationEmail =
         invite['email']?.toString().trim().toLowerCase() ?? '';
 
-    if (cleanEmail != invitationEmail) {
-      throw StateError(
-        'Invitation email does not match.',
-      );
+    if (invitationEmail.isNotEmpty && cleanEmail != invitationEmail) {
+      throw StateError('Invitation email does not match.');
     }
 
     var identity = await c

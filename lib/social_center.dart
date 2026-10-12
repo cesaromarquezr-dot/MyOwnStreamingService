@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -215,7 +216,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
 
     try {
       final data =
-          await controller.backendApi.getSocialCenter(profileId: profile.id);
+          await controller.backendApi.getSocialCenter(profileId: profile.id).timeout(const Duration(seconds: 15), onTimeout: () => throw Exception('Friends could not load in time. Check your connection and try again.')); 
       if (!mounted) return;
       setState(() {
         _data = data;
@@ -258,11 +259,150 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
 
   @override
   Widget build(BuildContext context) {
+    // The selected Friends preset is a shared social theme: it changes the
+    // color scheme, cards, inputs, tabs and density across Friends, Feed,
+    // Communities, Messages and My Page, not just the friend list rows.
+    return AnimatedBuilder(
+      animation: AppSectionCustomizationStore.revision,
+      builder: (context, _) {
+        final style = AppSectionCustomizationStore.settingsFor(
+          AppController.instance.currentProfile,
+        ).friendsDisplayStyle;
+        return AnimatedBuilder(
+          animation: _tabs,
+          builder: (context, _) {
+            final activeSection = _tabSections.isEmpty
+                ? 'feed'
+                : _tabSections[_tabs.index.clamp(0, _tabSections.length - 1).toInt()];
+            final theme = _themeForSocialPreset(
+              Theme.of(context),
+              style,
+              activeSection: activeSection,
+            );
+            return Theme(data: theme, child: _buildSocialContent());
+          },
+        );
+      },
+    );
+  }
+
+  bool _presetAppliesToSection(String style, String section) {
+    const messagePresets = {'WhatsApp', 'Messenger', 'Telegram', 'Snapchat', 'iMessage'};
+    const communityFeedPresets = {'Instagram', 'Facebook'};
+    const reelsPresets = {'TikTok', 'BeReal', 'YouTube Shorts'};
+    if (messagePresets.contains(style)) return section == 'messages';
+    if (communityFeedPresets.contains(style)) {
+      return {'feed', 'my-page', 'communities'}.contains(section);
+    }
+    if (reelsPresets.contains(style)) return section == 'reels';
+    return false;
+  }
+
+  ThemeData _themeForSocialPreset(
+    ThemeData base,
+    String style, {
+    required String activeSection,
+  }) {
+    // Each social preset is intentionally scoped to its corresponding surface;
+    // selecting a chat theme must not restyle the feed, community or reels UI.
+    if (!_presetAppliesToSection(style, activeSection)) return base;
+    final seed = switch (style) {
+      'Facebook' => const Color(0xFF1877F2),
+      'Instagram' => const Color(0xFFC13584),
+      'Snapchat' => const Color(0xFFFFD400),
+      'BeReal' => const Color(0xFFFFE500),
+      'TikTok' => const Color(0xFF25F4EE),
+      'YouTube Shorts' => const Color(0xFFFF0033),
+      'WhatsApp' => const Color(0xFF25D366),
+      'Messenger' => const Color(0xFF168AFF),
+      'iMessage' => const Color(0xFF34C759),
+      'Telegram' => const Color(0xFF2AABEE),
+      _ => const Color(0xFFE53935),
+    };
+    final scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: base.brightness,
+    );
+    final radius = switch (style) {
+      'TikTok' || 'YouTube Shorts' || 'Snapchat' => 12.0,
+      'WhatsApp' || 'iMessage' || 'Telegram' || 'Messenger' => 18.0,
+      'BeReal' => 8.0,
+      _ => 22.0,
+    };
+    final density = switch (style) {
+      'TikTok' || 'YouTube Shorts' || 'Snapchat' || 'Telegram' => VisualDensity.compact,
+      'BeReal' => const VisualDensity(horizontal: 0.5, vertical: 0.5),
+      _ => VisualDensity.standard,
+    };
+    return base.copyWith(
+      colorScheme: scheme,
+      visualDensity: density,
+      tabBarTheme: base.tabBarTheme.copyWith(
+        labelColor: scheme.primary,
+        indicatorColor: scheme.primary,
+        indicatorSize: TabBarIndicatorSize.label,
+      ),
+      cardTheme: base.cardTheme.copyWith(
+        color: Color.lerp(base.cardTheme.color ?? base.colorScheme.surface, scheme.primary, .055),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
+          side: BorderSide(color: scheme.primary.withValues(alpha: .22)),
+        ),
+      ),
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radius),
+          borderSide: BorderSide(color: scheme.primary, width: 1.8),
+        ),
+      ),
+      navigationBarTheme: base.navigationBarTheme.copyWith(
+        indicatorColor: scheme.primary.withValues(alpha: .22),
+      ),
+    );
+  }
+
+  Widget _buildSocialContent() {
     if (_loading) return const Center(child: CircularProgressIndicator());
+    final selectedStyle = AppSectionCustomizationStore.settingsFor(
+      AppController.instance.currentProfile,
+    ).friendsDisplayStyle;
+    final activeSection = _tabSections.isEmpty
+        ? 'feed'
+        : _tabSections[_tabs.index.clamp(0, _tabSections.length - 1).toInt()];
 
     return Column(
       children: [
         _header(),
+        if (_presetAppliesToSection(selectedStyle, activeSection))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 2, 18, 8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .65),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.palette_outlined, color: Theme.of(context).colorScheme.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '$selectedStyle theme • ${_socialSurfaceLabel(activeSection)}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
@@ -287,6 +427,16 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       ],
     );
   }
+
+
+  String _socialSurfaceLabel(String section) => switch (section) {
+        'messages' => 'Messages',
+        'feed' => 'Feed',
+        'my-page' => 'Profile page',
+        'communities' => 'Communities',
+        'reels' => 'Reels',
+        _ => 'Social',
+      };
 
   Widget _header() {
     final stories = _list('stories');
@@ -1032,6 +1182,37 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               const SizedBox(height: 10),
               _socialProductCard(mediaReference),
             ],
+            if (mediaReference['type'] == 'chat_invite') ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .045),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Row(
+                  children: [
+                    const CircleAvatar(child: Icon(Icons.forum_rounded)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(mediaReference['conversationTitle']?.toString() ?? 'Group chat', style: const TextStyle(fontWeight: FontWeight.w900)),
+                          const Text('Group chat invitation · expires in 30 days', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => _acceptChatInvite(mediaReference),
+                      icon: const Icon(Icons.login_rounded, size: 17),
+                      label: const Text('Join chat'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (mediaReference['imageUrl'] != null) ...[
               const SizedBox(height: 10),
               ClipRRect(
@@ -1356,13 +1537,10 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final friends = _list('friends');
     final requests = _list('requests');
     final suggestions = _list('suggestions');
-    final profile = AppController.instance.currentProfile;
-
     return AnimatedBuilder(
       animation: AppSectionCustomizationStore.revision,
       builder: (context, _) {
-        final displayStyle =
-            AppSectionCustomizationStore.settingsFor(profile).friendsDisplayStyle;
+        const displayStyle = 'Timeline';
         return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -1420,16 +1598,63 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Widget _friendDisplayCard(Map<String, dynamic> friend, String style) {
     final name = friend['display_name']?.toString() ?? 'Friend';
     final username = friend['username']?.toString() ?? '';
+    final avatarUrl = (friend['avatar_url'] ?? friend['avatarUrl'])?.toString();
+    final hasAvatar = avatarUrl != null && avatarUrl.startsWith('http');
+    final compactStyle = const {'Compact', 'Stories', 'Snapchat', 'Short-video', 'TikTok'}.contains(style);
+    final listStyle = const {'List', 'Daily moments', 'BeReal', 'Chat-first', 'WhatsApp', 'Messenger', 'iMessage', 'Telegram'}.contains(style);
+    final photoStyle = const {'Photo-first', 'Instagram'}.contains(style);
+    final storyStyle = const {'Stories', 'Snapchat'}.contains(style);
     final avatar = CircleAvatar(
-      radius: style == 'Compact' ? 17 : 21,
-      child: Text(_initial(name)),
+      radius: photoStyle ? 31 : (compactStyle ? 17 : 21),
+      backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
+      child: hasAvatar ? null : Text(_initial(name)),
     );
     final message = IconButton(
       tooltip: 'Message',
       onPressed: () => _startMessageFor(username),
       icon: const Icon(Icons.chat_bubble_outline_rounded),
     );
-    if (style == 'List') {
+
+    // Each preset changes the real Friends surface as well as the preview in
+    // Customize: photo-first uses larger avatars, while the other presets use
+    // list, compact, or feed-like cards. These are layout patterns, not copies
+    // of third-party branding.
+    if (photoStyle) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
+                ),
+                child: avatar,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(username.isEmpty ? 'Friend' : '@$username',
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white60)),
+                    const SizedBox(height: 4),
+                    Text(style == 'Instagram' ? 'Photo feed profile' : 'Photo-first profile', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                  ],
+                ),
+              ),
+              message,
+            ],
+          ),
+        ),
+      );
+    }
+    if (listStyle) {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         leading: avatar,
@@ -1439,9 +1664,19 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       );
     }
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: ListTile(
-        dense: style == 'Compact',
-        leading: avatar,
+        dense: compactStyle,
+        leading: storyStyle
+            ? Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
+                ),
+                child: avatar,
+              )
+            : avatar,
         title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text(username.isEmpty ? 'Friend' : '@$username', maxLines: 1, overflow: TextOverflow.ellipsis),
         trailing: message,
@@ -2226,11 +2461,170 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       await _load();
       final messagesIndex = _tabSections.indexOf('messages');
       if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
+      await _showGroupChatInviteOptions(
+        conversationId: id,
+        conversationTitle: result.$1.trim().isEmpty ? 'Group chat' : result.$1.trim(),
+      );
       await _openConversation(id);
     } catch (error) {
       if (mounted) {
         _showMessage(error.toString().replaceFirst('Exception: ', ''));
       }
+    }
+  }
+
+  String _chatInviteUrl(String token) {
+    final base = Uri.base;
+    if (base.scheme == 'http' || base.scheme == 'https') {
+      final query = Map<String, String>.from(base.queryParameters)
+        ..['chatInvite'] = token;
+      return base.replace(queryParameters: query).toString();
+    }
+    // Native builds may use this URI when a matching app-link handler is
+    // registered; the in-app community card also has a direct Join action.
+    return 'myownstreamingservice://join-chat/$token';
+  }
+
+  Future<void> _showGroupChatInviteOptions({
+    required String conversationId,
+    required String conversationTitle,
+  }) async {
+    final profile = AppController.instance.currentProfile;
+    if (profile == null) return;
+
+    String token;
+    try {
+      final response = await AppController.instance.backendApi
+          .createSocialConversationInvite(
+        profileId: profile.id,
+        conversationId: conversationId,
+      );
+      final invite = response['invite'] is Map
+          ? Map<String, dynamic>.from(response['invite'] as Map)
+          : <String, dynamic>{};
+      token = invite['token']?.toString() ?? '';
+      if (token.isEmpty) throw StateError('The server did not return an invite token.');
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          'Chat created, but invite links are unavailable. Apply the social conversation invite migration and update the backend. ${error.toString().replaceFirst('Exception: ', '')}',
+        );
+      }
+      return;
+    }
+
+    final inviteUrl = _chatInviteUrl(token);
+    final communities = _list('communities')
+        .where((community) => community['joined'] == true)
+        .toList(growable: false);
+    String? selectedCommunityId = communities.isEmpty
+        ? null
+        : communities.first['id']?.toString();
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Invite people to this chat'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Share a link for “$conversationTitle”. It expires in 30 days and allows up to 100 joins.'),
+                  const SizedBox(height: 12),
+                  SelectableText(inviteUrl, style: const TextStyle(color: Colors.lightBlueAccent)),
+                  const SizedBox(height: 18),
+                  if (communities.isNotEmpty) ...[
+                    const Text('Post this invite in a community', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedCommunityId,
+                      decoration: const InputDecoration(labelText: 'Joined community'),
+                      items: communities.map((community) => DropdownMenuItem<String>(
+                        value: community['id']?.toString(),
+                        child: Text(community['name']?.toString() ?? 'Community', overflow: TextOverflow.ellipsis),
+                      )).toList(),
+                      onChanged: (value) => setDialogState(() => selectedCommunityId = value),
+                    ),
+                  ] else
+                    const Text('Join a community first to post the invite there.', style: TextStyle(color: Colors.white60)),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: inviteUrl));
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (mounted) _showMessage('Group chat invite link copied.');
+              },
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('Copy link'),
+            ),
+            FilledButton.icon(
+              onPressed: selectedCommunityId == null ? null : () async {
+                final communityId = selectedCommunityId!;
+                Navigator.pop(dialogContext);
+                try {
+                  await AppController.instance.backendApi.createSocialPost(
+                    profileId: profile.id,
+                    body: 'Join our group chat “$conversationTitle” using the Join chat card below.',
+                    communityIds: [communityId],
+                    mediaReference: {
+                      'type': 'chat_invite',
+                      'inviteToken': token,
+                      'inviteUrl': inviteUrl,
+                      'conversationTitle': conversationTitle,
+                    },
+                  );
+                  await _load();
+                  if (mounted) _showMessage('Invite posted to the community.');
+                } catch (error) {
+                  if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
+                }
+              },
+              icon: const Icon(Icons.groups_rounded),
+              label: const Text('Share to community'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _acceptChatInvite(Map<String, dynamic> mediaReference) async {
+    final profile = AppController.instance.currentProfile;
+    final token = mediaReference['inviteToken']?.toString() ?? '';
+    if (profile == null || token.isEmpty) {
+      _showMessage('This chat invite is incomplete.');
+      return;
+    }
+    try {
+      final response = await AppController.instance.backendApi.acceptSocialConversationInvite(
+        profileId: profile.id,
+        token: token,
+      );
+      final conversation = response['conversation'] is Map
+          ? Map<String, dynamic>.from(response['conversation'] as Map)
+          : <String, dynamic>{};
+      final conversationId = response['conversationId']?.toString() ?? conversation['id']?.toString() ?? '';
+      if (conversationId.isEmpty) throw StateError('The invite did not identify a conversation.');
+      await _load();
+      if (!mounted) return;
+      final messagesIndex = _tabSections.indexOf('messages');
+      if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
+      await _openConversation(conversationId);
+    } catch (error) {
+      if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
     }
   }
 

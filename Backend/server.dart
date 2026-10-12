@@ -37,6 +37,8 @@
 //     ARM_SERVER_URL
 //     ARM_USERNAME
 //     ARM_PASSWORD
+//     MEDIA_AGENT_BASE_URL
+//     MEDIA_AGENT_SHARED_SECRET
 //     FOOD_PAYMENT_MOCK (development only)
 //
 // Local development certificate fallback:
@@ -255,6 +257,7 @@ Future<void> main() async {
   final serverAgentRoutes = ServerAgentRoutes(
     authentication: authentication,
     service: mediaServerAgentService,
+    store: SupabaseStore.instance,
   );
 
   // ------------------------------------------------------------

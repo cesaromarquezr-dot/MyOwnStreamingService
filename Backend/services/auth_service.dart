@@ -1141,18 +1141,24 @@ class AuthService {
   Future<String> inviteMember({
     required Account account,
     required String email,
+    String? phone,
     String role = 'member',
     bool sendEmail = true,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
+    final cleanPhone = (phone ?? '').replaceAll(RegExp(r'[^0-9+]'), '');
 
-    if (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail)) {
-      throw Exception(
-        'A valid member email address is required.',
-      );
+    if (sendEmail && (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail))) {
+      throw Exception('A valid member email address is required for email invitations.');
+    }
+    if (!sendEmail && cleanEmail.isEmpty && (cleanPhone.replaceAll('+', '').length < 7 || cleanPhone.replaceAll('+', '').length > 15)) {
+      throw Exception('Enter a valid member phone number.');
+    }
+    if (cleanEmail.isNotEmpty && !_isValidEmail(cleanEmail)) {
+      throw Exception('Enter a valid member email address or leave it blank for a phone invitation.');
     }
 
-    if (cleanEmail == account.email.trim().toLowerCase()) {
+    if (cleanEmail.isNotEmpty && cleanEmail == account.email.trim().toLowerCase()) {
       throw Exception(
         'The account owner is already a member.',
       );
@@ -1186,6 +1192,7 @@ class AuthService {
     await SupabaseStore.instance.createMemberInvitation(
       accountExternalId: account.id,
       email: cleanEmail,
+      phone: cleanPhone.isEmpty ? null : cleanPhone,
       role: cleanRole,
       tokenHash: tokenHash,
       expiresAt: expiresAt,
@@ -1216,7 +1223,7 @@ class AuthService {
       accountId: account.id,
       metadata: {
         'role': cleanRole,
-        'delivery': sendEmail ? 'email' : 'share-link',
+        'delivery': sendEmail ? 'email' : (cleanPhone.isNotEmpty ? 'sms' : 'share-link'),
       },
     );
 

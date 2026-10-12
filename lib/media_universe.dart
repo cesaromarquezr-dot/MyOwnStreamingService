@@ -8,6 +8,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'details.dart';
 
 class MediaUniverseScreen extends StatefulWidget {
   const MediaUniverseScreen({super.key});
@@ -146,7 +147,11 @@ class _SurpriseMeScreenState extends State<SurpriseMeScreen> {
         Text(selected!.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
         Text(selected!.type, style: const TextStyle(color: Colors.white60)), const SizedBox(height: 12),
         const Text('This selection was chosen from the eligible library items. No taste ranking was used.'),
-        const SizedBox(height: 12), OutlinedButton(onPressed: pick, child: const Text('SHUFFLE AGAIN')),
+        const SizedBox(height: 12),
+        Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 8, children: [
+          FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: selected!))), icon: const Icon(Icons.play_arrow_rounded), label: const Text('PLAY')),
+          OutlinedButton(onPressed: pick, child: const Text('SHUFFLE AGAIN')),
+        ]),
       ])))
     ]),
   );

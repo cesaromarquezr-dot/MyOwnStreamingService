@@ -77,7 +77,8 @@ create table if not exists public.account_invitations (
     references public.accounts(id)
     on delete cascade,
 
-  email text not null,
+  email text,
+  phone text,
 
   role text not null default 'member'
     check (role in ('admin', 'member')),
@@ -307,3 +308,6 @@ comment on table public.account_invitations is
 
 comment on column public.account_invitations.token_hash is
   'Backend-only hash of the invitation token. The raw invitation token is never stored.';
+-- Phone-delivered invitations may let the recipient choose their login email when accepting.
+alter table public.account_invitations alter column email drop not null;
+alter table public.account_invitations add column if not exists phone text;

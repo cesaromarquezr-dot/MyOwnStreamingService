@@ -267,25 +267,17 @@ The physical media itself does not need to be transferred into central storage.
 
 A participant's authorization to play media remains tied to the server/account that actually owns or exposes that media.
 
----
-
-# Storage subsystem
-
 Storage is a first-class backend subsystem.
 
 See:
 
-```text
 docs/STORAGE_ARCHITECTURE.md
-```
 
 for the detailed HDD/SSD, RAID, backup, and UPS architecture.
 
 The backend can expose authenticated storage information through:
 
-```text
 GET /api/v1/storage/system
-```
 
 The storage subsystem is intentionally separated from destructive storage administration.
 
@@ -305,15 +297,10 @@ Read-only monitoring must not silently perform destructive filesystem, RAID, or 
 
 Physical storage remains on the user's managed server.
 
----
-
-# Home-server media model
-
 The backend treats the home server as the authoritative location for physical media files.
 
 Central metadata can describe a locally hosted item:
 
-```text
 Account
   │
   └── Home Server
@@ -323,7 +310,6 @@ Account
         │
         └── Media Catalog
                └── Shared metadata
-```
 
 The central metadata layer can contain:
 
@@ -340,15 +326,10 @@ The central metadata layer can contain:
 
 It does not turn the central database into a copy of the user's physical media library.
 
----
-
-# ARM physical-media ingestion
-
 ARM is the automated physical-media ingestion layer.
 
 The intended pipeline is:
 
-```text
 Optical Drive
      │
      ▼
@@ -380,11 +361,9 @@ Import Review / Plan
      │
      ▼
 Library Import
-```
 
 ARM must preserve the relationship between:
 
-```text
 Physical Release
     ↓
 Physical Disc
@@ -392,7 +371,6 @@ Physical Disc
 Disc Content
     ↓
 Library Media
-```
 
 A bonus feature must not automatically become a second primary movie.
 
@@ -409,10 +387,6 @@ Examples of distinct disc content include:
 * other verified content.
 
 The ingestion pipeline should preserve all detected content rather than discarding non-primary material.
-
----
-
-# Physical release identity
 
 A physical release represents the actual packaged release rather than merely a title string.
 
@@ -435,10 +409,6 @@ Ingestion order must not determine identity.
 For example, scanning Disc 2 before Disc 1 must still allow both discs to resolve to the same physical release when verified metadata identifies them as belonging together.
 
 Title matching alone must not be treated as authoritative physical-release identity.
-
----
-
-# Music ingestion
 
 Music separates the physical release from the canonical recording.
 
@@ -473,15 +443,9 @@ Preferred identity signals include:
 
 Title matching alone is insufficient for canonical recording identity.
 
----
-
-# Lossless music archive
-
 Music imports prefer:
 
-```text
 FLAC
-```
 
 as the lossless archive/master representation.
 
@@ -502,10 +466,6 @@ FLAC master
 ```
 
 Derived playback files are disposable representations and must not replace the original lossless archive.
-
----
-
-# Metadata and verification
 
 ARM metadata is provider-neutral.
 
@@ -538,15 +498,10 @@ Verification should establish, where possible:
 * expected content classification;
 * metadata provenance.
 
----
-
-# Playback and transcoding
-
 Playback prefers the least expensive representation that satisfies the target device.
 
 The decision hierarchy is:
 
-```text
 Direct Play
     ↓
 Remux
@@ -554,7 +509,6 @@ Remux
 Audio Transcode
     ↓
 Full Transcode
-```
 
 Direct Play and remuxing should remain preferred whenever the target device can consume the source representation.
 
@@ -562,23 +516,15 @@ This prevents unnecessary CPU/GPU consumption.
 
 Full transcoding is performed only when required by the playback target.
 
----
-
-# Transcoding scheduler
-
 Transcoding jobs use a bounded concurrent scheduler.
 
 Configure the maximum number of simultaneous jobs through:
 
-```text
 TRANSCODE_MAX_CONCURRENT
-```
 
 Example:
 
-```text
 TRANSCODE_MAX_CONCURRENT=2
-```
 
 The scheduler prevents an unrestricted number of simultaneous FFmpeg processes from exhausting the home server.
 
@@ -605,10 +551,6 @@ Original Media
 ```
 
 The original media remains authoritative.
-
----
-
-# Recommendations
 
 Recommendations are generated from application metadata and profile activity.
 
@@ -637,17 +579,12 @@ These relationships allow related works to be surfaced without requiring the wor
 
 Recommendation scores represent algorithmic relevance/match calculations. They are not probabilities of a user watching a title.
 
----
-
-# Marketplace / Shop architecture
-
 Marketplace functionality is intentionally separate from entertainment metadata.
 
 A title, actor, franchise, album, or other media entity does not automatically become purchasable.
 
 The architecture separates:
 
-```text
 Entertainment Metadata
         │
         ▼
@@ -661,7 +598,6 @@ Eligible Offer
         │
         ▼
 Purchase Flow
-```
 
 A Shop association can identify that a product or merchant is related to an entertainment entity.
 
@@ -689,10 +625,6 @@ The marketplace can therefore provide discovery patterns such as:
 
 without conflating marketplace metadata with the user's private media library.
 
----
-
-# Supabase persistence boundary
-
 Supabase is used for server-side application metadata and persistence.
 
 Examples include:
@@ -714,10 +646,6 @@ Supabase does not become the authoritative storage location for the user's physi
 
 The home server remains responsible for the actual media files.
 
----
-
-# Application-state synchronization
-
 The backend can synchronize sanitized account/profile application state with Supabase.
 
 Client-provided snapshots are treated as untrusted input.
@@ -733,14 +661,8 @@ The server must never allow a client snapshot to overwrite backend-authoritative
 * server ownership.
 
 Backend-authoritative state must come from the authenticated server-side models and persistence layer.
-
----
-
-# Security boundaries
-
 The backend should enforce security at multiple layers:
 
-```text
 Client
   │
   ▼
@@ -766,7 +688,6 @@ Resource Authorization
   │
   ▼
 Service / Database
-```
 
 Important principles:
 
@@ -781,13 +702,8 @@ Important principles:
 * Never move private home-server media into central storage merely to coordinate Group Watch.
 * Keep security-sensitive decisions in the backend rather than Flutter.
 
----
-
-# External infrastructure boundary
-
 Some parts of the complete self-hosting architecture intentionally remain outside the Dart application:
 
-```text
 Cloudflare
 Firewall
 DDNS
@@ -797,15 +713,10 @@ RAID controller
 UPS
 Operating system
 Physical optical drives
-```
 
 The Dart backend integrates with these components through configuration, trusted-proxy controls, filesystem access, monitoring, APIs, and service boundaries.
 
 The application can therefore implement the software-side portion of the self-hosting architecture without pretending that Flutter/Dart itself replaces the physical or network infrastructure.
-
----
-
-# Current implementation boundary
 
 The backend is designed so that the same application code can run in:
 
@@ -834,11 +745,10 @@ This keeps deployment-specific secrets and infrastructure details out of the Flu
 
 Provider credentials remain backend-only. Configure only providers for which the deployment has the required rights and API access:
 
-- `TMDB_API_TOKEN` — TMDB application access token.
-- `OMDB_API_KEY` — OMDb API key for provider fields available through OMDb.
+ `TMDB_API_TOKEN` — TMDB application access token.
+ `OMDB_API_KEY` — OMDb API key for provider fields available through OMDb.
 
 The Flutter client never receives these credentials. Provider ratings are stored and displayed independently; the backend does not calculate a single cross-provider master score.
-
 
 ## Master Product Architecture
 
@@ -848,14 +758,18 @@ See `../docs/MASTER_PRODUCT_ARCHITECTURE.md`. The backend is organized around do
 
 Optional production integrations are backend-only:
 
-- `PAYPAL_CLIENT_ID`
-- `PAYPAL_CLIENT_SECRET`
-- `PAYPAL_BASE_URL` (sandbox default)
-- `APPLE_PAY_MERCHANT_ID`
-- `MERCADO_PAGO_ACCESS_TOKEN`
-- `TMDB_API_TOKEN`
-- `OMDB_API_KEY`
-- `LASTFM_API_KEY`
-- `MUSIC_METADATA_USER_AGENT`
+ `PAYPAL_CLIENT_ID`
+ `PAYPAL_CLIENT_SECRET`
+ `PAYPAL_BASE_URL` (sandbox default)
+ `APPLE_PAY_MERCHANT_ID`
+ `MERCADO_PAGO_ACCESS_TOKEN`
+ `TMDB_API_TOKEN`
+ `OMDB_API_KEY`
+ `LASTFM_API_KEY`
+ `MUSIC_METADATA_USER_AGENT`
 
 Never place these secrets in Flutter, Supabase client configuration, or source control. Apple Pay also requires the platform's merchant-validation/client setup; the backend exposes capability state but does not accept raw payment credentials.
+
+## TrueNAS media gateway
+
+See [`deploy/truenas/README.md`](../deploy/truenas/README.md) for the TrueNAS dataset, read-only media agent, Supabase server-media mapping, and signed playback URL setup. Configure `MEDIA_AGENT_BASE_URL` and `MEDIA_AGENT_SHARED_SECRET` on the Dart backend only. The matching secret also belongs in the trusted media-agent environment; neither secret belongs in Flutter.

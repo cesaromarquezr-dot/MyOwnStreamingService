@@ -617,11 +617,11 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
   /// Creates a seven-day invitation. Supabase stores only the SHA-256 token hash.
   Future<void> _create() async {
     final email = emailController.text.trim().toLowerCase();
-    if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Enter a valid member email address.')));
+    final phoneDigits = phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (deliveryMethod == 'email' && (email.isEmpty || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email))) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid member email address.')));
       return;
     }
-    final phoneDigits = phoneController.text.replaceAll(RegExp(r'\D'), '');
     if (deliveryMethod == 'sms' &&
         (phoneDigits.length < 7 || phoneDigits.length > 15)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -633,6 +633,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     try {
       final result = await AppController.instance.backendApi.inviteAccountMember(
         email: email,
+        phone: deliveryMethod == 'sms' ? '+$callingCode$phoneDigits' : null,
         role: role,
         sendEmail: deliveryMethod == 'email',
       );
@@ -677,7 +678,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       path: invitationPhone,
       queryParameters: {
         'body':
-            'You are invited to join a Streaming Service account. Open this secure link, then sign in using $invitationEmail: $invitationLink',
+            'You are invited to join a Streaming Service account. Open this secure link to accept and set up your login: $invitationLink${invitationEmail.isEmpty ? '' : ' (sign in using $invitationEmail)'}',
       },
     );
     try {
@@ -708,7 +709,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
             ? Column(mainAxisSize: MainAxisSize.min, children: [
                 const Align(alignment: Alignment.centerLeft, child: UniversalText('Invite an individual login to join this existing account. They will use this account’s home server.')),
                 const SizedBox(height: 16),
-                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, enabled: !submitting, decoration: InputDecoration(labelText: tr('Member email'), prefixIcon: Icon(Icons.email_outlined))),
+                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, enabled: !submitting, decoration: InputDecoration(labelText: deliveryMethod == 'sms' ? tr('Member email (optional for SMS)') : tr('Member email'), prefixIcon: Icon(Icons.email_outlined))),
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -766,7 +767,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                   ),
                   const SizedBox(height: 8),
                   const UniversalText(
-                    'The secure link is prepared in your SMS app. The member still signs in with the email address above.',
+                    'The secure link is prepared in your SMS app. The recipient can choose their sign-in email when accepting the invitation.',
                     style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ],
@@ -782,7 +783,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                 const SizedBox(height: 6),
                 UniversalText(invitationPhone.isEmpty
                     ? 'Send this link to $invitationEmail. It expires in 7 days.'
-                    : 'Send this link to $invitationPhone. The member must sign in with $invitationEmail. It expires in 7 days.'),
+                    : 'Send this link to $invitationPhone. The recipient can choose their sign-in email when accepting. It expires in 7 days.'),
                 const SizedBox(height: 14),
                 SelectableText(invitationLink!, style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 14),

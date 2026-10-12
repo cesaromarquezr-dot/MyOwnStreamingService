@@ -16,29 +16,26 @@ import 'library_release.dart';
 import 'signup.dart';
 import 'smart_search.dart';
 import 'details.dart';
+import 'seasonal_collections.dart';
 import 'profiles.dart';
 import 'remote_access.dart';
 import 'account_settings.dart';
 import 'device_features.dart';
 import 'film.dart';
 import 'how_it_works.dart';
-import 'group_chat.dart';
 import 'shop.dart';
 import 'food_delivery.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
 import 'platform_expansion.dart';
-import 'discovery_experience.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
 import 'localization.dart';
 import 'activity_timeline.dart';
 import 'social_home.dart';
 import 'navigation_hubs.dart';
-import 'hey_media.dart';
 import 'media_universe.dart';
-import 'personal_streaming.dart';
 import 'my_tv.dart';
 import 'social_story_experience.dart';
 import 'app_customization.dart';
@@ -76,9 +73,8 @@ int? _primaryIndexForPage(String pageId) => switch (pageId) {
       'artists' ||
       'bands' =>
         1,
-      'discover' => 2,
-      'shop' => 2,
-      'friends' => 3,
+      'shop' => 3,
+      'friends' => 2,
       _ => null,
     };
 
@@ -160,6 +156,10 @@ class _AppPageRouteObserver extends NavigatorObserver {
   }
 
   void setPageForRoute(Route<dynamic>? route, String pageId, int primaryIndex) {
+    // Invalidate any queued route-observer callbacks from routes that were
+    // removed during an onboarding handoff. Otherwise a stale profile/server
+    // route can overwrite the newly rendered MainScreen state after this frame.
+    _pendingPageUpdate++;
     if (route != null) _pageIds[route] = pageId;
     _appPageState.setPage(
       pageId,
@@ -199,16 +199,11 @@ class _AppPageRouteObserver extends NavigatorObserver {
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
+    // didRemove commonly fires for background routes discarded by
+    // pushAndRemoveUntil. Those routes are not the visible page, so never let
+    // their previousRoute overwrite the active page (especially during the
+    // server -> profile -> Home onboarding handoff).
     _pageIds.remove(route);
-    if (previousRoute != null) {
-      final previousPageId = _pageIds[previousRoute] ?? 'home';
-      _schedulePageUpdate(
-        previousPageId,
-        selectedPrimaryIndex: _primaryIndexForPage(previousPageId),
-        customizing: previousRoute.settings.name == '/app/customize' ||
-            previousRoute.settings.name == '/app/more',
-      );
-    }
   }
 
   @override
@@ -477,7 +472,10 @@ class _AppPageSurface extends StatelessWidget {
                 _appPageState.pageId != 'profiles' &&
                 _appPageState.pageId != 'server-selection' &&
                 _appPageState.pageId != 'import' &&
-                _appPageState.pageId != 'player';
+                _appPageState.pageId != 'player' &&
+                _appPageState.pageId != 'customize' &&
+                _appPageState.pageId != 'more' &&
+                !_appPageState.isCustomizing;
         const globalNavigationHeight = 84.0;
         final bottomInset = showGlobalNavigation
             ? globalNavigationHeight + MediaQuery.paddingOf(context).bottom
@@ -523,7 +521,6 @@ class _AppPageSurface extends StatelessWidget {
 String _pageTitleFor(String pageId) => switch (pageId) {
       'home' => 'Home',
       'library' => 'Library',
-      'discover' => 'Discover',
       'friends' => 'Friends',
       'movies' => 'Movies',
       'series' => 'TV Shows',
@@ -548,8 +545,6 @@ String _pageTitleFor(String pageId) => switch (pageId) {
       'devices' => 'Devices',
       'home-server' => 'Home Server',
       'members' => 'Account Members',
-      'personal-streaming' => 'Personal Streaming',
-      'group-watch' => 'Group Watch',
       _ => 'Page',
     };
 
@@ -618,6 +613,10 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     draft = _PageAppearanceStore.forPage(widget.pageId);
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
     sectionDraft = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    const friendsPresetIds = <String>{'Timeline', 'Facebook', 'Instagram', 'Snapchat', 'BeReal', 'TikTok', 'YouTube Shorts', 'WhatsApp', 'Messenger', 'iMessage', 'Telegram'};
+    if (widget.pageId == 'friends' && !friendsPresetIds.contains(sectionDraft.friendsDisplayStyle)) {
+      sectionDraft.friendsDisplayStyle = 'Timeline';
+    }
     StoryPlacementStore.load(AppController.instance.currentProfile);
   }
 
@@ -662,26 +661,102 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                       SwitchListTile(contentPadding: EdgeInsets.zero, value: sectionDraft.showShopInventory, onChanged: (v) => setState(() => sectionDraft.showShopInventory = v), title: const Text('Show inventory counts')),
                     ] else if (widget.pageId == 'library') ...[
                       DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.libraryViewMode,
+                        decoration: const InputDecoration(labelText: 'Library layout'),
+                        items: const [
+                          DropdownMenuItem(value: 'List', child: Text('List view')),
+                          DropdownMenuItem(value: 'Grid', child: Text('Grid view')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => sectionDraft.libraryViewMode = v);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
                         initialValue: sectionDraft.libraryCardStyle,
-                        decoration: const InputDecoration(labelText: 'Library card style'),
+                        decoration: const InputDecoration(labelText: 'Library card appearance'),
                         items: const ['Poster', 'Landscape', 'Compact'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
                         onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryCardStyle = v); },
                       ),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<int>(
-                        initialValue: sectionDraft.libraryColumns,
-                        decoration: const InputDecoration(labelText: 'Library columns'),
-                        items: const [1,2,3,4,5,6].map((v) => DropdownMenuItem(value: v, child: Text('$v'))).toList(),
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryColumns = v); },
-                      ),
+                      if (sectionDraft.libraryViewMode == 'Grid') ...[
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<int>(
+                          initialValue: sectionDraft.libraryColumns.clamp(1, 6),
+                          decoration: const InputDecoration(labelText: 'Widgets per row'),
+                          items: const [1, 2, 3, 4, 5, 6].map((v) => DropdownMenuItem(value: v, child: Text('$v per row'))).toList(),
+                          onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryColumns = v); },
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      const Text('Individual widget sizes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      const Text('Choose the size of each library shortcut independently.', style: TextStyle(color: Colors.white60)),
+                      const SizedBox(height: 8),
+                      for (final item in const <Map<String, String>>[
+                        {'id': 'movies', 'label': 'Movies'},
+                        {'id': 'tv-shows', 'label': 'TV shows'},
+                        {'id': 'music', 'label': 'Music'},
+                        {'id': 'radio', 'label': 'Radio'},
+                        {'id': 'collections', 'label': 'Collections'},
+                        {'id': 'my-tv', 'label': 'My TV'},
+                        {'id': 'favorites', 'label': 'Favorites'},
+                        {'id': 'coming-soon', 'label': 'Coming soon'},
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: DropdownButtonFormField<String>(
+                            initialValue: const ['Small', 'Medium', 'Large'].contains(sectionDraft.libraryWidgetSizes[item['id']])
+                                ? sectionDraft.libraryWidgetSizes[item['id']]
+                                : 'Medium',
+                            decoration: InputDecoration(labelText: '${item['label']} widget size'),
+                            items: const ['Small', 'Medium', 'Large'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() {
+                                  sectionDraft.libraryWidgetSizes = {
+                                    ...sectionDraft.libraryWidgetSizes,
+                                    item['id']!: v,
+                                  };
+                                });
+                              }
+                            },
+                          ),
+                        ),
                     ] else ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: sectionDraft.friendsDisplayStyle,
-                        decoration: const InputDecoration(labelText: 'Friends display'),
-                        items: const ['Cards', 'List', 'Compact'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.friendsDisplayStyle = v); },
+                      const Text('Choose a social layout', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      const Text('Choose a theme for its intended social surface: chat themes affect Messages, feed themes affect Feed/Profile/Communities, and short-video themes affect Reels. Friends stays on its own layout.', style: TextStyle(color: Colors.white60)),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          for (final preset in const <Map<String, Object>>[
+                            {'value': 'Facebook', 'title': 'Facebook', 'subtitle': 'Feed, profile page and communities', 'icon': Icons.dynamic_feed_rounded},
+                            {'value': 'Instagram', 'title': 'Instagram', 'subtitle': 'Feed, profile page and communities', 'icon': Icons.photo_library_outlined},
+                            {'value': 'Snapchat', 'title': 'Snapchat', 'subtitle': 'Messages: bright yellow chat theme', 'icon': Icons.bolt_rounded},
+                            {'value': 'BeReal', 'title': 'BeReal', 'subtitle': 'Reels: candid, minimal short-video style', 'icon': Icons.camera_alt_outlined},
+                            {'value': 'TikTok', 'title': 'TikTok', 'subtitle': 'Reels: full-height short-video style', 'icon': Icons.play_circle_outline_rounded},
+                            {'value': 'YouTube Shorts', 'title': 'YouTube Shorts', 'subtitle': 'Reels: vertical video and bold red accents', 'icon': Icons.smart_display_outlined},
+                            {'value': 'WhatsApp', 'title': 'WhatsApp', 'subtitle': 'Messages only: green chat styling', 'icon': Icons.chat_bubble_outline_rounded},
+                            {'value': 'Messenger', 'title': 'Messenger', 'subtitle': 'Messages only: blue conversation styling', 'icon': Icons.forum_outlined},
+                            {'value': 'iMessage', 'title': 'iMessage', 'subtitle': 'Clean message list and compact bubbles', 'icon': Icons.message_outlined},
+                            {'value': 'Telegram', 'title': 'Telegram', 'subtitle': 'Messages only: compact blue chat styling', 'icon': Icons.send_rounded},
+                          ])
+                            SizedBox(
+                              width: MediaQuery.sizeOf(context).width >= 760 ? 285 : MediaQuery.sizeOf(context).width - 88,
+                              child: _FriendsLayoutPresetCard(
+                                title: preset['title'] as String,
+                                subtitle: preset['subtitle'] as String,
+                                icon: preset['icon'] as IconData,
+                                presetId: preset['value'] as String,
+                                selected: sectionDraft.friendsDisplayStyle == preset['value'],
+                                onTap: () => setState(() => sectionDraft.friendsDisplayStyle = preset['value'] as String),
+                              ),
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
                         initialValue: StoryPlacementStore.forProfile(AppController.instance.currentProfile),
                         decoration: const InputDecoration(labelText: 'Friends’ Stories placement'),
@@ -870,6 +945,136 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   }
 }
 
+class _FriendsLayoutPresetCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String presetId;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FriendsLayoutPresetCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.presetId,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      color: selected ? accent.withValues(alpha: .16) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: selected ? accent : Colors.white12, width: selected ? 2 : 1),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(icon, color: selected ? accent : Colors.white70),
+                const SizedBox(width: 8),
+                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+                if (selected) Icon(Icons.check_circle_rounded, color: accent, size: 18),
+              ]),
+              const SizedBox(height: 6),
+              Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.25)),
+              const SizedBox(height: 12),
+              _friendsPresetPreview(presetId, accent),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _friendsPresetPreview(String presetId, Color accent) {
+    Widget bar(double width, {double height = 8, double opacity = .20}) =>
+        Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: opacity),
+            borderRadius: BorderRadius.circular(5),
+          ),
+        );
+    Widget avatar({double size = 20}) => Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: accent.withValues(alpha: .45),
+            border: Border.all(color: accent.withValues(alpha: .8)),
+          ),
+        );
+
+    switch (presetId) {
+      case 'Facebook':
+      case 'Timeline':
+        return Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [avatar(size: 18), const SizedBox(width: 7), Expanded(child: bar(96))]),
+            const SizedBox(height: 7),
+            bar(double.infinity, height: 19, opacity: .12),
+            const SizedBox(height: 6),
+            Row(children: [bar(35), const SizedBox(width: 7), bar(35), const SizedBox(width: 7), bar(35)]),
+          ]),
+        );
+      case 'Instagram':
+        return Row(children: [
+          for (var i = 0; i < 3; i++) ...[
+            Expanded(child: Container(height: 54, decoration: BoxDecoration(color: accent.withValues(alpha: .14 + i * .04), borderRadius: BorderRadius.circular(8)), child: Align(alignment: Alignment.topCenter, child: Padding(padding: const EdgeInsets.all(5), child: avatar(size: 17))))),
+            if (i < 2) const SizedBox(width: 5),
+          ],
+        ]);
+      case 'Snapchat':
+        return Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          for (var i = 0; i < 4; i++) Column(children: [Container(padding: const EdgeInsets.all(3), decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: accent, width: 2)), child: avatar(size: 24)), const SizedBox(height: 4), bar(30, height: 5, opacity: .12)]),
+        ]);
+      case 'BeReal':
+        return Row(children: [
+          Container(width: 55, height: 54, decoration: BoxDecoration(color: accent.withValues(alpha: .18), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.camera_alt_outlined, size: 22, color: Colors.white70)),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [bar(90), const SizedBox(height: 7), bar(62, opacity: .11), const SizedBox(height: 7), bar(44, opacity: .11)])),
+        ]);
+      case 'TikTok':
+        return Row(children: [
+          for (var i = 0; i < 3; i++) ...[
+            Expanded(child: Container(height: 58, decoration: BoxDecoration(color: accent.withValues(alpha: .12 + i * .05), borderRadius: BorderRadius.circular(8)), child: const Center(child: Icon(Icons.play_circle_outline_rounded, size: 21, color: Colors.white70)))),
+            if (i < 2) const SizedBox(width: 5),
+          ],
+        ]);
+      case 'WhatsApp':
+      case 'Messenger':
+      case 'iMessage':
+      case 'Telegram':
+        return Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [avatar(size: 18), const SizedBox(width: 7), Expanded(child: bar(92)), const SizedBox(width: 7), bar(21, height: 6, opacity: .12)]),
+            const SizedBox(height: 7),
+            Align(alignment: Alignment.centerLeft, child: Container(width: 112, height: 10, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(8)))),
+            const SizedBox(height: 5),
+            Align(alignment: Alignment.centerRight, child: Container(width: 94, height: 10, decoration: BoxDecoration(color: accent.withValues(alpha: .4), borderRadius: BorderRadius.circular(8)))),
+          ]),
+        );
+      default:
+        return Row(children: [avatar(), const SizedBox(width: 7), Expanded(child: bar(95)), const Spacer(), bar(32)]);
+    }
+  }
+}
+
 String _customizationSectionName(String pageId, String id) => switch (id) {
       'search' => 'Universal search',
       'movies' => 'Movies',
@@ -899,13 +1104,50 @@ String _customizationSectionName(String pageId, String id) => switch (id) {
     };
 
 // ============================================================
-void _enterMainHome() {
-  final navigator = _appNavigatorKey.currentState;
+String? _pendingChatInviteToken = Uri.base.queryParameters['chatInvite'];
+
+Future<void> _enterMainHome() => _navigateToMainHome();
+
+Future<void> _enterMainHomeFrom(BuildContext sourceContext) =>
+    _navigateToMainHome(sourceContext);
+
+Future<void> _navigateToMainHome([BuildContext? sourceContext]) async {
+  NavigatorState? navigator;
+  // Prefer the navigator attached to the active onboarding route. The global
+  // key can briefly still point at a navigator whose route stack is being
+  // replaced after server/profile handoff.
+  if (sourceContext != null && sourceContext.mounted) {
+    navigator = Navigator.of(sourceContext, rootNavigator: true);
+  }
+  navigator ??= _appNavigatorKey.currentState;
   if (navigator == null) return;
+
+  var destination = PrimaryDestination.home;
+  final token = _pendingChatInviteToken?.trim();
+  final profile = AppController.instance.currentProfile;
+  if (token != null && token.isNotEmpty && profile != null) {
+    // Do not let an invite API stall the onboarding flow. If the request fails
+    // or times out, the person still reaches Home and can use the in-community
+    // Join chat action later.
+    _pendingChatInviteToken = null;
+    try {
+      await AppController.instance.backendApi
+          .acceptSocialConversationInvite(
+        profileId: profile.id,
+        token: token,
+      ).timeout(const Duration(seconds: 8));
+      destination = PrimaryDestination.friends;
+    } catch (_) {
+      destination = PrimaryDestination.home;
+    }
+  }
+
+  if (!navigator.mounted) return;
+  _appPageState.setPage('home', selectedPrimaryIndex: 0, customizing: false);
   navigator.pushAndRemoveUntil<void>(
     MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/main'),
-      builder: (_) => const MainScreen(),
+      builder: (_) => MainScreen(initialDestination: destination),
     ),
     (route) => false,
   );
@@ -943,8 +1185,15 @@ class _SplashScreenState extends State<SplashScreen> {
         MaterialPageRoute(
           settings: RouteSettings(name: serverContext.needsServerSelection ? '/app/server-selection' : '/app/profiles'),
           builder: (_) => serverContext.needsServerSelection
-              ? ServerSelectionScreen(onProfileReady: _enterMainHome)
-              : ProfileSelectionScreen(onProfileSelected: (_) => _enterMainHome()),
+              ? ServerSelectionScreen(
+                  onProfileReady: _enterMainHomeFrom,
+                  onOpened: () => _appPageState.setPage('server-selection', selectedPrimaryIndex: 0, customizing: false),
+                  onServerSaved: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+                )
+              : ProfileSelectionScreen(
+                  onProfileSelected: (profileContext) => _enterMainHomeFrom(profileContext),
+                  onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+                ),
         ),
       );
       return;
@@ -1173,7 +1422,11 @@ class _LoginScreenState extends State<LoginScreen> {
           context,
           MaterialPageRoute(
             settings: const RouteSettings(name: '/app/server-selection'),
-            builder: (_) => ServerSelectionScreen(onProfileReady: _enterMainHome),
+            builder: (_) => ServerSelectionScreen(
+              onProfileReady: _enterMainHomeFrom,
+              onOpened: () => _appPageState.setPage('server-selection', selectedPrimaryIndex: 0, customizing: false),
+              onServerSaved: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+            ),
           ),
         );
         return;
@@ -1183,17 +1436,8 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => ProfileSelectionScreen(
-            onProfileSelected: (context) {
-              // Profile selection is complete. Enter the normal application
-              // shell immediately; customization is contextual and is opened
-              // from the Customize button on each major page.
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => const MainScreen(),
-                  settings: const RouteSettings(name: '/main'),
-                ),
-              );
-            },
+            onProfileSelected: (profileContext) => _enterMainHomeFrom(profileContext),
+            onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
           ),
           settings: const RouteSettings(name: '/app/profiles'),
         ),
@@ -1449,7 +1693,6 @@ class HomeCustomization {
               'Collections',
               'My TV',
               'Shop',
-              'Group Chat',
             ];
 
   HomeCustomization copy() => HomeCustomization(
@@ -1510,6 +1753,9 @@ class HomeCustomizationStore {
           if (!settings.sectionOrder.contains('Friends & Communities')) {
             settings.sectionOrder.insert(0, 'Friends & Communities');
           }
+          settings.navigationOrder.removeWhere(
+            (item) => item == 'Group Chat' || item == 'Discover',
+          );
           if (!settings.navigationOrder.contains('Surprise Me')) {
             final moreIndex = settings.navigationOrder.indexOf('More');
             if (moreIndex >= 0) {
@@ -1531,6 +1777,9 @@ class HomeCustomizationStore {
   static HomeCustomization settingsFor(Profile? profile) {
     final value =
         _settings.putIfAbsent(_key(profile), () => HomeCustomization());
+    value.navigationOrder.removeWhere(
+      (item) => item == 'Group Chat' || item == 'Discover',
+    );
     if (!value.navigationOrder.contains('Surprise Me')) {
       final moreIndex = value.navigationOrder.indexOf('More');
       if (moreIndex >= 0) {
@@ -1557,6 +1806,9 @@ class HomeCustomizationStore {
   static void apply(HomeCustomization value, [Profile? profile]) {
     final key = _key(profile ?? AppController.instance.currentProfile);
     final copy = value.copy();
+    copy.navigationOrder.removeWhere(
+      (item) => item == 'Group Chat' || item == 'Discover',
+    );
     _settings[key] = copy;
     _prefs?.setString('home_customization_$key', jsonEncode(_toJson(copy)));
   }
@@ -1942,12 +2194,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
       if (!mounted) return;
       // The profile is now fully customized, so go directly to Home. Account
       // invitations remain available later from the More (three-dot) menu.
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const MainScreen(),
-          settings: const RouteSettings(name: '/main'),
-        ),
-      );
+      if (mounted) setState(() => _isSaving = false);
+      await _enterMainHome();
       return;
     }
 
@@ -3027,7 +3275,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           children: [
             _PreviewNavItem(Icons.home_rounded, 'Home', true),
             _PreviewNavItem(Icons.video_library_rounded, 'Library', false),
-            _PreviewNavItem(Icons.explore_rounded, 'Discover', false),
             _PreviewNavItem(Icons.people_rounded, 'Friends', false),
             _PreviewNavItem(Icons.more_horiz_rounded, 'More', false),
           ],
@@ -4205,7 +4452,6 @@ class MainScreen extends StatefulWidget {
 enum PrimaryDestination {
   home,
   library,
-  discover,
   friends,
 }
 
@@ -4228,11 +4474,6 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
             label: 'Library',
           ),
           NavigationDestination(
-            icon: Icon(Icons.explore_outlined),
-            selectedIcon: Icon(Icons.explore_rounded),
-            label: 'Discover',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.people_outline_rounded),
             selectedIcon: Icon(Icons.people_rounded),
             label: 'Friends',
@@ -4248,7 +4489,7 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
           selectedIndex: selectedIndex,
           destinations: destinations,
           onDestinationSelected: (index) {
-            if (index == 4) {
+            if (index == 3) {
               _showGlobalMore();
               return;
             }
@@ -4312,17 +4553,6 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const AccountInviteScreen(), routeName: '/app/page/members');
       },
-      onPersonalStreaming: () {
-        Navigator.of(sheetContext).pop();
-        push(
-          const PersonalStreamingScreen(),
-          routeName: '/app/page/personal-streaming',
-        );
-      },
-      onGroupWatch: () {
-        Navigator.of(sheetContext).pop();
-        push(const GroupChatScreen(), routeName: '/app/page/group-watch');
-      },
       onShop: () {
         Navigator.of(sheetContext).pop();
         push(
@@ -4363,7 +4593,6 @@ class _MainScreenState extends State<MainScreen> {
   String get _pageTitle => switch (selected) {
         PrimaryDestination.home => 'Home',
         PrimaryDestination.library => 'Library',
-        PrimaryDestination.discover => 'Discover',
         PrimaryDestination.friends => 'Friends',
       };
 
@@ -4372,7 +4601,9 @@ class _MainScreenState extends State<MainScreen> {
       context,
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/profiles'),
-        builder: (_) => const ProfileSelectionScreen(),
+        builder: (_) => ProfileSelectionScreen(
+          onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+        ),
       ),
     ).then((_) {
       if (mounted) setState(() {});
@@ -4389,8 +4620,6 @@ class _MainScreenState extends State<MainScreen> {
         );
       case PrimaryDestination.library:
         return const LibraryHubScreen();
-      case PrimaryDestination.discover:
-        return const DiscoverHubScreen();
       case PrimaryDestination.friends:
         return const FriendsAndCommunitiesScreen();
     }
@@ -4400,18 +4629,8 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        settings: const RouteSettings(name: '/app/page/discover'),
+        settings: const RouteSettings(name: '/app/page/surprise-me'),
         builder: (_) => const SurpriseMeScreen(),
-      ),
-    );
-  }
-
-  void _showHeyMedia() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        settings: const RouteSettings(name: '/app/page/discover'),
-        builder: (_) => const HeyMediaScreen(),
       ),
     );
   }
@@ -4457,7 +4676,6 @@ class _MainScreenState extends State<MainScreen> {
                 );
               },
               onSurpriseMe: _showSurpriseMe,
-              onHeyMedia: _showHeyMedia,
               onProfile: _openProfiles,
             ),
             Expanded(
@@ -4477,7 +4695,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 /// Fixed primary navigation. Secondary features belong behind More or within
-/// the Library / Discover / Friends hubs rather than occupying the navbar.
+/// the Library / Friends hubs rather than occupying the navbar.
 class SimplePrimaryNavigationBar extends StatelessWidget {
   final PrimaryDestination? selected;
   final ValueChanged<PrimaryDestination?> onSelected;
@@ -4504,11 +4722,6 @@ class SimplePrimaryNavigationBar extends StatelessWidget {
         label: 'Library',
       ),
       const NavigationDestination(
-        icon: Icon(Icons.explore_outlined),
-        selectedIcon: Icon(Icons.explore_rounded),
-        label: 'Discover',
-      ),
-      const NavigationDestination(
         icon: Icon(Icons.people_outline_rounded),
         selectedIcon: Icon(Icons.people_rounded),
         label: 'Friends',
@@ -4523,15 +4736,14 @@ class SimplePrimaryNavigationBar extends StatelessWidget {
     final index = switch (selected) {
       PrimaryDestination.home => 0,
       PrimaryDestination.library => 1,
-      PrimaryDestination.discover => 2,
-      PrimaryDestination.friends => 3,
+      PrimaryDestination.friends => 2,
       null => 0,
     };
 
     return NavigationBar(
       selectedIndex: index,
       onDestinationSelected: (value) {
-        if (value == 4) {
+        if (value == 3) {
           onMore();
         } else {
           onSelected(PrimaryDestination.values[value]);
@@ -4547,7 +4759,6 @@ class AppShellHeader extends StatefulWidget {
   final String title;
   final ValueChanged<String> onSearch;
   final VoidCallback onSurpriseMe;
-  final VoidCallback onHeyMedia;
   final VoidCallback onProfile;
 
   const AppShellHeader({
@@ -4555,7 +4766,6 @@ class AppShellHeader extends StatefulWidget {
     required this.title,
     required this.onSearch,
     required this.onSurpriseMe,
-    required this.onHeyMedia,
     required this.onProfile,
   });
 
@@ -4630,19 +4840,6 @@ class _AppShellHeaderState extends State<AppShellHeader> {
               onPressed: widget.onSurpriseMe,
               icon: const Icon(Icons.shuffle_rounded),
             ),
-          const SizedBox(width: 4),
-          if (!compact)
-            FilledButton.tonalIcon(
-              onPressed: widget.onHeyMedia,
-              icon: const Icon(Icons.auto_awesome_rounded, size: 19),
-              label: const Text('Hey Media'),
-            )
-          else
-            IconButton(
-              tooltip: 'Hey Media',
-              onPressed: widget.onHeyMedia,
-              icon: const Icon(Icons.auto_awesome_rounded),
-            ),
           IconButton(
             tooltip: 'Profiles',
             onPressed: widget.onProfile,
@@ -4663,8 +4860,6 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onDevices;
   final VoidCallback onHomeServer;
   final VoidCallback onMembers;
-  final VoidCallback onPersonalStreaming;
-  final VoidCallback onGroupWatch;
   final VoidCallback onShop;
   final VoidCallback onFoodDelivery;
   final VoidCallback onMyTv;
@@ -4679,8 +4874,6 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onDevices,
     required this.onHomeServer,
     required this.onMembers,
-    required this.onPersonalStreaming,
-    required this.onGroupWatch,
     required this.onShop,
     required this.onFoodDelivery,
     required this.onMyTv,
@@ -4693,7 +4886,7 @@ class _MoreActionsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return _PremiumSheet(
       title: 'More',
-      subtitle: 'Servers, account tools and additional experiences',
+      subtitle: 'Server, account, device and utility settings',
       child: GridView.count(
         shrinkWrap: true,
         crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 3 : 2,
@@ -4714,17 +4907,13 @@ class _MoreActionsSheet extends StatelessWidget {
               'Downloads and devices', onDevices),
           _moreCard(Icons.settings_rounded, 'Settings',
               'Account and subscription', onSettings),
-          _moreCard(Icons.auto_awesome_rounded, 'Personal Streaming',
-              'Playback and discovery', onPersonalStreaming),
-          _moreCard(Icons.group_rounded, 'Group Watch / Chat',
-              'Watch and chat together', onGroupWatch),
           _moreCard(Icons.shopping_bag_outlined, 'Shop', 'Marketplace', onShop),
           _moreCard(Icons.delivery_dining_rounded, 'Food Delivery',
               'Find nearby restaurants and order food', onFoodDelivery),
           _moreCard(Icons.live_tv_rounded, 'My TV',
               'Create ad-free channels and view your guide', onMyTv),
           _moreCard(Icons.sports_esports_rounded, 'Games',
-              'Board, cards, puzzles and multiplayer', onGames),
+              'Music, movie/TV and rhythm games', onGames),
           _moreCard(Icons.settings_remote_rounded, 'TV Controller',
               'Use your phone as the TV remote', onTvController),
           _moreCard(Icons.tv_rounded, 'TV Host',
@@ -4901,6 +5090,16 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(width: 8),
                 ],
               ),
+            SliverToBoxAdapter(
+              child: _HomeWelcomeBanner(
+                profileName: profile.name,
+                serverName: controller.currentServer?.customName?.trim().isNotEmpty == true
+                    ? controller.currentServer!.customName!.trim()
+                    : (controller.currentServer?.name.trim().isNotEmpty == true
+                        ? controller.currentServer!.name.trim()
+                        : 'your server'),
+              ),
+            ),
             if (StoryPlacementStore.showsOnHome(profile))
               SliverToBoxAdapter(
                 child: FriendsStoriesStrip(profileId: profile.id),
@@ -4912,7 +5111,6 @@ class _HomeScreenState extends State<HomeScreen>
                       parent: _heroController, curve: Curves.easeOut),
                   child: _HomeHero(
                     media: heroMedia!,
-                    profileName: profile.name,
                     onPlay: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -5091,7 +5289,7 @@ class _HomeSeasonalCollections extends StatelessWidget {
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             const SizedBox(height: 12),
-            if (matches.isEmpty)
+            if (total == 0)
               const UniversalText(
                 'No matching titles in your library yet.',
                 style: TextStyle(color: Colors.white38),
@@ -5204,15 +5402,55 @@ class _HomeMediaEntryButtons extends StatelessWidget {
   }
 }
 
+class _HomeWelcomeBanner extends StatelessWidget {
+  final String profileName;
+  final String serverName;
+
+  const _HomeWelcomeBanner({
+    required this.profileName,
+    required this.serverName,
+  });
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    return 'Good night';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$_greeting, $profileName',
+            style: const TextStyle(
+              fontSize: 27,
+              height: 1.1,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Welcome to $serverName.',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Implements the `_HomeHero` class for this feature or UI component.
 class _HomeHero extends StatelessWidget {
   final MediaItem media;
-  final String profileName;
   final VoidCallback onPlay;
 
   const _HomeHero({
     required this.media,
-    required this.profileName,
     required this.onPlay,
   });
 
@@ -5274,10 +5512,6 @@ class _HomeHero extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 31, height: 1.05, fontWeight: FontWeight.w900),
                 ),
-                const SizedBox(height: 7),
-                UniversalText('Welcome back, $profileName',
-                    style:
-                        const TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 17),
                 FilledButton.icon(
                   onPressed: onPlay,
@@ -7202,307 +7436,6 @@ class SubscribeDialog extends StatelessWidget {
   }
 }
 
-// ============================================================
-// GROUP HUB
-// ============================================================
-
-class GroupHubScreen extends StatefulWidget {
-  const GroupHubScreen({super.key});
-
-  @override
-  State<GroupHubScreen> createState() => _GroupHubScreenState();
-}
-
-/// Implements the `_GroupHubScreenState` class for this feature or UI component.
-class _GroupHubScreenState extends State<GroupHubScreen> {
-  final messageController = TextEditingController();
-  bool loading = false;
-
-  @override
-
-  /// Performs `initState` for this feature. Update this documentation when its contract changes.
-  void initState() {
-    super.initState();
-    loadGroupData();
-  }
-
-  @override
-
-  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
-  void dispose() {
-    messageController.dispose();
-    super.dispose();
-  }
-
-  /// Performs `loadGroupData` for this feature. Update this documentation when its contract changes.
-  Future<void> loadGroupData() async {
-    final controller = AppController.instance;
-    if (!controller.backendApi.isAuthenticated) return;
-    if (mounted) setState(() => loading = true);
-    try {
-      await Future.wait([
-        controller.loadGroupWishlist(),
-        controller.loadGroupRecommendations(),
-      ]);
-    } catch (error) {
-      if (mounted) _showMessage('Unable to load group data: $error');
-    } finally {
-      if (mounted) setState(() => loading = false);
-    }
-  }
-
-  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
-  void _showMessage(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// Performs `sendMessage` for this feature. Update this documentation when its contract changes.
-  void sendMessage() {
-    final text = messageController.text.trim();
-    if (text.isEmpty) return;
-    AppController.instance.sendGroupMessage(message: text);
-    messageController.clear();
-    setState(() {});
-  }
-
-  /// Performs `openRecommendationDialog` for this feature. Update this documentation when its contract changes.
-  Future<void> openRecommendationDialog() async {
-    await showDialog(
-        context: context, builder: (_) => const AddGroupRecommendationDialog());
-    if (mounted) setState(() {});
-  }
-
-  /// Performs `refreshRecommendations` for this feature. Update this documentation when its contract changes.
-  Future<void> refreshRecommendations() async {
-    try {
-      await AppController.instance.loadGroupRecommendations();
-      if (mounted) setState(() {});
-    } catch (error) {
-      if (mounted) _showMessage('Unable to refresh recommendations: $error');
-    }
-  }
-
-  /// Performs `refreshWishlist` for this feature. Update this documentation when its contract changes.
-  Future<void> refreshWishlist() async {
-    try {
-      await AppController.instance.loadGroupWishlist();
-      if (mounted) setState(() {});
-    } catch (error) {
-      if (mounted) _showMessage('Unable to refresh wishlist: $error');
-    }
-  }
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final controller = AppController.instance;
-    return Scaffold(
-      backgroundColor: const Color(0xFF070707),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        title: const UniversalText('Group',
-            style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [
-          IconButton(
-              tooltip: tr('Refresh'),
-              onPressed: loading ? null : loadGroupData,
-              icon: const Icon(Icons.refresh_rounded))
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: loadGroupData,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF242424), Color(0xFF101010)]),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: .07)),
-                    ),
-                    child: Row(children: [
-                      Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: .14),
-                              borderRadius: BorderRadius.circular(17)),
-                          child: const Icon(Icons.groups_rounded, size: 28)),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                            UniversalText('Watch together',
-                                style: TextStyle(
-                                    fontSize: 22, fontWeight: FontWeight.w900)),
-                            SizedBox(height: 4),
-                            UniversalText(
-                                'Chat, recommend titles, and build a shared watchlist.',
-                                style: TextStyle(
-                                    color: Colors.white60, height: 1.35)),
-                          ])),
-                    ]),
-                  ),
-                  const SizedBox(height: 20),
-                  _GroupSectionHeader(
-                      title: tr('Group Chat'),
-                      icon: Icons.chat_bubble_outline_rounded,
-                      action: _SmallHeaderButton(
-                          icon: Icons.movie_outlined,
-                          label: 'Recommend',
-                          onTap: openRecommendationDialog)),
-                  const SizedBox(height: 10),
-                  if (controller.groupMessages.isEmpty)
-                    _GroupEmptyCard(
-                        icon: Icons.forum_outlined,
-                        title: tr('No messages yet'),
-                        subtitle: tr('Start the conversation below.'))
-                  else
-                    ...controller.groupMessages.map((message) =>
-                        _GroupMessageBubble(
-                            sender: message.sender,
-                            message: message.message,
-                            time: _formatTime(message.timestamp),
-                            badgeName: controller.currentProfileBadge())),
-                  if (controller.groupRecommendations.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    _GroupSectionHeader(
-                        title: tr('Recommendations'),
-                        icon: Icons.auto_awesome_outlined,
-                        action: IconButton(
-                            onPressed: refreshRecommendations,
-                            icon: const Icon(Icons.refresh_rounded))),
-                    const SizedBox(height: 10),
-                    ...controller.groupRecommendations
-                        .map((recommendation) => GroupRecommendationCard(
-                            recommendation: recommendation,
-                            onChanged: () {
-                              if (mounted) setState(() {});
-                            })),
-                  ],
-                  const SizedBox(height: 22),
-                  _GroupSectionHeader(
-                      title: tr('Shared Wishlist'),
-                      icon: Icons.favorite_outline_rounded,
-                      action: IconButton(
-                          onPressed: refreshWishlist,
-                          icon: const Icon(Icons.refresh_rounded))),
-                  const SizedBox(height: 10),
-                  if (controller.wishlist.isEmpty)
-                    _GroupEmptyCard(
-                        icon: Icons.favorite_border_rounded,
-                        title: tr('Your group wishlist is empty'),
-                        subtitle:
-                            tr('Approved recommendations will appear here.'))
-                  else
-                    ...controller.wishlist.map((item) => GroupWishlistCard(
-                        item: item,
-                        onChanged: () {
-                          if (mounted) setState(() {});
-                        })),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-              decoration: BoxDecoration(
-                  color: const Color(0xFF101010),
-                  border: Border(
-                      top: BorderSide(
-                          color: Colors.white.withValues(alpha: .07)))),
-              child: Row(children: [
-                Expanded(
-                    child: TextField(
-                        controller: messageController,
-                        onSubmitted: (_) => sendMessage(),
-                        textInputAction: TextInputAction.send,
-                        decoration: InputDecoration(
-                            hintText: tr('Message the group...'),
-                            filled: true,
-                            fillColor: Colors.white.withValues(alpha: .05),
-                            prefixIcon:
-                                const Icon(Icons.chat_bubble_outline_rounded),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide.none)))),
-                const SizedBox(width: 8),
-                Material(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(17),
-                    child: InkWell(
-                        onTap: sendMessage,
-                        borderRadius: BorderRadius.circular(17),
-                        child: const SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Icon(Icons.send_rounded)))),
-              ]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Performs `_formatTime` for this feature. Update this documentation when its contract changes.
-  String _formatTime(DateTime timestamp) =>
-      '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
-}
-
-class _GroupSectionHeader extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget? action;
-  const _GroupSectionHeader(
-      {required this.title, required this.icon, this.action});
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => Row(children: [
-        Icon(icon, size: 20, color: Colors.white70),
-        const SizedBox(width: 9),
-        Expanded(
-            child: Text(title,
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w900))),
-        if (action != null) action!
-      ]);
-}
-
-class _SmallHeaderButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _SmallHeaderButton(
-      {required this.icon, required this.label, required this.onTap});
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => TextButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 17),
-      label: Text(label),
-      style: TextButton.styleFrom(foregroundColor: Colors.white));
-}
-
 class _GroupEmptyCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -7527,1243 +7460,6 @@ class _GroupEmptyCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white38, fontSize: 12))
       ]));
-}
-
-class _GroupMessageBubble extends StatelessWidget {
-  final String sender;
-  final String message;
-  final String time;
-  final String? badgeName;
-  const _GroupMessageBubble(
-      {required this.sender,
-      required this.message,
-      required this.time,
-      this.badgeName});
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) => Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .045),
-          borderRadius: BorderRadius.circular(17)),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const CircleAvatar(
-            radius: 20, child: Icon(Icons.person_rounded, size: 20)),
-        const SizedBox(width: 11),
-        Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(
-                child: Row(children: [
-              Flexible(
-                  child: Text(sender,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                      overflow: TextOverflow.ellipsis)),
-              if (badgeName != null && badgeName!.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _InlineBadgeTag(label: badgeName!)
-              ]
-            ])),
-            Text(time,
-                style: const TextStyle(color: Colors.white38, fontSize: 11))
-          ]),
-          const SizedBox(height: 4),
-          Text(message,
-              style: const TextStyle(color: Colors.white70, height: 1.35))
-        ]))
-      ]));
-}
-
-class _InlineBadgeTag extends StatelessWidget {
-  final String label;
-  const _InlineBadgeTag({required this.label});
-  @override
-  Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-          color: Colors.amber.withValues(alpha: .13),
-          borderRadius: BorderRadius.circular(999)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.emoji_events_rounded, size: 10, color: Colors.amber),
-        const SizedBox(width: 3),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.amber, fontSize: 8, fontWeight: FontWeight.w800))
-      ]));
-}
-
-// ============================================================
-// ADD GROUP RECOMMENDATION
-// ============================================================
-
-class AddGroupRecommendationDialog extends StatefulWidget {
-  const AddGroupRecommendationDialog({
-    super.key,
-  });
-
-  @override
-  State<AddGroupRecommendationDialog> createState() =>
-      _AddGroupRecommendationDialogState();
-}
-
-/// Implements the `_AddGroupRecommendationDialogState` class for this feature or UI component.
-class _AddGroupRecommendationDialogState
-    extends State<AddGroupRecommendationDialog> {
-  final TextEditingController titleController = TextEditingController();
-
-  final TextEditingController customDurationController =
-      TextEditingController();
-
-  String selectedType = 'movie';
-  String selectedDuration = '24h';
-  String customDurationUnit = 'hours';
-  bool submitting = false;
-
-  @override
-
-  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
-  void dispose() {
-    titleController.dispose();
-    customDurationController.dispose();
-    super.dispose();
-  }
-
-  int? get selectedDurationHours {
-    switch (selectedDuration) {
-      case '24h':
-        return 24;
-
-      case '3d':
-        return 72;
-
-      case '1w':
-        return 168;
-
-      case 'custom':
-        final amount = int.tryParse(
-          customDurationController.text.trim(),
-        );
-
-        if (amount == null || amount <= 0) {
-          return null;
-        }
-
-        if (customDurationUnit == 'days') {
-          return amount * 24;
-        }
-
-        return amount;
-    }
-
-    return 24;
-  }
-
-  /// Performs `submitRecommendation` for this feature. Update this documentation when its contract changes.
-  Future<void> submitRecommendation() async {
-    if (submitting) {
-      return;
-    }
-
-    final title = titleController.text.trim();
-
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: UniversalText(
-            'Enter a movie or TV show title.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final controller = AppController.instance;
-
-    final currentProfile = controller.currentProfile;
-
-    if (currentProfile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: UniversalText(
-            'No profile is currently selected.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final durationHours = selectedDurationHours;
-
-    if (durationHours == null || durationHours <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: UniversalText(
-            'Enter a valid custom voting duration.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      submitting = true;
-    });
-
-    try {
-      await controller.createGroupRecommendation(
-        title: title,
-        type: selectedType,
-        profileId: currentProfile.id,
-        votingDurationHours: durationHours,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '"$title" was recommended to the group. '
-            'Voting is open for ${_formatDuration(durationHours)}.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      String message = error.toString();
-
-      if (message.startsWith('BackendApiException:')) {
-        message = message
-            .replaceFirst(
-              'BackendApiException:',
-              '',
-            )
-            .trim();
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: UniversalText(
-            'Unable to create recommendation: $message',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          submitting = false;
-        });
-      }
-    }
-  }
-
-  /// Performs `_formatDuration` for this feature. Update this documentation when its contract changes.
-  String _formatDuration(int hours) {
-    if (hours % 168 == 0) {
-      final weeks = hours ~/ 168;
-
-      return weeks == 1 ? '1 week' : '$weeks weeks';
-    }
-
-    if (hours % 24 == 0) {
-      final days = hours ~/ 24;
-
-      return days == 1 ? '1 day' : '$days days';
-    }
-
-    return hours == 1 ? '1 hour' : '$hours hours';
-  }
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const UniversalText(
-        'Recommend to the Group',
-      ),
-      content: SizedBox(
-        width: 500,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const UniversalText(
-                'Recommend any movie or TV show to the group. '
-                'It does not have to already exist in your library.',
-              ),
-              const SizedBox(
-                height: 20,
-              ),
-              TextField(
-                controller: titleController,
-                enabled: !submitting,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: tr('Movie or TV show title'),
-                  hintText: tr('Enter a title...'),
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(
-                height: 15,
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: selectedType,
-                decoration: InputDecoration(
-                  labelText: tr('Type'),
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem<String>(
-                    value: 'movie',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.movie_outlined,
-                        ),
-                        SizedBox(
-                          width: 10,
-                        ),
-                        UniversalText(
-                          'Movie',
-                        ),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: 'tvShow',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.tv_outlined,
-                        ),
-                        SizedBox(
-                          width: 10,
-                        ),
-                        UniversalText(
-                          'TV Show',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                onChanged: submitting
-                    ? null
-                    : (value) {
-                        if (value == null) {
-                          return;
-                        }
-
-                        setState(() {
-                          selectedType = value;
-                        });
-                      },
-              ),
-              const SizedBox(height: 15),
-              DropdownButtonFormField<String>(
-                initialValue: selectedDuration,
-                decoration: InputDecoration(
-                  labelText: tr('Voting duration'),
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem<String>(
-                    value: '24h',
-                    child: UniversalText(
-                      '24 hours',
-                    ),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: '3d',
-                    child: UniversalText(
-                      '3 days',
-                    ),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: '1w',
-                    child: UniversalText(
-                      '1 week',
-                    ),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: 'custom',
-                    child: UniversalText(
-                      'Custom',
-                    ),
-                  ),
-                ],
-                onChanged: submitting
-                    ? null
-                    : (value) {
-                        if (value == null) {
-                          return;
-                        }
-
-                        setState(() {
-                          selectedDuration = value;
-                        });
-                      },
-              ),
-              if (selectedDuration == 'custom') ...[
-                const SizedBox(height: 15),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: customDurationController,
-                        enabled: !submitting,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: tr('Amount'),
-                          hintText: tr('Example: 12'),
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (_) {
-                          setState(() {});
-                        },
-                      ),
-                    ),
-                    const SizedBox(
-                      width: 10,
-                    ),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: customDurationUnit,
-                        decoration: InputDecoration(
-                          labelText: tr('Unit'),
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem<String>(
-                            value: 'hours',
-                            child: UniversalText(
-                              'Hours',
-                            ),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'days',
-                            child: UniversalText(
-                              'Days',
-                            ),
-                          ),
-                        ],
-                        onChanged: submitting
-                            ? null
-                            : (value) {
-                                if (value == null) {
-                                  return;
-                                }
-
-                                setState(() {
-                                  customDurationUnit = value;
-                                });
-                              },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 12),
-              Text(
-                selectedDuration == 'custom'
-                    ? selectedDurationHours == null
-                        ? 'Enter a duration greater than 0.'
-                        : 'Voting will remain open for '
-                            '${_formatDuration(selectedDurationHours!)}.'
-                    : 'Voting will remain open for '
-                        '${_formatDuration(selectedDurationHours ?? 24)}.',
-                style: TextStyle(
-                  color: Colors.grey.shade400,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: submitting
-              ? null
-              : () {
-                  Navigator.of(
-                    context,
-                  ).pop();
-                },
-          child: const UniversalText(
-            'CANCEL',
-          ),
-        ),
-        ElevatedButton.icon(
-          onPressed: submitting ? null : submitRecommendation,
-          icon: submitting
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Icon(
-                  Icons.send,
-                ),
-          label: const UniversalText(
-            'RECOMMEND',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ============================================================
-// GROUP RECOMMENDATION CARD
-// ============================================================
-
-class GroupRecommendationCard extends StatefulWidget {
-  final Map<String, dynamic> recommendation;
-  final VoidCallback onChanged;
-
-  const GroupRecommendationCard({
-    super.key,
-    required this.recommendation,
-    required this.onChanged,
-  });
-
-  @override
-  State<GroupRecommendationCard> createState() =>
-      _GroupRecommendationCardState();
-}
-
-/// Implements the `_GroupRecommendationCardState` class for this feature or UI component.
-class _GroupRecommendationCardState extends State<GroupRecommendationCard> {
-  Timer? countdownTimer;
-  Duration remaining = Duration.zero;
-  bool voting = false;
-  bool refreshingAfterDeadline = false;
-
-  @override
-
-  /// Performs `initState` for this feature. Update this documentation when its contract changes.
-  void initState() {
-    super.initState();
-    _updateRemaining();
-    _startCountdown();
-  }
-
-  @override
-
-  /// Performs `didUpdateWidget` for this feature. Update this documentation when its contract changes.
-  void didUpdateWidget(
-    covariant GroupRecommendationCard oldWidget,
-  ) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.recommendation['votingEndsAt'] !=
-        widget.recommendation['votingEndsAt']) {
-      _updateRemaining();
-    }
-
-    _startCountdown();
-  }
-
-  @override
-
-  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
-  void dispose() {
-    countdownTimer?.cancel();
-    super.dispose();
-  }
-
-  /// Performs `_startCountdown` for this feature. Update this documentation when its contract changes.
-  void _startCountdown() {
-    countdownTimer?.cancel();
-
-    final status = _statusString(widget.recommendation);
-
-    if (status != 'voting') {
-      return;
-    }
-
-    countdownTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (!mounted) return;
-        _updateRemaining();
-      },
-    );
-  }
-
-  /// Performs `_updateRemaining` for this feature. Update this documentation when its contract changes.
-  void _updateRemaining() {
-    final endsAt = _dateTimeValue(
-      widget.recommendation['votingEndsAt'],
-    );
-
-    if (endsAt == null) {
-      if (mounted) {
-        setState(() {
-          remaining = Duration.zero;
-        });
-      }
-
-      return;
-    }
-
-    final difference = endsAt.difference(DateTime.now());
-
-    if (difference <= Duration.zero) {
-      if (mounted) {
-        setState(() {
-          remaining = Duration.zero;
-        });
-      }
-
-      _refreshAfterDeadline();
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        remaining = difference;
-      });
-    }
-  }
-
-  /// Performs `_refreshAfterDeadline` for this feature. Update this documentation when its contract changes.
-  Future<void> _refreshAfterDeadline() async {
-    if (refreshingAfterDeadline) {
-      return;
-    }
-
-    final status = _statusString(widget.recommendation);
-
-    if (status != 'voting') {
-      return;
-    }
-
-    refreshingAfterDeadline = true;
-    countdownTimer?.cancel();
-
-    try {
-      final controller = AppController.instance;
-
-      await controller.loadGroupRecommendations();
-      await controller.loadGroupWishlist();
-
-      if (!mounted) return;
-
-      widget.onChanged();
-    } catch (_) {
-    } finally {
-      refreshingAfterDeadline = false;
-    }
-  }
-
-  /// Performs `_vote` for this feature. Update this documentation when its contract changes.
-  Future<void> _vote(String vote) async {
-    if (voting) {
-      return;
-    }
-
-    final controller = AppController.instance;
-
-    final currentProfile = controller.currentProfile;
-
-    if (currentProfile == null) {
-      _showMessage(
-        'No profile is currently selected.',
-      );
-      return;
-    }
-
-    final status = _statusString(widget.recommendation);
-
-    if (status != 'voting' || remaining <= Duration.zero) {
-      await _refreshAfterDeadline();
-      return;
-    }
-
-    final votes = _votesMap(
-      widget.recommendation['votes'],
-    );
-
-    if (votes.containsKey(
-      currentProfile.id,
-    )) {
-      _showMessage(
-        'You have already voted on this recommendation.',
-      );
-      return;
-    }
-
-    setState(() {
-      voting = true;
-    });
-
-    try {
-      await controller.voteOnGroupRecommendation(
-        recommendationId: _stringValue(
-          widget.recommendation['id'],
-        ),
-        profileId: currentProfile.id,
-        vote: vote,
-      );
-
-      await controller.loadGroupRecommendations();
-
-      final updatedStatus = _findUpdatedRecommendationStatus();
-
-      if (updatedStatus == 'approved') {
-        await controller.loadGroupWishlist();
-      }
-
-      if (!mounted) return;
-
-      widget.onChanged();
-
-      _showMessage(
-        vote == 'yes'
-            ? 'Your YES vote was recorded.'
-            : 'Your NO vote was recorded.',
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      String message = error.toString();
-
-      if (message.startsWith('BackendApiException:')) {
-        message = message
-            .replaceFirst(
-              'BackendApiException:',
-              '',
-            )
-            .trim();
-      }
-
-      _showMessage(
-        'Unable to record your vote: $message',
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          voting = false;
-        });
-      }
-    }
-  }
-
-  /// Performs `_findUpdatedRecommendationStatus` for this feature. Update this documentation when its contract changes.
-  String _findUpdatedRecommendationStatus() {
-    final id = _stringValue(
-      widget.recommendation['id'],
-    );
-
-    final controller = AppController.instance;
-
-    for (final recommendation in controller.groupRecommendations) {
-      if (_stringValue(
-            recommendation['id'],
-          ) ==
-          id) {
-        return _statusString(
-          recommendation,
-        );
-      }
-    }
-
-    return _statusString(
-      widget.recommendation,
-    );
-  }
-
-  /// Performs `_showMessage` for this feature. Update this documentation when its contract changes.
-  void _showMessage(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
-  }
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final recommendation = widget.recommendation;
-
-    final controller = AppController.instance;
-
-    final currentProfile = controller.currentProfile;
-
-    final title = _stringValue(
-      recommendation['title'],
-      fallback: 'Untitled',
-    );
-
-    final type = _stringValue(
-      recommendation['type'],
-      fallback: 'movie',
-    );
-
-    final status = _statusString(recommendation);
-
-    final recommender = _profileName(
-      _stringValue(
-        recommendation['recommendedByProfileId'],
-      ),
-      controller,
-    );
-
-    final votes = _votesMap(
-      recommendation['votes'],
-    );
-
-    final yesVotes = _intValue(
-      recommendation['yesVotes'],
-      fallback: votes.values
-          .where(
-            (vote) => vote == 'yes',
-          )
-          .length,
-    );
-
-    final noVotes = _intValue(
-      recommendation['noVotes'],
-      fallback: votes.values
-          .where(
-            (vote) => vote == 'no',
-          )
-          .length,
-    );
-
-    final totalVotes = yesVotes + noVotes;
-
-    final yesPercentage = _percentage(
-      recommendation['yesPercentage'],
-      yesVotes,
-      totalVotes,
-    );
-
-    final noPercentage = _percentage(
-      recommendation['noPercentage'],
-      noVotes,
-      totalVotes,
-    );
-
-    final currentVote =
-        currentProfile == null ? null : votes[currentProfile.id];
-
-    // All profiles belonging to the account can vote. The only per-profile
-    // restriction is one vote per recommendation.
-    final canVote = status == 'voting' &&
-        remaining > Duration.zero &&
-        currentProfile != null &&
-        currentVote == null &&
-        !voting;
-
-    final typeIsMovie = type.toLowerCase() == 'movie';
-
-    final icon = typeIsMovie ? Icons.movie_outlined : Icons.tv_outlined;
-
-    final accentColor = status == 'approved'
-        ? Colors.green
-        : status == 'rejected' || status == 'expired'
-            ? Colors.red
-            : Colors.orange;
-
-    return Card(
-      margin: const EdgeInsets.only(
-        bottom: 10,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  backgroundColor: accentColor.withValues(
-                    alpha: .15,
-                  ),
-                  child: Icon(
-                    icon,
-                    color: accentColor,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      UniversalText(
-                        '${typeIsMovie ? 'Movie' : 'TV Show'} '
-                        'recommended by $recommender',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-            if (status == 'voting') ...[
-              Row(
-                children: [
-                  const Icon(
-                    Icons.schedule,
-                    size: 18,
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      remaining > Duration.zero
-                          ? 'Voting ends in ${_formatRemaining(remaining)}'
-                          : 'Voting ending...',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-            ] else ...[
-              const Row(
-                children: [
-                  Icon(
-                    Icons.lock_clock,
-                    size: 18,
-                  ),
-                  SizedBox(width: 7),
-                  UniversalText(
-                    'Voting ended',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: _VotePercentage(
-                    label: 'YES',
-                    percentage: yesPercentage,
-                    votes: yesVotes,
-                    icon: Icons.check,
-                  ),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: _VotePercentage(
-                    label: 'NO',
-                    percentage: noPercentage,
-                    votes: noVotes,
-                    icon: Icons.close,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: _percentageFlex(
-                      yesPercentage,
-                    ),
-                    child: Container(
-                      height: 8,
-                      color: Colors.green,
-                    ),
-                  ),
-                  Expanded(
-                    flex: _percentageFlex(
-                      noPercentage,
-                    ),
-                    child: Container(
-                      height: 8,
-                      color: Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 15),
-            if (status == 'voting') ...[
-              if (currentVote != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.blueGrey.shade900,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        currentVote == 'yes'
-                            ? Icons.check_circle
-                            : Icons.cancel,
-                        color: currentVote == 'yes' ? Colors.green : Colors.red,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: UniversalText(
-                          'You voted '
-                          '${currentVote.toUpperCase()}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else if (currentProfile == null)
-                UniversalText(
-                  'Select a profile to vote.',
-                  style: TextStyle(
-                    color: Colors.grey.shade400,
-                  ),
-                )
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: canVote ? () => _vote('yes') : null,
-                        icon: const Icon(
-                          Icons.check,
-                        ),
-                        label: const UniversalText(
-                          'YES',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(
-                      width: 10,
-                    ),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: canVote ? () => _vote('no') : null,
-                        icon: const Icon(
-                          Icons.close,
-                        ),
-                        label: const UniversalText(
-                          'NO',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade700,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-            if (status == 'approved') ...[
-              const SizedBox(height: 5),
-              const Row(
-                children: [
-                  Icon(
-                    Icons.check_circle,
-                    color: Colors.green,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: UniversalText(
-                      'Added to Group Wishlist',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (status == 'rejected') ...[
-              const SizedBox(height: 5),
-              const Row(
-                children: [
-                  Icon(
-                    Icons.cancel,
-                    color: Colors.red,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: UniversalText(
-                      'Recommendation rejected',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (status == 'expired') ...[
-              const SizedBox(height: 5),
-              const Row(
-                children: [
-                  Icon(
-                    Icons.timer_off,
-                    color: Colors.red,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: UniversalText(
-                      'Recommendation expired',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (totalVotes == 0 && status == 'voting')
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 8,
-                ),
-                child: UniversalText(
-                  'No votes yet.',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// VOTE PERCENTAGE
-// ============================================================
-
-class _VotePercentage extends StatelessWidget {
-  final String label;
-  final double percentage;
-  final int votes;
-  final IconData icon;
-
-  const _VotePercentage({
-    required this.label,
-    required this.percentage,
-    required this.votes,
-    required this.icon,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final color = label == 'YES' ? Colors.green : Colors.red;
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withValues(
-            alpha: .4,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: color,
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                UniversalText(
-                  '${_formatPercentageValue(percentage)}%',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                UniversalText(
-                  '$votes vote${votes == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _formatPercentageValue(
-    double value,
-  ) {
-    if (value == value.roundToDouble()) {
-      return value.toInt().toString();
-    }
-
-    return value.toStringAsFixed(1);
-  }
 }
 
 // ============================================================
@@ -9409,177 +8105,4 @@ class _GroupWatchPreferencesScreenState
       ),
     );
   }
-}
-
-// ============================================================
-// GROUP RECOMMENDATION HELPERS
-// ============================================================
-
-String _stringValue(
-  dynamic value, {
-  String fallback = '',
-}) {
-  if (value == null) {
-    return fallback;
-  }
-
-  final result = value.toString().trim();
-
-  return result.isEmpty ? fallback : result;
-}
-
-String _statusString(
-  Map<String, dynamic> recommendation,
-) {
-  return _stringValue(
-    recommendation['status'],
-    fallback: 'voting',
-  ).toLowerCase();
-}
-
-DateTime? _dateTimeValue(
-  dynamic value,
-) {
-  if (value is DateTime) {
-    return value;
-  }
-
-  if (value is String) {
-    return DateTime.tryParse(value);
-  }
-
-  return null;
-}
-
-int _intValue(
-  dynamic value, {
-  int fallback = 0,
-}) {
-  if (value is int) {
-    return value;
-  }
-
-  if (value is double) {
-    return value.round();
-  }
-
-  if (value is num) {
-    return value.toInt();
-  }
-
-  return int.tryParse(
-        value?.toString() ?? '',
-      ) ??
-      fallback;
-}
-
-Map<String, String> _votesMap(
-  dynamic value,
-) {
-  if (value is! Map) {
-    return <String, String>{};
-  }
-
-  final result = <String, String>{};
-
-  value.forEach(
-    (key, vote) {
-      final profileId = key.toString();
-
-      final voteString = vote.toString().toLowerCase();
-
-      if (voteString == 'yes' || voteString == 'no') {
-        result[profileId] = voteString;
-      }
-    },
-  );
-
-  return result;
-}
-
-double _percentage(
-  dynamic value,
-  int votes,
-  int totalVotes,
-) {
-  if (value is num) {
-    return value.toDouble();
-  }
-
-  if (totalVotes <= 0) {
-    return 0;
-  }
-
-  return (votes / totalVotes) * 100;
-}
-
-String _profileName(
-  String profileId,
-  AppController controller,
-) {
-  final account = controller.currentAccount;
-
-  if (account != null) {
-    for (final profile in account.profiles) {
-      if (profile.id == profileId) {
-        return profile.name;
-      }
-    }
-  }
-
-  return profileId.isEmpty ? 'Unknown profile' : profileId;
-}
-
-String _formatRemaining(
-  Duration duration,
-) {
-  if (duration <= Duration.zero) {
-    return '0 minutes';
-  }
-
-  final days = duration.inDays;
-
-  final hours = duration.inHours.remainder(24);
-
-  final minutes = duration.inMinutes.remainder(60);
-
-  final seconds = duration.inSeconds.remainder(60);
-
-  if (days > 0) {
-    if (hours > 0) {
-      return '${days}d ${hours}h';
-    }
-
-    return '${days}d';
-  }
-
-  if (hours > 0) {
-    if (minutes > 0) {
-      return '${hours}h ${minutes}m';
-    }
-
-    return '${hours}h';
-  }
-
-  if (minutes > 0) {
-    if (seconds > 0) {
-      return '${minutes}m ${seconds}s';
-    }
-
-    return '${minutes}m';
-  }
-
-  return '${seconds}s';
-}
-
-int _percentageFlex(
-  double percentage,
-) {
-  final rounded = percentage.round();
-
-  if (rounded <= 0) {
-    return 1;
-  }
-
-  return rounded;
 }

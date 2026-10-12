@@ -2,6 +2,7 @@
 // Purpose: Implements the profiles portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -59,10 +60,12 @@ int? _avatarIndexFromValue(String? value) {
 
 class ProfileSelectionScreen extends StatefulWidget {
   final void Function(BuildContext context)? onProfileSelected;
+  final VoidCallback? onOpened;
 
   const ProfileSelectionScreen({
     super.key,
     this.onProfileSelected,
+    this.onOpened,
   });
 
   @override
@@ -79,6 +82,8 @@ class _ProfileSelectionScreenState
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    // Hide the global navbar before profile selection/creation is rendered.
+    widget.onOpened?.call();
 
     _animationController = AnimationController(
       vsync: this,
@@ -97,7 +102,11 @@ class _ProfileSelectionScreenState
 
   /// Performs `_createProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _createProfile() async {
-    await showModalBottomSheet<void>(
+    final controller = AppController.instance;
+    final existingIds = (controller.currentAccount?.profiles ?? <Profile>[])
+        .map((profile) => profile.id)
+        .toSet();
+    final returnedProfile = await showModalBottomSheet<Profile?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -106,15 +115,27 @@ class _ProfileSelectionScreenState
     );
 
     if (!mounted) return;
-
     setState(() {});
 
-    final profiles = AppController.instance.currentAccount?.profiles ?? <Profile>[];
-    if (profiles.isEmpty) return;
+    // Prefer the exact profile returned by the save operation. The ID-diff
+    // fallback supports older persisted profile creation responses.
+    final profiles = controller.currentAccount?.profiles ?? <Profile>[];
+    Profile? createdProfile = returnedProfile;
+    if (createdProfile == null) {
+      for (final profile in profiles.reversed) {
+        if (!existingIds.contains(profile.id)) {
+          createdProfile = profile;
+          break;
+        }
+      }
+    }
+    if (createdProfile == null) return;
 
-    final profile = profiles.last;
-    await AppController.instance.activateProfile(profile.id);
-    await LanguageController.instance.loadForCurrentProfile();
+    // Switch the local profile immediately. Device registration is secondary
+    // work and must not delay navigation if the backend is slow or offline.
+    controller.switchProfile(createdProfile.id);
+    unawaited(controller.activateProfile(createdProfile.id).catchError((_) {}));
+    unawaited(LanguageController.instance.loadForCurrentProfile().catchError((_) {}));
     if (!mounted) return;
     _finishProfileSelection(context);
   }
@@ -158,29 +179,14 @@ class _ProfileSelectionScreenState
   /// Performs `_selectProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _selectProfile(Profile profile) async {
     final controller = AppController.instance;
+    controller.switchProfile(profile.id);
 
-    try {
-      await controller.activateProfile(profile.id);
-      await LanguageController.instance.loadForCurrentProfile();
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString().replaceFirst(
-              'Exception: ',
-              '',
-            ),
-          ),
-        ),
-      );
-
-      return;
-    }
-
+    // Device registration is deliberately non-blocking. A selected profile is
+    // enough to open Home; a slow/offline backend must not make selection look
+    // like it did nothing.
+    unawaited(controller.activateProfile(profile.id).catchError((_) {}));
+    unawaited(LanguageController.instance.loadForCurrentProfile().catchError((_) {}));
     if (!mounted) return;
-
     _finishProfileSelection(context);
   }
 
@@ -1919,44 +1925,33 @@ class _CreateProfileSheetState
       final avatarUrl = _selectedPhoto != null
           ? _selectedPhoto!.path
           : 'avatar:$_selectedAvatarIndex';
+      Profile? savedProfile;
 
       if (controller.isBackendAuthenticated) {
-        final result =
-            await controller.backendApi.addProfile(
+        final result = await controller.backendApi.addProfile(
           name: name,
           avatarUrl: avatarUrl,
         );
 
         if (!mounted) return;
-
         final data = result['profile'];
-
         if (data is Map) {
-          final profile =
-              Profile.fromJson(
-            Map<String, dynamic>.from(data),
-          );
-
-          final account =
-              controller.currentAccount;
-
+          savedProfile = Profile.fromJson(Map<String, dynamic>.from(data));
+          final account = controller.currentAccount;
           if (account != null &&
-              !account.profiles.any(
-                (item) => item.id == profile.id,
-              )) {
-            account.profiles.add(profile);
+              !account.profiles.any((item) => item.id == savedProfile!.id)) {
+            account.profiles.add(savedProfile);
           }
         }
       } else {
-        controller.addProfile(
-          name,
-          avatarUrl: avatarUrl,
-        );
+        savedProfile = controller.addProfile(name, avatarUrl: avatarUrl);
       }
 
       if (!mounted) return;
-
-      Navigator.of(context).pop();
+      if (savedProfile == null) {
+        throw StateError('The profile was not returned after saving. Please try again.');
+      }
+      Navigator.of(context).pop(savedProfile);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -2,21 +2,91 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../middleware/authentication.dart';
+import '../models/media_server_agent.dart';
 import '../services/media_server_agent_service.dart';
+import '../supabase_store.dart';
 
 /// Client-facing view of the local Media Server Agent. Raw NAS credentials and
 /// private filesystem paths are never returned.
 class ServerAgentRoutes {
   final AuthenticationMiddleware authentication;
   final MediaServerAgentService service;
+  final SupabaseStore store;
 
-  const ServerAgentRoutes({required this.authentication, required this.service});
+  const ServerAgentRoutes({
+    required this.authentication,
+    required this.service,
+    required this.store,
+  });
 
   Future<void> handle(HttpRequest request) async {
+    final path = request.uri.path;
+
+    // The trusted TrueNAS agent authenticates heartbeats with a shared secret.
+    // Account ownership is resolved server-side from Supabase, never accepted
+    // from the request body.
+    if (request.method == 'POST' && path == '/api/v1/server-agent/heartbeat') {
+      final configuredSecret =
+          (Platform.environment['MEDIA_AGENT_SHARED_SECRET'] ?? '').trim();
+      final suppliedSecret =
+          (request.headers.value('x-media-agent-secret') ?? '').trim();
+      if (configuredSecret.length < 32 ||
+          !_constantTimeEquals(configuredSecret, suppliedSecret)) {
+        return _json(request.response, 401, {
+          'success': false,
+          'error': 'Invalid media-agent credentials.',
+        });
+      }
+      final body = await _readJson(request);
+      final serverId = body['serverId']?.toString().trim() ?? '';
+      final agentId = body['agentId']?.toString().trim() ?? '';
+      if (serverId.isEmpty || agentId.isEmpty) {
+        return _json(request.response, 400, {
+          'success': false,
+          'error': 'serverId and agentId are required.',
+        });
+      }
+      try {
+        final accountId = await store.externalAccountIdForServer(serverId);
+        if (accountId == null) {
+          return _json(request.response, 404, {
+            'success': false,
+            'error': 'Server ownership could not be verified.',
+          });
+        }
+        final storageStatus =
+            body['storageStatus']?.toString() == 'available'
+                ? StorageStatus.available
+                : StorageStatus.offline;
+        service.heartbeat(MediaServerAgentSnapshot(
+          serverId: serverId,
+          accountId: accountId,
+          agentId: agentId,
+          status: storageStatus == StorageStatus.available
+              ? ServerAgentStatus.online
+              : ServerAgentStatus.degraded,
+          storageStatus: storageStatus,
+          nasName: body['nasName']?.toString(),
+          totalBytes: (body['totalBytes'] as num?)?.toInt() ?? 0,
+          freeBytes: (body['freeBytes'] as num?)?.toInt() ?? 0,
+          lastHeartbeatAt: DateTime.now().toUtc(),
+        ));
+        return _json(request.response, 200, {
+          'success': true,
+          'serverId': serverId,
+          'status': storageStatus == StorageStatus.available ? 'online' : 'degraded',
+        });
+      } catch (_) {
+        return _json(request.response, 503, {
+          'success': false,
+          'error': 'Unable to register media-agent heartbeat.',
+        });
+      }
+    }
+
     final principal = authentication.principal(request);
     if (principal == null) return _json(request.response, 401, {'success': false, 'error': 'Authentication required.'});
 
-    final path = request.uri.path;
     const prefix = '/api/v1/server-agent/';
 
     if (request.method == 'POST' && path == '/api/v1/server-agent/playback') {
@@ -60,6 +130,19 @@ class ServerAgentRoutes {
     }
 
     return _json(request.response, 404, {'success': false, 'error': 'Server agent route not found.'});
+  }
+
+  bool _constantTimeEquals(String left, String right) {
+    final a = utf8.encode(left);
+    final b = utf8.encode(right);
+    var difference = a.length ^ b.length;
+    final length = a.length > b.length ? a.length : b.length;
+    for (var i = 0; i < length; i++) {
+      final av = i < a.length ? a[i] : 0;
+      final bv = i < b.length ? b[i] : 0;
+      difference |= av ^ bv;
+    }
+    return difference == 0;
   }
 
   Future<Map<String, dynamic>> _readJson(HttpRequest request) async {

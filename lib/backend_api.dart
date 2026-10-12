@@ -309,6 +309,7 @@ class BackendApi {
   /// Invites another login identity to the currently authenticated account.
   Future<Map<String, dynamic>> inviteAccountMember({
     required String email,
+    String? phone,
     String role = 'member',
     bool sendEmail = true,
   }) async {
@@ -319,6 +320,7 @@ class BackendApi {
       headers: _headers,
       body: jsonEncode({
         'email': email.trim().toLowerCase(),
+        'phone': phone?.trim(),
         'role': role,
         'sendEmail': sendEmail,
       }),
@@ -3469,6 +3471,26 @@ class BackendApi {
           'usernames': usernames,
         },
         'Unable to create group chat.',
+      );
+
+  Future<Map<String, dynamic>> createSocialConversationInvite({
+    required String profileId,
+    required String conversationId,
+  }) =>
+      _socialPost(
+        'conversations/${Uri.encodeComponent(conversationId)}/invites',
+        {'profileId': profileId},
+        'Unable to create a group chat invite link.',
+      );
+
+  Future<Map<String, dynamic>> acceptSocialConversationInvite({
+    required String profileId,
+    required String token,
+  }) =>
+      _socialPost(
+        'conversation-invites/${Uri.encodeComponent(token)}/accept',
+        {'profileId': profileId},
+        'Unable to accept this group chat invite.',
       );
 
   Future<Map<String, dynamic>> getSocialConversation({

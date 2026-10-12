@@ -9,7 +9,9 @@ class AppSectionCustomization {
   bool showShopPrices;
   bool showShopInventory;
   String libraryCardStyle;
+  String libraryViewMode;
   int libraryColumns;
+  Map<String, String> libraryWidgetSizes;
   String friendsDisplayStyle;
 
   AppSectionCustomization({
@@ -18,9 +20,11 @@ class AppSectionCustomization {
     this.showShopPrices = true,
     this.showShopInventory = false,
     this.libraryCardStyle = 'Poster',
+    this.libraryViewMode = 'Grid',
     this.libraryColumns = 2,
-    this.friendsDisplayStyle = 'Cards',
-  });
+    Map<String, String>? libraryWidgetSizes,
+    this.friendsDisplayStyle = 'Timeline',
+  }) : libraryWidgetSizes = libraryWidgetSizes ?? <String, String>{};
 
   Map<String, dynamic> toJson() => {
         'shopCardStyle': shopCardStyle,
@@ -28,7 +32,9 @@ class AppSectionCustomization {
         'showShopPrices': showShopPrices,
         'showShopInventory': showShopInventory,
         'libraryCardStyle': libraryCardStyle,
+        'libraryViewMode': libraryViewMode,
         'libraryColumns': libraryColumns,
+        'libraryWidgetSizes': libraryWidgetSizes,
         'friendsDisplayStyle': friendsDisplayStyle,
       };
 
@@ -39,8 +45,12 @@ class AppSectionCustomization {
         showShopPrices: json['showShopPrices'] != false,
         showShopInventory: json['showShopInventory'] == true,
         libraryCardStyle: json['libraryCardStyle']?.toString() ?? 'Poster',
+        libraryViewMode: json['libraryViewMode']?.toString() == 'List' ? 'List' : 'Grid',
         libraryColumns: ((json['libraryColumns'] as num?)?.toInt() ?? 2).clamp(1, 6).toInt(),
-        friendsDisplayStyle: json['friendsDisplayStyle']?.toString() ?? 'Cards',
+        libraryWidgetSizes: json['libraryWidgetSizes'] is Map
+            ? (json['libraryWidgetSizes'] as Map).map((key, value) => MapEntry(key.toString(), value.toString()))
+            : <String, String>{},
+        friendsDisplayStyle: json['friendsDisplayStyle']?.toString() ?? 'Timeline',
       );
 }
 
