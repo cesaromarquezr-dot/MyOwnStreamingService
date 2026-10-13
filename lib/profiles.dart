@@ -28,7 +28,7 @@ const _avatarOptions = <_AvatarOption>[
   _AvatarOption('Star', icon: Icons.star),
   _AvatarOption('Heart', icon: Icons.favorite),
   _AvatarOption('Pet', icon: Icons.pets),
-  _AvatarOption('Game', icon: Icons.sports_esports),
+  _AvatarOption('Abstract', icon: Icons.category_outlined),
   _AvatarOption('Music', icon: Icons.music_note),
   _AvatarOption('Movie', icon: Icons.movie),
   _AvatarOption('Magic', icon: Icons.auto_awesome),

@@ -645,6 +645,7 @@ class MusicPlaybackController extends ChangeNotifier {
     try {
       await api.setSocialProfilePresence(
         profileId: profile.id,
+        availability: 'busy',
         activityType: 'listening',
         activityText: activity,
         clearActivity: false,

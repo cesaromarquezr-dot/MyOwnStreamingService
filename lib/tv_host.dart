@@ -97,11 +97,11 @@ class _TvHostScreenState extends State<TvHostScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (_commands.isNotEmpty) ...[
-                  const Align(alignment: Alignment.centerLeft, child: Text('Recent controller activity', style: TextStyle(fontWeight: FontWeight.w800))),
+                  const Align(alignment: Alignment.centerLeft, child: Text('Recent remote activity', style: TextStyle(fontWeight: FontWeight.w800))),
                   const SizedBox(height: 8),
                   ..._commands.map((command) => ListTile(
                         dense: true,
-                        leading: const Icon(Icons.gamepad_outlined),
+                        leading: const Icon(Icons.history_rounded),
                         title: Text('${command['command']}'),
                       )),
                 ],

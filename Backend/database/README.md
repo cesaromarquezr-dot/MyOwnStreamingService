@@ -138,3 +138,9 @@ Migrations should:
 * Keep global marketplace metadata separate from private account-server media.
 
 The in-memory database implementation may be used for local development and tests, while the durable database/store implementation is responsible for production persistence.
+
+## Household chat and guardian controls
+
+Apply `social_household_parental_controls.sql` after the base streaming, live persistence, social-home, and social V2 migrations. It creates the per-account household group conversation and foundational guardian/content access records. Add verified dates of birth and guardian relationships using a trusted management flow. Only guardian friend-request approval is wired in the current UI; guardian relationship management, community review screens, profile privacy restrictions, and enforcement of title/lyrics restrictions across every query/playback path still need implementation before parental controls can be described as complete.
+
+For databases that already had the retired live-sports feature, apply `remove_sports_feature.sql` after deploying the code that no longer references those tables.

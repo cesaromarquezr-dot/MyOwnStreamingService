@@ -1,4 +1,20 @@
-fastapi==0.115.12
-uvicorn[standard]==0.34.0
-supabase==2.15.1
-httpx==0.28.1
+services:
+  media-agent:
+    build: .
+    container_name: myownstreamingservice-media-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # Replace with the Docker host LAN address; do not publish to the internet.
+      - "192.168.1.60:8090:8090"
+    volumes:
+      # Replace this with the read-only NFS mount on the Docker host.
+      - /mnt/tank/media:/media:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

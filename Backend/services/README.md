@@ -1,6 +1,6 @@
 # Services
 
-Business logic for authentication, recommendations, ARM, search, payments, reviews, storage, playback/transcoding, marketplace, sports, and remote access.
+Business logic for authentication, recommendations, ARM, search, payments, reviews, storage, playback/transcoding, marketplace, and remote access.
 
 Services sit between HTTP routes/controllers and persistence or external infrastructure.
 
@@ -215,4 +215,4 @@ All services should follow these principles:
 11. **Prefer deterministic behavior** where recommendations or search results are ordered.
 12. **Use durable persistence for state that must survive process restarts.**
 13. **Use atomic operations for security-sensitive state transitions.**
-14. **Never interpret metadata relationships as authorization or purchasing rights.**
+14. **Never interpret metadata relationships as authorization or purchasing rights.

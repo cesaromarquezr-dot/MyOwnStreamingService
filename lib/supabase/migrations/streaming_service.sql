@@ -693,61 +693,6 @@ create table if not exists public.profile_feature_settings (
 );
 
 -- ============================================================================
--- SPORTS
--- ============================================================================
-
-create table if not exists public.sports_teams (
-  id uuid primary key default gen_random_uuid(),
-  provider text not null,
-  provider_team_id text not null,
-  name text not null,
-  league text,
-  metadata jsonb not null default '{}'::jsonb,
-  unique (provider, provider_team_id)
-);
-
-create table if not exists public.sports_games (
-  id uuid primary key default gen_random_uuid(),
-  provider text not null,
-  provider_game_id text not null,
-  league text,
-  home_team_id uuid
-    references public.sports_teams(id)
-    on delete set null,
-  away_team_id uuid
-    references public.sports_teams(id)
-    on delete set null,
-  starts_at timestamptz,
-  status text,
-  score_home integer,
-  score_away integer,
-  metadata jsonb not null default '{}'::jsonb,
-  unique (provider, provider_game_id)
-);
-
-create table if not exists public.sports_broadcasts (
-  id uuid primary key default gen_random_uuid(),
-  game_id uuid not null
-    references public.sports_games(id)
-    on delete cascade,
-  provider text not null,
-  stream_url text,
-  authorized boolean not null default false,
-  metadata jsonb not null default '{}'::jsonb
-);
-
-create table if not exists public.profile_followed_teams (
-  profile_id uuid not null
-    references public.profiles(id)
-    on delete cascade,
-  team_id uuid not null
-    references public.sports_teams(id)
-    on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (profile_id, team_id)
-);
-
--- ============================================================================
 -- REMOTE WORKERS / BACKUPS / ACTIVITY / ACHIEVEMENTS
 -- ============================================================================
 
@@ -1686,7 +1631,6 @@ alter table public.payments enable row level security;
 alter table public.profile_ui_settings enable row level security;
 alter table public.profile_home_widgets enable row level security;
 alter table public.profile_feature_settings enable row level security;
-alter table public.profile_followed_teams enable row level security;
 alter table public.remote_workers enable row level security;
 alter table public.remote_jobs enable row level security;
 alter table public.activity_events enable row level security;
@@ -1696,9 +1640,6 @@ alter table public.audit_log enable row level security;
 alter table public.legal_acceptances enable row level security;
 alter table public.copyright_reports enable row level security;
 
-alter table public.sports_teams enable row level security;
-alter table public.sports_games enable row level security;
-alter table public.sports_broadcasts enable row level security;
 alter table public.achievements enable row level security;
 alter table public.legal_policies enable row level security;
 
@@ -1847,15 +1788,6 @@ drop policy if exists legal_acceptance_account
 
 drop policy if exists copyright_account
   on public.copyright_reports;
-
-drop policy if exists sports_teams_public
-  on public.sports_teams;
-
-drop policy if exists sports_games_public
-  on public.sports_games;
-
-drop policy if exists sports_broadcasts_public
-  on public.sports_broadcasts;
 
 -- ============================================================================
 -- ACCOUNT / PROFILE / SERVER POLICIES
@@ -2473,25 +2405,6 @@ with check (
   account_id is null
   or account_id = public.my_account_id()
 );
-
--- ============================================================================
--- SPORTS / REFERENCE POLICIES
--- ============================================================================
-
-create policy sports_teams_public
-on public.sports_teams
-for select
-using (true);
-
-create policy sports_games_public
-on public.sports_games
-for select
-using (true);
-
-create policy sports_broadcasts_public
-on public.sports_broadcasts
-for select
-using (authorized = true);
 
 -- ============================================================================
 -- REALTIME

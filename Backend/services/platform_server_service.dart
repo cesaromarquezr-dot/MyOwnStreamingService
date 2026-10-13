@@ -1,6 +1,8 @@
 // Server selection/assignment service. Supabase is the durable source when configured;
 // the in-memory catalog keeps local development functional without external services.
 
+import 'dart:io';
+
 import '../models/account.dart';
 import '../models/platform_server.dart';
 import '../supabase_store.dart';
@@ -13,6 +15,16 @@ class PlatformServerService {
 
   PlatformServerService({required this.store}) {
     _seedLocalCatalog();
+  }
+
+  /// Synthetic local servers may only be used when persistence is deliberately
+  /// disabled or the mock launcher explicitly enables this development catalog.
+  /// Never silently offer/assign fake servers in a normal Supabase deployment.
+  bool get _allowLocalDevelopmentCatalog {
+    final value = (Platform.environment['PLATFORM_SERVER_MOCK'] ?? '')
+        .trim()
+        .toLowerCase();
+    return value == 'true' || value == '1' || value == 'yes';
   }
 
   void _seedLocalCatalog() {
@@ -40,10 +52,27 @@ class PlatformServerService {
   Future<ServerContext> contextFor(Account account) async {
     if (store.enabled) {
       try {
-        final result = await store.loadPlatformServerContext(accountExternalId: account.id);
-        if (result != null) return ServerContext.fromJson(result);
-      } catch (_) {
-        // Fall back to local state when the optional store is unavailable.
+        final result = await store.loadPlatformServerContext(
+          accountExternalId: account.id,
+        );
+        if (result != null) {
+          final persistedContext = ServerContext.fromJson(result);
+          // In the explicit mock mode, an empty Supabase catalog falls back to
+          // seeded local servers so onboarding can be exercised end to end.
+          if (!_allowLocalDevelopmentCatalog ||
+              persistedContext.currentServer != null ||
+              persistedContext.availableServers.isNotEmpty) {
+            return persistedContext;
+          }
+        } else if (!_allowLocalDevelopmentCatalog) {
+          throw StateError(
+            'No Supabase account mapping was found for the signed-in account. '
+            'Verify accounts.external_account_id and the platform-server migrations.',
+          );
+        }
+      } catch (error) {
+        if (!_allowLocalDevelopmentCatalog) rethrow;
+        // Only the explicit mock launcher may fall back to the seeded catalog.
       }
     }
 
@@ -86,20 +115,28 @@ class PlatformServerService {
     if (cleanName.isEmpty) throw ArgumentError('A server display name is required.');
     if (cleanName.length > 100) throw ArgumentError('Server display name is too long.');
 
-    if (store.enabled) {
+    final cleanServerId = serverId.trim();
+    final isSeededLocalServer = cleanServerId.startsWith('local-server-');
+    if (store.enabled &&
+        !(isSeededLocalServer && _allowLocalDevelopmentCatalog)) {
       final result = await store.claimPlatformServer(
         accountExternalId: account.id,
-        serverId: serverId.trim(),
+        serverId: cleanServerId,
         displayName: cleanName,
       );
-      return PlatformServer.fromJson(Map<String, dynamic>.from(result['server'] as Map));
+      return PlatformServer.fromJson(
+        Map<String, dynamic>.from(result['server'] as Map),
+      );
     }
 
+    // In local development, claim the explicitly seeded ID in memory. This is
+    // intentionally not allowed unless PLATFORM_SERVER_MOCK=true (or Supabase
+    // is disabled), otherwise fake server IDs could be assigned in production.
     final existing = _accountAssignments[account.id];
-    if (existing != null && existing != serverId) {
+    if (existing != null && existing != cleanServerId) {
       throw StateError('This account already has a server assignment.');
     }
-    final server = _servers[serverId.trim()];
+    final server = _servers[cleanServerId];
     if (server == null) throw StateError('Server not found.');
     if (server.status != 'available') throw StateError('Server is no longer available.');
     if (_accountAssignments.containsValue(server.id)) {

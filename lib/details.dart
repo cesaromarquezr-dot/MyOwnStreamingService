@@ -18,6 +18,7 @@ import 'widgets/like_toggle_button.dart';
 import 'social_sharing.dart';
 import 'food_delivery.dart';
 import 'details_recommendations.dart';
+import 'actor_connections.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -1465,12 +1466,20 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     }
 
     if (media.actors.isNotEmpty) {
-      rows.add(
-        _infoRow(
-          'Actors',
-          media.actors.join(' • '),
-        ),
-      );
+      final names = media.actors.map((name) => name.trim()).where((name) => name.isNotEmpty).toSet();
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SizedBox(width: 125, child: Text('Actors', style: TextStyle(color: Colors.white54, fontSize: 14))),
+          Expanded(child: Wrap(spacing: 6, runSpacing: 4, children: [
+            for (final actor in names) ActionChip(
+              label: Text(actor),
+              avatar: const Icon(Icons.account_tree_outlined, size: 15),
+              onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => ActorConnectionScreen(initialPerson: actor))),
+            ),
+          ])),
+        ]),
+      ));
     }
 
     if (customization.showRating &&

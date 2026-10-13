@@ -3860,7 +3860,7 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
 
   static const productTypes = [
     'Merchandise',
-    'Collectible / Game',
+    'Collectible',
     'Physical Media',
     'Poster',
     'Book',

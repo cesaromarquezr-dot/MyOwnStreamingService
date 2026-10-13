@@ -147,11 +147,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (activity == null) {
         await api.setSocialProfilePresence(
           profileId: profile.id,
+          availability: 'active',
           clearActivity: true,
         );
       } else {
         await api.setSocialProfilePresence(
           profileId: profile.id,
+          availability: 'busy',
           activityType: 'watching',
           activityText: activity,
         );

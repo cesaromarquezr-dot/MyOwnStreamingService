@@ -320,20 +320,6 @@ class AppText {
         'ko': '업적',
         'hi': 'उपलब्धियाँ',
       },
-      'connectedSports': {
-        'en': 'Connected Sports',
-        'es': 'Deportes conectados',
-        'fr': 'Sports connectés',
-        'de': 'Verbundene Sportdienste',
-        'pt': 'Desporto conectado',
-        'it': 'Sport collegati',
-        'ru': 'Подключённый спорт',
-        'ar': 'الرياضات المتصلة',
-        'zh': '已连接体育',
-        'ja': '接続スポーツ',
-        'ko': '연결된 스포츠',
-        'hi': 'कनेक्टेड स्पोर्ट्स',
-      },
     };
 
     return data[key]?[language] ?? data[key]?['en'] ?? key;
@@ -359,7 +345,6 @@ class AppText {
       'Monthly Wrapped': 'monthly',
       'Year-End Wrapped': 'yearly',
       'Achievements': 'achievements',
-      'Connected Sports': 'connectedSports',
       'Language': 'language',
     };
     final key = aliases[normalized];

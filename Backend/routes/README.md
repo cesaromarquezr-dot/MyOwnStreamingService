@@ -240,7 +240,6 @@ review_routes.dart
 search_routes.dart
 self_hosting_routes.dart
 shop_routes.dart
-sports_routes.dart
 storage_routes.dart
 supabase_sync_routes.dart
 ```

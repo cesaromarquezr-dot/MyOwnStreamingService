@@ -262,7 +262,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.sports_kabaddi_outlined),
+              Icon(Icons.flash_on_outlined),
               SizedBox(width: 10),
               UniversalText('Movie Battle'),
             ],
@@ -581,7 +581,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                         _roulette,
                       ),
                       _tile(
-                        Icons.sports_kabaddi_outlined,
+                        Icons.flash_on_outlined,
                         'Movie Battles',
                         'Put two titles head-to-head',
                         _battle,
@@ -1081,7 +1081,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                         ),
                         SizedBox(height: 7),
                         UniversalText(
-                          'Everything in one place: library, devices, security, travel, games, discovery and server controls.',
+                          'Everything in one place: library, devices, security, travel, discovery and server controls.',
                         ),
                       ],
                     ),

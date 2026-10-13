@@ -13,8 +13,6 @@ import 'device_features.dart';
 import 'remote_access.dart';
 import 'main.dart' show CustomizeHomeScreen;
 import 'details.dart';
-import 'sports.dart';
-import 'connected_sports.dart';
 import 'platform_expansion.dart';
 import 'music.dart';
 import 'music_achievements.dart';
@@ -65,22 +63,6 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(32, 'Device Management', Icons.devices_rounded, 'Trusted devices, pairing and device access controls.', (_) => const DeviceCenterScreen()),
       _RoadmapFeature(33, 'Remote Access', Icons.public_rounded, 'Trusted remote computers and remote imports.', (_) => const RemoteAccessScreen()),
       _RoadmapFeature(34, 'Backup & Restore', Icons.backup_rounded, 'Backup and recovery controls for account and library state.', (_) => const BackupScreen()),
-      _RoadmapFeature(35, 'Global Live Sports Hub', Icons.sports_rounded, 'Global live sports discovery with sport, country, competition and game hierarchy.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(36, 'International Sports Search', Icons.public_rounded, 'Filter live games by sport and country.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(37, 'Live Game Detection', Icons.sensors_rounded, 'Detect games currently live and refresh their state.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(38, 'Live Sports Multiview', Icons.dashboard_rounded, 'Architecture for multiple authorized live games at once.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(39, 'Global Soccer Center', Icons.sports_soccer_rounded, 'International soccer leagues and competitions.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(40, 'Global Basketball Center', Icons.sports_basketball_rounded, 'International basketball leagues and competitions.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(41, 'Global Hockey Center', Icons.sports_hockey_rounded, 'International hockey games and competitions.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(42, 'Global Baseball Center', Icons.sports_baseball_rounded, 'International baseball games and competitions.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(43, 'Global American Football Center', Icons.sports_football_rounded, 'NFL and international American football coverage.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(44, 'Tennis & Motorsport Center', Icons.sports_motorsports_rounded, 'Tennis, racing and motorsport discovery.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(45, 'Live Scores & Play-by-Play', Icons.scoreboard_rounded, 'Live scores and event data alongside authorized broadcasts.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(46, 'Team Pages & Follow Teams', Icons.groups_rounded, 'Follow teams and open their live and upcoming games.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(47, 'Sports Notifications', Icons.notifications_active_rounded, 'Notify profiles when followed games go live.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(48, 'Game Replay & Condensed Game', Icons.replay_rounded, 'Replay and condensed-game surfaces when licensed.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(49, 'Alternate Broadcasts & Audio', Icons.headset_rounded, 'Select among authorized original and alternate broadcast feeds.', (_) => const LiveSportsScreen()),
-      _RoadmapFeature(50, 'Major Event Mode', Icons.emoji_events_rounded, 'Pregame, live event, halftime and postgame experiences when licensed.', (_) => const LiveSportsScreen()),
       _RoadmapFeature(51, 'ARM Canonical Title Resolution', Icons.language_rounded, 'Resolve localized disc titles to the canonical/original movie while preserving disc title, market and raw ARM region.', (_) => const UltimateFeaturesScreen()),
       _RoadmapFeature(52, 'Recommendation Feedback', Icons.feedback_outlined, 'Improve recommendations from explicit feedback.', (_) => const FeatureCenterScreen()),
       _RoadmapFeature(53, 'Recommendation Diversity', Icons.shuffle_rounded, 'Prevent recommendation feeds from becoming repetitive.', (_) => const FeatureCenterScreen()),
@@ -134,12 +116,11 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(101, 'Account Security Center', Icons.security_rounded, 'Profile-scoped 2FA, suspicious-login alerts, new-device approval and session controls.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(102, 'Playback Experience Controls', Icons.play_circle_fill_rounded, 'Profile-scoped resume, autoplay, preload, picture-in-picture and track preferences.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(103, 'TV Experience Controls', Icons.tv_rounded, 'Series-first autoplay, preserved intros, specials and unfinished-season behavior.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(104, 'Notification Controls', Icons.notifications_active_rounded, 'Per-profile alerts for episodes, recommendations, sports and security events.', (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(104, 'Notification Controls', Icons.notifications_active_rounded, 'Per-profile alerts for episodes, recommendations and security events.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(105, 'Backup & Migration Controls', Icons.backup_rounded, 'Profile-scoped backup manifest coverage for settings, watch state, collections and layouts.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(106, 'Library Intelligence Controls', Icons.auto_awesome_rounded, 'Tune smart recommendations, diversity, explanations and franchise progress.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(107, 'Search & Discovery Controls', Icons.manage_search_rounded, 'Enable natural-language, localized-title, actor and crew discovery.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(108, 'Collection Studio Controls', Icons.collections_bookmark_rounded, 'Configure collection autoplay, release order, quality preference and credit advance.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(109, 'Live Sports Profile Controls', Icons.sports_soccer_rounded, 'Per-profile Home visibility, live-only behavior, alerts and multiview settings.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(110, 'Privacy & Profile Controls', Icons.privacy_tip_rounded, 'Control activity, reactions, watch-history sharing and profile PIN protection.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(111, 'Kids Safety Controls', Icons.child_care_rounded, 'Kids mode, age filters, safe collections and mature-content PIN protection.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(112, 'Performance Controls', Icons.speed_rounded, 'Tune animations, artwork preloading, reduced motion and fast Home mode.', (_) => const PlatformExpansionScreen()),
@@ -157,13 +138,11 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(124, 'Parent Approval Queue', Icons.approval_rounded, 'Hold flagged child-profile titles for explicit parent approval.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(125, 'Per-Title Kids Overrides', Icons.rule_rounded, 'Allow a parent to approve or block individual titles regardless of general rules.', (_) => const PlatformExpansionScreen()),
       _RoadmapFeature(126, 'Multi-Signal Kids Safety', Icons.shield_rounded, 'Combine age rating, content descriptors, legacy status, metadata confidence and parent rules instead of relying on a single rating.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(130, 'Connected Sports Services', Icons.hub_rounded, 'Connect supported sports services and surface scores, games, teams, players and schedules without copying provider video.', (_) => const ConnectedSportsHubScreen()),
       _RoadmapFeature(131, 'Global Language & Localization', Icons.translate_rounded, 'Global language selector with native language names, profile persistence, RTL support and localized metadata preferences.', (_) => const FeatureCenterScreen()),
       _RoadmapFeature(127, 'Music Home', Icons.music_note_rounded, 'Dedicated Music home with artists, bands, albums and songs.', (_) => const MusicScreen()),
       _RoadmapFeature(128, 'Custom Music Playlists', Icons.queue_music_rounded, 'Create, delete and curate profile playlists.', (_) => const MusicScreen()),
       _RoadmapFeature(129, 'Background Music Player', Icons.headphones_rounded, 'Keep music playing while browsing and resume it after movie/TV playback.', (_) => const MusicScreen()),
       _RoadmapFeature(130, 'Music Visual Customization', Icons.palette_outlined, 'Customize music home and navigation colors, glow and item styling.', (_) => const MusicScreen()),
-      _RoadmapFeature(131, 'Guess the Song', Icons.quiz_rounded, 'Music guessing game based on songs and soundtracks.', (_) => const MusicScreen()),
       _RoadmapFeature(132, 'Soundtrack Universe', Icons.album_rounded, 'Connect movies, shows, albums and songs into soundtrack experiences.', (_) => const MusicScreen()),
       _RoadmapFeature(133, 'Music Statistics', Icons.bar_chart_rounded, 'Track music songs, playlists and listening alongside movie/TV statistics.', (_) => const StatisticsScreen()),
       _RoadmapFeature(134, 'Music Achievements & Badges', Icons.emoji_events_rounded, 'Badges such as Cultured, Swiftie and Album Collector.', (_) => const AchievementsScreen()),
@@ -178,14 +157,14 @@ class RoadmapFeaturesScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const UniversalText('142-Feature Roadmap')),
+      appBar: AppBar(title: const UniversalText('Feature Roadmap')),
       body: Column(
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 10, 16, 6),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: UniversalText('142 planned and implemented platform features',
+              child: UniversalText('Platform features and controls',
                 style: TextStyle(color: Colors.white54),
               ),
             ),

@@ -8,7 +8,6 @@ enum MediaEventType {
   season,
   holiday,
   cultural,
-  sports,
   special,
   custom,
 }

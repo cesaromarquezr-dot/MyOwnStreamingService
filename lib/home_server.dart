@@ -15,7 +15,9 @@ import 'localization.dart';
 
 /// Displays the authenticated account's home server and its members.
 class HomeServerScreen extends StatefulWidget {
-  const HomeServerScreen({super.key});
+  final VoidCallback? onImportRip;
+
+  const HomeServerScreen({super.key, this.onImportRip});
 
   @override
   State<HomeServerScreen> createState() => _HomeServerScreenState();
@@ -176,6 +178,17 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                 _serverBanner(serverName, serverOnline, used, limit, progress),
                 const SizedBox(height: 18),
                 _membersSection(),
+                if (widget.onImportRip != null) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: widget.onImportRip,
+                      icon: const Icon(Icons.album_rounded),
+                      label: const UniversalText('Import / Rip Media'),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 _infoCard('Architecture', 'Optical drive → ARM → completed media → server importer → database → Flutter. ARM performs ripping; the home server owns the physical media and library storage.', Icons.account_tree_rounded),
                 const SizedBox(height: 10),
@@ -618,11 +631,13 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
   Future<void> _create() async {
     final email = emailController.text.trim().toLowerCase();
     final phoneDigits = phoneController.text.replaceAll(RegExp(r'\D'), '');
-    if (deliveryMethod == 'email' && (email.isEmpty || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email))) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid member email address.')));
+    // Invitation acceptance authenticates the new member by email. SMS and
+    // WhatsApp are delivery channels; they do not replace the login identity.
+    if (email.isEmpty || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid member email address so the recipient can finish creating their login.')));
       return;
     }
-    if (deliveryMethod == 'sms' &&
+    if (deliveryMethod != 'email' &&
         (phoneDigits.length < 7 || phoneDigits.length > 15)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter a valid phone number for SMS.')),
@@ -633,7 +648,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     try {
       final result = await AppController.instance.backendApi.inviteAccountMember(
         email: email,
-        phone: deliveryMethod == 'sms' ? '+$callingCode$phoneDigits' : null,
+        phone: deliveryMethod == 'email' ? null : '+$callingCode$phoneDigits',
         role: role,
         sendEmail: deliveryMethod == 'email',
       );
@@ -649,13 +664,14 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       setState(() {
         invitationLink = link;
         invitationEmail = email;
-        invitationPhone = deliveryMethod == 'sms'
-            ? '+$callingCode$phoneDigits'
-            : '';
+        invitationPhone = deliveryMethod == 'email'
+            ? ''
+            : '+$callingCode$phoneDigits';
         expiresAt = DateTime.now().toUtc().add(const Duration(days: 7));
         submitting = false;
       });
-      if (deliveryMethod == 'sms') await _openSmsComposer();
+      if (deliveryMethod == 'sms' || deliveryMethod == 'both') await _openSmsComposer();
+      if (deliveryMethod == 'whatsapp' || deliveryMethod == 'both') await _openWhatsAppComposer();
     } catch (e) {
       if (!mounted) return;
       setState(() => submitting = false);
@@ -699,6 +715,21 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     }
   }
 
+  Future<void> _openWhatsAppComposer() async {
+    if (invitationLink == null || invitationPhone.isEmpty) return;
+    final phoneDigits = invitationPhone.replaceAll(RegExp(r'\D'), '');
+    final message = 'You are invited to join a Streaming Service account. Open this secure link to accept and set up your login: $invitationLink${invitationEmail.isEmpty ? '' : ' (sign in using $invitationEmail)'}';
+    final uri = Uri.https('wa.me', '/$phoneDigits', {'text': message});
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp. Copy the invitation link instead.')));
+      }
+    } on PlatformException catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open WhatsApp: ${error.message ?? error.code}')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -709,7 +740,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
             ? Column(mainAxisSize: MainAxisSize.min, children: [
                 const Align(alignment: Alignment.centerLeft, child: UniversalText('Invite an individual login to join this existing account. They will use this account’s home server.')),
                 const SizedBox(height: 16),
-                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, enabled: !submitting, decoration: InputDecoration(labelText: deliveryMethod == 'sms' ? tr('Member email (optional for SMS)') : tr('Member email'), prefixIcon: Icon(Icons.email_outlined))),
+                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, enabled: !submitting, decoration: InputDecoration(labelText: deliveryMethod == 'email' ? tr('Member email') : tr('Member email (required for login)'), prefixIcon: Icon(Icons.email_outlined))),
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -724,16 +755,26 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                             : (_) => setState(() => deliveryMethod = 'email'),
                       ),
                       ChoiceChip(
-                        label: const Text('SMS'),
+                        label: const Text('SMS / iMessage'),
                         selected: deliveryMethod == 'sms',
                         onSelected: submitting
                             ? null
                             : (_) => setState(() => deliveryMethod = 'sms'),
                       ),
+                      ChoiceChip(
+                        label: const Text('WhatsApp'),
+                        selected: deliveryMethod == 'whatsapp',
+                        onSelected: submitting ? null : (_) => setState(() => deliveryMethod = 'whatsapp'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Both'),
+                        selected: deliveryMethod == 'both',
+                        onSelected: submitting ? null : (_) => setState(() => deliveryMethod = 'both'),
+                      ),
                     ],
                   ),
                 ),
-                if (deliveryMethod == 'sms') ...[
+                if (deliveryMethod != 'email') ...[
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -767,7 +808,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                   ),
                   const SizedBox(height: 8),
                   const UniversalText(
-                    'The secure link is prepared in your SMS app. The recipient can choose their sign-in email when accepting the invitation.',
+                    'The secure invite link can be sent through SMS/iMessage, WhatsApp, or both.',
                     style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ],
@@ -783,16 +824,19 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                 const SizedBox(height: 6),
                 UniversalText(invitationPhone.isEmpty
                     ? 'Send this link to $invitationEmail. It expires in 7 days.'
-                    : 'Send this link to $invitationPhone. The recipient can choose their sign-in email when accepting. It expires in 7 days.'),
+                    : 'Send this link to $invitationPhone through SMS/iMessage, WhatsApp, or both. It expires in 7 days.'),
                 const SizedBox(height: 14),
                 SelectableText(invitationLink!, style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 14),
-                if (invitationPhone.isNotEmpty)
-                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _openSmsComposer, icon: const Icon(Icons.sms_outlined), label: const UniversalText('OPEN SMS WITH INVITE LINK'))),
-                if (invitationPhone.isNotEmpty) const SizedBox(height: 8),
+                if (invitationPhone.isNotEmpty) ...[
+                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _openSmsComposer, icon: const Icon(Icons.sms_outlined), label: const UniversalText('OPEN SMS / IMESSAGE'))),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: _openWhatsAppComposer, icon: const Icon(Icons.chat_rounded), label: const UniversalText('OPEN WHATSAPP'))),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _copy, icon: const Icon(Icons.copy_rounded), label: const UniversalText('COPY INVITATION LINK'))),
                 const SizedBox(height: 8),
-                const UniversalText('The recipient must use the invited email. The link grants account membership only; it does not reveal a password or server credentials.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const UniversalText('The recipient must use the invited email to finish creating their login. The link grants account membership only; it does not reveal a password or server credentials.', style: TextStyle(color: Colors.white54, fontSize: 12)),
                 if (expiresAt != null) ...[const SizedBox(height: 8), UniversalText('Expires: ${expiresAt!.toLocal()}', style: const TextStyle(color: Colors.white38, fontSize: 11))],
               ]),
       ),

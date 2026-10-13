@@ -85,7 +85,6 @@ import 'routes/search_routes.dart';
 import 'routes/self_hosting_routes.dart';
 import 'routes/server_agent_routes.dart';
 import 'routes/shop_routes.dart';
-import 'routes/sports_routes.dart';
 import 'routes/storage_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/tv_channel_routes.dart';
@@ -115,7 +114,6 @@ import 'services/review_publication_service.dart';
 import 'services/review_service.dart';
 import 'services/search_service.dart';
 import 'services/shop_service.dart';
-import 'services/sports_service.dart';
 import 'services/storage_manager_service.dart';
 import 'services/subscription_service.dart';
 import 'services/tv_channel_service.dart';
@@ -453,11 +451,6 @@ Future<void> main() async {
     authentication: authentication,
   );
 
-  final sportsRoutes = SportsRoutes(
-    authentication: authentication,
-    service: const SportsService(),
-  );
-
   final reviewRoutes = ReviewRoutes(
     authentication: authentication,
     service: ReviewService(database),
@@ -539,7 +532,6 @@ Future<void> main() async {
       paymentRoutes,
       groupRoutes,
       armRoutes,
-      sportsRoutes,
       remoteAccessRoutes,
       storageRoutes,
       platformRoutes,
@@ -591,7 +583,6 @@ Future<void> _handleRequest(
   PaymentRoutes paymentRoutes,
   GroupRoutes groupRoutes,
   ArmRoutes armRoutes,
-  SportsRoutes sportsRoutes,
   RemoteAccessRoutes remoteAccessRoutes,
   StorageRoutes storageRoutes,
   PlatformRoutes platformRoutes,
@@ -1093,19 +1084,6 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/server/')) {
       await homeServerRoutes.handle(
-        request,
-      );
-
-      responseStarted = true;
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // SPORTS
-    // ----------------------------------------------------------
-
-    if (path.startsWith('/api/v1/sports')) {
-      await sportsRoutes.handle(
         request,
       );
 

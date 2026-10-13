@@ -1148,14 +1148,15 @@ class AuthService {
     final cleanEmail = email.trim().toLowerCase();
     final cleanPhone = (phone ?? '').replaceAll(RegExp(r'[^0-9+]'), '');
 
-    if (sendEmail && (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail))) {
-      throw Exception('A valid member email address is required for email invitations.');
+    // The acceptance flow uses the invite email as the login identity even
+    // when the secure invite URL is delivered through SMS or WhatsApp.
+    if (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail)) {
+      throw Exception('A valid member email address is required so the recipient can finish setting up their login.');
     }
-    if (!sendEmail && cleanEmail.isEmpty && (cleanPhone.replaceAll('+', '').length < 7 || cleanPhone.replaceAll('+', '').length > 15)) {
+    if (!sendEmail && cleanPhone.isNotEmpty &&
+        (cleanPhone.replaceAll('+', '').length < 7 ||
+         cleanPhone.replaceAll('+', '').length > 15)) {
       throw Exception('Enter a valid member phone number.');
-    }
-    if (cleanEmail.isNotEmpty && !_isValidEmail(cleanEmail)) {
-      throw Exception('Enter a valid member email address or leave it blank for a phone invitation.');
     }
 
     if (cleanEmail.isNotEmpty && cleanEmail == account.email.trim().toLowerCase()) {

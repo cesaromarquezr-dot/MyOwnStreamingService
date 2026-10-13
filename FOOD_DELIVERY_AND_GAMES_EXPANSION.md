@@ -8,8 +8,8 @@ Food & Delivery and Games are two independent features. Food & Delivery does not
 
 ### Catalog and device scope
 
-- Added catalog categories for trivia, party, music, movie/TV, racing, dance/rhythm, fighting, tournaments, and sports.
-- Added 150+ planned catalog concepts across board/card games, word/puzzle games, party games, music quizzes, movie/TV quizzes, dance/rhythm, motion sports, Music Racing, and cross-game tournaments.
+- Added catalog categories for trivia, party, music, movie/TV, racing, dance/rhythm, fighting, and tournaments.
+- Added 150+ planned catalog concepts across board/card games, word/puzzle games, party games, music quizzes, movie/TV quizzes, dance/rhythm, motion-controlled party games, Music Racing, and cross-game tournaments.
 - Added the Crossover Arena Fighter as a TV/console/PC-only catalog item. It is filtered out on mobile targets. Current platform checks recognize desktop builds, large web windows, and TV layouts; actual PS5/Xbox/Switch 2 packaging still depends on platform-specific build/toolchain support.
 - Music and movie/TV entries describe using existing server media IDs and metadata rather than duplicating the server's source audio/video.
 - Phone motion-controller support is identified in the catalog for planned dance, rhythm, and motion games.

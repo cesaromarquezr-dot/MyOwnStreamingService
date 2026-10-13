@@ -1,4 +1,4 @@
-Flutter client
+# Flutter client
 
 The Flutter client is the UI and client-side application layer for the streaming-service platform. The application is intentionally organized into feature-focused Dart files so media, music, discovery, reviews, storage, commerce, home-server administration, security, and platform features can evolve independently without turning the client into a single monolithic source file.
 
@@ -106,13 +106,9 @@ security_settings.dart — security, authentication, verification, sessions, and
 
 signup.dart — account registration.
 
-connected_sports.dart — connected sports/account integrations.
-
 device_features.dart — device-specific functionality and capabilities.
 
-Sports and platform expansion
-
-sports.dart — sports browsing and sports-related experiences.
+Platform expansion
 
 personal_streaming.dart — personal streaming, discovery, library tools, downloads, and playback preferences.
 
@@ -134,7 +130,7 @@ roadmap_features.dart — planned and experimental feature experiences.
 
 Backend integration
 
-The Flutter client communicates with a companion backend under Backend/. The backend is organized into routes, services, models, middleware, database access, ARM/import functionality, payments, recommendations, reviews, search, storage, remote access, sports, shop, and platform services.
+The Flutter client communicates with a companion backend under Backend/. The backend is organized into routes, services, models, middleware, database access, ARM/import functionality, payments, recommendations, reviews, search, storage, remote access, shop, and platform services.
 
 Important backend areas include:
 

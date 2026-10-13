@@ -2486,113 +2486,6 @@ class BackendApi {
   }
 
   // ==========================================================
-  // LIVE SPORTS
-  // ==========================================================
-
-  /// Retrieves live sports events.
-  Future<Map<String, dynamic>> getLiveSports({
-    String? sport,
-    String? country,
-  }) async {
-    _requireAuthentication();
-
-    final params = <String, String>{};
-
-    if (sport != null && sport.isNotEmpty) {
-      params['sport'] = sport;
-    }
-
-    if (country != null && country.isNotEmpty) {
-      params['country'] = country;
-    }
-
-    final uri = Uri.parse(
-      '$baseUrl/sports/live',
-    ).replace(
-      queryParameters: params,
-    );
-
-    final response = await http.get(
-      uri,
-      headers: _headers,
-    );
-
-    return _requireSuccess(
-      response,
-      'Unable to load live sports.',
-    );
-  }
-
-  /// Retrieves available sports teams.
-  Future<Map<String, dynamic>> getSportsTeams() async {
-    _requireAuthentication();
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/sports/teams'),
-      headers: _headers,
-    );
-
-    return _requireSuccess(
-      response,
-      'Unable to load sports teams.',
-    );
-  }
-
-  /// Retrieves available sports.
-  Future<List<dynamic>> getSports() async {
-    _requireAuthentication();
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/sports'),
-      headers: _headers,
-    );
-
-    final data = await _requireSuccess(
-      response,
-      'Unable to load sports.',
-    );
-
-    return data['sports'] is List ? data['sports'] as List : <dynamic>[];
-  }
-
-  /// Retrieves upcoming sports events.
-  Future<Map<String, dynamic>> getUpcomingSports({
-    String? sport,
-    String? country,
-    int days = 7,
-  }) async {
-    _requireAuthentication();
-
-    final params = <String, String>{
-      'days': days.toString(),
-    };
-
-    if (sport != null && sport.isNotEmpty) {
-      params['sport'] = sport;
-    }
-
-    if (country != null && country.isNotEmpty) {
-      params['country'] = country;
-    }
-
-    final uri = Uri.parse(
-      '$baseUrl/sports/upcoming',
-    ).replace(
-      queryParameters: params,
-    );
-
-    final response = await http.get(
-      uri,
-      headers: _headers,
-    );
-
-    return _requireSuccess(
-      response,
-      'Unable to load upcoming sports.',
-    );
-  }
-
-  // ==========================================================
   // HOME SERVER, MUSIC AND REVIEWS
   // ==========================================================
 
@@ -3890,6 +3783,25 @@ class BackendApi {
         'Unable to update friend request.');
   }
 
+  Future<Map<String, dynamic>> respondGuardianFriendRequest({
+    required String profileId,
+    required String friendshipId,
+    required String action,
+  }) async {
+    _requireAuthentication();
+    if (!{'approve', 'block'}.contains(action)) {
+      throw ArgumentError('Unsupported guardian review action.');
+    }
+    return _requireSuccess(
+      await http.patch(
+        Uri.parse('$baseUrl/social/guardian-friend-request/${Uri.encodeComponent(friendshipId)}'),
+        headers: _headers,
+        body: jsonEncode({'profileId': profileId, 'action': action}),
+      ),
+      'Unable to update guardian friend-request review.',
+    );
+  }
+
   Future<Map<String, dynamic>> createSocialPost({
     required String profileId,
     required String body,
@@ -3909,14 +3821,16 @@ class BackendApi {
         'Unable to publish post.',
       );
 
-  Future<Map<String, dynamic>> createSocialCommunity(
-          {required String profileId,
-          required String name,
-          required String description}) =>
+  Future<Map<String, dynamic>> createSocialCommunity({
+    required String profileId,
+    required String name,
+    required String description,
+    String category = 'general',
+  }) =>
       _socialPost(
-          'communities',
-          {'profileId': profileId, 'name': name, 'description': description},
-          'Unable to create community.');
+        'communities',
+        {'profileId': profileId, 'name': name, 'description': description, 'category': category},
+        'Unable to create community.');
 
   Future<Map<String, dynamic>> joinSocialCommunity(
           {required String profileId, required String communityId}) =>
@@ -4433,65 +4347,6 @@ class BackendApi {
       body: jsonEncode({'displayName': displayName}),
     );
     return _requireSuccess(response, 'Unable to rename server.');
-  }
-
-  // ==========================================================
-  // GAMES
-  // ==========================================================
-
-  Future<List<Map<String, dynamic>>> getGameRatings({required String profileId}) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/games/ratings?profileId=${Uri.encodeQueryComponent(profileId)}'),
-      headers: _headers,
-    );
-    final data = await _requireSuccess(response, 'Unable to load game ratings.');
-    return data['ratings'] is List
-        ? (data['ratings'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
-        : <Map<String, dynamic>>[];
-  }
-
-  Future<Map<String, dynamic>> createGameMatch({
-    required String profileId,
-    required String gameId,
-    required String mode,
-    String? opponentProfileId,
-    String? difficulty,
-    String? variant,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/games/matches'),
-      headers: _headers,
-      body: jsonEncode({
-        'profileId': profileId,
-        'gameId': gameId,
-        'mode': mode,
-        if (opponentProfileId != null) 'opponentProfileId': opponentProfileId,
-        if (difficulty != null) 'difficulty': difficulty,
-        if (variant != null) 'variant': variant,
-      }),
-    );
-    return _requireSuccess(response, 'Unable to create game match.');
-  }
-
-  Future<Map<String, dynamic>> submitGameResult({
-    required String profileId,
-    required String gameId,
-    required String mode,
-    required String result,
-    double? opponentRating,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/games/results'),
-      headers: _headers,
-      body: jsonEncode({
-        'profileId': profileId,
-        'gameId': gameId,
-        'mode': mode,
-        'result': result,
-        if (opponentRating != null) 'opponentRating': opponentRating,
-      }),
-    );
-    return _requireSuccess(response, 'Unable to submit game result.');
   }
 
   // ==========================================================

@@ -81,7 +81,7 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
               padding: const EdgeInsets.all(18),
               children: [
                 if (_pairings.isEmpty)
-                  const Card(child: Padding(padding: EdgeInsets.all(20), child: UniversalText('Pair a TV to use your phone as a remote, game controller, keyboard, or second screen.')))
+                  const Card(child: Padding(padding: EdgeInsets.all(20), child: UniversalText('Pair a TV to use your phone as a remote, keyboard, or second screen.')))
                 else ...[
                   DropdownButtonFormField<String>(
                     initialValue: _selectedTvId,
@@ -95,7 +95,6 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
                     child: SegmentedButton<String>(
                       segments: const [
                         ButtonSegment(value: 'remote', label: Text('Remote'), icon: Icon(Icons.settings_remote_rounded)),
-                        ButtonSegment(value: 'controller', label: Text('Gamepad'), icon: Icon(Icons.sports_esports_outlined)),
                         ButtonSegment(value: 'second-screen', label: Text('Second Screen'), icon: Icon(Icons.phone_android)),
                         ButtonSegment(value: 'keyboard', label: Text('Keyboard'), icon: Icon(Icons.keyboard_outlined)),
                       ],
@@ -106,11 +105,9 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
                   const SizedBox(height: 18),
                   _mode == 'remote'
                       ? _RemoteControls(tvId: _selectedTvId)
-                      : _mode == 'controller'
-                          ? _GameController(tvId: _selectedTvId)
-                          : _mode == 'keyboard'
-                              ? _KeyboardController(tvId: _selectedTvId)
-                              : _SecondScreen(tv: selected),
+                      : _mode == 'keyboard'
+                          ? _KeyboardController(tvId: _selectedTvId)
+                          : _SecondScreen(tv: selected),
                 ],
               ],
             ),
@@ -156,35 +153,6 @@ class _RemoteControls extends StatelessWidget {
         ]),
       ),
     );
-  }
-}
-
-class _GameController extends StatelessWidget {
-  final String? tvId;
-  const _GameController({required this.tvId});
-
-  void _send(BuildContext context, String command) {
-    AppController.instance.backendApi.sendTvCommand(tvDeviceId: tvId ?? '', profileId: AppController.instance.currentProfile?.id ?? '', command: {'type': 'gamepad', 'action': command}).catchError((error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        IconButton(onPressed: () => _send(context, 'left'), icon: const Icon(Icons.arrow_left_rounded), iconSize: 36),
-        Column(children: [
-          IconButton(onPressed: () => _send(context, 'up'), icon: const Icon(Icons.arrow_drop_up_rounded), iconSize: 36),
-          IconButton(onPressed: () => _send(context, 'down'), icon: const Icon(Icons.arrow_drop_down_rounded), iconSize: 36),
-        ]),
-        IconButton(onPressed: () => _send(context, 'right'), icon: const Icon(Icons.arrow_right_rounded), iconSize: 36),
-      ]),
-      const SizedBox(height: 8),
-      FilledButton.icon(onPressed: () => _send(context, 'primary'), icon: const Icon(Icons.circle), label: const Text('A / Select')),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(onPressed: () => _send(context, 'secondary'), icon: const Icon(Icons.close), label: const Text('B / Back')),
-    ])));
   }
 }
 

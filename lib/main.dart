@@ -18,7 +18,6 @@ import 'smart_search.dart';
 import 'details.dart';
 import 'seasonal_collections.dart';
 import 'profiles.dart';
-import 'remote_access.dart';
 import 'account_settings.dart';
 import 'device_features.dart';
 import 'film.dart';
@@ -37,10 +36,11 @@ import 'social_home.dart';
 import 'navigation_hubs.dart';
 import 'media_universe.dart';
 import 'my_tv.dart';
+import 'radio.dart';
 import 'social_story_experience.dart';
 import 'app_customization.dart';
+import 'social_theme_gallery.dart';
 import 'server_selection.dart';
-import 'games.dart';
 import 'tv_controller.dart';
 import 'tv_host.dart';
 
@@ -138,7 +138,20 @@ class _AppPageRouteObserver extends NavigatorObserver {
     });
   }
 
+  bool _isUnnamedPopup(Route<dynamic> route) {
+    final name = route.settings.name;
+    return (name == null || name.isEmpty) && route is PopupRoute<dynamic>;
+  }
+
   String _pageIdForRoute(String? name, Route<dynamic> route) {
+    // Dialogs and modal sheets are unnamed PopupRoutes by default. They are
+    // overlays on the current screen, not new page destinations. Keeping the
+    // current page identity prevents the Customize tooltip from targeting a
+    // phantom/previous page and prevents onboarding overlays from revealing
+    // the global navbar while the server name dialog is open.
+    if (_isUnnamedPopup(route)) {
+      return _appPageState.pageId;
+    }
     if (name == '/app/player') return 'player';
     if (name != null && name.startsWith('/app/page/')) {
       return name.substring('/app/page/'.length);
@@ -151,6 +164,12 @@ class _AppPageRouteObserver extends NavigatorObserver {
     }
     if (name == '/app/profiles') return 'profiles';
     if (name == '/app/server-selection') return 'server-selection';
+    if (name != null && name.startsWith('/main/')) {
+      final destination = name.substring('/main/'.length);
+      if (destination == 'home' || destination == 'library' || destination == 'friends') {
+        return destination;
+      }
+    }
     if (name == '/main') return 'home';
     return 'page_${identityHashCode(route)}';
   }
@@ -177,7 +196,9 @@ class _AppPageRouteObserver extends NavigatorObserver {
     _schedulePageUpdate(
       pageId,
       selectedPrimaryIndex: _primaryIndexForPage(pageId),
-      customizing: name == '/app/customize' || name == '/app/more',
+      customizing: _isUnnamedPopup(route)
+          ? _appPageState.isCustomizing
+          : name == '/app/customize' || name == '/app/more',
     );
   }
 
@@ -190,8 +211,10 @@ class _AppPageRouteObserver extends NavigatorObserver {
       _schedulePageUpdate(
         previousPageId,
         selectedPrimaryIndex: _primaryIndexForPage(previousPageId),
-        customizing: previousRoute.settings.name == '/app/customize' ||
-            previousRoute.settings.name == '/app/more',
+        customizing: _isUnnamedPopup(previousRoute)
+            ? _appPageState.isCustomizing
+            : previousRoute.settings.name == '/app/customize' ||
+                previousRoute.settings.name == '/app/more',
       );
     }
   }
@@ -217,7 +240,9 @@ class _AppPageRouteObserver extends NavigatorObserver {
       _schedulePageUpdate(
         pageId,
         selectedPrimaryIndex: _primaryIndexForPage(pageId),
-        customizing: name == '/app/customize' || name == '/app/more',
+        customizing: _isUnnamedPopup(newRoute)
+            ? _appPageState.isCustomizing
+            : name == '/app/customize' || name == '/app/more',
       );
     }
   }
@@ -613,11 +638,24 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     draft = _PageAppearanceStore.forPage(widget.pageId);
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
     sectionDraft = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
-    const friendsPresetIds = <String>{'Timeline', 'Facebook', 'Instagram', 'Snapchat', 'BeReal', 'TikTok', 'YouTube Shorts', 'WhatsApp', 'Messenger', 'iMessage', 'Telegram'};
-    if (widget.pageId == 'friends' && !friendsPresetIds.contains(sectionDraft.friendsDisplayStyle)) {
-      sectionDraft.friendsDisplayStyle = 'Timeline';
-    }
     StoryPlacementStore.load(AppController.instance.currentProfile);
+  }
+
+  Widget _socialThemeDropdown(String label, String value, ValueChanged<String> onChanged) {
+    return SocialThemePickerField(
+      label: label,
+      value: value,
+      onChanged: onChanged,
+    );
+  }
+
+  void _moveSocialNavItem(int from, int to) {
+    setState(() {
+      final order = List<String>.from(sectionDraft.socialNavOrder);
+      final moved = order.removeAt(from);
+      order.insert(to, moved);
+      sectionDraft.socialNavOrder = order;
+    });
   }
 
   @override
@@ -723,38 +761,94 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                           ),
                         ),
                     ] else ...[
-                      const Text('Choose a social layout', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      const Text('Customize each social surface', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 4),
-                      const Text('Choose a theme for its intended social surface: chat themes affect Messages, feed themes affect Feed/Profile/Communities, and short-video themes affect Reels. Friends stays on its own layout.', style: TextStyle(color: Colors.white60)),
+                      const Text('Use general design styles for each section. These presets do not use another service’s name, logo, or branded assets.', style: TextStyle(color: Colors.white60)),
                       const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          for (final preset in const <Map<String, Object>>[
-                            {'value': 'Facebook', 'title': 'Facebook', 'subtitle': 'Feed, profile page and communities', 'icon': Icons.dynamic_feed_rounded},
-                            {'value': 'Instagram', 'title': 'Instagram', 'subtitle': 'Feed, profile page and communities', 'icon': Icons.photo_library_outlined},
-                            {'value': 'Snapchat', 'title': 'Snapchat', 'subtitle': 'Messages: bright yellow chat theme', 'icon': Icons.bolt_rounded},
-                            {'value': 'BeReal', 'title': 'BeReal', 'subtitle': 'Reels: candid, minimal short-video style', 'icon': Icons.camera_alt_outlined},
-                            {'value': 'TikTok', 'title': 'TikTok', 'subtitle': 'Reels: full-height short-video style', 'icon': Icons.play_circle_outline_rounded},
-                            {'value': 'YouTube Shorts', 'title': 'YouTube Shorts', 'subtitle': 'Reels: vertical video and bold red accents', 'icon': Icons.smart_display_outlined},
-                            {'value': 'WhatsApp', 'title': 'WhatsApp', 'subtitle': 'Messages only: green chat styling', 'icon': Icons.chat_bubble_outline_rounded},
-                            {'value': 'Messenger', 'title': 'Messenger', 'subtitle': 'Messages only: blue conversation styling', 'icon': Icons.forum_outlined},
-                            {'value': 'iMessage', 'title': 'iMessage', 'subtitle': 'Clean message list and compact bubbles', 'icon': Icons.message_outlined},
-                            {'value': 'Telegram', 'title': 'Telegram', 'subtitle': 'Messages only: compact blue chat styling', 'icon': Icons.send_rounded},
-                          ])
-                            SizedBox(
-                              width: MediaQuery.sizeOf(context).width >= 760 ? 285 : MediaQuery.sizeOf(context).width - 88,
-                              child: _FriendsLayoutPresetCard(
-                                title: preset['title'] as String,
-                                subtitle: preset['subtitle'] as String,
-                                icon: preset['icon'] as IconData,
-                                presetId: preset['value'] as String,
-                                selected: sectionDraft.friendsDisplayStyle == preset['value'],
-                                onTap: () => setState(() => sectionDraft.friendsDisplayStyle = preset['value'] as String),
-                              ),
-                            ),
+                      _socialThemeDropdown('Feed theme', sectionDraft.feedStyle, (v) => setState(() => sectionDraft.feedStyle = v)),
+                      const SizedBox(height: 10),
+                      _socialThemeDropdown('Profile page theme', sectionDraft.profilePageStyle, (v) => setState(() => sectionDraft.profilePageStyle = v)),
+                      const SizedBox(height: 10),
+                      _socialThemeDropdown('Communities theme', sectionDraft.communitiesStyle, (v) => setState(() => sectionDraft.communitiesStyle = v)),
+                      const SizedBox(height: 10),
+                      _socialThemeDropdown('Friends theme', sectionDraft.friendsStyle, (v) => setState(() => sectionDraft.friendsStyle = v)),
+                      const SizedBox(height: 10),
+                      _socialThemeDropdown('Messages theme', sectionDraft.messagesStyle, (v) => setState(() => sectionDraft.messagesStyle = v)),
+                      const SizedBox(height: 10),
+                      _socialThemeDropdown('Reels / Shorts / Videos theme', sectionDraft.reelsStyle, (v) => setState(() => sectionDraft.reelsStyle = v)),
+                      const SizedBox(height: 18),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.socialNavPosition,
+                        decoration: const InputDecoration(labelText: 'Social navigation position'),
+                        items: const [
+                          DropdownMenuItem(value: 'Top', child: Text('Top bar')),
+                          DropdownMenuItem(value: 'Left', child: Text('Left side rail')),
+                          DropdownMenuItem(value: 'Right', child: Text('Right side rail')),
                         ],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.socialNavPosition = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      const Text('Social section order', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const Text('Choose each profile’s preferred order.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      for (var index = 0; index < sectionDraft.socialNavOrder.length; index++)
+                        Card(
+                          child: ListTile(
+                            title: Text(sectionDraft.socialNavOrder[index]),
+                            leading: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              IconButton(visualDensity: VisualDensity.compact, tooltip: 'Move up', onPressed: index == 0 ? null : () => _moveSocialNavItem(index, index - 1), icon: const Icon(Icons.keyboard_arrow_up_rounded)),
+                              IconButton(visualDensity: VisualDensity.compact, tooltip: 'Move down', onPressed: index == sectionDraft.socialNavOrder.length - 1 ? null : () => _moveSocialNavItem(index, index + 1), icon: const Icon(Icons.keyboard_arrow_down_rounded)),
+                            ]),
+                          ),
+                        ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.profilePageViewMode,
+                        decoration: const InputDecoration(labelText: 'Profile posts layout'),
+                        items: const [DropdownMenuItem(value: 'Post cards', child: Text('Post card boxes')), DropdownMenuItem(value: 'Timeline', child: Text('Scrollable timeline'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.profilePageViewMode = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.profilePostsSortOrder,
+                        decoration: const InputDecoration(labelText: 'Profile post order'),
+                        items: const [DropdownMenuItem(value: 'Newest to Oldest', child: Text('Newest to Oldest')), DropdownMenuItem(value: 'Oldest to Newest', child: Text('Oldest to Newest'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.profilePostsSortOrder = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.friendsViewMode,
+                        decoration: const InputDecoration(labelText: 'Friends layout'),
+                        items: const [DropdownMenuItem(value: 'List', child: Text('List view')), DropdownMenuItem(value: 'Cards', child: Text('Card view'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.friendsViewMode = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.friendsSortOrder,
+                        decoration: const InputDecoration(labelText: 'Friends order'),
+                        items: const [DropdownMenuItem(value: 'Oldest to Newest', child: Text('Oldest to Newest')), DropdownMenuItem(value: 'Newest to Oldest', child: Text('Newest to Oldest')), DropdownMenuItem(value: 'A-Z', child: Text('Alphabetical A-Z')), DropdownMenuItem(value: 'Z-A', child: Text('Alphabetical Z-A'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.friendsSortOrder = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.communitiesViewMode,
+                        decoration: const InputDecoration(labelText: 'Communities layout'),
+                        items: const [DropdownMenuItem(value: 'List', child: Text('List view')), DropdownMenuItem(value: 'Cards', child: Text('Card view'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.communitiesViewMode = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.communitiesMembershipFilter,
+                        decoration: const InputDecoration(labelText: 'Communities to show'),
+                        items: const [DropdownMenuItem(value: 'All', child: Text('All available')), DropdownMenuItem(value: 'Joined', child: Text('Joined communities')), DropdownMenuItem(value: 'Created', child: Text('Communities I created'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.communitiesMembershipFilter = v); },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: sectionDraft.communitiesSortOrder,
+                        decoration: const InputDecoration(labelText: 'Communities order'),
+                        items: const [DropdownMenuItem(value: 'Newest to Oldest', child: Text('Newest to Oldest')), DropdownMenuItem(value: 'Oldest to Newest', child: Text('Oldest to Newest')), DropdownMenuItem(value: 'Movies', child: Text('Movies')), DropdownMenuItem(value: 'Shows', child: Text('Shows')), DropdownMenuItem(value: 'Music', child: Text('Music')), DropdownMenuItem(value: 'Joined', child: Text('Recently joined')), DropdownMenuItem(value: 'Created', child: Text('Recently created'))],
+                        onChanged: (v) { if (v != null) setState(() => sectionDraft.communitiesSortOrder = v); },
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
@@ -945,136 +1039,6 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   }
 }
 
-class _FriendsLayoutPresetCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final String presetId;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FriendsLayoutPresetCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.presetId,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      color: selected ? accent.withValues(alpha: .16) : null,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: selected ? accent : Colors.white12, width: selected ? 2 : 1),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(icon, color: selected ? accent : Colors.white70),
-                const SizedBox(width: 8),
-                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
-                if (selected) Icon(Icons.check_circle_rounded, color: accent, size: 18),
-              ]),
-              const SizedBox(height: 6),
-              Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.25)),
-              const SizedBox(height: 12),
-              _friendsPresetPreview(presetId, accent),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _friendsPresetPreview(String presetId, Color accent) {
-    Widget bar(double width, {double height = 8, double opacity = .20}) =>
-        Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: opacity),
-            borderRadius: BorderRadius.circular(5),
-          ),
-        );
-    Widget avatar({double size = 20}) => Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: accent.withValues(alpha: .45),
-            border: Border.all(color: accent.withValues(alpha: .8)),
-          ),
-        );
-
-    switch (presetId) {
-      case 'Facebook':
-      case 'Timeline':
-        return Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(10)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [avatar(size: 18), const SizedBox(width: 7), Expanded(child: bar(96))]),
-            const SizedBox(height: 7),
-            bar(double.infinity, height: 19, opacity: .12),
-            const SizedBox(height: 6),
-            Row(children: [bar(35), const SizedBox(width: 7), bar(35), const SizedBox(width: 7), bar(35)]),
-          ]),
-        );
-      case 'Instagram':
-        return Row(children: [
-          for (var i = 0; i < 3; i++) ...[
-            Expanded(child: Container(height: 54, decoration: BoxDecoration(color: accent.withValues(alpha: .14 + i * .04), borderRadius: BorderRadius.circular(8)), child: Align(alignment: Alignment.topCenter, child: Padding(padding: const EdgeInsets.all(5), child: avatar(size: 17))))),
-            if (i < 2) const SizedBox(width: 5),
-          ],
-        ]);
-      case 'Snapchat':
-        return Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          for (var i = 0; i < 4; i++) Column(children: [Container(padding: const EdgeInsets.all(3), decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: accent, width: 2)), child: avatar(size: 24)), const SizedBox(height: 4), bar(30, height: 5, opacity: .12)]),
-        ]);
-      case 'BeReal':
-        return Row(children: [
-          Container(width: 55, height: 54, decoration: BoxDecoration(color: accent.withValues(alpha: .18), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.camera_alt_outlined, size: 22, color: Colors.white70)),
-          const SizedBox(width: 8),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [bar(90), const SizedBox(height: 7), bar(62, opacity: .11), const SizedBox(height: 7), bar(44, opacity: .11)])),
-        ]);
-      case 'TikTok':
-        return Row(children: [
-          for (var i = 0; i < 3; i++) ...[
-            Expanded(child: Container(height: 58, decoration: BoxDecoration(color: accent.withValues(alpha: .12 + i * .05), borderRadius: BorderRadius.circular(8)), child: const Center(child: Icon(Icons.play_circle_outline_rounded, size: 21, color: Colors.white70)))),
-            if (i < 2) const SizedBox(width: 5),
-          ],
-        ]);
-      case 'WhatsApp':
-      case 'Messenger':
-      case 'iMessage':
-      case 'Telegram':
-        return Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha: .035), borderRadius: BorderRadius.circular(10)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [avatar(size: 18), const SizedBox(width: 7), Expanded(child: bar(92)), const SizedBox(width: 7), bar(21, height: 6, opacity: .12)]),
-            const SizedBox(height: 7),
-            Align(alignment: Alignment.centerLeft, child: Container(width: 112, height: 10, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(8)))),
-            const SizedBox(height: 5),
-            Align(alignment: Alignment.centerRight, child: Container(width: 94, height: 10, decoration: BoxDecoration(color: accent.withValues(alpha: .4), borderRadius: BorderRadius.circular(8)))),
-          ]),
-        );
-      default:
-        return Row(children: [avatar(), const SizedBox(width: 7), Expanded(child: bar(95)), const Spacer(), bar(32)]);
-    }
-  }
-}
-
 String _customizationSectionName(String pageId, String id) => switch (id) {
       'search' => 'Universal search',
       'movies' => 'Movies',
@@ -1143,10 +1107,11 @@ Future<void> _navigateToMainHome([BuildContext? sourceContext]) async {
   }
 
   if (!navigator.mounted) return;
-  _appPageState.setPage('home', selectedPrimaryIndex: 0, customizing: false);
+  // Keep onboarding active until the first MainScreen frame is rendered.
+  final routeName = '/main/${destination.name}';
   navigator.pushAndRemoveUntil<void>(
     MaterialPageRoute<void>(
-      settings: const RouteSettings(name: '/main'),
+      settings: RouteSettings(name: routeName),
       builder: (_) => MainScreen(initialDestination: destination),
     ),
     (route) => false,
@@ -1684,7 +1649,6 @@ class HomeCustomization {
             [
               'Profile',
               'Home',
-              'Sports',
               'Surprise Me',
               'More',
               'Music',
@@ -1933,23 +1897,17 @@ class HomeCustomizationStore {
         navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
         navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
         sectionOrder: m['sectionOrder'] is List
-            ? (List<String>.from(m['sectionOrder'] as List)
-              ..replaceRange(
-                  0,
-                  (m['sectionOrder'] as List).length,
-                  (m['sectionOrder'] as List)
-                      .map((e) => e.toString() == 'Live Sports'
-                          ? 'Sports'
-                          : e.toString())
-                      .where((e) => e != 'Sports')))
+            ? List<String>.from(m['sectionOrder'] as List).where((item) => <String>{
+                'Continue Watching', 'Recently Added', 'Recommended', 'Popular',
+                'Movies', 'TV Shows', 'Music', 'Collections', 'Friends & Community',
+                'Seasonal Collections', 'Recently Watched', 'New Additions', 'All Library',
+              }.contains(item)).toList()
             : null,
         navigationOrder: m['navigationOrder'] is List
-            ? (List<String>.from(m['navigationOrder'] as List)
-              ..replaceRange(
-                  0,
-                  (m['navigationOrder'] as List).length,
-                  (m['navigationOrder'] as List).map((e) =>
-                      e.toString() == 'Live Sports' ? 'Sports' : e.toString())))
+            ? List<String>.from(m['navigationOrder'] as List).where((item) => <String>{
+                'Home', 'Profile', 'Surprise Me', 'More', 'Music', 'Radio', 'Film',
+                'Collections', 'My TV', 'Shop', 'Movies', 'TV Shows', 'Friends', 'Library',
+              }.contains(item)).toList()
             : null,
       );
 }
@@ -2117,8 +2075,6 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     musicDraft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
-    draft.sectionOrder.removeWhere(
-        (section) => section == 'Sports' || section == 'Live Sports');
     storyPlacement = StoryPlacementStore.forProfile(AppController.instance.currentProfile);
     unawaited(_loadStoryPlacementPreference());
     _normalizeHomePositions();
@@ -4496,12 +4452,19 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
             final destination = PrimaryDestination.values[index];
             final navigator = _appNavigatorKey.currentState;
             if (navigator == null) return;
+            // Sync the page identity on the first click, so contextual Customize
+            // always targets the destination now being shown.
+            _appPageState.setPage(
+              destination.name,
+              selectedPrimaryIndex: index,
+              customizing: false,
+            );
             navigator.pushAndRemoveUntil<void>(
               MaterialPageRoute<void>(
-                settings: const RouteSettings(name: '/main'),
+                settings: RouteSettings(name: '/main/${destination.name}'),
                 builder: (_) => MainScreen(initialDestination: destination),
               ),
-              (route) => route.isFirst,
+              (route) => false,
             );
           },
         );
@@ -4529,14 +4492,6 @@ void _showGlobalMore() {
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (sheetContext) => _MoreActionsSheet(
-      onImport: () {
-        Navigator.of(sheetContext).pop();
-        push(const ImportMediaScreen(), routeName: '/app/page/import');
-      },
-      onRemoteAccess: () {
-        Navigator.of(sheetContext).pop();
-        push(const RemoteAccessScreen(), routeName: '/app/page/remote-access');
-      },
       onSettings: () {
         Navigator.of(sheetContext).pop();
         push(const AccountSettingsScreen(), routeName: '/app/page/settings');
@@ -4547,7 +4502,19 @@ void _showGlobalMore() {
       },
       onHomeServer: () {
         Navigator.of(sheetContext).pop();
-        push(const HomeServerScreen(), routeName: '/app/page/home-server');
+        push(
+          HomeServerScreen(
+            onImportRip: () => push(
+              const ImportMediaScreen(),
+              routeName: '/app/page/import',
+            ),
+          ),
+          routeName: '/app/page/home-server',
+        );
+      },
+      onImport: () {
+        Navigator.of(sheetContext).pop();
+        push(const ImportMediaScreen(), routeName: '/app/page/import');
       },
       onMembers: () {
         Navigator.of(sheetContext).pop();
@@ -4571,9 +4538,9 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const MyTvScreen(), routeName: '/app/page/my-tv');
       },
-      onGames: () {
+      onRadio: () {
         Navigator.of(sheetContext).pop();
-        push(const GamesScreen(), routeName: '/app/page/games');
+        push(const RadioScreen(), routeName: '/app/page/radio');
       },
       onTvController: () {
         Navigator.of(sheetContext).pop();
@@ -4587,7 +4554,7 @@ void _showGlobalMore() {
   );
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   late PrimaryDestination selected = widget.initialDestination;
 
   String get _pageTitle => switch (selected) {
@@ -4635,10 +4602,54 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Timer? _presenceHeartbeat;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     LanguageController.instance.loadForCurrentProfile();
+    _startPresenceHeartbeat();
+  }
+
+  void _startPresenceHeartbeat() {
+    _presenceHeartbeat?.cancel();
+    unawaited(_touchSocialPresence());
+    _presenceHeartbeat = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => unawaited(_touchSocialPresence()),
+    );
+  }
+
+  Future<void> _touchSocialPresence() async {
+    if (!mounted || <String>{'boot', 'profiles', 'server-selection'}.contains(_appPageState.pageId)) return;
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    if (profile == null || !controller.backendApi.isAuthenticated) return;
+    try {
+      // A heartbeat updates last-seen without overriding the current
+      // availability or the watching/listening activity set by the player.
+      await controller.backendApi.setSocialProfilePresence(profileId: profile.id);
+    } catch (_) {
+      // Presence is advisory and must never interrupt playback or navigation.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPresenceHeartbeat();
+    } else {
+      _presenceHeartbeat?.cancel();
+      _presenceHeartbeat = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presenceHeartbeat?.cancel();
+    super.dispose();
   }
 
   @override
@@ -4853,31 +4864,37 @@ class _AppShellHeaderState extends State<AppShellHeader> {
 
 /// The More sheet keeps secondary destinations available without expanding the
 /// primary navigation bar again.
+class _MoreChoice {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onSelected;
+  const _MoreChoice(this.title, this.subtitle, this.icon, this.onSelected);
+}
+
 class _MoreActionsSheet extends StatelessWidget {
-  final VoidCallback onImport;
-  final VoidCallback onRemoteAccess;
   final VoidCallback onSettings;
   final VoidCallback onDevices;
   final VoidCallback onHomeServer;
+  final VoidCallback onImport;
   final VoidCallback onMembers;
   final VoidCallback onShop;
   final VoidCallback onFoodDelivery;
   final VoidCallback onMyTv;
-  final VoidCallback onGames;
+  final VoidCallback onRadio;
   final VoidCallback onTvController;
   final VoidCallback onTvHost;
 
   const _MoreActionsSheet({
-    required this.onImport,
-    required this.onRemoteAccess,
     required this.onSettings,
     required this.onDevices,
     required this.onHomeServer,
+    required this.onImport,
     required this.onMembers,
     required this.onShop,
     required this.onFoodDelivery,
     required this.onMyTv,
-    required this.onGames,
+    required this.onRadio,
     required this.onTvController,
     required this.onTvHost,
   });
@@ -4895,30 +4912,62 @@ class _MoreActionsSheet extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         childAspectRatio: 1.25,
         children: [
-          _moreCard(Icons.library_add_outlined, 'Import / Rip',
-              'Add physical media', onImport),
-          _moreCard(Icons.people_alt_outlined, 'Account Members',
-              'Add people to this account', onMembers),
-          _moreCard(Icons.dns_rounded, 'Home Server', 'Server and storage',
-              onHomeServer),
-          _moreCard(Icons.settings_remote_rounded, 'Remote Access',
-              'Trusted remote access', onRemoteAccess),
-          _moreCard(Icons.devices_rounded, 'Device Center',
-              'Downloads and devices', onDevices),
-          _moreCard(Icons.settings_rounded, 'Settings',
-              'Account and subscription', onSettings),
-          _moreCard(Icons.shopping_bag_outlined, 'Shop', 'Marketplace', onShop),
-          _moreCard(Icons.delivery_dining_rounded, 'Food Delivery',
-              'Find nearby restaurants and order food', onFoodDelivery),
-          _moreCard(Icons.live_tv_rounded, 'My TV',
-              'Create ad-free channels and view your guide', onMyTv),
-          _moreCard(Icons.sports_esports_rounded, 'Games',
-              'Music, movie/TV and rhythm games', onGames),
-          _moreCard(Icons.settings_remote_rounded, 'TV Controller',
-              'Use your phone as the TV remote', onTvController),
-          _moreCard(Icons.tv_rounded, 'TV Host',
-              'Show a pairing code on this TV', onTvHost),
+          _combinedCard(context, Icons.manage_accounts_outlined, 'Account & Server',
+            'Manage members, profiles, storage and server', [
+              _MoreChoice('Account Members', 'Invite or manage account members', Icons.people_alt_outlined, onMembers),
+              _MoreChoice('Home Server', 'Server status and storage', Icons.dns_rounded, onHomeServer),
+            ]),
+          _moreCard(Icons.album_rounded, 'Import / Rip', 'Import media and run the ARM disc-ripping workflow', onImport),
+          _moreCard(Icons.devices_rounded, 'Device Center', 'Downloads and devices', onDevices),
+          _moreCard(Icons.settings_rounded, 'Settings', 'Account and subscription', onSettings),
+          _combinedCard(context, Icons.shopping_bag_outlined, 'Shop & Delivery',
+            'Products, orders and food delivery', [
+              _MoreChoice('Shop', 'Marketplace and product orders', Icons.shopping_bag_outlined, onShop),
+              _MoreChoice('Food Delivery', 'Restaurants and food orders', Icons.delivery_dining_rounded, onFoodDelivery),
+            ]),
+          _combinedCard(context, Icons.live_tv_rounded, 'Radio & My TV',
+            'Music stations and a personal TV guide', [
+              _MoreChoice('Radio', 'Listen to radio stations', Icons.radio_rounded, onRadio),
+              _MoreChoice('My TV', 'Create ad-free channels and view your guide', Icons.live_tv_rounded, onMyTv),
+            ]),
+          _moreCard(Icons.settings_remote_rounded, 'TV Controller', 'Use your phone as the TV remote', onTvController),
+          _moreCard(Icons.tv_rounded, 'TV Host', 'Show a pairing code on this TV', onTvHost),
         ],
+      ),
+    );
+  }
+
+  Widget _combinedCard(BuildContext context, IconData icon, String title, String subtitle, List<_MoreChoice> choices) {
+    return Material(
+      color: Colors.white.withValues(alpha: .045),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (choiceContext) => _PremiumSheet(
+            title: title,
+            subtitle: subtitle,
+            child: Column(mainAxisSize: MainAxisSize.min, children: choices.map((choice) => ListTile(
+              leading: Icon(choice.icon),
+              title: Text(choice.title),
+              subtitle: Text(choice.subtitle),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () { Navigator.of(choiceContext).pop(); choice.onSelected(); },
+            )).toList()),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 26),
+            const SizedBox(height: 8),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 3),
+            Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+          ]),
+        ),
       ),
     );
   }
@@ -6624,7 +6673,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const UniversalText('Add Movie or Show'),
+        title: const UniversalText('Import / Rip Media'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

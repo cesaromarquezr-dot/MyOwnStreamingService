@@ -41,7 +41,7 @@ supabase/migrations/202609120001_streaming_service.sql
 
 in the Supabase SQL editor or through the Supabase CLI.
 
-The migration creates the account/profile/server hierarchy, server media indexes, exact-version Group Watch procedures, reviews, recommendations/votes, UI settings, security, remote jobs, backups, sports, legal tables, triggers, RLS, and scheduled jobs.
+The migration creates the account/profile/server hierarchy, server media indexes, exact-version Group Watch procedures, reviews, recommendations/votes, UI settings, security, remote jobs, backups, legal tables, triggers, RLS, and scheduled jobs.
 
 Apply `supabase/migrations/physical_media_ownership.sql` after the base streaming and canonical extension migrations to add the physical ownership ledger, ownership history, and imported-file provenance links.
 
@@ -89,7 +89,12 @@ Only application metadata and non-file state are synchronized, including:
 
 The home server remains responsible for the physical media files and their server-private storage paths.
 
-
 ### Master product architecture
 
 Apply `migrations/master_product_architecture.sql` after the existing account/membership, media, server, and shop migrations. It adds profile governance, member-to-profile assignments, multi-event media associations, media-server-agent state, and durable import-job metadata.
+
+## Social household and guardian controls
+
+After the existing streaming, live-persistence, social-home and social V2 migrations, apply `migrations/social_household_parental_controls.sql`. It seeds a household group conversation after an account has two active profiles and provides database structures for guardian review and profile-level content rules. A trusted UI must populate DOB and verified guardian links. The current approval queue only covers inbound friend requests; community review, title/lyrics enforcement and full parental controls are not complete until each relevant backend/playback route checks the access decisions.
+
+For existing databases, apply `migrations/remove_sports_feature.sql` after deploying the code that no longer references the retired sports tables.

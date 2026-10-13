@@ -1,4 +1,4 @@
-enum MediaEventType { season, holiday, cultural, sports, special, custom }
+enum MediaEventType { season, holiday, cultural, special, custom }
 
 class MediaEvent {
   final String id;

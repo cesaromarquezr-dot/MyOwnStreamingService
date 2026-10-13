@@ -187,11 +187,6 @@ class PlatformExpansionScreen extends StatelessWidget {
           'recommendations',
         ),
         _PreferenceSpec(
-          'Sports starting',
-          'Notify when a followed live game is about to start.',
-          'sports_starting',
-        ),
-        _PreferenceSpec(
           'Security events',
           'Always surface security and account-protection events.',
           'security_events',
@@ -307,34 +302,6 @@ class PlatformExpansionScreen extends StatelessWidget {
           'Auto-advance near credits',
           'Offer the next collection item near the end of credits.',
           'credits_advance',
-        ),
-      ],
-    ),
-    _PlatformCategory(
-      'Live Sports',
-      'Tune the global live-sports experience without changing broadcast rights.',
-      Icons.sports_soccer_rounded,
-      'sports',
-      [
-        _PreferenceSpec(
-          'Show Live Sports on Home',
-          'Keep the sports section available on this profile.',
-          'show_on_home',
-        ),
-        _PreferenceSpec(
-          'Only show when live',
-          'Hide the Home sports section when no authorized game is live.',
-          'only_when_live',
-        ),
-        _PreferenceSpec(
-          'Sports alerts',
-          'Notify about followed teams and live-game starts.',
-          'alerts',
-        ),
-        _PreferenceSpec(
-          'Enable multiview',
-          'Allow multiple authorized live games to be presented together.',
-          'multiview',
         ),
       ],
     ),
@@ -510,7 +477,7 @@ class PlatformExpansionScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const UniversalText('Profile-scoped controls for security, playback, TV, '
-                    'notifications, backup, discovery, collections, sports, '
+                    'notifications, backup, discovery, collections, '
                     'privacy, kids safety and performance.',
                   ),
                   const SizedBox(height: 12),

@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'app_core.dart';
 import 'app_customization.dart';
+import 'social_theme_gallery.dart';
 import 'music.dart';
 import 'shop.dart';
 import 'social_video_editor.dart';
@@ -29,54 +30,83 @@ String _socialInitial(String value) {
 }
 
 String _presenceState(Map<String, dynamic> member) {
-  final status = member['presenceStatus']?.toString() ?? 'away';
-  if (status == 'busy' || status == 'away') return status;
-  final lastSeen = DateTime.tryParse(member['lastSeenAt']?.toString() ?? '');
-  if (lastSeen == null ||
-      DateTime.now().toUtc().difference(lastSeen.toUtc()) > const Duration(minutes: 5)) {
-    return 'away';
+  final explicit = (member['presenceStatus'] ??
+          member['availability'] ??
+          member['presence_status'])
+      ?.toString()
+      .toLowerCase();
+  // A stale or explicitly away/offline presence must never keep a red/green
+  // halo after the app is closed or the profile stops reporting heartbeats.
+  if (const {'away', 'offline', 'invisible'}.contains(explicit)) {
+    return 'offline';
   }
+  final rawLastSeen =
+      (member['lastSeenAt'] ?? member['last_seen_at'])?.toString();
+  final lastSeen = DateTime.tryParse(rawLastSeen ?? '');
+  if (lastSeen == null ||
+      DateTime.now().toUtc().difference(lastSeen.toUtc()) >
+          const Duration(minutes: 5)) {
+    return 'offline';
+  }
+  if (explicit == 'busy' || explicit == 'occupied') return 'busy';
+  if (explicit == 'active' || explicit == 'online') return 'active';
   return 'active';
 }
 
-Color _presenceGlowColor(Map<String, dynamic> member) {
-  switch (_presenceState(member)) {
-    case 'active':
-      return Colors.greenAccent;
-    case 'busy':
-      return Colors.redAccent;
-    default:
-      return Colors.grey;
+Color? _presenceGlowColor(Map<String, dynamic> member) => switch (_presenceState(member)) {
+  'active' => Colors.greenAccent,
+  'busy' => Colors.redAccent,
+  _ => null,
+};
+
+String _lastSeenPhrase(Map<String, dynamic> member) {
+  final raw = (member['lastSeenAt'] ?? member['last_seen_at'])?.toString();
+  final date = DateTime.tryParse(raw ?? '');
+  if (date == null) return 'Last seen time unavailable';
+  final difference = DateTime.now().toUtc().difference(date.toUtc());
+  if (difference.inMinutes < 1) return 'Last seen just now';
+  if (difference.inMinutes < 60) return 'Last seen ${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
+  if (difference.inHours < 24) return 'Last seen ${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
+  if (difference.inDays < 7) return 'Last seen ${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'} ago';
+  if (difference.inDays < 30) {
+    final weeks = (difference.inDays / 7).floor();
+    return 'Last seen $weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
   }
+  if (difference.inDays < 365) {
+    final months = (difference.inDays / 30).floor();
+    return 'Last seen $months ${months == 1 ? 'month' : 'months'} ago';
+  }
+  final years = (difference.inDays / 365).floor();
+  return 'Last seen $years ${years == 1 ? 'year' : 'years'} ago';
 }
 
-Widget _presenceAvatar(
-  Map<String, dynamic> member,
-  String name, {
-  double radius = 20,
-}) {
+String _presenceTooltip(Map<String, dynamic> member) {
+  final state = _presenceState(member);
+  final activity = (member['activityText'] ?? member['activity_text'])?.toString().trim();
+  if (state == 'busy') return activity == null || activity.isEmpty ? 'Occupied' : 'Occupied • $activity';
+  if (state == 'active') return activity == null || activity.isEmpty ? 'Online' : 'Online • $activity';
+  return _lastSeenPhrase(member);
+}
+
+Widget _presenceAvatar(Map<String, dynamic> member, String name, {double radius = 20}) {
   final glow = _presenceGlowColor(member);
-  final avatarUrl = member['avatar_url']?.toString();
-  return Container(
-    padding: const EdgeInsets.all(2),
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      boxShadow: [
-        BoxShadow(
-          color: glow.withValues(alpha: .8),
-          blurRadius: 11,
-          spreadRadius: 2,
-        ),
-      ],
-    ),
-    child: CircleAvatar(
-      radius: radius,
-      backgroundImage: avatarUrl == null || avatarUrl.isEmpty
-          ? null
-          : NetworkImage(avatarUrl),
-      child: avatarUrl == null || avatarUrl.isEmpty
-          ? Text(_socialInitial(name))
-          : null,
+  final avatarUrl = (member['avatar_url'] ?? member['avatarUrl'])?.toString();
+  return Tooltip(
+    message: _presenceTooltip(member),
+    child: Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: glow == null ? const <BoxShadow>[] : [
+          BoxShadow(color: glow.withValues(alpha: .8), blurRadius: 11, spreadRadius: 2),
+        ],
+        border: glow == null ? null : Border.all(color: glow, width: 1.5),
+      ),
+      child: CircleAvatar(
+        radius: radius,
+        backgroundImage: avatarUrl == null || avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
+        child: avatarUrl == null || avatarUrl.isEmpty ? Text(_socialInitial(name)) : null,
+      ),
     ),
   );
 }
@@ -153,6 +183,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     unawaited(_loadStoryPlacement());
     PageContentCustomizationStore.revision
         .addListener(_onPageCustomizationChanged);
+    AppSectionCustomizationStore.revision
+        .addListener(_onPageCustomizationChanged);
     _load();
   }
 
@@ -162,9 +194,16 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   }
 
   List<String> get _configuredTabSections {
-    final sections =
-        PageContentCustomizationStore.settingsFor('friends').visibleSections;
-    return sections.isEmpty ? const ['feed'] : sections;
+    final configured = PageContentCustomizationStore.settingsFor('friends').visibleSections;
+    final sections = configured.isEmpty ? <String>['feed'] : configured;
+    final settings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    String idForLabel(String label) => switch (label) {
+      'Feed' => 'feed', 'Reels' => 'reels', 'Messages' => 'messages',
+      'Communities' => 'communities', 'Friends' => 'friends', 'My Page' => 'my-page',
+      _ => label.toLowerCase(),
+    };
+    final preferred = settings.socialNavOrder.map(idForLabel).where(sections.contains).toList();
+    return <String>[...preferred, ...sections.where((section) => !preferred.contains(section))];
   }
 
   List<String> get _tabSections => _visibleTabSections;
@@ -197,6 +236,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   void dispose() {
     StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
     PageContentCustomizationStore.revision
+        .removeListener(_onPageCustomizationChanged);
+    AppSectionCustomizationStore.revision
         .removeListener(_onPageCustomizationChanged);
     _tabs.dispose();
     super.dispose();
@@ -259,150 +300,145 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
 
   @override
   Widget build(BuildContext context) {
-    // The selected Friends preset is a shared social theme: it changes the
-    // color scheme, cards, inputs, tabs and density across Friends, Feed,
-    // Communities, Messages and My Page, not just the friend list rows.
     return AnimatedBuilder(
       animation: AppSectionCustomizationStore.revision,
       builder: (context, _) {
-        final style = AppSectionCustomizationStore.settingsFor(
-          AppController.instance.currentProfile,
-        ).friendsDisplayStyle;
+        final settings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
         return AnimatedBuilder(
           animation: _tabs,
           builder: (context, _) {
-            final activeSection = _tabSections.isEmpty
-                ? 'feed'
-                : _tabSections[_tabs.index.clamp(0, _tabSections.length - 1).toInt()];
-            final theme = _themeForSocialPreset(
-              Theme.of(context),
-              style,
-              activeSection: activeSection,
+            final activeSection = _tabSections.isEmpty ? 'feed' : _tabSections[_tabs.index.clamp(0, _tabSections.length - 1).toInt()];
+            return Theme(
+              data: _themeForSocialStyle(Theme.of(context), _styleForSurface(settings, activeSection)),
+              child: _buildSocialContent(),
             );
-            return Theme(data: theme, child: _buildSocialContent());
           },
         );
       },
     );
   }
 
-  bool _presetAppliesToSection(String style, String section) {
-    const messagePresets = {'WhatsApp', 'Messenger', 'Telegram', 'Snapchat', 'iMessage'};
-    const communityFeedPresets = {'Instagram', 'Facebook'};
-    const reelsPresets = {'TikTok', 'BeReal', 'YouTube Shorts'};
-    if (messagePresets.contains(style)) return section == 'messages';
-    if (communityFeedPresets.contains(style)) {
-      return {'feed', 'my-page', 'communities'}.contains(section);
-    }
-    if (reelsPresets.contains(style)) return section == 'reels';
-    return false;
-  }
+  String _styleForSurface(AppSectionCustomization settings, String section) => switch (section) {
+    'feed' => settings.feedStyle,
+    'my-page' => settings.profilePageStyle,
+    'communities' => settings.communitiesStyle,
+    'friends' => settings.friendsStyle,
+    'messages' => settings.messagesStyle,
+    'reels' => settings.reelsStyle,
+    _ => 'Casual',
+  };
 
-  ThemeData _themeForSocialPreset(
-    ThemeData base,
-    String style, {
-    required String activeSection,
-  }) {
-    // Each social preset is intentionally scoped to its corresponding surface;
-    // selecting a chat theme must not restyle the feed, community or reels UI.
-    if (!_presetAppliesToSection(style, activeSection)) return base;
-    final seed = switch (style) {
-      'Facebook' => const Color(0xFF1877F2),
-      'Instagram' => const Color(0xFFC13584),
-      'Snapchat' => const Color(0xFFFFD400),
-      'BeReal' => const Color(0xFFFFE500),
-      'TikTok' => const Color(0xFF25F4EE),
-      'YouTube Shorts' => const Color(0xFFFF0033),
-      'WhatsApp' => const Color(0xFF25D366),
-      'Messenger' => const Color(0xFF168AFF),
-      'iMessage' => const Color(0xFF34C759),
-      'Telegram' => const Color(0xFF2AABEE),
-      _ => const Color(0xFFE53935),
-    };
-    final scheme = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: base.brightness,
+  ThemeData _themeForSocialStyle(ThemeData base, String style) {
+    final tokens = socialThemeTokensFor(style);
+    final radius = tokens.radius;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+      side: BorderSide(
+        color: tokens.border.withValues(
+          alpha: style == 'Minimalist' ? .48 : .82,
+        ),
+        width: tokens.borderWidth,
+      ),
     );
-    final radius = switch (style) {
-      'TikTok' || 'YouTube Shorts' || 'Snapchat' => 12.0,
-      'WhatsApp' || 'iMessage' || 'Telegram' || 'Messenger' => 18.0,
-      'BeReal' => 8.0,
-      _ => 22.0,
+    final scheme = ColorScheme.fromSeed(
+      seedColor: tokens.accent,
+      brightness: tokens.brightness,
+    ).copyWith(
+      primary: tokens.accent,
+      onPrimary: tokens.isLight ? Colors.white : const Color(0xFF111218),
+      surface: tokens.surface,
+      onSurface: tokens.text,
+      outline: tokens.border,
+    );
+    final cardElevation = switch (style) {
+      'Skeuomorphic' => 5.0,
+      'Material' => 2.0,
+      _ => 0.0,
     };
-    final density = switch (style) {
-      'TikTok' || 'YouTube Shorts' || 'Snapchat' || 'Telegram' => VisualDensity.compact,
-      'BeReal' => const VisualDensity(horizontal: 0.5, vertical: 0.5),
-      _ => VisualDensity.standard,
-    };
+
     return base.copyWith(
+      brightness: tokens.brightness,
+      scaffoldBackgroundColor: tokens.canvas,
+      canvasColor: tokens.canvas,
       colorScheme: scheme,
-      visualDensity: density,
+      visualDensity: style == 'Compact'
+          ? VisualDensity.compact
+          : VisualDensity.standard,
+      appBarTheme: base.appBarTheme.copyWith(
+        backgroundColor: tokens.canvas,
+        foregroundColor: tokens.text,
+        surfaceTintColor: Colors.transparent,
+        elevation: style == 'Skeuomorphic' ? 3 : 0,
+      ),
       tabBarTheme: base.tabBarTheme.copyWith(
-        labelColor: scheme.primary,
-        indicatorColor: scheme.primary,
+        labelColor: tokens.accent,
+        indicatorColor: tokens.accent,
         indicatorSize: TabBarIndicatorSize.label,
       ),
       cardTheme: base.cardTheme.copyWith(
-        color: Color.lerp(base.cardTheme.color ?? base.colorScheme.surface, scheme.primary, .055),
+        color: tokens.surface,
+        elevation: cardElevation,
+        shadowColor: tokens.accent.withValues(alpha: .20),
+        surfaceTintColor: Colors.transparent,
+        shape: shape,
+      ),
+      chipTheme: base.chipTheme.copyWith(
+        backgroundColor: tokens.accent.withValues(
+          alpha: tokens.isLight ? .10 : .15,
+        ),
+        selectedColor: tokens.accent.withValues(alpha: .26),
+        side: BorderSide(
+          color: tokens.border.withValues(alpha: .75),
+          width: style == 'Brutalism' || style == 'High Contrast' ? 1.8 : 1,
+        ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radius),
-          side: BorderSide(color: scheme.primary.withValues(alpha: .22)),
+          borderRadius: BorderRadius.circular(
+            style == 'Brutalism' || style == 'Flat' ? 2 : radius,
+          ),
         ),
       ),
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: tokens.surface,
+        labelStyle: TextStyle(color: tokens.muted),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radius),
+          borderSide: BorderSide(color: tokens.border, width: tokens.borderWidth),
+        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: scheme.primary, width: 1.8),
+          borderSide: BorderSide(color: tokens.accent, width: 1.8),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: tokens.accent,
+          foregroundColor: tokens.isLight ? Colors.white : const Color(0xFF111218),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              style == 'Brutalism' || style == 'Flat' ? 2 : radius,
+            ),
+          ),
         ),
       ),
       navigationBarTheme: base.navigationBarTheme.copyWith(
-        indicatorColor: scheme.primary.withValues(alpha: .22),
+        backgroundColor: tokens.surface,
+        indicatorColor: tokens.accent.withValues(alpha: .22),
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(color: tokens.text, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
 
   Widget _buildSocialContent() {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    final selectedStyle = AppSectionCustomizationStore.settingsFor(
-      AppController.instance.currentProfile,
-    ).friendsDisplayStyle;
-    final activeSection = _tabSections.isEmpty
-        ? 'feed'
-        : _tabSections[_tabs.index.clamp(0, _tabSections.length - 1).toInt()];
+    final socialSettings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final navPosition = socialSettings.socialNavPosition;
 
     return Column(
       children: [
-        _header(),
-        if (_presetAppliesToSection(selectedStyle, activeSection))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 2, 18, 8),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .65),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.palette_outlined, color: Theme.of(context).colorScheme.primary, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '$selectedStyle theme • ${_socialSurfaceLabel(activeSection)}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        _header(showSectionNavigation: navPosition == 'Top'),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
@@ -419,26 +455,20 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             ),
           ),
         Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: _tabSections.map(_pageForTab).toList(),
-          ),
+          child: navPosition == 'Left' || navPosition == 'Right'
+              ? Row(children: [
+                  if (navPosition == 'Left') _sideSectionNavigation(),
+                  Expanded(child: TabBarView(controller: _tabs, children: _tabSections.map(_pageForTab).toList())),
+                  if (navPosition == 'Right') _sideSectionNavigation(),
+                ])
+              : TabBarView(controller: _tabs, children: _tabSections.map(_pageForTab).toList()),
         ),
       ],
     );
   }
 
 
-  String _socialSurfaceLabel(String section) => switch (section) {
-        'messages' => 'Messages',
-        'feed' => 'Feed',
-        'my-page' => 'Profile page',
-        'communities' => 'Communities',
-        'reels' => 'Reels',
-        _ => 'Social',
-      };
-
-  Widget _header() {
+  Widget _header({bool showSectionNavigation = true}) {
     final stories = _list('stories');
     final conversations = _list('conversations');
     final requests = _list('requests');
@@ -480,7 +510,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             ],
           ),
           const SizedBox(height: 12),
-          TabBar(
+          if (showSectionNavigation) TabBar(
             controller: _tabs,
             isScrollable: true,
             tabs: _tabSections.map((section) {
@@ -530,6 +560,57 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  String _socialSurfaceLabel(String section) => switch (section) {
+    'feed' => 'Feed', 'reels' => 'Reels', 'messages' => 'Messages',
+    'friends' => 'Friends', 'communities' => 'Communities', 'my-page' => 'My Page',
+    _ => section,
+  };
+
+  Widget _sideSectionNavigation() {
+    final selectedIndex = _tabs.index.clamp(0, _tabSections.length - 1).toInt();
+    return Container(
+      width: 92,
+      color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: .8),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        itemCount: _tabSections.length,
+        itemBuilder: (context, index) {
+          final section = _tabSections[index];
+          final selected = index == selectedIndex;
+          final icon = switch (section) {
+            'feed' => Icons.dynamic_feed_rounded,
+            'reels' => Icons.play_circle_outline_rounded,
+            'messages' => Icons.forum_rounded,
+            'friends' => Icons.people_outline_rounded,
+            'communities' => Icons.groups_rounded,
+            'my-page' => Icons.account_circle_outlined,
+            _ => Icons.apps_rounded,
+          };
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Material(
+              color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: .18) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _tabs.animateTo(index),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                  child: Column(children: [
+                    Icon(icon, color: selected ? Theme.of(context).colorScheme.primary : null),
+                    const SizedBox(height: 4),
+                    Text(_socialSurfaceLabel(section), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10, fontWeight: selected ? FontWeight.w800 : FontWeight.w500)),
+                  ]),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -586,11 +667,19 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Widget _myPageTab() {
     final profile = AppController.instance.currentProfile;
     if (profile == null) return const SizedBox.shrink();
+    final profileSettings = AppSectionCustomizationStore.settingsFor(profile);
     final posts = _list('posts')
-        .where(
-          (post) => post['isMine'] == true && post['visibility'] == 'friends',
-        )
-        .toList();
+        .where((post) => post['isMine'] == true ||
+            post['author_profile_id']?.toString() == profile.id ||
+            post['authorProfileId']?.toString() == profile.id)
+        .toList()
+      ..sort((a, b) {
+        final dateA = DateTime.tryParse((a['created_at'] ?? a['createdAt'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final dateB = DateTime.tryParse((b['created_at'] ?? b['createdAt'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return profileSettings.profilePostsSortOrder == 'Oldest to Newest' ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+      });
+    final totalFriends = _list('friends').length;
+    final totalPosts = (_data?['ownPostCount'] as num?)?.toInt() ?? posts.length;
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -629,7 +718,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                               ),
                             ),
                             Text(
-                              'Friends-only profile • ${posts.length} posts',
+                              '$totalFriends friends • $totalPosts posts',
                               style: const TextStyle(color: Colors.white54),
                             ),
                           ],
@@ -684,7 +773,37 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 ),
               ),
             ),
-          ...posts.map(_postCard),
+          if (profileSettings.profilePageViewMode == 'Post cards' && posts.isNotEmpty)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 800 ? 3 : constraints.maxWidth >= 520 ? 2 : 1;
+                final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: posts.map((post) => SizedBox(
+                    width: width,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [const Icon(Icons.article_outlined, size: 18), const SizedBox(width: 6), Expanded(child: Text(post['author_profile_name']?.toString() ?? profile.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)))]),
+                            const SizedBox(height: 8),
+                            Text(post['body']?.toString() ?? '', maxLines: 6, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 8),
+                            Text(post['created_at']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )).toList(),
+                );
+              },
+            )
+          else
+            ...posts.map(_postCard),
         ],
       ),
     );
@@ -1536,278 +1655,209 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Widget _friendsTab() {
     final friends = _list('friends');
     final requests = _list('requests');
+    final guardianRequests = _list('guardianRequests');
     final suggestions = _list('suggestions');
     return AnimatedBuilder(
       animation: AppSectionCustomizationStore.revision,
       builder: (context, _) {
-        const displayStyle = 'Timeline';
+        final settings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+        friends.sort((a, b) {
+          final nameA = (a['display_name'] ?? a['username'] ?? '').toString().toLowerCase();
+          final nameB = (b['display_name'] ?? b['username'] ?? '').toString().toLowerCase();
+          final dateA = DateTime.tryParse((a['friends_since'] ?? a['created_at'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateB = DateTime.tryParse((b['friends_since'] ?? b['created_at'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return switch (settings.friendsSortOrder) {
+            'Z-A' => nameB.compareTo(nameA),
+            'Newest to Oldest' => dateB.compareTo(dateA),
+            'Oldest to Newest' => dateA.compareTo(dateB),
+            _ => nameA.compareTo(nameB),
+          };
+        });
         return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          Row(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(18),
             children: [
-              const Expanded(
-                child: Text(
-                  'Your people',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: _addFriend,
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const Text('Add Friend'),
-              ),
+              Row(children: [
+                Expanded(child: Text('Your people • ${friends.length} friends', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+                FilledButton.icon(onPressed: _addFriend, icon: const Icon(Icons.person_add_alt_1_rounded), label: const Text('Add Friend')),
+              ]),
+              const SizedBox(height: 10),
+              if (friends.isEmpty) const Card(child: ListTile(leading: Icon(Icons.person_search_rounded), title: Text('No friends yet'), subtitle: Text('Use a unique @username to connect.'))),
+              ...friends.map((friend) => _friendDisplayCard(friend, settings.friendsViewMode)),
+              if (requests.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                const Text('Friend requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                ...requests.map(_requestCard),
+              ],
+              if (guardianRequests.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                const Text('Guardian approval queue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text('Requests sent to a supervised profile are held here for a guardian decision.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                const SizedBox(height: 8),
+                ...guardianRequests.map(_guardianRequestCard),
+              ],
+              if (suggestions.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                const Text('People you may know', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                ...suggestions.map(_suggestionCard),
+              ],
             ],
           ),
-          const SizedBox(height: 10),
-          if (friends.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.person_search_rounded),
-                title: Text('No friends yet'),
-                subtitle: Text('Use a unique @username to connect.'),
-              ),
-            ),
-          ...friends.map((friend) => _friendDisplayCard(friend, displayStyle)),
-          if (requests.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const Text(
-              'Friend requests',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 8),
-            ...requests.map(_requestCard),
-          ],
-          if (suggestions.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const Text(
-              'People you may know',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            ),
-            ...suggestions.map(_suggestionCard),
-          ],
-        ],
-      ),
         );
       },
     );
   }
 
-  Widget _friendDisplayCard(Map<String, dynamic> friend, String style) {
+  Widget _friendDisplayCard(Map<String, dynamic> friend, String viewMode) {
     final name = friend['display_name']?.toString() ?? 'Friend';
     final username = friend['username']?.toString() ?? '';
-    final avatarUrl = (friend['avatar_url'] ?? friend['avatarUrl'])?.toString();
-    final hasAvatar = avatarUrl != null && avatarUrl.startsWith('http');
-    final compactStyle = const {'Compact', 'Stories', 'Snapchat', 'Short-video', 'TikTok'}.contains(style);
-    final listStyle = const {'List', 'Daily moments', 'BeReal', 'Chat-first', 'WhatsApp', 'Messenger', 'iMessage', 'Telegram'}.contains(style);
-    final photoStyle = const {'Photo-first', 'Instagram'}.contains(style);
-    final storyStyle = const {'Stories', 'Snapchat'}.contains(style);
-    final avatar = CircleAvatar(
-      radius: photoStyle ? 31 : (compactStyle ? 17 : 21),
-      backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
-      child: hasAvatar ? null : Text(_initial(name)),
+    final friendSince = DateTime.tryParse((friend['friends_since'] ?? friend['created_at'])?.toString() ?? '');
+    final subtitle = <String>[
+      if (username.isNotEmpty) '@$username',
+      if (friendSince != null) 'Friends since ${friendSince.toLocal().toString().split(' ').first}',
+      _presenceTooltip(friend),
+    ].join(' • ');
+    final content = ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      leading: _presenceAvatar(friend, name, radius: viewMode == 'Cards' ? 24 : 19),
+      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+      subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        const Chip(label: Text('Friend')),
+        IconButton(tooltip: 'Message', onPressed: () => _startMessageFor(username), icon: const Icon(Icons.chat_bubble_outline_rounded)),
+      ]),
     );
-    final message = IconButton(
-      tooltip: 'Message',
-      onPressed: () => _startMessageFor(username),
-      icon: const Icon(Icons.chat_bubble_outline_rounded),
-    );
+    return viewMode == 'Cards' ? Card(clipBehavior: Clip.antiAlias, child: content) : content;
+  }
 
-    // Each preset changes the real Friends surface as well as the preview in
-    // Customize: photo-first uses larger avatars, while the other presets use
-    // list, compact, or feed-like cards. These are layout patterns, not copies
-    // of third-party branding.
-    if (photoStyle) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
-                ),
-                child: avatar,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w900)),
-                    Text(username.isEmpty ? 'Friend' : '@$username',
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white60)),
-                    const SizedBox(height: 4),
-                    Text(style == 'Instagram' ? 'Photo feed profile' : 'Photo-first profile', style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                  ],
-                ),
-              ),
-              message,
-            ],
-          ),
-        ),
-      );
-    }
-    if (listStyle) {
-      return ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        leading: avatar,
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text(username.isEmpty ? 'Friend' : '@$username'),
-        trailing: message,
-      );
-    }
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        dense: compactStyle,
-        leading: storyStyle
-            ? Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
-                ),
-                child: avatar,
-              )
-            : avatar,
-        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text(username.isEmpty ? 'Friend' : '@$username', maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: message,
-      ),
-    );
+  Widget _guardianRequestCard(Map<String, dynamic> request) {
+    final sender = request['sender'] is Map ? Map<String, dynamic>.from(request['sender'] as Map) : <String, dynamic>{};
+    final profile = AppController.instance.currentProfile;
+    if (profile == null) return const SizedBox.shrink();
+    final friendshipId = request['id']?.toString() ?? '';
+    final senderName = sender['display_name']?.toString() ?? sender['username']?.toString() ?? 'Someone';
+    final childName = request['childProfileName']?.toString() ?? 'child profile';
+    return Card(child: ListTile(
+      leading: const Icon(Icons.family_restroom_rounded),
+      title: Text('$senderName wants to add $childName'),
+      subtitle: Text('@${sender['username'] ?? ''} • Waiting for guardian approval'),
+      trailing: Wrap(spacing: 4, children: [
+        TextButton(onPressed: friendshipId.isEmpty ? null : () => _act(() async {
+          await AppController.instance.backendApi.respondGuardianFriendRequest(profileId: profile.id, friendshipId: friendshipId, action: 'block');
+        }), child: const Text('Block')),
+        FilledButton(onPressed: friendshipId.isEmpty ? null : () => _act(() async {
+          await AppController.instance.backendApi.respondGuardianFriendRequest(profileId: profile.id, friendshipId: friendshipId, action: 'approve');
+        }), child: const Text('Approve')),
+      ]),
+    ));
   }
 
   Widget _communitiesTab() {
-    final communities = _list('communities');
+    final profile = AppController.instance.currentProfile;
+    final allCommunities = _list('communities');
     final posts = _list('communityPosts');
     final stories = _list('communityStories');
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Communities',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: _createCommunity,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Create'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...communities.map(
-            (community) {
-              final communityId = community['id'].toString();
+    return AnimatedBuilder(
+      animation: AppSectionCustomizationStore.revision,
+      builder: (context, _) {
+        final settings = AppSectionCustomizationStore.settingsFor(profile);
+        final communities = allCommunities.where((community) {
+          final joined = community['joined'] == true;
+          final creator = (community['created_by_profile_id'] ?? community['createdByProfileId'] ?? community['owner_profile_id'])?.toString();
+          switch (settings.communitiesMembershipFilter) {
+            case 'Joined': return joined;
+            case 'Created': return profile != null && creator == profile.id;
+            default: return true;
+          }
+        }).toList();
+        int dateCompare(Map<String, dynamic> a, Map<String, dynamic> b, String field) {
+          final da = DateTime.tryParse((a[field] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse((b[field] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return da.compareTo(db);
+        }
+        communities.sort((a, b) {
+          switch (settings.communitiesSortOrder) {
+            case 'Oldest to Newest': return dateCompare(a, b, 'created_at');
+            case 'Newest to Oldest': return dateCompare(b, a, 'created_at');
+            case 'Joined': return dateCompare(b, a, 'joined_at');
+            case 'Created': return dateCompare(b, a, 'created_at');
+            case 'Movies':
+            case 'Shows':
+            case 'Music':
+              final target = settings.communitiesSortOrder.toLowerCase();
+              int rank(Map<String, dynamic> community) {
+                final type = (community['category'] ?? community['media_type'] ?? '').toString().toLowerCase();
+                return type == target ? 0 : 1;
+              }
+              final byCategory = rank(a).compareTo(rank(b));
+              return byCategory != 0 ? byCategory : (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? '');
+            default: return (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? '');
+          }
+        });
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(padding: const EdgeInsets.all(18), children: [
+            Row(children: [
+              Expanded(child: Text('Communities • ${communities.length}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+              FilledButton.icon(onPressed: _createCommunity, icon: const Icon(Icons.add_rounded), label: const Text('Create')),
+            ]),
+            const SizedBox(height: 10),
+            if (communities.isEmpty) const Card(child: ListTile(leading: Icon(Icons.groups_rounded), title: Text('No matching communities'), subtitle: Text('Try another filter or create a community.'))),
+            ...communities.map((community) {
+              final communityId = community['id']?.toString() ?? '';
               final isJoined = community['joined'] == true;
+              final creatorId = (community['created_by_profile_id'] ?? community['createdByProfileId'] ?? community['owner_profile_id'])?.toString();
+              final currentIsCreator = profile != null && creatorId == profile.id;
               final communityPosts = posts.where((post) {
-                final ids = (post['communityIds'] as List? ?? const [])
-                    .map((id) => id.toString());
-                return post['community_id']?.toString() == communityId ||
-                    ids.contains(communityId);
+                final ids = (post['communityIds'] as List? ?? const []).map((id) => id.toString());
+                return post['community_id']?.toString() == communityId || ids.contains(communityId);
               });
-              final communityStories = stories.where(
-                (story) => story['community_id']?.toString() == communityId,
-              );
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.groups_rounded),
-                        ),
-                        title: Text(
-                          community['name']?.toString() ?? 'Community',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text(
-                          community['description']?.toString() ?? '',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: isJoined
-                            ? const Chip(label: Text('Joined'))
-                            : FilledButton(
-                                onPressed: () => _act(
-                                  () => AppController.instance.backendApi
-                                      .joinSocialCommunity(
-                                    profileId: AppController
-                                        .instance.currentProfile!.id,
-                                    communityId: communityId,
-                                  ),
-                                ),
-                                child: const Text('Join'),
-                              ),
-                      ),
-                      if (isJoined) ...[
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            TextButton.icon(
-                              onPressed: () => _composeCommunityPost(
-                                communityId,
-                              ),
-                              icon: const Icon(Icons.post_add_rounded),
-                              label: const Text('Post'),
-                            ),
-                            TextButton.icon(
-                              onPressed: () =>
-                                  _composeStory(communityId: communityId),
-                              icon: const Icon(Icons.add_circle_outline),
-                              label: const Text('Story'),
-                            ),
-                          ],
-                        ),
-                        if (communityStories.isNotEmpty) ...[
-                          const Text(
-                            'Stories',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 6),
-                          SizedBox(
-                            height: 92,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              children:
-                                  communityStories.map(_storyBubble).toList(),
-                            ),
-                          ),
-                        ],
-                        if (communityPosts.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Community posts',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          ...communityPosts.map(_postCard),
-                        ],
-                      ],
-                    ],
+              final communityStories = stories.where((story) => story['community_id']?.toString() == communityId);
+              final category = (community['category'] ?? 'general').toString();
+              final subtitle = <String>[if (category.isNotEmpty) category, if (isJoined) 'Joined', if (currentIsCreator) 'Created by you'].join(' • ');
+              if (settings.communitiesViewMode == 'List') {
+                return Card(child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                  title: Text(community['name']?.toString() ?? 'Community'),
+                  subtitle: Text(subtitle.isEmpty ? (community['description']?.toString() ?? '') : subtitle),
+                  trailing: isJoined ? const Chip(label: Text('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const Text('Join')),
+                ));
+              }
+              return Card(child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                    title: Text(community['name']?.toString() ?? 'Community', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text('${community['description']?.toString() ?? ''}${subtitle.isEmpty ? '' : '\n$subtitle'}', maxLines: 3, overflow: TextOverflow.ellipsis),
+                    trailing: isJoined ? const Chip(label: Text('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const Text('Join')),
                   ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+                  if (isJoined) ...[
+                    Wrap(spacing: 8, children: [
+                      TextButton.icon(onPressed: () => _composeCommunityPost(communityId), icon: const Icon(Icons.post_add_rounded), label: const Text('Post')),
+                      TextButton.icon(onPressed: () => _composeStory(communityId: communityId), icon: const Icon(Icons.add_circle_outline), label: const Text('Story')),
+                    ]),
+                    if (communityStories.isNotEmpty) ...[
+                      const Text('Stories', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      SizedBox(height: 92, child: ListView(scrollDirection: Axis.horizontal, children: communityStories.map(_storyBubble).toList())),
+                    ],
+                    if (communityPosts.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text('Community posts', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      ...communityPosts.map(_postCard),
+                    ],
+                  ],
+                ]),
+              ));
+            }),
+          ]),
+        );
+      },
     );
   }
 
@@ -2379,15 +2429,39 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     if (profile == null) return;
     final name = await _prompt('Create community', 'Community name');
     if (name == null || name.trim().isEmpty) return;
-    final description =
-        await _prompt('Community description', 'Description') ?? '';
-    await _act(
-      () => AppController.instance.backendApi.createSocialCommunity(
-        profileId: profile.id,
-        name: name.trim(),
-        description: description.trim(),
+    final description = await _prompt('Community description', 'Description') ?? '';
+    if (!mounted) return;
+    var category = 'general';
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Community category'),
+          content: DropdownButtonFormField<String>(
+            initialValue: category,
+            decoration: const InputDecoration(labelText: 'Organize by'),
+            items: const [
+              DropdownMenuItem(value: 'movies', child: Text('Movies')),
+              DropdownMenuItem(value: 'shows', child: Text('Shows')),
+              DropdownMenuItem(value: 'music', child: Text('Music')),
+              DropdownMenuItem(value: 'general', child: Text('General')),
+            ],
+            onChanged: (value) { if (value != null) setDialogState(() => category = value); },
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, category), child: const Text('Create')),
+          ],
+        ),
       ),
     );
+    if (selected == null) return;
+    await _act(() => AppController.instance.backendApi.createSocialCommunity(
+      profileId: profile.id,
+      name: name.trim(),
+      description: description.trim(),
+      category: selected,
+    ));
   }
 
   Future<void> _newMessage() async {

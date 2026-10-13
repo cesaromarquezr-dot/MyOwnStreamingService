@@ -271,7 +271,7 @@ class _RadioScreenState extends State<RadioScreen> {
                             },
                           ),
                         ),
-                      for (final value in const ['music', 'news', 'sports', 'talk', 'public'])
+                      for (final value in const ['music', 'news', 'talk', 'public'])
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: ActionChip(label: Text(value), onPressed: () => _loadTag(value)),

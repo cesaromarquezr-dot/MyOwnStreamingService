@@ -783,6 +783,18 @@ class SupabaseSyncRoutes {
         return _json(request.response, HttpStatus.ok,
             {'success': true, 'friendship': friendship});
       }
+      if (bits.length == 2 &&
+          bits[0] == 'guardian-friend-request' &&
+          request.method == 'PATCH') {
+        final review = await store.answerSocialGuardianFriendRequest(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          friendshipId: bits[1],
+          action: _requiredText(body, 'action', 20),
+        );
+        return _json(request.response, HttpStatus.ok,
+            {'success': true, 'review': review});
+      }
       if (bits.length == 1 && bits[0] == 'posts' && request.method == 'POST') {
         final profileName =
             account.profiles.firstWhere((item) => item.id == profile).name;
@@ -809,7 +821,8 @@ class SupabaseSyncRoutes {
             accountExternalId: account.id,
             profileExternalId: profile,
             name: _requiredText(body, 'name', 80),
-            description: _optionalText(body, 'description', 500) ?? '');
+            description: _optionalText(body, 'description', 500) ?? '',
+            category: _optionalText(body, 'category', 20) ?? 'general');
         return _json(request.response, HttpStatus.created,
             {'success': true, 'community': community});
       }

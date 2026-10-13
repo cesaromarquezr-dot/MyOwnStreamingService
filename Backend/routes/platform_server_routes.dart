@@ -63,8 +63,15 @@ class PlatformServerRoutes {
       await _json(request.response, 400, {'success': false, 'error': error.message});
     } on StateError catch (error) {
       await _json(request.response, 409, {'success': false, 'error': error.message});
-    } catch (_) {
-      await _json(request.response, 500, {'success': false, 'error': 'Server selection request failed.'});
+    } catch (error, stackTrace) {
+      // Keep implementation details out of the HTTP response, but retain them
+      // in the backend console so server-assignment problems can be diagnosed.
+      stderr.writeln('[PlatformServerRoutes] Request failed: $error');
+      stderr.writeln(stackTrace);
+      await _json(request.response, 500, {
+        'success': false,
+        'error': 'Server selection request failed. Check backend console logs for details.',
+      });
     }
   }
 

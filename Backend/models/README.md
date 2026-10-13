@@ -649,12 +649,6 @@ authorization layers.
 
 ---
 
-# Sports models
-
-## `sports.dart`
-
-Sports models represent games and broadcast metadata.
-
 A broadcast can include:
 
 * provider

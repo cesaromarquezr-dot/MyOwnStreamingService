@@ -163,7 +163,21 @@ class SupabaseStore {
           .eq('id', otherId)
           .maybeSingle();
       if (other != null) {
-        friends.add({...other, 'profileId': otherProfile});
+        final presence = await c
+            .from('social_profile_presence')
+            .select('availability,activity_type,activity_text,last_seen_at')
+            .eq('account_id', otherId)
+            .eq('profile_id', otherProfile)
+            .maybeSingle();
+        friends.add({
+          ...other,
+          'profileId': otherProfile,
+          'friends_since': row['created_at'],
+          'presenceStatus': presence?['availability'] ?? 'away',
+          'activityType': presence?['activity_type'],
+          'activityText': presence?['activity_text'],
+          'lastSeenAt': presence?['last_seen_at'],
+        });
       }
     }
     final pendingRows = await c
@@ -172,6 +186,7 @@ class SupabaseStore {
         .eq('recipient_account_id', accountId)
         .eq('recipient_profile_id', profileExternalId)
         .eq('status', 'pending')
+        .eq('requires_guardian_review', false)
         .order('created_at', ascending: false)
         .limit(20);
     final requests = <Map<String, dynamic>>[];
@@ -183,6 +198,55 @@ class SupabaseStore {
           .maybeSingle();
       if (sender != null) requests.add({...row, 'sender': sender});
     }
+    // Friend requests addressed to supervised profiles are returned only to
+    // linked guardians, never to the child profile's pending-request list.
+    final guardianRequests = <Map<String, dynamic>>[];
+    final guardianProfile = await c
+        .from('profiles')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('external_profile_id', profileExternalId)
+        .eq('is_active', true)
+        .maybeSingle();
+    final guardianProfileId = guardianProfile?['id']?.toString();
+    if (guardianProfileId != null && guardianProfileId.isNotEmpty) {
+      final reviewRows = await c
+          .from('social_friendship_guardian_reviews')
+          .select('friendship_id,child_profile_id,created_at')
+          .eq('guardian_profile_id', guardianProfileId)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false)
+          .limit(30);
+      for (final review in reviewRows) {
+        final friendship = await c
+            .from('social_friendships')
+            .select()
+            .eq('id', review['friendship_id'].toString())
+            .eq('status', 'pending')
+            .eq('requires_guardian_review', true)
+            .maybeSingle();
+        if (friendship == null) continue;
+        final sender = await c
+            .from('accounts')
+            .select('username,display_name,avatar_url')
+            .eq('id', friendship['requester_account_id'].toString())
+            .maybeSingle();
+        final child = await c
+            .from('profiles')
+            .select('name')
+            .eq('id', review['child_profile_id'].toString())
+            .maybeSingle();
+        if (sender != null) {
+          guardianRequests.add({
+            ...Map<String, dynamic>.from(friendship),
+            'sender': Map<String, dynamic>.from(sender),
+            'childProfileName': child?['name']?.toString() ?? 'Child profile',
+            'guardianReview': true,
+          });
+        }
+      }
+    }
+
     final candidates = await c
         .from('accounts')
         .select('id,username,display_name,avatar_url')
@@ -229,14 +293,22 @@ class SupabaseStore {
       posts.addAll(items.map((row) => {...row, 'author': friend}));
     }
 
+    final ownPostIds = await c
+        .from('social_posts')
+        .select('id')
+        .eq('author_account_id', accountId)
+        .eq('author_profile_id', profileExternalId)
+        .limit(10000);
+    final ownPostCount = ownPostIds.length;
+
+    // A profile can see its own posts regardless of the friend-feed visibility.
     final ownPosts = await c
         .from('social_posts')
         .select()
         .eq('author_account_id', accountId)
         .eq('author_profile_id', profileExternalId)
-        .eq('visibility', 'friends')
         .order('created_at', ascending: false)
-        .limit(20);
+        .limit(100);
     for (final row in ownPosts) {
       posts.add({
         ...Map<String, dynamic>.from(row),
@@ -247,11 +319,15 @@ class SupabaseStore {
 
     final memberships = await c
         .from('social_community_memberships')
-        .select('community_id')
+        .select('community_id,joined_at')
         .eq('account_id', accountId)
         .eq('profile_id', profileExternalId);
     final joinedCommunityIds =
         memberships.map((item) => item['community_id'].toString()).toSet();
+    final joinedAtByCommunity = <String, dynamic>{
+      for (final membership in memberships)
+        membership['community_id'].toString(): membership['joined_at'],
+    };
     final communityPosts = <Map<String, dynamic>>[];
     if (joinedCommunityIds.isNotEmpty) {
       final communityLinks = await c
@@ -340,7 +416,7 @@ class SupabaseStore {
 
     final communities = await c
         .from('social_communities')
-        .select('id,name,slug,description,visibility,created_at')
+        .select('id,name,slug,description,visibility,category,created_by_profile_id,created_at')
         .eq('visibility', 'public')
         .order('name')
         .limit(100);
@@ -354,8 +430,10 @@ class SupabaseStore {
     );
     return {
       'friendCount': friends.length,
+      'ownPostCount': ownPostCount,
       'friends': friends,
       'requests': requests,
+      'guardianRequests': guardianRequests,
       'suggestions': suggestions,
       'posts': posts.take(30).toList(),
       'communityPosts': communityPosts.take(100).toList(),
@@ -364,8 +442,8 @@ class SupabaseStore {
       'communities': communities
           .map((community) => {
                 ...community,
-                'joined':
-                    joinedCommunityIds.contains(community['id'].toString()),
+                'joined': joinedCommunityIds.contains(community['id'].toString()),
+                'joined_at': joinedAtByCommunity[community['id'].toString()],
               })
           .toList(),
     };
@@ -542,6 +620,39 @@ class SupabaseStore {
         .single());
   }
 
+  Future<Map<String, dynamic>> answerSocialGuardianFriendRequest({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String friendshipId,
+    required String action,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    if (!{'approve', 'block'}.contains(action)) {
+      throw ArgumentError('Unsupported guardian review action.');
+    }
+    final account = await c.from('accounts').select('id')
+        .eq('external_account_id', accountExternalId).maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final guardian = await c.from('profiles').select('id')
+        .eq('account_id', account['id'].toString())
+        .eq('external_profile_id', profileExternalId)
+        .eq('is_active', true).maybeSingle();
+    if (guardian == null) throw StateError('Guardian profile not found.');
+    final review = await c.from('social_friendship_guardian_reviews')
+        .select('friendship_id,status')
+        .eq('friendship_id', friendshipId)
+        .eq('guardian_profile_id', guardian['id'].toString())
+        .eq('status', 'pending').maybeSingle();
+    if (review == null) throw StateError('This request is not awaiting this guardian profile.');
+    final updated = await c.from('social_friendship_guardian_reviews')
+        .update({'status': action == 'approve' ? 'approved' : 'blocked'})
+        .eq('friendship_id', friendshipId)
+        .eq('guardian_profile_id', guardian['id'].toString())
+        .select().single();
+    return Map<String, dynamic>.from(updated);
+  }
+
   Future<Map<String, dynamic>> createSocialPost({
     required String accountExternalId,
     required String profileExternalId,
@@ -617,11 +728,13 @@ class SupabaseStore {
     return Map<String, dynamic>.from(row);
   }
 
-  Future<Map<String, dynamic>> createSocialCommunity(
-      {required String accountExternalId,
-      required String profileExternalId,
-      required String name,
-      required String description}) async {
+  Future<Map<String, dynamic>> createSocialCommunity({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String name,
+    required String description,
+    String category = 'general',
+  }) async {
     final c = _db;
     if (c == null)
       throw StateError('Social features require Supabase persistence.');
@@ -641,7 +754,11 @@ class SupabaseStore {
           'slug':
               '$slugBase-${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}',
           'description': description.trim(),
-          'created_by_account_id': me['id']
+          'category': const {'movies', 'shows', 'music', 'general'}.contains(category.trim().toLowerCase())
+              ? category.trim().toLowerCase()
+              : 'general',
+          'created_by_account_id': me['id'],
+          'created_by_profile_id': profileExternalId,
         })
         .select()
         .single();
@@ -5009,6 +5126,22 @@ class SupabaseStore {
             'id',
             catalogId,
           );
+    }
+
+    final existingCanonicalCopy = await c
+        .from('server_media')
+        .select('id,server_media_id,metadata')
+        .eq('server_id', serverId)
+        .eq('media_catalog_id', catalogId)
+        .neq('server_media_id', cleanRelativeMediaId)
+        .limit(1)
+        .maybeSingle();
+    if (existingCanonicalCopy != null) {
+      final existingPath = existingCanonicalCopy['server_media_id']?.toString() ?? '';
+      if (incomingMetadata['source'] == 'approved-arm-import') {
+        throw FormatException('"$cleanTitle" already exists on this home server${existingPath.isEmpty ? '.' : ' at "$existingPath".'}');
+      }
+      return;
     }
 
     await c.from('server_media').upsert(

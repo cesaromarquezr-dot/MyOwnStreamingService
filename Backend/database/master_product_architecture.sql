@@ -51,7 +51,7 @@ create table if not exists public.media_events (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   event_type text not null default 'custom'
-    check (event_type in ('season','holiday','cultural','sports','special','custom')),
+    check (event_type in ('season','holiday','cultural','special','custom')),
   theme_id uuid,
   start_month_day text,
   end_month_day text,
