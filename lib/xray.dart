@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
+import 'media_text_localizer.dart';
 
 /// X-Ray screen showing cast, directors, music and other context for a title.
 class XRayScreen extends StatefulWidget {
@@ -187,7 +188,7 @@ class _XRayScreenState extends State<XRayScreen> {
     final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Private X-Ray note'),
+        title: const UniversalText('Private X-Ray note'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -202,10 +203,10 @@ class _XRayScreenState extends State<XRayScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel')),
+              child: const UniversalText('Cancel')),
           FilledButton(
               onPressed: () => Navigator.pop(dialogContext, controller.text),
-              child: const Text('Save')),
+              child: const UniversalText('Save')),
         ],
       ),
     );
@@ -254,7 +255,7 @@ class _XRayScreenState extends State<XRayScreen> {
     await Clipboard.setData(ClipboardData(text: reference));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Version-aware X-Ray reference copied.')));
+        const SnackBar(content: UniversalText('Version-aware X-Ray reference copied.')));
   }
 
   Future<void> _toggleFollow(String type, String name) async {
@@ -280,7 +281,7 @@ class _XRayScreenState extends State<XRayScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, updateDialog) => AlertDialog(
-          title: const Text('X-Ray sections'),
+          title: const UniversalText('X-Ray sections'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -304,10 +305,10 @@ class _XRayScreenState extends State<XRayScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel')),
+                child: const UniversalText('Cancel')),
             FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, selected),
-                child: const Text('Save')),
+                child: const UniversalText('Save')),
           ],
         ),
       ),
@@ -349,11 +350,11 @@ class _XRayScreenState extends State<XRayScreen> {
             initialValue: _spoilerLevel,
             onSelected: _setSpoilerLevel,
             itemBuilder: (_) => const [
-              PopupMenuItem(value: SpoilerProtectionLevel.noSpoilers, child: Text('No spoilers')),
-              PopupMenuItem(value: SpoilerProtectionLevel.currentScene, child: Text('Current scene')),
-              PopupMenuItem(value: SpoilerProtectionLevel.currentMovie, child: Text('Current movie')),
-              PopupMenuItem(value: SpoilerProtectionLevel.franchise, child: Text('Franchise')),
-              PopupMenuItem(value: SpoilerProtectionLevel.everything, child: Text('Everything')),
+              PopupMenuItem(value: SpoilerProtectionLevel.noSpoilers, child: UniversalText('No spoilers')),
+              PopupMenuItem(value: SpoilerProtectionLevel.currentScene, child: UniversalText('Current scene')),
+              PopupMenuItem(value: SpoilerProtectionLevel.currentMovie, child: UniversalText('Current movie')),
+              PopupMenuItem(value: SpoilerProtectionLevel.franchise, child: UniversalText('Franchise')),
+              PopupMenuItem(value: SpoilerProtectionLevel.everything, child: UniversalText('Everything')),
             ],
             icon: const Icon(Icons.visibility_outlined),
           ),
@@ -465,7 +466,7 @@ class _XRayScreenState extends State<XRayScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.note_alt_outlined),
-              title: const Text('My X-Ray notes'),
+              title: const UniversalText('My X-Ray notes'),
               subtitle: Text(
                   'Private to this profile · ${media.mediaVersionId ?? 'Unversioned media'}'),
               trailing: IconButton(
@@ -1106,7 +1107,7 @@ class ActorBiographyScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.movie_outlined),
               title: const UniversalText('Featured in'),
-              subtitle: Text(media.title),
+              subtitle: LocalizedMediaText(media.title),
             ),
           ),
         ],

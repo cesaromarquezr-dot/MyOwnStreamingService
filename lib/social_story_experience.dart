@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
 import 'music.dart';
+import 'localization.dart';
 
 
 class StoryPlacementStore {
@@ -167,12 +168,12 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_outlined),
-              title: const Text('Photo'),
+              title: const UniversalText('Photo'),
               onTap: () => Navigator.pop(sheetContext, 'photo'),
             ),
             ListTile(
               leading: const Icon(Icons.videocam_outlined),
-              title: const Text('Video'),
+              title: const UniversalText('Video'),
               onTap: () => Navigator.pop(sheetContext, 'video'),
             ),
           ],
@@ -228,7 +229,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         scrollable: true,
-        title: const Text('Add a poll'),
+        title: const UniversalText('Add a poll'),
         content: Column(
           children: [
             TextField(controller: question, decoration: const InputDecoration(labelText: 'Question')),
@@ -242,14 +243,14 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
           FilledButton(
             onPressed: () {
               final values = options.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
               if (question.text.trim().isEmpty || values.length < 2) return;
               Navigator.pop(dialogContext, {'question': question.text.trim(), 'options': values.take(6).toList()});
             },
-            child: const Text('Add poll'),
+            child: const UniversalText('Add poll'),
           ),
         ],
       ),
@@ -277,7 +278,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
             padding: const EdgeInsets.only(bottom: 20),
             shrinkWrap: true,
             children: [
-              const ListTile(title: Text('Mention friends'), subtitle: Text('Select one or more friends.')),
+              const ListTile(title: UniversalText('Mention friends'), subtitle: UniversalText('Select one or more friends.')),
               for (final friend in widget.friends)
                 CheckboxListTile(
                   value: selected.contains(friend['profileId']?.toString()),
@@ -296,7 +297,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
                   sheetContext,
                   widget.friends.where((friend) => selected.contains(friend['profileId']?.toString())).toList(),
                 ),
-                child: const Text('Done'),
+                child: const UniversalText('Done'),
               ),
             ],
           ),
@@ -435,7 +436,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Story')),
+      appBar: AppBar(title: const UniversalText('Create Story')),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -448,33 +449,33 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
                 DropdownButtonFormField<int>(
                   initialValue: expiresInHours,
                   decoration: const InputDecoration(labelText: 'Story lifetime', border: OutlineInputBorder()),
-                  items: const [DropdownMenuItem(value: 24, child: Text('24 hours')), DropdownMenuItem(value: 48, child: Text('2 days')), DropdownMenuItem(value: 72, child: Text('3 days')), DropdownMenuItem(value: 168, child: Text('1 week'))],
+                  items: const [DropdownMenuItem(value: 24, child: UniversalText('24 hours')), DropdownMenuItem(value: 48, child: UniversalText('2 days')), DropdownMenuItem(value: 72, child: UniversalText('3 days')), DropdownMenuItem(value: 168, child: UniversalText('1 week'))],
                   onChanged: (value) => setState(() => expiresInHours = value ?? 24),
                 ),
                 const SizedBox(height: 16),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   OutlinedButton.icon(onPressed: _pickMedia, icon: const Icon(Icons.add_photo_alternate_outlined), label: Text(selectedMedia == null ? 'Add photo/video' : 'Change media')),
-                  OutlinedButton.icon(onPressed: _pickMusic, icon: const Icon(Icons.music_note_rounded), label: const Text('Music')),
-                  OutlinedButton.icon(onPressed: _pickPoll, icon: const Icon(Icons.poll_outlined), label: const Text('Poll')),
-                  OutlinedButton.icon(onPressed: _pickFriendMentions, icon: const Icon(Icons.alternate_email_rounded), label: const Text('Friends')),
-                  OutlinedButton.icon(onPressed: _pickMediaMention, icon: const Icon(Icons.movie_filter_outlined), label: const Text('Movie / show')),
+                  OutlinedButton.icon(onPressed: _pickMusic, icon: const Icon(Icons.music_note_rounded), label: const UniversalText('Music')),
+                  OutlinedButton.icon(onPressed: _pickPoll, icon: const Icon(Icons.poll_outlined), label: const UniversalText('Poll')),
+                  OutlinedButton.icon(onPressed: _pickFriendMentions, icon: const Icon(Icons.alternate_email_rounded), label: const UniversalText('Friends')),
+                  OutlinedButton.icon(onPressed: _pickMediaMention, icon: const Icon(Icons.movie_filter_outlined), label: const UniversalText('Movie / show')),
                 ]),
                 const SizedBox(height: 10),
                 TextField(controller: locationController, onChanged: (_) => setState(() {}), decoration: const InputDecoration(prefixIcon: Icon(Icons.location_on_outlined), labelText: 'Location', border: OutlineInputBorder())),
                 if (selectedTrack != null) ...[
                   const SizedBox(height: 14),
-                  Card(child: ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(selectedTrack!.title), subtitle: Text('${selectedTrack!.artist} • ${selectedTrack!.album}'), trailing: DropdownButton<String>(value: musicMode, items: const [DropdownMenuItem(value: 'audio', child: Text('Audio only')), DropdownMenuItem(value: 'lyrics', child: Text('Show lyrics'))], onChanged: (value) => setState(() => musicMode = value ?? 'audio')))),
+                  Card(child: ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(selectedTrack!.title), subtitle: Text('${selectedTrack!.artist} • ${selectedTrack!.album}'), trailing: DropdownButton<String>(value: musicMode, items: const [DropdownMenuItem(value: 'audio', child: UniversalText('Audio only')), DropdownMenuItem(value: 'lyrics', child: UniversalText('Show lyrics'))], onChanged: (value) => setState(() => musicMode = value ?? 'audio')))),
                   if (musicMode == 'lyrics') ...[
-                    Row(children: [const Text('Lyric size'), Expanded(child: Slider(min: 14, max: 48, value: lyricsSize, onChanged: (value) => setState(() => lyricsSize = value)))]),
-                    Wrap(spacing: 8, children: [for (final color in [Colors.white, Colors.black, Colors.redAccent, Colors.amber, Colors.lightBlueAccent, Colors.pinkAccent]) ChoiceChip(label: const Text(''), selected: lyricsColor == color, avatar: CircleAvatar(backgroundColor: color), onSelected: (_) => setState(() => lyricsColor = color))]),
+                    Row(children: [const UniversalText('Lyric size'), Expanded(child: Slider(min: 14, max: 48, value: lyricsSize, onChanged: (value) => setState(() => lyricsSize = value)))]),
+                    Wrap(spacing: 8, children: [for (final color in [Colors.white, Colors.black, Colors.redAccent, Colors.amber, Colors.lightBlueAccent, Colors.pinkAccent]) ChoiceChip(label: const UniversalText(''), selected: lyricsColor == color, avatar: CircleAvatar(backgroundColor: color), onSelected: (_) => setState(() => lyricsColor = color))]),
                     const SizedBox(height: 6),
-                    const Text('Drag the lyrics in the preview to move them.'),
+                    const UniversalText('Drag the lyrics in the preview to move them.'),
                   ],
                 ],
                 if (mentions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Wrap(spacing: 6, children: [for (final mention in mentions) Chip(label: Text('@${mention['username'] ?? mention['displayName'] ?? 'friend'}'))])),
                 if (selectedPoll != null) Padding(padding: const EdgeInsets.only(top: 10), child: Card(child: ListTile(leading: const Icon(Icons.poll_rounded), title: Text(selectedPoll!['question'].toString()), subtitle: Text((selectedPoll!['options'] as List).join(' • '))))),
                 const SizedBox(height: 18),
-                FilledButton.icon(onPressed: () => Navigator.pop(context, StoryDraft(body: bodyController.text.trim().isEmpty ? 'Shared a story' : bodyController.text.trim(), expiresInHours: expiresInHours, storyData: _buildStoryData(), media: selectedMedia, mediaType: selectedMediaType)), icon: const Icon(Icons.send_rounded), label: const Text('Share Story')),
+                FilledButton.icon(onPressed: () => Navigator.pop(context, StoryDraft(body: bodyController.text.trim().isEmpty ? 'Shared a story' : bodyController.text.trim(), expiresInHours: expiresInHours, storyData: _buildStoryData(), media: selectedMedia, mediaType: selectedMediaType)), icon: const Icon(Icons.send_rounded), label: const UniversalText('Share Story')),
               ],
             );
             if (!wide) return Column(children: [Expanded(child: editor)]);
@@ -584,9 +585,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     final body = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Reply to Story'),
+        title: const UniversalText('Reply to Story'),
         content: TextField(controller: controller, maxLines: 4, autofocus: true, decoration: const InputDecoration(hintText: 'Write a reply…')),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('Send'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const UniversalText('Send'))],
       ),
     );
     controller.dispose();
@@ -723,7 +724,7 @@ final lyrics = music != null && music['mode'] == 'lyrics'
                       else if (videoLoading)
                         const Center(child: CircularProgressIndicator())
                       else if (videoError != null)
-                        Center(child: Text('Unable to play Story video.')),
+                        Center(child: UniversalText('Unable to play Story video.')),
                       if (widget.story['body']?.toString().trim().isNotEmpty == true)
                         Positioned(left: 20, right: 20, bottom: 24, child: Text(widget.story['body'].toString(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(blurRadius: 12)]))),
                       if (location != null && location.isNotEmpty) Positioned(top: 18, left: 18, child: Chip(avatar: const Icon(Icons.location_on_outlined), label: Text(location))),
@@ -742,7 +743,7 @@ final lyrics = music != null && music['mode'] == 'lyrics'
                     children: [
                       IconButton.filledTonal(onPressed: _toggleLike, icon: Icon(liked ? Icons.favorite : Icons.favorite_border), tooltip: 'Like'),
                       const SizedBox(width: 8),
-                      Expanded(child: FilledButton.icon(onPressed: _reply, icon: const Icon(Icons.reply_rounded), label: const Text('Reply'))),
+                      Expanded(child: FilledButton.icon(onPressed: _reply, icon: const Icon(Icons.reply_rounded), label: const UniversalText('Reply'))),
                     ],
                   ),
                 ),
@@ -796,7 +797,7 @@ class _StoryViewsScreenState extends State<StoryViewsScreen> {
   Widget build(BuildContext context) {
     final viewers = (data?['viewers'] as List? ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Story Views')),
+      appBar: AppBar(title: const UniversalText('Story Views')),
       body: error != null
           ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(error!)))
           : data == null
@@ -808,7 +809,7 @@ class _StoryViewsScreenState extends State<StoryViewsScreen> {
                     children: [
                       Card(child: ListTile(leading: const Icon(Icons.visibility_outlined), title: Text('${data!['totalViews'] ?? 0} total views'), subtitle: Text('${data!['uniqueViewers'] ?? 0} people • ${data!['likes'] ?? 0} likes'))),
                       const SizedBox(height: 12),
-                      if (viewers.isEmpty) const Card(child: ListTile(title: Text('No views yet'), subtitle: Text('When friends watch your Story, their repeat-view count will appear here.'))),
+                      if (viewers.isEmpty) const Card(child: ListTile(title: UniversalText('No views yet'), subtitle: UniversalText('When friends watch your Story, their repeat-view count will appear here.'))),
                       for (final viewer in viewers)
                         Card(
                           child: ListTile(

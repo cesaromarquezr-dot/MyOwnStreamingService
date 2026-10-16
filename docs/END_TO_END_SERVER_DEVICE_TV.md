@@ -10,7 +10,7 @@
 7. Open two player screens from the same profile/device context and confirm each playback session remains independent.
 8. On a TV, open **TV Host Mode** and display the six-digit pairing code.
 9. On a phone, open **TV Controller**, pair using the code, and verify the phone device ID is used rather than a shared hard-coded controller ID.
-10. Verify Remote, Gamepad, Keyboard, and Second Screen commands travel through the authenticated TV pairing.
+10. Verify Remote, Keyboard, and Second Screen commands travel through the authenticated TV pairing.
 11. Verify unauthorized profiles/devices cannot send commands to a paired TV.
 12. Verify the TV publishes its current playback state and the phone can read it without taking over the phone's own playback session.
 

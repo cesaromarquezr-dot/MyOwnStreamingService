@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -5,9 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:typed_data';
 
 import 'app_core.dart';
+import 'localization.dart';
+import 'page_customization_button.dart';
 
 class FoodRestaurant {
   final String id;
@@ -22,6 +26,13 @@ class FoodRestaurant {
   final String countryCode;
   final String? website;
   final String openingHours;
+  final Map<String, dynamic> businessHours;
+  final List<String> contactMethods;
+  final String? contactEmail;
+  final String? whatsappNumber;
+  final String? imessageAddress;
+  final String? smsNumber;
+  final bool is24_7;
   final String source;
   final bool isOrderable;
   final bool isOpenKnown;
@@ -57,6 +68,13 @@ class FoodRestaurant {
     this.countryCode = '',
     this.website,
     this.openingHours = '',
+    this.businessHours = const <String, dynamic>{},
+    this.contactMethods = const <String>['call'],
+    this.contactEmail,
+    this.whatsappNumber,
+    this.imessageAddress,
+    this.smsNumber,
+    this.is24_7 = false,
     this.source = 'platform',
     this.isOrderable = true,
     this.isOpenKnown = true,
@@ -94,6 +112,15 @@ class FoodRestaurant {
       countryCode: json['countryCode']?.toString() ?? json['country_code']?.toString() ?? '',
       website: _nullableString(json['website'] ?? json['contact:website']),
       openingHours: json['openingHours']?.toString() ?? json['opening_hours']?.toString() ?? '',
+      businessHours: _stringMap(json['businessHours'] ?? json['business_hours']),
+      contactMethods: _stringList(json['contactMethods'] ?? json['contact_methods']).isEmpty
+          ? <String>[(json['phone']?.toString().trim().isNotEmpty == true) ? 'call' : ''].where((item) => item.isNotEmpty).toList(growable: false)
+          : _stringList(json['contactMethods'] ?? json['contact_methods']),
+      contactEmail: _nullableString(json['contactEmail'] ?? json['contact_email']),
+      whatsappNumber: _nullableString(json['whatsappNumber'] ?? json['whatsapp_number']),
+      imessageAddress: _nullableString(json['imessageAddress'] ?? json['imessage_address']),
+      smsNumber: _nullableString(json['smsNumber'] ?? json['sms_number']),
+      is24_7: (json['is24_7'] ?? json['is_24_7']) == true,
       source: json['source']?.toString() ?? 'platform',
       isOrderable: json['isOrderable'] == null && json['is_orderable'] == null
           ? true
@@ -129,6 +156,108 @@ class FoodRestaurant {
   }
 }
 
+class FoodRestaurantReview {
+  final String id;
+  final String reviewerName;
+  final int rating;
+  final String title;
+  final String body;
+  final bool verifiedOrder;
+  final DateTime? createdAt;
+
+  const FoodRestaurantReview({
+    required this.id,
+    required this.reviewerName,
+    required this.rating,
+    this.title = '',
+    this.body = '',
+    this.verifiedOrder = false,
+    this.createdAt,
+  });
+
+  factory FoodRestaurantReview.fromJson(Map<String, dynamic> json) => FoodRestaurantReview(
+    id: json['id']?.toString() ?? '',
+    reviewerName: json['reviewerDisplayName']?.toString() ?? json['reviewer_display_name']?.toString() ?? 'Customer',
+    rating: _toInt(json['rating']).clamp(1, 5).toInt(),
+    title: json['title']?.toString() ?? '',
+    body: json['body']?.toString() ?? '',
+    verifiedOrder: (json['verifiedOrder'] ?? json['verified_order']) == true,
+    createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? json['created_at']?.toString() ?? ''),
+  );
+}
+
+class FoodMenuTheme {
+  final String id;
+  final String themeKey;
+  final String name;
+  final String description;
+  final String inspiration;
+  final String disclosure;
+  final List<String> menuItemIds;
+
+  const FoodMenuTheme({
+    required this.id,
+    required this.themeKey,
+    required this.name,
+    this.description = '',
+    this.inspiration = '',
+    this.disclosure = '',
+    this.menuItemIds = const <String>[],
+  });
+
+  factory FoodMenuTheme.fromJson(Map<String, dynamic> json) => FoodMenuTheme(
+    id: json['id']?.toString() ?? '',
+    themeKey: json['themeKey']?.toString() ?? json['theme_key']?.toString() ?? '',
+    name: json['name']?.toString() ?? 'Themed menu',
+    description: json['description']?.toString() ?? '',
+    inspiration: json['inspiration']?.toString() ?? '',
+    disclosure: json['disclosure']?.toString() ?? '',
+    menuItemIds: _stringList(json['menuItemIds'] ?? json['menu_item_ids']),
+  );
+}
+
+class FoodThemePreset {
+  final String key;
+  final String name;
+  final String inspiration;
+  final String description;
+  final List<String> menuIdeas;
+  const FoodThemePreset(this.key, this.name, this.inspiration, this.description, {this.menuIdeas = const <String>[]});
+}
+
+const foodThemePresets = <FoodThemePreset>[
+  FoodThemePreset(
+    'wizarding_fantasy', 'Wizarding Fantasy Marathon', 'Harry Potter-inspired',
+    'British-inspired savory food, magical sweets, and warm or cold butterbeer-inspired drinks.',
+    menuIdeas: <String>[
+      'Pumpkin pasties', 'Cornish pasties', 'Shepherd’s pie', 'Steak-and-kidney pudding', 'Hagrid-inspired roast beef platter',
+      'Butterbeer-inspired hot or cold non-alcoholic drink', 'Chocolate-frog-shaped treats',
+      'Every-flavor jelly beans', 'Treacle tart', 'Golden-Snitch mac-and-cheese bites',
+      'Pretzel-rod broomsticks', 'Honeydukes-inspired candy board', 'Pink-frosted birthday cake', 'Chocolate-covered gummies', 'Soft pretzels',
+      'Middle films: Patronus-inspired sugar cookies, treacle tart, and Gillyweed-inspired fruit snacks',
+      'Later films: Cauldron cakes, licorice wand treats, and foraged-mushroom-inspired dishes',
+      'Early films: pink-frosted birthday cake, chocolate-covered gummies, and soft pretzels',
+    ],
+  ),
+  FoodThemePreset(
+    'superhero_marathon', 'Superhero Movie Marathon', 'Marvel-inspired',
+    'Character-inspired comfort food, shareable snacks, bold colors, and cosmic non-alcoholic drinks.',
+    menuIdeas: <String>[
+      'Shawarma platter', 'Iron Man-inspired cheeseburgers and pepper-pot soup', 'Captain America-inspired apple pie',
+      'Red-and-gold watermelon and pineapple skewers', 'Coney-style hot dogs', 'Hulk-green smash burgers or green smoothies',
+      'Spider-Man-inspired New York-style pizza or spicy tacos', 'Black Panther-inspired piri-piri chicken or shisa nyama-style platter',
+      'Black Widow-inspired pelmeni', 'Thor-inspired pretzel hammer treats and non-alcoholic mead-style drink',
+      'Hawkeye bullseye hummus platter', 'Mjölnir pretzel-rod hammer treats or bacon-lollipop bites', 'Beer-cheese dip where suitable', 'Colorful infinity-stone gummies',
+      'Avengers-inspired mixed-berry “assemble” pie', 'Red, green, and gold themed donuts', 'Galaxy-blue Tesseract mocktail',
+      'Guardians-inspired tropical fruit and root-beer floats', 'Non-alcoholic themed frozen slushies',
+    ],
+  ),
+  FoodThemePreset('horror_night', 'Horror Movie Night', 'Horror cinema', 'Dark-red mocktails, spicy snacks, themed desserts, popcorn flights, and late-night sharing platters.', menuIdeas: <String>['Popcorn flight', 'Spicy wings or cauliflower bites', 'Red-berry mocktail', 'Black-cocoa cupcakes', 'Late-night sharing platter']),
+  FoodThemePreset('anime_watch_party', 'Anime Watch Party', 'Anime-inspired', 'Japanese comfort-food options, ramen, onigiri, bento boxes, mochi, and themed non-alcoholic drinks.', menuIdeas: <String>['Ramen bowls', 'Onigiri assortment', 'Bento box', 'Mochi selection', 'Japanese-style fruit soda']),
+  FoodThemePreset('space_adventure', 'Space Adventure Night', 'Science-fiction cinema', 'Galaxy-colored mocktails, star-shaped snacks, cosmic desserts, and shareable trays.', menuIdeas: <String>['Galaxy mocktail', 'Star-shaped sandwiches', 'Cosmic cupcakes', 'Meteor meatballs or plant-based bites', 'Astronaut-style snack packs']),
+  FoodThemePreset('holiday_marathon', 'Holiday Movie Marathon', 'Seasonal cinema', 'Cookies, warm drinks, comfort-food trays, festive desserts, and sharing platters.', menuIdeas: <String>['Cookie assortment', 'Warm spiced apple drink', 'Comfort-food platter', 'Festive brownies', 'Sharing snack board']),
+];
+
 class FoodMenuItem {
   final String id;
   final String category;
@@ -138,6 +267,10 @@ class FoodMenuItem {
   final String? imageUrl;
   final bool available;
   final List<String> tags;
+  final List<String> themeKeys;
+  final List<String> ingredients;
+  final List<String> allergens;
+  final List<String> removableIngredients;
   final List<FoodModifierGroup> modifierGroups;
 
   const FoodMenuItem({
@@ -149,6 +282,10 @@ class FoodMenuItem {
     this.imageUrl,
     this.available = true,
     this.tags = const <String>[],
+    this.themeKeys = const <String>[],
+    this.ingredients = const <String>[],
+    this.allergens = const <String>[],
+    this.removableIngredients = const <String>[],
     this.modifierGroups = const <FoodModifierGroup>[],
   });
 
@@ -163,6 +300,10 @@ class FoodMenuItem {
       imageUrl: _nullableString(json['imageUrl'] ?? json['image_url']),
       available: json['available'] == null ? true : json['available'] == true,
       tags: _stringList(json['tags']),
+      themeKeys: _stringList(json['themeKeys'] ?? json['theme_keys']),
+      ingredients: _stringList(json['ingredients']),
+      allergens: _stringList(json['allergens']),
+      removableIngredients: _stringList(json['removableIngredients'] ?? json['removable_ingredients']),
       modifierGroups: groups is List
           ? groups
               .whereType<Map>()
@@ -279,6 +420,7 @@ class FoodPaymentMethod {
 class FoodOrderResult {
   final String id;
   final String status;
+  final String restaurantId;
   final String restaurantName;
   final DateTime? estimatedDeliveryAt;
   final int etaMinMinutes;
@@ -297,6 +439,7 @@ class FoodOrderResult {
   const FoodOrderResult({
     required this.id,
     required this.status,
+    this.restaurantId = '',
     required this.restaurantName,
     this.estimatedDeliveryAt,
     this.etaMinMinutes = 30,
@@ -318,6 +461,7 @@ class FoodOrderResult {
     return FoodOrderResult(
       id: json['id']?.toString() ?? '',
       status: json['status']?.toString() ?? 'placed',
+      restaurantId: json['restaurantId']?.toString() ?? json['restaurant_id']?.toString() ?? '',
       restaurantName: json['restaurantName']?.toString() ?? json['restaurant_name']?.toString() ?? 'Restaurant',
       estimatedDeliveryAt: eta == null ? null : DateTime.tryParse(eta.toString()),
       etaMinMinutes: _toInt(json['etaMinMinutes'] ?? json['eta_min_minutes'], fallback: 30),
@@ -332,6 +476,101 @@ class FoodOrderResult {
       fulfillmentMethod: json['fulfillmentMethod']?.toString() ?? json['fulfillment_method']?.toString() ?? 'delivery',
       couponCode: _nullableString(json['couponCode'] ?? json['coupon_code']),
       pointsEarned: _toInt(json['pointsEarned'] ?? json['points_earned']),
+    );
+  }
+}
+
+class FoodConversationMessage {
+  final String id;
+  final String senderExternalId;
+  final String senderRole;
+  final String messageType;
+  final String body;
+  final DateTime? createdAt;
+  final Map<String, dynamic> metadata;
+
+  const FoodConversationMessage({
+    required this.id,
+    required this.senderExternalId,
+    required this.senderRole,
+    required this.messageType,
+    required this.body,
+    this.createdAt,
+    this.metadata = const <String, dynamic>{},
+  });
+
+  factory FoodConversationMessage.fromJson(Map<String, dynamic> json) {
+    final rawMetadata = json['metadata'];
+    return FoodConversationMessage(
+      id: json['id']?.toString() ?? '',
+      senderExternalId: json['senderExternalId']?.toString() ?? json['sender_external_id']?.toString() ?? '',
+      senderRole: json['senderRole']?.toString() ?? json['sender_role']?.toString() ?? 'customer',
+      messageType: json['messageType']?.toString() ?? json['message_type']?.toString() ?? 'text',
+      body: json['body']?.toString() ?? '',
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? json['created_at']?.toString() ?? ''),
+      metadata: rawMetadata is Map ? Map<String, dynamic>.from(rawMetadata) : const <String, dynamic>{},
+    );
+  }
+}
+
+class FoodConversation {
+  final String id;
+  final String restaurantId;
+  final String restaurantName;
+  final String customerExternalId;
+  final String customerDisplayName;
+  final String? orderId;
+  final String? relatedMenuItemId;
+  final String relatedMenuItemName;
+  final String topic;
+  final String subject;
+  final String status;
+  final String lastMessagePreview;
+  final DateTime? lastMessageAt;
+  final DateTime? createdAt;
+  final String viewerRole;
+  final List<FoodConversationMessage> messages;
+
+  const FoodConversation({
+    required this.id,
+    required this.restaurantId,
+    this.restaurantName = 'Restaurant',
+    required this.customerExternalId,
+    this.customerDisplayName = '',
+    this.orderId,
+    this.relatedMenuItemId,
+    this.relatedMenuItemName = '',
+    this.topic = 'general',
+    this.subject = 'Restaurant question',
+    this.status = 'open',
+    this.lastMessagePreview = '',
+    this.lastMessageAt,
+    this.createdAt,
+    this.viewerRole = 'customer',
+    this.messages = const <FoodConversationMessage>[],
+  });
+
+  factory FoodConversation.fromJson(Map<String, dynamic> json) {
+    final rawMessages = json['messages'];
+    return FoodConversation(
+      id: json['id']?.toString() ?? '',
+      restaurantId: json['restaurantId']?.toString() ?? json['restaurant_id']?.toString() ?? '',
+      restaurantName: json['restaurantName']?.toString() ?? json['restaurant_name']?.toString() ?? 'Restaurant',
+      customerExternalId: json['customerExternalId']?.toString() ?? json['customer_external_id']?.toString() ?? '',
+      customerDisplayName: json['customerDisplayName']?.toString() ?? json['customer_display_name']?.toString() ?? '',
+      orderId: _nullableString(json['orderId'] ?? json['order_id']),
+      relatedMenuItemId: _nullableString(json['relatedMenuItemId'] ?? json['related_menu_item_id']),
+      relatedMenuItemName: json['relatedMenuItemName']?.toString() ?? json['related_menu_item_name']?.toString() ?? '',
+      topic: json['topic']?.toString() ?? 'general',
+      subject: json['subject']?.toString() ?? 'Restaurant question',
+      status: json['status']?.toString() ?? 'open',
+      lastMessagePreview: json['lastMessagePreview']?.toString() ?? json['last_message_preview']?.toString() ?? '',
+      lastMessageAt: DateTime.tryParse(json['lastMessageAt']?.toString() ?? json['last_message_at']?.toString() ?? ''),
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? json['created_at']?.toString() ?? ''),
+      viewerRole: json['viewerRole']?.toString() ?? json['viewer_role']?.toString() ?? 'customer',
+      messages: rawMessages is List
+          ? rawMessages.whereType<Map>().map((item) => FoodConversationMessage.fromJson(Map<String, dynamic>.from(item))).toList(growable: false)
+          : const <FoodConversationMessage>[],
     );
   }
 }
@@ -385,6 +624,83 @@ class FoodDeliveryApi {
       throw Exception(data['error']?.toString() ?? 'Unable to load restaurant.');
     }
     return FoodRestaurant.fromJson(Map<String, dynamic>.from(restaurant));
+  }
+
+  Future<List<FoodRestaurantReview>> getRestaurantReviews(String restaurantId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/reviews'),
+      headers: _headers,
+    );
+    final data = _decode(response);
+    final raw = data['reviews'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! List) {
+      throw Exception(data['error']?.toString() ?? 'Unable to load restaurant reviews.');
+    }
+    return raw.whereType<Map>()
+        .map((row) => FoodRestaurantReview.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<FoodRestaurantReview> submitRestaurantReview({
+    required String restaurantId,
+    required int rating,
+    String title = '',
+    String body = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/reviews'),
+      headers: _headers,
+      body: jsonEncode({'rating': rating, 'title': title.trim(), 'body': body.trim()}),
+    );
+    final data = _decode(response);
+    final raw = data['review'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! Map) {
+      throw Exception(data['error']?.toString() ?? 'Unable to submit your review.');
+    }
+    return FoodRestaurantReview.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<FoodRestaurant> updateMerchantRestaurantProfile(String restaurantId, Map<String, dynamic> payload) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/profile'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final data = _decode(response);
+    final restaurant = data['restaurant'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || restaurant is! Map) {
+      throw Exception(data['error']?.toString() ?? 'Unable to update the restaurant profile.');
+    }
+    return FoodRestaurant.fromJson(Map<String, dynamic>.from(restaurant));
+  }
+
+  Future<List<FoodMenuTheme>> getFoodMenuThemes(String restaurantId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/themes'),
+      headers: _headers,
+    );
+    final data = _decode(response);
+    final raw = data['themes'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! List) {
+      throw Exception(data['error']?.toString() ?? 'Unable to load themed menus.');
+    }
+    return raw.whereType<Map>()
+        .map((row) => FoodMenuTheme.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<FoodMenuTheme> createFoodMenuTheme(String restaurantId, Map<String, dynamic> payload) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/themes'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    final data = _decode(response);
+    final raw = data['theme'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! Map) {
+      throw Exception(data['error']?.toString() ?? 'Unable to create themed menu.');
+    }
+    return FoodMenuTheme.fromJson(Map<String, dynamic>.from(raw));
   }
 
   Future<Map<String, dynamic>?> reverseGeocode({
@@ -635,6 +951,99 @@ class FoodDeliveryApi {
     return FoodOrderResult.fromJson(Map<String, dynamic>.from(order));
   }
 
+  Future<List<FoodConversation>> getCustomerConversations() async {
+    final response = await http.get(Uri.parse('$baseUrl/food/conversations'), headers: _headers);
+    final data = _decode(response);
+    final raw = data['conversations'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! List) {
+      throw Exception(data['error']?.toString() ?? 'Unable to load your restaurant messages.');
+    }
+    return raw.whereType<Map>()
+        .map((row) => FoodConversation.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<FoodConversation>> getMerchantConversations({String? restaurantId}) async {
+    final uri = Uri.parse('$baseUrl/food/merchant/conversations').replace(
+      queryParameters: restaurantId == null || restaurantId.trim().isEmpty
+          ? null
+          : {'restaurantId': restaurantId.trim()},
+    );
+    final response = await http.get(uri, headers: _headers);
+    final data = _decode(response);
+    final raw = data['conversations'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! List) {
+      throw Exception(data['error']?.toString() ?? 'Unable to load customer messages.');
+    }
+    return raw.whereType<Map>()
+        .map((row) => FoodConversation.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<FoodConversation> createFoodConversation({
+    required String restaurantId,
+    String topic = 'general',
+    String subject = 'Restaurant question',
+    String? relatedMenuItemId,
+    String relatedMenuItemName = '',
+    String? orderId,
+    String? firstMessage,
+    String? firstMessageType,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/food/conversations'),
+      headers: _headers,
+      body: jsonEncode({
+        'restaurantId': restaurantId,
+        'topic': topic,
+        'subject': subject,
+        if (relatedMenuItemId != null && relatedMenuItemId.isNotEmpty) 'relatedMenuItemId': relatedMenuItemId,
+        if (relatedMenuItemName.trim().isNotEmpty) 'relatedMenuItemName': relatedMenuItemName.trim(),
+        if (orderId != null && orderId.trim().isNotEmpty) 'orderId': orderId.trim(),
+        if (firstMessage != null && firstMessage.trim().isNotEmpty) 'firstMessage': firstMessage.trim(),
+        if (firstMessageType != null && firstMessageType.isNotEmpty) 'firstMessageType': firstMessageType,
+      }),
+    );
+    final data = _decode(response);
+    final raw = data['conversation'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! Map) {
+      throw Exception(data['error']?.toString() ?? 'Unable to start a conversation with this restaurant.');
+    }
+    return FoodConversation.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<FoodConversation> getFoodConversation(String conversationId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/food/conversations/${Uri.encodeComponent(conversationId)}'),
+      headers: _headers,
+    );
+    final data = _decode(response);
+    final raw = data['conversation'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! Map) {
+      throw Exception(data['error']?.toString() ?? 'Unable to load this conversation.');
+    }
+    return FoodConversation.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<FoodConversation> sendFoodConversationMessage({
+    required String conversationId,
+    required String body,
+    String messageType = 'text',
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/food/conversations/${Uri.encodeComponent(conversationId)}/messages'),
+      headers: _headers,
+      body: jsonEncode({'body': body, 'messageType': messageType, 'metadata': metadata}),
+    );
+    final data = _decode(response);
+    final raw = data['conversation'];
+    if (response.statusCode < 200 || response.statusCode >= 300 || raw is! Map) {
+      throw Exception(data['error']?.toString() ?? 'Unable to send your message.');
+    }
+    return FoodConversation.fromJson(Map<String, dynamic>.from(raw));
+  }
+
   static Map<String, dynamic> _decode(http.Response response) {
     try {
       final decoded = jsonDecode(response.body);
@@ -704,12 +1113,38 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
     super.initState();
     final backend = AppController.instance.backendApi;
     _api = widget.api ?? FoodDeliveryApi(baseUrl: backend.baseUrl, token: backend.token);
+    unawaited(_setProfileActivity('Ordering food'));
     _loadNearby();
     _loadRewards();
   }
 
+  Future<void> _setProfileActivity(String? activity) async {
+    final profile = AppController.instance.currentProfile;
+    final api = AppController.instance.backendApi;
+    if (profile == null || !api.isAuthenticated) return;
+    try {
+      if (activity == null) {
+        await api.setSocialProfilePresence(
+          profileId: profile.id,
+          availability: 'active',
+          clearActivity: true,
+        );
+      } else {
+        await api.setSocialProfilePresence(
+          profileId: profile.id,
+          availability: 'active',
+          activityType: 'ordering_food',
+          activityText: activity,
+        );
+      }
+    } catch (_) {
+      // Activity is advisory; ordering must continue when presence is offline.
+    }
+  }
+
   @override
   void dispose() {
+    unawaited(_setProfileActivity(null));
     _searchController.dispose();
     _addressController.dispose();
     _countryController.dispose();
@@ -827,7 +1262,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
         chosen = await showDialog<Map<String, dynamic>>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Choose the location'),
+            title: const UniversalText('Choose the location'),
             content: SizedBox(
               width: 520,
               child: ListView(
@@ -845,7 +1280,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
                 ],
               ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel'))],
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel'))],
           ),
         );
       }
@@ -911,12 +1346,10 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
                   child: SelectableText('Website: ${restaurant.website}'),
                 ),
               const SizedBox(height: 12),
-              const Text(
-                'This is a public directory listing, not a restaurant enrolled in Food & Delivery. Its live menu, item prices, tax rules, and delivery options have not been confirmed on this platform. The owner must register the restaurant and add a menu before in-app ordering can be enabled.',
+              const UniversalText('This is a public directory listing, not a restaurant enrolled in Food & Delivery. Its live menu, item prices, tax rules, and delivery options have not been confirmed on this platform. The owner must register the restaurant and add a menu before in-app ordering can be enabled.',
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Directory data © OpenStreetMap contributors.',
+              const UniversalText('Directory data © OpenStreetMap contributors.',
                 style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
             ],
@@ -925,7 +1358,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
+            child: const UniversalText('Close'),
           ),
         ],
       ),
@@ -940,8 +1373,19 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Food & Delivery'),
+        title: const UniversalText('Food & Delivery'),
         actions: [
+          const PageCustomizeButton(pageId: 'food-delivery'),
+          IconButton(
+            tooltip: 'Your restaurant messages',
+            onPressed: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => FoodConversationInboxScreen(api: _api, isMerchant: false),
+              ),
+            ),
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+          ),
           IconButton(
             tooltip: 'Restaurant owner center',
             onPressed: () => Navigator.push<void>(
@@ -983,8 +1427,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
                 ),
               ),
             const SizedBox(height: 8),
-            const Text(
-              'What are you craving?',
+            const UniversalText('What are you craving?',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 6),
@@ -1000,14 +1443,14 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
               child: OutlinedButton.icon(
                 onPressed: _loading ? null : () => _loadNearby(query: _activeQuery, forceDeviceLocation: true),
                 icon: const Icon(Icons.my_location_rounded),
-                label: const Text('Use my current location'),
+                label: const UniversalText('Use my current location'),
               ),
             ),
             Card(
               child: ExpansionTile(
                 leading: const Icon(Icons.location_city_rounded),
-                title: const Text('Enter location manually'),
-                subtitle: const Text('Country, state, city, ZIP/postal code, and street address'),
+                title: const UniversalText('Enter location manually'),
+                subtitle: const UniversalText('Country, state, city, ZIP/postal code, and street address'),
                 childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
                 children: [
                   TextField(
@@ -1055,7 +1498,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
               Card(
                 child: ExpansionTile(
                   leading: const Icon(Icons.loyalty_rounded),
-                  title: const Text('Restaurant rewards'),
+                  title: const UniversalText('Restaurant rewards'),
                   subtitle: Text('${_loyaltyBalances.fold<int>(0, (sum, balance) => sum + _toInt(balance['points']))} points across participating restaurants'),
                   children: [
                     for (final balance in _loyaltyBalances)
@@ -1069,8 +1512,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
               ),
             ],
             const SizedBox(height: 10),
-            const Text(
-              'Nearby search combines platform restaurants with public OpenStreetMap directory listings. Directory data can be incomplete or outdated. Only restaurants with a platform menu can accept in-app orders; external listings must be registered by the owner and given menu/pricing first. Data © OpenStreetMap contributors (openstreetmap.org/copyright).',
+            const UniversalText('Nearby search combines platform restaurants with public OpenStreetMap directory listings. Directory data can be incomplete or outdated. Only restaurants with a platform menu can accept in-app orders; external listings must be registered by the owner and given menu/pricing first. Data © OpenStreetMap contributors (openstreetmap.org/copyright).',
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             const SizedBox(height: 14),
@@ -1119,7 +1561,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
                       FilledButton.icon(
                         onPressed: () => _loadNearby(query: _activeQuery),
                         icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Try again'),
+                        label: const UniversalText('Try again'),
                       ),
                     ],
                   ),
@@ -1139,7 +1581,7 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
                 const Card(
                   child: Padding(
                     padding: EdgeInsets.all(22),
-                    child: Center(child: Text('No nearby restaurants matched that search.')),
+                    child: Center(child: UniversalText('No nearby restaurants matched that search.')),
                   ),
                 )
               else
@@ -1229,9 +1671,9 @@ class _RestaurantCard extends StatelessWidget {
                         ),
                       ),
                       if (!restaurant.isOrderable)
-                        const Chip(label: Text('Directory listing'))
+                        const Chip(label: UniversalText('Directory listing'))
                       else if (!restaurant.isOpen)
-                        const Chip(label: Text('Closed'))
+                        const Chip(label: UniversalText('Closed'))
                       else
                         Text(
                           '${restaurant.etaMinMinutes}-${restaurant.etaMaxMinutes} min',
@@ -1249,9 +1691,10 @@ class _RestaurantCard extends StatelessWidget {
                   Row(
                     children: [
                       if (restaurant.isOrderable) ...[
-                        const Icon(Icons.star_rounded, size: 17),
+                        for (var star = 1; star <= 5; star++)
+                          Icon(star <= restaurant.rating.round() ? Icons.star_rounded : Icons.star_outline_rounded, size: 13, color: Colors.amber),
                         const SizedBox(width: 4),
-                        Text('${restaurant.rating.toStringAsFixed(1)} (${restaurant.reviewCount})'),
+                        Text('${restaurant.rating.toStringAsFixed(1)} (${restaurant.reviewCount})', style: const TextStyle(fontSize: 12)),
                         const Spacer(),
                         Text(restaurant.allowsDelivery
                             ? 'Delivery ${_money(restaurant.deliveryFeeCents, restaurant.currencyCode)}'
@@ -1259,7 +1702,7 @@ class _RestaurantCard extends StatelessWidget {
                       ] else ...[
                         const Icon(Icons.public_rounded, size: 16),
                         const SizedBox(width: 5),
-                        const Expanded(child: Text('Menu not yet available on this platform', style: TextStyle(color: Colors.white60, fontSize: 12))),
+                        const Expanded(child: UniversalText('Menu not yet available on this platform', style: TextStyle(color: Colors.white60, fontSize: 12))),
                       ],
                     ],
                   ),
@@ -1287,6 +1730,204 @@ class _RestaurantCard extends StatelessWidget {
   }
 }
 
+class FoodRestaurantReviewsScreen extends StatefulWidget {
+  final FoodDeliveryApi api;
+  final FoodRestaurant restaurant;
+
+  const FoodRestaurantReviewsScreen({super.key, required this.api, required this.restaurant});
+
+  @override
+  State<FoodRestaurantReviewsScreen> createState() => _FoodRestaurantReviewsScreenState();
+}
+
+class _FoodRestaurantReviewsScreenState extends State<FoodRestaurantReviewsScreen> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  List<FoodRestaurantReview> _reviews = const <FoodRestaurantReview>[];
+  int _rating = 5;
+  double _averageRating = 0;
+  int _reviewCount = 0;
+  bool _loading = true;
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _averageRating = widget.restaurant.rating;
+    _reviewCount = widget.restaurant.reviewCount;
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final reviews = await widget.api.getRestaurantReviews(widget.restaurant.id);
+      double? freshAverage;
+      int? freshCount;
+      try {
+        final fresh = await widget.api.getRestaurant(widget.restaurant.id);
+        freshAverage = fresh.rating;
+        freshCount = fresh.reviewCount;
+      } catch (_) {
+        // The review list remains useful even if the restaurant summary endpoint is temporarily unavailable.
+      }
+      if (!mounted) return;
+      setState(() {
+        _reviews = reviews;
+        if (freshAverage != null) _averageRating = freshAverage;
+        if (freshCount != null) _reviewCount = freshCount;
+        _loading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { _loading = false; _error = error.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    if (_title.text.trim().isEmpty && _body.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Add a review title or a few details first.')));
+      return;
+    }
+    setState(() { _submitting = true; _error = null; });
+    try {
+      await widget.api.submitRestaurantReview(
+        restaurantId: widget.restaurant.id,
+        rating: _rating,
+        title: _title.text.trim(),
+        body: _body.text.trim(),
+      );
+      _title.clear();
+      _body.clear();
+      await _load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Your review has been saved.')));
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Widget _stars(int rating, {double size = 18}) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [for (var i = 1; i <= 5; i++) Icon(i <= rating ? Icons.star_rounded : Icons.star_outline_rounded, size: size, color: Colors.amber)],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final average = _averageRating;
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.restaurant.name} · Reviews')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        children: [
+          Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${average.toStringAsFixed(1)} / 5', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            _stars(average.round(), size: 24),
+            const SizedBox(height: 4),
+            Text('$_reviewCount customer reviews', style: const TextStyle(color: Colors.white60)),
+            const SizedBox(height: 10),
+            const UniversalText('Rate your experience', style: TextStyle(fontWeight: FontWeight.w800)),
+            Row(children: [
+              for (var i = 1; i <= 5; i++) IconButton(
+                tooltip: '$i ${i == 1 ? 'star' : 'stars'}',
+                onPressed: () => setState(() => _rating = i),
+                icon: Icon(i <= _rating ? Icons.star_rounded : Icons.star_outline_rounded, color: Colors.amber, size: 30),
+              ),
+              const SizedBox(width: 6),
+              Text('$_rating / 5'),
+            ]),
+            TextField(controller: _title, maxLength: 120, decoration: const InputDecoration(labelText: 'Review title (optional)')),
+            const SizedBox(height: 8),
+            TextField(controller: _body, minLines: 2, maxLines: 5, maxLength: 2000, decoration: const InputDecoration(labelText: 'How was your experience?', hintText: 'Food quality, accuracy, packaging, service…')),
+            if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.orangeAccent))),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: FilledButton.icon(
+              onPressed: _submitting ? null : _submit,
+              icon: _submitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.rate_review_outlined),
+              label: Text(_submitting ? 'Submitting…' : 'Submit review'),
+            )),
+            const SizedBox(height: 4),
+            const UniversalText('One review per account per restaurant; submitting again updates your previous review. Verified-order status is based on the restaurant order records.', style: TextStyle(fontSize: 11, color: Colors.white54)),
+          ]))),
+          const SizedBox(height: 12),
+          const UniversalText('Customer reviews', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          if (_loading) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+          if (!_loading && _reviews.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: UniversalText('No reviews yet. Be the first to share your experience.'))),
+          for (final review in _reviews)
+            Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Expanded(child: Text(review.reviewerName, style: const TextStyle(fontWeight: FontWeight.w800))), _stars(review.rating)]),
+              if (review.verifiedOrder) const Padding(padding: EdgeInsets.only(top: 4), child: Chip(avatar: Icon(Icons.verified_rounded, size: 15), label: UniversalText('Verified order'))),
+              if (review.title.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(review.title, style: const TextStyle(fontWeight: FontWeight.w800))),
+              if (review.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(review.body)),
+              if (review.createdAt != null) Padding(padding: const EdgeInsets.only(top: 7), child: Text(review.createdAt!.toLocal().toString().split(' ').first, style: const TextStyle(fontSize: 11, color: Colors.white54))),
+            ]))),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _launchRestaurantContact(BuildContext context, FoodRestaurant restaurant, String method) async {
+  String? rawTarget;
+  Uri? uri;
+  final phone = restaurant.phone.trim();
+  switch (method) {
+    case 'call':
+      rawTarget = phone;
+      if (rawTarget.isNotEmpty) uri = Uri(scheme: 'tel', path: rawTarget);
+      break;
+    case 'sms':
+      rawTarget = (restaurant.smsNumber ?? phone).trim();
+      if (rawTarget.isNotEmpty) uri = Uri(scheme: 'sms', path: rawTarget);
+      break;
+    case 'imessage':
+      rawTarget = (restaurant.imessageAddress ?? '').trim();
+      if (rawTarget.isNotEmpty) {
+        // Use the platform Messages handler. On Apple devices, recipients with iMessage enabled can continue in iMessage.
+      uri = Uri(scheme: 'sms', path: rawTarget);
+      }
+      break;
+    case 'whatsapp':
+      rawTarget = (restaurant.whatsappNumber ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+      if (rawTarget.isNotEmpty) uri = Uri.parse('https://wa.me/$rawTarget');
+      break;
+    case 'email':
+      rawTarget = (restaurant.contactEmail ?? '').trim();
+      if (rawTarget.isNotEmpty) uri = Uri(scheme: 'mailto', path: rawTarget);
+      break;
+    case 'website':
+      rawTarget = (restaurant.website ?? '').trim();
+      if (rawTarget.isNotEmpty) {
+        final candidate = Uri.tryParse(rawTarget.contains('://') ? rawTarget : 'https://$rawTarget');
+        if (candidate != null && (candidate.scheme == 'https' || candidate.scheme == 'http')) uri = candidate;
+      }
+      break;
+  }
+  if (uri == null) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('This contact method has not been configured by the restaurant.')));
+    return;
+  }
+  try {
+    final launched = await launchUrl(uri, mode: method == 'website' || method == 'whatsapp' ? LaunchMode.externalApplication : LaunchMode.platformDefault);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('No compatible app or handler was found for this contact method.')));
+    }
+  } catch (_) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Unable to open this contact method on this device.')));
+  }
+}
+
 class FoodMerchantCenterScreen extends StatefulWidget {
   final FoodDeliveryApi api;
 
@@ -1301,6 +1942,15 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
   final _cuisine = TextEditingController();
   final _description = TextEditingController();
   final _phone = TextEditingController();
+  final _weekdayOpen = TextEditingController(text: '09:00');
+  final _weekdayClose = TextEditingController(text: '17:00');
+  final _weekendOpen = TextEditingController(text: '09:00');
+  final _weekendClose = TextEditingController(text: '17:00');
+  final _whatsapp = TextEditingController();
+  final _imessage = TextEditingController();
+  final _sms = TextEditingController();
+  final _contactEmail = TextEditingController();
+  final _website = TextEditingController();
   final _address = TextEditingController();
   final _city = TextEditingController();
   final _state = TextEditingController();
@@ -1316,6 +1966,8 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
   double? _longitude;
   bool _allowsDelivery = true;
   bool _allowsPickup = true;
+  bool _open247 = false;
+  bool _weekendsClosed = true;
   bool _saving = false;
   bool _resolvingAddress = false;
   bool _loading = true;
@@ -1347,9 +1999,11 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
   @override
   void dispose() {
     for (final controller in [
-      _name, _cuisine, _description, _phone, _address, _city, _state,
-      _postal, _country, _heroImage, _currency, _deliveryFee,
-      _taxRate, _minimumOrder,
+      _name, _cuisine, _description, _phone,
+      _weekdayOpen, _weekdayClose, _weekendOpen, _weekendClose,
+      _whatsapp, _imessage, _sms, _contactEmail, _website,
+      _address, _city, _state, _postal, _country, _heroImage, _currency,
+      _deliveryFee, _taxRate, _minimumOrder,
     ]) {
       controller.dispose();
     }
@@ -1404,7 +2058,7 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
         place = await showDialog<Map<String, dynamic>>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Confirm restaurant location'),
+            title: const UniversalText('Confirm restaurant location'),
             content: SizedBox(
               width: 520,
               child: ListView(
@@ -1422,7 +2076,7 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
                 ],
               ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel'))],
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel'))],
           ),
         );
       }
@@ -1444,6 +2098,55 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
       if (mounted) setState(() => _resolvingAddress = false);
     }
   }
+
+  Map<String, dynamic> _businessHoursPayload() {
+    final hours = <String, dynamic>{};
+    const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri'];
+    const weekends = ['sat', 'sun'];
+    if (_open247) {
+      for (final day in [...weekdays, ...weekends]) {
+        hours[day] = {'closed': false, 'allDay': true, 'open': '00:00', 'close': '23:59'};
+      }
+      return hours;
+    }
+    for (final day in weekdays) {
+      hours[day] = {
+        'closed': false,
+        'allDay': false,
+        'open': _weekdayOpen.text.trim(),
+        'close': _weekdayClose.text.trim(),
+      };
+    }
+    for (final day in weekends) {
+      hours[day] = _weekendsClosed
+          ? {'closed': true, 'allDay': false}
+          : {
+              'closed': false,
+              'allDay': false,
+              'open': _weekendOpen.text.trim(),
+              'close': _weekendClose.text.trim(),
+            };
+    }
+    return hours;
+  }
+
+  String _hoursSummary() {
+    if (_open247) return '24/7';
+    final weekday = 'Mon-Fri ${_displayTime(_weekdayOpen.text)}-${_displayTime(_weekdayClose.text)}';
+    final weekend = _weekendsClosed
+        ? 'Sat-Sun Closed'
+        : 'Sat-Sun ${_displayTime(_weekendOpen.text)}-${_displayTime(_weekendClose.text)}';
+    return '$weekday; $weekend';
+  }
+
+  List<String> _selectedContactMethods() => [
+    if (_phone.text.trim().isNotEmpty) 'call',
+    if (_sms.text.trim().isNotEmpty) 'sms',
+    if (_imessage.text.trim().isNotEmpty) 'imessage',
+    if (_whatsapp.text.trim().isNotEmpty) 'whatsapp',
+    if (_contactEmail.text.trim().isNotEmpty) 'email',
+    if (_website.text.trim().isNotEmpty) 'website',
+  ];
 
   Future<void> _createRestaurant() async {
     if (_saving) return;
@@ -1469,6 +2172,15 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
         'cuisine': _cuisine.text.trim(),
         'description': _description.text.trim(),
         'phone': _phone.text.trim(),
+        'openingHours': _open247 ? '24/7' : _hoursSummary(),
+        'businessHours': _businessHoursPayload(),
+        'is24_7': _open247,
+        'contactMethods': _selectedContactMethods(),
+        'contactEmail': _contactEmail.text.trim(),
+        'whatsappNumber': _whatsapp.text.trim(),
+        'imessageAddress': _imessage.text.trim(),
+        'smsNumber': _sms.text.trim(),
+        'website': _website.text.trim(),
         'address': _address.text.trim(),
         'city': _city.text.trim(),
         'stateRegion': _state.text.trim(),
@@ -1538,6 +2250,10 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
     final description = TextEditingController();
     final price = TextEditingController();
     final imageUrl = TextEditingController();
+    final ingredients = TextEditingController();
+    final allergens = TextEditingController();
+    final removableIngredients = TextEditingController();
+    final themeKeys = TextEditingController(text: 'movie_night');
     XFile? pickedPhoto;
     final values = await showDialog<Map<String, String>>(
       context: context,
@@ -1552,6 +2268,10 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
                 TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')),
                 TextField(controller: description, maxLines: 2, decoration: const InputDecoration(labelText: 'Description')),
                 TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: 'Price (${restaurant.currencyCode})')),
+                TextField(controller: ingredients, maxLines: 2, decoration: const InputDecoration(labelText: 'Ingredients (comma-separated)', helperText: 'Use the current recipe, not assumptions.')),
+                TextField(controller: allergens, maxLines: 2, decoration: const InputDecoration(labelText: 'Declared allergens (comma-separated)', helperText: 'List known recipe allergens; cross-contact needs separate confirmation.')),
+                TextField(controller: removableIngredients, maxLines: 2, decoration: const InputDecoration(labelText: 'Ingredients that can be removed (comma-separated)')),
+                TextField(controller: themeKeys, maxLines: 2, decoration: const InputDecoration(labelText: 'Theme keys (comma-separated)', helperText: 'Examples: wizarding_fantasy, superhero_marathon, horror_night, anime_watch_party, movie_night')),
                 TextField(controller: imageUrl, decoration: const InputDecoration(labelText: 'Photo URL (optional)')),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -1563,26 +2283,30 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
                   label: Text(pickedPhoto == null ? 'Choose photo from device' : pickedPhoto!.name),
                 ),
                 const SizedBox(height: 4),
-                const Text('Choose a local JPG, PNG, or WebP photo, or paste a publicly accessible image URL.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const UniversalText('Choose a local JPG, PNG, or WebP photo, or paste a publicly accessible image URL.', style: TextStyle(color: Colors.white54, fontSize: 12)),
               ]),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
             FilledButton(onPressed: () => Navigator.pop(dialogContext, {
               'name': name.text.trim(), 'category': category.text.trim(),
               'description': description.text.trim(), 'price': price.text.trim(),
+              'ingredients': ingredients.text.trim(), 'allergens': allergens.text.trim(),
+              'removableIngredients': removableIngredients.text.trim(),
+              'themeKeys': themeKeys.text.trim(),
               'imageUrl': imageUrl.text.trim(),
-            }), child: const Text('Add item')),
+            }), child: const UniversalText('Add item')),
           ],
         ),
       ),
     );
     name.dispose(); category.dispose(); description.dispose(); price.dispose(); imageUrl.dispose();
+    ingredients.dispose(); allergens.dispose(); removableIngredients.dispose(); themeKeys.dispose();
     if (values == null || values['name']!.isEmpty) return;
     final parsedPrice = double.tryParse(values['price'] ?? '');
     if (parsedPrice == null || parsedPrice < 0) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid item price.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a valid item price.')));
       return;
     }
     try {
@@ -1592,6 +2316,10 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
         'description': values['description'],
         'priceCents': (parsedPrice * 100).round(),
         'imageUrl': values['imageUrl'],
+        'ingredients': _splitIngredientField(values['ingredients'] ?? ''),
+        'allergens': _splitIngredientField(values['allergens'] ?? ''),
+        'removableIngredients': _splitIngredientField(values['removableIngredients'] ?? ''),
+        'themeKeys': _splitIngredientField(values['themeKeys'] ?? '').map((key) => key.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_-]+'), '_')).where((key) => key.isNotEmpty).toList(growable: false),
         'available': true,
       });
       final photo = pickedPhoto;
@@ -1605,7 +2333,237 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
           contentType: mime,
         );
       }
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menu item added.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Menu item added.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _createThemedMenu(FoodRestaurant restaurant) async {
+    List<FoodMenuItem> items;
+    try {
+      items = await widget.api.getMenu(restaurant.id);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+      return;
+    }
+    if (!mounted) return;
+    if (items.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Add at least one menu item before creating a themed menu.')));
+      return;
+    }
+    var selectedPreset = foodThemePresets.first;
+    final name = TextEditingController(text: selectedPreset.name);
+    final key = TextEditingController(text: selectedPreset.key);
+    final description = TextEditingController(text: selectedPreset.description);
+    final inspiration = TextEditingController(text: selectedPreset.inspiration);
+    final selectedIds = <String>{};
+    final values = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text('Create themed menu · ${restaurant.name}'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selectedPreset.key,
+                  decoration: const InputDecoration(labelText: 'Theme idea'),
+                  items: [for (final preset in foodThemePresets) DropdownMenuItem(value: preset.key, child: Text(preset.name))],
+                  onChanged: (value) {
+                    final matches = foodThemePresets.where((preset) => preset.key == value);
+                    if (matches.isEmpty) return;
+                    setDialogState(() {
+                      selectedPreset = matches.first;
+                      name.text = selectedPreset.name;
+                      key.text = selectedPreset.key;
+                      description.text = selectedPreset.description;
+                      inspiration.text = selectedPreset.inspiration;
+                    });
+                  },
+                ),
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'Menu name')),
+                TextField(controller: key, decoration: const InputDecoration(labelText: 'Unique theme key')),
+                TextField(controller: inspiration, decoration: const InputDecoration(labelText: 'Inspiration / franchise / occasion')),
+                TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'Menu description')),
+                const SizedBox(height: 10),
+                Align(alignment: Alignment.centerLeft, child: Text('Suggested food ideas · ${selectedPreset.name}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                const SizedBox(height: 4),
+                Align(alignment: Alignment.centerLeft, child: Text(selectedPreset.menuIdeas.join(' • '), style: const TextStyle(fontSize: 12, color: Colors.white70))),
+                const SizedBox(height: 8),
+                const Align(alignment: Alignment.centerLeft, child: UniversalText('First add any dishes you actually sell as menu items with real prices and ingredient/allergen details. Then select those items below.', style: TextStyle(fontSize: 12, color: Colors.amberAccent))),
+                const SizedBox(height: 10),
+                const Align(alignment: Alignment.centerLeft, child: UniversalText('Choose menu items for this collection', style: TextStyle(fontWeight: FontWeight.w800))),
+                for (final item in items)
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: selectedIds.contains(item.id),
+                    title: Text(item.name),
+                    subtitle: Text('${item.category} · ${_money(item.priceCents, restaurant.currencyCode)}'),
+                    onChanged: (selected) => setDialogState(() {
+                      if (selected == true) { selectedIds.add(item.id); } else { selectedIds.remove(item.id); }
+                    }),
+                  ),
+                const SizedBox(height: 6),
+                const UniversalText('Fan-inspired concepts are not official or affiliated offerings unless the restaurant has the appropriate license. Use only artwork and branding you are authorized to use.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, {
+              'name': name.text.trim(), 'themeKey': key.text.trim(),
+              'description': description.text.trim(), 'inspiration': inspiration.text.trim(),
+              'menuItemIds': selectedIds.toList(growable: false),
+            }), child: const UniversalText('Create themed menu')),
+          ],
+        ),
+      ),
+    );
+    name.dispose(); key.dispose(); description.dispose(); inspiration.dispose();
+    if (values == null) return;
+    try {
+      await widget.api.createFoodMenuTheme(restaurant.id, values);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Themed menu created.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _editRestaurantProfile(FoodRestaurant restaurant) async {
+    Map<String, dynamic> day(String key) => _stringMap(restaurant.businessHours[key]);
+    final mon = day('mon');
+    final sat = day('sat');
+    final sun = day('sun');
+    final weekdayOpen = TextEditingController(text: mon['open']?.toString() ?? '09:00');
+    final weekdayClose = TextEditingController(text: mon['close']?.toString() ?? '17:00');
+    final weekendOpen = TextEditingController(text: sat['open']?.toString() ?? '09:00');
+    final weekendClose = TextEditingController(text: sat['close']?.toString() ?? '17:00');
+    final phone = TextEditingController(text: restaurant.phone);
+    final whatsapp = TextEditingController(text: restaurant.whatsappNumber ?? '');
+    final imessage = TextEditingController(text: restaurant.imessageAddress ?? '');
+    final sms = TextEditingController(text: restaurant.smsNumber ?? '');
+    final email = TextEditingController(text: restaurant.contactEmail ?? '');
+    final website = TextEditingController(text: restaurant.website ?? '');
+    var open247 = restaurant.is24_7 || restaurant.openingHours.trim().toLowerCase() == '24/7' || const ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+        .every((key) => (_stringMap(restaurant.businessHours[key])['allDay'] == true));
+    var weekendsClosed = (sat['closed'] == true && sun['closed'] == true) ||
+        (restaurant.businessHours.isEmpty && restaurant.openingHours.toLowerCase().contains('closed'));
+
+    Map<String, dynamic> schedule() {
+      const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri'];
+      const weekendDays = ['sat', 'sun'];
+      if (open247) {
+        return <String, dynamic>{
+          for (final key in [...weekdays, ...weekendDays])
+            key: <String, dynamic>{'closed': false, 'allDay': true, 'open': '00:00', 'close': '23:59'},
+        };
+      }
+      return <String, dynamic>{
+        for (final key in weekdays)
+          key: <String, dynamic>{'closed': false, 'allDay': false, 'open': weekdayOpen.text.trim(), 'close': weekdayClose.text.trim()},
+        for (final key in weekendDays)
+          key: weekendsClosed
+              ? <String, dynamic>{'closed': true, 'allDay': false}
+              : <String, dynamic>{'closed': false, 'allDay': false, 'open': weekendOpen.text.trim(), 'close': weekendClose.text.trim()},
+      };
+    }
+
+    String hoursSummary() {
+      if (open247) return '24/7';
+      final weekendSummary = weekendsClosed
+          ? 'Sat-Sun Closed'
+          : 'Sat-Sun ${_displayTime(weekendOpen.text)}-${_displayTime(weekendClose.text)}';
+      return 'Mon-Fri ${_displayTime(weekdayOpen.text)}-${_displayTime(weekdayClose.text)}; $weekendSummary';
+    }
+
+    final values = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text('Edit profile · ${restaurant.name}'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Align(alignment: Alignment.centerLeft, child: UniversalText('Business hours', style: TextStyle(fontWeight: FontWeight.w800))),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: open247,
+                  onChanged: (value) => setDialogState(() => open247 = value),
+                  title: const UniversalText('Open 24/7'),
+                ),
+                if (!open247) ...[
+                  const Align(alignment: Alignment.centerLeft, child: UniversalText('Use 24-hour time, for example 09:00 and 17:00.', style: TextStyle(fontSize: 12, color: Colors.white60))),
+                  Row(children: [
+                    Expanded(child: TextField(controller: weekdayOpen, decoration: const InputDecoration(labelText: 'Weekdays open'), keyboardType: TextInputType.datetime, onChanged: (_) => setDialogState(() {}))),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(controller: weekdayClose, decoration: const InputDecoration(labelText: 'Weekdays close'), keyboardType: TextInputType.datetime, onChanged: (_) => setDialogState(() {}))),
+                  ]),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: weekendsClosed,
+                    onChanged: (value) => setDialogState(() => weekendsClosed = value),
+                    title: const UniversalText('Closed on weekends'),
+                  ),
+                  if (!weekendsClosed) Row(children: [
+                    Expanded(child: TextField(controller: weekendOpen, decoration: const InputDecoration(labelText: 'Weekend open'), keyboardType: TextInputType.datetime, onChanged: (_) => setDialogState(() {}))),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(controller: weekendClose, decoration: const InputDecoration(labelText: 'Weekend close'), keyboardType: TextInputType.datetime, onChanged: (_) => setDialogState(() {}))),
+                  ]),
+                ],
+                InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Hours shown to customers'),
+                  child: Align(alignment: Alignment.centerLeft, child: Text(hoursSummary())),
+                ),
+                const SizedBox(height: 10),
+                TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone for calls')),
+                TextField(controller: sms, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'SMS number')),
+                TextField(controller: imessage, decoration: const InputDecoration(labelText: 'iMessage address or phone')),
+                TextField(controller: whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp number with country code')),
+                TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Support email')),
+                TextField(controller: website, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Website (HTTPS)')),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, <String, dynamic>{
+              'openingHours': hoursSummary(),
+              'businessHours': schedule(),
+              'is24_7': open247,
+              'phone': phone.text.trim(),
+              'smsNumber': sms.text.trim(),
+              'imessageAddress': imessage.text.trim(),
+              'whatsappNumber': whatsapp.text.trim(),
+              'contactEmail': email.text.trim(),
+              'website': website.text.trim(),
+            }), child: const UniversalText('Save changes')),
+          ],
+        ),
+      ),
+    );
+    for (final controller in [weekdayOpen, weekdayClose, weekendOpen, weekendClose, phone, whatsapp, imessage, sms, email, website]) {
+      controller.dispose();
+    }
+    if (values == null) return;
+    try {
+      final contactMethods = <String>[
+        if ((values['phone'] as String? ?? '').isNotEmpty) 'call',
+        if ((values['smsNumber'] as String? ?? '').isNotEmpty) 'sms',
+        if ((values['imessageAddress'] as String? ?? '').isNotEmpty) 'imessage',
+        if ((values['whatsappNumber'] as String? ?? '').isNotEmpty) 'whatsapp',
+        if ((values['contactEmail'] as String? ?? '').isNotEmpty) 'email',
+        if ((values['website'] as String? ?? '').isNotEmpty) 'website',
+      ];
+      await widget.api.updateMerchantRestaurantProfile(restaurant.id, {
+        ...values,
+        'contactMethods': contactMethods,
+      });
+      await _loadRestaurants();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Restaurant profile updated.')));
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
     }
@@ -1632,11 +2590,11 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, {
             'code': code.text.trim(), 'percent': percent.text.trim(),
             'description': description.text.trim(), 'minimum': minimum.text.trim(),
-          }), child: const Text('Create coupon')),
+          }), child: const UniversalText('Create coupon')),
         ],
       ),
     );
@@ -1645,7 +2603,7 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
     final discount = int.tryParse(values['percent'] ?? '');
     final minimumOrder = double.tryParse(values['minimum'] ?? '0');
     if (discount == null || discount < 1 || discount > 100 || minimumOrder == null || minimumOrder < 0) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a discount from 1–100% and a valid minimum.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a discount from 1–100% and a valid minimum.')));
       return;
     }
     try {
@@ -1674,24 +2632,57 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Restaurant Owner Center')),
+      appBar: AppBar(title: const UniversalText('Restaurant Owner Center')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         children: [
-          const Text('List your restaurant independently of your streaming server', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const UniversalText('List your restaurant independently of your streaming server', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
-          const Text('Each account can own restaurants in any city. Add your location, contact details, menu and photo links, set fees/tax configuration, and publish coupons.', style: TextStyle(color: Colors.white60)),
+          const UniversalText('Each account can own restaurants in any city. Add your location, contact details, menu and photo links, set fees/tax configuration, and publish coupons.', style: TextStyle(color: Colors.white60)),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => FoodConversationInboxScreen(api: widget.api, isMerchant: true),
+              ),
+            ),
+            icon: const Icon(Icons.mark_unread_chat_alt_outlined),
+            label: const UniversalText('Customer messages and support'),
+          ),
           const SizedBox(height: 14),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Register a restaurant', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                const UniversalText('Register a restaurant', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 10),
                 _field(_name, 'Restaurant name'),
                 _field(_cuisine, 'Cuisine / food type', hint: 'Mexican, pizza, sushi…'),
                 _field(_description, 'Description', maxLines: 3),
-                _field(_phone, 'Restaurant phone number', keyboardType: TextInputType.phone),
+                _field(_phone, 'Phone number for calls', keyboardType: TextInputType.phone),
+                _field(_sms, 'SMS / text number (optional)', keyboardType: TextInputType.phone),
+                _field(_imessage, 'iMessage address or phone (optional)', hint: 'Available mainly on Apple devices'),
+                _field(_whatsapp, 'WhatsApp number (include country code)', keyboardType: TextInputType.phone),
+                _field(_contactEmail, 'Support email (optional)', keyboardType: TextInputType.emailAddress),
+                _field(_website, 'Restaurant website (HTTPS URL)', keyboardType: TextInputType.url),
+                const SizedBox(height: 8),
+                const UniversalText('Business hours', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                SwitchListTile(contentPadding: EdgeInsets.zero, value: _open247, onChanged: (value) => setState(() {
+                  _open247 = value;
+                }), title: const UniversalText('Open 24/7')),
+                if (!_open247) ...[
+                  const UniversalText('Use 24-hour time, for example 09:00 and 17:00.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Row(children: [Expanded(child: _field(_weekdayOpen, 'Weekdays open')), const SizedBox(width: 8), Expanded(child: _field(_weekdayClose, 'Weekdays close'))]),
+                  SwitchListTile(contentPadding: EdgeInsets.zero, value: _weekendsClosed, onChanged: (value) => setState(() {
+                    _weekendsClosed = value;
+                  }), title: const UniversalText('Closed on weekends')),
+                  if (!_weekendsClosed) Row(children: [Expanded(child: _field(_weekendOpen, 'Weekend open')), const SizedBox(width: 8), Expanded(child: _field(_weekendClose, 'Weekend close'))]),
+                ],
+                InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Hours shown to customers'),
+                  child: Text(_hoursSummary()),
+                ),
                 _field(_address, 'Street address'),
                 _field(_city, 'City'),
                 _field(_state, 'State / province / region'),
@@ -1712,11 +2703,11 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
                   ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(_heroImage.text.trim(), height: 140, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink())),
                 _field(_currency, 'Currency code', hint: 'USD, MXN, CAD…'),
                 _field(_deliveryFee, 'Delivery fee (0 for free)', keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                const Padding(padding: EdgeInsets.only(bottom: 10), child: Text('The platform service fee is set by MyOwnStreamingService and shown separately at checkout.', style: TextStyle(color: Colors.white60))),
+                const Padding(padding: EdgeInsets.only(bottom: 10), child: UniversalText('The platform service fee is set by MyOwnStreamingService and shown separately at checkout.', style: TextStyle(color: Colors.white60))),
                 _field(_taxRate, 'Configured tax rate (%)', hint: 'Use the rate applicable to your jurisdiction', keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 _field(_minimumOrder, 'Minimum order', keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                SwitchListTile(contentPadding: EdgeInsets.zero, value: _allowsDelivery, onChanged: (value) => setState(() => _allowsDelivery = value), title: const Text('Offer delivery')),
-                SwitchListTile(contentPadding: EdgeInsets.zero, value: _allowsPickup, onChanged: (value) => setState(() => _allowsPickup = value), title: const Text('Offer pickup'), subtitle: const Text('Pickup orders do not include a delivery fee.')),
+                SwitchListTile(contentPadding: EdgeInsets.zero, value: _allowsDelivery, onChanged: (value) => setState(() => _allowsDelivery = value), title: const UniversalText('Offer delivery')),
+                SwitchListTile(contentPadding: EdgeInsets.zero, value: _allowsPickup, onChanged: (value) => setState(() => _allowsPickup = value), title: const UniversalText('Offer pickup'), subtitle: const UniversalText('Pickup orders do not include a delivery fee.')),
                 if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(_error!, style: const TextStyle(color: Colors.amber))),
                 SizedBox(width: double.infinity, child: FilledButton.icon(
                   onPressed: _saving ? null : _createRestaurant,
@@ -1727,9 +2718,9 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          const Text('Your restaurants', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          const UniversalText('Your restaurants', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           if (_loading) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
-          if (!_loading && _restaurants.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No restaurants registered to this account yet.'))),
+          if (!_loading && _restaurants.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: UniversalText('No restaurants registered to this account yet.'))),
           for (final restaurant in _restaurants)
             Card(
               child: ExpansionTile(
@@ -1738,8 +2729,19 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
                 subtitle: Text([restaurant.cuisine, restaurant.city, restaurant.stateRegion].where((v) => v.isNotEmpty).join(' · ')),
                 childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                 children: [
-                  if (restaurant.phone.isNotEmpty) ListTile(leading: const Icon(Icons.call_outlined), title: Text(restaurant.phone), contentPadding: EdgeInsets.zero),
+                  if (restaurant.rating > 0 || restaurant.reviewCount > 0)
+                    ListTile(leading: const Icon(Icons.star_rounded), title: Text('${restaurant.rating.toStringAsFixed(1)} / 5 · ${restaurant.reviewCount} reviews'), contentPadding: EdgeInsets.zero),
+                  if (restaurant.phone.isNotEmpty) ListTile(leading: const Icon(Icons.call_outlined), title: Text(restaurant.phone), subtitle: const UniversalText('Customer contact'), contentPadding: EdgeInsets.zero),
+                  if (restaurant.openingHours.isNotEmpty) ListTile(leading: const Icon(Icons.schedule_rounded), title: const UniversalText('Business hours'), subtitle: Text(restaurant.openingHours), contentPadding: EdgeInsets.zero),
                   if (restaurant.address.isNotEmpty) ListTile(leading: const Icon(Icons.place_outlined), title: Text(restaurant.address), subtitle: Text([restaurant.city, restaurant.stateRegion, restaurant.postalCode, restaurant.countryCode].where((v) => v.isNotEmpty).join(', ')), contentPadding: EdgeInsets.zero),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    if (restaurant.contactMethods.contains('call') && restaurant.phone.isNotEmpty) ActionChip(avatar: const Icon(Icons.call, size: 16), label: const UniversalText('Call'), onPressed: () => _launchRestaurantContact(context, restaurant, 'call')),
+                    if (restaurant.contactMethods.contains('sms') && (restaurant.smsNumber?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.sms_outlined, size: 16), label: const UniversalText('SMS'), onPressed: () => _launchRestaurantContact(context, restaurant, 'sms')),
+                    if (restaurant.contactMethods.contains('imessage') && (restaurant.imessageAddress?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.chat_bubble_outline, size: 16), label: const UniversalText('iMessage'), onPressed: () => _launchRestaurantContact(context, restaurant, 'imessage')),
+                    if (restaurant.contactMethods.contains('whatsapp') && (restaurant.whatsappNumber?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.chat, size: 16), label: const UniversalText('WhatsApp'), onPressed: () => _launchRestaurantContact(context, restaurant, 'whatsapp')),
+                    if (restaurant.contactMethods.contains('email') && (restaurant.contactEmail?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.email_outlined, size: 16), label: const UniversalText('Email'), onPressed: () => _launchRestaurantContact(context, restaurant, 'email')),
+                    if (restaurant.contactMethods.contains('website') && (restaurant.website?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.language, size: 16), label: const UniversalText('Website'), onPressed: () => _launchRestaurantContact(context, restaurant, 'website')),
+                  ]),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     Chip(label: Text('Delivery ${_money(restaurant.deliveryFeeCents, restaurant.currencyCode)}')),
                     Chip(label: Text('Service ${_money(restaurant.serviceFeeCents, restaurant.currencyCode)}')),
@@ -1748,10 +2750,40 @@ class _FoodMerchantCenterScreenState extends State<FoodMerchantCenterScreen> {
                   ]),
                   const SizedBox(height: 10),
                   Row(children: [
-                    Expanded(child: OutlinedButton.icon(onPressed: () => _addMenuItem(restaurant), icon: const Icon(Icons.add_rounded), label: const Text('Add menu item'))),
+                    Expanded(child: OutlinedButton.icon(onPressed: () => _addMenuItem(restaurant), icon: const Icon(Icons.add_rounded), label: const UniversalText('Add menu item'))),
                     const SizedBox(width: 8),
-                    Expanded(child: OutlinedButton.icon(onPressed: () => _addCoupon(restaurant), icon: const Icon(Icons.discount_outlined), label: const Text('Create coupon'))),
+                    Expanded(child: OutlinedButton.icon(onPressed: () => _createThemedMenu(restaurant), icon: const Icon(Icons.movie_filter_outlined), label: const UniversalText('Create themed menu'))),
                   ]),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                    onPressed: () => _addCoupon(restaurant),
+                    icon: const Icon(Icons.local_offer_outlined),
+                    label: const UniversalText('Create coupon'),
+                  )),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                    onPressed: () => _editRestaurantProfile(restaurant),
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                    label: const UniversalText('Edit hours and contact methods'),
+                  )),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: () => Navigator.push<void>(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => FoodConversationInboxScreen(
+                            api: widget.api,
+                            isMerchant: true,
+                            restaurantId: restaurant.id,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.forum_outlined),
+                      label: const UniversalText('Open this restaurant’s inbox'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1782,10 +2814,12 @@ class RestaurantMenuScreen extends StatefulWidget {
 
 class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
   List<FoodMenuItem> _items = const [];
+  List<FoodMenuTheme> _themes = const [];
   final List<FoodCartItem> _cart = [];
   bool _loading = true;
   String? _error;
   String _category = 'All';
+  String? _selectedThemeId;
 
   int get _subtotalCents => _cart.fold<int>(0, (sum, item) => sum + item.totalCents);
   int get _deliveryCents => widget.restaurant.deliveryFeeCents;
@@ -1800,9 +2834,11 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
   Future<void> _loadMenu() async {
     try {
       final items = await widget.api.getMenu(widget.restaurant.id);
+      final themes = await widget.api.getFoodMenuThemes(widget.restaurant.id).catchError((_) => <FoodMenuTheme>[]);
       if (!mounted) return;
       setState(() {
         _items = items;
+        _themes = themes;
         _loading = false;
       });
     } catch (error) {
@@ -1827,6 +2863,45 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
   }
 
 
+  Future<void> _openRestaurantConversation({
+    String topic = 'general',
+    FoodMenuItem? item,
+    String initialDraft = '',
+  }) async {
+    try {
+      final conversation = await widget.api.createFoodConversation(
+        restaurantId: widget.restaurant.id,
+        topic: topic,
+        subject: switch (topic) {
+          'recommendation' => 'Food recommendation',
+          'ingredient_question' => 'Ingredient and allergy question',
+          'order_support' => 'Order support',
+          _ => 'Question for ${widget.restaurant.name}',
+        },
+        relatedMenuItemId: item?.id,
+        relatedMenuItemName: item?.name ?? '',
+      );
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => FoodConversationScreen(
+            api: widget.api,
+            conversation: conversation,
+            isMerchant: false,
+            initialDraft: initialDraft,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
+  }
+
   Future<void> _checkout() async {
     if (_cart.isEmpty) return;
     await Navigator.push<void>(
@@ -1846,10 +2921,29 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
   @override
   Widget build(BuildContext context) {
     final categories = <String>{'All', ..._items.map((item) => item.category)}.toList();
-    final visible = _category == 'All' ? _items : _items.where((item) => item.category == _category).toList();
+    FoodMenuTheme? selectedTheme;
+    for (final theme in _themes) {
+      if (theme.id == _selectedThemeId) { selectedTheme = theme; break; }
+    }
+    final selectedThemeForFilter = selectedTheme;
+    final visible = selectedThemeForFilter != null
+        ? _items.where((item) => selectedThemeForFilter.menuItemIds.contains(item.id)).toList(growable: false)
+        : (_category == 'All' ? _items : _items.where((item) => item.category == _category).toList());
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.restaurant.name)),
+      appBar: AppBar(
+        title: Text(widget.restaurant.name),
+        actions: [
+          IconButton(
+            tooltip: 'Ask the restaurant for a recommendation',
+            onPressed: () => _openRestaurantConversation(
+              topic: 'recommendation',
+              initialDraft: 'Hi! I’m not sure what to order. What do you recommend?',
+            ),
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+          ),
+        ],
+      ),
       bottomNavigationBar: _cart.isEmpty
           ? null
           : SafeArea(
@@ -1877,6 +2971,32 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
                     const SizedBox(height: 12),
                     Text(widget.restaurant.cuisine, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 5),
+                    if (widget.restaurant.address.isNotEmpty || widget.restaurant.city.isNotEmpty)
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Icon(Icons.place_outlined, size: 18), const SizedBox(width: 6),
+                        Expanded(child: Text([widget.restaurant.address, widget.restaurant.city, widget.restaurant.stateRegion, widget.restaurant.postalCode, widget.restaurant.countryCode].where((value) => value.trim().isNotEmpty).join(', '))),
+                      ]),
+                    if (widget.restaurant.openingHours.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.schedule_rounded, size: 18), const SizedBox(width: 6), Expanded(child: Text('Hours: ${widget.restaurant.openingHours}'))]),
+                    ],
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      for (var star = 1; star <= 5; star++) Icon(star <= widget.restaurant.rating.round() ? Icons.star_rounded : Icons.star_outline_rounded, size: 18, color: Colors.amber),
+                      const SizedBox(width: 6),
+                      Text('${widget.restaurant.rating.toStringAsFixed(1)} / 5 (${widget.restaurant.reviewCount} reviews)'),
+                      const Spacer(),
+                      TextButton(onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => FoodRestaurantReviewsScreen(api: widget.api, restaurant: widget.restaurant))), child: const UniversalText('Read / write reviews')),
+                    ]),
+                    Wrap(spacing: 7, runSpacing: 6, children: [
+                      if (widget.restaurant.contactMethods.contains('call') && widget.restaurant.phone.isNotEmpty) ActionChip(avatar: const Icon(Icons.call, size: 16), label: const UniversalText('Call'), onPressed: () => _launchRestaurantContact(context, widget.restaurant, 'call')),
+                      if (widget.restaurant.contactMethods.contains('sms') && (widget.restaurant.smsNumber?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.sms_outlined, size: 16), label: const UniversalText('SMS'), onPressed: () => _launchRestaurantContact(context, widget.restaurant, 'sms')),
+                      if (widget.restaurant.contactMethods.contains('imessage') && (widget.restaurant.imessageAddress?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.chat_bubble_outline, size: 16), label: const UniversalText('iMessage'), onPressed: () => _launchRestaurantContact(context, widget.restaurant, 'imessage')),
+                      if (widget.restaurant.contactMethods.contains('whatsapp') && (widget.restaurant.whatsappNumber?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.chat, size: 16), label: const UniversalText('WhatsApp'), onPressed: () => _launchRestaurantContact(context, widget.restaurant, 'whatsapp')),
+                      if (widget.restaurant.contactMethods.contains('email') && (widget.restaurant.contactEmail?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.email_outlined, size: 16), label: const UniversalText('Email'), onPressed: () => _launchRestaurantContact(context, widget.restaurant, 'email')),
+                      if (widget.restaurant.contactMethods.contains('website') && (widget.restaurant.website?.isNotEmpty ?? false)) ActionChip(avatar: const Icon(Icons.language, size: 16), label: const UniversalText('Website'), onPressed: () => _launchRestaurantContact(context, widget.restaurant, 'website')),
+                    ]),
+                    const SizedBox(height: 5),
                     Text(
                       '${widget.restaurant.etaMinMinutes}-${widget.restaurant.etaMaxMinutes} min delivery • ${_money(widget.restaurant.deliveryFeeCents, widget.restaurant.currencyCode)} delivery',
                       style: const TextStyle(color: Colors.white60),
@@ -1884,6 +3004,45 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
                     if (widget.viewingContext != null) ...[
                       const SizedBox(height: 8),
                       Chip(avatar: const Icon(Icons.live_tv_rounded), label: Text(widget.viewingContext!)),
+                    ],
+                    if (_themes.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      const UniversalText('Themed menus for your movie night', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 118,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            for (final theme in _themes)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: SizedBox(
+                                  width: 260,
+                                  child: Card(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () => setState(() {
+                                        _selectedThemeId = _selectedThemeId == theme.id ? null : theme.id;
+                                        _category = 'All';
+                                      }),
+                                      child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Row(children: [const Icon(Icons.movie_filter_outlined), const SizedBox(width: 6), Expanded(child: Text(theme.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))), if (_selectedThemeId == theme.id) const Icon(Icons.check_circle_rounded, size: 18)]),
+                                        const SizedBox(height: 5),
+                                        Expanded(child: Text(theme.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white70))),
+                                        Text('${theme.menuItemIds.length} menu items', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                                      ])),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (selectedTheme != null && selectedTheme.disclosure.isNotEmpty)
+                        Padding(padding: const EdgeInsets.only(top: 4), child: Text(selectedTheme.disclosure, style: const TextStyle(fontSize: 11, color: Colors.white54))),
+                      if (_selectedThemeId != null)
+                        Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => setState(() => _selectedThemeId = null), icon: const Icon(Icons.close), label: const UniversalText('Show full menu'))),
                     ],
                     const SizedBox(height: 12),
                     SingleChildScrollView(
@@ -1905,32 +3064,816 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
                     const SizedBox(height: 12),
                     for (final item in visible)
                       Card(
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(12),
-                          leading: item.imageUrl == null
-                              ? const CircleAvatar(child: Icon(Icons.restaurant_menu_rounded))
-                              : ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(item.imageUrl!, width: 68, height: 68, fit: BoxFit.cover),
-                                ),
-                          title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w900)),
-                          subtitle: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(_money(item.priceCents, widget.restaurant.currencyCode), style: const TextStyle(fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 5),
-                              FilledButton(
-                                onPressed: item.available ? () => _add(item) : null,
-                                child: const Text('Add'),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              contentPadding: const EdgeInsets.all(12),
+                              leading: item.imageUrl == null
+                                  ? const CircleAvatar(child: Icon(Icons.restaurant_menu_rounded))
+                                  : ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.network(item.imageUrl!, width: 68, height: 68, fit: BoxFit.cover),
+                                    ),
+                              title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w900)),
+                              subtitle: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(_money(item.priceCents, widget.restaurant.currencyCode), style: const TextStyle(fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 5),
+                                  FilledButton(
+                                    onPressed: item.available ? () => _add(item) : null,
+                                    child: const UniversalText('Add'),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            if (item.ingredients.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Restaurant-listed ingredients: ${item.ingredients.join(', ')}',
+                                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                                  ),
+                                ),
+                              ),
+                            if (item.allergens.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: [
+                                      const Chip(label: UniversalText('Restaurant-declared allergens')),
+                                      ...item.allergens.take(5).map((allergen) => Chip(label: Text(allergen))),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: () => _openRestaurantConversation(
+                                    topic: 'ingredient_question',
+                                    item: item,
+                                    initialDraft: 'Hi, I have an ingredient/allergy question about ${item.name}. Does it contain [ingredient]? If it does, can it be removed? Please also confirm whether cross-contact is possible.',
+                                  ),
+                                  icon: const Icon(Icons.health_and_safety_outlined),
+                                  label: const UniversalText('Ask about ingredients or allergies'),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                   ],
                 ),
+    );
+  }
+}
+
+class FoodConversationInboxScreen extends StatefulWidget {
+  final FoodDeliveryApi api;
+  final bool isMerchant;
+  final String? restaurantId;
+
+  const FoodConversationInboxScreen({
+    super.key,
+    required this.api,
+    required this.isMerchant,
+    this.restaurantId,
+  });
+
+  @override
+  State<FoodConversationInboxScreen> createState() => _FoodConversationInboxScreenState();
+}
+
+class _FoodConversationInboxScreenState extends State<FoodConversationInboxScreen> {
+  List<FoodConversation> _conversations = const <FoodConversation>[];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (!_loading && mounted) setState(() => _error = null);
+    try {
+      final conversations = widget.isMerchant
+          ? await widget.api.getMerchantConversations(restaurantId: widget.restaurantId)
+          : await widget.api.getCustomerConversations();
+      if (!mounted) return;
+      setState(() {
+        _conversations = conversations;
+        _loading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  String _status(String value) => switch (value) {
+        'waiting_for_restaurant' => 'Waiting for restaurant',
+        'waiting_for_customer' => 'Waiting for customer',
+        'resolved' => 'Resolved',
+        'closed' => 'Closed',
+        _ => 'Open',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.isMerchant ? 'Customer messages and support' : 'Restaurant messages';
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh messages',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.cloud_off_outlined, size: 42),
+                      const SizedBox(height: 10),
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const UniversalText('Try again')),
+                    ]),
+                  ),
+                )
+              : _conversations.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        const SizedBox(height: 80),
+                        Icon(widget.isMerchant ? Icons.mark_unread_chat_alt_outlined : Icons.chat_bubble_outline_rounded, size: 56),
+                        const SizedBox(height: 12),
+                        Text(
+                          widget.isMerchant ? 'No customer messages yet' : 'No restaurant conversations yet',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.isMerchant
+                              ? 'Customers can ask for recommendations, ingredient details, allergy information, or order support.'
+                              : 'Open a restaurant menu and choose Ask the restaurant or Ask about ingredients or allergies.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white60),
+                        ),
+                      ],
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(12),
+                        itemCount: _conversations.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (context, index) {
+                          final conversation = _conversations[index];
+                          final customerLabel = conversation.customerDisplayName.trim().isNotEmpty
+                              ? conversation.customerDisplayName.trim()
+                              : 'Customer';
+                          final headline = widget.isMerchant
+                              ? (conversation.relatedMenuItemName.isNotEmpty
+                                  ? '$customerLabel · ${conversation.relatedMenuItemName}'
+                                  : customerLabel)
+                              : conversation.restaurantName;
+                          return Card(
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                child: Icon(switch (conversation.topic) {
+                                  'ingredient_question' => Icons.health_and_safety_outlined,
+                                  'recommendation' => Icons.restaurant_menu_rounded,
+                                  'order_support' => Icons.support_agent_rounded,
+                                  _ => Icons.chat_bubble_outline_rounded,
+                                }),
+                              ),
+                              title: Text(headline, style: const TextStyle(fontWeight: FontWeight.w800)),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(conversation.subject),
+                                    if (widget.isMerchant && conversation.restaurantName.isNotEmpty)
+                                      Text(conversation.restaurantName, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                                    if (conversation.lastMessagePreview.isNotEmpty)
+                                      Text(conversation.lastMessagePreview, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 5),
+                                    Wrap(spacing: 6, runSpacing: 4, children: [
+                                      Chip(label: Text(_status(conversation.status)), visualDensity: VisualDensity.compact),
+                                      if (conversation.topic == 'ingredient_question')
+                                        const Chip(
+                                          avatar: Icon(Icons.health_and_safety_outlined, size: 15),
+                                          label: UniversalText('Ingredient safety'),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                    ]),
+                                  ],
+                                ),
+                              ),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                              onTap: () async {
+                                await Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => FoodConversationScreen(
+                                      api: widget.api,
+                                      conversation: conversation,
+                                      isMerchant: widget.isMerchant,
+                                    ),
+                                  ),
+                                );
+                                if (mounted) _load();
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+    );
+  }
+}
+
+class FoodConversationScreen extends StatefulWidget {
+  final FoodDeliveryApi api;
+  final FoodConversation conversation;
+  final bool isMerchant;
+  final String initialDraft;
+
+  const FoodConversationScreen({
+    super.key,
+    required this.api,
+    required this.conversation,
+    required this.isMerchant,
+    this.initialDraft = '',
+  });
+
+  @override
+  State<FoodConversationScreen> createState() => _FoodConversationScreenState();
+}
+
+class _FoodConversationScreenState extends State<FoodConversationScreen> {
+  late final TextEditingController _composer;
+  final FocusNode _composerFocus = FocusNode();
+  final ScrollController _messagesScroll = ScrollController();
+  FoodConversation? _conversation;
+  List<FoodMenuItem> _menuItems = const <FoodMenuItem>[];
+  Timer? _pollTimer;
+  bool _loading = true;
+  bool _sending = false;
+  bool _menuLoaded = false;
+  String? _error;
+  String _draftMessageType = 'text';
+  int _lastMessageCount = 0;
+
+  bool get _isMerchant => widget.isMerchant;
+  FoodConversation get _activeConversation => _conversation ?? widget.conversation;
+
+  @override
+  void initState() {
+    super.initState();
+    _conversation = widget.conversation;
+    _composer = TextEditingController(text: widget.initialDraft);
+    _loadThread();
+    if (_isMerchant) _loadMenuItems();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_sending) _loadThread(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _composer.dispose();
+    _composerFocus.dispose();
+    _messagesScroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadThread({bool silent = false}) async {
+    if (!silent && mounted) setState(() => _error = null);
+    try {
+      final updated = await widget.api.getFoodConversation(_activeConversation.id);
+      if (!mounted) return;
+      final count = updated.messages.length;
+      final wasInitialLoad = _loading;
+      final hasNewMessage = count > _lastMessageCount;
+      setState(() {
+        _conversation = updated;
+        _loading = false;
+        _error = null;
+        _lastMessageCount = count;
+      });
+      if (hasNewMessage || wasInitialLoad) _scrollToBottom();
+    } catch (error) {
+      if (!mounted) return;
+      if (!silent) {
+        setState(() {
+          _loading = false;
+          _error = error.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    }
+  }
+
+  Future<void> _loadMenuItems() async {
+    if (_menuLoaded || _activeConversation.restaurantId.isEmpty) return;
+    _menuLoaded = true;
+    try {
+      final items = await widget.api.getMenu(_activeConversation.restaurantId);
+      if (mounted) setState(() => _menuItems = items.where((item) => item.available).toList(growable: false));
+    } catch (_) {
+      // Chat and ingredient replies still work if the menu request fails.
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _messagesScroll.hasClients) {
+        _messagesScroll.animateTo(
+          _messagesScroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _setDraft(String body, {String messageType = 'text'}) {
+    setState(() {
+      _composer.value = TextEditingValue(
+        text: body,
+        selection: TextSelection.collapsed(offset: body.length),
+      );
+      _draftMessageType = messageType;
+    });
+    _composerFocus.requestFocus();
+  }
+
+  Future<void> _send({String? messageType, Map<String, dynamic> metadata = const <String, dynamic>{}}) async {
+    await _sendPrepared(_composer.text, messageType: messageType ?? _draftMessageType, metadata: metadata, clearComposer: true);
+  }
+
+  Future<void> _sendPrepared(
+    String body, {
+    required String messageType,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+    bool clearComposer = false,
+  }) async {
+    final cleanBody = body.trim();
+    if (cleanBody.isEmpty || _sending) return;
+    if (cleanBody.length > 2000) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Messages must be 2000 characters or fewer.')));
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      final conversation = await widget.api.sendFoodConversationMessage(
+        conversationId: _activeConversation.id,
+        body: cleanBody,
+        messageType: messageType,
+        metadata: metadata,
+      );
+      if (!mounted) return;
+      setState(() {
+        _conversation = conversation;
+        _lastMessageCount = conversation.messages.length;
+        _draftMessageType = 'text';
+        if (clearComposer) _composer.clear();
+      });
+      _scrollToBottom();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error!)));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _recommendMenuItem() async {
+    if (_menuItems.isEmpty) await _loadMenuItems();
+    if (!mounted) return;
+    if (_menuItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('No available menu items were found. You can still type a recommendation.')));
+      return;
+    }
+    var selectedId = _menuItems.first.id;
+    final reason = TextEditingController();
+    final choice = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const UniversalText('Recommend a menu item'),
+          content: SizedBox(
+            width: 480,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              DropdownButtonFormField<String>(
+                initialValue: selectedId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Menu item'),
+                items: _menuItems.map((item) => DropdownMenuItem<String>(value: item.id, child: Text(item.name, overflow: TextOverflow.ellipsis))).toList(growable: false),
+                onChanged: (value) { if (value != null) setDialogState(() => selectedId = value); },
+              ),
+              const SizedBox(height: 10),
+              TextField(controller: reason, maxLines: 3, decoration: const InputDecoration(labelText: 'Why do you recommend it? (optional)')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, {'id': selectedId, 'reason': reason.text.trim()}), child: const UniversalText('Send recommendation')),
+          ],
+        ),
+      ),
+    );
+    reason.dispose();
+    if (choice == null) return;
+    final item = _menuItems.firstWhere((value) => value.id == choice['id'], orElse: () => _menuItems.first);
+    final why = choice['reason']?.trim() ?? '';
+    final body = 'I recommend ${item.name}.${why.isEmpty ? '' : ' $why'}';
+    await _sendPrepared(body, messageType: 'recommendation', clearComposer: true, metadata: {
+      'recommendedMenuItemId': item.id,
+      'recommendedMenuItemName': item.name,
+    });
+  }
+
+  Future<void> _answerIngredientQuestion() async {
+    final ingredient = TextEditingController();
+    var presence = 'contains';
+    var removal = 'cannot_remove';
+    var crossContact = 'not_confirmed';
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const UniversalText('Restaurant ingredient answer'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                  controller: ingredient,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(labelText: 'Ingredient the customer asked about'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: presence,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'What do your current recipe records say?'),
+                  items: const [
+                    DropdownMenuItem(value: 'contains', child: UniversalText('Confirmed: it contains this ingredient')),
+                    DropdownMenuItem(value: 'not_listed', child: UniversalText('Not present in the current recipe records')),
+                    DropdownMenuItem(value: 'cannot_confirm', child: UniversalText('Cannot confirm ingredients')),
+                  ],
+                  onChanged: (value) { if (value != null) setDialogState(() => presence = value); },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: removal,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Can the kitchen remove it?'),
+                  items: const [
+                    DropdownMenuItem(value: 'can_remove', child: UniversalText('Yes, kitchen confirms it can be removed')),
+                    DropdownMenuItem(value: 'cannot_remove', child: UniversalText('No, it cannot be removed')),
+                    DropdownMenuItem(value: 'not_confirmed', child: UniversalText('Removal has not been confirmed')),
+                  ],
+                  onChanged: (value) { if (value != null) setDialogState(() => removal = value); },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: crossContact,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Cross-contact during preparation'),
+                  items: const [
+                    DropdownMenuItem(value: 'cannot_rule_out', child: UniversalText('Cannot be ruled out')),
+                    DropdownMenuItem(value: 'controls_confirmed', child: UniversalText('Kitchen confirms separate precautions')),
+                    DropdownMenuItem(value: 'not_confirmed', child: UniversalText('Not confirmed')),
+                  ],
+                  onChanged: (value) { if (value != null) setDialogState(() => crossContact = value); },
+                ),
+                const SizedBox(height: 8),
+                const UniversalText('Only select answers you have checked with your current recipe and kitchen process. This response is not a medical guarantee.',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(
+              onPressed: ingredient.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, {
+                'ingredient': ingredient.text.trim(),
+                'presence': presence,
+                'removal': removal,
+                'crossContact': crossContact,
+              }),
+              child: const UniversalText('Send confirmed answer'),
+            ),
+          ],
+        ),
+      ),
+    );
+    ingredient.dispose();
+    if (result == null) return;
+    final name = result['ingredient']!;
+    final itemName = _activeConversation.relatedMenuItemName.trim();
+    final itemLabel = itemName.isEmpty ? 'this item' : '"$itemName"';
+    final presenceAnswer = switch (result['presence']) {
+      'contains' => 'The restaurant confirms that $itemLabel contains $name.',
+      'not_listed' => 'According to the restaurant’s current recipe records, $name is not listed in $itemLabel. This does not rule out cross-contact.',
+      _ => 'The restaurant cannot confirm whether $itemLabel contains $name.',
+    };
+    final removalAnswer = result['presence'] == 'contains'
+        ? switch (result['removal']) {
+            'can_remove' => 'The kitchen confirms that it can remove $name from $itemLabel on request.',
+            'cannot_remove' => 'The kitchen confirms that it cannot remove $name from $itemLabel.',
+            _ => 'Whether the kitchen can remove $name has not been confirmed.',
+          }
+        : result['presence'] == 'cannot_confirm'
+            ? 'Because the ingredients have not been confirmed, removal of $name cannot be treated as confirmed either.'
+            : '';
+    final crossContactAnswer = switch (result['crossContact']) {
+      'cannot_rule_out' => 'Cross-contact with $name cannot be ruled out.',
+      'controls_confirmed' => 'The restaurant says the kitchen follows separate preparation precautions, but this is not a medical guarantee.',
+      _ => 'The kitchen’s cross-contact handling has not been confirmed.',
+    };
+    await _sendPrepared(
+      [presenceAnswer, removalAnswer, crossContactAnswer].where((part) => part.isNotEmpty).join('\n'),
+      messageType: 'ingredient_answer',
+      clearComposer: true,
+      metadata: {
+        'ingredient': name,
+        'presence': result['presence'],
+        'removal': result['removal'],
+        'crossContact': result['crossContact'],
+        'restaurantConfirmed': true,
+      },
+    );
+  }
+
+  String _messageTypeLabel(String type) => switch (type) {
+        'recommendation_request' => 'Recommendation request',
+        'recommendation' => 'Restaurant recommendation',
+        'ingredient_question' => 'Ingredient / allergy question',
+        'ingredient_answer' => 'Restaurant ingredient response · not a medical guarantee',
+        'order_support' => 'Order support',
+        'support_update' => 'Support update',
+        _ => '',
+      };
+
+  String _timeLabel(DateTime? time) {
+    if (time == null) return '';
+    final local = time.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conversation = _activeConversation;
+    final ingredientTopic = conversation.topic == 'ingredient_question' ||
+        conversation.messages.any((message) => message.messageType == 'ingredient_question' || message.messageType == 'ingredient_answer');
+    final ownRole = _isMerchant ? 'restaurant' : 'customer';
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            _isMerchant
+                ? (conversation.customerDisplayName.trim().isEmpty ? 'Customer' : conversation.customerDisplayName.trim())
+                : conversation.restaurantName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(conversation.subject, style: Theme.of(context).textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ]),
+        actions: [
+          IconButton(tooltip: 'Refresh conversation', onPressed: _sending ? null : () => _loadThread(), icon: const Icon(Icons.refresh_rounded)),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (conversation.relatedMenuItemName.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Row(children: [
+                const Icon(Icons.restaurant_menu_rounded, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text('About: ${conversation.relatedMenuItemName}', style: const TextStyle(fontWeight: FontWeight.w700))),
+              ]),
+            ),
+          if (ingredientTopic)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: Colors.amber.withValues(alpha: 0.12),
+              child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.health_and_safety_outlined, color: Colors.amber),
+                SizedBox(width: 9),
+                Expanded(child: UniversalText('Allergy safety: wait for the restaurant’s explicit response. Menu details and chat are not a medical guarantee. If the kitchen cannot confirm ingredients or cross-contact handling, do not order the item if exposure could be unsafe.',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                )),
+              ]),
+            ),
+          if (_error != null)
+            MaterialBanner(
+              content: Text(_error!),
+              leading: const Icon(Icons.error_outline_rounded),
+              actions: [TextButton(onPressed: () => _loadThread(), child: const UniversalText('Retry'))],
+            ),
+          if (_loading)
+            const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: conversation.messages.isEmpty && !_loading
+                ? ListView(
+                    controller: _messagesScroll,
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      const SizedBox(height: 24),
+                      const Icon(Icons.forum_outlined, size: 54),
+                      const SizedBox(height: 12),
+                      Text(
+                        _isMerchant ? 'Reply to your customer' : 'Ask the restaurant directly',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isMerchant
+                            ? 'Use the suggested actions for recommendations and ingredient questions. Only send ingredient answers that the kitchen has confirmed.'
+                            : 'Ask for a recommendation, check ingredients, or get help with your order. A restaurant staff member must confirm any allergy-related answer.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white60),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    controller: _messagesScroll,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+                    itemCount: conversation.messages.length,
+                    itemBuilder: (context, index) {
+                      final message = conversation.messages[index];
+                      final isOwn = message.senderRole == ownRole;
+                      final isIngredientAnswer = message.messageType == 'ingredient_answer';
+                      return Align(
+                        alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 680),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 9),
+                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isIngredientAnswer
+                                  ? Colors.amber.withValues(alpha: 0.14)
+                                  : isOwn
+                                      ? Theme.of(context).colorScheme.primaryContainer
+                                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(16),
+                              border: isIngredientAnswer ? Border.all(color: Colors.amber.withValues(alpha: 0.65)) : null,
+                            ),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              if (_messageTypeLabel(message.messageType).isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 5),
+                                  child: Text(
+                                    _messageTypeLabel(message.messageType),
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: isIngredientAnswer ? Colors.amber : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75)),
+                                  ),
+                                ),
+                              SelectableText(message.body),
+                              const SizedBox(height: 5),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(_timeLabel(message.createdAt), style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                              ),
+                            ]),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (!_isMerchant && conversation.messages.length < 3)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(spacing: 6, runSpacing: 3, children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.restaurant_menu_rounded, size: 16),
+                    label: const UniversalText('What do you recommend?'),
+                    onPressed: () => _setDraft('Hi! I’m not sure what to order. What do you recommend?', messageType: 'recommendation_request'),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.health_and_safety_outlined, size: 16),
+                    label: const UniversalText('Ingredient / allergy question'),
+                    onPressed: () => _setDraft(
+                      'Does [menu item] contain [ingredient]? I am allergic. If it contains it, can the kitchen remove it? Please also tell me whether cross-contact is possible.',
+                      messageType: 'ingredient_question',
+                    ),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.support_agent_rounded, size: 16),
+                    label: const UniversalText('Order support'),
+                    onPressed: () => _setDraft('Hi, I need help with an order. ', messageType: 'order_support'),
+                  ),
+                ]),
+              ),
+            ),
+          if (_isMerchant)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(spacing: 6, runSpacing: 3, children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.restaurant_menu_rounded, size: 16),
+                    label: const UniversalText('Recommend a menu item'),
+                    onPressed: _sending ? null : _recommendMenuItem,
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.health_and_safety_outlined, size: 16),
+                    label: const UniversalText('Answer ingredient question'),
+                    onPressed: _sending ? null : _answerIngredientQuestion,
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.support_agent_rounded, size: 16),
+                    label: const UniversalText('Order support reply'),
+                    onPressed: () => _setDraft('Thanks for contacting us about your order. ', messageType: 'order_support'),
+                  ),
+                ]),
+              ),
+            ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Expanded(
+                  child: TextField(
+                    controller: _composer,
+                    focusNode: _composerFocus,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 2000,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: 'Write a message…',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(22))),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                      counterText: '',
+                    ),
+                    onChanged: (_) {
+                      if (_draftMessageType.isEmpty) _draftMessageType = 'text';
+                    },
+                    onSubmitted: (_) => _send(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: 'Send message',
+                  onPressed: _sending || _activeConversation.status == 'closed' ? null : () => _send(),
+                  icon: _sending
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.send_rounded),
+                ),
+              ]),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2196,7 +4139,7 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
     final canDeliver = widget.restaurant.allowsDelivery;
     final canPickup = widget.restaurant.allowsPickup;
     return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
+      appBar: AppBar(title: const UniversalText('Checkout')),
       bottomNavigationBar: _loading || (_error != null && _paymentMethods.isEmpty)
           ? null
           : SafeArea(
@@ -2223,8 +4166,8 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
                 if (canDeliver && canPickup)
                   SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment<String>(value: 'delivery', label: Text('Delivery'), icon: Icon(Icons.delivery_dining_rounded)),
-                      ButtonSegment<String>(value: 'pickup', label: Text('Pickup'), icon: Icon(Icons.storefront_rounded)),
+                      ButtonSegment<String>(value: 'delivery', label: UniversalText('Delivery'), icon: Icon(Icons.delivery_dining_rounded)),
+                      ButtonSegment<String>(value: 'pickup', label: UniversalText('Pickup'), icon: Icon(Icons.storefront_rounded)),
                     ],
                     selected: {_fulfillmentMethod},
                     onSelectionChanged: (selection) => setState(() {
@@ -2236,7 +4179,7 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
                   Card(
                     child: ListTile(
                       leading: const Icon(Icons.storefront_rounded),
-                      title: const Text('Pick up at the restaurant'),
+                      title: const UniversalText('Pick up at the restaurant'),
                       subtitle: Text('${widget.restaurant.address}${widget.restaurant.city.isEmpty ? '' : ', ${widget.restaurant.city}'}${widget.restaurant.phone.isEmpty ? '' : '\n${widget.restaurant.phone}'}\nNo delivery fee is charged for pickup.'),
                     ),
                   )
@@ -2245,7 +4188,7 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Delivery address', style: TextStyle(fontWeight: FontWeight.w900)),
+                        const UniversalText('Delivery address', style: TextStyle(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 8),
                         _addressField(_addressController, 'Street address', hint: 'House number and street'),
                         _addressField(_cityController, 'City'),
@@ -2263,12 +4206,12 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(14),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Restaurant coupon', style: TextStyle(fontWeight: FontWeight.w900)),
+                      const UniversalText('Restaurant coupon', style: TextStyle(fontWeight: FontWeight.w900)),
                       const SizedBox(height: 8),
                       Row(children: [
                         Expanded(child: TextField(controller: _couponController, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Coupon code', hintText: 'WELCOME10'))),
                         const SizedBox(width: 8),
-                        FilledButton.tonal(onPressed: _couponBusy ? null : _applyCoupon, child: _couponBusy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Apply')),
+                        FilledButton.tonal(onPressed: _couponBusy ? null : _applyCoupon, child: _couponBusy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const UniversalText('Apply')),
                       ]),
                       if (_couponMessage != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_couponMessage!, style: TextStyle(color: _appliedCouponCode != null ? Colors.lightGreenAccent : Colors.amber))),
                     ]),
@@ -2279,10 +4222,10 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(14),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Payment', style: TextStyle(fontWeight: FontWeight.w900)),
+                      const UniversalText('Payment', style: TextStyle(fontWeight: FontWeight.w900)),
                       const SizedBox(height: 6),
                       if (_paymentMethods.isEmpty)
-                        const Text('No saved payment methods are available. Add one in account payment settings first.', style: TextStyle(color: Colors.white60))
+                        const UniversalText('No saved payment methods are available. Add one in account payment settings first.', style: TextStyle(color: Colors.white60))
                       else
                         RadioGroup<FoodPaymentMethod>(
                           groupValue: _selectedPayment,
@@ -2292,7 +4235,7 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
                               RadioListTile<FoodPaymentMethod>(
                                 value: method,
                                 title: Text(method.displayName),
-                                subtitle: method.preferred ? const Text('Preferred') : null,
+                                subtitle: method.preferred ? const UniversalText('Preferred') : null,
                                 contentPadding: EdgeInsets.zero,
                               ),
                           ]),
@@ -2402,7 +4345,7 @@ class _FoodOrderStatusScreenState extends State<FoodOrderStatusScreen> {
         : TimeOfDay.fromDateTime(_eta!.toLocal()).format(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Order tracking')),
+      appBar: AppBar(title: const UniversalText('Order tracking')),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
@@ -2419,7 +4362,7 @@ class _FoodOrderStatusScreenState extends State<FoodOrderStatusScreen> {
                 padding: const EdgeInsets.all(22),
                 child: Column(
                   children: [
-                    const Text('Estimated time:', style: TextStyle(color: Colors.white60)),
+                    const UniversalText('Estimated time:', style: TextStyle(color: Colors.white60)),
                     const SizedBox(height: 5),
                     Text(etaLabel, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 7),
@@ -2453,7 +4396,7 @@ class _FoodOrderStatusScreenState extends State<FoodOrderStatusScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(children: [
-                  const Align(alignment: Alignment.centerLeft, child: Text('Order total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+                  const Align(alignment: Alignment.centerLeft, child: UniversalText('Order total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
                   const SizedBox(height: 8),
                   _SummaryLine(label: 'Restaurant subtotal', value: _money(_order.subtotalCents, _order.currencyCode)),
                   if (_order.discountCents > 0) _SummaryLine(label: 'Coupon ${_order.couponCode ?? ''}', value: '−${_money(_order.discountCents, _order.currencyCode)}'),
@@ -2478,7 +4421,43 @@ class _FoodOrderStatusScreenState extends State<FoodOrderStatusScreen> {
             OutlinedButton.icon(
               onPressed: _loading ? null : _refresh,
               icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh_rounded),
-              label: const Text('Refresh status'),
+              label: const UniversalText('Refresh status'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed: _order.restaurantId.isEmpty
+                  ? null
+                  : () async {
+                      final navigator = Navigator.of(context);
+                      final messenger = ScaffoldMessenger.of(context);
+                      try {
+                        final conversation = await widget.api.createFoodConversation(
+                          restaurantId: _order.restaurantId,
+                          topic: 'order_support',
+                          subject: 'Order support · #${_order.id.substring(0, math.min(8, _order.id.length))}',
+                          orderId: _order.id,
+                        );
+                        if (!mounted) return;
+                        await navigator.push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => FoodConversationScreen(
+                              api: widget.api,
+                              conversation: conversation,
+                              isMerchant: false,
+                              initialDraft: 'Hi, I have a question about order #${_order.id.substring(0, math.min(8, _order.id.length))}.',
+                            ),
+                          ),
+                        );
+                      } catch (error) {
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                          );
+                        }
+                      }
+                    },
+              icon: const Icon(Icons.support_agent_rounded),
+              label: const UniversalText('Message restaurant about this order'),
             ),
           ],
         ),
@@ -2564,6 +4543,33 @@ int _statusRank(String status) => switch (status) {
 String? _nullableString(dynamic value) {
   final result = value?.toString().trim();
   return result == null || result.isEmpty ? null : result;
+}
+
+List<String> _splitIngredientField(String value) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final part in value.split(RegExp(r'[,;\n]'))) {
+    final ingredient = part.trim();
+    if (ingredient.isEmpty || ingredient.length > 80) continue;
+    if (seen.add(ingredient.toLowerCase())) result.add(ingredient);
+    if (result.length == 80) break;
+  }
+  return result;
+}
+
+String _displayTime(String raw) {
+  final match = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(raw.trim());
+  if (match == null) return raw.trim();
+  final hour = int.tryParse(match.group(1) ?? '') ?? 0;
+  final minute = match.group(2) ?? '00';
+  final suffix = hour >= 12 ? 'PM' : 'AM';
+  final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  return '$displayHour:$minute $suffix';
+}
+
+Map<String, dynamic> _stringMap(dynamic value) {
+  if (value is! Map) return const <String, dynamic>{};
+  return Map<String, dynamic>.from(value);
 }
 
 List<String> _stringList(dynamic value) {

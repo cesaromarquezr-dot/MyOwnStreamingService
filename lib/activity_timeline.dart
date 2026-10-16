@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// A profile-scoped feed of interactions recorded by the shared media action
 /// contract. Domain state is still read from its owning service.
@@ -50,11 +51,11 @@ class _ActivityTimelineState extends State<ActivityTimeline> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return const Center(child: Text('Could not load activity.'));
+            return const Center(child: UniversalText('Could not load activity.'));
           }
           final items = snapshot.data ?? const <Map<String, dynamic>>[];
           if (items.isEmpty) {
-            return const Center(child: Text('No activity yet.'));
+            return const Center(child: UniversalText('No activity yet.'));
           }
           return ListView.separated(
             itemCount: items.length,

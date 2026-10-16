@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Account-scoped presentation and editing surface for canonical versions,
 /// version-specific scenes, and typed story relationships.
@@ -82,7 +83,7 @@ class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectio
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Franchise connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const UniversalText('Franchise connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text(widget.hasSeasons
                 ? 'Related productions keep their own season numbering and identity.'
@@ -91,7 +92,7 @@ class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectio
             if (!AppController.instance.backendApi.isAuthenticated)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
-                child: Text('Sign in to view linked productions.', style: TextStyle(color: Colors.white60)),
+                child: UniversalText('Sign in to view linked productions.', style: TextStyle(color: Colors.white60)),
               )
             else
               FutureBuilder<List<Map<String, dynamic>>>(
@@ -104,7 +105,7 @@ class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectio
                   if (links.isEmpty) {
                     return const Padding(
                       padding: EdgeInsets.only(top: 12),
-                      child: Text('No franchise relationships are recorded for this title.', style: TextStyle(color: Colors.white60)),
+                      child: UniversalText('No franchise relationships are recorded for this title.', style: TextStyle(color: Colors.white60)),
                     );
                   }
                   return Column(children: [
@@ -188,7 +189,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Add a version'),
+        title: const UniversalText('Add a version'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Version name', hintText: 'Encore')),
@@ -197,8 +198,8 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Add version')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add version')),
         ],
       ),
     );
@@ -226,7 +227,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Add a version scene'),
+        title: const UniversalText('Add a version scene'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: sceneTitle, decoration: const InputDecoration(labelText: 'Scene title', hintText: 'TVA incursion scene')),
@@ -236,8 +237,8 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Add scene')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add scene')),
         ],
       ),
     );
@@ -266,7 +267,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Link a story'),
+        title: const UniversalText('Link a story'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(controller: target, decoration: const InputDecoration(labelText: 'Related title')),
           TextField(controller: targetId, decoration: const InputDecoration(labelText: 'Canonical media ID (optional)')),
@@ -274,8 +275,8 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
           TextField(controller: timing, decoration: const InputDecoration(labelText: 'Story timing note')),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Add link')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add link')),
         ],
       ),
     );
@@ -311,7 +312,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  const Expanded(child: Text('Versions & story connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                  const Expanded(child: UniversalText('Versions & story connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
                   IconButton(
                     onPressed: _saving || !AppController.instance.backendApi.isAuthenticated
                         ? null
@@ -321,11 +322,11 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
                   ),
                 ]),
                 if (!AppController.instance.backendApi.isAuthenticated)
-                  const Text('Sign in to save versions and story connections.', style: TextStyle(color: Colors.white60))
+                  const UniversalText('Sign in to save versions and story connections.', style: TextStyle(color: Colors.white60))
                 else if (snapshot.connectionState == ConnectionState.waiting)
                   const LinearProgressIndicator()
                 else if (versions.isEmpty && relationships.isEmpty)
-                  const Text('Add alternate cuts, their physical editions, version-specific scenes, and story links.', style: TextStyle(color: Colors.white60))
+                  const UniversalText('Add alternate cuts, their physical editions, version-specific scenes, and story links.', style: TextStyle(color: Colors.white60))
                 else ...[
                   for (var index = 0; index < versions.length; index++)
                     _versionTile(record, versions[index], index),
@@ -353,7 +354,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
                     child: TextButton.icon(
                       onPressed: _saving ? null : () => _addRelationship(record),
                       icon: const Icon(Icons.add_link),
-                      label: const Text('Link another story'),
+                      label: const UniversalText('Link another story'),
                     ),
                   ),
                 if (_saving) const LinearProgressIndicator(),
@@ -387,7 +388,7 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
           child: TextButton.icon(
             onPressed: _saving ? null : () => _addScene(record, index),
             icon: const Icon(Icons.add),
-            label: const Text('Add scene'),
+            label: const UniversalText('Add scene'),
           ),
         ),
       ],

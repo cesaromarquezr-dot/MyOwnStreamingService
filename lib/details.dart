@@ -3,6 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
@@ -19,6 +20,7 @@ import 'social_sharing.dart';
 import 'food_delivery.dart';
 import 'details_recommendations.dart';
 import 'actor_connections.dart';
+import 'page_customization_button.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -88,6 +90,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
               actions: [
+                const PageCustomizeButton(pageId: 'details'),
                 IconButton(
                   tooltip: 'Food & Delivery',
                   icon: const Icon(Icons.delivery_dining_rounded),
@@ -147,11 +150,56 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         children: [
           for (final section in customization.sectionOrder)
             _buildSection(section),
+          _buildExternalPurchaseOptions(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
           MediaFranchiseConnectionsPanel(mediaId: media.id, hasSeasons: isTvShow),
           const SizedBox(height: 12),
           MediaKnowledgePanel(mediaWorkId: media.id, mediaTitle: media.title),
         ],
+      ),
+    );
+  }
+
+  /// Opens retailer search results rather than claiming that a specific copy
+  /// is in stock. Availability, format and regional eligibility are determined
+  /// by the retailer after the user follows the link.
+  Widget _buildExternalPurchaseOptions() {
+    final query = '${media.title} ${media.releaseYear ?? ''}'.trim();
+    final encoded = Uri.encodeQueryComponent(query);
+    final retailers = <({String name, IconData icon, String url})>[
+      (name: 'Amazon', icon: Icons.shopping_bag_outlined, url: 'https://www.amazon.com/s?k=$encoded'),
+      (name: 'Walmart', icon: Icons.storefront_outlined, url: 'https://www.walmart.com/search?q=$encoded'),
+      (name: 'Mercado Libre', icon: Icons.store_mall_directory_outlined, url: 'https://listado.mercadolibre.com.mx/${Uri.encodeComponent(query)}'),
+      (name: 'eBay', icon: Icons.sell_outlined, url: 'https://www.ebay.com/sch/i.html?_nkw=$encoded'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 12),
+      child: Card(
+        color: const Color(0xFF151515),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const UniversalText('Find to buy or rent', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const UniversalText('Search retailers for digital rentals, purchases, DVDs, Blu-rays, or used copies. These are search links; stock, format, price, and region availability are confirmed by each retailer.', style: TextStyle(color: Colors.white60)),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final retailer in retailers)
+                OutlinedButton.icon(
+                  icon: Icon(retailer.icon, size: 18),
+                  label: Text(retailer.name),
+                  onPressed: () async {
+                    final uri = Uri.tryParse(retailer.url);
+                    if (uri == null) return;
+                    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    if (!opened && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open ${retailer.name}.')));
+                    }
+                  },
+                ),
+            ]),
+          ]),
+        ),
       ),
     );
   }
@@ -286,10 +334,43 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   List<Map<String, dynamic>> _orderedSeasons() {
     final result = List<Map<String, dynamic>>.from(seasons);
 
-    if (customization.seasonOrder == 'Bottom to Top') {
-      return result.reversed.toList();
+    int? numberFor(Map<String, dynamic> season) {
+      final explicit = _integerValue(
+        season['seasonNumber'] ??
+            season['season_number'] ??
+            season['season'] ??
+            season['number'],
+      );
+      if (explicit != null) return explicit;
+
+      final label = _seasonTitle(season);
+      final match = RegExp(
+        r'\b(?:season|series|s)\s*#?0*(\d+)\b',
+        caseSensitive: false,
+      ).firstMatch(label);
+      return match == null ? null : int.tryParse(match.group(1) ?? '');
     }
 
+    result.sort((a, b) {
+      final aNumber = numberFor(a);
+      final bNumber = numberFor(b);
+      if (aNumber != null && bNumber != null) {
+        final numberCompare = aNumber.compareTo(bNumber);
+        if (numberCompare != 0) return numberCompare;
+      } else if (aNumber != null) {
+        return -1;
+      } else if (bNumber != null) {
+        return 1;
+      }
+
+      final aTitle = _seasonTitle(a).toLowerCase();
+      final bTitle = _seasonTitle(b).toLowerCase();
+      return aTitle.compareTo(bTitle);
+    });
+
+    if (customization.seasonOrder == 'Bottom to Top') {
+      return result.reversed.toList(growable: false);
+    }
     return result;
   }
 
@@ -306,11 +387,61 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
     for (final item in raw) {
       if (item is Map) {
-        result.add(
-          Map<String, dynamic>.from(item),
-        );
+        result.add(Map<String, dynamic>.from(item));
       }
     }
+
+    int? episodeNumberFor(Map<String, dynamic> episode) {
+      final explicit = _integerValue(
+        episode['episodeNumber'] ??
+            episode['episode_number'] ??
+            episode['episode'] ??
+            episode['number'],
+      );
+      if (explicit != null) return explicit;
+
+      final label = (episode['episodeCode'] ??
+              episode['filename'] ??
+              episode['title'] ??
+              episode['name'] ??
+              '')
+          .toString();
+      final patterns = <RegExp>[
+        RegExp(r'\bS\d{1,2}\s*E(\d{1,3})\b', caseSensitive: false),
+        RegExp(r'\bEpisode\s*#?0*(\d{1,3})\b', caseSensitive: false),
+      ];
+      for (final pattern in patterns) {
+        final match = pattern.firstMatch(label);
+        if (match != null) return int.tryParse(match.group(1) ?? '');
+      }
+      return null;
+    }
+
+    int? episodeEndFor(Map<String, dynamic> episode) => _integerValue(
+          episode['episodeEndNumber'] ??
+              episode['episode_end_number'] ??
+              episode['endEpisodeNumber'],
+        );
+
+    result.sort((a, b) {
+      final aNumber = episodeNumberFor(a);
+      final bNumber = episodeNumberFor(b);
+      if (aNumber != null && bNumber != null) {
+        final numberCompare = aNumber.compareTo(bNumber);
+        if (numberCompare != 0) return numberCompare;
+        final endCompare = (episodeEndFor(a) ?? aNumber)
+            .compareTo(episodeEndFor(b) ?? bNumber);
+        if (endCompare != 0) return endCompare;
+      } else if (aNumber != null) {
+        return -1;
+      } else if (bNumber != null) {
+        return 1;
+      }
+
+      final aTitle = (a['title'] ?? a['name'] ?? '').toString().toLowerCase();
+      final bTitle = (b['title'] ?? b['name'] ?? '').toString().toLowerCase();
+      return aTitle.compareTo(bTitle);
+    });
 
     return result;
   }
@@ -583,12 +714,29 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       return;
     }
 
+    final orderedSeasons = _orderedSeasons();
+    final selectedSeason = selectedSeasonIndex >= 0 && selectedSeasonIndex < orderedSeasons.length
+        ? orderedSeasons[selectedSeasonIndex]
+        : const <String, dynamic>{};
+    final seasonNumber = selectedSeason['seasonNumber'] ??
+        selectedSeason['season_number'] ??
+        selectedSeason['number'] ??
+        selectedSeason['season'];
+    final episodeNumber = episode['episodeNumber'] ??
+        episode['episode_number'] ??
+        episode['number'];
+    final episodeTitle = episode['title']?.toString() ??
+        episode['name']?.toString() ?? episodeMedia.title;
+    final activityLabel =
+        "Watching ${media.title} Season ${seasonNumber ?? '?'} Episode ${episodeNumber ?? '?'}: $episodeTitle";
+
     Navigator.of(context).push(
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/player'),
         builder: (_) {
           return PlayerScreen(
             media: episodeMedia,
+            activityLabel: activityLabel,
           );
         },
       ),
@@ -1297,8 +1445,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                       Text('Subtitles: ${media.subtitles.join(', ')}'),
                     if (media.extras.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      const Text(
-                        'Extras',
+                      const UniversalText('Extras',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                       for (final extra in media.extras) Text('• $extra'),
@@ -1470,7 +1617,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       rows.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(width: 125, child: Text('Actors', style: TextStyle(color: Colors.white54, fontSize: 14))),
+          const SizedBox(width: 125, child: UniversalText('Actors', style: TextStyle(color: Colors.white54, fontSize: 14))),
           Expanded(child: Wrap(spacing: 6, runSpacing: 4, children: [
             for (final actor in names) ActionChip(
               label: Text(actor),

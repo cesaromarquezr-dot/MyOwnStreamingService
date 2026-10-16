@@ -16,6 +16,8 @@ import 'social_video_editor.dart';
 import 'social_sharing.dart';
 import 'social_reels.dart';
 import 'social_story_experience.dart';
+import 'localization.dart';
+import 'media_text_localizer.dart';
 
 class _SocialPostDraft {
   const _SocialPostDraft({required this.body, this.photo});
@@ -159,7 +161,12 @@ class _SocialReviewDraft {
 /// Social content contains references/metadata only. Media playback remains
 /// owned by the existing home-server/media architecture.
 class SocialCenterScreen extends StatefulWidget {
-  const SocialCenterScreen({super.key});
+  final String? initialConversationId;
+
+  const SocialCenterScreen({
+    super.key,
+    this.initialConversationId,
+  });
 
   @override
   State<SocialCenterScreen> createState() => _SocialCenterScreenState();
@@ -185,7 +192,20 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         .addListener(_onPageCustomizationChanged);
     AppSectionCustomizationStore.revision
         .addListener(_onPageCustomizationChanged);
-    _load();
+    final initialConversationId = widget.initialConversationId?.trim();
+    if (initialConversationId != null && initialConversationId.isNotEmpty) {
+      unawaited(_loadAndOpenInitialConversation(initialConversationId));
+    } else {
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _loadAndOpenInitialConversation(String conversationId) async {
+    await _load();
+    if (!mounted) return;
+    final messagesIndex = _tabSections.indexOf('messages');
+    if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
+    await _openConversation(conversationId);
   }
 
   Future<void> _loadStoryPlacement() async {
@@ -445,7 +465,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             child: Card(
               child: ListTile(
                 leading: const Icon(Icons.error_outline_rounded),
-                title: const Text('Social services unavailable'),
+                title: const UniversalText('Social services unavailable'),
                 subtitle: Text(_error!),
                 trailing: IconButton(
                   onPressed: _load,
@@ -485,13 +505,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Friends & Community',
+                    UniversalText('Friends & Community',
                       style:
                           TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
                     ),
-                    Text(
-                      'Watch together, talk about media, and share what you are enjoying.',
+                    UniversalText('Watch together, talk about media, and share what you are enjoying.',
                       style: TextStyle(color: Colors.white54),
                     ),
                   ],
@@ -502,10 +520,15 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 onPressed: _load,
                 icon: const Icon(Icons.refresh_rounded),
               ),
+              IconButton(
+                tooltip: 'Create account group chat',
+                onPressed: _newAccountGroupMessage,
+                icon: const Icon(Icons.group_work_outlined),
+              ),
               FilledButton.icon(
                 onPressed: _newMessage,
                 icon: const Icon(Icons.chat_bubble_outline_rounded),
-                label: const Text('Message'),
+                label: const UniversalText('Message'),
               ),
             ],
           ),
@@ -652,9 +675,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             const Card(
               child: ListTile(
                 leading: Icon(Icons.dynamic_feed_outlined),
-                title: Text('Your social feed is quiet'),
-                subtitle: Text(
-                  'Add friends, join a community, or share a story to get started.',
+                title: UniversalText('Your social feed is quiet'),
+                subtitle: UniversalText('Add friends, join a community, or share a story to get started.',
                 ),
               ),
             ),
@@ -732,8 +754,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                     ],
                   ),
                   const SizedBox(height: 14),
-                  const Text(
-                    'Your page combines your social posts, media reviews, shorts, and community shares.',
+                  const UniversalText('Your page combines your social posts, media reviews, shorts, and community shares.',
                     style: TextStyle(color: Colors.white60, height: 1.35),
                   ),
                   const SizedBox(height: 12),
@@ -744,17 +765,17 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                       FilledButton.icon(
                         onPressed: _busy ? null : _composePagePost,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
-                        label: const Text('Post or photo'),
+                        label: const UniversalText('Post or photo'),
                       ),
                       OutlinedButton.icon(
                         onPressed: _busy ? null : _composeReview,
                         icon: const Icon(Icons.rate_review_outlined),
-                        label: const Text('Write a review'),
+                        label: const UniversalText('Write a review'),
                       ),
                       OutlinedButton.icon(
                         onPressed: _busy ? null : () => _createShort(),
                         icon: const Icon(Icons.movie_creation_outlined),
-                        label: const Text('Create Short'),
+                        label: const UniversalText('Create Short'),
                       ),
                     ],
                   ),
@@ -767,9 +788,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             const Card(
               child: ListTile(
                 leading: Icon(Icons.lock_outline_rounded),
-                title: Text('Your friends-only page is ready'),
-                subtitle: Text(
-                  'Share a post, a photo, or a media review to get started.',
+                title: UniversalText('Your friends-only page is ready'),
+                subtitle: UniversalText('Share a post, a photo, or a media review to get started.',
                 ),
               ),
             ),
@@ -817,7 +837,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final result = await showDialog<(String, String?)>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit profile'),
+        title: const UniversalText('Edit profile'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -844,7 +864,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(
@@ -854,7 +874,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                       ? null
                       : avatarController.text.trim()),
             ),
-            child: const Text('Save'),
+            child: const UniversalText('Save'),
           ),
         ],
       ),
@@ -890,7 +910,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Post to My Page'),
+          title: const UniversalText('Post to My Page'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -920,8 +940,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               ),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'Photos are private and shown only to authorized friends.',
+                child: UniversalText('Photos are private and shown only to authorized friends.',
                   style: TextStyle(color: Colors.white54, fontSize: 12),
                 ),
               ),
@@ -930,14 +949,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: const UniversalText('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(
                 dialogContext,
                 _SocialPostDraft(body: controller.text.trim(), photo: photo),
               ),
-              child: const Text('Post'),
+              child: const UniversalText('Post'),
             ),
           ],
         ),
@@ -1049,7 +1068,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           scrollable: true,
-          title: const Text('Write a media review'),
+          title: const UniversalText('Write a media review'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1094,14 +1113,13 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Share to My Page'),
-                subtitle: const Text('Visible to your accepted friends'),
+                title: const UniversalText('Share to My Page'),
+                subtitle: const UniversalText('Visible to your accepted friends'),
                 value: shareToPage,
                 onChanged: (value) => setDialogState(() => shareToPage = value),
               ),
               if (communities.isNotEmpty) ...[
-                const Text(
-                  'Also share to communities',
+                const UniversalText('Also share to communities',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 for (final community in communities)
@@ -1127,7 +1145,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: const UniversalText('Cancel'),
             ),
             FilledButton(
               onPressed: () {
@@ -1145,7 +1163,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   ),
                 );
               },
-              child: const Text('Save review'),
+              child: const UniversalText('Save review'),
             ),
           ],
         ),
@@ -1191,8 +1209,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                     color: Colors.white.withValues(alpha: .06),
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: const Text(
-                    'What are you watching, listening to, or collecting?',
+                  child: const UniversalText('What are you watching, listening to, or collecting?',
                     style: TextStyle(color: Colors.white54),
                   ),
                 ),
@@ -1319,14 +1336,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(mediaReference['conversationTitle']?.toString() ?? 'Group chat', style: const TextStyle(fontWeight: FontWeight.w900)),
-                          const Text('Group chat invitation · expires in 30 days', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                          const UniversalText('Group chat invitation · expires in 30 days', style: TextStyle(color: Colors.white60, fontSize: 11)),
                         ],
                       ),
                     ),
                     FilledButton.icon(
                       onPressed: () => _acceptChatInvite(mediaReference),
                       icon: const Icon(Icons.login_rounded, size: 17),
-                      label: const Text('Join chat'),
+                      label: const UniversalText('Join chat'),
                     ),
                   ],
                 ),
@@ -1415,21 +1432,21 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                           : Icons.favorite_border_rounded,
                       color: reaction == '❤️' ? Colors.redAccent : null,
                     ),
-                    label: const Text('Like'),
+                    label: const UniversalText('Like'),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _commentPost(post['id']?.toString() ?? ''),
                     icon: const Icon(Icons.mode_comment_outlined),
-                    label: const Text('Comment'),
+                    label: const UniversalText('Comment'),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _sharePost(post),
                     icon: const Icon(Icons.send_outlined),
-                    label: const Text('Share'),
+                    label: const UniversalText('Share'),
                   ),
                 ),
               ],
@@ -1475,8 +1492,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'PRODUCT',
+                    const UniversalText('PRODUCT',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
@@ -1533,8 +1549,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   child: Row(
                     children: [
                       const Expanded(
-                        child: Text(
-                          'Messages',
+                        child: UniversalText('Messages',
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
@@ -1542,12 +1557,22 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Create group chat',
+                        tooltip: 'Create account group chat',
+                        onPressed: _newAccountGroupMessage,
+                        icon: const Icon(Icons.group_work_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Message an account profile',
+                        onPressed: _newAccountDirectMessage,
+                        icon: const Icon(Icons.person_search_rounded),
+                      ),
+                      IconButton(
+                        tooltip: 'Create group chat with friends',
                         onPressed: _newGroupMessage,
                         icon: const Icon(Icons.group_add_outlined),
                       ),
                       IconButton(
-                        tooltip: 'New direct message',
+                        tooltip: 'New direct message to a friend',
                         onPressed: _newMessage,
                         icon: const Icon(Icons.edit_rounded),
                       ),
@@ -1569,8 +1594,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 if (conversations.isEmpty)
                   const ListTile(
                     leading: Icon(Icons.forum_outlined),
-                    title: Text('No conversations yet'),
-                    subtitle: Text('Start one with a friend.'),
+                    title: UniversalText('No conversations yet'),
+                    subtitle: UniversalText('Start one with a friend.'),
                   ),
                 ...conversations.map(_conversationTile),
               ],
@@ -1586,13 +1611,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               children: [
                 Icon(Icons.forum_rounded, size: 58, color: Colors.white24),
                 SizedBox(height: 12),
-                Text(
-                  'Select a conversation',
+                UniversalText('Select a conversation',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 SizedBox(height: 4),
-                Text(
-                  'Messages stay profile-scoped and never grant media playback access.',
+                UniversalText('Messages stay profile-scoped and never grant media playback access.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
@@ -1680,27 +1703,27 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             children: [
               Row(children: [
                 Expanded(child: Text('Your people • ${friends.length} friends', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
-                FilledButton.icon(onPressed: _addFriend, icon: const Icon(Icons.person_add_alt_1_rounded), label: const Text('Add Friend')),
+                FilledButton.icon(onPressed: _addFriend, icon: const Icon(Icons.person_add_alt_1_rounded), label: const UniversalText('Add Friend')),
               ]),
               const SizedBox(height: 10),
-              if (friends.isEmpty) const Card(child: ListTile(leading: Icon(Icons.person_search_rounded), title: Text('No friends yet'), subtitle: Text('Use a unique @username to connect.'))),
+              if (friends.isEmpty) const Card(child: ListTile(leading: Icon(Icons.person_search_rounded), title: UniversalText('No friends yet'), subtitle: UniversalText('Use a unique @username to connect.'))),
               ...friends.map((friend) => _friendDisplayCard(friend, settings.friendsViewMode)),
               if (requests.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const Text('Friend requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const UniversalText('Friend requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 ...requests.map(_requestCard),
               ],
               if (guardianRequests.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const Text('Guardian approval queue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const Text('Requests sent to a supervised profile are held here for a guardian decision.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                const UniversalText('Guardian approval queue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const UniversalText('Requests sent to a supervised profile are held here for a guardian decision.', style: TextStyle(color: Colors.white60, fontSize: 12)),
                 const SizedBox(height: 8),
                 ...guardianRequests.map(_guardianRequestCard),
               ],
               if (suggestions.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const Text('People you may know', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const UniversalText('People you may know', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 ...suggestions.map(_suggestionCard),
               ],
             ],
@@ -1725,7 +1748,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        const Chip(label: Text('Friend')),
+        const Chip(label: UniversalText('Friend')),
         IconButton(tooltip: 'Message', onPressed: () => _startMessageFor(username), icon: const Icon(Icons.chat_bubble_outline_rounded)),
       ]),
     );
@@ -1746,10 +1769,10 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       trailing: Wrap(spacing: 4, children: [
         TextButton(onPressed: friendshipId.isEmpty ? null : () => _act(() async {
           await AppController.instance.backendApi.respondGuardianFriendRequest(profileId: profile.id, friendshipId: friendshipId, action: 'block');
-        }), child: const Text('Block')),
+        }), child: const UniversalText('Block')),
         FilledButton(onPressed: friendshipId.isEmpty ? null : () => _act(() async {
           await AppController.instance.backendApi.respondGuardianFriendRequest(profileId: profile.id, friendshipId: friendshipId, action: 'approve');
-        }), child: const Text('Approve')),
+        }), child: const UniversalText('Approve')),
       ]),
     ));
   }
@@ -1801,10 +1824,10 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           child: ListView(padding: const EdgeInsets.all(18), children: [
             Row(children: [
               Expanded(child: Text('Communities • ${communities.length}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
-              FilledButton.icon(onPressed: _createCommunity, icon: const Icon(Icons.add_rounded), label: const Text('Create')),
+              FilledButton.icon(onPressed: _createCommunity, icon: const Icon(Icons.add_rounded), label: const UniversalText('Create')),
             ]),
             const SizedBox(height: 10),
-            if (communities.isEmpty) const Card(child: ListTile(leading: Icon(Icons.groups_rounded), title: Text('No matching communities'), subtitle: Text('Try another filter or create a community.'))),
+            if (communities.isEmpty) const Card(child: ListTile(leading: Icon(Icons.groups_rounded), title: UniversalText('No matching communities'), subtitle: UniversalText('Try another filter or create a community.'))),
             ...communities.map((community) {
               final communityId = community['id']?.toString() ?? '';
               final isJoined = community['joined'] == true;
@@ -1822,7 +1845,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
                   title: Text(community['name']?.toString() ?? 'Community'),
                   subtitle: Text(subtitle.isEmpty ? (community['description']?.toString() ?? '') : subtitle),
-                  trailing: isJoined ? const Chip(label: Text('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const Text('Join')),
+                  trailing: isJoined ? const Chip(label: UniversalText('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const UniversalText('Join')),
                 ));
               }
               return Card(child: Padding(
@@ -1833,21 +1856,21 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                     leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
                     title: Text(community['name']?.toString() ?? 'Community', style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: Text('${community['description']?.toString() ?? ''}${subtitle.isEmpty ? '' : '\n$subtitle'}', maxLines: 3, overflow: TextOverflow.ellipsis),
-                    trailing: isJoined ? const Chip(label: Text('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const Text('Join')),
+                    trailing: isJoined ? const Chip(label: UniversalText('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const UniversalText('Join')),
                   ),
                   if (isJoined) ...[
                     Wrap(spacing: 8, children: [
-                      TextButton.icon(onPressed: () => _composeCommunityPost(communityId), icon: const Icon(Icons.post_add_rounded), label: const Text('Post')),
-                      TextButton.icon(onPressed: () => _composeStory(communityId: communityId), icon: const Icon(Icons.add_circle_outline), label: const Text('Story')),
+                      TextButton.icon(onPressed: () => _composeCommunityPost(communityId), icon: const Icon(Icons.post_add_rounded), label: const UniversalText('Post')),
+                      TextButton.icon(onPressed: () => _composeStory(communityId: communityId), icon: const Icon(Icons.add_circle_outline), label: const UniversalText('Story')),
                     ]),
                     if (communityStories.isNotEmpty) ...[
-                      const Text('Stories', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const UniversalText('Stories', style: TextStyle(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
                       SizedBox(height: 92, child: ListView(scrollDirection: Axis.horizontal, children: communityStories.map(_storyBubble).toList())),
                     ],
                     if (communityPosts.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      const Text('Community posts', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const UniversalText('Community posts', style: TextStyle(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 8),
                       ...communityPosts.map(_postCard),
                     ],
@@ -1882,7 +1905,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   action: 'decline',
                 ),
               ),
-              child: const Text('Decline'),
+              child: const UniversalText('Decline'),
             ),
             FilledButton(
               onPressed: () => _act(
@@ -1892,7 +1915,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   action: 'accept',
                 ),
               ),
-              child: const Text('Accept'),
+              child: const UniversalText('Accept'),
             ),
           ],
         ),
@@ -1937,8 +1960,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: Icon(Icons.add_rounded),
             ),
             const SizedBox(height: 5),
-            const Text(
-              'Your story',
+            const UniversalText('Your story',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11),
@@ -1995,7 +2017,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Create post'),
+        title: const UniversalText('Create post'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -2008,11 +2030,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Post'),
+            child: const UniversalText('Post'),
           ),
         ],
       ),
@@ -2034,7 +2056,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Post to community'),
+        title: const UniversalText('Post to community'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -2047,11 +2069,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Post'),
+            child: const UniversalText('Post'),
           ),
         ],
       ),
@@ -2178,12 +2200,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         Map<String, String>? selected;
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Link to library content'),
+            title: const UniversalText('Link to library content'),
             content: SizedBox(
               width: 440,
               child: links.isEmpty
-                  ? const Text(
-                      'Add a movie, show, or song to this profile’s library first.',
+                  ? const UniversalText('Add a movie, show, or song to this profile’s library first.',
                     )
                   : RadioGroup<Map<String, String>>(
                       groupValue: selected,
@@ -2206,13 +2227,13 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
+                child: const UniversalText('Cancel'),
               ),
               FilledButton(
                 onPressed: selected == null
                     ? null
                     : () => Navigator.pop(dialogContext, selected),
-                child: const Text('Continue'),
+                child: const UniversalText('Continue'),
               ),
             ],
           ),
@@ -2224,7 +2245,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Future<int?> _chooseStoryLifetime() => showDialog<int>(
         context: context,
         builder: (dialogContext) => SimpleDialog(
-          title: const Text('Choose story lifetime'),
+          title: const UniversalText('Choose story lifetime'),
           children: [
             for (final option in const {
               24: '24 hours',
@@ -2243,30 +2264,30 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Future<String?> _chooseShortContentMode() => showDialog<String>(
         context: context,
         builder: (dialogContext) => SimpleDialog(
-          title: const Text('Choose Short format'),
+          title: const UniversalText('Choose Short format'),
           children: [
             SimpleDialogOption(
               onPressed: () => Navigator.pop(dialogContext, 'short'),
               child: const ListTile(
                 leading: Icon(Icons.flash_on_rounded),
-                title: Text('Short'),
-                subtitle: Text('Quick vertical clip tied to a movie, show, or song.'),
+                title: UniversalText('Short'),
+                subtitle: UniversalText('Quick vertical clip tied to a movie, show, or song.'),
               ),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(dialogContext, 'review'),
               child: const ListTile(
                 leading: Icon(Icons.star_rate_rounded),
-                title: Text('Video review'),
-                subtitle: Text('Review a movie, show, or song in vertical format.'),
+                title: UniversalText('Video review'),
+                subtitle: UniversalText('Review a movie, show, or song in vertical format.'),
               ),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(dialogContext, 'skit'),
               child: const ListTile(
                 leading: Icon(Icons.theater_comedy_rounded),
-                title: Text('Skit'),
-                subtitle: Text('A scene, parody, or character skit inspired by media.'),
+                title: UniversalText('Skit'),
+                subtitle: UniversalText('A scene, parody, or character skit inspired by media.'),
               ),
             ),
           ],
@@ -2377,7 +2398,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close'),
+              child: const UniversalText('Close'),
             ),
           ],
         ),
@@ -2396,7 +2417,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Add a friend'),
+        title: const UniversalText('Add a friend'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -2405,11 +2426,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Send request'),
+            child: const UniversalText('Send request'),
           ),
         ],
       ),
@@ -2436,21 +2457,21 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Community category'),
+          title: const UniversalText('Community category'),
           content: DropdownButtonFormField<String>(
             initialValue: category,
             decoration: const InputDecoration(labelText: 'Organize by'),
             items: const [
-              DropdownMenuItem(value: 'movies', child: Text('Movies')),
-              DropdownMenuItem(value: 'shows', child: Text('Shows')),
-              DropdownMenuItem(value: 'music', child: Text('Music')),
-              DropdownMenuItem(value: 'general', child: Text('General')),
+              DropdownMenuItem(value: 'movies', child: UniversalText('Movies')),
+              DropdownMenuItem(value: 'shows', child: UniversalText('Shows')),
+              DropdownMenuItem(value: 'music', child: UniversalText('Music')),
+              DropdownMenuItem(value: 'general', child: UniversalText('General')),
             ],
             onChanged: (value) { if (value != null) setDialogState(() => category = value); },
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, category), child: const Text('Create')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, category), child: const UniversalText('Create')),
           ],
         ),
       ),
@@ -2462,6 +2483,159 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       description: description.trim(),
       category: selected,
     ));
+  }
+
+  Future<void> _newAccountDirectMessage() async {
+    final controller = AppController.instance;
+    final current = controller.currentProfile;
+    if (current == null) return;
+    final profiles = (controller.currentAccount?.profiles ?? <Profile>[])
+        .where((profile) => profile.id != current.id)
+        .toList();
+    if (profiles.isEmpty) {
+      _showMessage('Create another profile on this account before starting an account chat.');
+      return;
+    }
+    final selectedId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        String? selected = profiles.first.id;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const UniversalText('Message an account profile'),
+            content: SizedBox(
+              width: 420,
+              child: RadioGroup<String>(
+                groupValue: selected,
+                onChanged: (value) => setDialogState(() => selected = value),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: profiles.map((profile) => RadioListTile<String>(
+                    value: profile.id,
+                    title: Text(profile.name),
+                  )).toList(),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(dialogContext, selected), child: const UniversalText('Open chat')),
+            ],
+          ),
+        );
+      },
+    );
+    if (selectedId == null) return;
+    try {
+      final response = await controller.backendApi.createSocialAccountConversation(
+        profileId: current.id,
+        targetProfileId: selectedId,
+      );
+      final conversation = response['conversation'] is Map
+          ? Map<String, dynamic>.from(response['conversation'] as Map)
+          : <String, dynamic>{};
+      final id = conversation['id']?.toString();
+      if (id == null || id.isEmpty || !mounted) return;
+      await _load();
+      final messagesIndex = _tabSections.indexOf('messages');
+      if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
+      await _openConversation(id);
+    } catch (error) {
+      if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _newAccountGroupMessage() async {
+    final controller = AppController.instance;
+    final current = controller.currentProfile;
+    if (current == null) return;
+    if (!controller.backendApi.isAuthenticated) {
+      _showMessage('Sign in to create an account group chat.');
+      return;
+    }
+    final profiles = (controller.currentAccount?.profiles ?? <Profile>[])
+        .where((profile) => profile.id != current.id)
+        .toList();
+    if (profiles.isEmpty) {
+      _showMessage('Create another profile on this account before creating a group chat.');
+      return;
+    }
+
+    final titleController = TextEditingController(text: 'Account group');
+    final selectedIds = <String>{};
+    final result = await showDialog<(String, List<String>)>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const UniversalText('Create account group chat'),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    maxLength: 100,
+                    decoration: const InputDecoration(labelText: 'Group name'),
+                  ),
+                  const SizedBox(height: 8),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: UniversalText('Choose profiles from this account'),
+                  ),
+                  ...profiles.map((profile) => CheckboxListTile(
+                    value: selectedIds.contains(profile.id),
+                    onChanged: (checked) => setDialogState(() {
+                      if (checked == true) {
+                        selectedIds.add(profile.id);
+                      } else {
+                        selectedIds.remove(profile.id);
+                      }
+                    }),
+                    title: Text(profile.name),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(
+              onPressed: selectedIds.isEmpty
+                  ? null
+                  : () => Navigator.pop(
+                        dialogContext,
+                        (titleController.text, selectedIds.toList()),
+                      ),
+              child: const UniversalText('Create group'),
+            ),
+          ],
+        ),
+      ),
+    );
+    titleController.dispose();
+    if (result == null || result.$2.isEmpty) return;
+    try {
+      final response = await controller.backendApi.createSocialAccountGroupConversation(
+        profileId: current.id,
+        title: result.$1,
+        profileIds: result.$2,
+      );
+      final conversation = response['conversation'] is Map
+          ? Map<String, dynamic>.from(response['conversation'] as Map)
+          : <String, dynamic>{};
+      final id = conversation['id']?.toString();
+      if (id == null || id.isEmpty || !mounted) return;
+      await _load();
+      final messagesIndex = _tabSections.indexOf('messages');
+      if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
+      await _openConversation(id);
+    } catch (error) {
+      if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
   Future<void> _newMessage() async {
@@ -2476,7 +2650,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final result = await showDialog<(String, String)>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Create group chat'),
+        title: const UniversalText('Create group chat'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2497,14 +2671,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(
               dialogContext,
               (titleController.text, friendsController.text),
             ),
-            child: const Text('Create'),
+            child: const UniversalText('Create'),
           ),
         ],
       ),
@@ -2600,7 +2774,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Invite people to this chat'),
+          title: const UniversalText('Invite people to this chat'),
           content: SizedBox(
             width: 480,
             child: SingleChildScrollView(
@@ -2613,7 +2787,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   SelectableText(inviteUrl, style: const TextStyle(color: Colors.lightBlueAccent)),
                   const SizedBox(height: 18),
                   if (communities.isNotEmpty) ...[
-                    const Text('Post this invite in a community', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const UniversalText('Post this invite in a community', style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       initialValue: selectedCommunityId,
@@ -2625,7 +2799,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                       onChanged: (value) => setDialogState(() => selectedCommunityId = value),
                     ),
                   ] else
-                    const Text('Join a community first to post the invite there.', style: TextStyle(color: Colors.white60)),
+                    const UniversalText('Join a community first to post the invite there.', style: TextStyle(color: Colors.white60)),
                 ],
               ),
             ),
@@ -2633,7 +2807,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Done'),
+              child: const UniversalText('Done'),
             ),
             OutlinedButton.icon(
               onPressed: () async {
@@ -2642,7 +2816,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 if (mounted) _showMessage('Group chat invite link copied.');
               },
               icon: const Icon(Icons.copy_rounded),
-              label: const Text('Copy link'),
+              label: const UniversalText('Copy link'),
             ),
             FilledButton.icon(
               onPressed: selectedCommunityId == null ? null : () async {
@@ -2667,7 +2841,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 }
               },
               icon: const Icon(Icons.groups_rounded),
-              label: const Text('Share to community'),
+              label: const UniversalText('Share to community'),
             ),
           ],
         ),
@@ -2855,11 +3029,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Continue'),
+            child: const UniversalText('Continue'),
           ),
         ],
       ),
@@ -2947,11 +3121,11 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Continue'),
+            child: const UniversalText('Continue'),
           ),
         ],
       ),
@@ -3276,12 +3450,12 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from library'),
+              title: const UniversalText('Choose from library'),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Record with camera'),
+              title: const UniversalText('Record with camera'),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
           ],
@@ -3296,12 +3470,12 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.image_outlined),
-              title: const Text('Photo'),
+              title: const UniversalText('Photo'),
               onTap: () => Navigator.pop(context, 'photo'),
             ),
             ListTile(
               leading: const Icon(Icons.videocam_outlined),
-              title: const Text('Video (up to 2 minutes)'),
+              title: const UniversalText('Video (up to 2 minutes)'),
               onTap: () => Navigator.pop(context, 'video'),
             ),
           ],
@@ -3419,12 +3593,12 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         child: Wrap(children: [
           ListTile(
             leading: const Icon(Icons.movie_outlined),
-            title: const Text('Recommend a movie or show'),
+            title: const UniversalText('Recommend a movie or show'),
             onTap: () => Navigator.pop(context, 'media'),
           ),
           ListTile(
             leading: const Icon(Icons.music_note_outlined),
-            title: const Text('Recommend a song'),
+            title: const UniversalText('Recommend a song'),
             onTap: () => Navigator.pop(context, 'song'),
           ),
         ]),
@@ -3440,12 +3614,12 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
       final selected = await showDialog<MediaItem>(
         context: context,
         builder: (context) => SimpleDialog(
-          title: const Text('Choose a recommendation'),
+          title: const UniversalText('Choose a recommendation'),
           children: [
             for (final media in library)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(context, media),
-                child: Text(media.title),
+                child: LocalizedMediaText(media.title),
               ),
           ],
         ),
@@ -3471,7 +3645,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
     final track = await showDialog<MusicTrack>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('Choose a song'),
+        title: const UniversalText('Choose a song'),
         children: [
           for (final item in tracks)
             SimpleDialogOption(
@@ -3506,7 +3680,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
     final product = await showDialog<ShopProduct>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('Share a Shop product'),
+        title: const UniversalText('Share a Shop product'),
         children: [
           for (final item in products)
             SimpleDialogOption(
@@ -3544,11 +3718,11 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Send'),
+            child: const UniversalText('Send'),
           ),
         ],
       ),
@@ -3652,7 +3826,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
     final result = await showDialog<(String, String)>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create a group poll'),
+        title: const UniversalText('Create a group poll'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3674,13 +3848,13 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+              child: const UniversalText('Cancel')),
           FilledButton(
               onPressed: () => Navigator.pop(
                     context,
                     (questionController.text, optionsController.text),
                   ),
-              child: const Text('Create poll')),
+              child: const UniversalText('Create poll')),
         ],
       ),
     );
@@ -3860,8 +4034,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    'Text style',
+                  UniversalText('Text style',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 10),
@@ -3922,7 +4095,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text('Character color'),
+                  const UniversalText('Character color'),
                   Wrap(
                     spacing: 6,
                     children: [
@@ -3960,7 +4133,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                       TextButton(
                         onPressed: () =>
                             setSheetState(() => next.remove('color')),
-                        child: const Text('Default'),
+                        child: const UniversalText('Default'),
                       ),
                     ],
                   ),
@@ -3968,7 +4141,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                     alignment: Alignment.centerRight,
                     child: FilledButton(
                       onPressed: () => Navigator.pop(sheetContext),
-                      child: const Text('Apply'),
+                      child: const UniversalText('Apply'),
                     ),
                   ),
                 ],
@@ -4010,8 +4183,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Chat background',
+              UniversalText('Chat background',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -4051,7 +4223,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.image_outlined),
-                title: const Text('Choose a background image'),
+                title: const UniversalText('Choose a background image'),
                 onTap: () async {
                   Navigator.pop(sheetContext);
                   await _pickChatBackgroundImage();
@@ -4061,7 +4233,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.hide_image_outlined),
-                  title: const Text('Remove background image'),
+                  title: const UniversalText('Remove background image'),
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     await _saveChatAppearance(clearBackgroundImage: true);
@@ -4170,11 +4342,11 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Message info'),
+          title: const UniversalText('Message info'),
           content: SizedBox(
             width: 360,
             child: recipients.isEmpty
-                ? const Text('No recipients to show.')
+                ? const UniversalText('No recipients to show.')
                 : ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 400),
                     child: ListView(
@@ -4206,7 +4378,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close'),
+              child: const UniversalText('Close'),
             ),
           ],
         ),
@@ -4347,11 +4519,11 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
               itemBuilder: (context) => const [
                 PopupMenuItem(
                   value: 'all_members',
-                  child: Text('All members can send'),
+                  child: UniversalText('All members can send'),
                 ),
                 PopupMenuItem(
                   value: 'admins_only',
-                  child: Text('Only admins can send'),
+                  child: UniversalText('Only admins can send'),
                 ),
               ],
               icon: const Icon(Icons.settings_outlined),
@@ -4375,21 +4547,21 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                 value: 'active',
                 child: ListTile(
                   leading: Icon(Icons.circle, color: Colors.greenAccent),
-                  title: Text('Active'),
+                  title: UniversalText('Active'),
                 ),
               ),
               PopupMenuItem(
                 value: 'away',
                 child: ListTile(
                   leading: Icon(Icons.circle, color: Colors.grey),
-                  title: Text('Away'),
+                  title: UniversalText('Away'),
                 ),
               ),
               PopupMenuItem(
                 value: 'busy',
                 child: ListTile(
                   leading: Icon(Icons.circle, color: Colors.redAccent),
-                  title: Text('Busy'),
+                  title: UniversalText('Busy'),
                 ),
               ),
               PopupMenuDivider(),
@@ -4397,7 +4569,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                 value: 'nickname',
                 child: ListTile(
                   leading: Icon(Icons.badge_outlined),
-                  title: Text('Set my nickname'),
+                  title: UniversalText('Set my nickname'),
                 ),
               ),
             ],
@@ -4428,8 +4600,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
           Expanded(
             child: messages.isEmpty
                 ? const Center(
-                    child: Text(
-                      'Say hello 👋',
+                    child: UniversalText('Say hello 👋',
                       style: TextStyle(color: Colors.white54),
                     ),
                   )
@@ -4554,7 +4725,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                                       onPressed: () => setState(
                                         () => replyingTo = message,
                                       ),
-                                      child: const Text('Reply'),
+                                      child: const UniversalText('Reply'),
                                     ),
                                   ],
                                 ),
@@ -4754,7 +4925,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
             children: [
               Icon(Icons.visibility_off_outlined, size: 18),
               SizedBox(width: 8),
-              Flexible(child: Text('Spoiler · tap to reveal')),
+              Flexible(child: UniversalText('Spoiler · tap to reveal')),
             ],
           ),
         ),
@@ -4764,11 +4935,11 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
       return TextButton.icon(
         onPressed: () => _openViewOnce(message),
         icon: const Icon(Icons.visibility_outlined),
-        label: const Text('Tap to view once'),
+        label: const UniversalText('Tap to view once'),
       );
     }
     if (reference['expired'] == true) {
-      return const Text('This view-once attachment has expired.');
+      return const UniversalText('This view-once attachment has expired.');
     }
     if (reference['viewOnce'] == true &&
         message['isMine'] != true &&
@@ -4776,7 +4947,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
       return TextButton.icon(
         onPressed: () => _openViewOnce(message),
         icon: const Icon(Icons.visibility_outlined),
-        label: const Text('Tap to view once'),
+        label: const UniversalText('Tap to view once'),
       );
     }
     if (type == 'poll' && poll != null) return _pollCard(poll);
@@ -4795,7 +4966,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
             url,
             width: 250,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Text('Image unavailable'),
+            errorBuilder: (_, __, ___) => const UniversalText('Image unavailable'),
           ),
         );
       }

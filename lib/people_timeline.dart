@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'details.dart';
+import 'localization.dart';
 
 /// One person page for acting, music, and all other career credits.
 class PeopleCareerTimelineScreen extends StatefulWidget {
@@ -106,11 +107,11 @@ class _PeopleCareerTimelineScreenState extends State<PeopleCareerTimelineScreen>
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Career timeline', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                const UniversalText('Career timeline', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
-                const Text('Acting, music, and creative work connected to one person identity.', style: TextStyle(color: Colors.white60)),
+                const UniversalText('Acting, music, and creative work connected to one person identity.', style: TextStyle(color: Colors.white60)),
                 if (_loading) const Padding(padding: EdgeInsets.only(top: 14), child: LinearProgressIndicator()),
-                if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Showing available library credits. Catalog credits could not load.', style: TextStyle(color: Colors.amber.shade200))),
+                if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: UniversalText('Showing available library credits. Catalog credits could not load.', style: TextStyle(color: Colors.amber.shade200))),
               ]),
             ),
           ),
@@ -121,7 +122,7 @@ class _PeopleCareerTimelineScreenState extends State<PeopleCareerTimelineScreen>
           ]),
           const SizedBox(height: 12),
           if (timeline.isEmpty)
-            const Card(child: Padding(padding: EdgeInsets.all(22), child: Text('No career credits are available yet. Add sourced person-to-work credits to build this timeline.')))
+            const Card(child: Padding(padding: EdgeInsets.all(22), child: UniversalText('No career credits are available yet. Add sourced person-to-work credits to build this timeline.')))
           else
             for (final item in timeline)
               _CareerCreditTile(
@@ -138,7 +139,7 @@ class _PeopleCareerTimelineScreenState extends State<PeopleCareerTimelineScreen>
                 },
               ),
           if (_personId != null && _catalogCredits.isEmpty && timeline.isNotEmpty)
-            const Padding(padding: EdgeInsets.only(top: 12), child: Text('These entries come from this device library. Add catalog credits to include albums and professional roles across devices.', style: TextStyle(color: Colors.white54))),
+            const Padding(padding: EdgeInsets.only(top: 12), child: UniversalText('These entries come from this device library. Add catalog credits to include albums and professional roles across devices.', style: TextStyle(color: Colors.white54))),
         ],
       ),
     );

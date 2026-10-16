@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 class ProfileArtworkScreen extends StatefulWidget {
   final Profile profile;
@@ -40,16 +41,14 @@ class _ProfileArtworkScreenState extends State<ProfileArtworkScreen> {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          const Text(
-            'Choose artwork from your library',
+          const UniversalText('Choose artwork from your library',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'ARM can expose disc artwork, scans and other approved media '
+          const UniversalText('ARM can expose disc artwork, scans and other approved media '
             'artwork here. The original media artwork is never replaced.',
           ),
           const SizedBox(height: 18),

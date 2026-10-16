@@ -3,6 +3,7 @@ import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
 import 'shop.dart';
+import 'localization.dart';
 
 /// Buyer discovery and interaction surface for scheduled, live, and replayed
 /// seller product demonstrations.
@@ -32,11 +33,11 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Live Shopping'), actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))]),
+    appBar: AppBar(title: const UniversalText('Live Shopping'), actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))]),
     body: loading ? const Center(child: CircularProgressIndicator()) : error != null
       ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Unable to load events: $error')))
       : RefreshIndicator(onRefresh: _load, child: events.isEmpty
-        ? ListView(children: const [SizedBox(height: 180), Center(child: Text('No live shopping events right now.'))])
+        ? ListView(children: const [SizedBox(height: 180), Center(child: UniversalText('No live shopping events right now.'))])
         : ListView.builder(padding: const EdgeInsets.all(16), itemCount: events.length, itemBuilder: (context, index) => _eventCard(context, events[index]))),
   );
 
@@ -55,7 +56,7 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
         _eventVideoWithFeaturedProduct(context, event, event['replayUrl'].toString()),
       if (status == 'scheduled' && event['scheduledAt'] != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Starts ${event['scheduledAt']}')),
       if (products.isNotEmpty) ...[
-        const SizedBox(height: 12), const Text('Products', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12), const UniversalText('Products', style: TextStyle(fontWeight: FontWeight.bold)),
         for (final product in products) Card(
           child: ListTile(
             onTap: () => Navigator.push(
@@ -82,19 +83,19 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
                     onPressed: () {
                       ShopCatalog.instance.addToBag(product.id);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Added to bag')),
+                        const SnackBar(content: UniversalText('Added to bag')),
                       );
                     },
                     icon: const Icon(Icons.add_shopping_cart),
                   )
-                : const Text('Sold out'),
+                : const UniversalText('Sold out'),
           ),
         ),
       ],
       if (status == 'live') ...[
         if (poll != null) _pollWidget(event, poll),
-        if (questions.isNotEmpty) ...[const SizedBox(height: 8), const Text('Answered questions', style: TextStyle(fontWeight: FontWeight.bold)), for (final q in questions) ListTile(dense: true, title: Text(q['text']?.toString() ?? ''), subtitle: Text(q['profileName']?.toString() ?? 'Buyer'))],
-        Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _ask(context, event), icon: const Icon(Icons.help_outline), label: const Text('Ask a question'))),
+        if (questions.isNotEmpty) ...[const SizedBox(height: 8), const UniversalText('Answered questions', style: TextStyle(fontWeight: FontWeight.bold)), for (final q in questions) ListTile(dense: true, title: Text(q['text']?.toString() ?? ''), subtitle: Text(q['profileName']?.toString() ?? 'Buyer'))],
+        Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _ask(context, event), icon: const Icon(Icons.help_outline), label: const UniversalText('Ask a question'))),
       ],
     ])));
   }
@@ -140,7 +141,7 @@ class _LiveShoppingScreenState extends State<LiveShoppingScreen> {
     final profile = AppController.instance.currentProfile;
     if (profile == null) { _notice('Select a profile before asking a question.'); return; }
     final controller = TextEditingController();
-    final text = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: const Text('Ask the seller'), content: TextField(controller: controller, maxLength: 1000, autofocus: true, decoration: const InputDecoration(hintText: 'Write your question')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Send'))]));
+    final text = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: const UniversalText('Ask the seller'), content: TextField(controller: controller, maxLength: 1000, autofocus: true, decoration: const InputDecoration(hintText: 'Write your question')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const UniversalText('Send'))]));
     controller.dispose();
     if (text == null || text.isEmpty) return;
     try { await AppController.instance.backendApi.askShopLiveQuestion(eventId: event['id'].toString(), profileId: profile.id, text: text); _notice('Question sent for seller review.'); await _load(); } catch (e) { _notice(e.toString()); }
@@ -194,8 +195,7 @@ class _LiveFeaturedProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'FEATURED PRODUCT',
+                    const UniversalText('FEATURED PRODUCT',
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w900,
@@ -244,17 +244,17 @@ class _SellerLiveShoppingScreenState extends State<SellerLiveShoppingScreen> {
     catch (e) { if (mounted) setState(() => loading = false); }
   }
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Live Shopping & Videos')), floatingActionButton: FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.add), label: const Text('Schedule event')), body: loading ? const Center(child: CircularProgressIndicator()) : events.isEmpty ? const Center(child: Text('Schedule a product demonstration or live event.')) : ListView(children: [for (final event in events) _sellerEvent(event)]));
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Live Shopping & Videos')), floatingActionButton: FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.add), label: const UniversalText('Schedule event')), body: loading ? const Center(child: CircularProgressIndicator()) : events.isEmpty ? const Center(child: UniversalText('Schedule a product demonstration or live event.')) : ListView(children: [for (final event in events) _sellerEvent(event)]));
 
   Widget _sellerEvent(Map<String, dynamic> event) {
     final status = event['status']?.toString() ?? 'scheduled';
-    return Card(margin: const EdgeInsets.all(12), child: ListTile(title: Text(event['title']?.toString() ?? 'Live event'), subtitle: Text('$status • ${event['scheduledAt'] ?? 'No start time'}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (action) => _manage(event, action), itemBuilder: (_) => [if (status == 'scheduled') const PopupMenuItem(value: 'start', child: Text('Start stream')), if (status == 'live') const PopupMenuItem(value: 'end', child: Text('End stream')), const PopupMenuItem(value: 'pin', child: Text('Feature a product')), const PopupMenuItem(value: 'poll', child: Text('Create a poll'))])));
+    return Card(margin: const EdgeInsets.all(12), child: ListTile(title: Text(event['title']?.toString() ?? 'Live event'), subtitle: Text('$status • ${event['scheduledAt'] ?? 'No start time'}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (action) => _manage(event, action), itemBuilder: (_) => [if (status == 'scheduled') const PopupMenuItem(value: 'start', child: UniversalText('Start stream')), if (status == 'live') const PopupMenuItem(value: 'end', child: UniversalText('End stream')), const PopupMenuItem(value: 'pin', child: UniversalText('Feature a product')), const PopupMenuItem(value: 'poll', child: UniversalText('Create a poll'))])));
   }
 
   Future<void> _create() async {
     final title = TextEditingController(); final description = TextEditingController(); final url = TextEditingController(); final ids = TextEditingController(text: ShopCatalog.instance.productsForStore(widget.store.id).map((p) => p.id).join(', '));
     var rewards = false;
-    final values = await showDialog<Map<String, dynamic>>(context: context, builder: (context) => StatefulBuilder(builder: (context, setDialog) => AlertDialog(title: const Text('Schedule a live event'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: title, decoration: const InputDecoration(labelText: 'Event title')), TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')), TextField(controller: url, decoration: const InputDecoration(labelText: 'HTTPS stream URL (optional)')), TextField(controller: ids, decoration: const InputDecoration(labelText: 'Product IDs (comma separated)')), CheckboxListTile(value: rewards, onChanged: (v) => setDialog(() => rewards = v ?? false), title: const Text('Enable randomized seller rewards'))])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, {'title': title.text.trim(), 'description': description.text.trim(), 'url': url.text.trim(), 'ids': ids.text.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList(), 'rewards': rewards}), child: const Text('Create'))])));
+    final values = await showDialog<Map<String, dynamic>>(context: context, builder: (context) => StatefulBuilder(builder: (context, setDialog) => AlertDialog(title: const UniversalText('Schedule a live event'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: title, decoration: const InputDecoration(labelText: 'Event title')), TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')), TextField(controller: url, decoration: const InputDecoration(labelText: 'HTTPS stream URL (optional)')), TextField(controller: ids, decoration: const InputDecoration(labelText: 'Product IDs (comma separated)')), CheckboxListTile(value: rewards, onChanged: (v) => setDialog(() => rewards = v ?? false), title: const UniversalText('Enable randomized seller rewards'))])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, {'title': title.text.trim(), 'description': description.text.trim(), 'url': url.text.trim(), 'ids': ids.text.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList(), 'rewards': rewards}), child: const UniversalText('Create'))])));
     title.dispose(); description.dispose(); url.dispose(); ids.dispose();
     if (values == null || (values['title'] as String).isEmpty) return;
     try { await AppController.instance.backendApi.createShopLiveEvent(storeId: widget.store.id, storeName: widget.store.name, title: values['title'] as String, description: values['description'] as String, streamUrl: (values['url'] as String).isEmpty ? null : values['url'] as String, productIds: (values['ids'] as List).cast<String>(), randomizedRewardsEnabled: values['rewards'] as bool); await _load(); }
@@ -265,13 +265,13 @@ class _SellerLiveShoppingScreenState extends State<SellerLiveShoppingScreen> {
     try {
       if (action == 'start' || action == 'end') {
         final controller = TextEditingController();
-        final url = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(action == 'start' ? 'Start live stream' : 'End stream'), content: TextField(controller: controller, decoration: InputDecoration(labelText: action == 'start' ? 'HTTPS stream URL' : 'HTTPS replay URL (optional)')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: Text(action == 'start' ? 'Start' : 'End'))])); controller.dispose();
+        final url = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(action == 'start' ? 'Start live stream' : 'End stream'), content: TextField(controller: controller, decoration: InputDecoration(labelText: action == 'start' ? 'HTTPS stream URL' : 'HTTPS replay URL (optional)')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: Text(action == 'start' ? 'Start' : 'End'))])); controller.dispose();
         if (url == null) return;
         await AppController.instance.backendApi.updateShopLiveEvent(eventId: event['id'].toString(), status: action == 'start' ? 'live' : 'ended', streamUrl: action == 'start' ? url : null, replayUrl: action == 'end' && url.isNotEmpty ? url : null);
       } else if (action == 'pin') {
         final ids = (event['productIds'] as List? ?? const []).map((v) => v.toString()).toList();
         if (ids.isEmpty) { _notice('Add products when creating the event first.'); return; }
-        final id = await showDialog<String>(context: context, builder: (context) => SimpleDialog(title: const Text('Feature product'), children: [for (final productId in ids) SimpleDialogOption(onPressed: () => Navigator.pop(context, productId), child: Text(ShopCatalog.instance.productById(productId)?.name ?? productId))]));
+        final id = await showDialog<String>(context: context, builder: (context) => SimpleDialog(title: const UniversalText('Feature product'), children: [for (final productId in ids) SimpleDialogOption(onPressed: () => Navigator.pop(context, productId), child: Text(ShopCatalog.instance.productById(productId)?.name ?? productId))]));
         if (id != null) await AppController.instance.backendApi.updateShopLiveEvent(eventId: event['id'].toString(), pinnedProductId: id);
       } else if (action == 'poll') { await _createPoll(event); }
       await _load();
@@ -280,7 +280,7 @@ class _SellerLiveShoppingScreenState extends State<SellerLiveShoppingScreen> {
 
   Future<void> _createPoll(Map<String, dynamic> event) async {
     final question = TextEditingController(); final choices = TextEditingController();
-    final values = await showDialog<List<String>>(context: context, builder: (context) => AlertDialog(title: const Text('Create live poll'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: question, decoration: const InputDecoration(labelText: 'Question')), TextField(controller: choices, decoration: const InputDecoration(labelText: 'Options, separated by commas'))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, [question.text.trim(), ...choices.text.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty)]), child: const Text('Create poll'))]));
+    final values = await showDialog<List<String>>(context: context, builder: (context) => AlertDialog(title: const UniversalText('Create live poll'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: question, decoration: const InputDecoration(labelText: 'Question')), TextField(controller: choices, decoration: const InputDecoration(labelText: 'Options, separated by commas'))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, [question.text.trim(), ...choices.text.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty)]), child: const UniversalText('Create poll'))]));
     if (values == null || values.length < 3) return;
     await AppController.instance.backendApi.updateShopLiveEvent(eventId: event['id'].toString(), poll: {'question': values.first, 'options': values.skip(1).take(6).toList()});
     question.dispose(); choices.dispose();

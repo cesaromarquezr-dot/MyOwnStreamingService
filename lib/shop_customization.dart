@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'shop_customization_models.dart';
+import 'localization.dart';
 
 class ShopProductCustomizationEditor extends StatefulWidget {
   const ShopProductCustomizationEditor({
@@ -67,14 +68,14 @@ class _ShopProductCustomizationEditorState
                 initialValue: type,
                 decoration: const InputDecoration(labelText: 'Type'),
                 items: const [
-                  DropdownMenuItem(value: 'choice', child: Text('Choice')),
-                  DropdownMenuItem(value: 'color', child: Text('Color')),
-                  DropdownMenuItem(value: 'size', child: Text('Size')),
-                  DropdownMenuItem(value: 'text', child: Text('Text')),
-                  DropdownMenuItem(value: 'font', child: Text('Font')),
-                  DropdownMenuItem(value: 'icon', child: Text('Icon')),
-                  DropdownMenuItem(value: 'image', child: Text('Image')),
-                  DropdownMenuItem(value: 'character', child: Text('Character')),
+                  DropdownMenuItem(value: 'choice', child: UniversalText('Choice')),
+                  DropdownMenuItem(value: 'color', child: UniversalText('Color')),
+                  DropdownMenuItem(value: 'size', child: UniversalText('Size')),
+                  DropdownMenuItem(value: 'text', child: UniversalText('Text')),
+                  DropdownMenuItem(value: 'font', child: UniversalText('Font')),
+                  DropdownMenuItem(value: 'icon', child: UniversalText('Icon')),
+                  DropdownMenuItem(value: 'image', child: UniversalText('Image')),
+                  DropdownMenuItem(value: 'character', child: UniversalText('Character')),
                 ],
                 onChanged: (value) => setDialogState(() => type = value ?? 'choice'),
               ),
@@ -93,24 +94,24 @@ class _ShopProductCustomizationEditorState
                 contentPadding: EdgeInsets.zero,
                 value: required,
                 onChanged: (value) => setDialogState(() => required = value),
-                title: const Text('Required'),
+                title: const UniversalText('Required'),
               ),
               if (type == 'choice' || type == 'icon' || type == 'character')
                 DropdownButtonFormField<int>(
                   initialValue: maxSelections,
                   decoration: const InputDecoration(labelText: 'Maximum selections'),
                   items: const [
-                    DropdownMenuItem(value: 1, child: Text('1')),
-                    DropdownMenuItem(value: 2, child: Text('2')),
-                    DropdownMenuItem(value: 3, child: Text('3')),
-                    DropdownMenuItem(value: 4, child: Text('4')),
+                    DropdownMenuItem(value: 1, child: UniversalText('1')),
+                    DropdownMenuItem(value: 2, child: UniversalText('2')),
+                    DropdownMenuItem(value: 3, child: UniversalText('3')),
+                    DropdownMenuItem(value: 4, child: UniversalText('4')),
                   ],
                   onChanged: (value) => setDialogState(() => maxSelections = value ?? 1),
                 ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
             FilledButton(
               onPressed: () {
                 final cleanTitle = title.text.trim();
@@ -138,7 +139,7 @@ class _ShopProductCustomizationEditorState
                   ),
                 );
               },
-              child: const Text('Add'),
+              child: const UniversalText('Add'),
             ),
           ],
         ),
@@ -187,7 +188,7 @@ class _ShopProductCustomizationEditorState
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           scrollable: true,
-          title: const Text('Edit customization'),
+          title: const UniversalText('Edit customization'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -197,25 +198,25 @@ class _ShopProductCustomizationEditorState
                 initialValue: const {'choice','color','size','text','font','icon','image','character'}.contains(type) ? type : 'choice',
                 decoration: const InputDecoration(labelText: 'Type'),
                 items: const [
-                  DropdownMenuItem(value: 'choice', child: Text('Choice')),
-                  DropdownMenuItem(value: 'color', child: Text('Color')),
-                  DropdownMenuItem(value: 'size', child: Text('Size')),
-                  DropdownMenuItem(value: 'text', child: Text('Text')),
-                  DropdownMenuItem(value: 'font', child: Text('Font')),
-                  DropdownMenuItem(value: 'icon', child: Text('Icon')),
-                  DropdownMenuItem(value: 'image', child: Text('Image')),
-                  DropdownMenuItem(value: 'character', child: Text('Character')),
+                  DropdownMenuItem(value: 'choice', child: UniversalText('Choice')),
+                  DropdownMenuItem(value: 'color', child: UniversalText('Color')),
+                  DropdownMenuItem(value: 'size', child: UniversalText('Size')),
+                  DropdownMenuItem(value: 'text', child: UniversalText('Text')),
+                  DropdownMenuItem(value: 'font', child: UniversalText('Font')),
+                  DropdownMenuItem(value: 'icon', child: UniversalText('Icon')),
+                  DropdownMenuItem(value: 'image', child: UniversalText('Image')),
+                  DropdownMenuItem(value: 'character', child: UniversalText('Character')),
                 ],
                 onChanged: (value) => setDialogState(() => type = value ?? 'choice'),
               ),
               const SizedBox(height: 10),
               TextField(controller: options, minLines: 2, maxLines: 7, decoration: const InputDecoration(labelText: 'Options', hintText: 'One option per line')),
-              SwitchListTile(contentPadding: EdgeInsets.zero, value: required, onChanged: (value) => setDialogState(() => required = value), title: const Text('Required')),
+              SwitchListTile(contentPadding: EdgeInsets.zero, value: required, onChanged: (value) => setDialogState(() => required = value), title: const UniversalText('Required')),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Save')),
           ],
         ),
       ),
@@ -245,35 +246,35 @@ class _ShopProductCustomizationEditorState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Customize Product'),
+        title: const UniversalText('Customize Product'),
         actions: [
           TextButton.icon(
             onPressed: () => Navigator.pop(context, groups),
             icon: const Icon(Icons.check_rounded),
-            label: const Text('Save'),
+            label: const UniversalText('Save'),
           ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
-          const Text('Buyer options', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const UniversalText('Buyer options', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const Text('Define what buyers can change. These groups are stored with the product and appear at checkout.'),
+          const UniversalText('Define what buyers can change. These groups are stored with the product and appear at checkout.'),
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(onPressed: () => _addGroup(preset: 'character'), icon: const Icon(Icons.person_outline), label: const Text('Character preset')),
-              OutlinedButton.icon(onPressed: () => _addGroup(preset: 'clothing'), icon: const Icon(Icons.checkroom_outlined), label: const Text('Clothing preset')),
-              OutlinedButton.icon(onPressed: () => _addGroup(preset: 'personalized'), icon: const Icon(Icons.text_fields_rounded), label: const Text('Personalized text')),
-              FilledButton.icon(onPressed: _addGroup, icon: const Icon(Icons.add_rounded), label: const Text('Custom group')),
+              OutlinedButton.icon(onPressed: () => _addGroup(preset: 'character'), icon: const Icon(Icons.person_outline), label: const UniversalText('Character preset')),
+              OutlinedButton.icon(onPressed: () => _addGroup(preset: 'clothing'), icon: const Icon(Icons.checkroom_outlined), label: const UniversalText('Clothing preset')),
+              OutlinedButton.icon(onPressed: () => _addGroup(preset: 'personalized'), icon: const Icon(Icons.text_fields_rounded), label: const UniversalText('Personalized text')),
+              FilledButton.icon(onPressed: _addGroup, icon: const Icon(Icons.add_rounded), label: const UniversalText('Custom group')),
             ],
           ),
           const SizedBox(height: 16),
           if (groups.isEmpty)
-            const Card(child: ListTile(leading: Icon(Icons.tune_rounded), title: Text('No buyer customization yet'), subtitle: Text('Add a group such as Size, Color, Text, Image, or Character.'))),
+            const Card(child: ListTile(leading: Icon(Icons.tune_rounded), title: UniversalText('No buyer customization yet'), subtitle: UniversalText('Add a group such as Size, Color, Text, Image, or Character.'))),
           for (final group in groups)
             Card(
               child: ListTile(
@@ -391,7 +392,7 @@ class _ShopProductCustomizerScreenState extends State<ShopProductCustomizerScree
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [Expanded(child: Text(group.title, style: const TextStyle(fontWeight: FontWeight.w900))), if (group.required) const Text('Required', style: TextStyle(fontSize: 11))]),
+              Row(children: [Expanded(child: Text(group.title, style: const TextStyle(fontWeight: FontWeight.w900))), if (group.required) const UniversalText('Required', style: TextStyle(fontSize: 11))]),
               const SizedBox(height: 10),
               Wrap(spacing: 8, runSpacing: 8, children: [for (final option in group.options) ChoiceChip(label: Text(option.label), selected: _selectionLabel(group) == option.label || (selections[group.id] is List && (selections[group.id] as List).contains(option.id)), onSelected: (_) => _setChoice(group, option))]),
             ]),
@@ -476,7 +477,7 @@ class _ShopProductCustomizerScreenState extends State<ShopProductCustomizerScree
 
   void _done() {
     if (!_valid()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Complete the required customization options.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Complete the required customization options.')));
       return;
     }
     final result = <String, dynamic>{
@@ -500,7 +501,7 @@ class _ShopProductCustomizerScreenState extends State<ShopProductCustomizerScree
   Widget build(BuildContext context) {
     final groups = widget.product.customizationGroups;
     return Scaffold(
-      appBar: AppBar(title: const Text('Customize Product')),
+      appBar: AppBar(title: const UniversalText('Customize Product')),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -509,30 +510,30 @@ class _ShopProductCustomizerScreenState extends State<ShopProductCustomizerScree
               _preview(),
               if (textController.text.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Text('Drag text or your uploaded image directly on the preview.'),
+                const UniversalText('Drag text or your uploaded image directly on the preview.'),
               ],
             ]));
             final controls = ListView(padding: const EdgeInsets.fromLTRB(18, 10, 18, 28), children: [
-              Card(child: ListTile(leading: const Icon(Icons.image_outlined), title: const Text('Choose your image'), subtitle: Text(selectedUploadedImage == null ? 'Use the seller image or upload your own.' : 'Custom image selected'), trailing: FilledButton.tonal(onPressed: _pickImage, child: const Text('Choose')))),
+              Card(child: ListTile(leading: const Icon(Icons.image_outlined), title: const UniversalText('Choose your image'), subtitle: Text(selectedUploadedImage == null ? 'Use the seller image or upload your own.' : 'Custom image selected'), trailing: FilledButton.tonal(onPressed: _pickImage, child: const UniversalText('Choose')))),
               const SizedBox(height: 8),
-              if (groups.isEmpty) const Card(child: ListTile(title: Text('This product has no configurable options yet.'), subtitle: Text('The seller can add options from Seller Dashboard → Customize Product.'))),
+              if (groups.isEmpty) const Card(child: ListTile(title: UniversalText('This product has no configurable options yet.'), subtitle: UniversalText('The seller can add options from Seller Dashboard → Customize Product.'))),
               for (final group in groups) _group(group),
               Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Design tools', style: TextStyle(fontWeight: FontWeight.w900)),
+                const UniversalText('Design tools', style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 TextField(controller: textController, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Text on product', hintText: 'Add text')),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, children: [for (final font in ['Sans','Serif','Monospace']) ChoiceChip(label: Text(font), selected: fontFamily == font, onSelected: (_) => setState(() => fontFamily = font))]),
                 const SizedBox(height: 8),
-                Wrap(spacing: 8, children: [for (final color in ['#FFFFFF','#000000','#FF5252','#FFD740','#40C4FF','#E040FB']) ChoiceChip(label: const Text(''), avatar: CircleAvatar(backgroundColor: _parseColor(color)), selected: textColor == color, onSelected: (_) => setState(() => textColor = color))]),
+                Wrap(spacing: 8, children: [for (final color in ['#FFFFFF','#000000','#FF5252','#FFD740','#40C4FF','#E040FB']) ChoiceChip(label: const UniversalText(''), avatar: CircleAvatar(backgroundColor: _parseColor(color)), selected: textColor == color, onSelected: (_) => setState(() => textColor = color))]),
                 const SizedBox(height: 8),
-                Row(children: [const Text('Text size'), Expanded(child: Slider(value: textScale, min: .7, max: 2.4, onChanged: (v) => setState(() => textScale = v)))]),
-                Row(children: [const Text('Image size'), Expanded(child: Slider(value: imageScale, min: .5, max: 2.5, onChanged: (v) => setState(() => imageScale = v)))]),
+                Row(children: [const UniversalText('Text size'), Expanded(child: Slider(value: textScale, min: .7, max: 2.4, onChanged: (v) => setState(() => textScale = v)))]),
+                Row(children: [const UniversalText('Image size'), Expanded(child: Slider(value: imageScale, min: .5, max: 2.5, onChanged: (v) => setState(() => imageScale = v)))]),
               ]))),
               const SizedBox(height: 12),
-              Card(child: ListTile(leading: const Icon(Icons.attach_money_rounded), title: const Text('Estimated price'), trailing: Text('${_customPrice.toStringAsFixed(2)} ${widget.product.currency}', style: const TextStyle(fontWeight: FontWeight.w900)))),
+              Card(child: ListTile(leading: const Icon(Icons.attach_money_rounded), title: const UniversalText('Estimated price'), trailing: Text('${_customPrice.toStringAsFixed(2)} ${widget.product.currency}', style: const TextStyle(fontWeight: FontWeight.w900)))),
               const SizedBox(height: 12),
-              SizedBox(height: 52, child: FilledButton.icon(onPressed: _done, icon: const Icon(Icons.check_rounded), label: const Text('Use this customization'))),
+              SizedBox(height: 52, child: FilledButton.icon(onPressed: _done, icon: const Icon(Icons.check_rounded), label: const UniversalText('Use this customization'))),
             ]);
             if (wide) return Row(children: [Expanded(child: preview), SizedBox(width: 420, child: controls)]);
             return controls;

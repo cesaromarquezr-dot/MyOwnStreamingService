@@ -1,0 +1,121 @@
+{
+  "summary": {
+    "created": 3,
+    "modified": 11,
+    "deleted": 0
+  },
+  "changes": [
+    {
+      "status": "CREATED",
+      "path": "docs/PAGE_CUSTOMIZATION_BUTTONS.md",
+      "sha256_after": "d45da5a4d45c98b1d6f15808bfd8f5edc3f89c5ce321687bd3cfa908ee34312c",
+      "bytes_after": 1775
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/details.dart",
+      "sha256_after": "c1351c9b3d5f3d68e0bb726107d7c8898028b2924c3f1654a2f036a767c9ed9f",
+      "bytes_after": 75867,
+      "sha256_before": "eeaf8a3a607ee2b0f1ef5694b4db98b39839658a61c6d0900ddc4957e16481b8",
+      "bytes_before": 75764
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/feature_center.dart",
+      "sha256_after": "062441385944fd27a28d5578fead31d0d4992b0a709902c2d263551c023191ca",
+      "bytes_after": 50955,
+      "sha256_before": "40e1e3c5c89df0570fe9617d836f5ae667ffc4a91c67597165c1199cd824824f",
+      "bytes_before": 50747
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/food_delivery.dart",
+      "sha256_after": "dc569ea7b5f719f6b722806c8a0202af21062432a653f72bb5bd029ba2d509a9",
+      "bytes_after": 212517,
+      "sha256_before": "59237c9a18be2ed9b205ec0e492f131f76496fb6282a804fbb75f0187ccfd04b",
+      "bytes_before": 212414
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/hey_marathon.dart",
+      "sha256_after": "48aced20ffe924644859d9dec75bc0ce304ea6a281db46548192e401bd993369",
+      "bytes_after": 52712,
+      "sha256_before": "ab2660ec51efa14c7718814e4ddb7f6cd66f120c5f2353708214e38a175a7068",
+      "bytes_before": 52610
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/library_hubs.dart",
+      "sha256_after": "3db1429aee884f9692a2618ef25a565cc5f26ef8aaf0efdb20e3b8cf96422875",
+      "bytes_after": 19331,
+      "sha256_before": "e8e89f451762ee51d4529178c95dcc95ee395369333ac9d3d8fec4acb540de6c",
+      "bytes_before": 19225
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/main.dart",
+      "sha256_after": "4f513347861c735224de5f17e1a133b0dde4f1c8ff68b8c6d61f8fb571adc9c7",
+      "bytes_after": 294038,
+      "sha256_before": "d9d6c3c4fd596f3b17c29943ef861f64dc107259966533ae4877fa19b3cca50f",
+      "bytes_before": 292521
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/movies.dart",
+      "sha256_after": "7a5f9e0a07d04af281dce34cd8ee7dbdd2f39b42ceebb6d7f6002b342b84462e",
+      "bytes_after": 53218,
+      "sha256_before": "3b7926e7c63d8d37dd3defcbc002aa96d637afa804576bf38a718446b8103400",
+      "bytes_before": 53122
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/my_tv.dart",
+      "sha256_after": "bff837bbbe838e2e75cc6f5868e1e8fe3aae09e5ed8abfa249f8c1336123e7da",
+      "bytes_after": 59911,
+      "sha256_before": "9efd440ae7c7cb052d53e27a24dd4edf2d9529776492a2bd9f039c19333f23f1",
+      "bytes_before": 59816
+    },
+    {
+      "status": "CREATED",
+      "path": "lib/page_customization_button.dart",
+      "sha256_after": "d3bce6734307fe08ec5b373123f1930270e6c69de814b852fad445a4ea88f955",
+      "bytes_after": 1690
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/seasonal_collections.dart",
+      "sha256_after": "6580d1409f0c41613041fb919875261cb43ca382c3a1d9304a9f2614c47461ba",
+      "bytes_after": 5285,
+      "sha256_before": "f62e7438a3d0934b2ca59b95ee5d698d11baf61e7cb16a31a42526cea9cd97a2",
+      "bytes_before": 5175
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/series.dart",
+      "sha256_after": "f1911e2a0819915bdbc1e70b94aa70d2cdc34f6f8f64dbc28d59279499231567",
+      "bytes_after": 48756,
+      "sha256_before": "49463c29506ebc321225336dcc7fc24b3deb56b65699a8f659767b6a20bd9d9f",
+      "bytes_before": 48660
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/shop.dart",
+      "sha256_after": "0396b06b42f35cc4330424fdee7c9bab8e6998c4e14f80a984f9ccfb4ae506c5",
+      "bytes_after": 201313,
+      "sha256_before": "f591f1ca338c9b3fc6911643d74ed5adf89f5a60bd9c273d0b7f3e6dd9618ae8",
+      "bytes_before": 200842
+    }
+  ],
+  "notes": [
+    "Created files include this manifest itself; its own checksum is intentionally omitted to avoid a self-referential hash.",
+    "The baseline is MyOwnStreamingService_platform_foundations_updated.zip from the available project library snapshot.",
+    "This package cannot account for unuploaded edits in a separate local Windows working copy."
+  ],
+  "verification": {
+    "flutter_analyze": "not_run_flutter_sdk_unavailable",
+    "flutter_test": "not_run_flutter_sdk_unavailable",
+    "source_assertions": "passed",
+    "delimiter_balance": "passed",
+    "zip_integrity": "passed"
+  }
+}

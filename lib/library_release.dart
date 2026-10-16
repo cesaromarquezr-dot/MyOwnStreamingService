@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'localization.dart';
 
 class LibraryReleaseChoice {
   final bool schedule;
@@ -18,11 +19,11 @@ Future<LibraryReleaseChoice?> showLibraryReleaseChoice(BuildContext context) asy
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
-        title: const Text('Add to Account Library'),
+        title: const UniversalText('Add to Account Library'),
         content: SizedBox(
           width: 460,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('The media is stored once on the account home NAS and is shared by all active profiles.'),
+            const UniversalText('The media is stored once on the account home NAS and is shared by all active profiles.'),
             const SizedBox(height: 16),
             RadioGroup<bool>(
               groupValue: schedule,
@@ -33,13 +34,13 @@ Future<LibraryReleaseChoice?> showLibraryReleaseChoice(BuildContext context) asy
                 children: [
                   RadioListTile<bool>(
                     value: false,
-                    title: Text('Right Now'),
-                    subtitle: Text('Publish immediately to the account library.'),
+                    title: UniversalText('Right Now'),
+                    subtitle: UniversalText('Publish immediately to the account library.'),
                   ),
                   RadioListTile<bool>(
                     value: true,
-                    title: Text('Schedule Additions'),
-                    subtitle: Text('Keep the import staged until the release time.'),
+                    title: UniversalText('Schedule Additions'),
+                    subtitle: UniversalText('Keep the import staged until the release time.'),
                   ),
                 ],
               ),
@@ -48,12 +49,12 @@ Future<LibraryReleaseChoice?> showLibraryReleaseChoice(BuildContext context) asy
               const SizedBox(height: 8),
               ListTile(leading: const Icon(Icons.calendar_today_outlined), title: Text(date == null ? 'Choose release date' : MaterialLocalizations.of(context).formatMediumDate(date!)), onTap: () async { final picked = await showDatePicker(context: context, firstDate: now, lastDate: DateTime(now.year + 5), initialDate: date ?? now.add(const Duration(days: 1))); if (picked != null) setState(() => date = picked); }),
               ListTile(leading: const Icon(Icons.schedule_outlined), title: Text(time == null ? 'Choose release time' : time!.format(context)), onTap: () async { final picked = await showTimePicker(context: context, initialTime: time ?? const TimeOfDay(hour: 7, minute: 0)); if (picked != null) setState(() => time = picked); }),
-              const Padding(padding: EdgeInsets.only(left: 16), child: Text('Time zone: Mountain Time (device/backend should preserve the account release zone).')),
+              const Padding(padding: EdgeInsets.only(left: 16), child: UniversalText('Time zone: Mountain Time (device/backend should preserve the account release zone).')),
             ],
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
           FilledButton(onPressed: schedule && (date == null || time == null) ? null : () { final selected = schedule ? DateTime(date!.year, date!.month, date!.day, time!.hour, time!.minute) : null; Navigator.pop(dialogContext, LibraryReleaseChoice(schedule: schedule, scheduledFor: selected, timeZone: 'America/Denver')); }, child: Text(schedule ? 'Schedule' : 'Add Now')),
         ],
       ),
@@ -72,13 +73,13 @@ class _ComingSoonScreenState extends State<ComingSoonScreen> {
   late Future<List<Map<String, dynamic>>> future;
   @override void initState() { super.initState(); future = widget.loader(); }
   @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Coming Soon')),
+    appBar: AppBar(title: const UniversalText('Coming Soon')),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
         final items = snapshot.data ?? const <Map<String, dynamic>>[];
-        if (items.isEmpty) return const Center(child: Text('Nothing is scheduled for release.'));
+        if (items.isEmpty) return const Center(child: UniversalText('Nothing is scheduled for release.'));
         return ListView.builder(padding: const EdgeInsets.all(16), itemCount: items.length, itemBuilder: (_, i) {
           final item = items[i];
           final when = DateTime.tryParse(item['scheduledFor']?.toString() ?? '')?.toLocal();

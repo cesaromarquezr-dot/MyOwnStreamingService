@@ -2,12 +2,13 @@
 // Purpose: Provides the cross-media experience tools and future-oriented UI entry points.
 
 import 'package:flutter/material.dart';
+import 'localization.dart';
 
 class MediaExperienceScreen extends StatelessWidget {
   const MediaExperienceScreen({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Media Experience')),
+    appBar: AppBar(title: const UniversalText('Media Experience')),
     body: ListView(padding: const EdgeInsets.all(18), children: const [
       _ExperienceCard('Complete the Experience', 'Watch, soundtrack, music video, lyrics, cast, characters, extras, trailers and connections.', Icons.all_inclusive_rounded),
       _ExperienceCard('Media Journey', 'Movie → song → artist → album → actor → franchise → another movie.', Icons.route_rounded),

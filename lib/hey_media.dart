@@ -15,6 +15,8 @@ import 'core/services/media_ai_assistant.dart';
 import 'details.dart';
 import 'shop.dart';
 import 'smart_search.dart';
+import 'localization.dart';
+import 'media_text_localizer.dart';
 
 enum _HeyMediaResponseMode {
   textOnly,
@@ -652,7 +654,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hey Media'),
+        title: const UniversalText('Hey Media'),
         actions: [
           IconButton(
             tooltip: 'Open universal search',
@@ -677,12 +679,11 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                     children: [
                       Icon(Icons.auto_awesome_rounded, size: 32),
                       SizedBox(width: 10),
-                      Text('Hey Media', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                      UniversalText('Hey Media', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Type a question or use the microphone. Ask what you have not watched, plan a movie marathon, find Store gifts, or ask about your music library. Choose text, spoken replies, and a preferred voice below. Answers use the data loaded for your account; missing information is not guessed.',
+                  const UniversalText('Type a question or use the microphone. Ask what you have not watched, plan a movie marathon, find Store gifts, or ask about your music library. Choose text, spoken replies, and a preferred voice below. Answers use the data loaded for your account; missing information is not guessed.',
                     style: TextStyle(color: Colors.white60, height: 1.45),
                   ),
                   const SizedBox(height: 18),
@@ -740,8 +741,8 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                     margin: EdgeInsets.zero,
                     child: ExpansionTile(
                       leading: const Icon(Icons.record_voice_over_rounded),
-                      title: const Text('Voice & response preferences'),
-                      subtitle: const Text('Choose text, speech, accent, and microphone language'),
+                      title: const UniversalText('Voice & response preferences'),
+                      subtitle: const UniversalText('Choose text, speech, accent, and microphone language'),
                       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       children: [
                         DropdownButtonFormField<_HeyMediaResponseMode>(
@@ -791,7 +792,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                               child: OutlinedButton.icon(
                                 onPressed: _previewSelectedVoice,
                                 icon: const Icon(Icons.play_arrow_rounded),
-                                label: const Text('Preview voice'),
+                                label: const UniversalText('Preview voice'),
                               ),
                             ),
                             if (_isSpeaking) ...[
@@ -817,8 +818,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                         const SizedBox(height: 4),
                         const Align(
                           alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Available voices depend on the operating system, installed speech packs, and browser. Hey Media chooses a matching installed voice where possible; missing gender/accent support may fall back to the device voice. The selected voice does not translate the answer text—full multilingual answers require a translation/AI service. Microphone language is set separately.',
+                          child: UniversalText('Available voices depend on the operating system, installed speech packs, and browser. Hey Media chooses a matching installed voice where possible; missing gender/accent support may fall back to the device voice. The selected voice does not translate the answer text—full multilingual answers require a translation/AI service. Microphone language is set separately.',
                             style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.35),
                           ),
                         ),
@@ -840,8 +840,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                   ),
                   if (!_speechInitialized && _voiceStatus == null) ...[
                     const SizedBox(height: 10),
-                    const Text(
-                      'Voice input is push-to-talk. Microphone support depends on the device and browser; always-on wake-word listening is not enabled.',
+                    const UniversalText('Voice input is push-to-talk. Microphone support depends on the device and browser; always-on wake-word listening is not enabled.',
                       style: TextStyle(color: Colors.white38, fontSize: 11),
                     ),
                   ],
@@ -857,7 +856,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                 children: [
                   SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                   SizedBox(width: 10),
-                  Expanded(child: Text('Checking your library and Store catalog…', style: TextStyle(color: Colors.white70))),
+                  Expanded(child: UniversalText('Checking your library and Store catalog…', style: TextStyle(color: Colors.white70))),
                 ],
               )
             else
@@ -873,12 +872,12 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                   children: [
                     const Padding(
                       padding: EdgeInsets.fromLTRB(16, 8, 16, 10),
-                      child: Text('Your marathon schedule', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                      child: UniversalText('Your marathon schedule', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                     ),
                     for (final entry in plan)
                       ListTile(
                         leading: CircleAvatar(child: Text('${entry.dayNumber}')),
-                        title: Text(entry.media.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        title: LocalizedMediaText(entry.media.title, style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text([
                           if (entry.calendarDate != null) _formatDate(entry.calendarDate!),
                           if (entry.media.releaseYear != null) '${entry.media.releaseYear}',
@@ -899,14 +898,14 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
             const SizedBox(height: 14),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text('Related Store products', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              child: UniversalText('Related Store products', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
             ),
             const SizedBox(height: 8),
             for (final product in productResults) _productCard(product),
           ],
           if (infoItems.isNotEmpty) ...[
             const SizedBox(height: 12),
-            const Text('Albums found in your library', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+            const UniversalText('Albums found in your library', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
             for (final album in infoItems)
               Card(
                 child: ListTile(
@@ -919,7 +918,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
             const Card(
               child: ListTile(
                 leading: Icon(Icons.lightbulb_outline_rounded),
-                title: Text('Try asking for unwatched movies, a marathon, gift recommendations, or your latest album.'),
+                title: UniversalText('Try asking for unwatched movies, a marathon, gift recommendations, or your latest album.'),
               ),
             ),
         ],
@@ -941,7 +940,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                     errorBuilder: (_, __, ___) => const Icon(Icons.play_circle_outline_rounded),
                   ),
                 ),
-          title: Text(media.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: LocalizedMediaText(media.title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text([
             media.type,
             if (media.releaseYear != null) '${media.releaseYear}',

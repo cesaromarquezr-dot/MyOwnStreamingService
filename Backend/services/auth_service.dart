@@ -598,6 +598,58 @@ class AuthService {
     );
   }
 
+  /// Creates a backend session for a verified third-party identity that has
+  /// already been validated with the configured Supabase Auth endpoint.
+  /// The caller MUST validate the provider access token and confirmed email;
+  /// this method deliberately accepts an Account, not a client-supplied email.
+  Future<AuthLoginResult> loginWithVerifiedExternalIdentity({
+    required Account account,
+    required String provider,
+    String ipAddress = 'unknown',
+    String userAgent = 'unknown',
+  }) async {
+    final normalizedProvider = provider.trim().toLowerCase();
+    if (!const {'google', 'apple'}.contains(normalizedProvider)) {
+      throw ArgumentError.value(provider, 'provider', 'Unsupported sign-in provider.');
+    }
+    if (!account.hasActiveSubscription) {
+      await _audit('login_blocked_subscription', accountId: account.id,
+          metadata: {'provider': normalizedProvider});
+      throw Exception('Your subscription is not active. Complete payment before logging in.');
+    }
+
+    const ownerMemberIdPrefix = 'owner_';
+    if (account.mfaEnabled) {
+      account.mfaChallengeMemberId = '$ownerMemberIdPrefix${account.id}';
+      database.saveAccount(account);
+      await database.persistAccountAndWait(account);
+      await startMfaChallenge(account);
+      await _audit('federated_login_mfa_required', accountId: account.id,
+          metadata: {'provider': normalizedProvider});
+      return const AuthLoginResult(
+        token: null,
+        suspicious: false,
+        reasons: <String>[],
+        requiresMfa: true,
+      );
+    }
+
+    final token = _generateSessionToken();
+    final normalizedIp = _normalizeIp(ipAddress);
+    final normalizedAgent = _normalizeUserAgent(userAgent);
+    database.saveSession(
+      token,
+      account.id,
+      memberId: '$ownerMemberIdPrefix${account.id}',
+      ttl: Database.defaultSessionLifetime,
+      ipAddress: normalizedIp,
+      userAgent: normalizedAgent,
+    );
+    await _audit('federated_login_success', accountId: account.id,
+        metadata: {'provider': normalizedProvider});
+    return AuthLoginResult(token: token, suspicious: false, reasons: const <String>[]);
+  }
+
   Future<void> _recordLoginFailure(
     String normalizedLogin,
   ) async {

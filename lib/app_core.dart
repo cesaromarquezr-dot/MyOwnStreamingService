@@ -2,12 +2,15 @@
 // Purpose: Implements the app core portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
+import 'offline_sync_queue.dart';
+import 'offline_metadata_cache.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
 import 'core/models/profile_governance.dart';
@@ -72,6 +75,9 @@ class MediaItem {
   /// Provider ratings are kept as separate source records; they are not combined.
   final List<Map<String, dynamic>> externalRatings;
   final double? userRatingStars;
+  /// Authorized media-gateway URL for adaptive HLS/DASH or progressive playback.
+  /// Never set this to a raw NAS filesystem path.
+  final String? playbackUrl;
   final String? trailerUrl;
   final DateTime addedAt;
   final String? addedByProfileId;
@@ -131,6 +137,7 @@ class MediaItem {
   final String? mediaVersionId;
 
   MediaItem({
+    this.playbackUrl,
     this.trailerUrl,
     DateTime? addedAt,
     this.addedByProfileId,
@@ -251,6 +258,7 @@ class MediaItem {
       userRatingStars: json['userRatingStars'] is num
           ? (json['userRatingStars'] as num).toDouble()
           : double.tryParse(json['userRatingStars']?.toString() ?? ''),
+      playbackUrl: json['playbackUrl']?.toString() ?? json['streamingUrl']?.toString(),
       trailerUrl: json['trailerUrl']?.toString(),
       addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
       addedByProfileId: json['addedByProfileId']?.toString(),
@@ -577,7 +585,6 @@ class PageContentCustomizationStore {
       'movies',
       'tv-shows',
       'music',
-      'radio',
       'collections',
       'my-tv',
       'favorites',
@@ -1683,6 +1690,7 @@ class AppController extends ChangeNotifier {
       'activeProfileIds': List<String>.from(activeProfileIds),
       'libraryMediaIds': library.map((m) => m.id).toList(),
       'watchedMediaIds': watched.map((m) => m.id).toList(),
+      'playbackProgress': Map<String, double>.from(playbackProgress),
       'likedMediaIds': liked.map((m) => m.id).toList(),
       'collections': collections.map((c) => c.toJson()).toList(),
       'groupWatchSessions': groupWatchSessions.map((s) => s.toJson()).toList(),
@@ -1770,6 +1778,10 @@ class AppController extends ChangeNotifier {
       }
 
       _applyBackendAccount(Map<String, dynamic>.from(accountData));
+      final restoredProfileId = currentProfile?.id;
+      if (library.isEmpty && restoredProfileId != null) {
+        await restoreOfflineMetadataCache(profileId: restoredProfileId);
+      }
       notifyListeners();
       return true;
     } catch (_) {
@@ -2148,6 +2160,7 @@ class AppController extends ChangeNotifier {
 
     currentAccount!.profiles.removeWhere((profile) => profile.id == profileId);
     activeProfileIds.remove(profileId);
+    unawaited(OfflineMetadataCache(profileId: profileId).clear());
 
     if (currentProfile?.id == profileId) {
       currentProfile = currentAccount!.profiles.isEmpty
@@ -2266,7 +2279,45 @@ class AppController extends ChangeNotifier {
       ));
     }
     _refreshAutomaticCollections();
+    final profile = currentProfile;
+    if (profile != null) {
+      final snapshotProfileId = profile.id;
+      final visibleMetadata = library
+          .where((item) => item.isAccessibleTo(profile))
+          .map((item) => item.toJson())
+          .toList(growable: false);
+      unawaited(OfflineMetadataCache(profileId: snapshotProfileId)
+          .save(visibleMetadata)
+          .catchError((_) {}));
+    }
     notifyListeners();
+  }
+
+  /// Restores only sanitized catalog metadata, and only when no online library
+  /// is already available. Playback/trailer URLs are never stored by the cache.
+  Future<void> restoreOfflineMetadataCache({String? profileId}) async {
+    final profile = currentProfile;
+    final requestedId = profileId?.trim();
+    if (profile == null || requestedId == null || requestedId.isEmpty ||
+        profile.id != requestedId || library.isNotEmpty) {
+      return;
+    }
+    try {
+      final rows = await OfflineMetadataCache(profileId: requestedId).load();
+      if (rows.isEmpty || currentProfile?.id != requestedId || library.isNotEmpty) return;
+      final restored = rows
+          .map(MediaItem.fromJson)
+          .where((item) => item.id.isNotEmpty && item.title.isNotEmpty && item.isAccessibleTo(currentProfile))
+          .toList(growable: false);
+      if (restored.isEmpty) return;
+      library
+        ..clear()
+        ..addAll(restored);
+      _refreshAutomaticCollections();
+      notifyListeners();
+    } catch (_) {
+      // Cached metadata is an enhancement only; never block startup on it.
+    }
   }
 
   /// Performs `addToLibrary` for this feature. Update this documentation when its contract changes.
@@ -2343,6 +2394,18 @@ class AppController extends ChangeNotifier {
     final clamped = progress.clamp(0.0, 1.0);
 
     playbackProgress[mediaId] = clamped.toDouble();
+    final profileId = currentProfile?.id;
+    if (profileId != null && profileId.isNotEmpty) {
+      // Coalesces repeated player progress ticks into one durable pending update
+      // per profile/title. The queue contains no media bytes or credentials.
+      unawaited(OfflineSyncQueue(
+        scopeId: currentAccount?.id ?? 'local',
+      ).enqueuePlaybackProgress(
+        profileId: profileId,
+        mediaId: mediaId,
+        progress: clamped.toDouble(),
+      ).catchError((_) {}));
+    }
 
     notifyListeners();
   }

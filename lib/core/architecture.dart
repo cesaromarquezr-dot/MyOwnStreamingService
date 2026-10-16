@@ -65,5 +65,11 @@ abstract final class MasterProductCapabilities {
     ProductCapability(key: 'settings', domain: ProductDomain.identity, label: 'Settings'),
     ProductCapability(key: 'delete_media', domain: ProductDomain.media, label: 'Delete Media', destructive: true, requiresConfirmation: true),
     ProductCapability(key: 'server_migration', domain: ProductDomain.server, label: 'Server Migration', longRunning: true, requiresConfirmation: true),
+    ProductCapability(key: 'production_readiness', domain: ProductDomain.server, label: 'Production Readiness'),
+    ProductCapability(key: 'backup_restore', domain: ProductDomain.server, label: 'Backup and Restore', longRunning: true, destructive: true, requiresConfirmation: true),
+    ProductCapability(key: 'offline_sync', domain: ProductDomain.experience, label: 'Offline Sync'),
+    ProductCapability(key: 'accessibility', domain: ProductDomain.experience, label: 'Accessibility Preferences'),
+    ProductCapability(key: 'privacy_controls', domain: ProductDomain.identity, label: 'Privacy Controls'),
+    ProductCapability(key: 'ai_action_confirmation', domain: ProductDomain.intelligence, label: 'AI Action Confirmation', requiresConfirmation: true),
   ];
 }

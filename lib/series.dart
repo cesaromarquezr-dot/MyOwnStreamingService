@@ -8,6 +8,7 @@ import 'app_core.dart';
 import 'details.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
+import 'page_customization_button.dart';
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -95,11 +96,11 @@ class _SeriesScreenState extends State<SeriesScreen>
         icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 18),
         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
         items: const [
-          DropdownMenuItem(value: 'Default', child: Text('Default')),
-          DropdownMenuItem(value: 'A-Z', child: Text('A-Z')),
-          DropdownMenuItem(value: 'Z-A', child: Text('Z-A')),
-          DropdownMenuItem(value: 'Oldest to Newest', child: Text('Oldest to Newest')),
-          DropdownMenuItem(value: 'Newest to Oldest', child: Text('Newest to Oldest')),
+          DropdownMenuItem(value: 'Default', child: UniversalText('Default')),
+          DropdownMenuItem(value: 'A-Z', child: UniversalText('A-Z')),
+          DropdownMenuItem(value: 'Z-A', child: UniversalText('Z-A')),
+          DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')),
+          DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')),
         ],
         onChanged: (value) => setState(() => _sortMode = value ?? 'Default'),
       ),
@@ -304,6 +305,7 @@ class _SeriesScreenState extends State<SeriesScreen>
           ),
         ),
         actions: [
+          const PageCustomizeButton(pageId: 'series'),
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: _GlassIconButton(
@@ -496,8 +498,7 @@ class _TvIntrosSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          Text(
-            'Opening sequences indexed from your TV library',
+          UniversalText('Opening sequences indexed from your TV library',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.5),
               fontSize: 12,

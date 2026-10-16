@@ -12,14 +12,13 @@ import 'widgets/like_toggle_button.dart';
 import 'localization.dart';
 import 'media_actions.dart';
 import 'people_timeline.dart';
+import 'media_text_localizer.dart';
+import 'page_customization_button.dart';
 
 class LibraryCollectionsScreen extends StatelessWidget {
   const LibraryCollectionsScreen({super.key});
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const UniversalText('Collections')),
-        body: const CollectionsPanel(),
-      );
+  Widget build(BuildContext context) => const CollectionsPanel();
 }
 
 class LibraryActorsScreen extends StatelessWidget {
@@ -47,7 +46,14 @@ class _PeopleDirectoryScreen extends StatelessWidget {
     }
     final people = values.where((e) => e.trim().isNotEmpty).toList()..sort();
     return Scaffold(
-      appBar: AppBar(title: Text(kind)),
+      appBar: AppBar(
+        title: Text(kind),
+        actions: [
+          PageCustomizeButton(
+            pageId: kind.toLowerCase() == 'actors' ? 'actors' : 'people',
+          ),
+        ],
+      ),
       body: people.isEmpty
           ? Center(child: UniversalText('No $kind metadata has been imported yet.'))
           : GridView.builder(
@@ -124,8 +130,8 @@ class _PersonMediaScreen extends StatelessWidget {
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.timeline_rounded),
-                      title: const Text('Career timeline', style: TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: const Text('Combine acting and other career credits'),
+                      title: const UniversalText('Career timeline', style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: const UniversalText('Combine acting and other career credits'),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => Navigator.push(context, MaterialPageRoute(
                         builder: (_) => PeopleCareerTimelineScreen(personName: person, localCredits: localCredits),
@@ -137,7 +143,7 @@ class _PersonMediaScreen extends StatelessWidget {
                 return Card(
                   child: ListTile(
                     leading: media.imageUrl == null ? const Icon(Icons.movie_rounded) : Image.network(media.imageUrl!, width: 52, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_rounded)),
-                    title: Text(media.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    title: LocalizedMediaText(media.title, style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: UniversalText('${media.type}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
@@ -326,7 +332,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             for (final media in filteredMovies)
               Card(child: ListTile(
                 leading: const Icon(Icons.movie_outlined),
-                title: Text(media.title),
+                title: LocalizedMediaText(media.title),
                 subtitle: Text(media.type),
                 trailing: LikeToggleButton(
                   liked: controller.isLiked(media.id),
@@ -353,7 +359,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             for (final media in filteredShows)
               Card(child: ListTile(
                 leading: const Icon(Icons.tv_outlined),
-                title: Text(media.title),
+                title: LocalizedMediaText(media.title),
                 subtitle: Text(media.type),
                 trailing: LikeToggleButton(
                   liked: controller.isLiked(media.id),
@@ -380,7 +386,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             for (final track in filteredSongs)
               Card(child: ListTile(
                 leading: const Icon(Icons.music_note_rounded),
-                title: Text(track.title),
+                title: LocalizedMediaText(track.title),
                 subtitle: Text(track.artist),
                 trailing: LikeToggleButton(
                   liked: true,

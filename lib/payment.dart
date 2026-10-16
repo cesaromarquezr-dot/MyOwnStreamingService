@@ -762,8 +762,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
         Padding(
           padding: const EdgeInsets.only(left: 3),
-          child: Text(
-            'Local mock checkout: enter any 6–32 digit number, for example 123456.',
+          child: UniversalText('Local mock checkout: enter any 6–32 digit number, for example 123456.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.34),
               fontSize: 10.5,

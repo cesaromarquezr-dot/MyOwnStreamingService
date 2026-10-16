@@ -76,6 +76,40 @@ class FoodDeliveryRoutes {
         return;
       }
 
+      final merchantProfileMatch = RegExp(
+        r'^/api/v1/food/merchant/restaurants/([^/]+)/profile$',
+      ).firstMatch(path);
+      if (request.method == 'PATCH' && merchantProfileMatch != null) {
+        final body = await _readJson(request);
+        final restaurant = await service.updateRestaurantProfile(
+          account: account,
+          restaurantId: Uri.decodeComponent(merchantProfileMatch.group(1)!),
+          data: body,
+        );
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'restaurant': restaurant,
+        });
+        return;
+      }
+
+      final merchantThemeMatch = RegExp(
+        r'^/api/v1/food/merchant/restaurants/([^/]+)/themes$',
+      ).firstMatch(path);
+      if (request.method == 'POST' && merchantThemeMatch != null) {
+        final body = await _readJson(request);
+        final theme = await service.createMenuTheme(
+          account: account,
+          restaurantId: Uri.decodeComponent(merchantThemeMatch.group(1)!),
+          data: body,
+        );
+        await _json(request.response, HttpStatus.created, {
+          'success': true,
+          'theme': theme,
+        });
+        return;
+      }
+
       final merchantPhotoMatch = RegExp(
         r'^/api/v1/food/merchant/restaurants/([^/]+)/photo$',
       ).firstMatch(path);
@@ -150,6 +184,114 @@ class FoodDeliveryRoutes {
         await _json(request.response, HttpStatus.ok, {
           'success': true,
           'balances': await service.loyaltySummary(account),
+        });
+        return;
+      }
+
+      if (request.method == 'GET' && path == '/api/v1/food/conversations') {
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'conversations': await service.customerFoodConversations(account),
+        });
+        return;
+      }
+
+      if (request.method == 'GET' && path == '/api/v1/food/merchant/conversations') {
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'conversations': await service.merchantFoodConversations(
+            account: account,
+            restaurantId: request.uri.queryParameters['restaurantId'],
+          ),
+        });
+        return;
+      }
+
+      if (request.method == 'POST' && path == '/api/v1/food/conversations') {
+        final body = await _readJson(request);
+        final conversation = await service.createFoodConversation(
+          account: account,
+          data: body,
+        );
+        await _json(request.response, HttpStatus.created, {
+          'success': true,
+          'conversation': conversation,
+        });
+        return;
+      }
+
+      final messageMatch = RegExp(
+        r'^/api/v1/food/conversations/([^/]+)/messages$',
+      ).firstMatch(path);
+      if (request.method == 'POST' && messageMatch != null) {
+        final body = await _readJson(request);
+        final conversation = await service.sendFoodConversationMessage(
+          account: account,
+          conversationId: Uri.decodeComponent(messageMatch.group(1)!),
+          data: body,
+        );
+        await _json(request.response, HttpStatus.created, {
+          'success': true,
+          'conversation': conversation,
+        });
+        return;
+      }
+
+      final conversationMatch = RegExp(
+        r'^/api/v1/food/conversations/([^/]+)$',
+      ).firstMatch(path);
+      if (request.method == 'GET' && conversationMatch != null) {
+        final conversation = await service.foodConversation(
+          account: account,
+          conversationId: Uri.decodeComponent(conversationMatch.group(1)!),
+        );
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'conversation': conversation,
+        });
+        return;
+      }
+
+      final restaurantReviewsMatch = RegExp(
+        r'^/api/v1/food/restaurants/([^/]+)/reviews$',
+      ).firstMatch(path);
+      if (restaurantReviewsMatch != null && request.method == 'GET') {
+        final reviews = await service.restaurantReviews(
+          Uri.decodeComponent(restaurantReviewsMatch.group(1)!),
+        );
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'reviews': reviews,
+        });
+        return;
+      }
+      if (restaurantReviewsMatch != null && request.method == 'POST') {
+        final body = await _readJson(request);
+        final rating = int.tryParse(body['rating']?.toString() ?? '') ?? 0;
+        final review = await service.submitRestaurantReview(
+          account: account,
+          restaurantId: Uri.decodeComponent(restaurantReviewsMatch.group(1)!),
+          rating: rating,
+          title: body['title']?.toString() ?? '',
+          body: body['body']?.toString() ?? '',
+        );
+        await _json(request.response, HttpStatus.created, {
+          'success': true,
+          'review': review,
+        });
+        return;
+      }
+
+      final restaurantThemesMatch = RegExp(
+        r'^/api/v1/food/restaurants/([^/]+)/themes$',
+      ).firstMatch(path);
+      if (request.method == 'GET' && restaurantThemesMatch != null) {
+        final themes = await service.menuThemes(
+          Uri.decodeComponent(restaurantThemesMatch.group(1)!),
+        );
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'themes': themes,
         });
         return;
       }

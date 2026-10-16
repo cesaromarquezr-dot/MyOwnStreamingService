@@ -9,6 +9,9 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'details.dart';
+import 'entertainment_studio.dart';
+import 'localization.dart';
+import 'media_text_localizer.dart';
 
 class MediaUniverseScreen extends StatefulWidget {
   const MediaUniverseScreen({super.key});
@@ -30,7 +33,7 @@ class _MediaUniverseScreenState extends State<MediaUniverseScreen> {
     final filtered = library.where((item) =>
         query.trim().isEmpty || item.title.toLowerCase().contains(query.toLowerCase())).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Media Universe')),
+      appBar: AppBar(title: const UniversalText('Media Universe')),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
@@ -47,14 +50,16 @@ class _MediaUniverseScreenState extends State<MediaUniverseScreen> {
             children: [
               _tile('Surprise Me', Icons.shuffle_rounded, () => _open(context, const SurpriseMeScreen())),
               _tile('Devices & Sessions', Icons.devices_rounded, () => _open(context, const MediaSessionsScreen())),
-              _tile('Library Health', Icons.health_and_safety_outlined, () => _open(context, const LibraryHealthScreen())),
+              _tile('Library Health', Icons.health_and_safety_outlined, () => _open(context, const SmartMediaLibrarianScreen())),
+              _tile('Entertainment Studio', Icons.auto_awesome_rounded, () => _open(context, const EntertainmentStudioScreen())),
+              _tile('Knowledge Graph', Icons.hub_rounded, () => _open(context, const MediaConnectionGraphScreen())),
               _tile('Artwork Library', Icons.photo_library_outlined, () => _open(context, const MediaArtworkScreen())),
               _tile('AI Media Lab', Icons.auto_awesome_rounded, () => _open(context, const MediaAiLabScreen())),
               _tile('My Media Passport', Icons.badge_outlined, () => _open(context, const MediaPassportScreen())),
             ],
           ),
           const SizedBox(height: 24),
-          const Text('Explore Media', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          const UniversalText('Explore Media', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           if (filtered.isEmpty)
             const _EmptyUniverse()
@@ -75,9 +80,9 @@ class _MediaUniverseScreenState extends State<MediaUniverseScreen> {
         child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(Icons.hub_rounded, size: 42),
           SizedBox(height: 12),
-          Text('Your Media Universe', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          UniversalText('Your Media Universe', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           SizedBox(height: 7),
-          Text('Movies, shows, songs, albums, people, characters, franchises, extras, artwork and your personal history connected in one place.', style: TextStyle(color: Colors.white70, height: 1.4)),
+          UniversalText('Movies, shows, songs, albums, people, characters, franchises, extras, artwork and your personal history connected in one place.', style: TextStyle(color: Colors.white70, height: 1.4)),
         ]),
       );
 
@@ -93,7 +98,7 @@ class _MediaUniverseCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         child: ListTile(
           leading: _Artwork(imageUrl: item.imageUrl),
-          title: Text(item.title),
+          title: LocalizedMediaText(item.title),
           subtitle: Text('${item.type}${item.releaseYear == null ? '' : ' • ${item.releaseYear}'}'),
           trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaPassportItemScreen(item: item))),
@@ -126,31 +131,31 @@ class _SurpriseMeScreenState extends State<SurpriseMeScreen> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Surprise Me')),
+    appBar: AppBar(title: const UniversalText('Surprise Me')),
     body: ListView(padding: const EdgeInsets.all(20), children: [
-      const Text('True Random', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
+      const UniversalText('True Random', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
       const SizedBox(height: 8),
-      const Text('Random Everything intentionally crosses movies, episodes, songs, albums, music videos and extras.'),
+      const UniversalText('Random Everything intentionally crosses movies, episodes, songs, albums, music videos and extras.'),
       const SizedBox(height: 20),
       DropdownButtonFormField<String>(initialValue: mode, items: const [
-        DropdownMenuItem(value: 'Random Everything', child: Text('Random Everything')),
-        DropdownMenuItem(value: 'Movies', child: Text('Movies')),
-        DropdownMenuItem(value: 'TV Episodes', child: Text('TV Episodes')),
-        DropdownMenuItem(value: 'Music', child: Text('Music')),
-        DropdownMenuItem(value: 'Physical', child: Text('Something I Own Physically')),
+        DropdownMenuItem(value: 'Random Everything', child: UniversalText('Random Everything')),
+        DropdownMenuItem(value: 'Movies', child: UniversalText('Movies')),
+        DropdownMenuItem(value: 'TV Episodes', child: UniversalText('TV Episodes')),
+        DropdownMenuItem(value: 'Music', child: UniversalText('Music')),
+        DropdownMenuItem(value: 'Physical', child: UniversalText('Something I Own Physically')),
       ], onChanged: (v) => setState(() => mode = v ?? mode), decoration: const InputDecoration(labelText: 'Mode')),
       const SizedBox(height: 20),
-      FilledButton.icon(onPressed: pick, icon: const Icon(Icons.shuffle_rounded), label: const Text('SURPRISE ME')),
+      FilledButton.icon(onPressed: pick, icon: const Icon(Icons.shuffle_rounded), label: const UniversalText('SURPRISE ME')),
       const SizedBox(height: 24),
       if (selected != null) Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(children: [
         _Artwork(imageUrl: selected!.imageUrl, size: 180), const SizedBox(height: 14),
         Text(selected!.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
         Text(selected!.type, style: const TextStyle(color: Colors.white60)), const SizedBox(height: 12),
-        const Text('This selection was chosen from the eligible library items. No taste ranking was used.'),
+        const UniversalText('This selection was chosen from the eligible library items. No taste ranking was used.'),
         const SizedBox(height: 12),
         Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 8, children: [
-          FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: selected!))), icon: const Icon(Icons.play_arrow_rounded), label: const Text('PLAY')),
-          OutlinedButton(onPressed: pick, child: const Text('SHUFFLE AGAIN')),
+          FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: selected!))), icon: const Icon(Icons.play_arrow_rounded), label: const UniversalText('PLAY')),
+          OutlinedButton(onPressed: pick, child: const UniversalText('SHUFFLE AGAIN')),
         ]),
       ])))
     ]),
@@ -161,13 +166,13 @@ class MediaSessionsScreen extends StatelessWidget {
   const MediaSessionsScreen({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Devices & Sessions')),
+    appBar: AppBar(title: const UniversalText('Devices & Sessions')),
     body: ListView(padding: const EdgeInsets.all(18), children: [
       _sessionCard('Living Room TV', 'TV', 'Playing Jurassic Park', true),
       _sessionCard('Phone', 'Phone', 'Listening to music', true),
       _sessionCard('Bedroom PC', 'Desktop', 'Browsing library', false),
       const SizedBox(height: 18),
-      const Text('A profile can have multiple independent sessions. Starting playback on one device does not hijack another session.', style: TextStyle(color: Colors.white60)),
+      const UniversalText('A profile can have multiple independent sessions. Starting playback on one device does not hijack another session.', style: TextStyle(color: Colors.white60)),
     ]),
   );
   Widget _sessionCard(String name, String type, String activity, bool active) => Card(child: ListTile(
@@ -183,15 +188,15 @@ class LibraryHealthScreen extends StatelessWidget {
     final library = AppController.instance.library;
     final missingArtwork = library.where((m) => m.imageUrl == null || m.imageUrl!.isEmpty).length;
     final physical = library.where((m) => m.discType != null).length;
-    return Scaffold(appBar: AppBar(title: const Text('Library Health')), body: ListView(padding: const EdgeInsets.all(18), children: [
+    return Scaffold(appBar: AppBar(title: const UniversalText('Library Health')), body: ListView(padding: const EdgeInsets.all(18), children: [
       _metric('Media items', '${library.length}', Icons.video_library_outlined),
       _metric('Missing artwork', '$missingArtwork', Icons.image_not_supported_outlined),
       _metric('Physical imports', '$physical', Icons.album_outlined),
       _metric('Relationships', 'Ready for graph sync', Icons.account_tree_outlined),
       const SizedBox(height: 16),
-      const Text('Library Detective', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+      const UniversalText('Library Detective', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
       const SizedBox(height: 8),
-      const Text('Future checks include duplicates, edition conflicts, incomplete seasons, missing artwork, missing relationships and uncertain ARM identification. Nothing is deleted automatically.'),
+      const UniversalText('Future checks include duplicates, edition conflicts, incomplete seasons, missing artwork, missing relationships and uncertain ARM identification. Nothing is deleted automatically.'),
     ]));
   }
   Widget _metric(String title, String value, IconData icon) => Card(child: ListTile(leading: Icon(icon), title: Text(title), trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w800))));
@@ -207,13 +212,13 @@ class _MediaArtworkScreenState extends State<MediaArtworkScreen> {
   Widget build(BuildContext context) {
     final library = AppController.instance.library.where((m) => m.imageUrl != null && m.imageUrl!.isNotEmpty).toList();
     final profile = AppController.instance.currentProfile;
-    return Scaffold(appBar: AppBar(title: const Text('My Artwork')), body: ListView(padding: const EdgeInsets.all(18), children: [
-      const Text('Artwork from your media', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
+    return Scaffold(appBar: AppBar(title: const UniversalText('My Artwork')), body: ListView(padding: const EdgeInsets.all(18), children: [
+      const UniversalText('Artwork from your media', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
       const SizedBox(height: 6),
-      const Text('ARM can classify disc/poster/booklet artwork and make approved images available for profile pictures.'),
+      const UniversalText('ARM can classify disc/poster/booklet artwork and make approved images available for profile pictures.'),
       const SizedBox(height: 18),
       ...library.map((media) => Card(child: ListTile(
-        leading: _Artwork(imageUrl: media.imageUrl), title: Text(media.title), subtitle: Text(media.discType == null ? 'Library artwork' : 'Disc artwork candidate'),
+        leading: _Artwork(imageUrl: media.imageUrl), title: LocalizedMediaText(media.title), subtitle: Text(media.discType == null ? 'Library artwork' : 'Disc artwork candidate'),
         trailing: FilledButton(
   onPressed: profile == null
       ? null
@@ -234,7 +239,7 @@ class _MediaArtworkScreenState extends State<MediaArtworkScreen> {
             setState(() {});
           }
         },
-  child: const Text('USE'),
+  child: const UniversalText('USE'),
 ),
       ))),
     ]));
@@ -245,7 +250,7 @@ class MediaAiLabScreen extends StatelessWidget {
   const MediaAiLabScreen({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('AI Media Lab')),
+        appBar: AppBar(title: const UniversalText('AI Media Lab')),
         body: ListView(
           padding: const EdgeInsets.all(18),
           children: const [
@@ -269,10 +274,10 @@ class MediaPassportScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppController.instance;
-    return Scaffold(appBar: AppBar(title: const Text('My Media Passport')), body: ListView(padding: const EdgeInsets.all(18), children: [
-      const Text('Your relationship with media', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)), const SizedBox(height: 12),
+    return Scaffold(appBar: AppBar(title: const UniversalText('My Media Passport')), body: ListView(padding: const EdgeInsets.all(18), children: [
+      const UniversalText('Your relationship with media', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)), const SizedBox(height: 12),
       _row('Library items', '${c.library.length}'), _row('Watched', '${c.watched.length}'), _row('Liked', '${c.liked.length}'), _row('Collections', '${c.collections.length}'), _row('Profiles', '${c.currentAccount?.profiles.length ?? 0}'),
-      const SizedBox(height: 20), const Text('This is private personal history. Importing, watching and listening remain separate events.'),
+      const SizedBox(height: 20), const UniversalText('This is private personal history. Importing, watching and listening remain separate events.'),
     ]));
   }
   Widget _row(String a, String b) => Card(child: ListTile(title: Text(a), trailing: Text(b, style: const TextStyle(fontWeight: FontWeight.w800))));
@@ -283,13 +288,13 @@ class MediaPassportItemScreen extends StatelessWidget {
   const MediaPassportItemScreen({super.key, required this.item});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(item.title)),
+        appBar: AppBar(title: LocalizedMediaText(item.title)),
         body: ListView(
           padding: const EdgeInsets.all(18),
           children: [
             Center(child: _Artwork(imageUrl: item.imageUrl, size: 220)),
             const SizedBox(height: 16),
-            Text(item.title, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+            LocalizedMediaText(item.title, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
             Text(item.type),
             const SizedBox(height: 18),
             _info('Imported', item.addedAt.toLocal().toString()),
@@ -316,4 +321,4 @@ class _Artwork extends StatelessWidget {
     return Container(width: size, height: size, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.image_outlined));
   }
 }
-class _EmptyUniverse extends StatelessWidget { const _EmptyUniverse(); @override Widget build(BuildContext context) => const Card(child: Padding(padding: EdgeInsets.all(24), child: Text('Your Media Universe will populate as media is imported or added to the library.'))); }
+class _EmptyUniverse extends StatelessWidget { const _EmptyUniverse(); @override Widget build(BuildContext context) => const Card(child: Padding(padding: EdgeInsets.all(24), child: UniversalText('Your Media Universe will populate as media is imported or added to the library.'))); }

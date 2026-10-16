@@ -1,6 +1,6 @@
 -- Master Product Architecture persistence additions.
 -- Run after the existing streaming_service.sql / membership migrations.
--- These additions are additive; existing media, radio, ARM, commerce and
+-- These additions are additive; existing media, ARM, commerce and
 -- playback tables remain intact.
 
 -- ---------------------------------------------------------------------------

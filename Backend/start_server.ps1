@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 $url = [Environment]::GetEnvironmentVariable("SUPABASE_URL", "User")
 $key = [Environment]::GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY", "User")
@@ -13,6 +13,13 @@ if ([string]::IsNullOrWhiteSpace($key)) {
 
 $env:SUPABASE_URL = $url
 $env:SUPABASE_SERVICE_ROLE_KEY = $key
+$publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_PUBLISHABLE_KEY", "User")
+if ([string]::IsNullOrWhiteSpace($publishableKey)) {
+    $publishableKey = [Environment]::GetEnvironmentVariable("SUPABASE_ANON_KEY", "User")
+}
+if (-not [string]::IsNullOrWhiteSpace($publishableKey)) {
+    $env:SUPABASE_PUBLISHABLE_KEY = $publishableKey
+}
 # Never inherit the local seeded server catalog into a persistent deployment.
 $env:PLATFORM_SERVER_MOCK = "false"
 if ([string]::IsNullOrWhiteSpace($env:TLS_CERTIFICATE_PATH)) {

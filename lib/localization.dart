@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'media_text_localizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Represents one supported application language.
@@ -488,24 +489,40 @@ class UniversalText extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: LanguageController.instance,
-      builder: (_, __) => Text(
-        universalTranslate(value),
-        style: style,
-        strutStyle: strutStyle,
-        textAlign: textAlign,
-        textDirection: textDirection,
-        locale: locale,
-        softWrap: softWrap,
-        overflow: overflow,
-        textScaler: textScaler,
-        maxLines: maxLines,
-        semanticsLabel: semanticsLabel == null
-            ? null
-            : universalTranslate(semanticsLabel!),
-        textWidthBasis: textWidthBasis,
-        textHeightBehavior: textHeightBehavior,
-        selectionColor: selectionColor,
-      ),
+      builder: (_, __) {
+        final fallback = universalTranslate(value);
+        final language = LanguageController.instance.current.code;
+        // Prefer local phrase translations. Only send an app label to the
+        // optional translation service when this language has no local entry.
+        // This avoids hundreds of redundant requests for common controls.
+        final future = language == 'en' || fallback != value
+            ? Future<String>.value(fallback)
+            : MediaTextLocalizer.instance.translate(
+                value,
+                targetLanguage: language,
+              );
+        return FutureBuilder<String>(
+          future: future,
+          builder: (context, snapshot) => Text(
+            snapshot.data ?? fallback,
+            style: style,
+            strutStyle: strutStyle,
+            textAlign: textAlign,
+            textDirection: textDirection,
+            locale: locale ?? Locale(language),
+            softWrap: softWrap,
+            overflow: overflow,
+            textScaler: textScaler,
+            maxLines: maxLines,
+            semanticsLabel: semanticsLabel == null
+                ? null
+                : universalTranslate(semanticsLabel!),
+            textWidthBasis: textWidthBasis,
+            textHeightBehavior: textHeightBehavior,
+            selectionColor: selectionColor,
+          ),
+        );
+      },
     );
   }
 }

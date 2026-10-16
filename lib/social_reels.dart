@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'app_core.dart';
 import 'shop.dart';
 import 'social_sharing.dart';
+import 'localization.dart';
 
 /// Vertical short-video surface for friend + community posts.
 ///
@@ -84,8 +85,7 @@ class _SocialReelsScreenState extends State<SocialReelsScreen> {
             Icon(Icons.play_circle_outline_rounded, size: 64),
             SizedBox(height: 14),
             Center(
-              child: Text(
-                'No Shorts yet',
+              child: UniversalText('No Shorts yet',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
               ),
             ),
@@ -93,8 +93,7 @@ class _SocialReelsScreenState extends State<SocialReelsScreen> {
             Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 28),
-                child: Text(
-                  'Create a short linked to a movie, show, or song. Reviews and skits can use the same vertical-video format.',
+                child: UniversalText('Create a short linked to a movie, show, or song. Reviews and skits can use the same vertical-video format.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
@@ -252,7 +251,7 @@ class _SocialReelPageState extends State<_SocialReelPage> {
     final comment = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Comment on Short'),
+        title: const UniversalText('Comment on Short'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -263,11 +262,11 @@ class _SocialReelPageState extends State<_SocialReelPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Post'),
+            child: const UniversalText('Post'),
           ),
         ],
       ),
@@ -554,8 +553,7 @@ class _ReelProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'SHOP',
+                    const UniversalText('SHOP',
                       style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                     Text(

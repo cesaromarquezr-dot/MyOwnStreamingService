@@ -7,6 +7,8 @@
 // this Flutter model. A production payment provider should replace the
 // development gateway with provider-side tokenization/hosted checkout.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
@@ -21,6 +23,8 @@ import 'social_sharing.dart';
 import 'shop_customization_models.dart';
 import 'shop_customization.dart';
 import 'app_customization.dart';
+import 'media_text_localizer.dart';
+import 'page_customization_button.dart';
 
 /// A globally searchable entity that a seller can associate with a product.
 ///
@@ -1264,7 +1268,7 @@ class ShopProductDetailsScreen extends StatelessWidget {
     final customization = await _customize(context);
     if (!context.mounted) return;
     ShopCatalog.instance.addToBag(product.id, customization: customization);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to bag')));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Added to bag')));
   }
 
   Future<void> _buy(BuildContext context) async {
@@ -1414,7 +1418,7 @@ class ShopProductDetailsScreen extends StatelessWidget {
             Card(
               child: ListTile(
                 leading: const Icon(Icons.tune_rounded),
-                title: const Text('This product is customizable'),
+                title: const UniversalText('This product is customizable'),
                 subtitle: Text('${product.customizationGroups.length} customization group${product.customizationGroups.length == 1 ? '' : 's'} available before checkout.'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _customize(context),
@@ -1423,13 +1427,13 @@ class ShopProductDetailsScreen extends StatelessWidget {
           ],
           if (product.description.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
-            const Text('About this product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const UniversalText('About this product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
             Text(product.description, style: const TextStyle(height: 1.45)),
           ],
           if (product.associations.isNotEmpty) ...[
             const SizedBox(height: 18),
-            const Text('Related to', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const UniversalText('Related to', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             for (final association in product.associations)
               ListTile(
@@ -1496,6 +1500,31 @@ class _ShopScreenState extends State<ShopScreen> {
   void initState() {
     super.initState();
     catalog.syncShopEntityIndex();
+    unawaited(_setProfileActivity('Shopping'));
+  }
+
+  Future<void> _setProfileActivity(String? activity) async {
+    final profile = AppController.instance.currentProfile;
+    final api = AppController.instance.backendApi;
+    if (profile == null || !api.isAuthenticated) return;
+    try {
+      if (activity == null) {
+        await api.setSocialProfilePresence(
+          profileId: profile.id,
+          availability: 'active',
+          clearActivity: true,
+        );
+      } else {
+        await api.setSocialProfilePresence(
+          profileId: profile.id,
+          availability: 'active',
+          activityType: 'shopping',
+          activityText: activity,
+        );
+      }
+    } catch (_) {
+      // Activity display is best-effort and must not block shopping.
+    }
   }
 
   List<ShopProduct> get visibleProducts {
@@ -1525,6 +1554,7 @@ class _ShopScreenState extends State<ShopScreen> {
 
   @override
   void dispose() {
+    unawaited(_setProfileActivity(null));
     searchController.dispose();
     super.dispose();
   }
@@ -1579,6 +1609,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 ? 'Shop'
                 : 'Shop • ${widget.contextAssociationName}'),
             actions: [
+              const PageCustomizeButton(pageId: 'shop'),
               IconButton(
                 tooltip: 'Wishlist',
                 icon: const Icon(Icons.favorite_border_rounded),
@@ -1730,7 +1761,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     for (final media in mediaMatches)
                       Card(
                         child: ListTile(
-                          title: Text(media.title),
+                          title: LocalizedMediaText(media.title),
                           subtitle: Text(media.franchiseName == null
                               ? media.type
                               : '${media.type} • ${media.franchiseName}'),
@@ -1804,12 +1835,12 @@ class _ShopScreenState extends State<ShopScreen> {
           value: sortMode,
           underline: const SizedBox.shrink(),
           items: const [
-            DropdownMenuItem(value: 'Relevance', child: Text('Relevance')),
-            DropdownMenuItem(value: 'Newest', child: Text('Newest')),
+            DropdownMenuItem(value: 'Relevance', child: UniversalText('Relevance')),
+            DropdownMenuItem(value: 'Newest', child: UniversalText('Newest')),
             DropdownMenuItem(
-                value: 'Price: low to high', child: Text('Price ↑')),
+                value: 'Price: low to high', child: UniversalText('Price ↑')),
             DropdownMenuItem(
-                value: 'Price: high to low', child: Text('Price ↓')),
+                value: 'Price: high to low', child: UniversalText('Price ↓')),
           ],
           onChanged: (value) => setState(() => sortMode = value ?? 'Relevance'),
         ),
@@ -2010,8 +2041,7 @@ class _CreateStoreDialogState extends State<_CreateStoreDialog> {
         address.addressLine1.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Enter the complete store address, including country, city and postal/ZIP code.',
+          content: UniversalText('Enter the complete store address, including country, city and postal/ZIP code.',
           ),
         ),
       );
@@ -2249,7 +2279,7 @@ class ShopStoreScreen extends StatelessWidget {
               'Featured': Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Featured',
+                    const UniversalText('Featured',
                         style: TextStyle(
                             fontSize: 21, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 8),
@@ -2260,7 +2290,7 @@ class ShopStoreScreen extends StatelessWidget {
                 key: _productsSectionKey,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('All Products',
+                  const UniversalText('All Products',
                       style:
                           TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
@@ -2474,7 +2504,7 @@ class ShopStoreScreen extends StatelessWidget {
                                                 ? null
                                                 : () => ShopCatalog.instance
                                                     .addToBag(product.id),
-                                        child: const Text('Add'),
+                                        child: const UniversalText('Add'),
                                       ),
                                     ),
                                     IconButton(
@@ -2572,8 +2602,10 @@ class SellerDashboardScreen extends StatelessWidget {
     final activeStore = store ?? (stores.isEmpty ? null : stores.first);
     return Scaffold(
       appBar: AppBar(
-          automaticallyImplyLeading: false,
-          title: const UniversalText('Seller Dashboard')),
+        automaticallyImplyLeading: false,
+        title: const UniversalText('Seller Dashboard'),
+        actions: const [PageCustomizeButton(pageId: 'seller-dashboard')],
+      ),
       body: activeStore == null
           ? const Center(
               child: UniversalText('Create a store to become a seller.'))
@@ -2663,8 +2695,8 @@ class SellerDashboardScreen extends StatelessWidget {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ShopStoreSettingsScreen(store: activeStore),
+                          settings: const RouteSettings(name: '/app/page/store-creation'),
+                          builder: (_) => ShopStoreSettingsScreen(store: activeStore),
                         ),
                       ),
                     ),
@@ -2688,6 +2720,7 @@ class SellerDashboardScreen extends StatelessWidget {
                       onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
+                              settings: const RouteSettings(name: '/app/page/store-creation'),
                               builder: (_) => ShopStoreSettingsScreen(
                                   store: activeStore, designerOnly: true))),
                       icon: const Icon(Icons.palette_outlined),
@@ -2697,12 +2730,12 @@ class SellerDashboardScreen extends StatelessWidget {
                       onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) =>
-                                  ShopStoreSettingsScreen(store: activeStore))),
+                              settings: const RouteSettings(name: '/app/page/store-creation'),
+                              builder: (_) => ShopStoreSettingsScreen(store: activeStore))),
                       icon: const Icon(Icons.settings_outlined),
                       label: const UniversalText('Store Settings & Payouts')),
                   const SizedBox(height: 14),
-                  const Text('Orders',
+                  const UniversalText('Orders',
                       style:
                           TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                   for (final order in storeOrders.take(20))
@@ -2713,7 +2746,7 @@ class SellerDashboardScreen extends StatelessWidget {
                                 '${order.createdAt} • ${order.total.toStringAsFixed(2)} USD'),
                             trailing: const Icon(Icons.receipt_long_outlined))),
                   const SizedBox(height: 14),
-                  const Text('Products',
+                  const UniversalText('Products',
                       style:
                           TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                   for (final product in products)
@@ -3038,9 +3071,11 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-            title: UniversalText(widget.designerOnly
-                ? 'Storefront Designer'
-                : 'Store Settings & Appearance')),
+          title: UniversalText(widget.designerOnly
+              ? 'Storefront Designer'
+              : 'Store Settings & Appearance'),
+          actions: const [PageCustomizeButton(pageId: 'store-creation')],
+        ),
         body: ListView(padding: const EdgeInsets.all(18), children: [
           if (!widget.designerOnly) ...[
             TextField(
@@ -3057,10 +3092,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
             const SizedBox(height: 10),
           ],
           const SizedBox(height: 22),
-          const Text('Storefront Designer',
+          const UniversalText('Storefront Designer',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-          const Text(
-              'Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
+          const UniversalText('Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
           const SizedBox(height: 12),
           TextField(
               controller: logo,
@@ -3077,11 +3111,11 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration: const InputDecoration(
                   labelText: 'Theme preset', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'Indigo', child: Text('Indigo')),
-                DropdownMenuItem(value: 'Ocean', child: Text('Ocean')),
-                DropdownMenuItem(value: 'Forest', child: Text('Forest')),
-                DropdownMenuItem(value: 'Sunset', child: Text('Sunset')),
-                DropdownMenuItem(value: 'Custom', child: Text('Custom'))
+                DropdownMenuItem(value: 'Indigo', child: UniversalText('Indigo')),
+                DropdownMenuItem(value: 'Ocean', child: UniversalText('Ocean')),
+                DropdownMenuItem(value: 'Forest', child: UniversalText('Forest')),
+                DropdownMenuItem(value: 'Sunset', child: UniversalText('Sunset')),
+                DropdownMenuItem(value: 'Custom', child: UniversalText('Custom'))
               ],
               onChanged: (value) => _applyThemePreset(value)),
           const SizedBox(height: 10),
@@ -3092,9 +3126,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
                   border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(
-                    value: 'system', child: Text('Auto (follow device)')),
-                DropdownMenuItem(value: 'light', child: Text('Light')),
-                DropdownMenuItem(value: 'dark', child: Text('Dark'))
+                    value: 'system', child: UniversalText('Auto (follow device)')),
+                DropdownMenuItem(value: 'light', child: UniversalText('Light')),
+                DropdownMenuItem(value: 'dark', child: UniversalText('Dark'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3121,9 +3155,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration: const InputDecoration(
                   labelText: 'Store background', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'solid', child: Text('Solid color')),
-                DropdownMenuItem(value: 'gradient', child: Text('Gradient')),
-                DropdownMenuItem(value: 'image', child: Text('Image'))
+                DropdownMenuItem(value: 'solid', child: UniversalText('Solid color')),
+                DropdownMenuItem(value: 'gradient', child: UniversalText('Gradient')),
+                DropdownMenuItem(value: 'image', child: UniversalText('Image'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3170,9 +3204,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
                     decoration:
                         const InputDecoration(labelText: 'Hero image position'),
                     items: const [
-                      DropdownMenuItem(value: 'left', child: Text('Left')),
-                      DropdownMenuItem(value: 'center', child: Text('Center')),
-                      DropdownMenuItem(value: 'right', child: Text('Right'))
+                      DropdownMenuItem(value: 'left', child: UniversalText('Left')),
+                      DropdownMenuItem(value: 'center', child: UniversalText('Center')),
+                      DropdownMenuItem(value: 'right', child: UniversalText('Right'))
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -3205,9 +3239,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               initialValue: designDraft.fontFamily,
               decoration: const InputDecoration(labelText: 'Typography'),
               items: const [
-                DropdownMenuItem(value: 'Default', child: Text('System')),
-                DropdownMenuItem(value: 'Serif', child: Text('Serif')),
-                DropdownMenuItem(value: 'Monospace', child: Text('Monospace'))
+                DropdownMenuItem(value: 'Default', child: UniversalText('System')),
+                DropdownMenuItem(value: 'Serif', child: UniversalText('Serif')),
+                DropdownMenuItem(value: 'Monospace', child: UniversalText('Monospace'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3240,8 +3274,8 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration:
                   const InputDecoration(labelText: 'Product presentation'),
               items: const [
-                DropdownMenuItem(value: 'list', child: Text('Compact list')),
-                DropdownMenuItem(value: 'grid', child: Text('Product grid'))
+                DropdownMenuItem(value: 'list', child: UniversalText('Compact list')),
+                DropdownMenuItem(value: 'grid', child: UniversalText('Product grid'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3254,8 +3288,8 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
                 decoration:
                     const InputDecoration(labelText: 'Mobile grid columns'),
                 items: const [
-                  DropdownMenuItem(value: 1, child: Text('1 column')),
-                  DropdownMenuItem(value: 2, child: Text('2 columns'))
+                  DropdownMenuItem(value: 1, child: UniversalText('1 column')),
+                  DropdownMenuItem(value: 2, child: UniversalText('2 columns'))
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -3281,9 +3315,9 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration:
                   const InputDecoration(labelText: 'Product image ratio'),
               items: const [
-                DropdownMenuItem(value: 'Square', child: Text('Square')),
-                DropdownMenuItem(value: 'Portrait', child: Text('Portrait')),
-                DropdownMenuItem(value: 'Landscape', child: Text('Landscape'))
+                DropdownMenuItem(value: 'Square', child: UniversalText('Square')),
+                DropdownMenuItem(value: 'Portrait', child: UniversalText('Portrait')),
+                DropdownMenuItem(value: 'Landscape', child: UniversalText('Landscape'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3291,7 +3325,7 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
                 }
               }),
           const SizedBox(height: 10),
-          const Text('Store section order',
+          const UniversalText('Store section order',
               style: TextStyle(fontWeight: FontWeight.bold)),
           for (var index = 0; index < designDraft.sectionOrder.length; index++)
             ListTile(
@@ -3596,7 +3630,7 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
             child: Row(children: [
               swatch(selectedColor),
               const SizedBox(width: 10),
-              const Text('Saved custom color')
+              const UniversalText('Saved custom color')
             ]),
           ),
         ..._storefrontColorChoices.entries.map((entry) => DropdownMenuItem<int>(
@@ -3860,7 +3894,7 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
 
   static const productTypes = [
     'Merchandise',
-    'Collectible',
+    'Collectible / Memorabilia',
     'Physical Media',
     'Poster',
     'Book',
@@ -4106,7 +4140,7 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
             Card(
               child: ListTile(
                 leading: const Icon(Icons.tune_rounded),
-                title: const Text('Customize Product'),
+                title: const UniversalText('Customize Product'),
                 subtitle: Text(customizationGroups.isEmpty ? 'Add buyer controls such as size, color, text, image, font, icon, or character options.' : '${customizationGroups.length} buyer customization groups configured.'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () async {
@@ -4225,7 +4259,7 @@ class ShopBagScreen extends StatelessWidget {
               ],
               if (catalog.savedForLaterProductIds.isNotEmpty) ...[
                 const SizedBox(height: 22),
-                const Text('Saved for later',
+                const UniversalText('Saved for later',
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                 for (final product in catalog.savedForLaterProductIds
@@ -4239,7 +4273,7 @@ class ShopBagScreen extends StatelessWidget {
                           trailing: TextButton(
                               onPressed: () =>
                                   catalog.moveSavedToBag(product.id),
-                              child: const Text('Move to bag')))),
+                              child: const UniversalText('Move to bag')))),
               ],
             ]),
           );
@@ -4300,11 +4334,10 @@ class ShopProductComparisonScreen extends StatelessWidget {
               .whereType<ShopProduct>()
               .toList();
           return Scaffold(
-              appBar: AppBar(title: const Text('Compare products')),
+              appBar: AppBar(title: const UniversalText('Compare products')),
               body: products.isEmpty
                   ? const Center(
-                      child: Text(
-                          'Select products from the marketplace to compare them.'))
+                      child: UniversalText('Select products from the marketplace to compare them.'))
                   : ListView(padding: const EdgeInsets.all(16), children: [
                       for (final product in products)
                         Card(
@@ -4347,7 +4380,7 @@ class ShopProductComparisonScreen extends StatelessWidget {
                                                       ? null
                                                       : () => catalog
                                                           .addToBag(product.id),
-                                              child: const Text('Add to bag'))),
+                                              child: const UniversalText('Add to bag'))),
                                     ]))),
                     ]));
         },
@@ -4458,7 +4491,7 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Delivery address',
+                        const UniversalText('Delivery address',
                             style: TextStyle(
                                 fontSize: 22, fontWeight: FontWeight.w900)),
                         const SizedBox(height: 6),
@@ -4530,7 +4563,7 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
                             ]),
                       ]))),
           const SizedBox(height: 14),
-          const Text('Payment method',
+          const UniversalText('Payment method',
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           _paymentProviderOptions(),
           const SizedBox(height: 8),
@@ -5052,8 +5085,7 @@ class _StorefrontDevicePreviewState extends State<StorefrontDevicePreview> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Live Preview',
+            const UniversalText('Live Preview',
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
@@ -5069,7 +5101,7 @@ class _StorefrontDevicePreviewState extends State<StorefrontDevicePreview> {
                   ),
                 if (device == 'Phone' || device == 'Tablet')
                   FilterChip(
-                    label: const Text('Landscape'),
+                    label: const UniversalText('Landscape'),
                     selected: landscape,
                     onSelected: (value) => setState(() => landscape = value),
                   ),

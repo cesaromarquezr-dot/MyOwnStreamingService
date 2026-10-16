@@ -108,8 +108,8 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
                     ),
                   ),
                   Wrap(spacing: 8, children: [
-                    ChoiceChip(label: const Text('Written'), selected: reviewType == 'written', onSelected: (_) => setState(() => reviewType = 'written')),
-                    ChoiceChip(label: const Text('Video link'), selected: reviewType == 'video', onSelected: (_) => setState(() => reviewType = 'video')),
+                    ChoiceChip(label: const UniversalText('Written'), selected: reviewType == 'written', onSelected: (_) => setState(() => reviewType = 'written')),
+                    ChoiceChip(label: const UniversalText('Video link'), selected: reviewType == 'video', onSelected: (_) => setState(() => reviewType = 'video')),
                   ]),
                   if (reviewType == 'video') ...[
                     const SizedBox(height: 8),
@@ -231,9 +231,9 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Wrap(spacing: 8, children: [
-                  TextButton.icon(onPressed: () => _interact(entry, 'reaction'), icon: const Icon(Icons.favorite_border_rounded), label: const Text('React')),
-                  TextButton.icon(onPressed: () => _interact(entry, 'comment'), icon: const Icon(Icons.comment_outlined), label: const Text('Comment')),
-                  TextButton.icon(onPressed: () => _interact(entry, 'note'), icon: const Icon(Icons.sticky_note_2_outlined), label: const Text('Note')),
+                  TextButton.icon(onPressed: () => _interact(entry, 'reaction'), icon: const Icon(Icons.favorite_border_rounded), label: const UniversalText('React')),
+                  TextButton.icon(onPressed: () => _interact(entry, 'comment'), icon: const Icon(Icons.comment_outlined), label: const UniversalText('Comment')),
+                  TextButton.icon(onPressed: () => _interact(entry, 'note'), icon: const Icon(Icons.sticky_note_2_outlined), label: const UniversalText('Note')),
                 ]),
               ),
           ],
@@ -326,7 +326,7 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
 
   Future<String?> _promptInteraction(String type) async {
     final controller = TextEditingController();
-    final value = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(type == 'comment' ? 'Comment on review' : 'Add private note'), content: TextField(controller: controller, autofocus: true, minLines: 2, maxLines: 5), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save'))]));
+    final value = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(type == 'comment' ? 'Comment on review' : 'Add private note'), content: TextField(controller: controller, autofocus: true, minLines: 2, maxLines: 5), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const UniversalText('Save'))]));
     controller.dispose();
     return value;
   }

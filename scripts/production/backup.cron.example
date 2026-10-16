@@ -1,0 +1,5 @@
+# Example root crontab entry. Install only after creating a root-readable
+# /etc/myownstreamingservice/backup.env (mode 0600) with BACKUP_ROOT, BACKUP_WORK_ROOT (private tmpfs/encrypted scratch),
+# SUPABASE_DB_URL, and AGE_RECIPIENT. Keep destination separate from media ZFS.
+# Runs every day at 03:15 UTC; logs must be rotated and monitored.
+15 3 * * * set -a; . /etc/myownstreamingservice/backup.env; set +a; /opt/MyOwnStreamingService/scripts/production/backup.sh >> /var/log/myownstreamingservice-backup.log 2>&1

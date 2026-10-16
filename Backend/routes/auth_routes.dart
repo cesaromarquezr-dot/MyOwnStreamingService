@@ -16,6 +16,7 @@
 // account persistence, and payment processing belong to their respective
 // services. This route layer must not implement those mechanisms itself.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -74,7 +75,14 @@ class AuthRoutes {
       }
 
       if (request.method == 'POST' &&
-          path == '/api/v1/auth/mfa/verify-login') {
+          path == '/api/v1/auth/oauth/exchange') {
+        await _exchangeFederatedIdentity(request);
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          (path == '/api/v1/auth/mfa/verify-login' ||
+           path == '/api/v1/auth/mfa/verify')) {
         await _mfaVerifyLogin(request);
         return;
       }
@@ -656,6 +664,140 @@ class AuthRoutes {
         },
       },
     );
+  }
+
+  /// Exchanges a client Supabase Auth access token for this application's
+  /// own backend session. The email/provider are read from Supabase's verified
+  /// /auth/v1/user response, never trusted from the Flutter request body.
+  Future<void> _exchangeFederatedIdentity(HttpRequest request) async {
+    final body = await _readJsonBody(request);
+    final provider = _readRequiredString(body, 'provider').toLowerCase();
+    final accessToken = _readRequiredString(body, 'accessToken');
+    if (!const {'google', 'apple'}.contains(provider) ||
+        accessToken.length < 20 || accessToken.length > 8192 ||
+        accessToken.contains(RegExp(r'\s'))) {
+      await _sendJson(request.response, statusCode: HttpStatus.badRequest, body: {
+        'success': false,
+        'error': 'Unsupported provider or invalid external access token.',
+      });
+      return;
+    }
+
+    final supabaseUrl = (Platform.environment['SUPABASE_URL'] ?? '').trim();
+    final publishableKey = (Platform.environment['SUPABASE_PUBLISHABLE_KEY'] ??
+            Platform.environment['SUPABASE_ANON_KEY'] ?? '')
+        .trim();
+    final parsedUrl = Uri.tryParse(supabaseUrl);
+    if (parsedUrl == null || parsedUrl.scheme != 'https' ||
+        parsedUrl.host.isEmpty || publishableKey.isEmpty) {
+      await _sendJson(request.response, statusCode: HttpStatus.serviceUnavailable, body: {
+        'success': false,
+        'error': 'External sign-in is not configured on the backend. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY).',
+      });
+      return;
+    }
+
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+      final externalRequest = await client.getUrl(parsedUrl.resolve('/auth/v1/user'));
+      externalRequest.headers
+        ..set(HttpHeaders.authorizationHeader, 'Bearer $accessToken')
+        ..set('apikey', publishableKey)
+        ..set(HttpHeaders.acceptHeader, 'application/json');
+      final externalResponse = await externalRequest.close().timeout(const Duration(seconds: 12));
+      final raw = await externalResponse.transform(utf8.decoder).join();
+      if (externalResponse.statusCode != HttpStatus.ok) {
+        await _sendJson(request.response, statusCode: HttpStatus.unauthorized, body: {
+          'success': false,
+          'error': 'The external identity provider could not verify this sign-in.',
+        });
+        return;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) throw const FormatException('Invalid identity response.');
+      final user = Map<String, dynamic>.from(decoded);
+      final email = user['email']?.toString().trim().toLowerCase() ?? '';
+      final emailConfirmedAt = user['email_confirmed_at']?.toString().trim() ?? '';
+      final isAnonymous = user['is_anonymous'] == true;
+      final appMetadata = user['app_metadata'] is Map
+          ? Map<String, dynamic>.from(user['app_metadata'] as Map)
+          : <String, dynamic>{};
+      final activeProvider = appMetadata['provider']?.toString().toLowerCase();
+      final providers = (appMetadata['providers'] is List
+              ? (appMetadata['providers'] as List).map((e) => e.toString().toLowerCase())
+              : const <String>[]) 
+          .toSet();
+      final identities = (user['identities'] is List ? user['identities'] as List : const [])
+          .whereType<Map>()
+          .map((identity) => identity['provider']?.toString().toLowerCase() ?? '')
+          .toSet();
+      final providerMatches = activeProvider == provider || providers.contains(provider) || identities.contains(provider);
+      if (email.isEmpty || email.length > AuthService.maximumEmailLength ||
+          emailConfirmedAt.isEmpty || isAnonymous || !providerMatches) {
+        await _sendJson(request.response, statusCode: HttpStatus.unauthorized, body: {
+          'success': false,
+          'error': 'The external account must have a confirmed email and match the selected provider.',
+        });
+        return;
+      }
+
+      final account = authService.database.getAccountByEmail(email);
+      if (account == null) {
+        await _sendJson(request.response, statusCode: HttpStatus.conflict, body: {
+          'success': false,
+          'error': 'No existing MyOwnStreamingService account is linked to this email. Sign in with your current account first; social sign-in does not create or merge accounts automatically.',
+        });
+        return;
+      }
+      final clientIp = request.connectionInfo?.remoteAddress.address ?? 'unknown';
+      final userAgent = request.headers.value(HttpHeaders.userAgentHeader) ?? 'unknown';
+      final result = await authService.loginWithVerifiedExternalIdentity(
+        account: account,
+        provider: provider,
+        ipAddress: clientIp,
+        userAgent: userAgent,
+      );
+      if (result.requiresMfa || result.token == null) {
+        await _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+          'success': true,
+          'requiresMfa': true,
+          'email': email,
+          'message': 'Complete the email MFA challenge before a backend session is created.',
+        });
+        return;
+      }
+      final token = result.token!;
+      final session = authService.sessionFromToken(token);
+      final signedInAccount = authService.accountFromToken(token);
+      await _sendJson(request.response, statusCode: HttpStatus.ok, body: {
+        'success': true,
+        'message': 'External sign-in successful.',
+        'provider': provider,
+        'token': token,
+        'expiresAt': session?.expiresAt.toIso8601String(),
+        'account': signedInAccount?.toJson(),
+        'security': {'suspicious': false, 'reasons': <String>[], 'question': signedInAccount?.securityQuestion, 'requiresVerification': false},
+      });
+    } on TimeoutException {
+      await _sendJson(request.response, statusCode: HttpStatus.gatewayTimeout, body: {
+        'success': false,
+        'error': 'The identity provider did not respond in time. Try again.',
+      });
+    } on FormatException {
+      await _sendJson(request.response, statusCode: HttpStatus.unauthorized, body: {
+        'success': false,
+        'error': 'The identity provider returned an invalid identity response.',
+      });
+    } catch (error, stackTrace) {
+      developer.log('Federated sign-in failed.', name: 'AuthRoutes', error: error, stackTrace: stackTrace);
+      await _sendJson(request.response, statusCode: HttpStatus.unauthorized, body: {
+        'success': false,
+        'error': 'External sign-in could not be completed.',
+      });
+    } finally {
+      client?.close(force: true);
+    }
   }
 
   // =========================================================================

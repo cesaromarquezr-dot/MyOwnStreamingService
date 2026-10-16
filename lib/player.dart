@@ -11,9 +11,12 @@ import 'app_core.dart';
 import 'music.dart';
 import 'xray.dart';
 import 'localization.dart';
+import 'streaming_experience.dart';
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
+  /// Optional, richer presence label supplied by episodes, collections or TV channels.
+  final String? activityLabel;
 
   // Optional Group Watch session.
   //
@@ -30,6 +33,7 @@ class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
     required this.media,
+    this.activityLabel,
     this.groupWatchSessionId,
   });
 
@@ -74,6 +78,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool youtubePlayerReady = false;
   bool youtubeUrlInvalid = false;
   bool musicWasPlayingBeforeVideo = false;
+  bool _autoplayNextEnabled = true;
+  late final String _qoeSessionId = '${widget.media.id}_${DateTime.now().microsecondsSinceEpoch}';
+  final DateTime _qoeStartedAt = DateTime.now();
+  bool _qoeReadyLogged = false;
+
+  bool get _usesAdaptivePlayback {
+    final value = widget.media.playbackUrl?.trim() ?? '';
+    final uri = Uri.tryParse(value);
+    return widget.groupWatchSessionId == null &&
+        groupWatchSessionId == null && uri != null && uri.hasAuthority &&
+        uri.userInfo.isEmpty && (uri.scheme == 'https' || uri.scheme == 'http');
+  }
 
   StreamSubscription<YoutubeVideoState>? youtubeVideoStateSubscription;
 
@@ -92,11 +108,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     videoFinished = position >= 1.0;
 
-    _initializeYoutubePlayer();
-    _initializeGroupWatch();
-    unawaited(_startIndependentPlaybackSession());
+    if (!_usesAdaptivePlayback) {
+      _initializeYoutubePlayer();
+      _initializeGroupWatch();
+      unawaited(_startIndependentPlaybackSession());
+      unawaited(_recordQoe('play_requested'));
+    }
+    unawaited(_loadStreamingExperiencePreferences());
     _startControlsTimer();
-    unawaited(_setSocialWatchActivity('Watching ${widget.media.title}'));
+    unawaited(_setSocialWatchActivity(_activityText));
+  }
+
+  Future<void> _recordQoe(String event, {int? valueMs}) => PlaybackQoeTelemetry.record(
+        event: event,
+        mediaId: widget.media.id,
+        sessionId: _qoeSessionId,
+        profileId: AppController.instance.currentProfile?.id,
+        valueMs: valueMs,
+      );
+
+  Future<void> _loadStreamingExperiencePreferences() async {
+    final preferences = await StreamingExperiencePreferences.load(
+      profileId: AppController.instance.currentProfile?.id,
+    );
+    if (!mounted) return;
+    setState(() {
+      _autoplayNextEnabled = preferences.autoplayNext;
+      subtitlesEnabled = preferences.subtitlesEnabled;
+    });
   }
 
   Future<void> _startIndependentPlaybackSession() async {
@@ -135,6 +174,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         positionSeconds: seconds,
       );
     } catch (_) {}
+  }
+
+  String get _activityText {
+    final custom = widget.activityLabel?.trim();
+    final value = custom == null || custom.isEmpty
+        ? 'Watching ${widget.media.title}'
+        : custom;
+    return value.length <= 160 ? value : '${value.substring(0, 157)}...';
   }
 
   Future<void> _setSocialWatchActivity(String? activity) async {
@@ -278,6 +325,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       setState(() {
         youtubePlayerReady = true;
       });
+      if (!_qoeReadyLogged) {
+        _qoeReadyLogged = true;
+        unawaited(_recordQoe('player_ready', valueMs: DateTime.now().difference(_qoeStartedAt).inMilliseconds));
+      }
 
       if (position > 0.0 && position < 1.0) {
         _seekYoutubeByNormalizedPosition(position);
@@ -289,6 +340,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     if (value.playerState == PlayerState.ended && !videoFinished) {
+      unawaited(_recordQoe('completed'));
       finishVideo();
     }
   }
@@ -463,6 +515,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     await controller.seekTo(
       seconds: seconds,
     );
+    unawaited(_recordQoe('seek', valueMs: (seconds * 1000).round()));
   }
 
   /// Performs `_seekYoutubeBySeconds` for this feature. Update this documentation when its contract changes.
@@ -1041,6 +1094,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void startAutoplayCountdown(
     String nextEpisodeTitle,
   ) {
+    if (!_autoplayNextEnabled) return;
     autoplayTimer?.cancel();
 
     setState(() {
@@ -1664,6 +1718,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
+    if (_usesAdaptivePlayback) {
+      return AdaptiveStreamingPlayer(
+        media: widget.media,
+        activityLabel: widget.activityLabel,
+      );
+    }
     final controller = AppController.instance;
 
     final groupSession = groupWatchSessionId == null
@@ -3707,7 +3767,7 @@ class _AudioSubtitleOptionsState extends State<AudioSubtitleOptions> {
                       icon: const Icon(Icons.expand_more_rounded),
                       items: [
                         const DropdownMenuItem<String?>(
-                            value: null, child: Text('Off')),
+                            value: null, child: UniversalText('Off')),
                         ...subtitleOptions.map(
                           (option) => DropdownMenuItem<String?>(
                               value: option, child: Text(option)),

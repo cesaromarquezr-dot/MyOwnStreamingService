@@ -44,11 +44,11 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
       final accepted = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Pair a TV'),
+          title: const UniversalText('Pair a TV'),
           content: TextField(controller: codeController, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit TV code')),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Pair')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Pair')),
           ],
         ),
       );
@@ -94,9 +94,9 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
                     scrollDirection: Axis.horizontal,
                     child: SegmentedButton<String>(
                       segments: const [
-                        ButtonSegment(value: 'remote', label: Text('Remote'), icon: Icon(Icons.settings_remote_rounded)),
-                        ButtonSegment(value: 'second-screen', label: Text('Second Screen'), icon: Icon(Icons.phone_android)),
-                        ButtonSegment(value: 'keyboard', label: Text('Keyboard'), icon: Icon(Icons.keyboard_outlined)),
+                        ButtonSegment(value: 'remote', label: UniversalText('Remote'), icon: Icon(Icons.settings_remote_rounded)),
+                        ButtonSegment(value: 'second-screen', label: UniversalText('Second Screen'), icon: Icon(Icons.phone_android)),
+                        ButtonSegment(value: 'keyboard', label: UniversalText('Keyboard'), icon: Icon(Icons.keyboard_outlined)),
                       ],
                       selected: {_mode},
                       onSelectionChanged: (selection) => setState(() => _mode = selection.first),
@@ -146,9 +146,9 @@ class _RemoteControls extends StatelessWidget {
           ]),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
-            OutlinedButton(onPressed: () => _send(context, 'volume_down'), child: const Text('Vol -')),
-            OutlinedButton(onPressed: () => _send(context, 'volume_up'), child: const Text('Vol +')),
-            OutlinedButton(onPressed: () => _send(context, 'mute'), child: const Text('Mute')),
+            OutlinedButton(onPressed: () => _send(context, 'volume_down'), child: const UniversalText('Vol -')),
+            OutlinedButton(onPressed: () => _send(context, 'volume_up'), child: const UniversalText('Vol +')),
+            OutlinedButton(onPressed: () => _send(context, 'mute'), child: const UniversalText('Mute')),
           ]),
         ]),
       ),
@@ -179,10 +179,10 @@ class _SecondScreen extends StatelessWidget {
     return Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(tv['tvName']?.toString() ?? 'TV', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
       const SizedBox(height: 6),
-      const Text('Companion / second-screen mode does not take over playback. It displays synchronized information while the TV remains the primary screen.', style: TextStyle(color: Colors.white60)),
+      const UniversalText('Companion / second-screen mode does not take over playback. It displays synchronized information while the TV remains the primary screen.', style: TextStyle(color: Colors.white60)),
       const SizedBox(height: 14),
-      const ListTile(leading: Icon(Icons.info_outline), title: Text('Now Playing'), subtitle: Text('The TV app can publish the current title, episode, cast, soundtrack, trivia and synchronized controls here.')),
-      const ListTile(leading: Icon(Icons.people_outline), title: Text('Social'), subtitle: Text('Friends, reactions, chat and watch-party controls can appear here while the TV stays focused on playback.')),
+      const ListTile(leading: Icon(Icons.info_outline), title: UniversalText('Now Playing'), subtitle: UniversalText('The TV app can publish the current title, episode, cast, soundtrack, trivia and synchronized controls here.')),
+      const ListTile(leading: Icon(Icons.people_outline), title: UniversalText('Social'), subtitle: UniversalText('Friends, reactions, chat and watch-party controls can appear here while the TV stays focused on playback.')),
     ])));
   }
 }

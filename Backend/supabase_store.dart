@@ -116,6 +116,61 @@ class SupabaseStore {
 
   SupabaseClient? get _db => _client;
 
+  /// Lists profile-level activity for the authenticated account only. Profile
+  /// IDs and names are returned from the server-owned profiles table, never
+  /// from arbitrary client input.
+  Future<Map<String, dynamic>> loadSocialAccountProfiles({
+    required String accountExternalId,
+    required String profileExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final accountId = account['id'].toString();
+    final currentProfile = await c
+        .from('profiles')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('external_profile_id', profileExternalId)
+        .eq('is_active', true)
+        .maybeSingle();
+    if (currentProfile == null) throw StateError('Profile not found.');
+
+    final profiles = await c
+        .from('profiles')
+        .select('external_profile_id,name,avatar_url')
+        .eq('account_id', accountId)
+        .eq('is_active', true)
+        .not('external_profile_id', 'is', null)
+        .order('name', ascending: true);
+    final results = <Map<String, dynamic>>[];
+    for (final row in profiles) {
+      final profileId = row['external_profile_id']?.toString() ?? '';
+      if (profileId.isEmpty) continue;
+      final presence = await c
+          .from('social_profile_presence')
+          .select('availability,activity_type,activity_text,last_seen_at')
+          .eq('account_id', accountId)
+          .eq('profile_id', profileId)
+          .maybeSingle();
+      results.add({
+        'profileId': profileId,
+        'name': row['name']?.toString() ?? 'Profile',
+        'avatarUrl': row['avatar_url']?.toString(),
+        'presenceStatus': presence?['availability'] ?? 'away',
+        'activityType': presence?['activity_type'],
+        'activityText': presence?['activity_text'],
+        'lastSeenAt': presence?['last_seen_at'],
+      });
+    }
+    return {'profiles': results};
+  }
+
   Future<Map<String, dynamic>> loadSocialHome({
     required String accountExternalId,
     required String profileExternalId,
@@ -988,20 +1043,35 @@ class SupabaseStore {
             .eq('id', otherAccountId)
             .maybeSingle();
         if (person != null) {
+          final memberProfileId = member['profile_id'].toString();
+          final sameAccount = otherAccountId == accountId;
+          final isCurrentProfile = sameAccount && memberProfileId == profileExternalId;
+          final memberProfile = await c
+              .from('profiles')
+              .select('name,avatar_url')
+              .eq('account_id', otherAccountId)
+              .eq('external_profile_id', memberProfileId)
+              .maybeSingle();
           final presence = await c
               .from('social_profile_presence')
-              .select(
-                'availability,activity_type,activity_text,nickname,last_seen_at',
-              )
-              .eq('account_id', member['account_id'].toString())
-              .eq('profile_id', member['profile_id'].toString())
+              .select('availability,activity_type,activity_text,nickname,last_seen_at')
+              .eq('account_id', otherAccountId)
+              .eq('profile_id', memberProfileId)
               .maybeSingle();
           people.add({
             ...Map<String, dynamic>.from(person),
+            if (sameAccount && memberProfile?['name'] != null)
+              'display_name': memberProfile!['name'],
+            if (sameAccount &&
+                (memberProfile?['avatar_url']?.toString().startsWith('https://') == true ||
+                    memberProfile?['avatar_url']?.toString().startsWith('http://') == true))
+              'avatar_url': memberProfile!['avatar_url'],
+            'profileName': memberProfile?['name'],
+            'profileAvatarUrl': memberProfile?['avatar_url'],
             'accountId': otherAccountId,
-            'profileId': member['profile_id'],
+            'profileId': memberProfileId,
             'role': member['role'],
-            'isSelf': otherAccountId == accountId,
+            'isSelf': isCurrentProfile,
             'presenceStatus': presence?['availability'] ?? 'away',
             'activityType': presence?['activity_type'],
             'activityText': presence?['activity_text'],
@@ -1021,7 +1091,8 @@ class SupabaseStore {
       final lastMessage =
           messages.isEmpty ? null : Map<String, dynamic>.from(messages.first);
       if (lastMessage != null &&
-          lastMessage['sender_account_id'].toString() != accountId) {
+          !(lastMessage['sender_account_id'].toString() == accountId &&
+              lastMessage['sender_profile_id'].toString() == profileExternalId)) {
         final deliveredAt = DateTime.now().toUtc().toIso8601String();
         await c
             .from('social_conversation_members')
@@ -1039,7 +1110,7 @@ class SupabaseStore {
             .from('social_messages')
             .select('id')
             .eq('conversation_id', conversationId)
-            .neq('sender_account_id', accountId)
+            .or('sender_account_id.neq.$accountId,sender_profile_id.neq.$profileExternalId')
             .isFilter('deleted_at', null);
         unreadCount = unread.length;
       } else {
@@ -1047,7 +1118,7 @@ class SupabaseStore {
             .from('social_messages')
             .select('id')
             .eq('conversation_id', conversationId)
-            .neq('sender_account_id', accountId)
+            .or('sender_account_id.neq.$accountId,sender_profile_id.neq.$profileExternalId')
             .gt('created_at', lastRead)
             .isFilter('deleted_at', null);
         unreadCount = unread.length;
@@ -1179,6 +1250,168 @@ class SupabaseStore {
       'created': true,
       'target': target,
     };
+  }
+
+  /// Creates or reuses a direct message between two profiles belonging to
+  /// the same account. This intentionally does not require an external
+  /// friendship because both identities are managed by the account owner.
+  Future<Map<String, dynamic>> createSocialAccountConversation({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String targetProfileId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final cleanTargetId = targetProfileId.trim();
+    if (cleanTargetId.isEmpty || cleanTargetId == profileExternalId) {
+      throw ArgumentError('Choose another profile on this account.');
+    }
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final accountId = account['id'].toString();
+    final ownedProfiles = await c
+        .from('profiles')
+        .select('external_profile_id')
+        .eq('account_id', accountId)
+        .eq('is_active', true)
+        .inFilter('external_profile_id', [profileExternalId, cleanTargetId]);
+    final ownedIds = ownedProfiles
+        .map((row) => row['external_profile_id']?.toString() ?? '')
+        .toSet();
+    if (!ownedIds.contains(profileExternalId) || !ownedIds.contains(cleanTargetId)) {
+      throw StateError('Both profiles must belong to this account.');
+    }
+
+    final currentMemberships = await c
+        .from('social_conversation_members')
+        .select('conversation_id')
+        .eq('account_id', accountId)
+        .eq('profile_id', profileExternalId);
+    for (final membership in currentMemberships) {
+      final conversationId = membership['conversation_id'].toString();
+      final conversation = await c
+          .from('social_conversations')
+          .select()
+          .eq('id', conversationId)
+          .eq('kind', 'direct')
+          .maybeSingle();
+      if (conversation == null) continue;
+      final members = await c
+          .from('social_conversation_members')
+          .select('account_id,profile_id')
+          .eq('conversation_id', conversationId);
+      final profileIds = members
+          .where((member) => member['account_id'].toString() == accountId)
+          .map((member) => member['profile_id'].toString())
+          .toSet();
+      if (members.length == 2 &&
+          profileIds.length == 2 &&
+          profileIds.contains(profileExternalId) &&
+          profileIds.contains(cleanTargetId)) {
+        return {'conversation': conversation, 'created': false};
+      }
+    }
+
+    final conversation = await c
+        .from('social_conversations')
+        .insert({
+          'kind': 'direct',
+          'title': '',
+          'created_by_account_id': accountId,
+          'created_by_profile_id': profileExternalId,
+        })
+        .select()
+        .single();
+    await c.from('social_conversation_members').insert([
+      {
+        'conversation_id': conversation['id'],
+        'account_id': accountId,
+        'profile_id': profileExternalId,
+        'role': 'owner',
+      },
+      {
+        'conversation_id': conversation['id'],
+        'account_id': accountId,
+        'profile_id': cleanTargetId,
+        'role': 'member',
+      },
+    ]);
+    return {'conversation': conversation, 'created': true};
+  }
+
+  /// Creates a group conversation containing the current profile and selected
+  /// profiles from the same account. IDs are checked against Supabase before
+  /// any membership rows are written.
+  Future<Map<String, dynamic>> createSocialAccountGroupConversation({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String title,
+    required List<String> profileIds,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final selectedIds = profileIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty && id != profileExternalId)
+        .toSet()
+        .toList();
+    if (selectedIds.isEmpty || selectedIds.length > 6) {
+      throw ArgumentError('Choose between 1 and 6 other account profiles.');
+    }
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final accountId = account['id'].toString();
+    final ownedProfiles = await c
+        .from('profiles')
+        .select('external_profile_id')
+        .eq('account_id', accountId)
+        .eq('is_active', true)
+        .inFilter('external_profile_id', [profileExternalId, ...selectedIds]);
+    final ownedIds = ownedProfiles
+        .map((row) => row['external_profile_id']?.toString() ?? '')
+        .toSet();
+    if (!ownedIds.contains(profileExternalId) ||
+        selectedIds.any((id) => !ownedIds.contains(id))) {
+      throw StateError('Every selected profile must belong to this account.');
+    }
+
+    final cleanTitle = title.trim();
+    final conversation = await c
+        .from('social_conversations')
+        .insert({
+          'kind': 'group',
+          'title': cleanTitle.isEmpty
+              ? 'Account group'
+              : cleanTitle.substring(0, min(100, cleanTitle.length)),
+          'created_by_account_id': accountId,
+          'created_by_profile_id': profileExternalId,
+        })
+        .select()
+        .single();
+    await c.from('social_conversation_members').insert([
+      {
+        'conversation_id': conversation['id'],
+        'account_id': accountId,
+        'profile_id': profileExternalId,
+        'role': 'owner',
+      },
+      for (final targetId in selectedIds)
+        {
+          'conversation_id': conversation['id'],
+          'account_id': accountId,
+          'profile_id': targetId,
+          'role': 'member',
+        },
+    ]);
+    return {'conversation': conversation, 'created': true};
   }
 
   Future<Map<String, dynamic>> createSocialGroupConversation({
@@ -1497,19 +1730,35 @@ class SupabaseStore {
           .eq('id', member['account_id'].toString())
           .maybeSingle();
       if (person != null) {
+        final memberAccountId = member['account_id'].toString();
+        final memberProfileId = member['profile_id'].toString();
+        final isSameAccount = memberAccountId == me['id'].toString();
+        final isCurrentProfile = isSameAccount && memberProfileId == profileExternalId;
+        final memberProfile = await c
+            .from('profiles')
+            .select('name,avatar_url')
+            .eq('account_id', memberAccountId)
+            .eq('external_profile_id', memberProfileId)
+            .maybeSingle();
         final presence = await c
             .from('social_profile_presence')
-            .select(
-              'availability,activity_type,activity_text,nickname,last_seen_at',
-                                    )
-            .eq('account_id', member['account_id'].toString())
-            .eq('profile_id', member['profile_id'].toString())
+            .select('availability,activity_type,activity_text,nickname,last_seen_at')
+            .eq('account_id', memberAccountId)
+            .eq('profile_id', memberProfileId)
             .maybeSingle();
 
         people.add({
           ...Map<String, dynamic>.from(person),
-          'accountId': member['account_id'],
-          'profileId': member['profile_id'],
+          if (isSameAccount && memberProfile?['name'] != null)
+            'display_name': memberProfile!['name'],
+          if (isSameAccount &&
+              (memberProfile?['avatar_url']?.toString().startsWith('https://') == true ||
+                  memberProfile?['avatar_url']?.toString().startsWith('http://') == true))
+            'avatar_url': memberProfile!['avatar_url'],
+          'profileName': memberProfile?['name'],
+          'profileAvatarUrl': memberProfile?['avatar_url'],
+          'accountId': memberAccountId,
+          'profileId': memberProfileId,
           'role': member['role'],
           'lastReadAt': member['last_read_at'],
           'lastDeliveredAt': member['last_delivered_at'],
@@ -1518,11 +1767,9 @@ class SupabaseStore {
           'activityText': presence?['activity_text'],
           'nickname': presence?['nickname'],
           'lastSeenAt': presence?['last_seen_at'],
-          if (member['account_id'].toString() == me['id'].toString())
-            'chatBackgroundColor': member['chat_background_color'],
-          if (member['account_id'].toString() == me['id'].toString())
-            'chatBackgroundImagePath': member['chat_background_image_path'],
-          'isSelf': member['account_id'].toString() == me['id'].toString(),
+          if (isCurrentProfile) 'chatBackgroundColor': member['chat_background_color'],
+          if (isCurrentProfile) 'chatBackgroundImagePath': member['chat_background_image_path'],
+          'isSelf': isCurrentProfile,
         });
       }
     }
@@ -1532,7 +1779,8 @@ class SupabaseStore {
         .from('social_conversation_members')
         .update({'last_read_at': readAt, 'last_delivered_at': readAt})
         .eq('conversation_id', conversationId)
-        .eq('account_id', me['id'].toString());
+        .eq('account_id', me['id'].toString())
+        .eq('profile_id', profileExternalId);
     for (final person in people) {
       if (person['isSelf'] == true) {
         person['lastReadAt'] = readAt;
@@ -1740,7 +1988,7 @@ class SupabaseStore {
       throw ArgumentError('Invalid presence status.');
     }
     if (activityType != null &&
-        !{'watching', 'listening'}.contains(activityType)) {
+        !{'watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'}.contains(activityType)) {
       throw ArgumentError('Invalid activity type.');
     }
     final cleanActivity = activityText?.trim();
@@ -2536,6 +2784,7 @@ class SupabaseStore {
     required String profileExternalId,
     required String postId,
     required String body,
+    Map<String, dynamic>? mediaReference,
   }) async {
     final c = _db;
     if (c == null)
@@ -2563,6 +2812,11 @@ class SupabaseStore {
     final clean = body.trim();
     if (clean.isEmpty || clean.length > 2000)
       throw ArgumentError('Comment must contain 1–2000 characters.');
+    final safeMediaReference = _validateSocialMediaReference(
+      mediaReference,
+      accountId: me['id'].toString(),
+      profileId: profileExternalId,
+    );
     return Map<String, dynamic>.from(await c
         .from('social_post_comments')
         .insert({
@@ -2570,6 +2824,7 @@ class SupabaseStore {
           'author_account_id': me['id'],
           'author_profile_id': profileExternalId,
           'body': clean,
+          'media_reference': safeMediaReference,
         })
         .select()
         .single());
@@ -2934,6 +3189,231 @@ class SupabaseStore {
         })
         .select()
         .single());
+  }
+
+  /// Publishes a profile's *public* end-to-end-encryption key. Private keys
+  /// must remain on the user's device and must never be sent to this backend.
+  /// Optional aliases keep older route payloads compatible during migration.
+  Future<Map<String, dynamic>> publishSocialE2eePublicKey({
+    required String accountExternalId,
+    required String profileExternalId,
+    String? publicKey,
+    String? e2eePublicKey,
+    String? key,
+    String? keyId,
+    String? deviceId,
+    String? deviceName,
+    String? algorithm,
+    String? keyFingerprint,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Social features require Supabase persistence.');
+    }
+
+    final cleanAccount = accountExternalId.trim();
+    final cleanProfile = profileExternalId.trim();
+    final cleanKey = (publicKey ?? e2eePublicKey ?? key ?? '').trim();
+    if (cleanAccount.isEmpty || cleanProfile.isEmpty) {
+      throw ArgumentError('An account and profile are required.');
+    }
+    if (cleanKey.isEmpty || cleanKey.length > 8192) {
+      throw ArgumentError('The public key must be between 1 and 8192 characters.');
+    }
+
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', cleanAccount)
+        .single();
+    final accountId = account['id'].toString();
+    final profile = await c
+        .from('profiles')
+        .select('external_profile_id')
+        .eq('account_id', accountId)
+        .eq('external_profile_id', cleanProfile)
+        .eq('is_active', true)
+        .maybeSingle();
+    if (profile == null) {
+      throw StateError('The profile does not belong to this account or is inactive.');
+    }
+
+    final cleanDeviceId = (deviceId ?? 'default').trim();
+    final cleanKeyId = (keyId ?? '').trim();
+    final cleanAlgorithm = (algorithm ?? 'unspecified').trim();
+    final cleanFingerprint = (keyFingerprint ?? '').trim();
+    final now = DateTime.now().toUtc().toIso8601String();
+    return Map<String, dynamic>.from(
+      await c.from('social_profile_e2ee_keys').upsert({
+        'account_id': accountId,
+        'profile_id': cleanProfile,
+        'device_id': cleanDeviceId.isEmpty ? 'default' : cleanDeviceId,
+        'device_name': (deviceName ?? '').trim(),
+        'key_id': cleanKeyId,
+        'algorithm': cleanAlgorithm.isEmpty ? 'unspecified' : cleanAlgorithm,
+        'key_fingerprint': cleanFingerprint,
+        'public_key': cleanKey,
+        'updated_at': now,
+      }, onConflict: 'account_id,profile_id,device_id')
+          .select('account_id,profile_id,device_id,device_name,key_id,algorithm,key_fingerprint,public_key,created_at,updated_at')
+          .single(),
+    );
+  }
+
+  /// Edits a message only when it belongs to the requesting profile.
+  /// ID/body aliases are temporary compatibility shims for route versions.
+  Future<Map<String, dynamic>> editSocialMessage({
+    required String accountExternalId,
+    required String profileExternalId,
+    String? messageId,
+    String? socialMessageId,
+    String? messageExternalId,
+    String? conversationId,
+    String? body,
+    String? editedBody,
+    String? newBody,
+    String? text,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Social features require Supabase persistence.');
+    }
+    final cleanMessageId =
+        (messageId ?? socialMessageId ?? messageExternalId ?? '').trim();
+    final cleanBody = (body ?? editedBody ?? newBody ?? text ?? '').trim();
+    if (cleanMessageId.isEmpty) throw ArgumentError('A message ID is required.');
+    if (cleanBody.isEmpty || cleanBody.length > 4000) {
+      throw ArgumentError('Edited messages must contain 1–4000 characters.');
+    }
+
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final accountId = account['id'].toString();
+    final existing = await c
+        .from('social_messages')
+        .select('id,conversation_id')
+        .eq('id', cleanMessageId)
+        .eq('sender_account_id', accountId)
+        .eq('sender_profile_id', profileExternalId)
+        .isFilter('deleted_at', null)
+        .maybeSingle();
+    if (existing == null) {
+      throw StateError('Message not found or you cannot edit it.');
+    }
+    final targetConversation = existing['conversation_id'].toString();
+    if (conversationId != null &&
+        conversationId.trim().isNotEmpty &&
+        conversationId.trim() != targetConversation) {
+      throw StateError('The message does not belong to that conversation.');
+    }
+    final membership = await c
+        .from('social_conversation_members')
+        .select('conversation_id')
+        .eq('conversation_id', targetConversation)
+        .eq('account_id', accountId)
+        .eq('profile_id', profileExternalId)
+        .maybeSingle();
+    if (membership == null) {
+      throw StateError('You are not a member of this conversation.');
+    }
+
+    final updated = await c
+        .from('social_messages')
+        .update({
+          'body': cleanBody,
+          'edited_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', cleanMessageId)
+        .eq('sender_account_id', accountId)
+        .eq('sender_profile_id', profileExternalId)
+        .isFilter('deleted_at', null)
+        .select()
+        .maybeSingle();
+    if (updated == null) throw StateError('The message could not be edited.');
+    return Map<String, dynamic>.from(updated);
+  }
+
+  /// Pins/unpins a message in a conversation. Direct-chat members may pin;
+  /// group-chat pins are restricted to owners and moderators.
+  Future<Map<String, dynamic>> setSocialMessagePinned({
+    required String accountExternalId,
+    required String profileExternalId,
+    String? messageId,
+    String? socialMessageId,
+    String? messageExternalId,
+    String? conversationId,
+    bool? pinned,
+    bool? isPinned,
+    bool? pin,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Social features require Supabase persistence.');
+    }
+    final cleanMessageId =
+        (messageId ?? socialMessageId ?? messageExternalId ?? '').trim();
+    final targetPinned = pinned ?? isPinned ?? pin;
+    if (cleanMessageId.isEmpty) throw ArgumentError('A message ID is required.');
+    if (targetPinned == null) throw ArgumentError('A pin state is required.');
+
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .single();
+    final accountId = account['id'].toString();
+    final existing = await c
+        .from('social_messages')
+        .select('id,conversation_id')
+        .eq('id', cleanMessageId)
+        .isFilter('deleted_at', null)
+        .maybeSingle();
+    if (existing == null) throw StateError('Message not found.');
+    final targetConversation = existing['conversation_id'].toString();
+    if (conversationId != null &&
+        conversationId.trim().isNotEmpty &&
+        conversationId.trim() != targetConversation) {
+      throw StateError('The message does not belong to that conversation.');
+    }
+
+    final membership = await c
+        .from('social_conversation_members')
+        .select('role')
+        .eq('conversation_id', targetConversation)
+        .eq('account_id', accountId)
+        .eq('profile_id', profileExternalId)
+        .maybeSingle();
+    if (membership == null) {
+      throw StateError('You are not a member of this conversation.');
+    }
+    final conversation = await c
+        .from('social_conversations')
+        .select('kind')
+        .eq('id', targetConversation)
+        .single();
+    if (conversation['kind'] == 'group' &&
+        !{'owner', 'moderator'}.contains(membership['role'])) {
+      throw StateError('Only group owners or moderators can pin messages.');
+    }
+
+    final now = DateTime.now().toUtc().toIso8601String();
+    final updated = await c
+        .from('social_messages')
+        .update({
+          'is_pinned': targetPinned,
+          'pinned_at': targetPinned ? now : null,
+          'pinned_by_account_id': targetPinned ? accountId : null,
+        })
+        .eq('id', cleanMessageId)
+        .eq('conversation_id', targetConversation)
+        .isFilter('deleted_at', null)
+        .select()
+        .maybeSingle();
+    if (updated == null) throw StateError('The message pin could not be updated.');
+    return Map<String, dynamic>.from(updated);
   }
 
   Future<Map<String, dynamic>> createSocialStory({
@@ -6041,6 +6521,269 @@ class SupabaseStore {
     return row == null ? null : Map<String, dynamic>.from(row);
   }
 
+  // ---------------------------------------------------------------------------
+  // FOOD CUSTOMER / RESTAURANT MESSAGING
+  // ---------------------------------------------------------------------------
+
+  Future<Map<String, dynamic>> createFoodConversation({
+    required String customerExternalId,
+    required String restaurantId,
+    required String topic,
+    required String subject,
+    String? relatedMenuItemId,
+    String relatedMenuItemName = '',
+    String? orderId,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Food messaging requires Supabase persistence.');
+    }
+
+    final restaurant = await c
+        .from('food_restaurants')
+        .select('id,name')
+        .eq('id', restaurantId)
+        .maybeSingle();
+    if (restaurant == null) throw StateError('Restaurant not found.');
+
+    var confirmedMenuItemName = relatedMenuItemName.trim();
+    final menuItemId = relatedMenuItemId?.trim() ?? '';
+    if (menuItemId.isNotEmpty) {
+      final menuItem = await c
+          .from('food_menu_items')
+          .select('id,name')
+          .eq('id', menuItemId)
+          .eq('restaurant_id', restaurantId)
+          .maybeSingle();
+      if (menuItem == null) {
+        throw StateError('The selected menu item does not belong to this restaurant.');
+      }
+      confirmedMenuItemName = menuItem['name']?.toString() ?? confirmedMenuItemName;
+    }
+
+    final cleanOrderId = orderId?.trim() ?? '';
+    if (cleanOrderId.isNotEmpty) {
+      final account = await c
+          .from('accounts')
+          .select('id')
+          .eq('external_account_id', customerExternalId)
+          .maybeSingle();
+      final internalAccountId = account?['id']?.toString();
+      if (internalAccountId == null || internalAccountId.isEmpty) {
+        throw StateError('Account identity could not be resolved.');
+      }
+      final order = await c
+          .from('food_orders')
+          .select('id,account_id,restaurant_id')
+          .eq('id', cleanOrderId)
+          .maybeSingle();
+      if (order == null ||
+          order['account_id']?.toString() != internalAccountId ||
+          order['restaurant_id']?.toString() != restaurantId) {
+        throw StateError('That order cannot be attached to this conversation.');
+      }
+    }
+
+    final now = DateTime.now().toUtc().toIso8601String();
+    final created = await c.from('food_conversations').insert({
+      'restaurant_id': restaurantId,
+      'customer_external_id': customerExternalId,
+      'order_id': cleanOrderId.isEmpty ? null : cleanOrderId,
+      'related_menu_item_id': menuItemId.isEmpty ? null : menuItemId,
+      'related_menu_item_name': confirmedMenuItemName,
+      'topic': topic,
+      'subject': subject,
+      'status': 'open',
+      'last_message_at': now,
+      'updated_at': now,
+    }).select().single();
+    return Map<String, dynamic>.from(created);
+  }
+
+  Future<Map<String, dynamic>?> getFoodConversationRecord(String conversationId) async {
+    final c = _db;
+    if (c == null) return null;
+    final row = await c
+        .from('food_conversations')
+        .select()
+        .eq('id', conversationId)
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>?> getFoodConversationDetails(String conversationId) async {
+    final c = _db;
+    if (c == null) return null;
+    final row = await getFoodConversationRecord(conversationId);
+    if (row == null) return null;
+    final restaurant = await c
+        .from('food_restaurants')
+        .select('id,name')
+        .eq('id', row['restaurant_id']?.toString() ?? '')
+        .maybeSingle();
+    final customer = await c
+        .from('accounts')
+        .select('username,display_name')
+        .eq('external_account_id', row['customer_external_id']?.toString() ?? '')
+        .maybeSingle();
+    final messages = await c
+        .from('food_conversation_messages')
+        .select()
+        .eq('conversation_id', conversationId)
+        .order('created_at', ascending: true)
+        .limit(500);
+    return {
+      ...row,
+      'restaurant_name': restaurant?['name']?.toString() ?? 'Restaurant',
+      'customer_display_name': (customer?['display_name']?.toString().trim().isNotEmpty ?? false)
+          ? customer!['display_name'].toString().trim()
+          : customer?['username']?.toString() ?? '',
+      'messages': messages.whereType<Map>()
+          .map((message) => Map<String, dynamic>.from(message))
+          .toList(growable: false),
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> listCustomerFoodConversations(
+    String customerExternalId,
+  ) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+    final rows = await c
+        .from('food_conversations')
+        .select()
+        .eq('customer_external_id', customerExternalId)
+        .order('last_message_at', ascending: false)
+        .limit(100);
+    final result = <Map<String, dynamic>>[];
+    for (final raw in rows.whereType<Map>()) {
+      final row = Map<String, dynamic>.from(raw);
+      final restaurant = await c
+          .from('food_restaurants')
+          .select('name')
+          .eq('id', row['restaurant_id']?.toString() ?? '')
+          .maybeSingle();
+      result.add({
+        ...row,
+        'restaurant_name': restaurant?['name']?.toString() ?? 'Restaurant',
+      });
+    }
+    return result;
+  }
+
+  Future<List<Map<String, dynamic>>> listMerchantFoodConversations({
+    required String accountExternalId,
+    String? restaurantId,
+  }) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+
+    final memberships = await c
+        .from('food_restaurant_owners')
+        .select('restaurant_id')
+        .eq('account_external_id', accountExternalId);
+    final ownedIds = memberships
+        .whereType<Map>()
+        .map((row) => row['restaurant_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (restaurantId != null && restaurantId.trim().isNotEmpty) {
+      if (!ownedIds.contains(restaurantId.trim())) {
+        throw StateError('You do not have permission to view this restaurant inbox.');
+      }
+      ownedIds
+        ..clear()
+        ..add(restaurantId.trim());
+    }
+    if (ownedIds.isEmpty) return <Map<String, dynamic>>[];
+
+    final restaurantNames = <String, String>{};
+    final rawConversations = <Map<String, dynamic>>[];
+    for (final id in ownedIds) {
+      final rows = await c
+          .from('food_conversations')
+          .select()
+          .eq('restaurant_id', id)
+          .order('last_message_at', ascending: false)
+          .limit(100);
+      final restaurant = await c
+          .from('food_restaurants')
+          .select('name')
+          .eq('id', id)
+          .maybeSingle();
+      restaurantNames[id] = restaurant?['name']?.toString() ?? 'Restaurant';
+      rawConversations.addAll(
+        rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)),
+      );
+    }
+
+    final customerIds = rawConversations
+        .map((row) => row['customer_external_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final customerNames = <String, String>{};
+    if (customerIds.isNotEmpty) {
+      final accounts = await c
+          .from('accounts')
+          .select('external_account_id,username,display_name')
+          .inFilter('external_account_id', customerIds);
+      for (final raw in accounts.whereType<Map>()) {
+        final row = Map<String, dynamic>.from(raw);
+        final externalId = row['external_account_id']?.toString() ?? '';
+        final displayName = row['display_name']?.toString().trim() ?? '';
+        customerNames[externalId] = displayName.isNotEmpty
+            ? displayName
+            : row['username']?.toString() ?? '';
+      }
+    }
+
+    final result = rawConversations.map((row) {
+      final externalId = row['customer_external_id']?.toString() ?? '';
+      return <String, dynamic>{
+        ...row,
+        'restaurant_name': restaurantNames[row['restaurant_id']?.toString() ?? ''] ?? 'Restaurant',
+        'customer_display_name': customerNames[externalId] ?? '',
+      };
+    }).toList(growable: false);
+    result.sort((a, b) {
+      final aTime = DateTime.tryParse(a['last_message_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = DateTime.tryParse(b['last_message_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return result.take(200).toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> createFoodConversationMessage({
+    required String conversationId,
+    required String senderExternalId,
+    required String senderRole,
+    required String messageType,
+    required String body,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Food messaging requires Supabase persistence.');
+    final now = DateTime.now().toUtc().toIso8601String();
+    final inserted = await c.from('food_conversation_messages').insert({
+      'conversation_id': conversationId,
+      'sender_external_id': senderExternalId,
+      'sender_role': senderRole,
+      'message_type': messageType,
+      'body': body,
+      'metadata': metadata,
+      'created_at': now,
+    }).select().single();
+    final preview = body.length > 180 ? '${body.substring(0, 177)}…' : body;
+    await c.from('food_conversations').update({
+      'status': senderRole == 'restaurant' ? 'waiting_for_customer' : 'waiting_for_restaurant',
+      'last_message_preview': preview,
+      'last_message_at': now,
+      'updated_at': now,
+    }).eq('id', conversationId);
+    return Map<String, dynamic>.from(inserted);
+  }
+
   Future<bool> ownsFoodRestaurant({
     required String accountExternalId,
     required String restaurantId,
@@ -6096,6 +6839,15 @@ class SupabaseStore {
       'cuisine': restaurant['cuisine'],
       'description': restaurant['description'] ?? '',
       'phone': restaurant['phone'] ?? '',
+      'opening_hours': restaurant['openingHours'] ?? 'Hours not provided',
+      'business_hours': restaurant['businessHours'] ?? const <String, dynamic>{},
+      'contact_methods': restaurant['contactMethods'] ?? const <String>['call'],
+      'contact_email': restaurant['contactEmail'],
+      'whatsapp_number': restaurant['whatsappNumber'],
+      'imessage_address': restaurant['imessageAddress'],
+      'sms_number': restaurant['smsNumber'],
+      'website': restaurant['website'],
+      'is_24_7': restaurant['is24_7'] ?? false,
       'address': restaurant['address'],
       'city': restaurant['city'] ?? '',
       'state_region': restaurant['stateRegion'] ?? '',
@@ -6193,6 +6945,10 @@ class SupabaseStore {
       'image_url': item['imageUrl'],
       'available': item['available'] ?? true,
       'tags': item['tags'] ?? const <String>[],
+      'theme_keys': item['themeKeys'] ?? const <String>[],
+      'ingredients': item['ingredients'] ?? const <String>[],
+      'allergens': item['allergens'] ?? const <String>[],
+      'removable_ingredients': item['removableIngredients'] ?? const <String>[],
       'modifier_groups': item['modifierGroups'] ?? const <Map<String, dynamic>>[],
     }).select().single();
     return Map<String, dynamic>.from(created);
@@ -7398,50 +8154,164 @@ class SupabaseStore {
     }
   }
 
-
   // ---------------------------------------------------------------------------
-  // GAME RATINGS
+  // FOOD RESTAURANT PROFILES, REVIEWS, AND THEMED MENUS
   // ---------------------------------------------------------------------------
 
-  Future<List<Map<String, dynamic>>> loadGameRatings({
-    required String accountExternalId,
-    required String profileId,
+  Future<Map<String, dynamic>> updateFoodRestaurantProfile({
+    required String restaurantId,
+    required Map<String, dynamic> fields,
   }) async {
     final c = _db;
-    if (c == null) return const <Map<String, dynamic>>[];
-    final accountId = await _accountInternalId(accountExternalId);
-    if (accountId == null) return const <Map<String, dynamic>>[];
-    final rows = await c
-        .from('game_ratings')
-        .select('profile_id,game_id,mode,rating,games_played,wins,losses,draws,xp,current_streak,best_streak')
-        .eq('account_id', accountId)
-        .eq('profile_id', profileId);
-    return rows.map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+    if (c == null) throw StateError('Restaurant profile editing requires Supabase persistence.');
+    final allowed = <String, String>{
+      'phone': 'phone',
+      'openingHours': 'opening_hours',
+      'businessHours': 'business_hours',
+      'contactMethods': 'contact_methods',
+      'contactEmail': 'contact_email',
+      'whatsappNumber': 'whatsapp_number',
+      'imessageAddress': 'imessage_address',
+      'smsNumber': 'sms_number',
+      'website': 'website',
+      'is24_7': 'is_24_7',
+    };
+    final update = <String, dynamic>{};
+    for (final entry in allowed.entries) {
+      if (fields.containsKey(entry.key)) update[entry.value] = fields[entry.key];
+    }
+    if (update.isEmpty) throw ArgumentError('No supported restaurant profile fields were supplied.');
+    update['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    final row = await c.from('food_restaurants').update(update)
+        .eq('id', restaurantId).select().maybeSingle();
+    if (row == null) throw StateError('Restaurant not found.');
+    return Map<String, dynamic>.from(row);
   }
 
-  Future<void> upsertGameRating({
+  Future<List<Map<String, dynamic>>> getFoodRestaurantReviews(
+    String restaurantId, {int limit = 50}
+  ) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+    final rows = await c.from('food_restaurant_reviews')
+        .select('id,restaurant_id,reviewer_display_name,rating,title,body,verified_order,created_at,updated_at')
+        .eq('restaurant_id', restaurantId)
+        .order('created_at', ascending: false)
+        .limit(limit.clamp(1, 100));
+    return rows.whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> upsertFoodRestaurantReview({
+    required String restaurantId,
     required String accountExternalId,
-    required Map<String, dynamic> rating,
+    required int rating,
+    required String title,
+    required String body,
   }) async {
     final c = _db;
-    if (c == null) return;
-    final accountId = await _accountInternalId(accountExternalId);
-    if (accountId == null) return;
-    await c.from('game_ratings').upsert({
-      'account_id': accountId,
-      'profile_id': rating['profileId']?.toString() ?? '',
-      'game_id': rating['gameId']?.toString() ?? '',
-      'mode': rating['mode']?.toString() ?? 'ranked',
-      'rating': rating['rating'] ?? 500,
-      'games_played': rating['gamesPlayed'] ?? 0,
-      'wins': rating['wins'] ?? 0,
-      'losses': rating['losses'] ?? 0,
-      'draws': rating['draws'] ?? 0,
-      'xp': rating['xp'] ?? 0,
-      'current_streak': rating['currentStreak'] ?? 0,
-      'best_streak': rating['bestStreak'] ?? 0,
+    if (c == null) throw StateError('Restaurant reviews require Supabase persistence.');
+    final account = await c.from('accounts')
+        .select('username,display_name')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final displayName = (account['display_name']?.toString().trim().isNotEmpty == true)
+        ? account['display_name'].toString().trim()
+        : (account['username']?.toString().trim().isNotEmpty == true
+            ? account['username'].toString().trim() : 'Customer');
+
+    // Verified-order status is derived from server records and never trusted from the client.
+    final accountRow = await c.from('accounts').select('id')
+        .eq('external_account_id', accountExternalId).maybeSingle();
+    var verifiedOrder = false;
+    final internalAccountId = accountRow?['id']?.toString();
+    if (internalAccountId != null && internalAccountId.isNotEmpty) {
+      final completed = await c.from('food_orders').select('id')
+          .eq('account_id', internalAccountId)
+          .eq('restaurant_id', restaurantId)
+          .inFilter('status', ['delivered', 'picked_up'])
+          .limit(1);
+      verifiedOrder = completed.isNotEmpty;
+    }
+
+    final saved = await c.from('food_restaurant_reviews').upsert({
+      'restaurant_id': restaurantId,
+      'account_external_id': accountExternalId,
+      'reviewer_display_name': displayName,
+      'rating': rating,
+      'title': title,
+      'body': body,
+      'verified_order': verifiedOrder,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'account_id,profile_id,game_id,mode');
+    }, onConflict: 'restaurant_id,account_external_id').select().single();
+    return Map<String, dynamic>.from(saved);
+  }
+
+  Future<List<Map<String, dynamic>>> getFoodMenuThemes(String restaurantId) async {
+    final c = _db;
+    if (c == null) return <Map<String, dynamic>>[];
+    final rows = await c.from('food_menu_themes').select()
+        .eq('restaurant_id', restaurantId).eq('active', true)
+        .order('created_at', ascending: false).limit(50);
+    final result = <Map<String, dynamic>>[];
+    for (final raw in rows.whereType<Map>()) {
+      final theme = Map<String, dynamic>.from(raw);
+      final themeId = theme['id']?.toString() ?? '';
+      if (themeId.isEmpty) continue;
+      final links = await c.from('food_menu_theme_items')
+          .select('menu_item_id,display_order').eq('theme_id', themeId)
+          .order('display_order');
+      theme['menuItemIds'] = links.whereType<Map>()
+          .map((entry) => entry['menu_item_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty).toList(growable: false);
+      result.add(theme);
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> createFoodMenuTheme({
+    required String restaurantId,
+    required Map<String, dynamic> theme,
+    required List<String> menuItemIds,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Themed menus require Supabase persistence.');
+    final uniqueIds = menuItemIds.toSet().toList(growable: false);
+    if (uniqueIds.isEmpty || uniqueIds.length > 100) {
+      throw ArgumentError('Choose between 1 and 100 menu items for a themed menu.');
+    }
+    final existing = await c.from('food_menu_items').select('id')
+        .eq('restaurant_id', restaurantId).inFilter('id', uniqueIds);
+    if (existing.length != uniqueIds.length) {
+      throw StateError('Every themed-menu item must belong to this restaurant.');
+    }
+    final created = await c.from('food_menu_themes').insert({
+      'restaurant_id': restaurantId,
+      'theme_key': theme['themeKey'],
+      'name': theme['name'],
+      'description': theme['description'] ?? '',
+      'inspiration': theme['inspiration'] ?? '',
+      'disclosure': theme['disclosure'] ?? 'Fan-inspired menu concept; not an official or affiliated offering unless expressly licensed.',
+      'active': true,
+    }).select().single();
+    final themeRow = Map<String, dynamic>.from(created);
+    final themeId = themeRow['id']?.toString() ?? '';
+    try {
+      await c.from('food_menu_theme_items').insert([
+        for (var i = 0; i < uniqueIds.length; i++) {
+          'theme_id': themeId,
+          'menu_item_id': uniqueIds[i],
+          'display_order': i,
+        }
+      ]);
+    } catch (_) {
+      if (themeId.isNotEmpty) {
+        await c.from('food_menu_themes').delete().eq('id', themeId);
+      }
+      rethrow;
+    }
+    return {...themeRow, 'menuItemIds': uniqueIds};
   }
 
 }

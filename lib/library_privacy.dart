@@ -2,10 +2,14 @@
 // Purpose: Implements the library privacy portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
+import 'privacy_preferences.dart';
 
 class LibraryPrivacyScreen extends StatefulWidget {
   const LibraryPrivacyScreen({super.key});
@@ -15,12 +19,93 @@ class LibraryPrivacyScreen extends StatefulWidget {
 }
 
 class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
-  bool privateLibrary = true;
-  bool allowUsageDiagnostics = true;
+  PrivacyPreferences preferences = PrivacyPreferences();
+  bool loadingPreferences = true;
   bool ownershipConfirmed = false;
   bool deleteMediaOnAccountDeletion = true;
 
+  String get _profileId => AppController.instance.currentProfile?.id ?? 'default';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrivacyPreferences();
+  }
+
+  Future<void> _loadPrivacyPreferences() async {
+    final loaded = await PrivacyPreferencesStore.load(profileId: _profileId);
+    if (!mounted) return;
+    setState(() { preferences = loaded; loadingPreferences = false; });
+  }
+
+  Future<void> _updatePrivacy(void Function() change) async {
+    final oldPresence = preferences.sharePresence;
+    final oldActivity = preferences.shareActivity;
+    setState(change);
+    final nextPresence = preferences.sharePresence;
+    final nextActivity = preferences.shareActivity;
+    final profileId = AppController.instance.currentProfile?.id;
+    final api = AppController.instance.backendApi;
+    if (profileId != null && api.isAuthenticated &&
+        ((oldPresence && !nextPresence) || (oldActivity && !nextActivity))) {
+      try {
+        await api.setSocialProfilePresence(
+          profileId: profileId,
+          availability: nextPresence ? null : 'away',
+          clearActivity: !nextActivity || !nextPresence,
+        );
+      } catch (_) {
+        // Local privacy intent is still saved if presence service is unavailable.
+      }
+    }
+    await PrivacyPreferencesStore.save(profileId: _profileId, value: preferences);
+    if (profileId != null && api.isAuthenticated && !oldPresence && nextPresence) {
+      try {
+        await api.setSocialProfilePresence(profileId: profileId, availability: 'active', clearActivity: true);
+      } catch (_) {
+        // Presence can refresh on the next authenticated heartbeat.
+      }
+    }
+  }
+
   /// Performs `_deleteAccount` for this feature. Update this documentation when its contract changes.
+  Future<void> _exportAccountData() async {
+    final controller = AppController.instance;
+    final account = controller.currentAccount;
+    if (account == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: UniversalText('No signed-in account data is available to export.')),
+      );
+      return;
+    }
+    final snapshot = <String, dynamic>{
+      'format': 'myownstreamingservice-account-export-v1',
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'account': <String, dynamic>{
+        'id': account.id,
+        'username': account.username,
+        'profiles': account.profiles.map((profile) => <String, dynamic>{
+          'id': profile.id,
+          'name': profile.name,
+          'avatarUrl': profile.avatarUrl,
+        }).toList(),
+      },
+      'currentProfileId': controller.currentProfile?.id,
+      'libraryMediaIds': controller.library.map((item) => item.id).toList(),
+      'watchedMediaIds': controller.watched.map((item) => item.id).toList(),
+      'likedMediaIds': controller.liked.map((item) => item.id).toList(),
+      'dislikedMediaIds': controller.disliked.map((item) => item.id).toList(),
+      'playbackProgress': Map<String, double>.from(controller.playbackProgress),
+      'collections': controller.collections.map((item) => item.toJson()).toList(),
+      'privacyPreferences': PrivacyPreferencesStore.cached(controller.currentProfile?.id).toJson(),
+    };
+    await Clipboard.setData(ClipboardData(text: JsonEncoder.withIndent('  ').convert(snapshot)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: UniversalText('Account export copied as JSON. Store it securely; it contains personal library information.')),
+    );
+  }
+
   Future<void> _deleteAccount() async {
     if (!deleteMediaOnAccountDeletion) return;
     final confirmed = await showDialog<bool>(
@@ -76,17 +161,30 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
             body: 'Only import content you own or are legally authorized to copy and use. Owning a physical disc does not by itself guarantee every form of copying or remote streaming is lawful in every country.',
           ),
           const SizedBox(height: 14),
-          SwitchListTile(
-            title: const UniversalText('Private library'),
-            subtitle: const UniversalText('Keep your collection isolated from other accounts.'),
-            value: privateLibrary,
-            onChanged: (v) => setState(() => privateLibrary = v),
+          if (loadingPreferences) const LinearProgressIndicator(),
+          const SwitchListTile(
+            title: UniversalText('Private library'),
+            subtitle: UniversalText('Account isolation is always enforced by backend authorization and database policies; it cannot be disabled from this screen.'),
+            value: true,
+            onChanged: null,
           ),
           SwitchListTile(
             title: const UniversalText('Usage diagnostics'),
-            subtitle: const UniversalText('Allow privacy-conscious service diagnostics and reliability metrics.'),
-            value: allowUsageDiagnostics,
-            onChanged: (v) => setState(() => allowUsageDiagnostics = v),
+            subtitle: const UniversalText('Allow privacy-conscious playback diagnostics and reliability metrics. Off by default.'),
+            value: preferences.sharePlaybackDiagnostics,
+            onChanged: loadingPreferences ? null : (v) => _updatePrivacy(() => preferences.sharePlaybackDiagnostics = v),
+          ),
+          SwitchListTile(
+            title: const UniversalText('Share online status'),
+            subtitle: const UniversalText('Allow other profiles on the account to see when this profile is active.'),
+            value: preferences.sharePresence,
+            onChanged: loadingPreferences ? null : (v) => _updatePrivacy(() => preferences.sharePresence = v),
+          ),
+          SwitchListTile(
+            title: const UniversalText('Share current activity'),
+            subtitle: const UniversalText('Allow current movies, episodes, or music to appear beside this profile.'),
+            value: preferences.shareActivity,
+            onChanged: loadingPreferences ? null : (v) => _updatePrivacy(() => preferences.shareActivity = v),
           ),
           SwitchListTile(
             title: const UniversalText('Delete stored media with account deletion'),
@@ -133,6 +231,12 @@ class _LibraryPrivacyScreenState extends State<LibraryPrivacyScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: _exportAccountData,
+            icon: const Icon(Icons.download_outlined),
+            label: const UniversalText('EXPORT MY ACCOUNT DATA (JSON)'),
+          ),
+          const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: () => _showPolicy(context),
             icon: const Icon(Icons.description_outlined),

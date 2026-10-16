@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Builds profile-local related titles from known recommendations and the
 /// account's existing library. The ranking favours shared franchise, genre,
@@ -80,8 +81,7 @@ class DetailsRecommendationsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'You might also like',
+        const UniversalText('You might also like',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 12),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
-import 'profiles.dart';
+import 'localization.dart';
 
 /// Profile-scoped friends, account profiles, and community activity for Home.
 class SocialHomeSection extends StatefulWidget {
@@ -79,11 +79,9 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
 
   @override
   Widget build(BuildContext context) {
-    final account = AppController.instance.currentAccount;
     final profile = AppController.instance.currentProfile;
     if (profile == null) return const SizedBox.shrink();
 
-    final profiles = account?.profiles ?? const <Profile>[];
     final friends = _items('friends');
     final requests = _items('requests');
     final suggestions = _items('suggestions');
@@ -136,55 +134,6 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                 child:
                     Text(error!, style: const TextStyle(color: Colors.white60)),
               ),
-            if (profiles.length >= 2) ...[
-              Row(
-                children: [
-                  Expanded(child: _sectionHeading('Your account group')),
-                  TextButton(
-                    onPressed: _openAccountGroup,
-                    child: const Text('Switch profile'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 80,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final member in profiles)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 14),
-                        child: Column(
-                          children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundImage: member.avatarUrl == null
-                                  ? null
-                                  : NetworkImage(member.avatarUrl!),
-                              child: member.avatarUrl == null
-                                  ? Text(_initial(member.name))
-                                  : null,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              member.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: member.id == profile.id
-                                    ? const Color(0xFF76D6E8)
-                                    : Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
             if (data != null) ...[
               ...[
                 _sectionHeading('Friends’ stories'),
@@ -223,13 +172,12 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                   Expanded(child: _sectionHeading('Friends’ posts')),
                   TextButton(
                     onPressed: () => _compose(profile.id),
-                    child: const Text('Create post'),
+                    child: const UniversalText('Create post'),
                   ),
                 ],
               ),
               if (posts.isEmpty)
-                const Text(
-                  'Posts from your friends will show up here.',
+                const UniversalText('Posts from your friends will show up here.',
                   style: TextStyle(color: Colors.white54),
                 )
               else
@@ -267,7 +215,7 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                   Expanded(child: _sectionHeading('Communities')),
                   TextButton(
                     onPressed: () => _createCommunity(profile.id),
-                    child: const Text('Create'),
+                    child: const UniversalText('Create'),
                   ),
                 ],
               ),
@@ -288,8 +236,7 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
               ),
               const SizedBox(height: 6),
               if (matchingCommunities.isEmpty)
-                const Text(
-                  'No matching public communities yet. Create one to get started.',
+                const UniversalText('No matching public communities yet. Create one to get started.',
                   style: TextStyle(color: Colors.white54),
                 )
               else
@@ -515,7 +462,7 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
               action: 'accept',
             ),
           ),
-          child: const Text('Accept'),
+          child: const UniversalText('Accept'),
         ),
         TextButton(
           onPressed: () => _act(
@@ -525,7 +472,7 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
               action: 'decline',
             ),
           ),
-          child: const Text('Decline'),
+          child: const UniversalText('Decline'),
         ),
       ],
     );
@@ -554,21 +501,9 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                     communityId: community['id'].toString(),
                   ),
                 ),
-                child: const Text('Join'),
+                child: const UniversalText('Join'),
               ),
       );
-
-  Future<void> _openAccountGroup() async {
-    await Navigator.of(context).push<Profile?>(
-      MaterialPageRoute<Profile?>(
-        settings: const RouteSettings(name: '/app/profiles'),
-        builder: (_) => const ProfileSelectionScreen(),
-      ),
-    );
-    if (!mounted) return;
-    setState(() {});
-    await load();
-  }
 
   Future<void> _compose(String profileId) async {
     final value = await _textDialog(
@@ -593,7 +528,7 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Your story'),
+          title: const UniversalText('Your story'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -610,10 +545,10 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                 initialValue: expiresInHours,
                 decoration: const InputDecoration(labelText: 'Story lifetime'),
                 items: const [
-                  DropdownMenuItem(value: 24, child: Text('24 hours')),
-                  DropdownMenuItem(value: 48, child: Text('2 days')),
-                  DropdownMenuItem(value: 72, child: Text('3 days')),
-                  DropdownMenuItem(value: 168, child: Text('1 week')),
+                  DropdownMenuItem(value: 24, child: UniversalText('24 hours')),
+                  DropdownMenuItem(value: 48, child: UniversalText('2 days')),
+                  DropdownMenuItem(value: 72, child: UniversalText('3 days')),
+                  DropdownMenuItem(value: 168, child: UniversalText('1 week')),
                 ],
                 onChanged: (value) =>
                     setDialogState(() => expiresInHours = value ?? 24),
@@ -623,14 +558,14 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: const UniversalText('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(
                 dialogContext,
                 (controller.text, expiresInHours),
               ),
-              child: const Text('Share'),
+              child: const UniversalText('Share'),
             ),
           ],
         ),
@@ -679,11 +614,11 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Save'),
+            child: const UniversalText('Save'),
           ),
         ],
       ),
@@ -721,7 +656,7 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
+            child: const UniversalText('Close'),
           ),
         ],
       ),

@@ -11,6 +11,7 @@ import 'package:countrify/countrify.dart';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// A normalized address used by store and checkout flows.
 class WorldwideAddress {
@@ -277,8 +278,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Unable to load states/provinces: '
+          content: UniversalText('Unable to load states/provinces: '
             '${error.toString()}',
           ),
         ),
@@ -392,8 +392,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
       if (results.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'No postal codes were returned for this city. '
+            content: UniversalText('No postal codes were returned for this city. '
               'You can enter the postal code manually.',
             ),
           ),
@@ -831,8 +830,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
                       ),
                     )
                   : const Icon(Icons.search),
-              label: const Text(
-                'Find postal / ZIP codes for this city',
+              label: const UniversalText('Find postal / ZIP codes for this city',
               ),
             ),
           ),
@@ -891,8 +889,7 @@ class _WorldwideAddressFormState extends State<WorldwideAddressForm> {
 
         const SizedBox(height: 8),
 
-        Text(
-          'Worldwide location data: countries, states/provinces/regions '
+        UniversalText('Worldwide location data: countries, states/provinces/regions '
           'and cities are available offline. Postal codes use the format '
           'appropriate to the selected country.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(

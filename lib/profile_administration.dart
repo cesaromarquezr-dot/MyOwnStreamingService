@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'core/models/profile_governance.dart';
 import 'core/services/profile_governance_api.dart';
+import 'localization.dart';
 
 /// Account/profile governance screen. Owner authorization is enforced by the
 /// backend; this screen is intentionally only a presentation/editor surface.
@@ -80,17 +81,17 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
           : ListView(
               padding: const EdgeInsets.all(18),
               children: [
-                const Text('Profile administration', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                const UniversalText('Profile administration', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
-                const Text('The account owner is always able to manage this profile. Self-management is optional and remains limited by backend permissions.'),
+                const UniversalText('The account owner is always able to manage this profile. Self-management is optional and remains limited by backend permissions.'),
                 const SizedBox(height: 18),
                 if (_error != null)
                   Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(_error!))),
                 if (_isAccountOwner)
                   Card(
                     child: SwitchListTile(
-                      title: const Text('Allow members to manage their own profiles'),
-                      subtitle: const Text('Members can manage only profiles assigned to them that are marked self-managed. The owner remains authoritative.'),
+                      title: const UniversalText('Allow members to manage their own profiles'),
+                      subtitle: const UniversalText('Members can manage only profiles assigned to them that are marked self-managed. The owner remains authoritative.'),
                       value: _allowMembersToManageOwnProfiles,
                       onChanged: _saving
                           ? null
@@ -127,8 +128,8 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
                   ),
                 ),
                 SwitchListTile(
-                  title: const Text('Allow this profile to self-manage'),
-                  subtitle: const Text('Members still cannot manage other profiles or account/server settings.'),
+                  title: const UniversalText('Allow this profile to self-manage'),
+                  subtitle: const UniversalText('Members still cannot manage other profiles or account/server settings.'),
                   value: _governance.isSelfManaged,
                   onChanged: _saving
                       ? null
@@ -138,8 +139,8 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
                 ),
                 if (_isAccountOwner)
                   SwitchListTile(
-                    title: const Text('Allow a self-managed member to change content controls'),
-                    subtitle: const Text('This separately permits the member to change this profile’s content level and related policy.'),
+                    title: const UniversalText('Allow a self-managed member to change content controls'),
+                    subtitle: const UniversalText('This separately permits the member to change this profile’s content level and related policy.'),
                     value: _governance.permissions.contains(ProfilePermission.manageContentPolicy),
                     onChanged: _saving
                         ? null
@@ -154,22 +155,22 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
                           },
                   ),
                 SwitchListTile(
-                  title: const Text('Allow explicit music'),
+                  title: const UniversalText('Allow explicit music'),
                   value: _governance.explicitMusicAllowed,
                   onChanged: _saving ? null : (value) => _save(_governance.copyWith(explicitMusicAllowed: value)),
                 ),
                 SwitchListTile(
-                  title: const Text('Allow explicit lyrics'),
+                  title: const UniversalText('Allow explicit lyrics'),
                   value: _governance.explicitLyricsAllowed,
                   onChanged: _saving ? null : (value) => _save(_governance.copyWith(explicitLyricsAllowed: value)),
                 ),
                 SwitchListTile(
-                  title: const Text('Restrict purchases'),
+                  title: const UniversalText('Restrict purchases'),
                   value: _governance.purchasesRestricted,
                   onChanged: _saving ? null : (value) => _save(_governance.copyWith(purchasesRestricted: value)),
                 ),
                 SwitchListTile(
-                  title: const Text('Require profile PIN protection'),
+                  title: const UniversalText('Require profile PIN protection'),
                   value: _governance.profilePinEnabled,
                   onChanged: _saving ? null : (value) => _save(_governance.copyWith(profilePinEnabled: value)),
                 ),

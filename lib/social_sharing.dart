@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 Future<void> showSocialShareDialog(
   BuildContext context, {
@@ -14,7 +15,7 @@ Future<void> showSocialShareDialog(
   final profile = AppController.instance.currentProfile;
   if (profile == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Select a profile before sharing.')),
+      const SnackBar(content: UniversalText('Select a profile before sharing.')),
     );
     return;
   }
@@ -67,8 +68,7 @@ Future<void> showSocialShareDialog(
                   Flexible(
                     child: conversations.isEmpty
                         ? const Center(
-                            child: Text(
-                              'Start a chat before sharing to conversations.',
+                            child: UniversalText('Start a chat before sharing to conversations.',
                             ),
                           )
                         : ListView(
@@ -108,12 +108,12 @@ Future<void> showSocialShareDialog(
                           ));
                         },
                         icon: const Icon(Icons.ios_share_outlined),
-                        label: const Text('Share outside app'),
+                        label: const UniversalText('Share outside app'),
                       ),
                       const SizedBox(width: 8),
                       TextButton(
                         onPressed: () => Navigator.pop(sheetContext),
-                        child: const Text('Cancel'),
+                        child: const UniversalText('Cancel'),
                       ),
                       const Spacer(),
                       FilledButton(

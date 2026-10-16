@@ -28,7 +28,6 @@ const _avatarOptions = <_AvatarOption>[
   _AvatarOption('Star', icon: Icons.star),
   _AvatarOption('Heart', icon: Icons.favorite),
   _AvatarOption('Pet', icon: Icons.pets),
-  _AvatarOption('Abstract', icon: Icons.category_outlined),
   _AvatarOption('Music', icon: Icons.music_note),
   _AvatarOption('Movie', icon: Icons.movie),
   _AvatarOption('Magic', icon: Icons.auto_awesome),
@@ -131,13 +130,16 @@ class _ProfileSelectionScreenState
     }
     if (createdProfile == null) return;
 
-    // Switch the local profile immediately. Device registration is secondary
-    // work and must not delay navigation if the backend is slow or offline.
-    controller.switchProfile(createdProfile.id);
-    unawaited(controller.activateProfile(createdProfile.id).catchError((_) {}));
-    unawaited(LanguageController.instance.loadForCurrentProfile().catchError((_) {}));
-    if (!mounted) return;
-    _finishProfileSelection(context);
+    // Saving a profile must not activate it or leave profile selection. The
+    // user explicitly chooses which profile to enter after creation.
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Profile "${createdProfile.name}" saved. Select a profile to continue.'),
+        ),
+      );
+      setState(() {});
+    }
   }
 
   /// Performs `_editProfile` for this feature. Update this documentation when its contract changes.
@@ -179,7 +181,36 @@ class _ProfileSelectionScreenState
   /// Performs `_selectProfile` for this feature. Update this documentation when its contract changes.
   Future<void> _selectProfile(Profile profile) async {
     final controller = AppController.instance;
+    final previousProfile = controller.currentProfile;
+    if (previousProfile != null &&
+        previousProfile.id != profile.id &&
+        controller.backendApi.isAuthenticated) {
+      // Mark the profile we are leaving away before switching identities. This
+      // prevents the Home activity strip from showing a stale green glow for
+      // the old profile after the selection handoff.
+      try {
+        await controller.backendApi.setSocialProfilePresence(
+          profileId: previousProfile.id,
+          availability: 'away',
+          clearActivity: true,
+        ).timeout(const Duration(seconds: 2));
+      } catch (_) {
+        // Presence must never prevent a profile from opening.
+      }
+    }
     controller.switchProfile(profile.id);
+    if (controller.backendApi.isAuthenticated) {
+      // The chosen profile is now the active app identity. Start a fresh
+      // presence record without carrying over an old activity from its prior
+      // session; playback can publish its own activity as it starts.
+      unawaited(
+        controller.backendApi.setSocialProfilePresence(
+          profileId: profile.id,
+          availability: 'active',
+          clearActivity: true,
+        ).then<void>((_) {}, onError: (_) {}),
+      );
+    }
 
     // Device registration is deliberately non-blocking. A selected profile is
     // enough to open Home; a slow/offline backend must not make selection look
@@ -248,8 +279,7 @@ class _ProfileSelectionScreenState
                         const _ProfileLogo(),
                         const SizedBox(height: 42),
 
-                        const Text(
-                          "Who's watching?",
+                        const UniversalText("Who's watching?",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 34,

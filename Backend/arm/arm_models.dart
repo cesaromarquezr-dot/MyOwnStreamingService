@@ -61,7 +61,6 @@ enum ArmReleaseType {
   album,
   compilation,
   musicVideo,
-  game,
   data,
   mixed,
   other,
@@ -989,6 +988,101 @@ class ArmRecordingMatch {
       };
 }
 
+/// Canonical TV episode identity, deliberately independent of physical-disc
+/// number and import order. Season zero is allowed for specials.
+class ArmEpisodeIdentity {
+  final String? seriesId;
+  final String? seriesTitle;
+  final int? seasonNumber;
+  final int? episodeNumber;
+  final int? episodeEndNumber;
+  final int? absoluteEpisodeNumber;
+  final String? episodeTitle;
+  final String orderScheme;
+  final double confidence;
+  final String matchSource;
+
+  const ArmEpisodeIdentity({
+    this.seriesId,
+    this.seriesTitle,
+    this.seasonNumber,
+    this.episodeNumber,
+    this.episodeEndNumber,
+    this.absoluteEpisodeNumber,
+    this.episodeTitle,
+    this.orderScheme = 'aired',
+    this.confidence = 0,
+    this.matchSource = 'unknown',
+  });
+
+  bool get hasEpisodeNumber =>
+      seasonNumber != null &&
+      seasonNumber! >= 0 &&
+      episodeNumber != null &&
+      episodeNumber! > 0;
+
+  bool get hasSeriesIdentity =>
+      (seriesId?.trim().isNotEmpty ?? false) ||
+      (seriesTitle?.trim().isNotEmpty ?? false);
+
+  bool get isResolved => hasEpisodeNumber && hasSeriesIdentity;
+
+  bool get needsReview => !isResolved || confidence < 0.80;
+
+  String get seriesKey {
+    final id = seriesId?.trim();
+    if (id != null && id.isNotEmpty) return id.toLowerCase();
+    return (seriesTitle ?? '').trim().toLowerCase();
+  }
+
+  String? get watchOrderKey {
+    if (!isResolved) return null;
+    return '$seriesKey|${seasonNumber!.toString().padLeft(2, '0')}|${episodeNumber!.toString().padLeft(3, '0')}';
+  }
+
+  factory ArmEpisodeIdentity.fromJson(Map<String, dynamic> json) {
+    int? readInt(dynamic value) => value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    double readDouble(dynamic value, {double fallback = 0}) => value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString() ?? '') ?? fallback;
+    String? readString(dynamic value) {
+      final text = value?.toString().trim();
+      return text == null || text.isEmpty ? null : text;
+    }
+
+    return ArmEpisodeIdentity(
+      seriesId: readString(json['seriesId'] ?? json['series_id'] ?? json['showId'] ?? json['show_id'] ?? json['seriesExternalId'] ?? json['series_external_id']),
+      seriesTitle: readString(json['seriesTitle'] ?? json['series_title'] ?? json['showTitle'] ?? json['show_title'] ?? json['series']),
+      seasonNumber: readInt(json['seasonNumber'] ?? json['season_number'] ?? json['season']),
+      episodeNumber: readInt(json['episodeNumber'] ?? json['episode_number'] ?? json['episode']),
+      episodeEndNumber: readInt(json['episodeEndNumber'] ?? json['episode_end_number'] ?? json['endEpisodeNumber'] ?? json['end_episode_number']),
+      absoluteEpisodeNumber: readInt(json['absoluteEpisodeNumber'] ?? json['absolute_episode_number'] ?? json['absoluteNumber']),
+      episodeTitle: readString(json['episodeTitle'] ?? json['episode_title'] ?? json['episodeName'] ?? json['episode_name']),
+      orderScheme: readString(json['orderScheme'] ?? json['order_scheme'] ?? json['episodeOrder'] ?? json['episode_order']) ?? 'aired',
+      confidence: readDouble(json['confidence'] ?? json['matchConfidence']),
+      matchSource: readString(json['matchSource'] ?? json['match_source'] ?? json['source']) ?? 'provided_metadata',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'seriesId': seriesId,
+        'seriesTitle': seriesTitle,
+        'seasonNumber': seasonNumber,
+        'episodeNumber': episodeNumber,
+        'episodeEndNumber': episodeEndNumber,
+        'absoluteEpisodeNumber': absoluteEpisodeNumber,
+        'episodeTitle': episodeTitle,
+        'orderScheme': orderScheme,
+        'confidence': confidence,
+        'matchSource': matchSource,
+        'isResolved': isResolved,
+        'needsReview': needsReview,
+        'watchOrderKey': watchOrderKey,
+      };
+}
+
 /// ARM's legacy/flat representation of detected title content.
 ///
 /// This remains in place for compatibility with existing ARM routes/services.
@@ -1018,6 +1112,8 @@ class ArmDiscTitle {
   final int? discNumber;
   final String? artist;
   final String? album;
+  final ArmEpisodeIdentity? episodeIdentity;
+  final ArmVerificationResult? verificationResult;
 
   ArmDiscTitle({
     required this.id,
@@ -1043,7 +1139,53 @@ class ArmDiscTitle {
     this.discNumber,
     this.artist,
     this.album,
+    this.episodeIdentity,
+    this.verificationResult,
   });
+
+  bool get isEpisode =>
+      _contentTypeFromLegacyClassification(
+        classification, mediaType, title, metadata,
+      ) == ArmDiscContentType.episode;
+
+  bool get needsEpisodeOrderReview =>
+      isEpisode && (episodeIdentity?.needsReview ?? true);
+
+  ArmDiscTitle withEpisodeIdentity(
+    ArmEpisodeIdentity? identity, {
+    String? canonicalTitle,
+    String? originalTitle,
+  }) =>
+      ArmDiscTitle(
+        id: id, title: title,
+        mediaType: identity != null && !isEpisode ? 'tv' : mediaType,
+        classification: identity != null && !isEpisode ? 'episode' : classification,
+        year: year, durationSeconds: durationSeconds, confidence: confidence,
+        outputPath: outputPath, metadata: metadata,
+        canonicalTitle: canonicalTitle ?? this.canonicalTitle,
+        originalTitle: originalTitle ?? this.originalTitle,
+        originalLanguage: originalLanguage,
+        countryOfOrigin: countryOfOrigin, discTitle: discTitle,
+        discMarketCountry: discMarketCountry, detectedRegion: detectedRegion,
+        audioCodec: audioCodec, archiveFormat: archiveFormat,
+        losslessAudio: losslessAudio, trackNumber: trackNumber,
+        discNumber: discNumber, artist: artist, album: album,
+        episodeIdentity: identity, verificationResult: verificationResult,
+      );
+
+  ArmDiscTitle withVerificationResult(ArmVerificationResult result) =>
+      ArmDiscTitle(
+        id: id, title: title, mediaType: mediaType, classification: classification,
+        year: year, durationSeconds: durationSeconds, confidence: confidence,
+        outputPath: outputPath, metadata: metadata, canonicalTitle: canonicalTitle,
+        originalTitle: originalTitle, originalLanguage: originalLanguage,
+        countryOfOrigin: countryOfOrigin, discTitle: discTitle,
+        discMarketCountry: discMarketCountry, detectedRegion: detectedRegion,
+        audioCodec: audioCodec, archiveFormat: archiveFormat,
+        losslessAudio: losslessAudio, trackNumber: trackNumber,
+        discNumber: discNumber, artist: artist, album: album,
+        episodeIdentity: episodeIdentity, verificationResult: result,
+      );
 
   bool get isMusic =>
       mediaType.toLowerCase().contains('music') ||
@@ -1056,13 +1198,11 @@ class ArmDiscTitle {
 
   bool get isFeatureMovie {
     final type = mediaType.toLowerCase();
-    final kind = (classification ?? '').toLowerCase();
-
-    return (type.contains('movie') || type.contains('film')) &&
-        (kind.isEmpty ||
-            kind == 'feature' ||
-            kind == 'feature_film' ||
-            kind == 'main_feature');
+    if (!(type.contains('movie') || type.contains('film'))) return false;
+    return _contentTypeFromLegacyClassification(
+          classification, mediaType, title, metadata,
+        ) ==
+        ArmDiscContentType.feature;
   }
 
   /// Converts this legacy ARM title into the newer disc-content model.
@@ -1077,15 +1217,22 @@ class ArmDiscTitle {
       contentType: _contentTypeFromLegacyClassification(
         classification,
         mediaType,
+        title,
+        metadata,
       ),
       title: title,
-      mediaId: isFeatureMovie ? id : null,
+      mediaId: (isFeatureMovie || isEpisode) ? id : null,
       outputPath: outputPath,
       codec: audioCodec,
       durationSeconds: durationSeconds,
       confidence: confidence,
-      primary: isFeatureMovie,
-      metadata: metadata,
+      primary: isFeatureMovie || isEpisode,
+      metadata: {
+        ...metadata,
+        if (episodeIdentity != null) 'episodeIdentity': episodeIdentity!.toJson(),
+        if (needsEpisodeOrderReview) 'requiresEpisodeOrderReview': true,
+        if (verificationResult != null) 'verificationResult': verificationResult!.toJson(),
+      },
     );
   }
 
@@ -1164,6 +1311,12 @@ class ArmDiscTitle {
       ),
       artist: json['artist']?.toString(),
       album: json['album']?.toString(),
+      episodeIdentity: _episodeIdentityFromJson(json),
+      verificationResult: json['verificationResult'] is Map
+          ? ArmVerificationResult.fromJson(
+              Map<String, dynamic>.from(json['verificationResult'] as Map),
+            )
+          : null,
     );
   }
 
@@ -1191,7 +1344,31 @@ class ArmDiscTitle {
         'discNumber': discNumber,
         'artist': artist,
         'album': album,
+        'isEpisode': isEpisode,
+        'episodeIdentity': episodeIdentity?.toJson(),
+        'requiresEpisodeOrderReview': needsEpisodeOrderReview,
+        'verificationResult': verificationResult?.toJson(),
       };
+
+  static ArmEpisodeIdentity? _episodeIdentityFromJson(
+    Map<String, dynamic> json,
+  ) {
+    final nested = json['episodeIdentity'];
+    if (nested is Map) {
+      return ArmEpisodeIdentity.fromJson(Map<String, dynamic>.from(nested));
+    }
+
+    final hasPosition = json.containsKey('seasonNumber') ||
+        json.containsKey('season') ||
+        json.containsKey('episodeNumber') ||
+        json.containsKey('episode');
+    if (!hasPosition) return null;
+
+    final identity = ArmEpisodeIdentity.fromJson(json);
+    return identity.hasEpisodeNumber || identity.hasSeriesIdentity
+        ? identity
+        : null;
+  }
 
   static double? _double(dynamic value) =>
       value is num
@@ -1221,58 +1398,88 @@ class ArmDiscTitle {
   static ArmDiscContentType _contentTypeFromLegacyClassification(
     String? classification,
     String mediaType,
+    String title,
+    Map<String, dynamic> metadata,
   ) {
-    final normalized =
-        (classification ?? '').trim().toLowerCase();
-    final normalizedMediaType =
-        mediaType.trim().toLowerCase();
+    final normalized = (classification ?? '').trim().toLowerCase();
+    final normalizedMediaType = mediaType.trim().toLowerCase();
+    final contentRole = (metadata['contentRole'] ??
+            metadata['content_role'] ??
+            metadata['bonusType'] ??
+            metadata['bonus_type'] ??
+            '')
+        .toString()
+        .toLowerCase();
+    final displaySignal = '$contentRole $normalized $title'.toLowerCase();
 
-    if (normalized == 'track' ||
-        normalized == 'song' ||
+    // Prefer explicit/strong extra labels before broad media-type inference.
+    // Some disc scanners incorrectly label every video title as "feature".
+    if (normalized == 'deleted_scene' || normalized == 'deleted_scenes' ||
+        RegExp(r'\bdeleted scenes?\b').hasMatch(displaySignal)) {
+      return ArmDiscContentType.deletedScene;
+    }
+    if (normalized == 'commentary' || normalized == 'audio_commentary' ||
+        RegExp(r'\b(commentary|audio commentary)\b').hasMatch(displaySignal)) {
+      return ArmDiscContentType.commentary;
+    }
+    final normalizedTitle = title.trim().toLowerCase();
+    final clearlyTrailerTitle = RegExp(
+      r'^(?:(?:official|teaser|theatrical|final|red band)\s+)?trailers?(?:\s*[#-]?\s*\d+)?(?:\s*\([^)]*\))?$',
+      caseSensitive: false,
+    ).hasMatch(normalizedTitle) ||
+        RegExp(r'^(?:official|teaser|theatrical) trailer for\b', caseSensitive: false)
+            .hasMatch(normalizedTitle);
+    if (normalized == 'trailer' || normalized == 'trailers' ||
+        contentRole.contains('trailer') || clearlyTrailerTitle) {
+      return ArmDiscContentType.trailer;
+    }
+    if (normalized == 'making_of' || normalized == 'makingof' ||
+        normalized == 'behind_the_scenes' ||
+        RegExp(r'\b(making of|behind the scenes|featurette|production diary)\b')
+            .hasMatch(displaySignal)) {
+      return ArmDiscContentType.makingOf;
+    }
+    if (normalized == 'interview' || normalized == 'interviews' ||
+        RegExp(r'\binterviews?\b').hasMatch(displaySignal)) {
+      return ArmDiscContentType.interview;
+    }
+    if (normalized == 'bonus' || normalized == 'bonus_feature' ||
+        normalized == 'bonus_features' ||
+        RegExp(r'\b(bonus feature|special features|extras)\b')
+            .hasMatch(displaySignal)) {
+      return ArmDiscContentType.bonusFeature;
+    }
+
+    if (normalized == 'music_video' || normalized == 'musicvideo') {
+      return ArmDiscContentType.musicVideo;
+    }
+    // Album labels must win over the broad mediaType=music/audio inference.
+    if (normalized == 'album' || normalized == 'music_album') {
+      return ArmDiscContentType.album;
+    }
+    if (normalized == 'track' || normalized == 'song' ||
         normalizedMediaType.contains('music') ||
         normalizedMediaType.contains('audio')) {
       return ArmDiscContentType.song;
     }
-
-    if (normalized == 'album') {
-      return ArmDiscContentType.album;
+    if (normalized == 'episode' || normalized == 'tv_episode') {
+      return ArmDiscContentType.episode;
     }
 
-    if (normalized == 'bonus' ||
-        normalized == 'bonus_feature' ||
-        normalized == 'bonus_features') {
-      return ArmDiscContentType.bonusFeature;
-    }
+    final isTv = normalizedMediaType == 'tv' ||
+        normalizedMediaType.contains('television') ||
+        normalizedMediaType.contains('tv_show') ||
+        normalizedMediaType.contains('tv series') ||
+        normalizedMediaType == 'series' ||
+        normalizedMediaType == 'show';
+    if (isTv) return ArmDiscContentType.episode;
 
-    if (normalized == 'deleted_scene' ||
-        normalized == 'deleted_scenes') {
-      return ArmDiscContentType.deletedScene;
+    if (normalized == 'feature' || normalized == 'main_feature' ||
+        normalized == 'feature_film' || normalized == 'movie' ||
+        normalized == 'film' || normalized.isEmpty) {
+      return ArmDiscContentType.feature;
     }
-
-    if (normalized == 'commentary') {
-      return ArmDiscContentType.commentary;
-    }
-
-    if (normalized == 'trailer' ||
-        normalized == 'trailers') {
-      return ArmDiscContentType.trailer;
-    }
-
-    if (normalized == 'making_of' ||
-        normalized == 'makingof') {
-      return ArmDiscContentType.makingOf;
-    }
-
-    if (normalized == 'interview') {
-      return ArmDiscContentType.interview;
-    }
-
-    if (normalized == 'music_video' ||
-        normalized == 'musicvideo') {
-      return ArmDiscContentType.musicVideo;
-    }
-
-    return ArmDiscContentType.feature;
+    return ArmDiscContentType.other;
   }
 }
 
@@ -1390,6 +1597,11 @@ class ArmVerificationResult {
   final bool hasVideo;
   final bool hasAudio;
   final bool contentFingerprintAvailable;
+  final List<Map<String, dynamic>> videoTracks;
+  final List<Map<String, dynamic>> audioTracks;
+  final List<Map<String, dynamic>> subtitleTracks;
+  final List<Map<String, dynamic>> chapterMarkers;
+  final Map<String, dynamic> formatInfo;
 
   ArmVerificationResult({
     required this.passed,
@@ -1404,6 +1616,11 @@ class ArmVerificationResult {
     this.hasVideo = false,
     this.hasAudio = false,
     this.contentFingerprintAvailable = false,
+    this.videoTracks = const [],
+    this.audioTracks = const [],
+    this.subtitleTracks = const [],
+    this.chapterMarkers = const [],
+    this.formatInfo = const {},
   });
 
   factory ArmVerificationResult.fromJson(
@@ -1433,6 +1650,13 @@ class ArmVerificationResult {
         hasAudio: json['hasAudio'] == true,
         contentFingerprintAvailable:
             json['contentFingerprintAvailable'] == true,
+        videoTracks: _mapsFromJson(json['videoTracks']),
+        audioTracks: _mapsFromJson(json['audioTracks']),
+        subtitleTracks: _mapsFromJson(json['subtitleTracks']),
+        chapterMarkers: _mapsFromJson(json['chapterMarkers']),
+        formatInfo: json['formatInfo'] is Map
+            ? Map<String, dynamic>.from(json['formatInfo'] as Map)
+            : const <String, dynamic>{},
       );
 
   Map<String, dynamic> toJson() => {
@@ -1449,7 +1673,19 @@ class ArmVerificationResult {
         'hasAudio': hasAudio,
         'contentFingerprintAvailable':
             contentFingerprintAvailable,
+        'videoTracks': videoTracks,
+        'audioTracks': audioTracks,
+        'subtitleTracks': subtitleTracks,
+        'chapterMarkers': chapterMarkers,
+        'formatInfo': formatInfo,
       };
+
+  static List<Map<String, dynamic>> _mapsFromJson(dynamic value) =>
+      value is List
+          ? value.whereType<Map>().map(
+              (item) => Map<String, dynamic>.from(item),
+            ).toList(growable: false)
+          : <Map<String, dynamic>>[];
 
   static List<String> _strings(dynamic value) =>
       value is List

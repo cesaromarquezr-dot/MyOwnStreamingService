@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -74,7 +72,7 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
       final accepted = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Name your server'),
+          title: const UniversalText('Name your server'),
           content: TextField(
             controller: nameController,
             autofocus: true,
@@ -84,8 +82,8 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save & Continue')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Save & Continue')),
           ],
         ),
       );
@@ -97,11 +95,10 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
         }
         return;
       }
-      // Avoid an indefinitely unresponsive screen if the backend is unreachable.
-      // A failure is displayed below instead of being erased by _load().
-      await controller
-          .claimServer(serverId: server.id, displayName: displayName)
-          .timeout(const Duration(seconds: 30));
+      await controller.claimServer(
+        serverId: server.id,
+        displayName: displayName,
+      );
       if (!mounted) return;
       // Switch the global shell to the profile-selection state before replacing
       // this route, so a stale navbar cannot flash after saving the server name.
@@ -109,51 +106,12 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
       _finish();
     } catch (error) {
       if (!mounted) return;
-      final message = _friendlyError(error);
-
-      // A timeout may happen after the server was actually assigned. Refresh
-      // once and continue to profiles if the assignment is now visible.
-      try {
-        final serverContext = await controller
-            .loadServerContext()
-            .timeout(const Duration(seconds: 8));
-        if (!mounted) return;
-        if (serverContext.currentServer != null) {
-          widget.onServerSaved?.call();
-          _finish();
-          return;
-        }
-        setState(() {
-          _servers = serverContext.availableServers;
-          _loading = false;
-          _error = message;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _error = message;
-        });
-      }
+      setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+      await _load();
     } finally {
       nameController.dispose();
       if (mounted) setState(() => _claiming = false);
     }
-  }
-
-  String _friendlyError(Object error) {
-    var message = error.toString().trim();
-    for (final prefix in const <String>[
-      'BackendApiException:',
-      'BackendApiException: ',
-      'Exception: ',
-    ]) {
-      message = message.replaceFirst(prefix, '').trim();
-    }
-    if (message.isEmpty || message == 'Server selection request failed.') {
-      return 'Could not save this server. Check the backend console for the server-assignment error, then try again.';
-    }
-    return message;
   }
 
   void _finish() {
@@ -189,13 +147,9 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
         automaticallyImplyLeading: false,
         title: const UniversalText('Pick a Server'),
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (_loading)
-            const Center(child: CircularProgressIndicator())
-          else
-            RefreshIndicator(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
                 padding: const EdgeInsets.all(18),
@@ -272,7 +226,7 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
                                 child: FilledButton.icon(
                                   onPressed: _claiming ? null : () => _select(server),
                                   icon: const Icon(Icons.check_circle_outline),
-                                  label: const Text('Select server'),
+                                  label: const UniversalText('Select server'),
                                 ),
                               ),
                             ],
@@ -282,41 +236,6 @@ class _ServerSelectionScreenState extends State<ServerSelectionScreen> {
                 ],
               ),
             ),
-          if (_claiming)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black45,
-                child: Center(
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 22,
-                        vertical: 18,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.5),
-                          ),
-                          const SizedBox(width: 14),
-                          Flexible(
-                            child: Text(
-                              'Saving server and opening profiles…',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
       ),
     );
   }

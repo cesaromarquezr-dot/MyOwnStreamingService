@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pro_video_editor/pro_video_editor.dart';
 import 'package:share_plus/share_plus.dart';
+import 'localization.dart';
 
 class SocialVideoEditResult {
   const SocialVideoEditResult({
@@ -175,7 +176,7 @@ class _SocialVideoEditorScreenState extends State<SocialVideoEditorScreen> {
     final caption = _captionController.text.trim();
     if (caption.length > 180) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Captions can be up to 180 characters.')),
+        const SnackBar(content: UniversalText('Captions can be up to 180 characters.')),
       );
       return;
     }
@@ -275,15 +276,14 @@ class _SocialVideoEditorScreenState extends State<SocialVideoEditorScreen> {
     final maxSeconds =
         metadata == null ? 90.0 : metadata.duration.inMilliseconds / 1000;
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit short video')),
+      appBar: AppBar(title: const UniversalText('Edit short video')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : metadata == null || trim == null
               ? const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text(
-                      'This video could not be edited. Choose another local video and try again.',
+                    child: UniversalText('This video could not be edited. Choose another local video and try again.',
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -291,8 +291,7 @@ class _SocialVideoEditorScreenState extends State<SocialVideoEditorScreen> {
               : ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
-                    const Text(
-                      'Trim to 90 seconds or less',
+                    const UniversalText('Trim to 90 seconds or less',
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                     RangeSlider(
@@ -319,15 +318,15 @@ class _SocialVideoEditorScreenState extends State<SocialVideoEditorScreen> {
                       initialValue: _aspectRatio,
                       decoration: const InputDecoration(labelText: 'Crop'),
                       items: const [
-                        DropdownMenuItem(value: 0, child: Text('Original')),
-                        DropdownMenuItem(value: 1, child: Text('Square · 1:1')),
+                        DropdownMenuItem(value: 0, child: UniversalText('Original')),
+                        DropdownMenuItem(value: 1, child: UniversalText('Square · 1:1')),
                         DropdownMenuItem(
                           value: 9 / 16,
-                          child: Text('Portrait · 9:16'),
+                          child: UniversalText('Portrait · 9:16'),
                         ),
                         DropdownMenuItem(
                           value: 16 / 9,
-                          child: Text('Landscape · 16:9'),
+                          child: UniversalText('Landscape · 16:9'),
                         ),
                       ],
                       onChanged: _rendering
@@ -345,8 +344,7 @@ class _SocialVideoEditorScreenState extends State<SocialVideoEditorScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Choose a cover frame',
+                    const UniversalText('Choose a cover frame',
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 8),
@@ -396,7 +394,7 @@ class _SocialVideoEditorScreenState extends State<SocialVideoEditorScreen> {
                     OutlinedButton.icon(
                       onPressed: _rendering ? null : () => _render(export: true),
                       icon: const Icon(Icons.ios_share_rounded),
-                      label: const Text('Export to another app'),
+                      label: const UniversalText('Export to another app'),
                     ),
                   ],
                 ),

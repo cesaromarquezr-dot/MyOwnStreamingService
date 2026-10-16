@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Displays account security controls backed by the authenticated API.
 class SecuritySettingsScreen extends StatefulWidget {
@@ -61,9 +62,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         final code = await showDialog<String>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Verify MFA'),
+            title: const UniversalText('Verify MFA'),
             content: TextField(controller: controller, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit email code')),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Verify'))],
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const UniversalText('Verify'))],
           ),
         );
         controller.dispose();
@@ -87,19 +88,19 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       final values = await showDialog<List<String>>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Change password'),
+          title: const UniversalText('Change password'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: current, obscureText: true, decoration: const InputDecoration(labelText: 'Current password')),
             TextField(controller: next, obscureText: true, decoration: const InputDecoration(labelText: 'New password (10+ characters)')),
             TextField(controller: confirmed, obscureText: true, decoration: const InputDecoration(labelText: 'Confirm new password')),
           ]),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, [current.text, next.text, confirmed.text]), child: const Text('Change'))],
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, [current.text, next.text, confirmed.text]), child: const UniversalText('Change'))],
         ),
       );
       if (values == null) return;
       if (values[1] != values[2]) throw Exception('New passwords do not match.');
       await AppController.instance.backendApi.changePassword(currentPassword: values[0], newPassword: values[1]);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed. Sign in again on this device.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Password changed. Sign in again on this device.')));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
@@ -110,7 +111,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Security & Privacy')),
+      appBar: AppBar(title: const UniversalText('Security & Privacy')),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -118,10 +119,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
               child: ListView(padding: const EdgeInsets.all(18), children: [
                 if (error != null) Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(error!))),
                 Card(child: Column(children: [
-                  SwitchListTile(title: const Text('Multi-factor authentication'), subtitle: Text(mfaEnabled ? 'Enabled — email verification is required after password authentication.' : 'Disabled'), value: mfaEnabled, onChanged: (_) => _mfa()),
-                  const ListTile(title: Text('Password protection'), subtitle: Text('Backend password hashes use Argon2id. Plaintext passwords are never stored in the application database.')),
-                  ListTile(leading: const Icon(Icons.password), title: const Text('Change password'), onTap: _changePassword),
-                  const ListTile(title: Text('Passkeys'), subtitle: Text('The security API reserves the WebAuthn/passkey integration surface; passkey credentials are not exposed as passwords or bearer tokens.')),
+                  SwitchListTile(title: const UniversalText('Multi-factor authentication'), subtitle: Text(mfaEnabled ? 'Enabled — email verification is required after password authentication.' : 'Disabled'), value: mfaEnabled, onChanged: (_) => _mfa()),
+                  const ListTile(title: UniversalText('Password protection'), subtitle: UniversalText('Backend password hashes use Argon2id. Plaintext passwords are never stored in the application database.')),
+                  ListTile(leading: const Icon(Icons.password), title: const UniversalText('Change password'), onTap: _changePassword),
+                  const ListTile(title: UniversalText('Passkeys'), subtitle: UniversalText('The security API reserves the WebAuthn/passkey integration surface; passkey credentials are not exposed as passwords or bearer tokens.')),
                 ])),
                 const SizedBox(height: 12),
                 Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -135,7 +136,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                   ),
                 ]))),
                 const SizedBox(height: 12),
-                const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('Transport protection: HTTPS is required for non-local backend endpoints. The backend also applies security headers, CORS restrictions, rate limiting, proxy validation, and bearer-token session authentication.'))),
+                const Card(child: Padding(padding: EdgeInsets.all(16), child: UniversalText('Transport protection: HTTPS is required for non-local backend endpoints. The backend also applies security headers, CORS restrictions, rate limiting, proxy validation, and bearer-token session authentication.'))),
               ]),
             ),
     );

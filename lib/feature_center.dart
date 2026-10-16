@@ -8,6 +8,7 @@ import 'app_core.dart';
 import 'collection_details.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'page_customization_button.dart';
 
 /// Main feature/discovery center for advanced streaming-service features.
 class FeatureCenterScreen extends StatefulWidget {
@@ -515,6 +516,10 @@ class _CollectionsPanelState
         return Scaffold(
           backgroundColor:
               Theme.of(context).scaffoldBackgroundColor,
+          appBar: AppBar(
+            title: const UniversalText('Collections'),
+            actions: const [PageCustomizeButton(pageId: 'collections')],
+          ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(
               16,
@@ -968,12 +973,11 @@ class _CollectionsPanelState
                     itemBuilder: (context) => [
                       const PopupMenuItem(
                         value: 'play',
-                        child: Text('Play'),
+                        child: UniversalText('Play'),
                       ),
                       const PopupMenuItem(
                         value: 'browse',
-                        child: Text(
-                          'Browse titles',
+                        child: UniversalText('Browse titles',
                         ),
                       ),
                       if (shared &&
@@ -981,16 +985,14 @@ class _CollectionsPanelState
                           !automatic)
                         const PopupMenuItem(
                           value: 'contributors',
-                          child: Text(
-                            'Manage contributors',
+                          child: UniversalText('Manage contributors',
                           ),
                         ),
                       if (!collection.isOfficial &&
                           editable)
                         const PopupMenuItem(
                           value: 'delete',
-                          child: Text(
-                            'Delete',
+                          child: UniversalText('Delete',
                           ),
                         ),
                     ],
@@ -1401,11 +1403,11 @@ class _CollectionPreferencesDialog
               items: const [
                 DropdownMenuItem(
                   value: 'Automatic first',
-                  child: Text('Automatic first'),
+                  child: UniversalText('Automatic first'),
                 ),
                 DropdownMenuItem(
                   value: 'Custom first',
-                  child: Text('Custom first'),
+                  child: UniversalText('Custom first'),
                 ),
               ],
               onChanged: (value) {
@@ -1429,11 +1431,11 @@ class _CollectionPreferencesDialog
               items: const [
                 DropdownMenuItem(
                   value: 'Grid',
-                  child: Text('Grid'),
+                  child: UniversalText('Grid'),
                 ),
                 DropdownMenuItem(
                   value: 'List',
-                  child: Text('List'),
+                  child: UniversalText('List'),
                 ),
               ],
               onChanged: (value) {

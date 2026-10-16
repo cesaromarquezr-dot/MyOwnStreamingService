@@ -13,9 +13,9 @@ import 'library_release.dart';
 import 'movies.dart';
 import 'music.dart';
 import 'my_tv.dart';
-import 'radio.dart';
 import 'series.dart';
 import 'social_center.dart';
+import 'localization.dart';
 
 class LibraryHubScreen extends StatelessWidget {
   const LibraryHubScreen({super.key});
@@ -62,12 +62,6 @@ class LibraryHubScreen extends StatelessWidget {
             'Albums, artists and tracks',
             Icons.music_note_rounded,
             () => _push(context, const MusicScreen()),
-          ),
-          'radio': _HubEntry(
-            'Radio',
-            'Live and saved stations',
-            Icons.radio_rounded,
-            () => _push(context, const RadioScreen()),
           ),
           'collections': _HubEntry(
             'Collections',
@@ -138,7 +132,7 @@ class LibraryHubScreen extends StatelessWidget {
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.storage_rounded),
-                  title: const Text('Account-wide library storage'),
+                  title: const UniversalText('Account-wide library storage'),
                   subtitle: Text(
                     'One physical copy lives on the account home NAS. ${controller.currentAccount?.profiles.length ?? 0} profiles share access while keeping their own progress, ratings and collections.',
                   ),
@@ -212,10 +206,17 @@ class LibraryHubScreen extends StatelessWidget {
 }
 
 class FriendsAndCommunitiesScreen extends StatelessWidget {
-  const FriendsAndCommunitiesScreen({super.key});
+  final String? initialConversationId;
+
+  const FriendsAndCommunitiesScreen({
+    super.key,
+    this.initialConversationId,
+  });
 
   @override
-  Widget build(BuildContext context) => const SocialCenterScreen();
+  Widget build(BuildContext context) => SocialCenterScreen(
+        initialConversationId: initialConversationId,
+      );
 }
 
 class _HubScaffold extends StatelessWidget {
@@ -359,7 +360,6 @@ void _push(BuildContext context, Widget page) {
     SeriesScreen() => 'series',
     MusicScreen() => 'music',
     LibraryActorsScreen() => 'actors',
-    RadioScreen() => 'radio',
     CollectionsPanel() => 'collections',
     MyTvScreen() => 'my-tv',
     FavoritesScreen() => 'favorites',

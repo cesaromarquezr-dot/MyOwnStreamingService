@@ -1,0 +1,60 @@
+{
+  "title": "MyOwnStreamingService Analyzer Fixes",
+  "baseline_archive": "MyOwnStreamingService_streaming_experience_updated.zip",
+  "created_at": "2026-10-15T17:37:09.388343+00:00",
+  "summary": {
+    "modified": 5,
+    "created": 0,
+    "deleted": 0
+  },
+  "changes": [
+    {
+      "status": "MODIFIED",
+      "path": "lib/food_delivery.dart",
+      "sha256_before": "8fbb8b6f18e4a3f8b0e24987aa700bbcac68ccedb95e78b593334af7bf36dc8e",
+      "sha256_after": "eff39948afe5bc2071658e25768457846a39d581b3924a87348a6abb639136ef",
+      "bytes_after": 213966
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/streaming_experience.dart",
+      "sha256_before": "a0ea56cd634ffc3216dd7fe56c62e82cffeab3e9ec5252bfcfccbd180d39b3eb",
+      "sha256_after": "9713fd05be5c4ba6290ddeb74925cb38e4d4099752fde11f5cfcad636c8234b4",
+      "bytes_after": 32327
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/main.dart",
+      "sha256_before": "d97035010f75038d2c02acc4f066f2afacca123b05d3501f19c962478262700a",
+      "sha256_after": "43c3375009f70cd79f20e5429a3613d2735b1b4ff6d6074c51681f26fb4fe6ed",
+      "bytes_after": 304304
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/social_center.dart",
+      "sha256_before": "c1d3998678eae8e57489814cd1236d08f01946e8c644ec0fa105265b46c341c2",
+      "sha256_after": "9358917cea122b92876f5fb5dd09daf14a55249bb56f678df7f88e2b332cc735",
+      "bytes_after": 195973
+    },
+    {
+      "status": "MODIFIED",
+      "path": "lib/social_home.dart",
+      "sha256_before": "8cfb9d876e69360b7cb1514507c6a54a606ed879434f9635dfc3143e0c074ad1",
+      "sha256_after": "4be25f584c0b743671aca231fa294ea4555728ed55b57c53e914b42ca4cd52de",
+      "bytes_after": 21991
+    }
+  ],
+  "validation": {
+    "archive_source_snapshot_extracted": "passed",
+    "reported_analyzer_fixes_applied": "source-level reviewed",
+    "flutter_analyze": "not run; Flutter/Dart SDK unavailable in packaging environment",
+    "flutter_test": "not run; Flutter/Dart SDK unavailable in packaging environment",
+    "changed_source_files_detected": [
+      "lib/food_delivery.dart",
+      "lib/main.dart",
+      "lib/social_center.dart",
+      "lib/social_home.dart",
+      "lib/streaming_experience.dart"
+    ]
+  }
+}

@@ -7,6 +7,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'privacy_preferences.dart';
 import 'details.dart';
 import 'localization.dart';
 
@@ -46,7 +47,7 @@ class SmartSearch {
     final scored = <_SearchMatch>[];
     final recommendationIds = <String, int>{
       for (var i = 0; i < AppController.instance.recommendations.length; i++)
-        AppController.instance.recommendations[i].id: (50 - i).clamp(5, 50),
+        AppController.instance.recommendations[i].id: (50 - i).clamp(5, 50).toInt(),
     };
 
     for (final media in library) {
@@ -84,10 +85,44 @@ class SmartSearch {
           rating == normalizedQuery;
 
       if (matchesExactTitle) {
-        score += 100;
+        score += 120;
       } else if (matchesTitle) {
-        score += 60;
+        score += 70;
+      } else if (normalizedQuery.length >= 4) {
+        // Typo tolerance for short title queries (e.g. "batmn" → "Batman").
+        // Bounded edit distance avoids turning broad searches into unrelated matches.
+        final titleTokens = normalizedTitle.split(' ').where((part) => part.isNotEmpty);
+        final queryTokens = normalizedQuery.split(' ').where((part) => part.isNotEmpty).toList();
+        if (queryTokens.length == 1) {
+          var bestDistance = 99;
+          for (final token in titleTokens) {
+            if ((token.length - normalizedQuery.length).abs() > 2) continue;
+            final distance = _editDistance(token, normalizedQuery, maxDistance: 2);
+            if (distance < bestDistance) bestDistance = distance;
+          }
+          if (bestDistance <= (normalizedQuery.length >= 8 ? 2 : 1)) {
+            score += bestDistance == 0 ? 65 : bestDistance == 1 ? 38 : 24;
+          }
+        } else if (queryTokens.every((queryToken) => titleTokens.any((titleToken) =>
+            (titleToken.length - queryToken.length).abs() <= 1 &&
+            _editDistance(titleToken, queryToken, maxDistance: 1) <= 1))) {
+          score += 35;
+        }
       }
+
+      final metadataFields = <String>[
+        ...media.actors,
+        ...media.directors,
+        ...media.writers,
+        ...media.genres,
+        ...media.tags,
+        ...media.music,
+        ...media.studios,
+        ...media.companies,
+        if (media.franchiseName != null) media.franchiseName!,
+      ];
+      final matchesMetadata = _matchesMetadata(normalizedQuery, metadataFields);
+      if (matchesMetadata) score += 28;
 
       if (matchesDescription) {
         score += 20;
@@ -113,9 +148,9 @@ class SmartSearch {
         score += 70;
       }
 
-      score += recommendationIds[media.id] ?? 0;
-
       if (score > 0) {
+        // Personal relevance is a tie-breaker only after a genuine query match.
+        score += recommendationIds[media.id] ?? 0;
         scored.add(
           _SearchMatch(
             media: media,
@@ -145,16 +180,136 @@ class SmartSearch {
         .toList();
   }
 
+  /// Ranks the account's own library using backend recommendations when present,
+  /// plus a transparent local fallback based on likes, watch history and metadata.
+  /// This is a lightweight personal relevance model, not a claim of ML training.
   static List<MediaItem> recommendations(List<MediaItem> library, {int limit = 12}) {
-    final allowed = library.map((m) => m.id).toSet();
-    final recommended = AppController.instance.recommendations
-        .where((media) => allowed.contains(media.id))
-        .toList();
-    final fallback = library
-        .where((media) => !recommended.any((item) => item.id == media.id))
-        .toList()
-      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-    return [...recommended, ...fallback].take(limit).toList();
+    if (limit <= 0 || library.isEmpty) return <MediaItem>[];
+    final controller = AppController.instance;
+    final profileId = controller.currentProfile?.id;
+    if (!PrivacyPreferencesStore.cached(profileId).personalizedRecommendations) {
+      final excluded = <String>{
+        ...controller.disliked.map((item) => item.id),
+        ...controller.watched.map((item) => item.id),
+      };
+      final generic = library.where((item) =>
+          !excluded.contains(item.id) &&
+          controller.getPlaybackProgress(item.id) < 0.95).toList()
+        ..sort((a, b) {
+          final added = b.addedAt.compareTo(a.addedAt);
+          return added != 0 ? added : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
+      return generic.take(limit).toList(growable: false);
+    }
+    final explicitRank = <String, int>{
+      for (var i = 0; i < controller.recommendations.length; i++)
+        controller.recommendations[i].id: (100 - i).clamp(20, 100).toInt(),
+    };
+    final dislikedIds = controller.disliked.map((media) => media.id).toSet();
+    final completedIds = controller.watched.map((media) => media.id).toSet();
+    final likedSeeds = controller.liked.toList(growable: false);
+    final watchedSeeds = <MediaItem>[
+      ...controller.watched,
+      ...library.where((media) {
+        final progress = controller.getPlaybackProgress(media.id);
+        return progress >= 0.15 && progress < 0.95;
+      }),
+    ];
+
+    final candidates = library.where((media) =>
+        !dislikedIds.contains(media.id) &&
+        !completedIds.contains(media.id) &&
+        controller.getPlaybackProgress(media.id) < 0.95).toList();
+
+    int overlap(List<String> left, List<String> right) {
+      final rightValues = right.map(_normalize).where((value) => value.isNotEmpty).toSet();
+      return left.map(_normalize).where((value) => value.isNotEmpty && rightValues.contains(value)).toSet().length;
+    }
+
+    double similarity(MediaItem candidate, MediaItem seed) {
+      var value = 0.0;
+      value += overlap(candidate.genres, seed.genres) * 7;
+      value += overlap(candidate.actors, seed.actors) * 5;
+      value += overlap(candidate.directors, seed.directors) * 6;
+      value += overlap(candidate.writers, seed.writers) * 2.5;
+      value += overlap(candidate.tags, seed.tags) * 3.5;
+      value += overlap(candidate.music, seed.music) * 2;
+      value += overlap(candidate.studios, seed.studios) * 2;
+      value += overlap(candidate.companies, seed.companies) * 1.5;
+      final candidateFranchise = _normalize(candidate.franchiseName ?? '');
+      final seedFranchise = _normalize(seed.franchiseName ?? '');
+      if (candidateFranchise.isNotEmpty && candidateFranchise == seedFranchise) value += 9;
+      if (_normalize(candidate.type) == _normalize(seed.type)) value += 1.5;
+      return value;
+    }
+
+    final scores = <String, double>{};
+    for (final candidate in candidates) {
+      var score = (explicitRank[candidate.id] ?? 0).toDouble();
+      for (final seed in likedSeeds) {
+        if (seed.id != candidate.id) score += similarity(candidate, seed) * 1.8;
+      }
+      for (final seed in watchedSeeds) {
+        if (seed.id != candidate.id) score += similarity(candidate, seed);
+      }
+      final criticRating = (candidate.rating ?? 0).clamp(0, 10).toDouble();
+      score += criticRating * 0.25;
+      score += ((candidate.userRatingStars ?? 0).clamp(0, 5).toDouble()) * 0.5;
+      final ageDays = DateTime.now().difference(candidate.addedAt).inDays;
+      if (ageDays >= 0) score += (5 - ageDays / 30).clamp(0, 5).toDouble();
+      scores[candidate.id] = score;
+    }
+
+    candidates.sort((a, b) {
+      final scoreCompare = (scores[b.id] ?? 0).compareTo(scores[a.id] ?? 0);
+      if (scoreCompare != 0) return scoreCompare;
+      final dateCompare = b.addedAt.compareTo(a.addedAt);
+      if (dateCompare != 0) return dateCompare;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return candidates.take(limit).toList(growable: false);
+  }
+
+  static bool _matchesMetadata(String query, Iterable<String> fields) {
+    final queryTokens = query.split(' ').where((part) => part.isNotEmpty).toList();
+    for (final field in fields) {
+      final normalized = _normalize(field);
+      if (normalized.contains(query)) return true;
+      if (query.length < 4) continue;
+      final fieldTokens = normalized.split(' ').where((part) => part.isNotEmpty);
+      if (queryTokens.every((queryToken) => fieldTokens.any((token) =>
+          (token.length - queryToken.length).abs() <= 1 &&
+          _editDistance(token, queryToken, maxDistance: 1) <= 1))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static int _editDistance(String left, String right, {required int maxDistance}) {
+    if ((left.length - right.length).abs() > maxDistance) return maxDistance + 1;
+    if (left == right) return 0;
+    if (left.isEmpty) return right.length;
+    if (right.isEmpty) return left.length;
+
+    var previous = List<int>.generate(right.length + 1, (index) => index);
+    for (var i = 1; i <= left.length; i++) {
+      final current = List<int>.filled(right.length + 1, maxDistance + 1);
+      current[0] = i;
+      var rowMinimum = current[0];
+      for (var j = 1; j <= right.length; j++) {
+        final substitutionCost = left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
+        current[j] = <int>[
+          current[j - 1] + 1,
+          previous[j] + 1,
+          previous[j - 1] + substitutionCost,
+        ].reduce((a, b) => a < b ? a : b);
+        if (current[j] < rowMinimum) rowMinimum = current[j];
+      }
+      if (rowMinimum > maxDistance) return maxDistance + 1;
+      previous = current;
+    }
+    return previous[right.length];
   }
 
   static String _normalize(String value) {
@@ -624,9 +779,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Recommended for you', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                const UniversalText('Recommended for you', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
-                Text('Based on your watch history, likes, genres, and the recommendation engine.', style: TextStyle(color: Colors.white.withValues(alpha: .58))),
+                UniversalText('Based on your watch history, likes, genres, and the recommendation engine.', style: TextStyle(color: Colors.white.withValues(alpha: .58))),
               ],
             ),
           ),

@@ -14,6 +14,8 @@ import 'profile_content_safety.dart';
 import 'core/services/tv_programming_service.dart';
 import 'core/models/tv_channel.dart';
 import 'core/services/tv_channel_engine.dart';
+import 'localization.dart';
+import 'page_customization_button.dart';
 
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
 
@@ -312,7 +314,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content:
-                  Text('Saved on this device. Server sync will retry later.'),
+                  UniversalText('Saved on this device. Server sync will retry later.'),
             ),
           );
         }
@@ -639,6 +641,37 @@ class _MyTvScreenState extends State<MyTvScreen> {
     );
   }
 
+  Future<void> _addChannelPreset({
+    required String name,
+    required List<String> contentTypes,
+    String filterText = '',
+    bool favoritesOnly = false,
+  }) async {
+    final existing = _channels.where((channel) => channel.name.toLowerCase() == name.toLowerCase()).toList();
+    if (existing.isNotEmpty) {
+      setState(() => _selectedChannelId = existing.first.id);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Opened your "$name" channel.')));
+      return;
+    }
+    final channel = _MyTvChannel(
+      id: 'my_tv_preset_${DateTime.now().microsecondsSinceEpoch}',
+      name: name,
+      contentTypes: contentTypes,
+      filterText: filterText,
+      favoritesOnly: favoritesOnly,
+      startTimeMinutes: 7 * 60,
+      shuffle: name != 'Seasonal Spotlight',
+    );
+    setState(() {
+      _channels = [..._channels, channel];
+      _selectedChannelId = channel.id;
+      _showGuide = false;
+    });
+    await _save();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Created "$name" from your profile-accessible library.')));
+  }
+
   Future<void> _addChannel() async {
     final name = TextEditingController();
     final filterText = TextEditingController();
@@ -651,7 +684,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create a channel'),
+          title: const UniversalText('Create a channel'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(
@@ -679,7 +712,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: EdgeInsets.only(top: 12),
-                    child: Text('Include in channel'),
+                    child: UniversalText('Include in channel'),
                   )),
               Wrap(
                 spacing: 8,
@@ -700,16 +733,14 @@ class _MyTvScreenState extends State<MyTvScreen> {
               const SizedBox(height: 14),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'Channel metadata',
+                child: UniversalText('Channel metadata',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
                 ),
               ),
               const SizedBox(height: 4),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  "Choose genres, tags, studios, franchises, or people from this profile's library.",
+                child: UniversalText("Choose genres, tags, studios, franchises, or people from this profile's library.",
                   style: TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ),
@@ -755,22 +786,21 @@ class _MyTvScreenState extends State<MyTvScreen> {
               ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Only include liked items'),
+                title: const UniversalText('Only include liked items'),
                 value: favoritesOnly,
                 onChanged: (value) =>
                     setDialogState(() => favoritesOnly = value ?? false),
               ),
-              const Text(
-                  'Channels use media available to this profile. Music can also match soundtrack titles linked to matching movies or shows in your library.'),
+              const UniversalText('Channels use media available to this profile. Music can also match soundtrack titles linked to matching movies or shows in your library.'),
             ]),
           ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel')),
+                child: const UniversalText('Cancel')),
             FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Create')),
+                child: const UniversalText('Create')),
           ],
         ),
       ),
@@ -801,17 +831,16 @@ class _MyTvScreenState extends State<MyTvScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Delete ${channel.name}?'),
-        content: const Text(
-          'This removes the channel from your account. Your library and media are not deleted.',
+        content: const UniversalText('This removes the channel from your account. Your library and media are not deleted.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: const UniversalText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete channel'),
+            child: const UniversalText('Delete channel'),
           ),
         ],
       ),
@@ -868,7 +897,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('My TV Music'),
+          title: const UniversalText('My TV Music'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -885,9 +914,9 @@ class _MyTvScreenState extends State<MyTvScreen> {
                     initialValue: mode,
                     decoration: const InputDecoration(labelText: 'Music schedule'),
                     items: const [
-                      DropdownMenuItem(value: 'none', child: Text('No music breaks')),
-                      DropdownMenuItem(value: 'per_program', child: Text('X songs per movie / episode')),
-                      DropdownMenuItem(value: 'every_minutes', child: Text('X songs every Y minutes')),
+                      DropdownMenuItem(value: 'none', child: UniversalText('No music breaks')),
+                      DropdownMenuItem(value: 'per_program', child: UniversalText('X songs per movie / episode')),
+                      DropdownMenuItem(value: 'every_minutes', child: UniversalText('X songs every Y minutes')),
                     ],
                     onChanged: (value) => setDialogState(() => mode = value ?? 'none'),
                   ),
@@ -929,8 +958,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
                       initialValue: source,
                       decoration: const InputDecoration(labelText: 'Music source'),
                       items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All music available to this profile')),
-                        DropdownMenuItem(value: 'favorites', child: Text('Favorite songs')),
+                        DropdownMenuItem(value: 'all', child: UniversalText('All music available to this profile')),
+                        DropdownMenuItem(value: 'favorites', child: UniversalText('Favorite songs')),
                       ],
                       onChanged: (value) => setDialogState(() => source = value ?? 'all'),
                     ),
@@ -949,24 +978,24 @@ class _MyTvScreenState extends State<MyTvScreen> {
                       initialValue: placement,
                       decoration: const InputDecoration(labelText: 'Place music'),
                       items: const [
-                        DropdownMenuItem(value: 'before', child: Text('Before the episode / movie')),
-                        DropdownMenuItem(value: 'after', child: Text('After the episode / movie')),
-                        DropdownMenuItem(value: 'before_after', child: Text('Before and after')),
-                        DropdownMenuItem(value: 'between', child: Text('Between episodes / movies')),
-                        DropdownMenuItem(value: 'throughout', child: Text('Throughout the scheduled programming')),
+                        DropdownMenuItem(value: 'before', child: UniversalText('Before the episode / movie')),
+                        DropdownMenuItem(value: 'after', child: UniversalText('After the episode / movie')),
+                        DropdownMenuItem(value: 'before_after', child: UniversalText('Before and after')),
+                        DropdownMenuItem(value: 'between', child: UniversalText('Between episodes / movies')),
+                        DropdownMenuItem(value: 'throughout', child: UniversalText('Throughout the scheduled programming')),
                       ],
                       onChanged: (value) => setDialogState(() => placement = value ?? 'between'),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Prefer natural break points'),
-                      subtitle: const Text('Keep music between programs instead of pretending there are commercial breaks.'),
+                      title: const UniversalText('Prefer natural break points'),
+                      subtitle: const UniversalText('Keep music between programs instead of pretending there are commercial breaks.'),
                       value: natural,
                       onChanged: (value) => setDialogState(() => natural = value),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Avoid recently played songs'),
+                      title: const UniversalText('Avoid recently played songs'),
                       value: avoidRecent,
                       onChanged: (value) => setDialogState(() => avoidRecent = value),
                     ),
@@ -976,8 +1005,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save music settings')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Save music settings')),
           ],
         ),
       ),
@@ -1011,7 +1040,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add programming rule'),
+          title: const UniversalText('Add programming rule'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1028,7 +1057,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Align(alignment: Alignment.centerLeft, child: Text('Active months')),
+                const Align(alignment: Alignment.centerLeft, child: UniversalText('Active months')),
                 Wrap(
                   spacing: 4,
                   children: List.generate(12, (index) {
@@ -1042,8 +1071,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
                 ),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Program this as a nightly priority'),
-                  subtitle: const Text('For example, every night in October.'),
+                  title: const UniversalText('Program this as a nightly priority'),
+                  subtitle: const UniversalText('For example, every night in October.'),
                   value: nightly,
                   onChanged: (value) => setDialogState(() => nightly = value ?? false),
                 ),
@@ -1051,8 +1080,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Add rule')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add rule')),
           ],
         ),
       ),
@@ -1110,7 +1139,10 @@ class _MyTvScreenState extends State<MyTvScreen> {
         context,
         MaterialPageRoute(
           settings: const RouteSettings(name: '/app/player'),
-          builder: (_) => PlayerScreen(media: entry.media!),
+          builder: (_) => PlayerScreen(
+            media: entry.media!,
+            activityLabel: "Watching TV channel ${_selected?.name ?? 'TV'}: ${entry.media!.title}",
+          ),
         ),
       );
     }
@@ -1123,8 +1155,9 @@ class _MyTvScreenState extends State<MyTvScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My TV'),
+        title: const UniversalText('My TV'),
         actions: [
+          const PageCustomizeButton(pageId: 'my-tv'),
           IconButton(
             onPressed: _loading ? null : () => setState(() => _showGuide = !_showGuide),
             tooltip: 'TV Guide',
@@ -1187,11 +1220,20 @@ class _MyTvScreenState extends State<MyTvScreen> {
                 if (_showGuide)
                   const Padding(
                     padding: EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Unavailable runtimes are estimated at 30 minutes for episodes and 2 hours for movies.',
+                    child: UniversalText('Unavailable runtimes are estimated at 30 minutes for episodes and 2 hours for movies.',
                       style: TextStyle(color: Colors.white38, fontSize: 12),
                     ),
                   ),
+                const SizedBox(height: 14),
+                const UniversalText('Quick channel presets', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  ActionChip(avatar: const Icon(Icons.movie_rounded, size: 17), label: const Text('Movie Mix'), onPressed: _loading ? null : () => _addChannelPreset(name: 'Movie Mix', contentTypes: const ['Movies'])),
+                  ActionChip(avatar: const Icon(Icons.tv_rounded, size: 17), label: const Text('Series Mix'), onPressed: _loading ? null : () => _addChannelPreset(name: 'Series Mix', contentTypes: const ['Shows'])),
+                  ActionChip(avatar: const Icon(Icons.favorite_rounded, size: 17), label: const Text('Favorites'), onPressed: _loading ? null : () => _addChannelPreset(name: 'Favorites', contentTypes: _channelContentTypes, favoritesOnly: true)),
+                  ActionChip(avatar: const Icon(Icons.music_note_rounded, size: 17), label: const Text('Movies + Music'), onPressed: _loading ? null : () => _addChannelPreset(name: 'Movies + Music', contentTypes: const ['Movies', 'Music'])),
+                  ActionChip(avatar: const Icon(Icons.auto_awesome_rounded, size: 17), label: const Text('Seasonal Spotlight'), onPressed: _loading ? null : () => _addChannelPreset(name: 'Seasonal Spotlight', contentTypes: _channelContentTypes)),
+                ]),
                 const SizedBox(height: 16),
                 if (_showGuide) ..._guideCards(context),
                 if (!_showGuide && channel != null) ...[
@@ -1290,9 +1332,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
                     const Card(
                       child: ListTile(
                         leading: Icon(Icons.tv_off_outlined),
-                        title: Text('No programs in this channel yet'),
-                        subtitle: Text(
-                          'Add content to this channel, or create another channel. The TV Guide is generated from this channel’s contents.',
+                        title: UniversalText('No programs in this channel yet'),
+                        subtitle: UniversalText('Add content to this channel, or create another channel. The TV Guide is generated from this channel’s contents.',
                         ),
                       ),
                     )
@@ -1322,8 +1363,8 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   const Card(
                     child: ListTile(
                       leading: Icon(Icons.tv_off_outlined),
-                      title: Text('No channels'),
-                      subtitle: Text('Create a channel to build your TV Guide.'),
+                      title: UniversalText('No channels'),
+                      subtitle: UniversalText('Create a channel to build your TV Guide.'),
                     ),
                   ),
               ],
@@ -1381,7 +1422,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                     ),
                     Expanded(
                       child: entries.isEmpty
-                          ? const Center(child: Text('No matching programs', style: TextStyle(color: Colors.white54)))
+                          ? const Center(child: UniversalText('No matching programs', style: TextStyle(color: Colors.white54)))
                           : ListView.builder(
                               scrollDirection: Axis.horizontal,
                               itemCount: entries.length,
@@ -1428,7 +1469,7 @@ class _MyTvScreenState extends State<MyTvScreen> {
                   SizedBox(
                     height: headerHeight,
                     child: Row(children: [
-                      Container(width: channelWidth, padding: const EdgeInsets.all(12), alignment: Alignment.centerLeft, child: const Text('CHANNELS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2))),
+                      Container(width: channelWidth, padding: const EdgeInsets.all(12), alignment: Alignment.centerLeft, child: const UniversalText('CHANNELS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2))),
                       for (var i = 0; i < 12; i++)
                         SizedBox(width: slotWidth, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 15), child: Text(TimeOfDay(hour: ((DateTime.now().hour * 60 + DateTime.now().minute + i * 30) ~/ 60) % 24, minute: (DateTime.now().minute + i * 30) % 60).format(context), style: const TextStyle(fontSize: 11, color: Colors.white54)))),
                     ]),

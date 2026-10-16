@@ -10,6 +10,15 @@ create table if not exists food_restaurants (
   cuisine text not null,
   description text not null default '',
   phone text not null default '',
+  opening_hours text not null default 'Hours not provided',
+  business_hours jsonb not null default '{}'::jsonb,
+  contact_methods text[] not null default array['call']::text[],
+  contact_email text,
+  whatsapp_number text,
+  imessage_address text,
+  sms_number text,
+  website text,
+  is_24_7 boolean not null default false,
   address text not null default '',
   city text not null default '',
   state_region text not null default '',
@@ -17,7 +26,7 @@ create table if not exists food_restaurants (
   country_code char(2) not null default '',
   latitude double precision not null,
   longitude double precision not null,
-  rating numeric(3,2) not null default 0,
+  rating numeric(3,2) not null default 0 check (rating between 0 and 5),
   review_count integer not null default 0,
   delivery_fee_cents integer not null default 0 check (delivery_fee_cents >= 0),
   service_fee_cents integer not null default 199 check (service_fee_cents >= 0),
@@ -52,6 +61,10 @@ create table if not exists food_menu_items (
   image_url text,
   available boolean not null default true,
   tags text[] not null default '{}',
+  theme_keys text[] not null default '{}',
+  ingredients text[] not null default '{}',
+  allergens text[] not null default '{}',
+  removable_ingredients text[] not null default '{}',
   modifier_groups jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -209,3 +222,6 @@ on conflict (id) do update set
   public = excluded.public,
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
+
+create index if not exists idx_food_menu_items_theme_keys
+  on food_menu_items using gin (theme_keys);

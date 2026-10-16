@@ -61,3 +61,11 @@ The agent currently supports direct file streaming and byte ranges. It does not 
 - The playback URL is a bearer capability until expiry; do not log full query strings or share URLs.
 - Restrict reverse-proxy routes, rate-limit playback creation, and use account/profile entitlement checks before issuing URLs.
 - Review TrueNAS ACLs and test access with the dedicated read-only identity.
+
+## Backup and restore operations
+
+For the Supabase database and sanitized application snapshot, see `scripts/production/backup.sh` and `scripts/production/restore_supabase.sh`. Run these from an environment with `pg_dump`, `pg_restore`, `age`, and GNU tar, using a private `BACKUP_ROOT` outside the media dataset. Configure a scheduled TrueNAS task or a secured host cron job and send backups to a separate protected destination. The scripts deliberately exclude movie/music media payloads and local secret files. Configure separate ZFS snapshots and replication for each media dataset, and exercise the restore checklist in `docs/RECOVERY_DRILL_CHECKLIST.md`. Do not expose the Supabase service-role key or age private identity to Flutter or the web client.
+
+### Encrypted backup work area
+
+Use `scripts/production/backup.sh` with `BACKUP_WORK_ROOT` on private tmpfs or encrypted scratch storage. Plaintext database dumps exist there temporarily; keep it separate from the source/media dataset. Configure independent ZFS snapshots/replication for actual media payloads and test restore procedures regularly.

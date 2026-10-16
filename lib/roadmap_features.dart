@@ -20,6 +20,7 @@ import 'reviews.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
 import 'localization.dart';
+import 'expanded_platform.dart';
 
 /// Implements the `RoadmapFeaturesScreen` class for this feature or UI component.
 class RoadmapFeaturesScreen extends StatelessWidget {
@@ -154,6 +155,7 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(140, 'ARM Media Scanner', Icons.disc_full_rounded, 'Scan completed ARM media and synchronize discovered files into Flutter.', (_) => const HomeServerScreen()),
       _RoadmapFeature(141, 'Server Storage Dashboard', Icons.storage_rounded, 'Display Movies, Series, Music and available storage with hover details.', (_) => const StorageDashboardScreen()),
       _RoadmapFeature(142, 'Custom Storage Visualization', Icons.color_lens_rounded, 'Customize storage category colors and progress visualization.', (_) => const StorageDashboardScreen()),
+      _RoadmapFeature(143, 'Expanded Platform Capability Center', Icons.hub_rounded, 'Browse new AI, discovery, social, commerce, privacy, reliability and operations capabilities.', (_) => const ExpandedPlatformScreen()),
     ];
 
     return Scaffold(

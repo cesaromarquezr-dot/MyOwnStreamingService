@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'privacy_preferences.dart';
+
 /// Implements the `BackendApiException` class for this feature or UI component.
 class BackendApiException implements Exception {
   final String message;
@@ -3117,40 +3119,6 @@ class BackendApi {
         : <Map<String, dynamic>>[];
   }
 
-  Future<List<Map<String, dynamic>>> getRadioStations({
-    String? countryCode,
-    String? state,
-    String? city,
-    String? query,
-    String? tag,
-    String? band,
-    int limit = 40,
-  }) async {
-    _requireAuthentication();
-    final queryParameters = <String, String>{
-      if (countryCode?.trim().isNotEmpty == true)
-        'countryCode': countryCode!.trim(),
-      if (state?.trim().isNotEmpty == true) 'state': state!.trim(),
-      if (city?.trim().isNotEmpty == true) 'city': city!.trim(),
-      if (query?.trim().isNotEmpty == true) 'q': query!.trim(),
-      if (tag?.trim().isNotEmpty == true) 'tag': tag!.trim(),
-      if (band?.trim().isNotEmpty == true) 'band': band!.trim(),
-      'limit': '${limit.clamp(1, 100)}',
-    };
-    final uri = Uri.parse('$baseUrl/radio/stations')
-        .replace(queryParameters: queryParameters);
-    final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
-      'Unable to load radio stations.',
-    );
-    return data['stations'] is List
-        ? (data['stations'] as List)
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList()
-        : <Map<String, dynamic>>[];
-  }
-
   Future<List<Map<String, dynamic>>> getMediaSeasons(
       {required String seriesId}) async {
     _requireAuthentication();
@@ -3341,6 +3309,44 @@ class BackendApi {
     );
   }
 
+  Future<Map<String, dynamic>> getSocialAccountProfiles({
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/social/account-profiles').replace(
+      queryParameters: {'profileId': profileId},
+    );
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load profile activity.',
+    );
+  }
+
+  Future<Map<String, dynamic>> createSocialAccountConversation({
+    required String profileId,
+    required String targetProfileId,
+  }) =>
+      _socialPost(
+        'conversations',
+        {'profileId': profileId, 'targetProfileId': targetProfileId},
+        'Unable to start an account profile conversation.',
+      );
+
+  Future<Map<String, dynamic>> createSocialAccountGroupConversation({
+    required String profileId,
+    required String title,
+    required List<String> profileIds,
+  }) =>
+      _socialPost(
+        'conversations',
+        {
+          'profileId': profileId,
+          'title': title,
+          'profileIds': profileIds,
+        },
+        'Unable to create an account group chat.',
+      );
+
   Future<Map<String, dynamic>> createSocialConversation({
     required String profileId,
     required String username,
@@ -3490,20 +3496,28 @@ class BackendApi {
     String? nickname,
     bool clearActivity = false,
     bool clearNickname = false,
-  }) =>
-      _socialPost(
-        'presence',
-        {
-          'profileId': profileId,
-          if (availability != null) 'availability': availability,
-          if (activityType != null) 'activityType': activityType,
-          if (activityText != null) 'activityText': activityText,
-          if (nickname != null) 'nickname': nickname,
-          if (clearActivity) 'clearActivity': true,
-          if (clearNickname) 'clearNickname': true,
-        },
-        'Unable to update profile presence.',
-      );
+  }) async {
+    final privacy = await PrivacyPreferencesStore.load(profileId: profileId);
+    // Suppress all presence network writes when the profile disabled presence.
+    // When disabling it, the settings screen first sends one final 'away' update.
+    if (!privacy.sharePresence) {
+      return <String, dynamic>{'success': true, 'suppressedByPrivacy': true};
+    }
+    final allowActivity = privacy.shareActivity;
+    return _socialPost(
+      'presence',
+      {
+        'profileId': profileId,
+        if (availability != null) 'availability': availability,
+        if (allowActivity && activityType != null) 'activityType': activityType,
+        if (allowActivity && activityText != null) 'activityText': activityText,
+        if (nickname != null) 'nickname': nickname,
+        if (clearActivity || !allowActivity) 'clearActivity': true,
+        if (clearNickname) 'clearNickname': true,
+      },
+      'Unable to update profile presence.',
+    );
+  }
 
   Future<Map<String, dynamic>> setSocialMessageNickname({
     required String profileId,

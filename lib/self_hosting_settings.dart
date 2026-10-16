@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 /// Displays Cloudflare, reverse-proxy, DDNS, VPN, and port status.
 class SelfHostingSettingsScreen extends StatefulWidget {
@@ -36,18 +37,18 @@ class _SelfHostingSettingsScreenState extends State<SelfHostingSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Self-hosting & Server Connection')),
+      appBar: AppBar(title: const UniversalText('Self-hosting & Server Connection')),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
           const Card(child: ListTile(
             leading: Icon(Icons.security),
-            title: Text('Production connection'),
-            subtitle: Text('Use the public HTTPS hostname. The internal Dart port should remain behind the firewall and reverse proxy.'),
+            title: UniversalText('Production connection'),
+            subtitle: UniversalText('Use the public HTTPS hostname. The internal Dart port should remain behind the firewall and reverse proxy.'),
           )),
           if (error != null) Card(child: ListTile(
             leading: const Icon(Icons.error_outline),
-            title: const Text('Status unavailable'),
+            title: const UniversalText('Status unavailable'),
             subtitle: Text(error!),
           )),
           if (status != null) ...[
@@ -60,7 +61,7 @@ class _SelfHostingSettingsScreenState extends State<SelfHostingSettingsScreen> {
             _item('Internal backend port', (status!['ports'] as Map?)?['internalBackend']),
           ],
           const SizedBox(height: 12),
-          FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Refresh status')),
+          FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const UniversalText('Refresh status')),
         ],
       ),
     );

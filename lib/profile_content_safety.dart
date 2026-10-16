@@ -195,15 +195,15 @@ class _ProfileContentSafetyScreenState
                 items: const [
                   DropdownMenuItem(
                     value: SharedProfileChildAccessMode.sharedAllowed,
-                    child: Text('Allow shared profile use'),
+                    child: UniversalText('Allow shared profile use'),
                   ),
                   DropdownMenuItem(
                     value: SharedProfileChildAccessMode.separatePreferred,
-                    child: Text('Prefer a separate child profile'),
+                    child: UniversalText('Prefer a separate child profile'),
                   ),
                   DropdownMenuItem(
                     value: SharedProfileChildAccessMode.separateRequired,
-                    child: Text('Require a separate child profile'),
+                    child: UniversalText('Require a separate child profile'),
                   ),
                 ],
                 onChanged: _serverLoading ? null : (value) {
@@ -257,7 +257,7 @@ class _ProfileContentSafetyScreenState
               MaterialPageRoute(builder: (_) => const PlatformExpansionScreen()),
             ),
             icon: const Icon(Icons.tune_rounded),
-            label: const Text('OPEN ADVANCED SAFETY SETTINGS'),
+            label: const UniversalText('OPEN ADVANCED SAFETY SETTINGS'),
           ),
         ],
       ),

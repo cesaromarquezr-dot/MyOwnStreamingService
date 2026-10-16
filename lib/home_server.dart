@@ -12,6 +12,7 @@ import 'storage_dashboard.dart';
 import 'music.dart';
 import 'shop.dart';
 import 'localization.dart';
+import 'entertainment_studio.dart';
 
 /// Displays the authenticated account's home server and its members.
 class HomeServerScreen extends StatefulWidget {
@@ -132,6 +133,7 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
             ? List<String>.from((m['featuredArtists'] as List).map((e) => e.toString()))
             : const <String>[],
         audioUrl: '${serverApi.baseUrl}/library/stream?path=${Uri.encodeComponent(m['id']?.toString() ?? '')}',
+        musicVideoUrl: (m['musicVideoUrl'] ?? m['music_video_url'])?.toString(),
         lyrics: m['lyrics']?.toString() ?? '',
       )).toList();
       MusicLibraryStore.instance.tracks
@@ -158,9 +160,13 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
   Widget build(BuildContext context) {
     final account = AppController.instance.currentAccount;
     final serverName = account == null ? 'Home Server' : '${account.username} Server';
-    final serverOnline = arm?['connected'] == true || storage != null;
-    final used = (storage?['usedBytes'] as num?)?.toInt() ?? 0;
-    final limit = (storage?['limitBytes'] as num?)?.toInt() ?? 0;
+    final serverOnline = storage != null;
+    final categoryRows = storage?['categories'] is List
+        ? (storage!['categories'] as List).whereType<Map>().toList()
+        : const <Map>[];
+    final used = categoryRows.fold<int>(0, (sum, row) => sum + ((row['usedBytes'] as num?)?.toInt() ?? 0));
+    final configuredCategories = categoryRows.fold<int>(0, (sum, row) => sum + ((row['capacityBytes'] as num?)?.toInt() ?? 0));
+    final limit = (storage?['totalBytes'] as num?)?.toInt() ?? configuredCategories;
     final progress = limit > 0 ? (used / limit).clamp(0.0, 1.0).toDouble() : 0.0;
 
     return Scaffold(
@@ -200,7 +206,9 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                   const SizedBox(height: 12),
                   FilledButton.icon(onPressed: _syncLibrary, icon: const Icon(Icons.sync_rounded), label: const UniversalText('Scan & sync server library')),
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StorageDashboardScreen())), icon: const Icon(Icons.storage_rounded), label: const UniversalText('Open storage manager')),
+                  OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StorageDashboardScreen())), icon: const Icon(Icons.storage_rounded), label: const UniversalText('Open live storage manager')),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartMediaLibrarianScreen())), icon: const Icon(Icons.health_and_safety_rounded), label: const UniversalText('Audit library metadata')),
                 ],
                 const SizedBox(height: 20),
                 _infoCard('Physical setup', 'Connect a DVD/Blu-ray/UHD-capable optical drive to the ARM host. Configure the exact drive/firmware for UHD support, then point ARM at the server media directories. Do not assume every Blu-ray drive supports UHD ripping.', Icons.album_rounded),
@@ -377,8 +385,8 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                   initialValue: role,
                   decoration: const InputDecoration(labelText: 'Role'),
                   items: const [
-                    DropdownMenuItem(value: 'member', child: Text('Member')),
-                    DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                    DropdownMenuItem(value: 'member', child: UniversalText('Member')),
+                    DropdownMenuItem(value: 'admin', child: UniversalText('Admin')),
                   ],
                   onChanged: (value) => setDialogState(() => role = value ?? 'member'),
                 ),
@@ -386,7 +394,7 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('CANCEL')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('CANCEL')),
             FilledButton(
               onPressed: () async {
                 final username = usernameController.text.trim().replaceFirst('@', '');
@@ -399,7 +407,7 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
                 }
               },
-              child: const Text('ADD USER'),
+              child: const UniversalText('ADD USER'),
             ),
           ],
         ),
@@ -634,13 +642,13 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     // Invitation acceptance authenticates the new member by email. SMS and
     // WhatsApp are delivery channels; they do not replace the login identity.
     if (email.isEmpty || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid member email address so the recipient can finish creating their login.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a valid member email address so the recipient can finish creating their login.')));
       return;
     }
     if (deliveryMethod != 'email' &&
         (phoneDigits.length < 7 || phoneDigits.length > 15)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid phone number for SMS.')),
+        const SnackBar(content: UniversalText('Enter a valid phone number for SMS.')),
       );
       return;
     }
@@ -702,7 +710,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not open the SMS app. Copy the invitation link instead.'),
+            content: UniversalText('Could not open the SMS app. Copy the invitation link instead.'),
           ),
         );
       }
@@ -723,7 +731,7 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp. Copy the invitation link instead.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Could not open WhatsApp. Copy the invitation link instead.')));
       }
     } on PlatformException catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open WhatsApp: ${error.message ?? error.code}')));
@@ -748,26 +756,26 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                     spacing: 8,
                     children: [
                       ChoiceChip(
-                        label: const Text('Email'),
+                        label: const UniversalText('Email'),
                         selected: deliveryMethod == 'email',
                         onSelected: submitting
                             ? null
                             : (_) => setState(() => deliveryMethod = 'email'),
                       ),
                       ChoiceChip(
-                        label: const Text('SMS / iMessage'),
+                        label: const UniversalText('SMS / iMessage'),
                         selected: deliveryMethod == 'sms',
                         onSelected: submitting
                             ? null
                             : (_) => setState(() => deliveryMethod = 'sms'),
                       ),
                       ChoiceChip(
-                        label: const Text('WhatsApp'),
+                        label: const UniversalText('WhatsApp'),
                         selected: deliveryMethod == 'whatsapp',
                         onSelected: submitting ? null : (_) => setState(() => deliveryMethod = 'whatsapp'),
                       ),
                       ChoiceChip(
-                        label: const Text('Both'),
+                        label: const UniversalText('Both'),
                         selected: deliveryMethod == 'both',
                         onSelected: submitting ? null : (_) => setState(() => deliveryMethod = 'both'),
                       ),

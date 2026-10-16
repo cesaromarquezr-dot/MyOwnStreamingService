@@ -1081,7 +1081,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                         ),
                         SizedBox(height: 7),
                         UniversalText(
-                          'Everything in one place: library, devices, security, travel, discovery and server controls.',
+                          'Everything in one place: library, devices, security, discovery and server controls.',
                         ),
                       ],
                     ),

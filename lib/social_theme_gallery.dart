@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import 'app_customization.dart';
+import 'localization.dart';
 
 /// Human-readable descriptions and concrete preview tokens for every social style.
 const Map<String, String> socialThemeDescriptions = <String, String>{
@@ -124,7 +125,7 @@ class SocialThemePickerField extends StatelessWidget {
               if (selected != null) onChanged(selected);
             },
             icon: Icon(Icons.palette_outlined, color: tokens.accent),
-            label: const Text('Preview all 15 styles'),
+            label: const UniversalText('Preview all 15 styles'),
           ),
         ),
       ],
@@ -157,7 +158,7 @@ class _SocialThemeGallerySheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 15, 12, 10),
               child: Row(
                 children: [
-                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Social theme gallery', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), SizedBox(height: 3), Text('Choose a style to see its sample and description.', style: TextStyle(color: Colors.white60, fontSize: 12))])),
+                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [UniversalText('Social theme gallery', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), SizedBox(height: 3), UniversalText('Choose a style to see its sample and description.', style: TextStyle(color: Colors.white60, fontSize: 12))])),
                   IconButton(tooltip: 'Close gallery', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded)),
                 ],
               ),
@@ -183,7 +184,7 @@ class _SocialThemeGallerySheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(children: [Expanded(child: Text(style, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))), if (selected) const Chip(avatar: Icon(Icons.check_circle, size: 16), label: Text('Current'))]),
+                            Row(children: [Expanded(child: Text(style, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))), if (selected) const Chip(avatar: Icon(Icons.check_circle, size: 16), label: UniversalText('Current'))]),
                             Text(socialThemeDescriptions[style]!, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.35)),
                             const SizedBox(height: 9),
                             SocialThemePreview(style: style, height: 124),
@@ -272,15 +273,15 @@ class SocialThemePreview extends StatelessWidget {
             ),
             const SizedBox(width: 7),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Alex Morgan', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.text, fontSize: isCompact ? 10 : 11, fontWeight: FontWeight.w900, letterSpacing: isBrutal ? .4 : 0)),
-              Text('Shared a new post', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.muted, fontSize: isCompact ? 8 : 9)),
+              UniversalText('Alex Morgan', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.text, fontSize: isCompact ? 10 : 11, fontWeight: FontWeight.w900, letterSpacing: isBrutal ? .4 : 0)),
+              UniversalText('Shared a new post', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.muted, fontSize: isCompact ? 8 : 9)),
             ])),
             if (style == 'High Contrast') Icon(Icons.circle, size: 11, color: t.accent),
             if (isRetro) Icon(Icons.auto_awesome, size: 15, color: t.accent),
             if (isCyberpunk) Icon(Icons.bolt, size: 15, color: t.border),
           ]),
           SizedBox(height: isCompact ? 5 : 8),
-          Text('A little inspiration for today.', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.text, fontSize: isCompact ? 9 : 10, fontWeight: FontWeight.w600)),
+          UniversalText('A little inspiration for today.', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.text, fontSize: isCompact ? 9 : 10, fontWeight: FontWeight.w600)),
           SizedBox(height: isCompact ? 5 : 7),
           Row(children: [
             _previewAction(t, Icons.favorite_border_rounded, 'Like', isCompact),

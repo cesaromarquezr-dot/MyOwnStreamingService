@@ -65,8 +65,16 @@ class Media {
 
   // TV information.
   final String? seriesId;
+  final String? seriesTitle;
   final int? seasonNumber;
   final int? episodeNumber;
+  final int? episodeEndNumber;
+  final int? absoluteEpisodeNumber;
+  final String? episodeTitle;
+  final String episodeOrderScheme;
+  final bool episodeOrderNeedsReview;
+  final String? episodeMatchSource;
+  final double? episodeMatchConfidence;
   final int? totalEpisodesInSeason;
 
   // Release information.
@@ -87,6 +95,15 @@ class Media {
   final List<String> languages;
   final List<String> subtitles;
   final List<String> extras;
+
+  /// Structured track/chapter metadata from the importer. The string lists
+  /// above remain for legacy UI compatibility; these preserve stream indexes,
+  /// languages, commentary/accessibility flags, and timestamps for newer UI.
+  final List<Map<String, dynamic>> videoTrackDetails;
+  final List<Map<String, dynamic>> audioTrackDetails;
+  final List<Map<String, dynamic>> subtitleTrackDetails;
+  final List<Map<String, dynamic>> chapterMarkers;
+  final Map<String, dynamic> sourceFormatInfo;
 
   // ARM / physical-media provenance.
   //
@@ -144,8 +161,16 @@ class Media {
     this.references = const [],
     this.music = const [],
     this.seriesId,
+    this.seriesTitle,
     this.seasonNumber,
     this.episodeNumber,
+    this.episodeEndNumber,
+    this.absoluteEpisodeNumber,
+    this.episodeTitle,
+    this.episodeOrderScheme = 'aired',
+    this.episodeOrderNeedsReview = false,
+    this.episodeMatchSource,
+    this.episodeMatchConfidence,
     this.totalEpisodesInSeason,
     this.releaseDate,
     this.discType,
@@ -159,6 +184,11 @@ class Media {
     this.languages = const [],
     this.subtitles = const [],
     this.extras = const [],
+    this.videoTrackDetails = const [],
+    this.audioTrackDetails = const [],
+    this.subtitleTrackDetails = const [],
+    this.chapterMarkers = const [],
+    this.sourceFormatInfo = const {},
     this.physicalReleaseId,
     this.physicalDiscId,
     this.discContentId,
@@ -246,8 +276,16 @@ class Media {
       'music': List<String>.from(music),
 
       'seriesId': seriesId,
+      'seriesTitle': seriesTitle,
       'seasonNumber': seasonNumber,
       'episodeNumber': episodeNumber,
+      'episodeEndNumber': episodeEndNumber,
+      'absoluteEpisodeNumber': absoluteEpisodeNumber,
+      'episodeTitle': episodeTitle,
+      'episodeOrderScheme': episodeOrderScheme,
+      'episodeOrderNeedsReview': episodeOrderNeedsReview,
+      'episodeMatchSource': episodeMatchSource,
+      'episodeMatchConfidence': episodeMatchConfidence,
       'totalEpisodesInSeason': totalEpisodesInSeason,
 
       'releaseDate': releaseDate?.toIso8601String(),
@@ -263,6 +301,11 @@ class Media {
       'languages': List<String>.from(languages),
       'subtitles': List<String>.from(subtitles),
       'extras': List<String>.from(extras),
+      'videoTrackDetails': videoTrackDetails,
+      'audioTrackDetails': audioTrackDetails,
+      'subtitleTrackDetails': subtitleTrackDetails,
+      'chapterMarkers': chapterMarkers,
+      'sourceFormatInfo': sourceFormatInfo,
 
       'physicalReleaseId': physicalReleaseId,
       'physicalDiscId': physicalDiscId,
@@ -316,9 +359,17 @@ class Media {
 
       music: _stringList(json['music']),
 
-      seriesId: _nullableString(json['seriesId']),
-      seasonNumber: _parseInt(json['seasonNumber']),
-      episodeNumber: _parseInt(json['episodeNumber']),
+      seriesId: _nullableString(json['seriesId'] ?? json['series_id']),
+      seriesTitle: _nullableString(json['seriesTitle'] ?? json['series_title']),
+      seasonNumber: _parseInt(json['seasonNumber'] ?? json['season_number']),
+      episodeNumber: _parseInt(json['episodeNumber'] ?? json['episode_number']),
+      episodeEndNumber: _parseInt(json['episodeEndNumber'] ?? json['episode_end_number']),
+      absoluteEpisodeNumber: _parseInt(json['absoluteEpisodeNumber'] ?? json['absolute_episode_number']),
+      episodeTitle: _nullableString(json['episodeTitle'] ?? json['episode_title']),
+      episodeOrderScheme: _nullableString(json['episodeOrderScheme'] ?? json['episode_order_scheme']) ?? 'aired',
+      episodeOrderNeedsReview: _parseBool(json['episodeOrderNeedsReview'] ?? json['episode_order_needs_review']),
+      episodeMatchSource: _nullableString(json['episodeMatchSource'] ?? json['episode_match_source']),
+      episodeMatchConfidence: _parseDouble(json['episodeMatchConfidence'] ?? json['episode_match_confidence']),
       totalEpisodesInSeason:
           _parseInt(json['totalEpisodesInSeason']),
 
@@ -336,6 +387,11 @@ class Media {
       languages: _stringList(json['languages']),
       subtitles: _stringList(json['subtitles']),
       extras: _stringList(json['extras']),
+      videoTrackDetails: _mapList(json['videoTrackDetails'] ?? json['video_track_details']),
+      audioTrackDetails: _mapList(json['audioTrackDetails'] ?? json['audio_track_details']),
+      subtitleTrackDetails: _mapList(json['subtitleTrackDetails'] ?? json['subtitle_track_details']),
+      chapterMarkers: _mapList(json['chapterMarkers'] ?? json['chapter_markers']),
+      sourceFormatInfo: _map(json['sourceFormatInfo'] ?? json['source_format_info']),
 
       physicalReleaseId:
           _nullableString(json['physicalReleaseId']),
@@ -388,8 +444,16 @@ class Media {
     List<String>? references,
     List<String>? music,
     String? seriesId,
+    String? seriesTitle,
     int? seasonNumber,
     int? episodeNumber,
+    int? episodeEndNumber,
+    int? absoluteEpisodeNumber,
+    String? episodeTitle,
+    String? episodeOrderScheme,
+    bool? episodeOrderNeedsReview,
+    String? episodeMatchSource,
+    double? episodeMatchConfidence,
     int? totalEpisodesInSeason,
     DateTime? releaseDate,
     String? discType,
@@ -403,6 +467,11 @@ class Media {
     List<String>? languages,
     List<String>? subtitles,
     List<String>? extras,
+    List<Map<String, dynamic>>? videoTrackDetails,
+    List<Map<String, dynamic>>? audioTrackDetails,
+    List<Map<String, dynamic>>? subtitleTrackDetails,
+    List<Map<String, dynamic>>? chapterMarkers,
+    Map<String, dynamic>? sourceFormatInfo,
     String? physicalReleaseId,
     String? physicalDiscId,
     String? discContentId,
@@ -422,6 +491,10 @@ class Media {
     bool clearAdaptationGroupId = false,
     bool clearAdaptationGroupName = false,
     bool clearSeriesId = false,
+    bool clearSeriesTitle = false,
+    bool clearEpisodeTitle = false,
+    bool clearEpisodeMatchSource = false,
+    bool clearEpisodeMatchConfidence = false,
     bool clearReleaseDate = false,
     bool clearPhysicalReleaseId = false,
     bool clearPhysicalDiscId = false,
@@ -473,8 +546,16 @@ class Media {
       music: music ?? this.music,
 
       seriesId: clearSeriesId ? null : (seriesId ?? this.seriesId),
+      seriesTitle: clearSeriesTitle ? null : (seriesTitle ?? this.seriesTitle),
       seasonNumber: seasonNumber ?? this.seasonNumber,
       episodeNumber: episodeNumber ?? this.episodeNumber,
+      episodeEndNumber: episodeEndNumber ?? this.episodeEndNumber,
+      absoluteEpisodeNumber: absoluteEpisodeNumber ?? this.absoluteEpisodeNumber,
+      episodeTitle: clearEpisodeTitle ? null : (episodeTitle ?? this.episodeTitle),
+      episodeOrderScheme: episodeOrderScheme ?? this.episodeOrderScheme,
+      episodeOrderNeedsReview: episodeOrderNeedsReview ?? this.episodeOrderNeedsReview,
+      episodeMatchSource: clearEpisodeMatchSource ? null : (episodeMatchSource ?? this.episodeMatchSource),
+      episodeMatchConfidence: clearEpisodeMatchConfidence ? null : (episodeMatchConfidence ?? this.episodeMatchConfidence),
       totalEpisodesInSeason:
           totalEpisodesInSeason ?? this.totalEpisodesInSeason,
 
@@ -493,6 +574,11 @@ class Media {
       languages: languages ?? this.languages,
       subtitles: subtitles ?? this.subtitles,
       extras: extras ?? this.extras,
+      videoTrackDetails: videoTrackDetails ?? this.videoTrackDetails,
+      audioTrackDetails: audioTrackDetails ?? this.audioTrackDetails,
+      subtitleTrackDetails: subtitleTrackDetails ?? this.subtitleTrackDetails,
+      chapterMarkers: chapterMarkers ?? this.chapterMarkers,
+      sourceFormatInfo: sourceFormatInfo ?? this.sourceFormatInfo,
 
       physicalReleaseId: clearPhysicalReleaseId
           ? null
@@ -522,6 +608,10 @@ class Media {
       case 'tvshow':
       case 'tv_show':
       case 'tv show':
+      case 'tv':
+      case 'television':
+      case 'episode':
+      case 'tv_episode':
       case 'series':
         return MediaType.tvShow;
 
@@ -631,6 +721,17 @@ class Media {
 
     return text;
   }
+
+  static List<Map<String, dynamic>> _mapList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
+  static Map<String, dynamic> _map(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : const {};
 
   static List<String> _stringList(dynamic value) {
     if (value is String) {

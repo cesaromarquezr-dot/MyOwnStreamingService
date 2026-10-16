@@ -1,5 +1,5 @@
 -- One canonical person may have credits across film, television, music,
--- producing, writing, directing, hosting, theater, games, and future types.
+-- producing, writing, directing, hosting, theater, and future types.
 create table if not exists public.media_people (
   id text primary key,
   name text not null,

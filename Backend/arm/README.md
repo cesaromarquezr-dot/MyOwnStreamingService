@@ -502,6 +502,3 @@ without changing the conceptual library model.
 
 ARM is therefore treated as an ingestion source rather than as the identity
 system for the entire media library.
-
-```
-```

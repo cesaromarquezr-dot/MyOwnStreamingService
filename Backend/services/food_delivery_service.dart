@@ -146,6 +146,123 @@ class FoodDeliveryService {
     };
   }
 
+  Future<List<Map<String, dynamic>>> restaurantReviews(String restaurantId) async {
+    final cleanId = _required(restaurantId, 'restaurantId', 256);
+    if (await SupabaseStore.instance.getFoodRestaurant(cleanId) == null) {
+      throw StateError('Restaurant not found.');
+    }
+    return SupabaseStore.instance.getFoodRestaurantReviews(cleanId);
+  }
+
+  Future<Map<String, dynamic>> submitRestaurantReview({
+    required Account account,
+    required String restaurantId,
+    required int rating,
+    String title = '',
+    String body = '',
+  }) async {
+    final cleanId = _required(restaurantId, 'restaurantId', 256);
+    if (rating < 1 || rating > 5) throw ArgumentError('Choose a rating from 1 to 5 stars.');
+    final cleanTitle = title.trim();
+    final cleanBody = body.trim();
+    if (cleanTitle.length > 120 || cleanBody.length > 2000) {
+      throw ArgumentError('Review title must be 120 characters or fewer and review text 2,000 or fewer.');
+    }
+    if (cleanTitle.isEmpty && cleanBody.isEmpty) {
+      throw ArgumentError('Add a short review or a title before submitting.');
+    }
+    if (await SupabaseStore.instance.getFoodRestaurant(cleanId) == null) {
+      throw StateError('Restaurant not found.');
+    }
+    return SupabaseStore.instance.upsertFoodRestaurantReview(
+      restaurantId: cleanId,
+      accountExternalId: account.id,
+      rating: rating,
+      title: cleanTitle,
+      body: cleanBody,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateRestaurantProfile({
+    required Account account,
+    required String restaurantId,
+    required Map<String, dynamic> data,
+  }) async {
+    final cleanId = _required(restaurantId, 'restaurantId', 256);
+    if (!await SupabaseStore.instance.ownsFoodRestaurant(
+      accountExternalId: account.id,
+      restaurantId: cleanId,
+    )) {
+      throw StateError('You do not have permission to edit this restaurant.');
+    }
+    final fields = <String, dynamic>{};
+    if (data.containsKey('openingHours')) {
+      fields['openingHours'] = _required(data['openingHours'], 'openingHours', 300);
+    }
+    if (data.containsKey('businessHours')) {
+      if (data['businessHours'] is! Map) throw ArgumentError('businessHours must be a weekday schedule object.');
+      fields['businessHours'] = _normalizeBusinessHours(data['businessHours']);
+    }
+    if (data.containsKey('contactMethods')) {
+      final methods = _cleanStringList(data['contactMethods']).toSet();
+      const allowed = {'call','sms','imessage','whatsapp','email','website'};
+      if (!allowed.containsAll(methods)) throw ArgumentError('One or more restaurant contact methods are not supported.');
+      fields['contactMethods'] = methods.toList(growable: false);
+    }
+    if (data.containsKey('phone')) fields['phone'] = _cleanOptionalContact(data['phone'], 'phone', 40) ?? '';
+    for (final field in ['contactEmail','whatsappNumber','imessageAddress','smsNumber']) {
+      if (data.containsKey(field)) fields[field] = _cleanOptionalContact(data[field], field, field == 'contactEmail' || field == 'imessageAddress' ? 254 : 40);
+    }
+    if (data.containsKey('website')) fields['website'] = _safeOptionalUrl(data['website']);
+    if (data.containsKey('is24_7')) fields['is24_7'] = data['is24_7'] == true;
+    if (fields.isEmpty) throw ArgumentError('No restaurant profile changes were provided.');
+    return SupabaseStore.instance.updateFoodRestaurantProfile(restaurantId: cleanId, fields: fields);
+  }
+
+  Future<List<Map<String, dynamic>>> menuThemes(String restaurantId) async {
+    final cleanId = _required(restaurantId, 'restaurantId', 256);
+    if (await SupabaseStore.instance.getFoodRestaurant(cleanId) == null) {
+      throw StateError('Restaurant not found.');
+    }
+    return SupabaseStore.instance.getFoodMenuThemes(cleanId);
+  }
+
+  Future<Map<String, dynamic>> createMenuTheme({
+    required Account account,
+    required String restaurantId,
+    required Map<String, dynamic> data,
+  }) async {
+    final cleanId = _required(restaurantId, 'restaurantId', 256);
+    if (!await SupabaseStore.instance.ownsFoodRestaurant(accountExternalId: account.id, restaurantId: cleanId)) {
+      throw StateError('You do not have permission to manage this restaurant.');
+    }
+    final name = _required(data['name'], 'name', 120);
+    final keyInput = (data['themeKey']?.toString() ?? name).trim().toLowerCase();
+    final themeKey = keyInput.replaceAll(RegExp(r'[^a-z0-9_-]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+    if (themeKey.length < 2 || themeKey.length > 64) throw ArgumentError('Theme key must be 2–64 letters, numbers, dashes, or underscores.');
+    final menuItemIds = _cleanStringList(data['menuItemIds']).toSet().toList(growable: false);
+    if (menuItemIds.isEmpty) throw ArgumentError('Select at least one menu item for the themed menu.');
+    final description = (data['description']?.toString() ?? '').trim();
+    final inspiration = (data['inspiration']?.toString() ?? '').trim();
+    if (description.length > 1200 || inspiration.length > 120) throw ArgumentError('The themed-menu description or inspiration is too long.');
+    final validItems = await SupabaseStore.instance.getFoodMenu(cleanId);
+    final validIds = validItems.map((item) => item['id']?.toString() ?? '').toSet();
+    if (menuItemIds.any((id) => !validIds.contains(id))) throw ArgumentError('The selected menu contains an item that is not part of this restaurant.');
+    return SupabaseStore.instance.createFoodMenuTheme(
+      restaurantId: cleanId,
+      theme: {
+        'themeKey': themeKey,
+        'name': name,
+        'description': description,
+        'inspiration': inspiration,
+        'disclosure': (data['disclosure']?.toString() ?? '').trim().isEmpty
+            ? 'Fan-inspired menu concept; not an official or affiliated offering unless expressly licensed.'
+            : (data['disclosure']?.toString() ?? '').trim(),
+      },
+      menuItemIds: menuItemIds,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> menu(String restaurantId, {String query = ''}) async {
     final cleanId = _required(restaurantId, 'restaurantId', 256);
     final rows = await SupabaseStore.instance.getFoodMenu(cleanId);
@@ -387,6 +504,15 @@ class FoodDeliveryService {
         'cuisine': cuisine,
         'description': (data['description']?.toString() ?? '').trim(),
         'phone': (data['phone']?.toString() ?? '').trim(),
+        'openingHours': (data['openingHours']?.toString() ?? 'Hours not provided').trim(),
+        'businessHours': _normalizeBusinessHours(data['businessHours']),
+        'contactMethods': _cleanStringList(data['contactMethods']).where((method) => {'call','sms','imessage','whatsapp','email','website'}.contains(method)).toList(growable: false),
+        'contactEmail': _cleanOptionalContact(data['contactEmail'], 'contactEmail', 254),
+        'whatsappNumber': _cleanOptionalContact(data['whatsappNumber'], 'whatsappNumber', 40),
+        'imessageAddress': _cleanOptionalContact(data['imessageAddress'], 'imessageAddress', 254),
+        'smsNumber': _cleanOptionalContact(data['smsNumber'], 'smsNumber', 40),
+        'website': _safeOptionalUrl(data['website']),
+        'is24_7': data['is24_7'] == true || (data['openingHours']?.toString().trim().toLowerCase() == '24/7'),
         'address': address,
         'city': (data['city']?.toString() ?? '').trim(),
         'stateRegion': (data['stateRegion']?.toString() ?? '').trim(),
@@ -486,6 +612,10 @@ class FoodDeliveryService {
         'imageUrl': _safeOptionalUrl(data['imageUrl']),
         'available': data['available'] != false,
         'tags': data['tags'] is List ? data['tags'] : const <String>[],
+        'themeKeys': _cleanStringList(data['themeKeys']),
+        'ingredients': _cleanStringList(data['ingredients']),
+        'allergens': _cleanStringList(data['allergens']),
+        'removableIngredients': _cleanStringList(data['removableIngredients']),
         'modifierGroups': const <Map<String, dynamic>>[],
       },
     );
@@ -566,6 +696,183 @@ class FoodDeliveryService {
     return balances.values.toList(growable: false);
   }
 
+  // ---------------------------------------------------------------------------
+  // CUSTOMER / RESTAURANT CONVERSATIONS
+  // ---------------------------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> customerFoodConversations(Account account) {
+    return SupabaseStore.instance.listCustomerFoodConversations(account.id);
+  }
+
+  Future<List<Map<String, dynamic>>> merchantFoodConversations({
+    required Account account,
+    String? restaurantId,
+  }) async {
+    final cleanRestaurantId = restaurantId?.trim() ?? '';
+    if (cleanRestaurantId.isNotEmpty &&
+        !await SupabaseStore.instance.ownsFoodRestaurant(
+          accountExternalId: account.id,
+          restaurantId: cleanRestaurantId,
+        )) {
+      throw StateError('You do not have permission to view this restaurant inbox.');
+    }
+    return SupabaseStore.instance.listMerchantFoodConversations(
+      accountExternalId: account.id,
+      restaurantId: cleanRestaurantId.isEmpty ? null : cleanRestaurantId,
+    );
+  }
+
+  Future<Map<String, dynamic>> createFoodConversation({
+    required Account account,
+    required Map<String, dynamic> data,
+  }) async {
+    final restaurantId = _required(data['restaurantId'], 'restaurantId', 256);
+    final requestedTopic = (data['topic']?.toString() ?? 'general').trim().toLowerCase();
+    const topics = {'general', 'recommendation', 'ingredient_question', 'order_support'};
+    if (!topics.contains(requestedTopic)) {
+      throw ArgumentError('topic must be general, recommendation, ingredient_question, or order_support.');
+    }
+    final relatedMenuItemId = data['relatedMenuItemId']?.toString().trim() ?? '';
+    final relatedMenuItemName = data['relatedMenuItemName']?.toString().trim() ?? '';
+    final orderId = data['orderId']?.toString().trim() ?? '';
+    final subject = _required(
+      data['subject'] ?? switch (requestedTopic) {
+        'recommendation' => 'Food recommendation',
+        'ingredient_question' => 'Ingredient and allergy question',
+        'order_support' => 'Order support',
+        _ => 'Restaurant question',
+      },
+      'subject',
+      160,
+    );
+    final firstMessage = data['firstMessage']?.toString().trim() ?? '';
+    if (firstMessage.length > 2000) {
+      throw ArgumentError('Messages must be 2000 characters or fewer.');
+    }
+
+    final created = await SupabaseStore.instance.createFoodConversation(
+      customerExternalId: account.id,
+      restaurantId: restaurantId,
+      topic: requestedTopic,
+      subject: subject,
+      relatedMenuItemId: relatedMenuItemId.isEmpty ? null : relatedMenuItemId,
+      relatedMenuItemName: relatedMenuItemName,
+      orderId: orderId.isEmpty ? null : orderId,
+    );
+    final conversationId = created['id']?.toString() ?? '';
+    if (conversationId.isEmpty) throw StateError('The conversation could not be created.');
+
+    if (firstMessage.isNotEmpty) {
+      await SupabaseStore.instance.createFoodConversationMessage(
+        conversationId: conversationId,
+        senderExternalId: account.id,
+        senderRole: 'customer',
+        messageType: _customerMessageType(requestedTopic, data['firstMessageType']?.toString()),
+        body: firstMessage,
+      );
+    }
+    return (await foodConversation(account: account, conversationId: conversationId));
+  }
+
+  Future<Map<String, dynamic>> foodConversation({
+    required Account account,
+    required String conversationId,
+  }) async {
+    final cleanId = _required(conversationId, 'conversationId', 256);
+    final record = await SupabaseStore.instance.getFoodConversationRecord(cleanId);
+    if (record == null) throw StateError('Conversation not found.');
+    final customerExternalId = record['customer_external_id']?.toString() ?? '';
+    final restaurantId = record['restaurant_id']?.toString() ?? '';
+    final isCustomer = customerExternalId == account.id;
+    final isMerchant = await SupabaseStore.instance.ownsFoodRestaurant(
+      accountExternalId: account.id,
+      restaurantId: restaurantId,
+    );
+    if (!isCustomer && !isMerchant) {
+      throw StateError('You do not have permission to view this conversation.');
+    }
+    final details = await SupabaseStore.instance.getFoodConversationDetails(cleanId);
+    if (details == null) throw StateError('Conversation not found.');
+    return {
+      ...details,
+      'viewerRole': isMerchant && !isCustomer ? 'restaurant' : 'customer',
+    };
+  }
+
+  Future<Map<String, dynamic>> sendFoodConversationMessage({
+    required Account account,
+    required String conversationId,
+    required Map<String, dynamic> data,
+  }) async {
+    final cleanId = _required(conversationId, 'conversationId', 256);
+    final body = _required(data['body'], 'body', 2000);
+    final record = await SupabaseStore.instance.getFoodConversationRecord(cleanId);
+    if (record == null) throw StateError('Conversation not found.');
+    if ((record['status']?.toString() ?? '') == 'closed') {
+      throw StateError('This conversation is closed. Start a new conversation for more help.');
+    }
+
+    final customerExternalId = record['customer_external_id']?.toString() ?? '';
+    final restaurantId = record['restaurant_id']?.toString() ?? '';
+    final isCustomer = customerExternalId == account.id;
+    final isMerchant = await SupabaseStore.instance.ownsFoodRestaurant(
+      accountExternalId: account.id,
+      restaurantId: restaurantId,
+    );
+    if (!isCustomer && !isMerchant) {
+      throw StateError('You do not have permission to reply to this conversation.');
+    }
+    final senderRole = isMerchant && !isCustomer ? 'restaurant' : 'customer';
+    final requestedType = data['messageType']?.toString();
+    final topic = record['topic']?.toString() ?? 'general';
+    final messageType = senderRole == 'customer'
+        ? _customerMessageType(topic, requestedType)
+        : _restaurantMessageType(requestedType, topic);
+    final rawMetadata = data['metadata'];
+    final metadata = rawMetadata is Map
+        ? Map<String, dynamic>.from(rawMetadata)
+        : const <String, dynamic>{};
+    if (jsonEncode(metadata).length > 4096) {
+      throw ArgumentError('Message metadata must be 4 KB or smaller.');
+    }
+    await SupabaseStore.instance.createFoodConversationMessage(
+      conversationId: cleanId,
+      senderExternalId: account.id,
+      senderRole: senderRole,
+      messageType: messageType,
+      body: body,
+      metadata: metadata,
+    );
+    return foodConversation(account: account, conversationId: cleanId);
+  }
+
+  String _customerMessageType(String topic, String? requested) {
+    if (requested == 'ingredient_question' || topic == 'ingredient_question') {
+      return 'ingredient_question';
+    }
+    if (requested == 'recommendation_request' || topic == 'recommendation') {
+      return 'recommendation_request';
+    }
+    if (requested == 'order_support' || topic == 'order_support') return 'order_support';
+    return 'text';
+  }
+
+  String _restaurantMessageType(String? requested, String topic) {
+    switch (requested) {
+      case 'recommendation':
+        return 'recommendation';
+      case 'ingredient_answer':
+        return 'ingredient_answer';
+      case 'order_support':
+        return 'order_support';
+      case 'support_update':
+        return 'support_update';
+      default:
+        if (topic == 'order_support') return 'order_support';
+        return 'text';
+    }
+  }
+
   Future<Map<String, dynamic>> _validatedCoupon({
     required String restaurantId,
     required String code,
@@ -601,6 +908,45 @@ class FoodDeliveryService {
     return coupon;
   }
 
+  Map<String, dynamic> _normalizeBusinessHours(dynamic raw) {
+    if (raw == null) return <String, dynamic>{};
+    if (raw is! Map) throw ArgumentError('businessHours must be a weekday schedule object.');
+    const days = {'mon','tue','wed','thu','fri','sat','sun'};
+    final result = <String, dynamic>{};
+    for (final entry in raw.entries) {
+      final day = entry.key.toString().toLowerCase();
+      if (!days.contains(day) || entry.value is! Map) continue;
+      final value = Map<String, dynamic>.from(entry.value as Map);
+      final closed = value['closed'] == true;
+      final allDay = value['allDay'] == true || value['all_day'] == true;
+      if (closed) {
+        result[day] = {'closed': true, 'allDay': false};
+        continue;
+      }
+      if (allDay) {
+        result[day] = {'closed': false, 'allDay': true, 'open': '00:00', 'close': '23:59'};
+        continue;
+      }
+      final open = (value['open']?.toString() ?? '').trim();
+      final close = (value['close']?.toString() ?? '').trim();
+      final timePattern = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
+      if (!timePattern.hasMatch(open) || !timePattern.hasMatch(close)) {
+        throw ArgumentError('Business hours for $day must use 24-hour HH:MM values.');
+      }
+      result[day] = {'closed': false, 'allDay': false, 'open': open, 'close': close};
+    }
+    return result;
+  }
+
+  String? _cleanOptionalContact(dynamic value, String field, int maxLength) {
+    final result = value?.toString().trim() ?? '';
+    if (result.isEmpty) return null;
+    if (result.length > maxLength || result.contains(RegExp(r'[\r\n]'))) {
+      throw ArgumentError('$field is too long or contains invalid characters.');
+    }
+    return result;
+  }
+
   String? _safeOptionalUrl(dynamic value) {
     final raw = value?.toString().trim() ?? '';
     if (raw.isEmpty) return null;
@@ -609,6 +955,20 @@ class FoodDeliveryService {
       throw ArgumentError('Image URLs must use HTTP or HTTPS.');
     }
     return uri.toString();
+  }
+
+  List<String> _cleanStringList(dynamic raw) {
+    if (raw is! List) return const <String>[];
+    final seen = <String>{};
+    final result = <String>[];
+    for (final entry in raw) {
+      final value = entry.toString().trim();
+      if (value.isEmpty || value.length > 80) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) result.add(value);
+      if (result.length >= 80) break;
+    }
+    return result;
   }
 
   int _boundedInt(dynamic value, int minimum, int maximum, String field) {

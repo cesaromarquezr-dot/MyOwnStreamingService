@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'music.dart';
+import 'localization.dart';
+import 'media_text_localizer.dart';
+import 'page_customization_button.dart';
 
 /// Calendar-aware seasonal selections drawn only from the user's own library.
 class SeasonalCollectionEngine {
@@ -111,37 +114,38 @@ class SeasonalCollectionsScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(title),
         backgroundColor: const Color(0xFF090909),
+        actions: const [PageCustomizeButton(pageId: 'collections')],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text('$title from your library', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const Text('A calendar-aware mix of your own movies, TV titles, and music.', style: TextStyle(color: Colors.white60)),
+          const UniversalText('A calendar-aware mix of your own movies, TV titles, and music.', style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 16),
           if (media.isEmpty && songs.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
-              child: Text('No seasonally tagged titles found in your library yet.', style: TextStyle(color: Colors.white54)),
+              child: UniversalText('No seasonally tagged titles found in your library yet.', style: TextStyle(color: Colors.white54)),
             ),
           for (final item in media)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.movie_outlined),
-              title: Text(item.title),
+              title: LocalizedMediaText(item.title),
               subtitle: Text(item.type),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),
             ),
           if (songs.isNotEmpty) ...[
             const SizedBox(height: 18),
-            const Text('Songs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const UniversalText('Songs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           ],
           for (final track in songs)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.music_note_rounded),
-              title: Text(track.title),
+              title: LocalizedMediaText(track.title),
               subtitle: Text(track.artist),
             ),
         ],

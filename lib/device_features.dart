@@ -15,6 +15,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
+import 'media_text_localizer.dart';
 
 /// Device, TV casting, account pairing and road-trip controls.
 ///
@@ -593,7 +594,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                   ...media.take(12).map(
                         (item) => CheckboxListTile(
                           value: downloads.contains(item.id),
-                          title: Text(item.title),
+                          title: LocalizedMediaText(item.title),
                           subtitle: Text(
                             _mediaTypeLabel(item),
                           ),

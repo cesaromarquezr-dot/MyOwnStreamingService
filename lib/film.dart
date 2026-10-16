@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'media_text_localizer.dart';
 import 'movies.dart';
 import 'series.dart';
 
@@ -58,9 +59,9 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
           const SizedBox(height: 18),
           SegmentedButton<int>(
             segments: const [
-              ButtonSegment(value: 0, label: Text('All'), icon: Icon(Icons.apps_rounded)),
-              ButtonSegment(value: 1, label: Text('Movies'), icon: Icon(Icons.movie_outlined)),
-              ButtonSegment(value: 2, label: Text('TV'), icon: Icon(Icons.tv_outlined)),
+              ButtonSegment(value: 0, label: UniversalText('All'), icon: Icon(Icons.apps_rounded)),
+              ButtonSegment(value: 1, label: UniversalText('Movies'), icon: Icon(Icons.movie_outlined)),
+              ButtonSegment(value: 2, label: UniversalText('TV'), icon: Icon(Icons.tv_outlined)),
             ],
             selected: {tab},
             onSelectionChanged: (value) => setState(() => tab = value.first),
@@ -107,7 +108,7 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
         const SizedBox(height: 8),
         ...items.map((item) => Card(child: ListTile(
           leading: item.imageUrl == null ? const Icon(Icons.movie_outlined) : Image.network(item.imageUrl!, width: 48, height: 68, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_outlined)),
-          title: Text(item.title),
+          title: LocalizedMediaText(item.title),
           subtitle: Text('${item.type}${item.releaseYear == null ? '' : ' • ${item.releaseYear}'}'),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),
@@ -150,7 +151,7 @@ class _FilmItemListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: Text(title)),
-        body: ListView(padding: const EdgeInsets.all(16), children: items.map((item) => Card(child: ListTile(title: Text(item.title), subtitle: Text(item.type), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)))))).toList()),
+        body: ListView(padding: const EdgeInsets.all(16), children: items.map((item) => Card(child: ListTile(title: LocalizedMediaText(item.title), subtitle: Text(item.type), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)))))).toList()),
       );
 }
 

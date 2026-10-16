@@ -1,775 +1,85 @@
-# Home Server Backend
-
-The Dart backend exposes the authenticated API used by the Flutter/web clients.
-
-The backend is organized into the following layers:
-
-* `arm/` — ARM integration, physical-media ingestion, verification, and import planning.
-* `routes/` — HTTP API endpoint handlers and request validation.
-* `services/` — business logic and external-service orchestration.
-* `models/` — API/domain objects shared by backend subsystems.
-* `database/` — application persistence abstraction and local backend state.
-* `supabase_store.dart` — server-side Supabase persistence for account/application metadata.
-* `server.dart` — HTTPS/HTTP server startup, middleware, routing, CORS, security headers, and self-hosting controls.
-* `config.dart` — environment-driven deployment configuration.
-* `self_hosting_security.dart` — trusted-proxy, client-IP, VPN, and rate-limit enforcement.
-
-Physical movie, television, music, and disc files remain on the user's managed home/media server. Central persistence stores account/application metadata rather than becoming a central media warehouse.
-
----
-
-## Deployment architecture
-
-The intended production network is:
-
-```text
-Internet
-   │
-   ▼
-Cloudflare
-   │
-   ▼
-Firewall / Router
-   │
-   ▼
-NGINX Proxy Manager
-   │
-   ▼
-Dart Home Server Backend
-   │
-   ├── Database / Supabase metadata
-   ├── NAS / local media storage
-   ├── Optical drives / ARM
-   └── Transcoding / playback services
-```
+# netflix
 
-The Flutter/web client communicates with the authenticated backend API. The client is not installed as the home server itself.
-
-For a physical deployment:
-
-1. Mount the media/NAS storage into the server environment.
-2. Connect configured optical drives to the ARM/server environment.
-3. Configure the backend media paths through environment variables.
-4. Configure the ARM endpoint through `ARM_SERVER_URL`.
-5. Configure TLS according to the deployment:
-
-   * Dart terminates HTTPS directly, or
-   * NGINX Proxy Manager terminates public HTTPS and forwards traffic to the backend.
-6. Configure trusted-proxy settings when the backend is intentionally restricted to the reverse proxy.
-7. Keep service-role credentials and other backend secrets exclusively on the server.
-
-Example environment configuration includes:
-
-```text
-SERVER_HOST
-SERVER_PUBLIC_URL
-BACKEND_TLS_ENABLED
+A new Flutter application.
 
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+## Getting Started
 
-ARM_SERVER_URL
-ARM_USERNAME
-ARM_PASSWORD
+This project is a starting point for a Flutter application.
 
-MEDIA_ROOT
-ARM_OUTPUT_ROOT
+A few resources to get you started if this is your first Flutter project:
 
-TRUSTED_PROXY_CIDRS
-REQUIRE_TRUSTED_PROXY
-PROXY_SHARED_SECRET
+- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
+- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
 
-ALLOWED_ORIGINS
-VPN_CIDRS
-RATE_LIMIT_PER_MINUTE
+For help getting started with Flutter, view our
+[online documentation](https://flutter.dev/docs), which offers tutorials,
+samples, guidance on mobile development, and a full API reference.
 
-TRANSCODE_MAX_CONCURRENT
-TRANSCODE_CACHE_ROOT
-```
+## Home server / ARM architecture
 
-`ARM_OUTPUT_ROOT` is optional when ARM writes directly into `MEDIA_ROOT`.
-For a separate ARM worker, mount its completed output directory into the home
-server and set `ARM_OUTPUT_ROOT` to that mounted path. Approved imports from
-that directory are copied into `MEDIA_ROOT/arm_imports` before they are
-indexed. ARM output paths must resolve to files visible to the backend process;
-an absolute path that exists only on the ARM machine cannot be copied by the
-home server.
+The project now treats the home server as the source of truth for server-managed media. The intended physical pipeline is:
 
-With `ARM_MOCK=true`, mock `MOCK://` outputs create a small non-playable
-placeholder under `MEDIA_ROOT/arm_mock`, allowing the approval and library
-indexing flow to be exercised without a real disc or rip file.
+`DVD/CD/Blu-ray/UHD drive -> ARM -> completed media -> server scanner -> database/API -> Flutter`
 
-Secrets must never be embedded in Flutter source code or returned through the public API.
+### Backend environment
 
----
+- `SERVER_HOST=0.0.0.0` — bind the API to the LAN.
+- `SERVER_PUBLIC_URL=http://<server-ip>:8080` — URL clients should use.
+- `ARM_SERVER_URL=http://<arm-host>:<port>` — ARM web/API address.
+- `MEDIA_ROOT=/path/to/media` — root of Movies/Series/Music storage.
+- `MOVIES_PATH`, `SERIES_PATH`, `MUSIC_PATH` — optional category paths.
+- `MOVIES_CAPACITY_BYTES`, `SERIES_CAPACITY_BYTES`, `MUSIC_CAPACITY_BYTES`, `AVAILABLE_STORAGE_BYTES` — dashboard capacity overrides.
 
-## Account/server deployment model
+The current implementation does not assume a particular physical drive or UHD firmware. Verify the exact optical-drive revision and its ARM/MakeMKV compatibility before purchasing it. Audio CDs should be routed through a CD-capable ripping workflow; the server scanner already recognizes common audio output formats.
 
-The current production model is:
+## Account, server and Group Watch architecture
 
-```text
-Account
- └── Managed Home/Media Server
-      ├── NAS / storage
-      ├── Media library
-      ├── ARM / optical drives
-      ├── Playback services
-      └── Transcoding
-```
+- One account has one managed home server in the current subscription model.
+- The server owns the account's physical Movies, TV Shows and Music files; Supabase stores metadata, identity and server indexes only.
+- All profiles in an account share that account's server/library, even when profiles live in different houses.
+- Remote computers can be paired as import workers. A disc/import completed at a remote house is sent over a secure connection to the account's server.
+- Group Chat is cross-account: rooms are coordinated by the backend and do not require shared media storage.
+- Group Watch is cross-account: each participant is associated with their own account/server, and the backend validates the requested media/version on each participant server before the session starts.
+- The web client is the same Flutter application compiled for web; the server-side agent/API is deployed separately on each physical media server.
 
-The current subscription architecture assumes one managed home/media server per account in the applicable subscription tier.
+## Managed-server subscription pricing
 
-Profiles belong to accounts rather than individual physical servers. This allows profiles associated with the same account to access that account's server remotely, including from different houses.
+The backend calculates the public price from configurable server hardware/storage amortization, estimated electricity, bandwidth/operations, support reserve, payment processing and target gross margin. The default retail price is **$54.99 USD/month** or **$599.99 USD/year** for one managed server. Operators can change the assumptions with environment variables; the client never controls the amount charged.
 
-Each physical server deployment runs the same backend code but is associated with its account.
+## Canonical roadmap and architecture
 
-The Flutter/web application remains the client application. It does not become the server merely because it is used remotely.
+The project now uses a consolidated architecture model for the larger roadmap. The historical roadmap contains 1,000 requirements, while the canonical implementation catalog contains 500 capabilities with one owner per capability. Contexts such as Stories, Live Shopping, Watch Party, Marketplace, Movies, TV and Music extend shared systems instead of creating duplicate implementations. The roadmap's breadth is set; the next phase deepens integration, intelligence, reliability, privacy, accessibility, and polish.
 
----
+See [`docs/CANONICAL_ARCHITECTURE.md`](docs/CANONICAL_ARCHITECTURE.md) for the canonical shared capability architecture, Universal Media Actions, integration ownership, and delivery order.
 
-## Authentication and account security
+See [`docs/MASTER_CAPABILITY_ROADMAP.md`](docs/MASTER_CAPABILITY_ROADMAP.md) for the carried-forward Phase 1/2 foundation, the numbered Phase 3 additions through #116, and the separate productionization track.
 
-Authentication is handled by the backend rather than trusted to the client.
+The feature map for media versions, universal profile actions, dynamic collections, and relationship graph ownership is included in the canonical architecture document.
 
-The backend is responsible for:
+See [`docs/XRAY_ARCHITECTURE.md`](docs/XRAY_ARCHITECTURE.md) for the canonical X-Ray capability, its version-specific timeline and spoiler model, and the implementation path from the current player overlay.
 
-* account credentials;
-* member identities;
-* account memberships;
-* profile ownership;
-* sessions;
-* password verification;
-* password recovery;
-* security questions;
-* MFA challenges;
-* subscription access checks;
-* session revocation;
-* security-event auditing;
-* trusted-proxy validation;
-* request rate limiting.
+## Consolidated product features
 
-Backend-only credentials include:
+This snapshot includes consolidated food-delivery messaging, restaurant review/profile/theme support, disc-import episode-order safeguards, and app/media localization work. Gaming has been removed from the project's feature scope. Review [`docs/FEATURE_CONSOLIDATION_STATUS.md`](docs/FEATURE_CONSOLIDATION_STATUS.md) for included behavior, the required SQL migration order, integration dependencies, and known validation limits.
 
-* password hashes;
-* security-answer hashes;
-* MFA challenge hashes;
-* service-role keys;
-* ARM credentials;
-* payment-provider credentials;
-* proxy shared secrets.
+For an auditable list of every created, modified, and deleted file in this consolidated snapshot, see [`docs/CHANGE_MANIFEST.md`](docs/CHANGE_MANIFEST.md). The manifest compares against the available source archive and cannot include unuploaded edits in a separate local working copy.
 
-These values must never be returned to Flutter/web clients.
+## Hey Marathon
 
-Supabase service-role access is server-side only.
+Open **More → Hey Marathon** to create a timed movie or TV marathon from the current profile's library. The planner expands series into numbered episodes, protects against saving unresolved episode order, schedules breaks, lets users share invitations, and passes the theme into Hey Eats. Plans are stored locally per profile on the current device. See [HEY_MARATHON.md](HEY_MARATHON.md) for behavior and verification steps.
 
----
+## Expanded platform capabilities
 
-## Profiles and cross-account membership
+The next set of additions (proactive Hey Media suggestions, custom media spaces, franchise viewing orders, metadata provenance, NAS health, integrations, and recovery foundations) is documented in [`docs/EXPANDED_PLATFORM_PHASE2.md`](docs/EXPANDED_PLATFORM_PHASE2.md). Its additive migration is `Backend/database/expanded_platform_phase2.sql`. These are foundations and roadmap entries, not a claim that all integrations are complete.
 
-An account can contain multiple profiles.
+The next-wave shared foundation is documented in [`docs/EXPANDED_PLATFORM_IMPLEMENTATION.md`](docs/EXPANDED_PLATFORM_IMPLEMENTATION.md). It includes typed Flutter capability metadata and an additive Supabase migration in `Backend/database/expanded_platform_features.sql`. Podcasts and audiobooks are intentionally excluded from the product scope.
 
-Profiles are persisted independently so application state can be associated with a specific profile without creating another account or home server.
+The general product foundations added in Phase 3 are documented in [`docs/PLATFORM_FOUNDATIONS_ARCHITECTURE.md`](docs/PLATFORM_FOUNDATIONS_ARCHITECTURE.md), with owner-scoped collector-edition and recommendation-feedback tables in `Backend/database/expanded_platform_phase3.sql`. This adds source-level foundations and contracts; it does not mean the full gateway, AI orchestration, payments, or NAS health workers are complete.
 
-Account membership is separate from the physical server.
+## Streaming experience quality foundation
 
-A member identity can belong to more than one account:
+The project includes profile-scoped playback preferences, device-local QoE diagnostics, typo-tolerant universal media search, an adaptive playback view for trusted signed HLS/DASH or progressive URLs, a sample HLS VOD ladder script, and a service-role-only Supabase schema for future trusted telemetry ingestion. See [Streaming Experience Implementation](docs/STREAMING_EXPERIENCE_IMPLEMENTATION.md) for setup, limits, security rules, and the remaining media-gateway integration required for true end-to-end TrueNAS streaming.
 
-```text
-Member Identity
- ├── Account A membership
- └── Account B membership
-```
+## Production readiness, privacy, and recovery
 
-This allows invited users to participate in multiple accounts while retaining separate account authorization boundaries.
-
-The backend must always resolve:
-
-```text
-authenticated identity
-        ↓
-account membership
-        ↓
-profile ownership
-        ↓
-resource authorization
-```
-
-An authenticated identity alone is not sufficient authorization to access another account's media.
-
----
-
-## Cross-account Group Chat
-
-Group Chat is a backend-coordinated feature.
-
-A chat room can contain profiles from different accounts:
-
-```text
-Account A
- ├── Profile A1
- └── Profile A2
-
-Account B
- ├── Profile B1
- └── Profile B2
-
-        │
-        ▼
-
-    Group Chat Room
-```
-
-The backend owns:
-
-* room membership;
-* invitations;
-* participant authorization;
-* messages;
-* room state;
-* account/profile relationships.
-
-Group Chat does not require copying users' physical media into central storage.
-
----
-
-## Cross-account Group Watch
-
-Group Watch is also cross-account.
-
-The backend coordinates playback while each participant continues using media authorized by their own account/server.
-
-Conceptually:
-
-```text
-                Backend
-                   │
-        ┌──────────┴──────────┐
-        ▼                     ▼
- Account A Server       Account B Server
-        │                     │
-   Local Media            Local Media
-        │                     │
-        └──── Playback State ─┘
-```
-
-The backend is responsible for:
-
-* resolving invited profiles;
-* validating account/profile membership;
-* validating media availability;
-* validating authorization;
-* negotiating compatible playback information;
-* synchronizing playback state;
-* managing participant state;
-* handling invitations and session lifecycle.
-
-The physical media itself does not need to be transferred into central storage.
-
-A participant's authorization to play media remains tied to the server/account that actually owns or exposes that media.
-
-Storage is a first-class backend subsystem.
-
-See:
-
-docs/STORAGE_ARCHITECTURE.md
-
-for the detailed HDD/SSD, RAID, backup, and UPS architecture.
-
-The backend can expose authenticated storage information through:
-
-GET /api/v1/storage/system
-
-The storage subsystem is intentionally separated from destructive storage administration.
-
-The backend may report:
-
-* filesystem capacity;
-* available space;
-* storage pools;
-* RAID state;
-* degraded/rebuild state;
-* backup state;
-* UPS state;
-* configured media categories;
-* storage allocation information.
-
-Read-only monitoring must not silently perform destructive filesystem, RAID, or backup operations.
-
-Physical storage remains on the user's managed server.
-
-The backend treats the home server as the authoritative location for physical media files.
-
-Central metadata can describe a locally hosted item:
-
-Account
-  │
-  └── Home Server
-        │
-        ├── Server Media
-        │      └── Local media identifier
-        │
-        └── Media Catalog
-               └── Shared metadata
-
-The central metadata layer can contain:
-
-* title;
-* media type;
-* year;
-* descriptions;
-* artwork references;
-* trailer metadata;
-* catalog relationships;
-* server/media identifiers;
-* availability state;
-* file-size metadata.
-
-It does not turn the central database into a copy of the user's physical media library.
-
-ARM is the automated physical-media ingestion layer.
-
-The intended pipeline is:
-
-Optical Drive
-     │
-     ▼
-Disc Detection
-     │
-     ▼
-Disc Scan
-     │
-     ▼
-Physical Release
-     │
-     ├── Disc 1
-     │    ├── Main Feature
-     │    ├── Bonus Feature
-     │    └── Trailer
-     │
-     └── Disc 2
-          ├── Main Feature
-          └── Bonus Feature
-     │
-     ▼
-Verification
-     │
-     ▼
-Metadata Resolution
-     │
-     ▼
-Import Review / Plan
-     │
-     ▼
-Library Import
-
-ARM must preserve the relationship between:
-
-Physical Release
-    ↓
-Physical Disc
-    ↓
-Disc Content
-    ↓
-Library Media
-
-A bonus feature must not automatically become a second primary movie.
-
-Examples of distinct disc content include:
-
-* primary feature;
-* episode;
-* deleted scene;
-* commentary;
-* trailer;
-* bonus feature;
-* soundtrack/music;
-* data content;
-* other verified content.
-
-The ingestion pipeline should preserve all detected content rather than discarding non-primary material.
-
-A physical release represents the actual packaged release rather than merely a title string.
-
-Relevant metadata can include:
-
-* release title;
-* release type;
-* edition;
-* barcode;
-* country;
-* region;
-* release year;
-* discs;
-* metadata provenance.
-
-A release can contain multiple physical discs.
-
-Ingestion order must not determine identity.
-
-For example, scanning Disc 2 before Disc 1 must still allow both discs to resolve to the same physical release when verified metadata identifies them as belonging together.
-
-Title matching alone must not be treated as authoritative physical-release identity.
-
-Music separates the physical release from the canonical recording.
-
-The model is:
-
-```text
-Music Release
- └── Medium
-      └── Track
-           └── Canonical Recording
-```
-
-A recording may appear in multiple releases.
-
-For example, the same canonical recording can exist on:
-
-* an artist album;
-* a soundtrack;
-* a compilation;
-* another physical release.
-
-The backend therefore avoids creating a new canonical recording merely because the same recording was encountered through another release.
-
-Preferred identity signals include:
-
-* ISRC;
-* verified release metadata;
-* audio fingerprint;
-* duration;
-* artist relationships;
-* other authoritative metadata.
-
-Title matching alone is insufficient for canonical recording identity.
-
-Music imports prefer:
-
-FLAC
-
-as the lossless archive/master representation.
-
-The lossless source is retained.
-
-Playback-specific versions are derived only when required:
-
-```text
-FLAC master
-   │
-   ├── Direct Play
-   │
-   ├── AAC
-   │
-   ├── MP3
-   │
-   └── Opus
-```
-
-Derived playback files are disposable representations and must not replace the original lossless archive.
-
-ARM metadata is provider-neutral.
-
-Metadata may describe:
-
-* artwork;
-* posters;
-* descriptions;
-* cast;
-* directors;
-* artists;
-* albums;
-* release information;
-* market/country;
-* region;
-* music identifiers;
-* physical-release information.
-
-Metadata must remain distinguishable from verified physical content.
-
-The backend should not manufacture a physical relationship from an unverified title match.
-
-Verification should establish, where possible:
-
-* readable content;
-* media type;
-* audio/video streams;
-* duration;
-* file integrity;
-* expected content classification;
-* metadata provenance.
-
-Playback prefers the least expensive representation that satisfies the target device.
-
-The decision hierarchy is:
-
-Direct Play
-    ↓
-Remux
-    ↓
-Audio Transcode
-    ↓
-Full Transcode
-
-Direct Play and remuxing should remain preferred whenever the target device can consume the source representation.
-
-This prevents unnecessary CPU/GPU consumption.
-
-Full transcoding is performed only when required by the playback target.
-
-Transcoding jobs use a bounded concurrent scheduler.
-
-Configure the maximum number of simultaneous jobs through:
-
-TRANSCODE_MAX_CONCURRENT
-
-Example:
-
-TRANSCODE_MAX_CONCURRENT=2
-
-The scheduler prevents an unrestricted number of simultaneous FFmpeg processes from exhausting the home server.
-
-Transcoding output is stored in a derived cache rather than replacing the original media.
-
-The cache is disposable.
-
-The architecture is:
-
-```text
-Original Media
-      │
-      ├── Direct Play ──────────────► Client
-      │
-      ├── Remux ────────────────────► Client
-      │
-      └── Transcode
-             │
-             ▼
-       Transcode Cache
-             │
-             ▼
-           Client
-```
-
-The original media remains authoritative.
-
-Recommendations are generated from application metadata and profile activity.
-
-Signals can include:
-
-* watched media;
-* liked media;
-* disliked media;
-* genres;
-* themes;
-* actors;
-* directors;
-* artists;
-* language;
-* country;
-* release relationships;
-* adaptation relationships;
-* series continuation;
-* shared profile interests;
-* recency;
-* diversity constraints.
-
-International and local productions can be connected through verified country/language and adaptation relationships.
-
-These relationships allow related works to be surfaced without requiring the works to be treated as identical.
-
-Recommendation scores represent algorithmic relevance/match calculations. They are not probabilities of a user watching a title.
-
-Marketplace functionality is intentionally separate from entertainment metadata.
-
-A title, actor, franchise, album, or other media entity does not automatically become purchasable.
-
-The architecture separates:
-
-Entertainment Metadata
-        │
-        ▼
-Entity Association
-        │
-        ▼
-Merchant/Product Relationship
-        │
-        ▼
-Eligible Offer
-        │
-        ▼
-Purchase Flow
-
-A Shop association can identify that a product or merchant is related to an entertainment entity.
-
-That relationship alone does not establish:
-
-* availability;
-* stock;
-* price;
-* purchase eligibility;
-* ownership;
-* checkout authorization.
-
-Actual Shop eligibility must be backed by a real merchant/product relationship.
-
-The marketplace can therefore provide discovery patterns such as:
-
-* search;
-* filtering;
-* sorting;
-* categories;
-* merchant associations;
-* product discovery;
-* local/social marketplace presentation;
-* checkout flows;
-
-without conflating marketplace metadata with the user's private media library.
-
-Supabase is used for server-side application metadata and persistence.
-
-Examples include:
-
-* accounts;
-* member identities;
-* account memberships;
-* profiles;
-* subscriptions;
-* payment sessions;
-* security events;
-* server registrations;
-* server-media metadata;
-* profile customization;
-* account snapshots;
-* marketplace entity metadata.
-
-Supabase does not become the authoritative storage location for the user's physical movie, television, or music files.
-
-The home server remains responsible for the actual media files.
-
-The backend can synchronize sanitized account/profile application state with Supabase.
-
-Client-provided snapshots are treated as untrusted input.
-
-The server must never allow a client snapshot to overwrite backend-authoritative security information such as:
-
-* password hashes;
-* MFA state;
-* security-answer hashes;
-* subscription authorization;
-* payment status;
-* account ownership;
-* server ownership.
-
-Backend-authoritative state must come from the authenticated server-side models and persistence layer.
-The backend should enforce security at multiple layers:
-
-Client
-  │
-  ▼
-HTTPS / Reverse Proxy
-  │
-  ▼
-Trusted Proxy Validation
-  │
-  ▼
-Rate Limiting
-  │
-  ▼
-Authentication
-  │
-  ▼
-Account Authorization
-  │
-  ▼
-Profile Authorization
-  │
-  ▼
-Resource Authorization
-  │
-  ▼
-Service / Database
-
-Important principles:
-
-* Never trust client-provided ownership.
-* Never trust client-provided payment success.
-* Never trust forwarded IP headers unless the immediate peer is a trusted proxy.
-* Never expose service-role credentials.
-* Never expose password material.
-* Never use title matching alone as authoritative physical-media identity.
-* Never treat metadata association as proof of marketplace eligibility.
-* Never replace original media with derived transcoding output.
-* Never move private home-server media into central storage merely to coordinate Group Watch.
-* Keep security-sensitive decisions in the backend rather than Flutter.
-
-Some parts of the complete self-hosting architecture intentionally remain outside the Dart application:
-
-Cloudflare
-Firewall
-DDNS
-NGINX Proxy Manager
-Physical NAS
-RAID controller
-UPS
-Operating system
-Physical optical drives
-
-The Dart backend integrates with these components through configuration, trusted-proxy controls, filesystem access, monitoring, APIs, and service boundaries.
-
-The application can therefore implement the software-side portion of the self-hosting architecture without pretending that Flutter/Dart itself replaces the physical or network infrastructure.
-
-The backend is designed so that the same application code can run in:
-
-* local development;
-* a Windows home server;
-* a Linux home server;
-* a NAS-adjacent server;
-* a reverse-proxy deployment;
-* a directly TLS-terminated development deployment.
-
-Environment variables determine deployment-specific details such as:
-
-* network binding;
-* public URL;
-* TLS mode;
-* proxy trust;
-* storage paths;
-* ARM endpoint;
-* Supabase credentials;
-* transcoding concurrency;
-* marketplace integrations.
-
-This keeps deployment-specific secrets and infrastructure details out of the Flutter application and source-controlled application logic.
-
-### External media-rating providers
-
-Provider credentials remain backend-only. Configure only providers for which the deployment has the required rights and API access:
-
- `TMDB_API_TOKEN` — TMDB application access token.
- `OMDB_API_KEY` — OMDb API key for provider fields available through OMDb.
-
-The Flutter client never receives these credentials. Provider ratings are stored and displayed independently; the backend does not calculate a single cross-provider master score.
-
-## Master Product Architecture
-
-See `../docs/MASTER_PRODUCT_ARCHITECTURE.md`. The backend is organized around domain services, authenticated capabilities, long-running jobs, events, profile governance, and a local Media Server Agent boundary for NAS access.
-
-## External provider configuration
-
-Optional production integrations are backend-only:
-
- `PAYPAL_CLIENT_ID`
- `PAYPAL_CLIENT_SECRET`
- `PAYPAL_BASE_URL` (sandbox default)
- `APPLE_PAY_MERCHANT_ID`
- `MERCADO_PAGO_ACCESS_TOKEN`
- `TMDB_API_TOKEN`
- `OMDB_API_KEY`
- `LASTFM_API_KEY`
- `MUSIC_METADATA_USER_AGENT`
-
-Never place these secrets in Flutter, Supabase client configuration, or source control. Apple Pay also requires the platform's merchant-validation/client setup; the backend exposes capability state but does not accept raw payment credentials.
-
-## TrueNAS media gateway
-
-See [`deploy/truenas/README.md`](../deploy/truenas/README.md) for the TrueNAS dataset, read-only media agent, Supabase server-media mapping, and signed playback URL setup. Configure `MEDIA_AGENT_BASE_URL` and `MEDIA_AGENT_SHARED_SECRET` on the Dart backend only. The matching secret also belongs in the trusted media-agent environment; neither secret belongs in Flutter.
+See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_AND_RELIABILITY.md) for the rollout steps covering privacy-aware presence/diagnostics, owner-gated operations probes, accessibility, offline progress sync, Hey Media action confirmation, CI quality gates, encrypted database backups, and TrueNAS recovery boundaries. Use [`docs/RECOVERY_DRILL_CHECKLIST.md`](docs/RECOVERY_DRILL_CHECKLIST.md) for scheduled restoration drills. Apply `Backend/database/production_readiness_and_privacy.sql` only after a verified backup and the existing base/account migrations.

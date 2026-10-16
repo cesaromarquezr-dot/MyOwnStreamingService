@@ -282,6 +282,16 @@ class SupabaseSyncRoutes {
           'attachmentPath': attachmentPath,
         });
       }
+      if (bits.length == 1 && bits[0] == 'account-profiles' && request.method == 'GET') {
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...await store.loadSocialAccountProfiles(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+          ),
+        });
+      }
+
       if (bits.length == 1 && bits[0] == 'home' && request.method == 'GET') {
         return _json(request.response, HttpStatus.ok, {
           'success': true,
@@ -340,6 +350,31 @@ class SupabaseSyncRoutes {
       if (bits.length == 1 &&
           bits[0] == 'conversations' &&
           request.method == 'POST') {
+        if (body['profileIds'] is List) {
+          final conversation = await store.createSocialAccountGroupConversation(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            title: _optionalText(body, 'title', 100) ?? 'Account group',
+            profileIds: (body['profileIds'] as List)
+                .map((item) => item.toString())
+                .toList(),
+          );
+          return _json(request.response, HttpStatus.created, {
+            'success': true,
+            ...conversation,
+          });
+        }
+        if (body['targetProfileId'] != null) {
+          final conversation = await store.createSocialAccountConversation(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            targetProfileId: _requiredText(body, 'targetProfileId', 256),
+          );
+          return _json(request.response, HttpStatus.created, {
+            'success': true,
+            ...conversation,
+          });
+        }
         if (body['usernames'] is List) {
           final conversation = await store.createSocialGroupConversation(
             accountExternalId: account.id,

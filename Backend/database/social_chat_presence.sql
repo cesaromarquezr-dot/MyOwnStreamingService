@@ -19,7 +19,7 @@ create table if not exists public.social_profile_presence (
   last_seen_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (account_id, profile_id),
-  check (activity_type is null or activity_type in ('watching', 'listening'))
+  check (activity_type is null or activity_type in ('watching', 'listening', 'shopping', 'ordering_food', 'planning_marathon'))
 );
 
 create index if not exists social_profile_presence_last_seen_idx

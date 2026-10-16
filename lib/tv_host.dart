@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'localization.dart';
 
 class TvHostScreen extends StatefulWidget {
   const TvHostScreen({super.key});
@@ -70,7 +71,7 @@ class _TvHostScreenState extends State<TvHostScreen> {
     final code = _code ?? '------';
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text('TV Host Mode')),
+      appBar: AppBar(title: const UniversalText('TV Host Mode')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
@@ -81,9 +82,9 @@ class _TvHostScreenState extends State<TvHostScreen> {
               children: [
                 const Icon(Icons.tv_rounded, size: 82),
                 const SizedBox(height: 24),
-                const Text('Pair your phone controller', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+                const UniversalText('Pair your phone controller', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 12),
-                const Text('Open the mobile app, choose TV Controller, and enter this code.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60)),
+                const UniversalText('Open the mobile app, choose TV Controller, and enter this code.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60)),
                 const SizedBox(height: 28),
                 Text(code, style: const TextStyle(fontSize: 54, fontWeight: FontWeight.w900, letterSpacing: 10)),
                 if (_expiresAt != null) Text('Expires ${_expiresAt!.toLocal()}', style: const TextStyle(color: Colors.white54)),
@@ -97,16 +98,16 @@ class _TvHostScreenState extends State<TvHostScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (_commands.isNotEmpty) ...[
-                  const Align(alignment: Alignment.centerLeft, child: Text('Recent remote activity', style: TextStyle(fontWeight: FontWeight.w800))),
+                  const Align(alignment: Alignment.centerLeft, child: UniversalText('Recent controller activity', style: TextStyle(fontWeight: FontWeight.w800))),
                   const SizedBox(height: 8),
                   ..._commands.map((command) => ListTile(
                         dense: true,
-                        leading: const Icon(Icons.history_rounded),
+                        leading: const Icon(Icons.settings_remote_rounded),
                         title: Text('${command['command']}'),
                       )),
                 ],
                 const SizedBox(height: 18),
-                OutlinedButton.icon(onPressed: _startPairing, icon: const Icon(Icons.refresh), label: const Text('New code')),
+                OutlinedButton.icon(onPressed: _startPairing, icon: const Icon(Icons.refresh), label: const UniversalText('New code')),
               ],
             ),
           ),

@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050" role="img" aria-labelledby="title desc">
+  <title id="title">MyOwnStreamingService AI, adaptive delivery and security architecture</title>
+  <desc id="desc">Architecture diagram showing Flutter clients, verified social login, personalization, thumbnail generation, adaptive HLS and DASH packaging, NAS origin, multi-CDN delivery, Supabase metadata, client-side encrypted chat, offline downloads, and optional DRM licensing infrastructure.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#121c2e"/></linearGradient>
+    <linearGradient id="clients" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#18324c"/><stop offset="1" stop-color="#1c3a53"/></linearGradient>
+    <linearGradient id="backend" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#26345a"/><stop offset="1" stop-color="#31345f"/></linearGradient>
+    <linearGradient id="delivery" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#164b4e"/><stop offset="1" stop-color="#1d5955"/></linearGradient>
+    <linearGradient id="data" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#41334e"/><stop offset="1" stop-color="#4b3555"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000" flood-opacity=".26"/></filter>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#78b8f4"/></marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58d7b5"/></marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ffc477"/></marker>
+    <style>
+      .title{font:700 31px Inter,Segoe UI,Arial,sans-serif;fill:#f2f6ff}.subtitle{font:400 14px Inter,Segoe UI,Arial,sans-serif;fill:#aebbd0}
+      .lane{font:700 15px Inter,Segoe UI,Arial,sans-serif;fill:#b7c8e1;letter-spacing:1.7px}
+      .cardtitle{font:700 17px Inter,Segoe UI,Arial,sans-serif;fill:#f5f8ff}.body{font:400 13px Inter,Segoe UI,Arial,sans-serif;fill:#d3dfef}.small{font:400 11px Inter,Segoe UI,Arial,sans-serif;fill:#afc0d5}
+      .pill{font:700 10px Inter,Segoe UI,Arial,sans-serif;letter-spacing:.6px;fill:#effaff}.edge{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;opacity:.95}.divider{stroke:#ffffff;stroke-opacity:.11;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1600" height="1050" fill="url(#bg)"/>
+  <circle cx="1480" cy="90" r="230" fill="#276b8d" opacity=".08"/><circle cx="110" cy="960" r="260" fill="#77549a" opacity=".08"/>
+  <text x="58" y="59" class="title">MyOwnStreamingService</text>
+  <text x="58" y="86" class="subtitle">AI discovery · adaptive delivery · secure social experiences · NAS-backed media</text>
+  <g transform="translate(1264 40)"><rect width="280" height="36" rx="18" fill="#1c2b40" stroke="#54708f"/><circle cx="18" cy="18" r="5" fill="#58d7b5"/><text x="32" y="22" class="small">DESIGN + DEPLOYMENT BOUNDARIES</text></g>
+
+  <text x="58" y="132" class="lane">01 / EXPERIENCE LAYER</text>
+  <g filter="url(#shadow)">
+    <rect x="58" y="151" width="338" height="176" rx="18" fill="url(#clients)" stroke="#46749a"/>
+    <text x="82" y="184" class="cardtitle">Flutter apps</text>
+    <text x="82" y="207" class="body">iOS · Android · Web · Desktop</text>
+    <line x1="82" y1="222" x2="372" y2="222" class="divider"/>
+    <text x="82" y="246" class="body">• Profile-aware home &amp; watchlists</text>
+    <text x="82" y="268" class="body">• OAuth sign-in via Supabase Auth</text>
+    <text x="82" y="290" class="body">• Live chat, reviews and reactions</text>
+    <text x="82" y="312" class="body">• Playback progress &amp; accessibility</text>
+
+    <rect x="420" y="151" width="338" height="176" rx="18" fill="url(#clients)" stroke="#46749a"/>
+    <text x="444" y="184" class="cardtitle">Adaptive player</text>
+    <text x="444" y="207" class="body">HLS / DASH + adaptive bitrate (ABR)</text>
+    <line x1="444" y1="222" x2="734" y2="222" class="divider"/>
+    <text x="444" y="246" class="body">• Switches renditions by bandwidth</text>
+    <text x="444" y="268" class="body">• Origin + configured CDN fallback</text>
+    <text x="444" y="290" class="body">• Playback progress / resume</text>
+    <text x="444" y="312" class="body">• Native DRM SDK required for protected VOD</text>
+
+    <rect x="782" y="151" width="338" height="176" rx="18" fill="url(#clients)" stroke="#46749a"/>
+    <text x="806" y="184" class="cardtitle">Offline &amp; secure social</text>
+    <text x="806" y="207" class="body">Device-local storage &amp; encryption</text>
+    <line x1="806" y1="222" x2="1096" y2="222" class="divider"/>
+    <text x="806" y="246" class="body">• Authorized single-file downloads</text>
+    <text x="806" y="268" class="body">• X25519 → HKDF-SHA256 → AES-256-GCM</text>
+    <text x="806" y="290" class="body">• Private chat keys remain on device</text>
+    <text x="806" y="312" class="small">Prototype: no forward secrecy; verify fingerprints</text>
+
+    <rect x="1144" y="151" width="398" height="176" rx="18" fill="#202d3c" stroke="#a8865e"/>
+    <text x="1168" y="184" class="cardtitle">User signals &amp; privacy controls</text>
+    <text x="1168" y="207" class="body">History · completion · likes · skips · genre affinity</text>
+    <line x1="1168" y1="222" x2="1518" y2="222" class="divider"/>
+    <text x="1168" y="246" class="body">• Consent-aware behavioral inputs</text>
+    <text x="1168" y="268" class="body">• Per-profile recommendations and controls</text>
+    <text x="1168" y="290" class="body">• Avoid sending media contents to AI APIs by default</text>
+    <text x="1168" y="312" class="small">Current ranker is metadata/profile scoring, not a hosted LLM</text>
+  </g>
+
+  <text x="58" y="374" class="lane">02 / APPLICATION &amp; PROCESSING LAYER</text>
+  <g filter="url(#shadow)">
+    <rect x="58" y="393" width="338" height="188" rx="18" fill="url(#backend)" stroke="#6b80c2"/>
+    <text x="82" y="426" class="cardtitle">API gateway + identity</text>
+    <text x="82" y="450" class="body">Dart backend · authenticated routes</text>
+    <line x1="82" y1="465" x2="372" y2="465" class="divider"/>
+    <text x="82" y="489" class="body">• Verify OAuth token against Supabase</text>
+    <text x="82" y="511" class="body">• Issue app session + preserve MFA</text>
+    <text x="82" y="533" class="body">• Enforce profile and media access</text>
+    <text x="82" y="555" class="small">Keep service-role secret on the backend only</text>
+
+    <rect x="420" y="393" width="338" height="188" rx="18" fill="url(#backend)" stroke="#6b80c2"/>
+    <text x="444" y="426" class="cardtitle">Personalization engine</text>
+    <text x="444" y="450" class="body">Explainable profile-aware ranking</text>
+    <line x1="444" y1="465" x2="734" y2="465" class="divider"/>
+    <text x="444" y="489" class="body">• Blend history, genres, cast and tags</text>
+    <text x="444" y="511" class="body">• Exclude watched / disliked content</text>
+    <text x="444" y="533" class="body">• Record feedback and evaluate outcomes</text>
+    <text x="444" y="555" class="small">Optional future model provider behind server-side adapter</text>
+
+    <rect x="782" y="393" width="338" height="188" rx="18" fill="url(#delivery)" stroke="#4ea992"/>
+    <text x="806" y="426" class="cardtitle">FFmpeg processing workers</text>
+    <text x="806" y="450" class="body">Adaptive packaging + thumbnail extraction</text>
+    <line x1="806" y1="465" x2="1096" y2="465" class="divider"/>
+    <text x="806" y="489" class="body">• Multi-rendition HLS master playlist</text>
+    <text x="806" y="511" class="body">• DASH MPD + fragmented media segments</text>
+    <text x="806" y="533" class="body">• Cached JPEG frame previews</text>
+    <text x="806" y="555" class="small">Short-lived capability URLs; constrained source paths</text>
+
+    <rect x="1144" y="393" width="398" height="188" rx="18" fill="#30384a" stroke="#8b9bab"/>
+    <text x="1168" y="426" class="cardtitle">Entitlement &amp; delivery policy</text>
+    <text x="1168" y="450" class="body">Signed access · cache policy · observability</text>
+    <line x1="1168" y1="465" x2="1518" y2="465" class="divider"/>
+    <text x="1168" y="489" class="body">• Short-lived paths and access checks</text>
+    <text x="1168" y="511" class="body">• CDN health metrics / retry policy</text>
+    <text x="1168" y="533" class="body">• DRM license authorization integration point</text>
+    <text x="1168" y="555" class="small">DRM needs licensed packager + licenses + native SDKs</text>
+  </g>
+
+  <text x="58" y="631" class="lane">03 / STORAGE, DELIVERY &amp; TRUST BOUNDARIES</text>
+  <g filter="url(#shadow)">
+    <rect x="58" y="650" width="338" height="176" rx="18" fill="url(#data)" stroke="#a77cc0"/>
+    <text x="82" y="684" class="cardtitle">TrueNAS / media origin</text>
+    <text x="82" y="708" class="body">Movies · TV · music · subtitles</text>
+    <line x1="82" y1="723" x2="372" y2="723" class="divider"/>
+    <text x="82" y="747" class="body">• Original media remains on NAS</text>
+    <text x="82" y="769" class="body">• Media-root containment + ACLs</text>
+    <text x="82" y="791" class="body">• Derived adaptive package cache</text>
+    <text x="82" y="813" class="small">Backups, disk health and capacity alerts</text>
+
+    <rect x="420" y="650" width="338" height="176" rx="18" fill="url(#data)" stroke="#a77cc0"/>
+    <text x="444" y="684" class="cardtitle">Supabase control plane</text>
+    <text x="444" y="708" class="body">Auth · profile metadata · history</text>
+    <line x1="444" y1="723" x2="734" y2="723" class="divider"/>
+    <text x="444" y="747" class="body">• OAuth provider identity</text>
+    <text x="444" y="769" class="body">• Catalog / watch activity / preferences</text>
+    <text x="444" y="791" class="body">• E2EE public-key directory only</text>
+    <text x="444" y="813" class="small">Never store E2EE private keys or media files here</text>
+
+    <rect x="782" y="650" width="338" height="176" rx="18" fill="url(#delivery)" stroke="#4ea992"/>
+    <text x="806" y="684" class="cardtitle">Multi-CDN edge layer</text>
+    <text x="806" y="708" class="body">CDN A ↔ CDN B ↔ regional edge</text>
+    <line x1="806" y1="723" x2="1096" y2="723" class="divider"/>
+    <text x="806" y="747" class="body">• Mirror/proxy manifests and segments</text>
+    <text x="806" y="769" class="body">• Client tries origin, then configured URLs</text>
+    <text x="806" y="791" class="body">• Monitor availability and origin load</text>
+    <text x="806" y="813" class="small">Setting URLs alone does not provision CDN caching</text>
+
+    <rect x="1144" y="650" width="398" height="176" rx="18" fill="#3f3830" stroke="#b99a66"/>
+    <text x="1168" y="684" class="cardtitle">DRM vendor / license plane</text>
+    <text x="1168" y="708" class="body">Widevine · FairPlay · PlayReady (optional)</text>
+    <line x1="1168" y1="723" x2="1518" y2="723" class="divider"/>
+    <text x="1168" y="747" class="body">• Encrypt with licensed packaging vendor</text>
+    <text x="1168" y="769" class="body">• Check subscription and device entitlement</text>
+    <text x="1168" y="791" class="body">• Issue and renew device licenses securely</text>
+    <text x="1168" y="813" class="small">Not enabled by the current FFmpeg packaging endpoint</text>
+  </g>
+
+  <!-- Request and delivery paths -->
+  <path class="edge" stroke="#78b8f4" marker-end="url(#arrowBlue)" d="M227 327 V355 H225 V393"/>
+  <path class="edge" stroke="#78b8f4" marker-end="url(#arrowBlue)" d="M589 327 V354 H589 V393"/>
+  <path class="edge" stroke="#78b8f4" marker-end="url(#arrowBlue)" d="M951 327 V356 H951 V393"/>
+  <path class="edge" stroke="#ffc477" marker-end="url(#arrowOrange)" d="M1310 327 V357 H1342 V393"/>
+  <path class="edge" stroke="#58d7b5" marker-end="url(#arrowGreen)" d="M227 581 V614 H227 V650"/>
+  <path class="edge" stroke="#58d7b5" marker-end="url(#arrowGreen)" d="M589 581 V614 H589 V650"/>
+  <path class="edge" stroke="#58d7b5" marker-end="url(#arrowGreen)" d="M951 581 V614 H951 V650"/>
+  <path class="edge" stroke="#ffc477" marker-end="url(#arrowOrange)" d="M1342 581 V614 H1342 V650"/>
+  <!-- Cross-layer data flow -->
+  <path class="edge" stroke="#78b8f4" marker-end="url(#arrowBlue)" d="M396 240 H410"/>
+  <path class="edge" stroke="#78b8f4" marker-end="url(#arrowBlue)" d="M396 488 H410"/>
+  <path class="edge" stroke="#58d7b5" marker-end="url(#arrowGreen)" d="M951 581 V638 H951 V650"/>
+  <path class="edge" stroke="#58d7b5" marker-end="url(#arrowGreen)" d="M396 738 H410"/>
+  <path class="edge" stroke="#58d7b5" marker-end="url(#arrowGreen)" d="M758 738 H772"/>
+  <path class="edge" stroke="#ffc477" marker-end="url(#arrowOrange)" d="M1120 738 H1134"/>
+  <path class="edge" stroke="#ffc477" marker-end="url(#arrowOrange)" d="M951 650 V630 H1342 V581"/>
+
+  <g transform="translate(58 862)">
+    <rect width="1484" height="130" rx="18" fill="#111c2d" stroke="#3a4c65"/>
+    <text x="24" y="31" class="cardtitle">Implementation status &amp; critical boundaries</text>
+    <g transform="translate(24 48)"><circle cx="7" cy="7" r="5" fill="#58d7b5"/><text x="20" y="11" class="body">Implemented locally: HLS/DASH packaging, thumbnail frame extraction, OAuth token exchange, offline single-file downloads, E2EE text prototype.</text></g>
+    <g transform="translate(24 73)"><circle cx="7" cy="7" r="5" fill="#ffc477"/><text x="20" y="11" class="body">Configuration needed: OAuth providers, Supabase migrations, HTTPS endpoints, CDN origin mapping and monitoring.</text></g>
+    <g transform="translate(24 98)"><circle cx="7" cy="7" r="5" fill="#ff8888"/><text x="20" y="11" class="body">External production work: true AI vision model, audited E2EE with forward secrecy, licensed DRM packager and license services.</text></g>
+  </g>
+  <text x="58" y="1024" class="small">MyOwnStreamingService · Architecture concept · Paths and provider readiness must be verified in the target deployment.</text>
+</svg>

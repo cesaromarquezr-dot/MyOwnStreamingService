@@ -1,388 +1,186 @@
-// FILE: `lib/storage_dashboard.dart`.
-// Purpose: Part of the documented streaming-service client/backend architecture.
-// Media files remain on the appropriate account server; this source contains application logic, UI, or API coordination.
-
-// Customizable server storage dashboard used by the More menu and home server.
+// FILE: lib/storage_dashboard.dart
+// Live, read-only view of the authenticated home-server storage endpoint.
+// It never invents usage values and never mutates media files.
 
 import 'package:flutter/material.dart';
+import 'app_core.dart';
 import 'localization.dart';
 
 const Map<String, Color> namedColors = {
-  'Red': Colors.red,
-  'Blue': Colors.blue,
-  'Black': Colors.black,
-  'White': Colors.white,
-  'Yellow': Colors.yellow,
-  'Green': Colors.green,
-  'Purple': Colors.purple,
-  'Violet': Color.fromARGB(255, 238, 130, 238),
-  'Indigo': Colors.indigo,
-  'Pink': Colors.pink,
-  'Maroon': Color.fromARGB(255, 128, 0, 0),
-  'Fuchsia': Color.fromARGB(255, 255, 0, 255),
-  'Aqua': Color.fromARGB(255, 0, 255, 255),
-  'Cyan': Colors.cyan,
-  'Orange': Colors.orange,
-  'Brown': Colors.brown,
-  'Lime': Colors.lime,
-  'Teal': Colors.teal,
-  'Amber': Colors.amber,
-  'Grey': Colors.grey,
+  'Red': Colors.red, 'Blue': Colors.blue, 'Black': Colors.black,
+  'White': Colors.white, 'Yellow': Colors.yellow, 'Green': Colors.green,
+  'Purple': Colors.purple, 'Violet': Color.fromARGB(255, 238, 130, 238),
+  'Indigo': Colors.indigo, 'Pink': Colors.pink,
+  'Maroon': Color.fromARGB(255, 128, 0, 0), 'Fuchsia': Color.fromARGB(255, 255, 0, 255),
+  'Aqua': Color.fromARGB(255, 0, 255, 255), 'Cyan': Colors.cyan,
+  'Orange': Colors.orange, 'Brown': Colors.brown, 'Lime': Colors.lime,
+  'Teal': Colors.teal, 'Amber': Colors.amber, 'Grey': Colors.grey,
 };
 
-/// Implements the `StorageDashboardScreen` class for this feature or UI component.
 class StorageDashboardScreen extends StatefulWidget {
   const StorageDashboardScreen({super.key});
-
   static String formatBytes(int bytes) {
-    if (bytes <= 0) {
-      return '0 B';
-    }
-
-    if (bytes < 1024) {
-      return '$bytes B';
-    }
-
-    final gb = bytes / (1024 * 1024 * 1024);
-
-    if (gb < 1024) {
-      return '${gb.toStringAsFixed(1)} GB';
-    }
-
-    return '${(gb / 1024).toStringAsFixed(2)} TB';
+    if (bytes < 0) return 'Unknown';
+    if (bytes < 1024) return '$bytes B';
+    const units = ['KB', 'MB', 'GB', 'TB', 'PB'];
+    var value = bytes / 1024.0;
+    var index = 0;
+    while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
+    return '${value.toStringAsFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[index]}';
   }
-
   @override
-  State<StorageDashboardScreen> createState() =>
-      _StorageDashboardScreenState();
+  State<StorageDashboardScreen> createState() => _StorageDashboardScreenState();
 }
 
-/// Implements the `_StorageDashboardScreenState` class for this feature or UI component.
 class _StorageDashboardScreenState extends State<StorageDashboardScreen> {
-  // No media has been imported yet, so all storage values start at zero.
-  final Map<String, double> used = {
-    'Movies': 0.0,
-    'Series': 0.0,
-    'Music': 0.0,
-    'Available': 0.0,
+  bool loading = true;
+  String? error;
+  DateTime? lastUpdated;
+  Map<String, dynamic>? snapshot;
+  Map<String, dynamic>? armSnapshot;
+  final Map<String, Color> colors = <String, Color>{
+    'Movies': Colors.red, 'Series': Colors.blue, 'Music': Colors.purple,
   };
 
-  // Default colors. These can be changed from the customization dialog.
-  final Map<String, Color> colors = {
-    'Movies': Colors.red,
-    'Series': Colors.blue,
-    'Music': Colors.purple,
-    'Available': Colors.green,
-  };
+  @override
+  void initState() { super.initState(); _refresh(); }
 
-  final Map<String, String> units = {
-    'Movies': 'TB',
-    'Series': 'TB',
-    'Music': 'GB',
-    'Available': 'TB',
-  };
+  Future<void> _refresh() async {
+    if (!AppController.instance.backendApi.isAuthenticated) {
+      if (!mounted) return;
+      setState(() { loading = false; error = 'Sign in to view live home-server storage. No values are estimated.'; });
+      return;
+    }
+    setState(() { loading = true; error = null; });
+    try {
+      final results = await Future.wait<dynamic>([
+        AppController.instance.backendApi.getHomeServerStorage(),
+        AppController.instance.backendApi.getHomeServerArm(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        snapshot = Map<String, dynamic>.from(results[0] as Map);
+        armSnapshot = Map<String, dynamic>.from(results[1] as Map);
+        lastUpdated = DateTime.now(); loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
 
-  /// Builds the storage dashboard.
+  List<Map<String, dynamic>> get categories {
+    final raw = snapshot?['categories'];
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw.whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList();
+  }
+
+  Map<String, dynamic>? _filesystemFor(String path) {
+    final filesystem = snapshot?['filesystem'];
+    if (filesystem is! Map) return null;
+    final byPath = filesystem['categories'];
+    if (byPath is! Map) return null;
+    final value = byPath[path];
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
+
+  int? _int(Object? value) => value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+
   @override
   Widget build(BuildContext context) {
-    final total = used.values.fold<double>(
-      0,
-      (a, b) => a + b,
-    );
-
+    final usedTotal = categories.fold<int>(0, (sum, item) => sum + (_int(item['usedBytes']) ?? 0));
+    final configuredTotal = categories.fold<int>(0, (sum, item) => sum + (_int(item['capacityBytes']) ?? 0));
+    final available = _int(snapshot?['availableBytes']);
+    final root = snapshot?['root']?.toString() ?? 'Not reported';
     return Scaffold(
-      appBar: AppBar(
-        title: const UniversalText('Server Storage'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const UniversalText('Media storage',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-
-          const SizedBox(height: 6),
-
-          const UniversalText('No media has been imported yet. Storage usage will remain at 0 until media is added.',
-          ),
-
-          const SizedBox(height: 20),
-
-          for (final name in used.keys) _storageRow(name, total),
-
-          const SizedBox(height: 18),
-
-          const SizedBox(height: 8),
-
-          _architectureCard(
-            Icons.storage_rounded,
-            'HDD RAID media pool',
-            'Primary movies, series, and music storage. RAID provides availability when a drive fails; it is not a backup.',
-          ),
-
-          _architectureCard(
-            Icons.speed_rounded,
-            'SSD performance tier',
-            'Use SSD storage for the database, metadata, thumbnails, indexes, and disposable transcode cache.',
-          ),
-
-          _architectureCard(
-            Icons.backup_rounded,
-            'Separate backups',
-            'Backups protect against deletion, corruption, ransomware, and catastrophic NAS failure. Original media is never replaced by a transcode.',
-          ),
-
-          _architectureCard(
-            Icons.battery_charging_full_rounded,
-            'UPS protection',
-            'UPS monitoring allows the server to stop non-essential work and shut down cleanly before battery runtime is exhausted.',
-          ),
-
-          FilledButton.icon(
-            onPressed: _edit,
-            icon: const Icon(Icons.palette_outlined),
-            label: const UniversalText('Customize storage colors'),
-          ),
-
-          const SizedBox(height: 12),
-
-          OutlinedButton.icon(
-            onPressed: _showInfo,
-            icon: const Icon(Icons.info_outline),
-            label: const UniversalText('How storage is calculated'),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const UniversalText('Server Storage'), actions: [
+        IconButton(tooltip: 'Refresh live storage and filesystem health', onPressed: loading ? null : _refresh, icon: const Icon(Icons.refresh_rounded)),
+      ]),
+      body: loading ? const Center(child: CircularProgressIndicator()) : ListView(padding: const EdgeInsets.all(16), children: [
+        if (error != null) Card(child: Padding(padding: const EdgeInsets.all(14), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent), const SizedBox(width: 10), Expanded(child: Text(error!))]))),
+        Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primary.withValues(alpha: .24), Theme.of(context).colorScheme.surface])), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const UniversalText('Storage health overview', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6), Text('Media root: $root', style: const TextStyle(color: Colors.white70)),
+          if (lastUpdated != null) Text('Last checked: ${lastUpdated!.toLocal().toString().split('.').first}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(height: 16),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _metric('Reported media used', StorageDashboardScreen.formatBytes(usedTotal), Icons.storage_rounded),
+            _metric('Configured category capacity', configuredTotal > 0 ? StorageDashboardScreen.formatBytes(configuredTotal) : 'Not configured', Icons.pie_chart_outline_rounded),
+            _metric('Additional configured space', available == null ? 'Unknown' : StorageDashboardScreen.formatBytes(available), Icons.add_circle_outline_rounded),
+          ]),
+        ])),
+        const SizedBox(height: 16),
+        const UniversalText('Media categories', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        if (categories.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: UniversalText('The server returned no category measurements. Check the home-server service configuration; this screen does not substitute placeholder zeroes.'))),
+        for (final category in categories) _categoryCard(category),
+        const SizedBox(height: 14),
+        const UniversalText('Filesystem health', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        for (final category in categories) _filesystemCard(category),
+        const SizedBox(height: 14),
+        Card(child: ListTile(leading: Icon(armSnapshot?['connected'] == true ? Icons.check_circle_rounded : Icons.cloud_off_rounded, color: armSnapshot?['connected'] == true ? Colors.greenAccent : Colors.orangeAccent), title: const Text('ARM / media import worker'), subtitle: Text('${armSnapshot?['armServerUrl'] ?? 'Not configured'}\nDrive: ${armSnapshot?['opticalDriveHint'] ?? 'Unknown'}'), isThreeLine: true, trailing: Icon(armSnapshot?['connected'] == true ? Icons.check_rounded : Icons.warning_amber_rounded))),
+        const SizedBox(height: 12),
+        _architectureCard(Icons.storage_rounded, 'HDD / ZFS media pool', 'Use redundant storage for availability, snapshots for quick rollback, and separate replication for disaster recovery. RAID/ZFS redundancy is not a backup.'),
+        _architectureCard(Icons.speed_rounded, 'SSD metadata and transcode cache', 'Keep artwork thumbnails, indexes, databases and disposable transcodes on a fast tier where appropriate. Do not treat cache files as source media.'),
+        _architectureCard(Icons.backup_rounded, 'Backup and restore verification', 'Monitor backup freshness, checksum verification, destination capacity and last successful restore drill. A backup is not proven until it has been restored.'),
+        _architectureCard(Icons.battery_charging_full_rounded, 'UPS and clean shutdown', 'Monitor UPS battery, shutdown integration and storage health alerts from the server-side monitoring agent.'),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: _editColors, icon: const Icon(Icons.palette_outlined), label: const UniversalText('Customize storage colors')),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(onPressed: _showInfo, icon: const Icon(Icons.info_outline_rounded), label: const UniversalText('How storage is measured')),
+      ]),
     );
   }
 
-  Widget _architectureCard(IconData icon, String title, String description) {
-    return Card(
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Padding(padding: const EdgeInsets.only(top: 6), child: Text(description)),
-      ),
-    );
+  Widget _metric(String label, String value, IconData icon) => Container(width: 155, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, size: 20), const SizedBox(height: 8), Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(label, style: const TextStyle(fontSize: 11, color: Colors.white60))]));
+
+  Widget _categoryCard(Map<String, dynamic> item) {
+    final name = item['name']?.toString() ?? 'Media';
+    final path = item['path']?.toString() ?? '';
+    final usedBytes = _int(item['usedBytes']);
+    final capacity = _int(item['capacityBytes']);
+    final usage = item['usagePercent'] is num ? ((item['usagePercent'] as num).toDouble() / 100).clamp(0.0, 1.0).toDouble() : (capacity != null && capacity > 0 && usedBytes != null ? (usedBytes / capacity).clamp(0.0, 1.0).toDouble() : null);
+    final exists = item['exists'] == true;
+    final color = colors[name] ?? Theme.of(context).colorScheme.primary;
+    return Card(child: Padding(padding: const EdgeInsets.all(15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Icon(Icons.folder_rounded, color: color), const SizedBox(width: 9), Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w900))), Text(usedBytes == null ? 'Unknown' : StorageDashboardScreen.formatBytes(usedBytes), style: const TextStyle(fontWeight: FontWeight.w800))]),
+      const SizedBox(height: 6), Text(path, style: const TextStyle(fontSize: 12, color: Colors.white54), maxLines: 2, overflow: TextOverflow.ellipsis),
+      const SizedBox(height: 10), LinearProgressIndicator(value: usage, minHeight: 10, backgroundColor: Colors.white12, color: usage != null && usage >= .9 ? Colors.redAccent : color),
+      const SizedBox(height: 7),
+      Row(children: [Expanded(child: Text('Configured: ${capacity == null || capacity == 0 ? 'Not set' : StorageDashboardScreen.formatBytes(capacity)}', style: const TextStyle(fontSize: 12, color: Colors.white60))), Text(exists ? 'Directory found' : 'Directory missing', style: TextStyle(fontSize: 12, color: exists ? Colors.greenAccent : Colors.orangeAccent))]),
+      if (usage != null && usage >= .9) const Padding(padding: EdgeInsets.only(top: 6), child: Text('Warning: configured category usage is at or above 90%. Review free space before importing more media.', style: TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+    ])));
   }
 
-  Widget _storageRow(
-    String name,
-    double total,
-  ) {
-    final value = used[name] ?? 0.0;
-
-    final ratio = total <= 0
-        ? 0.0
-        : (value / total).clamp(0.0, 1.0);
-
-    final displayValue = value == 0
-        ? '0 ${units[name]}'
-        : '${value >= 1 ? value.toStringAsFixed(
-              value == value.roundToDouble() ? 0 : 2,
-            ) : (value * 1024).toStringAsFixed(0)} ${units[name]}';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.folder_rounded,
-                  color: colors[name],
-                ),
-
-                const SizedBox(width: 10),
-
-                Expanded(
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-
-                Text(displayValue),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: Tooltip(
-                message: '$name: 0',
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    minHeight: 12,
-                    backgroundColor: Colors.white12,
-                    color: colors[name],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Widget _filesystemCard(Map<String, dynamic> item) {
+    final name = item['name']?.toString() ?? 'Media';
+    final fs = _filesystemFor(item['path']?.toString() ?? '');
+    final total = _int(fs?['totalBytes']);
+    final free = _int(fs?['freeBytes']);
+    final used = _int(fs?['usedBytes']);
+    final known = total != null && free != null && total > 0;
+    final safeTotal = total ?? 0;
+    final safeFree = free ?? 0;
+    final safeUsed = used ?? (safeTotal >= safeFree ? safeTotal - safeFree : 0);
+    final pct = safeTotal > 0 ? safeUsed / safeTotal : null;
+    final summary = known
+        ? '${StorageDashboardScreen.formatBytes(safeUsed)} used of ${StorageDashboardScreen.formatBytes(safeTotal)} · ${StorageDashboardScreen.formatBytes(safeFree)} free${pct != null && pct >= .9 ? '\nFilesystem is at or above 90% used.' : ''}'
+        : 'Filesystem capacity is not available from the host OS for this configured path.';
+    return Card(child: ListTile(leading: Icon(known ? Icons.check_circle_outline_rounded : Icons.help_outline_rounded, color: known ? Colors.greenAccent : Colors.orangeAccent), title: Text('$name filesystem'), subtitle: Text(summary), isThreeLine: true, trailing: known && pct != null && pct >= .9 ? const Icon(Icons.warning_rounded, color: Colors.orangeAccent) : null));
   }
 
-  /// Opens the color customization dialog.
-  Future<void> _edit() async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const UniversalText('Storage colors'),
+  Widget _architectureCard(IconData icon, String title, String description) => Card(child: ListTile(leading: Icon(icon), title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Padding(padding: const EdgeInsets.only(top: 6), child: Text(description))));
 
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final name in used.keys)
-                    ListTile(
-                      leading: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: colors[name],
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-
-                      title: Text(name),
-
-                      subtitle: Text(
-                        _colorName(colors[name] ?? Colors.grey),
-                      ),
-
-                      trailing: const Icon(
-                        Icons.chevron_right_rounded,
-                      ),
-
-                      onTap: () {
-                        Navigator.pop(dialogContext);
-                        _chooseColor(name);
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+  Future<void> _editColors() async {
+    final names = categories.map((c) => c['name']?.toString() ?? 'Media').toList();
+    if (names.isEmpty) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No storage categories are available to customize.'))); return; }
+    final selectedCategory = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(title: const Text('Choose a category'), children: [for (final name in names) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, name), child: Text(name))]));
+    if (selectedCategory == null || !mounted) return;
+    final selectedColorName = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(title: Text('$selectedCategory color'), children: [for (final entry in namedColors.entries) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, entry.key), child: Row(children: [Container(width: 20, height: 20, decoration: BoxDecoration(color: entry.value, shape: BoxShape.circle)), const SizedBox(width: 10), Text(entry.key)]))]));
+    if (selectedColorName == null || !mounted) return;
+    setState(() => colors[selectedCategory] = namedColors[selectedColorName] ?? Colors.grey);
   }
 
-  /// Opens the named-color picker for a storage category.
-  Future<void> _chooseColor(String category) async {
-    final selectedColor = colors[category] ?? Colors.grey;
-
-    final colorName = _colorName(selectedColor);
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: UniversalText('$category color'),
-
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final entry in namedColors.entries)
-                    RadioListTile<String>(
-                      value: entry.key,
-                      // ignore: deprecated_member_use
-                      groupValue: colorName,
-                      title: Row(
-                        children: [
-                          Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              color: entry.value,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white24,
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(width: 12),
-
-                          Text(entry.key),
-                        ],
-                      ),
-                      // ignore: deprecated_member_use
-                      onChanged: (value) {
-                        if (value != null) {
-                          Navigator.pop(
-                            dialogContext,
-                            value,
-                          );
-                        }
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    if (result == null || !mounted) {
-      return;
-    }
-
-    final selected = namedColors[result];
-
-    if (selected == null) {
-      return;
-    }
-
-    setState(() {
-      colors[category] = selected;
-    });
-  }
-
-  /// Converts a Color back to its friendly customization name.
-  String _colorName(Color color) {
-    for (final entry in namedColors.entries) {
-      if (entry.value.toARGB32() == color.toARGB32()) {
-        return entry.key;
-      }
-    }
-
-    return 'Grey';
-  }
-
-  void _showInfo() {
-    showDialog<void>(
-      context: context,
-      builder: (_) {
-        return const AlertDialog(
-          title: UniversalText('Storage'),
-          content: UniversalText('Storage starts at 0 because no media has been imported. '
-            'Storage usage will increase when movies, series, music, '
-            'or other media are actually imported into the server.',
-          ),
-        );
-      },
-    );
-  }
+  void _showInfo() => showDialog<void>(context: context, builder: (_) => const AlertDialog(title: UniversalText('Storage measurements'), content: UniversalText('Configured category usage measures files under the server media directories. Filesystem usage is reported separately when the host operating system can inspect the volume. Unknown values remain unknown; the dashboard does not treat missing measurements as zero. Storage capacity and physical free space can differ.')));
 }

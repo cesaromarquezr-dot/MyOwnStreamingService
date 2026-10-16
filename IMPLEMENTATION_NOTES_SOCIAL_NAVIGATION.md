@@ -18,6 +18,7 @@ This update applies a best-effort subset of the requested UX and backend work to
 - Repaired the TrueNAS agent's packaged Python source, Dockerfile, dependencies, and Compose file. It now has a read-only media mount and local-network binding example.
 - Added database groundwork for a per-account automatic “Home Server Profiles” group conversation (created when there are at least two active profiles and updated when profiles are added), plus guardian review tables/triggers for incoming friend requests to a supervised child profile.
 
+
 ## This update: theme gallery, onboarding visibility, and Import / Rip
 
 - Added `lib/social_theme_gallery.dart`. It defines descriptions and preview tokens for all 15 social styles: Light, Dark, Minimalist, Flat, Skeuomorphic, Material, Neumorphism, Glassmorphism, High Contrast, Brand-Centric, Cyberpunk, Retro Futurism, Brutalism, Compact, and Casual. Each social section theme control now displays the selected preview and opens a scrollable gallery with a sample post, action chips, style description, and a one-tap Use action.

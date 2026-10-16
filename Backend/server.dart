@@ -60,7 +60,6 @@ import 'database/database.dart';
 import 'middleware/authentication.dart';
 import 'routes/arm_routes.dart';
 import 'routes/auth_routes.dart';
-import 'routes/game_routes.dart';
 import 'routes/food_delivery_routes.dart';
 import 'routes/group_routes.dart';
 import 'routes/home_server_routes.dart';
@@ -76,7 +75,6 @@ import 'routes/platform_routes.dart';
 import 'routes/platform_server_routes.dart';
 import 'routes/playback_routes.dart';
 import 'routes/profile_governance_routes.dart';
-import 'routes/radio_routes.dart';
 import 'routes/rating_routes.dart';
 import 'routes/recommendations_routes.dart';
 import 'routes/remote_access_routes.dart';
@@ -92,7 +90,6 @@ import 'routes/tv_pairing_routes.dart';
 import 'self_hosting_security.dart';
 import 'services/auth_service.dart';
 import 'services/email_service.dart';
-import 'services/game_service.dart';
 import 'services/food_delivery_service.dart';
 import 'services/group_recommendation_service.dart';
 import 'services/group_watch_service.dart';
@@ -233,10 +230,6 @@ Future<void> main() async {
     store: SupabaseStore.instance,
   );
 
-  final gameService = GameService(
-    store: SupabaseStore.instance,
-  );
-
   final tvPairingService = TvPairingService();
 
   // ------------------------------------------------------------
@@ -265,15 +258,6 @@ Future<void> main() async {
   final platformServerRoutes = PlatformServerRoutes(
     authentication: authentication,
     service: platformServerService,
-  );
-
-  // ------------------------------------------------------------
-  // GAME ROUTES
-  // ------------------------------------------------------------
-
-  final gameRoutes = GameRoutes(
-    authentication: authentication,
-    service: gameService,
   );
 
   // ------------------------------------------------------------
@@ -468,10 +452,6 @@ Future<void> main() async {
 
   final locationRoutes = LocationRoutes();
 
-  final radioRoutes = RadioRoutes(
-    authentication: authentication,
-  );
-
   final selfHostingSecurity = SelfHostingSecurity();
 
   final selfHostingRoutes = SelfHostingRoutes(
@@ -544,14 +524,12 @@ Future<void> main() async {
       supabaseSyncRoutes,
       mediaIntelligenceRoutes,
       locationRoutes,
-      radioRoutes,
       selfHostingRoutes,
       selfHostingSecurity,
       physicalItemRoutes,
       profileGovernanceRoutes,
       serverAgentRoutes,
       platformServerRoutes,
-      gameRoutes,
       foodDeliveryRoutes,
       tvPairingRoutes,
       tvChannelRoutes,
@@ -595,14 +573,12 @@ Future<void> _handleRequest(
   SupabaseSyncRoutes supabaseSyncRoutes,
   MediaIntelligenceRoutes mediaIntelligenceRoutes,
   LocationRoutes locationRoutes,
-  RadioRoutes radioRoutes,
   SelfHostingRoutes selfHostingRoutes,
   SelfHostingSecurity selfHostingSecurity,
   PhysicalItemRoutes physicalItemRoutes,
   ProfileGovernanceRoutes profileGovernanceRoutes,
   ServerAgentRoutes serverAgentRoutes,
   PlatformServerRoutes platformServerRoutes,
-  GameRoutes gameRoutes,
   FoodDeliveryRoutes foodDeliveryRoutes,
   TvPairingRoutes tvPairingRoutes,
   TvChannelRoutes tvChannelRoutes,
@@ -742,19 +718,6 @@ Future<void> _handleRequest(
     }
 
     // ----------------------------------------------------------
-    // GAMES
-    // ----------------------------------------------------------
-
-    if (path.startsWith('/api/v1/games/')) {
-      await gameRoutes.handle(
-        request,
-      );
-
-      responseStarted = true;
-      return;
-    }
-
-    // ----------------------------------------------------------
     // TV CONTROL
     // ----------------------------------------------------------
 
@@ -814,19 +777,6 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/self-hosting/')) {
       await selfHostingRoutes.handle(
-        request,
-      );
-
-      responseStarted = true;
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // RADIO
-    // ----------------------------------------------------------
-
-    if (path == '/api/v1/radio/stations') {
-      await radioRoutes.handle(
         request,
       );
 
