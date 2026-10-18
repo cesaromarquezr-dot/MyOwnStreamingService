@@ -10,14 +10,14 @@ This release adds practical foundations for security/privacy controls, regressio
 - `lib/accessibility_offline_settings.dart`: text scaling, high contrast, reduce motion, subtitle and audio-description preferences, presence privacy, and pending progress sync.
 - `lib/app_accessibility.dart`: applies profile text scale, contrast, and reduced-animation preference at the app root.
 - `lib/core/services/hey_media_action_policy.dart`: shared confirmation policy for consequential Hey Media actions. Every action executor must still re-check authorization at the backend and must use this policy before side effects.
-- `Backend/database/production_readiness_and_privacy.sql`: service-role-only tables for privacy preference synchronization, sanitized AI action audits, idempotent sync receipts, health snapshots, and backup records. There are deliberately no browser-client RLS policies.
+- `Backend/database/consolidated_platform.sql`: service-role-only tables for privacy preference synchronization, sanitized AI action audits, idempotent sync receipts, health snapshots, and backup records. There are deliberately no browser-client RLS policies.
 - `.github/workflows/flutter-quality.yml`: analyze and test gate on push/PR.
 - `scripts/production/backup.sh` and `scripts/production/restore_supabase.sh`: encrypted PostgreSQL backup bundle and guarded database restore.
 
 ## First rollout checklist
 
 1. Create a verified backup before applying schema changes.
-2. Apply `Backend/database/production_readiness_and_privacy.sql` after existing base and account/social migrations. The app currently stores privacy preferences on-device and directly enforces presence/telemetry choices; cross-device privacy preference synchronization and audit ingestion require authenticated backend endpoints to be added before those tables are used.
+2. Apply `Backend/database/consolidated_platform.sql` after existing base and account/social migrations. The app currently stores privacy preferences on-device and directly enforces presence/telemetry choices; cross-device privacy preference synchronization and audit ingestion require authenticated backend endpoints to be added before those tables are used.
 3. Configure `AGE_RECIPIENT`, `BACKUP_ROOT`, `BACKUP_WORK_ROOT`, and `SUPABASE_DB_URL` for the scheduled backup environment. `BACKUP_WORK_ROOT` must be a private tmpfs or encrypted scratch directory because unencrypted PostgreSQL dumps and bundles exist there briefly; do not point it at a shared or unencrypted media dataset. Use a dedicated encrypted backup destination outside the media pool being snapshotted; restrict its permissions and test decryption/restore separately.
 4. Configure a separate TrueNAS ZFS snapshot and replication task for actual media datasets. The backup script deliberately does not recursively copy movie/music files, and it does not operate the TrueNAS API.
 5. Run `scripts/production/backup.sh`, verify the SHA-256 file, and perform a restore to a disposable staging database. Set `RESTORE_WORK_ROOT` to private tmpfs/encrypted scratch storage before restoring. Production restore requires an additional explicit environment acknowledgement.

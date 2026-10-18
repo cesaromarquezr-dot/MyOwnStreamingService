@@ -699,6 +699,9 @@ class MediaCollection {
   String? customPosterUrl;
   String? automaticFranchiseId;
   String? automaticFranchiseType;
+  /// Optional live query used by user-created smart collections.
+  /// Supported values: liked_movies, liked_shows, liked_media, watched, unwatched.
+  String? smartRule;
   String sortMode;
   bool autoPlayEnabled;
   bool autoPlayNextEnabled;
@@ -723,6 +726,7 @@ class MediaCollection {
     this.customPosterUrl,
     this.automaticFranchiseId,
     this.automaticFranchiseType,
+    this.smartRule,
     this.sortMode = 'Collection order',
     this.autoPlayEnabled = true,
     this.autoPlayNextEnabled = true,
@@ -774,6 +778,7 @@ class MediaCollection {
         'customPosterUrl': customPosterUrl,
         'automaticFranchiseId': automaticFranchiseId,
         'automaticFranchiseType': automaticFranchiseType,
+        'smartRule': smartRule,
         'sortMode': sortMode,
         'autoPlayEnabled': autoPlayEnabled,
         'autoPlayNextEnabled': autoPlayNextEnabled,
@@ -800,6 +805,7 @@ class MediaCollection {
         customPosterUrl: json['customPosterUrl']?.toString(),
         automaticFranchiseId: json['automaticFranchiseId']?.toString(),
         automaticFranchiseType: json['automaticFranchiseType']?.toString(),
+        smartRule: json['smartRule']?.toString(),
         sortMode: json['sortMode']?.toString() ?? 'Collection order',
         autoPlayEnabled: json['autoPlayEnabled'] != false,
         autoPlayNextEnabled: json['autoPlayNextEnabled'] != false,
@@ -859,13 +865,32 @@ class ActivityItem {
   final String title;
   final String action;
   final DateTime timestamp;
+  bool read;
 
   ActivityItem({
     required this.id,
     required this.title,
     required this.action,
     required this.timestamp,
+    this.read = false,
   });
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'title': title,
+        'action': action,
+        'timestamp': timestamp.toIso8601String(),
+        'read': read,
+      };
+
+  factory ActivityItem.fromJson(Map<String, dynamic> json) => ActivityItem(
+        id: json['id']?.toString() ?? '',
+        title: json['title']?.toString() ?? 'MyOwnStreamingService',
+        action: json['action']?.toString() ?? '',
+        timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        read: json['read'] == true,
+      );
 }
 
 /// Implements the `BackendGroupChatMessage` class for this feature or UI component.
@@ -1296,6 +1321,22 @@ class AppController extends ChangeNotifier {
   final List<MediaItem> disliked = <MediaItem>[];
 
   final List<ActivityItem> activity = <ActivityItem>[];
+  String? _loadedActivityStorageKey;
+  int _activityLoadGeneration = 0;
+  int _activityRevision = 0;
+  bool _activityNeedsMerge = false;
+  Future<void> _activityPersistenceQueue = Future<void>.value();
+
+  String get _activityStorageKey {
+    final profileId = currentProfile?.id;
+    final accountId = currentAccount?.id;
+    final scope = (profileId != null && profileId.isNotEmpty)
+        ? 'profile_$profileId'
+        : (accountId != null && accountId.isNotEmpty ? 'account_$accountId' : 'guest');
+    return 'moss_activity_feed_$scope';
+  }
+
+  int get unreadActivityCount => activity.where((item) => !item.read).length;
 
   final List<ChatMessage> groupMessages = <ChatMessage>[];
 
@@ -2202,6 +2243,12 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..add(profile.id);
 
+    // Reset the visible feed immediately, then restore this profile's own feed.
+    activity.clear();
+    _loadedActivityStorageKey = null;
+    _activityNeedsMerge = false;
+    _activityRevision++;
+    unawaited(loadActivity(force: true));
     notifyListeners();
   }
 
@@ -2425,6 +2472,7 @@ class AppController extends ChangeNotifier {
     }
 
     playbackProgress[media.id] = 1.0;
+    _refreshAutomaticCollections();
 
     notifyListeners();
   }
@@ -2466,6 +2514,7 @@ class AppController extends ChangeNotifier {
       liked.add(media);
     }
 
+    _refreshAutomaticCollections();
     notifyListeners();
   }
 
@@ -2481,6 +2530,7 @@ class AppController extends ChangeNotifier {
       disliked.add(media);
     }
 
+    _refreshAutomaticCollections();
     notifyListeners();
   }
 
@@ -2496,6 +2546,7 @@ class AppController extends ChangeNotifier {
       (item) => item.id == mediaId,
     );
 
+    _refreshAutomaticCollections();
     notifyListeners();
   }
 
@@ -2570,6 +2621,134 @@ class AppController extends ChangeNotifier {
     if (activity.length > 100) {
       activity.removeLast();
     }
+    _activityRevision++;
+    _persistOrRestoreActivity();
+    notifyListeners();
+  }
+
+  void _persistOrRestoreActivity() {
+    final key = _activityStorageKey;
+    if (_loadedActivityStorageKey == key) {
+      unawaited(_persistActivity());
+      return;
+    }
+    // Preserve older stored events if an action arrives before the profile's
+    // local feed has finished loading. Multiple actions are merged together.
+    _activityNeedsMerge = true;
+    unawaited(loadActivity(force: true));
+  }
+
+  /// Restores the current profile's notification feed from local device storage.
+  /// Profile-scoped keys prevent activity from leaking between household profiles.
+  Future<void> loadActivity({bool force = false}) async {
+    final key = _activityStorageKey;
+    if (!force && _loadedActivityStorageKey == key) return;
+    final generation = ++_activityLoadGeneration;
+    final revision = _activityRevision;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (generation != _activityLoadGeneration || key != _activityStorageKey) {
+        return;
+      }
+      final loaded = <ActivityItem>[];
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final row in decoded.whereType<Map>()) {
+            final item = ActivityItem.fromJson(Map<String, dynamic>.from(row));
+            if (item.id.isNotEmpty) loaded.add(item);
+            if (loaded.length >= 100) break;
+          }
+        }
+      }
+      final needsMerge = _activityNeedsMerge || revision != _activityRevision;
+      if (needsMerge) {
+        final byId = <String, ActivityItem>{
+          for (final item in loaded) item.id: item,
+        };
+        // Current in-memory versions win so read-state changes made while the
+        // storage request was pending are not overwritten by older cached data.
+        for (final item in activity) {
+          byId[item.id] = item;
+        }
+        final merged = byId.values.toList()
+          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        activity
+          ..clear()
+          ..addAll(merged.take(100));
+        _activityNeedsMerge = false;
+        _loadedActivityStorageKey = key;
+        unawaited(_persistActivity());
+      } else {
+        activity
+          ..clear()
+          ..addAll(loaded);
+        _loadedActivityStorageKey = key;
+      }
+      notifyListeners();
+    } catch (_) {
+      // Local notifications are optional state. A corrupt cache never blocks Home.
+      if (generation != _activityLoadGeneration || key != _activityStorageKey) {
+        return;
+      }
+      _loadedActivityStorageKey = key;
+      if (_activityNeedsMerge) {
+        _activityNeedsMerge = false;
+        unawaited(_persistActivity());
+      }
+    }
+  }
+
+  Future<void> _persistActivity() {
+    final key = _activityStorageKey;
+    final payload = jsonEncode(activity.map((item) => item.toJson()).toList(growable: false));
+    // Serialize snapshots so an earlier write cannot finish after Clear all and
+    // accidentally resurrect notifications that the user already removed.
+    final write = _activityPersistenceQueue.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(key, payload);
+      } catch (_) {
+        // Notification persistence must never interrupt a media or social action.
+      }
+    });
+    _activityPersistenceQueue = write;
+    return write;
+  }
+
+  void markActivityRead(String activityId) {
+    final index = activity.indexWhere((entry) => entry.id == activityId);
+    if (index < 0 || activity[index].read) return;
+    activity[index].read = true;
+    _activityRevision++;
+    _persistOrRestoreActivity();
+    notifyListeners();
+  }
+
+  void markAllActivityRead() {
+    var changed = false;
+    for (final item in activity) {
+      if (!item.read) {
+        item.read = true;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    _activityRevision++;
+    _persistOrRestoreActivity();
+    notifyListeners();
+  }
+
+  void clearActivity() {
+    if (activity.isEmpty) return;
+    // Cancel an in-flight restore so cleared entries cannot reappear afterward.
+    _activityLoadGeneration++;
+    _activityNeedsMerge = false;
+    _loadedActivityStorageKey = _activityStorageKey;
+    activity.clear();
+    _activityRevision++;
+    unawaited(_persistActivity());
     notifyListeners();
   }
 
@@ -4354,6 +4533,10 @@ class AppController extends ChangeNotifier {
     liked.clear();
     disliked.clear();
 
+    _activityLoadGeneration++;
+    _loadedActivityStorageKey = null;
+    _activityNeedsMerge = false;
+    _activityRevision++;
     activity.clear();
     groupMessages.clear();
     wishlist.clear();
@@ -4591,6 +4774,7 @@ class AppController extends ChangeNotifier {
     bool shared = true,
     bool featured = false,
     bool automatic = false,
+    String? smartRule,
     String posterMode = 'First 4 Posters',
     String? customPosterUrl,
     Iterable<String> mediaIds = const <String>[],
@@ -4603,6 +4787,7 @@ class AppController extends ChangeNotifier {
       isShared: shared,
       isFeatured: featured,
       isAutomatic: automatic,
+      smartRule: smartRule,
       posterMode: posterMode,
       customPosterUrl: customPosterUrl,
       mediaIds: mediaIds.toSet().toList(),
@@ -4616,6 +4801,7 @@ class AppController extends ChangeNotifier {
     }
     collections.add(collection);
     if (featured) featuredCollectionOrder.add(collection.id);
+    _refreshAutomaticCollections();
     addNotification(action: 'created collection "${collection.name}"');
     notifyListeners();
     return collection;
@@ -4790,6 +4976,31 @@ class AppController extends ChangeNotifier {
   /// implementation waited for the complete franchise count, which meant a
   /// partially owned franchise could never appear on the Collections screen.
   void _refreshAutomaticCollections() {
+    // User-created smart collections are recalculated from the current profile's
+    // authoritative library/reaction/history state whenever that state changes.
+    for (final collection in collections.where((item) => item.smartRule != null)) {
+      final matches = library.where((media) {
+        final isShow = _isShowType(media.type);
+        switch (collection.smartRule) {
+          case 'liked_movies':
+            return !isShow && isLiked(media.id);
+          case 'liked_shows':
+            return isShow && isLiked(media.id);
+          case 'liked_media':
+            return isLiked(media.id);
+          case 'watched':
+            return isWatched(media.id);
+          case 'unwatched':
+            return !isWatched(media.id);
+          default:
+            return false;
+        }
+      }).map((media) => media.id).toList();
+      collection.mediaIds
+        ..clear()
+        ..addAll(matches);
+    }
+
     final definitions = <Map<String, dynamic>>[
       {
         'id': 'back-to-the-future',
@@ -4885,6 +5096,12 @@ class AppController extends ChangeNotifier {
         !automaticIds.contains(collection.automaticFranchiseId));
     featuredCollectionOrder.removeWhere(
         (id) => !collections.any((collection) => collection.id == id));
+  }
+
+  bool _isShowType(String type) {
+    final value = type.toLowerCase();
+    return value.contains('tv') || value.contains('show') ||
+        value.contains('series') || value.contains('episode');
   }
 
   /// Creates or retrieves one authoritative automatic franchise collection.

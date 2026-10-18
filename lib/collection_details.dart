@@ -10,6 +10,7 @@ import 'details.dart';
 import 'player.dart';
 import 'localization.dart';
 import 'media_actions.dart';
+import 'social_sharing.dart';
 import 'food_delivery.dart';
 
 /// Full-screen collection details view.
@@ -153,6 +154,23 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                       tooltip: collection.isLikedByCurrentProfile ? 'Remove from favorite collections' : 'Add to favorite collections',
                       icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite : Icons.favorite_border),
                       onPressed: () => controller.toggleCollectionLike(collection.id),
+                    ),
+                    IconButton(
+                      tooltip: 'Share collection to messages',
+                      icon: const Icon(Icons.share_outlined),
+                      onPressed: () => showSocialShareDialog(
+                        context,
+                        title: collection.name,
+                        message: 'Shared collection: ${collection.name}',
+                        mediaReference: {
+                          'type': 'collection',
+                          'mediaType': 'collection',
+                          'mediaId': collection.id,
+                          'title': collection.name,
+                          'description': '${collection.mediaIds.length} items',
+                          'itemIds': collection.mediaIds,
+                        },
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Food & Delivery',

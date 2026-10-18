@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
+import 'social_detail_pages.dart';
+import 'friend_story_profile_viewer.dart';
 
 /// Profile-scoped friends, account profiles, and community activity for Home.
 class SocialHomeSection extends StatefulWidget {
@@ -349,17 +351,30 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
         'Friend';
     return SizedBox(
       width: 72,
-      child: Column(
-        children: [
-          CircleAvatar(child: Text(_initial(name))),
-          const SizedBox(height: 4),
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white70, fontSize: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          final targetProfileId = (friend['profileId'] ?? friend['profile_id'] ?? friend['targetProfileId'] ?? friend['target_profile_id'])?.toString() ?? '';
+          if (targetProfileId.isEmpty) return;
+          Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => FriendStoryProfileViewer(friend: friend),
+          ));
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              CircleAvatar(child: Text(_initial(name))),
+              const SizedBox(height: 4),
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 10),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -411,6 +426,20 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
               ),
             ),
           ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                final postId = post['id']?.toString() ?? '';
+                if (postId.isEmpty) return;
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => SocialPostDetailScreen(postId: postId, initialPost: post),
+                ));
+              },
+              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+              label: const Text('View discussion'),
+            ),
+          ),
         ],
       ),
     );
@@ -479,30 +508,42 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
   }
 
   Widget _communityRow(String profileId, Map<String, dynamic> community) =>
-      ListTile(
-        dense: true,
-        contentPadding: EdgeInsets.zero,
-        title: Text(
-          community['name']?.toString() ?? '',
-          style: const TextStyle(color: Colors.white),
-        ),
-        subtitle: Text(
-          community['description']?.toString() ?? '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white54),
-        ),
-        trailing: community['joined'] == true
-            ? const Icon(Icons.check_circle, color: Color(0xFF76D6E8))
-            : TextButton(
-                onPressed: () => _act(
-                  () => AppController.instance.backendApi.joinSocialCommunity(
-                    profileId: profileId,
-                    communityId: community['id'].toString(),
-                  ),
-                ),
-                child: const UniversalText('Join'),
+      Card(
+        color: const Color(0xFF20232B),
+        margin: const EdgeInsets.only(bottom: 6),
+        child: ListTile(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => SocialCommunityDetailScreen(community: community),
+          )),
+          leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+          title: Text(
+            community['name']?.toString() ?? '',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(community['description']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54)),
+              const SizedBox(height: 3),
+              Text(
+                '${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts',
+                style: const TextStyle(color: Colors.white60, fontSize: 11),
               ),
+            ],
+          ),
+          isThreeLine: true,
+          trailing: community['joined'] == true
+              ? const Chip(avatar: Icon(Icons.check_circle, size: 16), label: Text('Joined'))
+              : TextButton(
+                  onPressed: busy ? null : () => _act(
+                    () => AppController.instance.backendApi.joinSocialCommunity(
+                      profileId: profileId,
+                      communityId: community['id'].toString(),
+                    ),
+                  ),
+                  child: const UniversalText('Join'),
+                ),
+        ),
       );
 
   Future<void> _compose(String profileId) async {
@@ -631,6 +672,11 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
     final author = story['author'] is Map
         ? Map<String, dynamic>.from(story['author'] as Map)
         : <String, dynamic>{};
+    final authorId = (author['profileId'] ?? author['profile_id'] ?? author['id'])?.toString() ?? '';
+    if (authorId.isNotEmpty) {
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FriendStoryProfileViewer(friend: author)));
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(

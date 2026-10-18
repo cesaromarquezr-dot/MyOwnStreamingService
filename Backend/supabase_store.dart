@@ -469,12 +469,80 @@ class SupabaseStore {
       ..sort((a, b) => (b['created_at']?.toString() ?? '')
           .compareTo(a['created_at']?.toString() ?? ''));
 
-    final communities = await c
+    final publicCommunities = await c
         .from('social_communities')
         .select('id,name,slug,description,visibility,category,created_by_profile_id,created_at')
         .eq('visibility', 'public')
         .order('name')
         .limit(100);
+    // The connection directory includes private communities the current
+    // profile has joined, but never private communities belonging only to
+    // someone else. This lets a user find all their own communities without
+    // making private membership discoverable to outsiders.
+    final joinedPrivateCommunities = joinedCommunityIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await c
+            .from('social_communities')
+            .select('id,name,slug,description,visibility,category,created_by_profile_id,created_at')
+            .inFilter('id', joinedCommunityIds.toList())
+            .eq('visibility', 'private'))
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+    final communityById = <String, Map<String, dynamic>>{
+      for (final row in publicCommunities)
+        row['id'].toString(): Map<String, dynamic>.from(row),
+      for (final row in joinedPrivateCommunities)
+        row['id'].toString(): row,
+    };
+    final communities = communityById.values.toList()
+      ..sort((a, b) => (a['name']?.toString() ?? '')
+          .compareTo(b['name']?.toString() ?? ''));
+    final visibleCommunityIds = communities
+        .map((community) => community['id'].toString())
+        .toList();
+    final memberCounts = <String, int>{};
+    final postIdsByCommunity = <String, Set<String>>{};
+    if (visibleCommunityIds.isNotEmpty) {
+      final memberRows = await c
+          .from('social_community_memberships')
+          .select('community_id')
+          .inFilter('community_id', visibleCommunityIds);
+      for (final row in memberRows) {
+        final id = row['community_id']?.toString();
+        if (id != null) memberCounts[id] = (memberCounts[id] ?? 0) + 1;
+      }
+      final legacyPosts = await c
+          .from('social_posts')
+          .select('id,community_id')
+          .inFilter('community_id', visibleCommunityIds)
+          .limit(10000);
+      for (final row in legacyPosts) {
+        final communityId = row['community_id']?.toString();
+        final postId = row['id']?.toString();
+        if (communityId != null && postId != null) {
+          postIdsByCommunity.putIfAbsent(communityId, () => <String>{}).add(postId);
+        }
+      }
+      final sharedPosts = await c
+          .from('social_post_communities')
+          .select('post_id,community_id')
+          .inFilter('community_id', visibleCommunityIds)
+          .limit(10000);
+      for (final row in sharedPosts) {
+        final communityId = row['community_id']?.toString();
+        final postId = row['post_id']?.toString();
+        if (communityId != null && postId != null) {
+          postIdsByCommunity.putIfAbsent(communityId, () => <String>{}).add(postId);
+        }
+      }
+    }
+    final followingRows = await c
+        .from('social_follows')
+        .select('target_type,target_key,target_name,target_avatar_url,target_subtitle,created_at')
+        .eq('follower_account_id', accountId)
+        .eq('follower_profile_id', profileExternalId)
+        .order('created_at', ascending: false)
+        .limit(1000);
     final stories = await _loadSocialStories(
       accountId: accountId,
       profileExternalId: profileExternalId,
@@ -483,9 +551,22 @@ class SupabaseStore {
       accountId: accountId,
       profileExternalId: profileExternalId,
     );
+    final enrichedCommunities = communities.map((community) {
+      final id = community['id'].toString();
+      return {
+        ...Map<String, dynamic>.from(community),
+        'joined': joinedCommunityIds.contains(id),
+        'joined_at': joinedAtByCommunity[id],
+        'memberCount': memberCounts[id] ?? 0,
+        'postCount': postIdsByCommunity[id]?.length ?? 0,
+      };
+    }).toList();
     return {
       'friendCount': friends.length,
+      'followingCount': followingRows.length,
+      'communityCount': joinedCommunityIds.length,
       'ownPostCount': ownPostCount,
+      'following': followingRows.map((row) => Map<String, dynamic>.from(row)).toList(),
       'friends': friends,
       'requests': requests,
       'guardianRequests': guardianRequests,
@@ -494,13 +575,7 @@ class SupabaseStore {
       'communityPosts': communityPosts.take(100).toList(),
       'stories': stories,
       'communityStories': communityStories,
-      'communities': communities
-          .map((community) => {
-                ...community,
-                'joined': joinedCommunityIds.contains(community['id'].toString()),
-                'joined_at': joinedAtByCommunity[community['id'].toString()],
-              })
-          .toList(),
+      'communities': enrichedCommunities,
     };
   }
 
@@ -568,7 +643,8 @@ class SupabaseStore {
   Future<Map<String, dynamic>> sendSocialFriendRequest(
       {required String accountExternalId,
       required String profileExternalId,
-      required String username}) async {
+      required String username,
+      String? targetProfileExternalId}) async {
     final c = _db;
     if (c == null)
       throw StateError('Social features require Supabase persistence.');
@@ -584,17 +660,25 @@ class SupabaseStore {
         .maybeSingle();
     if (me == null || target == null)
       throw StateError('Account or user not found.');
-    final targetProfiles = await c
+    var targetProfileQuery = c
         .from('profiles')
         .select('external_profile_id')
         .eq('account_id', target['id'].toString())
         .eq('is_active', true)
-        .not('external_profile_id', 'is', null)
-        .limit(1);
-    if (targetProfiles.isEmpty)
-      throw StateError('That user has no active profile.');
-    final targetProfile =
-        targetProfiles.first['external_profile_id'].toString();
+        .not('external_profile_id', 'is', null);
+    final requestedProfile = targetProfileExternalId?.trim();
+    if (requestedProfile != null && requestedProfile.isNotEmpty) {
+      targetProfileQuery = targetProfileQuery.eq(
+        'external_profile_id', requestedProfile,
+      );
+    }
+    final targetProfiles = await targetProfileQuery.limit(1);
+    if (targetProfiles.isEmpty) {
+      throw StateError(targetProfileExternalId == null
+          ? 'That user has no active profile.'
+          : 'That profile is not available for friend requests.');
+    }
+    final targetProfile = targetProfiles.first['external_profile_id'].toString();
     if (me['id'].toString() == target['id'].toString() &&
         profileExternalId == targetProfile)
       throw StateError('You cannot add yourself.');
@@ -852,9 +936,694 @@ class SupabaseStore {
     }, onConflict: 'community_id,account_id,profile_id');
   }
 
+  /// Removes the authenticated profile's membership. Community owners must
+  /// transfer ownership before leaving so every community retains an owner.
+  Future<void> leaveSocialCommunity({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String communityId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final account = await c.from('accounts').select('id')
+        .eq('external_account_id', accountExternalId).single();
+    final membership = await c.from('social_community_memberships')
+        .select('role').eq('community_id', communityId)
+        .eq('account_id', account['id']).eq('profile_id', profileExternalId)
+        .maybeSingle();
+    if (membership == null) return;
+    if (membership['role'] == 'owner') {
+      throw StateError('Community owners cannot leave until ownership is transferred.');
+    }
+    await c.from('social_community_memberships').delete()
+        .eq('community_id', communityId)
+        .eq('account_id', account['id'])
+        .eq('profile_id', profileExternalId);
+  }
+
   // ---------------------------------------------------------------------------
   // SOCIAL V2: STORIES, POSTS, REACTIONS, COMMENTS, MESSAGES, AND NOTES
   // ---------------------------------------------------------------------------
+
+  /// Loads a profile page and its permitted social graph. Visibility is
+  /// checked server-side; the client never decides whether private content is
+  /// returned. IDs refer to profile/account identities, not display titles.
+  Future<Map<String, dynamic>> loadSocialProfile({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String targetAccountId,
+    required String targetProfileId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final viewer = await c.from('accounts').select('id').eq(
+      'external_account_id', accountExternalId,
+    ).maybeSingle();
+    if (viewer == null) throw StateError('Account not found.');
+    final viewerAccountId = viewer['id'].toString();
+    final viewerProfile = await c.from('profiles').select('id').eq(
+      'account_id', viewerAccountId,
+    ).eq('external_profile_id', profileExternalId).eq('is_active', true).maybeSingle();
+    if (viewerProfile == null) throw StateError('Profile not found.');
+
+    final target = await c.from('accounts').select(
+      'id,username,display_name,avatar_url',
+    ).eq('id', targetAccountId).maybeSingle();
+    if (target == null) throw StateError('Profile not found.');
+    final targetProfile = await c.from('profiles').select(
+      'external_profile_id,name,avatar_url,is_active',
+    ).eq('account_id', targetAccountId)
+     .eq('external_profile_id', targetProfileId).eq('is_active', true).maybeSingle();
+    if (targetProfile == null) throw StateError('Profile not found.');
+
+    final isSelf = viewerAccountId == targetAccountId && profileExternalId == targetProfileId;
+    var areFriends = false;
+    var relationshipStatus = 'none';
+    String? friendshipId;
+    if (isSelf) {
+      relationshipStatus = 'self';
+    } else {
+      final outgoing = await c.from('social_friendships').select('id,status')
+          .eq('requester_account_id', viewerAccountId)
+          .eq('requester_profile_id', profileExternalId)
+          .eq('recipient_account_id', targetAccountId)
+          .eq('recipient_profile_id', targetProfileId)
+          .inFilter('status', ['accepted', 'pending']).maybeSingle();
+      final incoming = await c.from('social_friendships').select('id,status')
+          .eq('requester_account_id', targetAccountId)
+          .eq('requester_profile_id', targetProfileId)
+          .eq('recipient_account_id', viewerAccountId)
+          .eq('recipient_profile_id', profileExternalId)
+          .inFilter('status', ['accepted', 'pending']).maybeSingle();
+      final relationship = outgoing ?? incoming;
+      if (relationship != null) {
+        friendshipId = relationship['id']?.toString();
+        final status = relationship['status']?.toString() ?? 'none';
+        if (status == 'accepted') {
+          areFriends = true;
+          relationshipStatus = 'friends';
+        } else {
+          relationshipStatus = outgoing != null ? 'request_sent' : 'request_received';
+        }
+      }
+    }
+
+    final privacyRow = await c.from('social_profile_privacy').select()
+        .eq('account_id', targetAccountId).eq('profile_id', targetProfileId).maybeSingle();
+    String setting(String field) => privacyRow?[field]?.toString() ?? 'friends';
+    bool canSee(String field) {
+      final value = setting(field);
+      return isSelf || value == 'public' || (value == 'friends' && areFriends);
+    }
+    final canViewProfile = isSelf || setting('profile_visibility') == 'public' ||
+        (setting('profile_visibility') == 'friends' && areFriends);
+    final profile = <String, dynamic>{
+      ...Map<String, dynamic>.from(target),
+      'profileId': targetProfileId,
+      'profileName': targetProfile['name']?.toString() ?? 'Profile',
+      'profileAvatarUrl': targetProfile['avatar_url'],
+      'relationshipStatus': relationshipStatus,
+      'friendshipId': friendshipId,
+      'isSelf': isSelf,
+      'isFriend': areFriends,
+      'canViewProfile': canViewProfile,
+    };
+    if (!canViewProfile) {
+      return {
+        'profile': profile,
+        'posts': <Map<String, dynamic>>[],
+        'friends': <Map<String, dynamic>>[],
+        'following': <Map<String, dynamic>>[],
+        'communities': <Map<String, dynamic>>[],
+        'friendCount': null,
+        'followingCount': null,
+        'communityCount': null,
+        'postCount': null,
+        'canViewLists': false,
+        'canViewFriendsList': false,
+        'canViewFollowingList': false,
+        'canViewCommunitiesList': false,
+      };
+    }
+
+    final friendshipRows = <Map<String, dynamic>>[];
+    if (canSee('friends_visibility')) {
+      final targetOutgoing = await c.from('social_friendships').select(
+        'id,requester_account_id,requester_profile_id,recipient_account_id,recipient_profile_id,created_at',
+      ).eq('requester_account_id', targetAccountId)
+       .eq('requester_profile_id', targetProfileId).eq('status', 'accepted').limit(1000);
+      final targetIncoming = await c.from('social_friendships').select(
+        'id,requester_account_id,requester_profile_id,recipient_account_id,recipient_profile_id,created_at',
+      ).eq('recipient_account_id', targetAccountId)
+       .eq('recipient_profile_id', targetProfileId).eq('status', 'accepted').limit(1000);
+      final seen = <String>{};
+      for (final edge in [...targetOutgoing, ...targetIncoming]) {
+        final outgoingFromTarget = edge['requester_account_id'].toString() == targetAccountId &&
+            edge['requester_profile_id'].toString() == targetProfileId;
+        final otherAccountId = (outgoingFromTarget ? edge['recipient_account_id'] : edge['requester_account_id']).toString();
+        final otherProfileId = (outgoingFromTarget ? edge['recipient_profile_id'] : edge['requester_profile_id']).toString();
+        final key = '$otherAccountId:$otherProfileId';
+        if (!seen.add(key)) continue;
+        final account = await c.from('accounts').select('id,username,display_name,avatar_url')
+            .eq('id', otherAccountId).maybeSingle();
+        if (account == null) continue;
+        friendshipRows.add({
+          ...Map<String, dynamic>.from(account),
+          'profileId': otherProfileId,
+          'friends_since': edge['created_at'],
+          'relationshipStatus': otherAccountId == viewerAccountId && otherProfileId == profileExternalId ? 'friends' : 'unknown',
+        });
+      }
+    }
+
+    final followingRows = canSee('following_visibility')
+        ? await c.from('social_follows').select(
+            'target_type,target_key,target_name,target_avatar_url,target_subtitle,created_at',
+          ).eq('follower_account_id', targetAccountId)
+           .eq('follower_profile_id', targetProfileId)
+           .order('created_at', ascending: false).limit(1000)
+        : <Map<String, dynamic>>[];
+
+    final memberships = canSee('communities_visibility')
+        ? await c.from('social_community_memberships').select('community_id,joined_at')
+            .eq('account_id', targetAccountId).eq('profile_id', targetProfileId).limit(1000)
+        : <Map<String, dynamic>>[];
+    final viewerMemberships = await c.from('social_community_memberships').select('community_id')
+        .eq('account_id', viewerAccountId).eq('profile_id', profileExternalId).limit(1000);
+    final viewerCommunityIds = viewerMemberships.map((m) => m['community_id'].toString()).toSet();
+    final communities = <Map<String, dynamic>>[];
+    for (final membership in memberships) {
+      final id = membership['community_id']?.toString();
+      if (id == null) continue;
+      final community = await c.from('social_communities').select(
+        'id,name,slug,description,visibility,category,created_at',
+      ).eq('id', id).maybeSingle();
+      if (community == null) continue;
+      // Private community membership is not leaked to people who are not in it.
+      if (community['visibility'] == 'private' && !viewerCommunityIds.contains(id) && !isSelf) continue;
+      final memberRows = await c.from('social_community_memberships').select('profile_id')
+          .eq('community_id', id).limit(10000);
+      final postRows = await c.from('social_posts').select('id')
+          .eq('community_id', id).limit(10000);
+      final linkedPostRows = await c.from('social_post_communities').select('post_id')
+          .eq('community_id', id).limit(10000);
+      final distinctPostIds = <String>{
+        for (final row in postRows)
+          if (row['id'] != null) row['id'].toString(),
+        for (final row in linkedPostRows)
+          if (row['post_id'] != null) row['post_id'].toString(),
+      };
+      communities.add({
+        ...Map<String, dynamic>.from(community),
+        'joined_at': membership['joined_at'],
+        'joined': viewerCommunityIds.contains(id),
+        'memberCount': memberRows.length,
+        'postCount': distinctPostIds.length,
+      });
+    }
+
+    final postRows = canSee('posts_visibility')
+        ? await c.from('social_posts').select().eq('author_account_id', targetAccountId)
+            .eq('author_profile_id', targetProfileId).order('created_at', ascending: false).limit(1000)
+        : <Map<String, dynamic>>[];
+    final posts = <Map<String, dynamic>>[];
+    for (final raw in postRows) {
+      final row = Map<String, dynamic>.from(raw);
+      final visibility = row['visibility']?.toString() ?? 'friends';
+      if (visibility == 'friends' && !areFriends && !isSelf) continue;
+      if (visibility == 'community') {
+        final postCommunityIds = <String>{
+          if (row['community_id'] != null) row['community_id'].toString(),
+        };
+        final postId = row['id']?.toString();
+        if (postId != null && postId.isNotEmpty) {
+          final links = await c.from('social_post_communities')
+              .select('community_id').eq('post_id', postId);
+          postCommunityIds.addAll(links.map((link) => link['community_id'].toString()));
+        }
+        if (!isSelf && !postCommunityIds.any(viewerCommunityIds.contains)) continue;
+      }
+      await _attachSocialMedia(row);
+      posts.add(row);
+    }
+
+    return {
+      'profile': profile,
+      'posts': posts,
+      'friends': friendshipRows,
+      'following': followingRows.map((row) => Map<String, dynamic>.from(row)).toList(),
+      'communities': communities,
+      'friendCount': canSee('friends_visibility') ? friendshipRows.length : null,
+      'followingCount': canSee('following_visibility') ? followingRows.length : null,
+      'communityCount': canSee('communities_visibility') ? communities.length : null,
+      'postCount': canSee('posts_visibility') ? posts.length : null,
+      'canViewLists': canSee('friends_visibility') || canSee('following_visibility') || canSee('communities_visibility'),
+      'canViewFriendsList': canSee('friends_visibility'),
+      'canViewFollowingList': canSee('following_visibility'),
+      'canViewCommunitiesList': canSee('communities_visibility'),
+    };
+  }
+
+  /// Loads one community's full detail model. The viewer's membership is
+  /// checked before private community data or member-only posts are returned.
+  Future<Map<String, dynamic>> loadSocialCommunityDetail({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String communityId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+
+    final account = await c.from('accounts').select('id')
+        .eq('external_account_id', accountExternalId).maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final accountId = account['id'].toString();
+    final community = await c.from('social_communities').select(
+      'id,name,slug,description,visibility,category,created_by_account_id,created_by_profile_id,created_at',
+    ).eq('id', communityId).maybeSingle();
+    if (community == null) throw StateError('Community not found.');
+
+    final ownMembership = await c.from('social_community_memberships')
+        .select('role,joined_at')
+        .eq('community_id', communityId)
+        .eq('account_id', accountId)
+        .eq('profile_id', profileExternalId)
+        .maybeSingle();
+    final isMember = ownMembership != null;
+    if (community['visibility'] == 'private' && !isMember) {
+      // Don't disclose whether an inaccessible private community exists.
+      throw StateError('Community not found or you do not have access.');
+    }
+
+    final memberRows = await c.from('social_community_memberships')
+        .select('account_id,profile_id,role,joined_at')
+        .eq('community_id', communityId)
+        .order('joined_at', ascending: true)
+        .limit(10000);
+    final members = <Map<String, dynamic>>[];
+    // Member identities are exposed only to current members. Bound the visible
+    // directory, then batch-load its accounts/profiles instead of doing two
+    // database requests for every member.
+    if (isMember) {
+      final memberPage = memberRows.take(250).toList();
+      final memberAccountIds = memberPage
+          .map((row) => row['account_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final memberProfileIds = memberPage
+          .map((row) => row['profile_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final memberAccountsById = <String, Map<String, dynamic>>{};
+      final memberProfilesByKey = <String, Map<String, dynamic>>{};
+      if (memberAccountIds.isNotEmpty) {
+        final accountRows = await c.from('accounts')
+            .select('id,username,display_name,avatar_url')
+            .inFilter('id', memberAccountIds);
+        for (final row in accountRows) {
+          memberAccountsById[row['id'].toString()] =
+              Map<String, dynamic>.from(row);
+        }
+        if (memberProfileIds.isNotEmpty) {
+          final profileRows = await c.from('profiles')
+              .select('account_id,external_profile_id,name,avatar_url')
+              .inFilter('account_id', memberAccountIds)
+              .inFilter('external_profile_id', memberProfileIds)
+              .eq('is_active', true);
+          for (final row in profileRows) {
+            final key = '${row['account_id']}:${row['external_profile_id']}';
+            memberProfilesByKey[key] = Map<String, dynamic>.from(row);
+          }
+        }
+      }
+      for (final membership in memberPage) {
+        final memberAccountId = membership['account_id']?.toString() ?? '';
+        final memberProfileId = membership['profile_id']?.toString() ?? '';
+        if (memberAccountId.isEmpty || memberProfileId.isEmpty) continue;
+        final memberAccount = memberAccountsById[memberAccountId];
+        if (memberAccount == null) continue;
+        final memberProfile = memberProfilesByKey['$memberAccountId:$memberProfileId'];
+        members.add({
+          ...memberAccount,
+          'profileId': memberProfileId,
+          'profileName': memberProfile?['name']?.toString() ??
+              memberAccount['display_name']?.toString() ?? 'Member',
+          'avatar_url': memberProfile?['avatar_url'] ?? memberAccount['avatar_url'],
+          'role': membership['role']?.toString() ?? 'member',
+          'joined_at': membership['joined_at'],
+        });
+      }
+    }
+
+    // Community post counts use distinct post IDs across the legacy singular
+    // community_id column and the newer many-to-many link table.
+    final legacyRows = await c.from('social_posts').select('id')
+        .eq('community_id', communityId).limit(10000);
+    final linkedRows = await c.from('social_post_communities').select('post_id')
+        .eq('community_id', communityId).limit(10000);
+    final postIds = <String>{
+      for (final row in legacyRows) if (row['id'] != null) row['id'].toString(),
+      for (final row in linkedRows) if (row['post_id'] != null) row['post_id'].toString(),
+    };
+
+    final posts = <Map<String, dynamic>>[];
+    final recentPostIds = <String>{};
+    if (isMember) {
+      // Fetch only the newest bounded slice for the rendered feed. Counts above
+      // still use the full bounded ID sets; this avoids a giant IN clause for
+      // communities with thousands of historical posts.
+      final recentLegacyRows = await c.from('social_posts').select('id')
+          .eq('community_id', communityId)
+          .order('created_at', ascending: false).limit(200);
+      final recentLinkedRows = await c.from('social_post_communities')
+          .select('post_id').eq('community_id', communityId)
+          .order('created_at', ascending: false).limit(200);
+      recentPostIds.addAll(recentLegacyRows
+          .map((row) => row['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty));
+      recentPostIds.addAll(recentLinkedRows
+          .map((row) => row['post_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty));
+    }
+    final candidateRows = recentPostIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await c.from('social_posts')
+            .select()
+            .inFilter('id', recentPostIds.toList())
+            .order('created_at', ascending: false)
+            .limit(200);
+    final visibleRows = <Map<String, dynamic>>[];
+    for (final candidate in candidateRows) {
+      final postId = candidate['id']?.toString() ?? '';
+      if (postId.isEmpty) continue;
+      final row = Map<String, dynamic>.from(candidate);
+      // The selected ID came from this community's legacy relation or link
+      // table, and the current profile is a member, so a community-scoped post
+      // is already authorized. Other visibility modes still use the common
+      // post-access policy (including friend-only posts linked to a community).
+      if (row['visibility'] != 'community' &&
+          !await _canAccessSocialPost(
+            c,
+            accountId: accountId,
+            profileId: profileExternalId,
+            postId: postId,
+            post: row,
+          )) {
+        continue;
+      }
+      visibleRows.add(row);
+    }
+
+    final authorAccountIds = visibleRows
+        .map((row) => row['author_account_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final authorProfileIds = visibleRows
+        .map((row) => row['author_profile_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final authorsById = <String, Map<String, dynamic>>{};
+    final authorProfilesByKey = <String, Map<String, dynamic>>{};
+    if (authorAccountIds.isNotEmpty) {
+      final authorRows = await c.from('accounts')
+          .select('id,username,display_name,avatar_url')
+          .inFilter('id', authorAccountIds);
+      for (final row in authorRows) {
+        authorsById[row['id'].toString()] = Map<String, dynamic>.from(row);
+      }
+      if (authorProfileIds.isNotEmpty) {
+        final profileRows = await c.from('profiles')
+            .select('account_id,external_profile_id,name,avatar_url')
+            .inFilter('account_id', authorAccountIds)
+            .inFilter('external_profile_id', authorProfileIds)
+            .eq('is_active', true);
+        for (final row in profileRows) {
+          authorProfilesByKey['${row['account_id']}:${row['external_profile_id']}'] =
+              Map<String, dynamic>.from(row);
+        }
+      }
+    }
+    final visiblePostIds = visibleRows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+    final reactionRows = visiblePostIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await c.from('social_post_reactions')
+            .select('post_id,reaction,account_id,profile_id')
+            .inFilter('post_id', visiblePostIds)
+            .limit(10000);
+    final commentRows = visiblePostIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await c.from('social_post_comments')
+            .select('id,post_id')
+            .inFilter('post_id', visiblePostIds)
+            .limit(10000);
+    final reactionsByPost = <String, List<Map<String, dynamic>>>{};
+    for (final row in reactionRows) {
+      reactionsByPost.putIfAbsent(row['post_id'].toString(), () => <Map<String, dynamic>>[])
+          .add(Map<String, dynamic>.from(row));
+    }
+    final commentCountByPost = <String, int>{};
+    for (final row in commentRows) {
+      final id = row['post_id']?.toString();
+      if (id != null) commentCountByPost[id] = (commentCountByPost[id] ?? 0) + 1;
+    }
+    for (final post in visibleRows) {
+      final postId = post['id'].toString();
+      final authorAccountId = post['author_account_id']?.toString() ?? '';
+      final authorProfileId = post['author_profile_id']?.toString() ?? '';
+      final author = authorsById[authorAccountId];
+      final authorProfile = authorProfilesByKey['$authorAccountId:$authorProfileId'];
+      post['author'] = {
+        if (author != null) ...author,
+        'profileId': authorProfileId,
+        'profileName': authorProfile?['name']?.toString() ??
+            author?['display_name']?.toString() ?? 'Member',
+        if (authorProfile?['avatar_url'] != null)
+          'avatar_url': authorProfile!['avatar_url'],
+      };
+      post['communityPost'] = true;
+      post['communityIds'] = [communityId];
+      await _attachSocialMedia(post);
+      final reactions = reactionsByPost[postId] ?? const <Map<String, dynamic>>[];
+      final ownReaction = reactions.where((row) =>
+          row['account_id']?.toString() == accountId &&
+          row['profile_id']?.toString() == profileExternalId);
+      post['reactionCount'] = reactions.length;
+      post['commentCount'] = commentCountByPost[postId] ?? 0;
+      post['myReaction'] = ownReaction.isEmpty ? null : ownReaction.first['reaction'];
+      posts.add(post);
+    }
+
+
+    final communityData = <String, dynamic>{
+      ...Map<String, dynamic>.from(community),
+      'joined': isMember,
+      'joined_at': ownMembership?['joined_at'],
+      'memberRole': ownMembership?['role']?.toString(),
+      'isOwner': ownMembership?['role'] == 'owner',
+      'memberCount': memberRows.length,
+      'postCount': postIds.length,
+    };
+    return {
+      'community': communityData,
+      'members': members,
+      'posts': posts.take(200).toList(),
+      'joined': isMember,
+      'isOwner': ownMembership?['role'] == 'owner',
+    };
+  }
+
+  /// Returns the complete authorized discussion for a single canonical post.
+  /// Visibility checks remain server-side; post IDs, not body text, identify it.
+  Future<Map<String, dynamic>> loadSocialPostDetail({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String postId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final account = await c.from('accounts').select('id')
+        .eq('external_account_id', accountExternalId).maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final accountId = account['id'].toString();
+    final raw = await c.from('social_posts').select().eq('id', postId).maybeSingle();
+    if (raw == null) throw StateError('Post not found.');
+    final post = Map<String, dynamic>.from(raw);
+    final canAccess = await _canAccessSocialPost(c,
+        accountId: accountId,
+        profileId: profileExternalId,
+        postId: postId,
+        post: post);
+    if (!canAccess) throw StateError('You do not have permission to view this post.');
+
+    final authorAccountId = post['author_account_id']?.toString() ?? '';
+    final authorProfileId = post['author_profile_id']?.toString() ?? '';
+    final author = await c.from('accounts')
+        .select('id,username,display_name,avatar_url')
+        .eq('id', authorAccountId).maybeSingle();
+    final authorProfile = await c.from('profiles')
+        .select('name,avatar_url')
+        .eq('account_id', authorAccountId)
+        .eq('external_profile_id', authorProfileId)
+        .eq('is_active', true).maybeSingle();
+    post['author'] = {
+      if (author != null) ...Map<String, dynamic>.from(author),
+      'profileId': authorProfileId,
+      'profileName': authorProfile?['name']?.toString() ?? 'Member',
+      if (authorProfile?['avatar_url'] != null)
+        'avatar_url': authorProfile!['avatar_url'],
+    };
+    await _attachSocialMedia(post);
+
+    final rawComments = await c.from('social_post_comments').select(
+      'id,author_account_id,author_profile_id,body,media_reference,created_at',
+    ).eq('post_id', postId).order('created_at', ascending: true).limit(300);
+    final comments = <Map<String, dynamic>>[];
+    final commentAccountIds = rawComments
+        .map((row) => row['author_account_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final commentProfileIds = rawComments
+        .map((row) => row['author_profile_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final commentAuthorsById = <String, Map<String, dynamic>>{};
+    final commentProfilesByKey = <String, Map<String, dynamic>>{};
+    if (commentAccountIds.isNotEmpty) {
+      final authorRows = await c.from('accounts')
+          .select('id,username,display_name,avatar_url')
+          .inFilter('id', commentAccountIds);
+      for (final row in authorRows) {
+        commentAuthorsById[row['id'].toString()] = Map<String, dynamic>.from(row);
+      }
+      if (commentProfileIds.isNotEmpty) {
+        final profileRows = await c.from('profiles')
+            .select('account_id,external_profile_id,name,avatar_url')
+            .inFilter('account_id', commentAccountIds)
+            .inFilter('external_profile_id', commentProfileIds)
+            .eq('is_active', true);
+        for (final row in profileRows) {
+          commentProfilesByKey['${row['account_id']}:${row['external_profile_id']}'] =
+              Map<String, dynamic>.from(row);
+        }
+      }
+    }
+    for (final rawComment in rawComments) {
+      final comment = Map<String, dynamic>.from(rawComment);
+      final commentAccountId = comment['author_account_id']?.toString() ?? '';
+      final commentProfileId = comment['author_profile_id']?.toString() ?? '';
+      final commentAuthor = commentAuthorsById[commentAccountId];
+      final commentProfile = commentProfilesByKey['$commentAccountId:$commentProfileId'];
+      comment['author'] = {
+        if (commentAuthor != null) ...commentAuthor,
+        'profileId': commentProfileId,
+        'profileName': commentProfile?['name']?.toString() ??
+            commentAuthor?['display_name']?.toString() ?? 'Member',
+        if (commentProfile?['avatar_url'] != null)
+          'avatar_url': commentProfile!['avatar_url'],
+      };
+      comments.add(comment);
+    }
+    final reactions = await c.from('social_post_reactions')
+        .select('reaction,account_id,profile_id').eq('post_id', postId).limit(10000);
+    final ownReaction = reactions.where((row) =>
+        row['account_id']?.toString() == accountId &&
+        row['profile_id']?.toString() == profileExternalId);
+    post['reactionCount'] = reactions.length;
+    post['commentCount'] = comments.length;
+    post['myReaction'] = ownReaction.isEmpty ? null : ownReaction.first['reaction'];
+    return {
+      'post': post,
+      'comments': comments,
+      'reactionCount': reactions.length,
+      'commentCount': comments.length,
+      'myReaction': post['myReaction'],
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> loadSocialFollowing({
+    required String accountExternalId,
+    required String profileExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final account = await c.from('accounts').select('id').eq(
+      'external_account_id', accountExternalId,
+    ).maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final rows = await c.from('social_follows').select(
+      'target_type,target_key,target_name,target_avatar_url,target_subtitle,created_at',
+    ).eq('follower_account_id', account['id'].toString())
+     .eq('follower_profile_id', profileExternalId)
+     .order('created_at', ascending: false).limit(1000);
+    return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<Map<String, dynamic>> followSocialStore({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String targetType,
+    required String targetId,
+    String? targetAccountExternalId,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final account = await c.from('accounts').select('id').eq(
+      'external_account_id', accountExternalId,
+    ).maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    final type = targetType.trim().toLowerCase();
+    if (!{'store', 'shop', 'seller', 'merchant'}.contains(type)) {
+      throw ArgumentError('Only public stores can be followed from this page.');
+    }
+    final entities = await c.from('shop_entities').select(
+      'entity_type,entity_id,name,subtitle,account_external_id,is_public',
+    ).eq('entity_type', type).eq('entity_id', targetId.trim()).eq('is_public', true).limit(10);
+    Map<String, dynamic>? match;
+    for (final entity in entities) {
+      final actualOwner = entity['account_external_id']?.toString() ?? '';
+      if (actualOwner == (targetAccountExternalId ?? '')) { match = Map<String, dynamic>.from(entity); break; }
+    }
+    if (match == null) throw StateError('This store is no longer available to follow.');
+    final key = '$type:${match['entity_id']}:${match['account_external_id'] ?? ''}';
+    final row = await c.from('social_follows').upsert({
+      'follower_account_id': account['id'].toString(),
+      'follower_profile_id': profileExternalId,
+      'target_type': 'store',
+      'target_key': key,
+      'target_name': match['name'].toString(),
+      'target_subtitle': match['subtitle']?.toString(),
+    }, onConflict: 'follower_account_id,follower_profile_id,target_type,target_key')
+      .select('target_type,target_key,target_name,target_avatar_url,target_subtitle,created_at').single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  Future<void> unfollowSocialTarget({
+    required String accountExternalId,
+    required String profileExternalId,
+    required String targetType,
+    required String targetKey,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Social features require Supabase persistence.');
+    final account = await c.from('accounts').select('id').eq(
+      'external_account_id', accountExternalId,
+    ).maybeSingle();
+    if (account == null) throw StateError('Account not found.');
+    await c.from('social_follows').delete()
+      .eq('follower_account_id', account['id'].toString())
+      .eq('follower_profile_id', profileExternalId)
+      .eq('target_type', targetType)
+      .eq('target_key', targetKey);
+  }
 
   Future<Map<String, dynamic>> loadSocialCenter({
     required String accountExternalId,
@@ -2842,6 +3611,7 @@ class SupabaseStore {
     if (authorAccountId == accountId && authorProfileId == profileId) {
       return true;
     }
+    if (post['visibility'] == 'public') return true;
     if (post['visibility'] == 'community') {
       final links = await client
           .from('social_post_communities')
@@ -8312,6 +9082,69 @@ class SupabaseStore {
       rethrow;
     }
     return {...themeRow, 'menuItemIds': uniqueIds};
+  }
+
+
+
+  // ---------------------------------------------------------------------------
+  // CUSTOMER SUPPORT / TICKETING
+  // ---------------------------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> listSupportTickets({
+    required String accountId,
+    bool allTickets = false,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Support ticketing requires Supabase persistence.');
+    final rows = allTickets
+        ? await c.from('support_tickets').select().order('updated_at', ascending: false).limit(200)
+        : await c.from('support_tickets').select().eq('account_id', accountId).order('updated_at', ascending: false).limit(200);
+    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<Map<String, dynamic>> createSupportTicket({
+    required String accountId,
+    required String subject,
+    required String category,
+    required String priority,
+    required String description,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Support ticketing requires Supabase persistence.');
+    final now = DateTime.now().toUtc().toIso8601String();
+    final row = await c.from('support_tickets').insert({
+      'account_id': accountId,
+      'subject': subject,
+      'category': category,
+      'priority': priority,
+      'description': description,
+      'status': 'open',
+      'replies': <Map<String, dynamic>>[],
+      'created_at': now,
+      'updated_at': now,
+    }).select().single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>> updateSupportTicket({
+    required String ticketId,
+    required String status,
+    required String staffReply,
+  }) async {
+    final c = _db;
+    if (c == null) throw StateError('Support ticketing requires Supabase persistence.');
+    final existing = await c.from('support_tickets').select().eq('id', ticketId).maybeSingle();
+    if (existing == null) throw StateError('Support ticket not found.');
+    final replies = (existing['replies'] as List? ?? const []).map((v) => Map<String, dynamic>.from(v as Map)).toList();
+    if (staffReply.trim().isNotEmpty) {
+      replies.add({'message': staffReply.trim(), 'authorRole': 'support', 'createdAt': DateTime.now().toUtc().toIso8601String()});
+    }
+    final row = await c.from('support_tickets').update({
+      'status': status,
+      'replies': replies,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', ticketId).select().single();
+    return Map<String, dynamic>.from(row);
   }
 
 }

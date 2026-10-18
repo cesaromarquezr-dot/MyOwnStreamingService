@@ -16,6 +16,7 @@ import 'core/models/tv_channel.dart';
 import 'core/services/tv_channel_engine.dart';
 import 'localization.dart';
 import 'page_customization_button.dart';
+import 'public_live_tv.dart';
 
 const _channelContentTypes = <String>['Movies', 'Shows', 'Music'];
 
@@ -1224,6 +1225,22 @@ class _MyTvScreenState extends State<MyTvScreen> {
                       style: TextStyle(color: Colors.white38, fontSize: 12),
                     ),
                   ),
+                const SizedBox(height: 14),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.satellite_alt_rounded),
+                    title: const Text('Looking for real broadcast channels?'),
+                    subtitle: const Text('Open Public Live TV to browse external public streams, filter by country or genre, and save favorites.'),
+                    trailing: const Icon(Icons.arrow_forward_rounded),
+                    onTap: () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        settings: const RouteSettings(name: '/app/page/public-live-tv'),
+                        builder: (_) => const PublicLiveTvScreen(),
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 14),
                 const UniversalText('Quick channel presets', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),

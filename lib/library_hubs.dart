@@ -248,6 +248,50 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Created "$playlistName".')));
   }
 
+  Future<void> _createSmartCollection({
+    required String rule,
+    required String defaultName,
+  }) async {
+    final name = TextEditingController(text: defaultName);
+    final shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const UniversalText('Create Auto-Updating Collection'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: name,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Collection name'),
+            ),
+            const SizedBox(height: 12),
+            const UniversalText('New matching likes will be added automatically. Removing a like removes that item from this smart collection, but not from independent custom collections.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const UniversalText('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('Create')),
+        ],
+      ),
+    );
+    final collectionName = name.text.trim();
+    name.dispose();
+    if (shouldCreate != true || collectionName.isEmpty) return;
+    AppController.instance.createCollection(
+      name: collectionName,
+      description: 'Automatically maintained from your likes.',
+      automatic: true,
+      smartRule: rule,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: UniversalText('Created auto-updating collection "$collectionName".')),
+      );
+    }
+  }
+
   Future<void> _createMediaCollection(List<MediaItem> media, {required String defaultName}) async {
     if (media.isEmpty) return;
     final name = TextEditingController(text: defaultName);
@@ -314,6 +358,35 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         builder: (_, __) => ListView(
           padding: const EdgeInsets.all(18),
           children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const UniversalText('Keep your library in sync', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  const UniversalText('Smart collections update when you like or unlike movies and shows. Custom collections remain hand-curated.'),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _createSmartCollection(rule: 'liked_media', defaultName: 'My Liked Movies & Shows'),
+                      icon: const Icon(Icons.auto_awesome_rounded),
+                      label: const UniversalText('Auto-update combined favorites'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _createSmartCollection(rule: 'liked_movies', defaultName: 'My Liked Movies'),
+                      icon: const Icon(Icons.movie_filter_rounded),
+                      label: const UniversalText('Auto-update movies'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _createSmartCollection(rule: 'liked_shows', defaultName: 'My Liked TV Shows'),
+                      icon: const Icon(Icons.live_tv_rounded),
+                      label: const UniversalText('Auto-update shows'),
+                    ),
+                  ]),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 12),
             const UniversalText('Liked Movies', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             CategoryFilterChips(
               categories: movieCategories,

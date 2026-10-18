@@ -65,7 +65,7 @@ Authenticated endpoints remain available for shared intelligence/policy support:
 
 ## Persistence
 
-`Backend/database/tv_channels.sql` retains durable channel/intelligence/schedule storage for future server-side EPG generation. The Flutter TV screen currently persists account-owned channels through the authenticated application-record system and generates the guide from those channels locally.
+`Backend/database/consolidated_platform.sql` retains durable channel/intelligence/schedule storage for future server-side EPG generation. The Flutter TV screen currently persists account-owned channels through the authenticated application-record system and generates the guide from those channels locally.
 
 ## User-defined programming rules
 

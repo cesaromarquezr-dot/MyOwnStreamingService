@@ -36,13 +36,13 @@ Owner-created themed menus group actual restaurant menu items. Presets offer exa
 
 For a new database, apply the current base schemas and then the food migrations in this order:
 
-1. `Backend/database/food_delivery.sql`
+1. `Backend/database/consolidated_commerce.sql`
 2. `Backend/database/food_messaging.sql`
-3. `Backend/database/food_restaurant_profiles_reviews_themes.sql`
+3. `Backend/database/consolidated_commerce.sql`
 
 The matching Supabase migration copies are under `lib/supabase/migrations/`. Also apply the existing account/media/social/shop/TV migrations required by the features you deploy. Use your project's established migration process rather than running a duplicate migration out of order.
 
-For cross-server inventory and TV pairing, apply `Backend/database/platform_servers_and_tv_pairing.sql`; it intentionally contains no games tables. Demo warehouse/server seed rows are for development inventory only and must be replaced with real hardware information in production.
+For cross-server inventory and TV pairing, apply `Backend/database/consolidated_platform.sql`; it intentionally contains no games tables. Demo warehouse/server seed rows are for development inventory only and must be replaced with real hardware information in production.
 
 ## Verification and limitations
 

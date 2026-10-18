@@ -13,8 +13,8 @@ The modified list includes the broad static-label localization migration (805 ap
 ## Created files
 
 | File |
-| `Backend/database/food_restaurant_profiles_reviews_themes.sql` |
-| `Backend/database/platform_servers_and_tv_pairing.sql` |
+| `Backend/database/consolidated_commerce.sql` |
+| `Backend/database/consolidated_platform.sql` |
 | `docs/CHANGE_MANIFEST.md` |
 | `docs/FEATURE_CONSOLIDATION_STATUS.md` |
 | `docs/LOCALIZATION_SETUP.md` |
@@ -28,7 +28,7 @@ The modified list includes the broad static-label localization migration (805 ap
 | File |
 | `Backend/arm/arm_models.dart` |
 | `Backend/database/README.md` |
-| `Backend/database/food_delivery.sql` |
+| `Backend/database/consolidated_commerce.sql` |
 | `Backend/routes/food_delivery_routes.dart` |
 | `Backend/server.dart` |
 | `Backend/services/food_delivery_service.dart` |

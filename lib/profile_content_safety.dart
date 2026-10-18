@@ -9,7 +9,7 @@ import 'app_core.dart';
 import 'core/models/profile_governance.dart';
 import 'core/services/profile_governance_api.dart';
 import 'localization.dart';
-import 'platform_expansion.dart';
+import 'innovation_features.dart';
 
 /// Available high-level content levels for a profile.
 class ProfileContentSafetyScreen extends StatefulWidget {

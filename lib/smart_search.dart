@@ -2,6 +2,7 @@
 // Purpose: Implements the smart search portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,11 @@ import 'app_core.dart';
 import 'privacy_preferences.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'music.dart';
+import 'music_favorites.dart';
+import 'shop.dart';
+import 'hollywood.dart';
+import 'social_detail_pages.dart';
 
 class SmartSearch {
   static List<MediaItem> search(
@@ -372,6 +378,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   final FocusNode searchFocusNode = FocusNode();
 
   List<MediaItem> results = [];
+  List<MusicTrack> musicResults = [];
+  List<ShopProduct> productResults = <ShopProduct>[];
+  List<Map<String, dynamic>> peopleResults = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> socialResults = <Map<String, dynamic>>[];
+  bool remoteSearchLoading = false;
+  Timer? _searchDebounce;
+  int _remoteSearchGeneration = 0;
 
   late AnimationController animationController;
 
@@ -381,6 +394,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     super.initState();
 
     controller.text = widget.initialQuery;
+    unawaited(_initializeMusicSearch());
     if (widget.initialQuery.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) performSearch(widget.initialQuery);
@@ -397,7 +411,27 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     animationController.forward();
   }
 
-  /// Performs `_focusChanged` for this feature. Update this documentation when its contract changes.
+  /// Loads the active profile music catalog before searching across media types.
+  Future<void> _initializeMusicSearch() async {
+    final profileId = AppController.instance.currentProfile?.id;
+    await Future.wait<void>([
+      _ignoreOptionalInitialization(() => MusicLibraryStore.instance.initializeForProfile(profileId)),
+      _ignoreOptionalInitialization(() => MusicFavoritesBridge.initializeForProfile(profileId)),
+      _ignoreOptionalInitialization(() => ShopCatalog.instance.initialize()),
+    ]);
+    if (mounted && controller.text.trim().isNotEmpty) {
+      performSearch(controller.text);
+    }
+  }
+
+  Future<void> _ignoreOptionalInitialization(Future<void> Function() initialize) async {
+    try {
+      await initialize();
+    } catch (_) {
+      // One unavailable optional catalog must not disable the remaining search.
+    }
+  }
+
   void _focusChanged() {
     if (mounted) {
       setState(() {});
@@ -407,6 +441,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    _searchDebounce?.cancel();
+    _remoteSearchGeneration++;
     controller.dispose();
 
     searchFocusNode
@@ -421,29 +457,234 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   /// Performs `performSearch` for this feature. Update this documentation when its contract changes.
   void performSearch([String? value]) {
     final query = value ?? controller.text;
-
     final library = AppController.instance.library;
-
-    setState(() {
-      results = SmartSearch.search(
-        query,
-        library,
-      );
+    final normalized = query.trim().toLowerCase();
+    final musicMatches = normalized.isEmpty
+        ? <MusicTrack>[]
+        : MusicLibraryStore.instance.tracks.where((track) {
+            final searchable = <String>[
+              track.title,
+              track.artist,
+              track.album,
+              ...track.genres,
+              ...track.featuredArtists,
+              ...track.subgenres,
+            ].join(' ').toLowerCase();
+            return searchable.contains(normalized);
+          }).toList();
+    musicMatches.sort((a, b) {
+      final aExact = a.title.toLowerCase() == normalized ? 0 : 1;
+      final bExact = b.title.toLowerCase() == normalized ? 0 : 1;
+      if (aExact != bExact) return aExact.compareTo(bExact);
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
     });
+
+    final localPeople = _localPeople(normalized);
+    final products = normalized.isEmpty
+        ? <ShopProduct>[]
+        : (normalized == 'shop' || normalized == 'products' || normalized == 'merchandise'
+            ? ShopCatalog.instance.products.where((product) => product.active).take(12).toList()
+            : ShopCatalog.instance.searchProducts(query).take(12).toList());
+    _searchDebounce?.cancel();
+    final generation = ++_remoteSearchGeneration;
+    setState(() {
+      results = SmartSearch.search(query, library);
+      musicResults = musicMatches;
+      productResults = products;
+      peopleResults = localPeople;
+      socialResults = <Map<String, dynamic>>[];
+      remoteSearchLoading = normalized.length >= 2 &&
+          AppController.instance.backendApi.isAuthenticated;
+    });
+
+    if (normalized.length >= 2 &&
+        AppController.instance.backendApi.isAuthenticated) {
+      _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+        unawaited(_loadRemoteSearch(normalized, generation));
+      });
+    }
 
     animationController
       ..reset()
       ..forward();
   }
 
+  List<Map<String, dynamic>> _localPeople(String query) {
+    if (query.isEmpty) return <Map<String, dynamic>>[];
+    final controller = AppController.instance;
+    final sources = <String, List<String>>{
+      'Actor': controller.actorsCatalog,
+      'Director': controller.directorsCatalog,
+      'Writer': controller.writersCatalog,
+      'Artist / band': controller.musicCatalog,
+    };
+    final categoryForQuery = switch (query) {
+      'actor' || 'actors' => 'Actor',
+      'director' || 'directors' => 'Director',
+      'writer' || 'writers' => 'Writer',
+      'artist' || 'artists' || 'band' || 'bands' || 'singer' || 'singers' => 'Artist / band',
+      _ => null,
+    };
+    final found = <String, Map<String, dynamic>>{};
+    for (final entry in sources.entries) {
+      if (categoryForQuery != null && entry.key != categoryForQuery) continue;
+      for (final name in entry.value) {
+        final clean = name.trim();
+        if (clean.isEmpty ||
+            (categoryForQuery == null && !clean.toLowerCase().contains(query))) {
+          continue;
+        }
+        found.putIfAbsent(clean.toLowerCase(), () => <String, dynamic>{
+              'id': clean,
+              'name': clean,
+              'category': entry.key,
+              'source': 'local-library',
+            });
+      }
+    }
+    return found.values.take(12).toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _maps(dynamic value) => value is List
+      ? value.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList()
+      : <Map<String, dynamic>>[];
+
+  String _mapText(Map<String, dynamic> value, Iterable<String> keys) =>
+      keys.map((key) => value[key]?.toString() ?? '').where((text) => text.isNotEmpty).join(' ');
+
+  Future<void> _loadRemoteSearch(String query, int generation) async {
+    final app = AppController.instance;
+    final profile = app.currentProfile;
+    if (profile == null || !app.backendApi.isAuthenticated) {
+      if (mounted && generation == _remoteSearchGeneration) {
+        setState(() => remoteSearchLoading = false);
+      }
+      return;
+    }
+
+    final remotePeople = <Map<String, dynamic>>[];
+    final remoteSocial = <Map<String, dynamic>>[];
+    try {
+      // The backend may match credits, aliases, or career metadata rather than
+      // only the display name, so preserve all results returned for this query.
+      final people = await app.backendApi.searchMediaPeople(query: query);
+      remotePeople.addAll(people);
+    } catch (_) {
+      // Search still works from the local library if the people service is offline.
+    }
+    try {
+      // Social search is limited to the current profile's authorized home feed.
+      // It never searches arbitrary private accounts or private community content.
+      final home = await app.backendApi.getSocialHome(profileId: profile.id);
+      final showAllFriends = query == 'friends' || query == 'friend';
+      final showAllCommunities = query == 'communities' || query == 'community';
+      final showAllPosts = query == 'posts' || query == 'post';
+      for (final key in <String>['friends', 'communities', 'posts']) {
+        for (final item in _maps(home[key])) {
+          final haystack = _mapText(item, <String>[
+            'name', 'display_name', 'displayName', 'username', 'description',
+            'body', 'text', 'title', 'content', 'message',
+          ]).toLowerCase();
+          final categoryBrowse = key == 'friends' && showAllFriends ||
+              key == 'communities' && showAllCommunities ||
+              key == 'posts' && showAllPosts;
+          if (!categoryBrowse && !haystack.contains(query)) continue;
+          remoteSocial.add(<String, dynamic>{
+            'kind': key == 'friends' ? 'friend' : key == 'communities' ? 'community' : 'post',
+            'data': item,
+          });
+        }
+      }
+    } catch (_) {
+      // Social access may be unavailable for an offline or limited session.
+    }
+
+    if (!mounted || generation != _remoteSearchGeneration ||
+        controller.text.trim().toLowerCase() != query) {
+      return;
+    }
+
+    final mergedPeople = <String, Map<String, dynamic>>{};
+    for (final person in <Map<String, dynamic>>[...peopleResults, ...remotePeople]) {
+      final name = _mapText(person, <String>['name', 'displayName', 'display_name', 'fullName', 'full_name']).trim();
+      if (name.isEmpty) continue;
+      mergedPeople.putIfAbsent(name.toLowerCase(), () => person);
+    }
+    setState(() {
+      peopleResults = mergedPeople.values.take(15).toList(growable: false);
+      socialResults = remoteSocial.take(30).toList(growable: false);
+      remoteSearchLoading = false;
+    });
+  }
+
+  void _openPerson(Map<String, dynamic> person) {
+    final name = _mapText(person, <String>['name', 'displayName', 'display_name', 'fullName', 'full_name']).trim();
+    if (name.isEmpty) return;
+    final category = _mapText(person, <String>[
+      'category', 'profession', 'role', 'type', 'knownFor', 'known_for',
+    ]).toLowerCase();
+    if (category.contains('artist') ||
+        category.contains('band') ||
+        category.contains('singer') ||
+        category.contains('musician')) {
+      Navigator.push<void>(context, MaterialPageRoute<void>(
+        builder: (_) => MusicArtistProfileScreen(artistName: name),
+      ));
+      return;
+    }
+    Navigator.push<void>(context, MaterialPageRoute<void>(
+      builder: (_) => ActorDetailsScreen(actor: Actor(
+        id: (person['id'] ?? person['personId'] ?? person['person_id'] ?? name).toString(),
+        name: name,
+        photoUrl: (person['photoUrl'] ?? person['photo_url'] ?? person['imageUrl'] ?? person['image_url'] ?? '').toString(),
+        biography: (person['biography'] ?? person['bio'] ?? '').toString(),
+        placeOfBirth: (person['placeOfBirth'] ?? person['place_of_birth'] ?? '').toString(),
+        dateOfBirth: DateTime.tryParse((person['dateOfBirth'] ?? person['date_of_birth'] ?? '').toString()),
+        knownFor: (person['knownFor'] ?? person['known_for'] ?? person['profession'] ?? person['category'] ?? 'Entertainment').toString(),
+      )),
+    ));
+  }
+
+  void _openSocialResult(Map<String, dynamic> result) {
+    final kind = result['kind']?.toString() ?? '';
+    final data = result['data'] is Map ? Map<String, dynamic>.from(result['data'] as Map) : <String, dynamic>{};
+    if (kind == 'community') {
+      Navigator.push<void>(context, MaterialPageRoute<void>(
+        builder: (_) => SocialCommunityDetailScreen(community: data),
+      ));
+    } else if (kind == 'post') {
+      final id = (data['id'] ?? data['postId'] ?? data['post_id'] ?? '').toString();
+      if (id.isEmpty) return;
+      Navigator.push<void>(context, MaterialPageRoute<void>(
+        builder: (_) => SocialPostDetailScreen(postId: id, initialPost: data),
+      ));
+    } else if (kind == 'friend') {
+      final accountId = (data['id'] ?? data['accountId'] ?? data['account_id'] ?? '').toString();
+      final profileId = (data['profileId'] ?? data['profile_id'] ?? '').toString();
+      if (accountId.isEmpty || profileId.isEmpty) return;
+      Navigator.push<void>(context, MaterialPageRoute<void>(
+        builder: (_) => SocialProfileDetailScreen(
+          targetAccountId: accountId,
+          targetProfileId: profileId,
+          initialProfile: data,
+        ),
+      ));
+    }
+  }
+
   /// Performs `clearSearch` for this feature. Update this documentation when its contract changes.
   void clearSearch() {
     controller.clear();
-
+    _searchDebounce?.cancel();
+    _remoteSearchGeneration++;
     setState(() {
-      results = [];
+      results = <MediaItem>[];
+      musicResults = <MusicTrack>[];
+      productResults = <ShopProduct>[];
+      peopleResults = <Map<String, dynamic>>[];
+      socialResults = <Map<String, dynamic>>[];
+      remoteSearchLoading = false;
     });
-
     searchFocusNode.requestFocus();
   }
 
@@ -462,17 +703,26 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
 
   /// Performs `_typeLabel` for this feature. Update this documentation when its contract changes.
   String _typeLabel(MediaItem media) {
-    final type = media.type.toLowerCase();
-
-    if (type == 'tvshow' ||
-        type == 'tv_show' ||
-        type == 'tv show' ||
-        type == 'series' ||
-        type == 'show') {
-      return 'TV SHOW';
-    }
-
-    return 'MOVIE';
+    final type = media.type.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+    return switch (type) {
+      'movie' || 'film' || 'featurefilm' => 'MOVIE',
+      'tvshow' || 'series' || 'show' || 'television' => 'TV SERIES',
+      'season' || 'tvseason' => 'TV SEASON',
+      'episode' || 'tvepisode' => 'TV EPISODE',
+      'song' || 'track' => 'SONG',
+      'album' => 'ALBUM',
+      'artist' => 'ARTIST',
+      'musicvideo' => 'MUSIC VIDEO',
+      'special' || 'tvspecial' => 'SPECIAL',
+      'documentary' => 'DOCUMENTARY',
+      'podcast' => 'PODCAST',
+      'audiobook' => 'AUDIOBOOK',
+      'concert' || 'liveevent' => 'LIVE EVENT',
+      'channel' || 'livetv' => 'CHANNEL',
+      'trailer' => 'TRAILER',
+      'short' || 'clip' => 'SHORT',
+      _ => media.type.trim().isEmpty ? 'MEDIA' : media.type.trim().toUpperCase(),
+    };
   }
 
   @override
@@ -580,7 +830,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                     ),
                     const SizedBox(height: 3),
                     UniversalText(
-                      'Find something to watch',
+                      'Search entertainment, artists, friends, communities, and products',
                       style: TextStyle(
                         color: Colors.white
                             .withValues(alpha: 0.52),
@@ -644,7 +894,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
               onSubmitted: performSearch,
               decoration: InputDecoration(
                 hintText: tr(
-                  'Search movies, shows, years...',
+                  'Search movies, shows, music, people, friends, communities, products…',
                 ),
                 hintStyle: TextStyle(
                   color: Colors.white
@@ -718,8 +968,32 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           _SuggestionChip(
             label: '5.0',
             icon: Icons.star_outline_rounded,
-            onTap: () =>
-                useSuggestion('5.0'),
+            onTap: () => useSuggestion('5.0'),
+          ),
+          _SuggestionChip(
+            label: 'Actors',
+            icon: Icons.person_outline_rounded,
+            onTap: () => useSuggestion('actors'),
+          ),
+          _SuggestionChip(
+            label: 'Artists',
+            icon: Icons.mic_none_rounded,
+            onTap: () => useSuggestion('artists'),
+          ),
+          _SuggestionChip(
+            label: 'Friends',
+            icon: Icons.people_outline_rounded,
+            onTap: () => useSuggestion('friends'),
+          ),
+          _SuggestionChip(
+            label: 'Communities',
+            icon: Icons.groups_2_outlined,
+            onTap: () => useSuggestion('communities'),
+          ),
+          _SuggestionChip(
+            label: 'Shop',
+            icon: Icons.shopping_bag_outlined,
+            onTap: () => useSuggestion('shop'),
           ),
         ],
       ),
@@ -742,9 +1016,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       child: Row(
         children: [
           Text(
-            results.isEmpty
-                ? 'No results'
-                : '${results.length} ${results.length == 1 ? 'result' : 'results'}',
+            remoteSearchLoading && results.isEmpty && musicResults.isEmpty &&
+                    productResults.isEmpty && peopleResults.isEmpty && socialResults.isEmpty
+                ? 'Searching…'
+                : results.isEmpty && musicResults.isEmpty && productResults.isEmpty &&
+                        peopleResults.isEmpty && socialResults.isEmpty
+                    ? 'No results'
+                    : '${results.length + musicResults.length + productResults.length + peopleResults.length + socialResults.length} ${(results.length + musicResults.length + productResults.length + peopleResults.length + socialResults.length) == 1 ? 'result' : 'results'}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -752,9 +1030,11 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             ),
           ),
           const Spacer(),
-          if (results.isNotEmpty)
+          if (remoteSearchLoading)
+            const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 1.5))
+          else if (results.isNotEmpty || musicResults.isNotEmpty || productResults.isNotEmpty || peopleResults.isNotEmpty || socialResults.isNotEmpty)
             UniversalText(
-              'YOUR LIBRARY',
+              'CONNECTED SEARCH',
               style: TextStyle(
                 color: Colors.white
                     .withValues(alpha: 0.35),
@@ -808,7 +1088,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       );
     }
 
-    if (results.isEmpty) {
+    if (results.isEmpty && musicResults.isEmpty && productResults.isEmpty &&
+        peopleResults.isEmpty && socialResults.isEmpty && !remoteSearchLoading) {
       return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -821,7 +1102,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             icon: Icons.movie_filter_outlined,
             title: tr('Nothing found'),
             message: tr(
-              'Try another title, year, rating, movie, or TV show.',
+              'Try a title, artist, actor, friend, community, post, or shop product.',
             ),
           ),
         ),
@@ -829,76 +1110,114 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     }
 
     return SliverPadding(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final media = results[index];
-
-            return _SearchResultCard(
-              key: ValueKey(
-                '${media.title}_${media.releaseYear}_$index',
+        delegate: SliverChildListDelegate([
+          if (results.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 4, bottom: 8),
+              child: UniversalText('Movies & TV', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+            ),
+            for (var index = 0; index < results.length; index++)
+              _SearchResultCard(
+                key: ValueKey('media:${results[index].id}'),
+                media: results[index],
+                typeLabel: _typeLabel(results[index]),
+                index: index,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: results[index]))),
               ),
-              media: media,
-              typeLabel: _typeLabel(media),
-              index: index,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    transitionDuration:
-                        const Duration(
-                      milliseconds: 450,
-                    ),
-                    reverseTransitionDuration:
-                        const Duration(
-                      milliseconds: 300,
-                    ),
-                    pageBuilder: (
-                      context,
-                      animation,
-                      secondaryAnimation,
-                    ) =>
-                        MediaDetailsScreen(
-                      media: media,
-                    ),
-                    transitionsBuilder: (
-                      context,
-                      animation,
-                      secondaryAnimation,
-                      child,
-                    ) {
-                      final curved =
-                          CurvedAnimation(
-                        parent: animation,
-                        curve:
-                            Curves.easeOutCubic,
-                      );
-
-                      return FadeTransition(
-                        opacity: curved,
-                        child: SlideTransition(
-                          position:
-                              Tween<Offset>(
-                            begin:
-                                const Offset(
-                              0.04,
-                              0,
-                            ),
-                            end: Offset.zero,
-                          ).animate(curved),
-                          child: child,
-                        ),
-                      );
-                    },
+          ],
+          if (musicResults.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 18, bottom: 8),
+              child: UniversalText('Music', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+            ),
+            for (final track in musicResults)
+              Card(
+                color: Colors.white.withValues(alpha: .055),
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.music_note_rounded)),
+                  title: Text(track.title),
+                  subtitle: Text('${track.artist}${track.album.trim().isEmpty ? '' : ' · ${track.album}'}'),
+                  trailing: const Icon(Icons.play_arrow_rounded),
+                  onTap: () => MusicPlaybackController.instance.play(track),
+                ),
+              ),
+          ],
+          if (peopleResults.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 18, bottom: 8),
+              child: UniversalText('Actors, artists & entertainment people', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+            ),
+            for (final person in peopleResults)
+              Card(
+                color: Colors.white.withValues(alpha: .055),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage: ((person['photoUrl'] ?? person['photo_url'] ?? person['imageUrl'] ?? person['image_url'])?.toString().trim().isNotEmpty ?? false)
+                        ? NetworkImage((person['photoUrl'] ?? person['photo_url'] ?? person['imageUrl'] ?? person['image_url']).toString())
+                        : null,
+                    child: const Icon(Icons.person_outline_rounded),
+                  ),
+                  title: Text(_mapText(person, <String>['name', 'displayName', 'display_name', 'fullName', 'full_name']).trim()),
+                  subtitle: Text((person['knownFor'] ?? person['known_for'] ?? person['profession'] ?? person['category'] ?? 'Entertainment').toString()),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _openPerson(person),
+                ),
+              ),
+          ],
+          if (socialResults.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 18, bottom: 8),
+              child: UniversalText('Friends, communities & posts', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+            ),
+            for (final result in socialResults)
+              Builder(builder: (context) {
+                final data = result['data'] is Map ? Map<String, dynamic>.from(result['data'] as Map) : <String, dynamic>{};
+                final kind = result['kind']?.toString() ?? 'social';
+                final title = _mapText(data, <String>['name', 'display_name', 'displayName', 'username', 'title', 'body', 'text', 'content']).trim();
+                final subtitle = switch (kind) {
+                  'community' => 'Community · ${data['memberCount'] ?? data['member_count'] ?? ''} members',
+                  'post' => 'Community or friend post',
+                  _ => 'Friend',
+                };
+                return Card(
+                  color: Colors.white.withValues(alpha: .055),
+                  child: ListTile(
+                    leading: CircleAvatar(child: Icon(kind == 'community' ? Icons.groups_2_outlined : kind == 'post' ? Icons.forum_outlined : Icons.person_outline_rounded)),
+                    title: Text(title.isEmpty ? 'Untitled $kind' : title, maxLines: kind == 'post' ? 2 : 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(subtitle),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _openSocialResult(result),
                   ),
                 );
-              },
-            );
-          },
-          childCount: results.length,
-        ),
+              }),
+          ],
+          if (productResults.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 18, bottom: 8),
+              child: UniversalText('Shop & merchandise', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+            ),
+            for (final product in productResults)
+              Card(
+                color: Colors.white.withValues(alpha: .055),
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.shopping_bag_outlined)),
+                  title: Text(product.name),
+                  subtitle: Text('${product.category} · ${product.price.toStringAsFixed(2)} ${product.currency}'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.push<void>(context, MaterialPageRoute<void>(
+                    builder: (_) => ShopProductDetailsScreen(product: product),
+                  )),
+                ),
+              ),
+          ],
+          if (remoteSearchLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ]),
       ),
     );
   }
@@ -931,6 +1250,7 @@ class _SearchResultCardState
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final media = widget.media;
+    final identityHint = _identityHint(media);
 
     return TweenAnimationBuilder<double>(
       duration: Duration(
@@ -1055,16 +1375,25 @@ class _SearchResultCardState
                                       widget.typeLabel,
                                 ),
                                 _MetaPill(
-                                  label: media
-                                      .releaseYear
-                                      .toString(),
+                                  label: media.releaseYear?.toString() ?? 'Year unknown',
                                 ),
-                                _MetaPill(
-                                  label:
-                                      '★ ${media.rating}',
-                                ),
+                                if (media.rating != null)
+                                  _MetaPill(label: '★ ${media.rating}'),
                               ],
                             ),
+                            if (identityHint.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                identityHint,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .95),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 11),
                             Text(
                               media.description ?? '',
@@ -1123,6 +1452,28 @@ class _SearchResultCardState
         ),
       ),
     );
+  }
+
+  String _identityHint(MediaItem media) {
+    final hints = <String>[];
+    final original = media.originalTitle?.trim();
+    if (original != null && original.isNotEmpty &&
+        original.toLowerCase() != media.title.trim().toLowerCase()) {
+      hints.add('Original title: $original');
+    }
+    final disc = media.discTitle?.trim();
+    if (disc != null && disc.isNotEmpty &&
+        disc.toLowerCase() != media.title.trim().toLowerCase()) {
+      hints.add('Edition: $disc');
+    }
+    final country = media.countryOfOrigin?.trim();
+    if (country != null && country.isNotEmpty) hints.add(country);
+    final director = media.directors.isNotEmpty ? media.directors.first.trim() : '';
+    if (director.isNotEmpty) hints.add('Directed by $director');
+    if (hints.isEmpty && media.franchiseName?.trim().isNotEmpty == true) {
+      hints.add('Part of ${media.franchiseName}');
+    }
+    return hints.join(' · ');
   }
 }
 

@@ -1780,10 +1780,30 @@ class _ShopScreenState extends State<ShopScreen> {
                   Icons.shopping_bag_outlined,
                 ),
                 const SizedBox(height: 8),
-                if (products.isEmpty)
+                if (products.isEmpty) ...[
                   _empty(widget.contextAssociationName == null
-                      ? 'No real seller products are listed yet.'
+                      ? (search.trim().isEmpty
+                          ? 'No active seller products are listed yet. Try browsing stores or check back later.'
+                          : 'No products match “${search.trim()}”. Try a broader search or reset your filters.')
                       : 'No seller product is currently associated with this title.'),
+                  if (widget.contextAssociationName == null &&
+                      (search.trim().isNotEmpty || categoryFilter != 'All' || sortMode != 'Relevance'))
+                    Align(
+                      alignment: Alignment.center,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          searchController.clear();
+                          setState(() {
+                            search = '';
+                            categoryFilter = 'All';
+                            sortMode = 'Relevance';
+                          });
+                        },
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const UniversalText('Clear search and filters'),
+                      ),
+                    ),
+                ],
                 for (final product in products) _productCard(context, product),
               ],
             ],
@@ -1934,11 +1954,30 @@ class _ShopScreenState extends State<ShopScreen> {
                   Text(_money(product.price, product.currency),
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w900)),
-                  Text('${product.inventoryQuantity} in stock',
-                      style: const TextStyle(fontSize: 12)),
+                  Text(
+                    product.inventoryQuantity <= 0
+                        ? 'Out of stock'
+                        : product.inventoryQuantity <= 3
+                            ? 'Only ${product.inventoryQuantity} left'
+                            : 'In stock',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: product.inventoryQuantity <= 3
+                          ? FontWeight.w700
+                          : FontWeight.normal,
+                      color: product.inventoryQuantity <= 0
+                          ? Theme.of(context).colorScheme.error
+                          : product.inventoryQuantity <= 3
+                              ? Theme.of(context).colorScheme.tertiary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ])),
             Column(children: [
               IconButton(
+                  tooltip: catalog.isWishlisted(product.id)
+                      ? 'Remove from wishlist'
+                      : 'Add to wishlist',
                   onPressed: () => catalog.toggleWishlist(product.id),
                   icon: Icon(catalog.isWishlisted(product.id)
                       ? Icons.favorite

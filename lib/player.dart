@@ -12,6 +12,7 @@ import 'music.dart';
 import 'xray.dart';
 import 'localization.dart';
 import 'streaming_experience.dart';
+import 'innovation_features.dart';
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
@@ -1930,11 +1931,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _SeekButton(
-                  icon: Icons.replay_10_rounded,
+                  icon: Icons.replay_5_rounded,
                   onPressed: youtubePlayerReady
                       ? () {
                           _seekYoutubeBySeconds(
-                            -10,
+                            -5,
                           );
                         }
                       : null,
@@ -2278,6 +2279,160 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // BOTTOM CONTROLS
   // ============================================================
 
+  String _bookmarkTimestamp(int positionMs) {
+    final duration = Duration(milliseconds: positionMs < 0 ? 0 : positionMs);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '${duration.inMinutes}:$seconds';
+  }
+
+  Future<void> _addSceneBookmark() async {
+    final controller = youtubeController;
+    if (controller == null) {
+      _showSnackBar('Scene bookmarks are available when timestamped playback is connected.');
+      return;
+    }
+    if (!ExpandedPlatformRepository.instance.isAvailable) {
+      _showSnackBar('Configure Supabase and sign in to save scene bookmarks.');
+      return;
+    }
+
+    double seconds;
+    try {
+      seconds = await controller.currentTime;
+    } catch (_) {
+      if (!mounted) return;
+      _showSnackBar('The current playback position is not available yet.');
+      return;
+    }
+    if (!mounted) return;
+    final positionMs = (seconds.clamp(0.0, 24 * 60 * 60) * 1000).round();
+    final labelController = TextEditingController(
+      text: 'Scene at ${_bookmarkTimestamp(positionMs)}',
+    );
+    final noteController = TextEditingController();
+    final values = await showDialog<Map<String, String?>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Bookmark this scene'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Save ${_bookmarkTimestamp(positionMs)} in “${widget.media.title}”.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: labelController,
+              maxLength: 160,
+              decoration: const InputDecoration(labelText: 'Scene label'),
+            ),
+            TextField(
+              controller: noteController,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 2000,
+              decoration: const InputDecoration(labelText: 'Optional note'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, {
+              'label': labelController.text.trim(),
+              'note': noteController.text.trim(),
+            }),
+            child: const Text('Save bookmark'),
+          ),
+        ],
+      ),
+    );
+    labelController.dispose();
+    noteController.dispose();
+    if (values == null) return;
+
+    try {
+      final saved = await ExpandedPlatformRepository.instance.addSceneBookmark(
+        mediaKey: widget.media.id,
+        positionMs: positionMs,
+        label: values['label'],
+        note: values['note'],
+      );
+      if (!mounted) return;
+      if (saved == null) {
+        _showSnackBar('Sign in to save scene bookmarks.');
+      } else {
+        _showSnackBar('Scene bookmarked at ${_bookmarkTimestamp(positionMs)}.');
+      }
+    } catch (error) {
+      if (mounted) _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _showSceneBookmarks() async {
+    final repository = ExpandedPlatformRepository.instance;
+    if (!repository.isAvailable) {
+      _showSnackBar('Configure Supabase and sign in to use scene bookmarks.');
+      return;
+    }
+    try {
+      final bookmarks = await repository.sceneBookmarks(widget.media.id);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF171717),
+        builder: (sheetContext) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.60,
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 12, 12),
+                child: Row(children: [
+                  const Icon(Icons.bookmarks_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Scenes · ${widget.media.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                  IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+                ]),
+              ),
+              const Divider(height: 1),
+              if (bookmarks.isEmpty)
+                const Expanded(child: _PlayerMessage(icon: Icons.bookmark_border_rounded, message: 'No saved scenes yet. Add a bookmark while watching.'))
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: bookmarks.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final bookmark = bookmarks[index];
+                      return ListTile(
+                        leading: const CircleAvatar(child: Icon(Icons.play_arrow_rounded)),
+                        title: Text(bookmark.label?.trim().isNotEmpty == true
+                            ? bookmark.label!.trim()
+                            : 'Scene at ${_bookmarkTimestamp(bookmark.positionMs)}'),
+                        subtitle: Text([
+                          _bookmarkTimestamp(bookmark.positionMs),
+                          if (bookmark.note?.trim().isNotEmpty == true) bookmark.note!.trim(),
+                        ].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        onTap: () async {
+                          Navigator.pop(sheetContext);
+                          final target = bookmark.positionMs / 1000.0;
+                          final current = await youtubeController?.currentTime ?? target;
+                          await _seekYoutubeBySeconds((target - current).round());
+                          _startControlsTimer();
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   /// Performs `_buildControls` for this feature. Update this documentation when its contract changes.
   Widget _buildControls(
     GroupWatchSession? groupSession,
@@ -2333,12 +2488,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           Row(
             children: [
               _BottomControlButton(
-                icon: Icons.replay_10_rounded,
+                icon: Icons.replay_5_rounded,
                 onPressed: videoFinished || isGroupPaused || !hasYoutube
                     ? null
                     : () {
                         _seekYoutubeBySeconds(
-                          -10,
+                          -5,
                         );
                       },
               ),
@@ -2381,6 +2536,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
               _BottomControlButton(
                 icon: Icons.subtitles_rounded,
                 onPressed: openAudioSubtitleOptions,
+              ),
+              _BottomControlButton(
+                icon: Icons.bookmark_add_outlined,
+                onPressed: hasYoutube ? _addSceneBookmark : null,
+              ),
+              _BottomControlButton(
+                icon: Icons.bookmarks_outlined,
+                onPressed: _showSceneBookmarks,
               ),
               if (groupSession == null)
                 _BottomControlButton(

@@ -19,9 +19,9 @@ Activities currently set by the client include watching media, listening to an a
 
 Apply these SQL files in order on the backend's Supabase database:
 
-1. `Backend/database/social_v2_migration.sql` (if the social V2 messaging schema has not already been installed)
-2. `Backend/database/social_chat_presence.sql`
-3. `Backend/database/social_presence_activity_types.sql`
+1. `Backend/database/consolidated_social.sql` (if the social V2 messaging schema has not already been installed)
+2. `Backend/database/consolidated_social.sql`
+3. `Backend/database/consolidated_social.sql`
 
 The new activity-type migration only replaces the CHECK constraint that mentions `activity_type`; it leaves the availability constraint intact. Run it in a staging database first and review the migration against the live schema.
 

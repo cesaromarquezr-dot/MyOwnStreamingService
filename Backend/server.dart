@@ -84,6 +84,7 @@ import 'routes/self_hosting_routes.dart';
 import 'routes/server_agent_routes.dart';
 import 'routes/shop_routes.dart';
 import 'routes/storage_routes.dart';
+import 'routes/support_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/tv_channel_routes.dart';
 import 'routes/tv_pairing_routes.dart';
@@ -309,6 +310,8 @@ Future<void> main() async {
   // SEARCH ROUTES
   // ------------------------------------------------------------
 
+  final supportRoutes = SupportRoutes(authentication: authentication);
+
   final searchRoutes = SearchRoutes(
     authenticationMiddleware: authentication,
     searchService: searchService,
@@ -533,6 +536,7 @@ Future<void> main() async {
       foodDeliveryRoutes,
       tvPairingRoutes,
       tvChannelRoutes,
+      supportRoutes,
     ).catchError(
       (Object error, StackTrace stackTrace) {
         developer.log(
@@ -582,6 +586,7 @@ Future<void> _handleRequest(
   FoodDeliveryRoutes foodDeliveryRoutes,
   TvPairingRoutes tvPairingRoutes,
   TvChannelRoutes tvChannelRoutes,
+  SupportRoutes supportRoutes,
 ) async {
   var responseStarted = false;
 
@@ -663,6 +668,13 @@ Future<void> _handleRequest(
     }
 
     final path = request.uri.path;
+
+    // CUSTOMER SUPPORT / TICKETING
+    if (path == '/api/v1/support/tickets' || path.startsWith('/api/v1/support/tickets/')) {
+      await supportRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
 
     // ----------------------------------------------------------
     // HEALTH

@@ -313,6 +313,76 @@ class SupabaseSyncRoutes {
         );
       }
 
+      if (bits.length == 2 && bits[0] == 'communities' && request.method == 'GET') {
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...await store.loadSocialCommunityDetail(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            communityId: bits[1],
+          ),
+        });
+      }
+
+      if (bits.length == 2 && bits[0] == 'posts' && request.method == 'GET') {
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...await store.loadSocialPostDetail(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            postId: bits[1],
+          ),
+        });
+      }
+
+      if (bits.length == 1 && bits[0] == 'profile' && request.method == 'GET') {
+        final targetAccountId = request.uri.queryParameters['targetAccountId']?.trim() ?? '';
+        final targetProfileId = request.uri.queryParameters['targetProfileId']?.trim() ?? '';
+        if (targetAccountId.isEmpty || targetProfileId.isEmpty) {
+          throw const FormatException('A target profile is required.');
+        }
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          ...await store.loadSocialProfile(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            targetAccountId: targetAccountId,
+            targetProfileId: targetProfileId,
+          ),
+        });
+      }
+
+      if (bits.length == 1 && bits[0] == 'following' && request.method == 'GET') {
+        return _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'following': await store.loadSocialFollowing(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+          ),
+        });
+      }
+
+      if (bits.length == 1 && bits[0] == 'following' && request.method == 'POST') {
+        final follow = await store.followSocialStore(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          targetType: _requiredText(body, 'targetType', 32),
+          targetId: _requiredText(body, 'targetId', 256),
+          targetAccountExternalId: _optionalText(body, 'targetAccountExternalId', 256),
+        );
+        return _json(request.response, HttpStatus.created, {'success': true, 'follow': follow});
+      }
+
+      if (bits.length == 1 && bits[0] == 'following' && request.method == 'DELETE') {
+        await store.unfollowSocialTarget(
+          accountExternalId: account.id,
+          profileExternalId: profile,
+          targetType: _requiredText(body, 'targetType', 32),
+          targetKey: _requiredText(body, 'targetKey', 512),
+        );
+        return _json(request.response, HttpStatus.ok, {'success': true});
+      }
+
       if (bits.length == 1 &&
           bits[0] == 'presence' &&
           request.method == 'POST') {
@@ -803,7 +873,8 @@ class SupabaseSyncRoutes {
         final friendship = await store.sendSocialFriendRequest(
             accountExternalId: account.id,
             profileExternalId: profile,
-            username: _requiredText(body, 'username', 80));
+            username: _requiredText(body, 'username', 80),
+            targetProfileExternalId: _optionalText(body, 'targetProfileId', 256));
         return _json(request.response, HttpStatus.created,
             {'success': true, 'friendship': friendship});
       }
@@ -866,6 +937,16 @@ class SupabaseSyncRoutes {
           bits[1] == 'join' &&
           request.method == 'POST') {
         await store.joinSocialCommunity(
+            accountExternalId: account.id,
+            profileExternalId: profile,
+            communityId: _requiredText(body, 'communityId', 80));
+        return _json(request.response, HttpStatus.ok, {'success': true});
+      }
+      if (bits.length == 2 &&
+          bits[0] == 'communities' &&
+          bits[1] == 'leave' &&
+          request.method == 'POST') {
+        await store.leaveSocialCommunity(
             accountExternalId: account.id,
             profileExternalId: profile,
             communityId: _requiredText(body, 'communityId', 80));

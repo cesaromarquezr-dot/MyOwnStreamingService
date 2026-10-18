@@ -9,13 +9,13 @@ This expansion adds the shared foundation for the next wave of MyOwnStreamingSer
 ## New files
 
 - `lib/expanded_platform.dart`: typed capability catalog, bookmark and assistant-memory models, and a Supabase repository for scene bookmarks and explicitly user-managed Hey Media memory.
-- `Backend/database/expanded_platform_features.sql`: additive Supabase schema with ownership-oriented row-level security for personal data.
+- `Backend/database/consolidated_platform.sql`: additive Supabase schema with ownership-oriented row-level security for personal data.
 - `test/expanded_platform_test.dart`: catalog and bookmark model tests.
 
 ## Apply the migration
 
 1. Back up the Supabase database.
-2. Review `Backend/database/expanded_platform_features.sql` against your deployed schema and current RLS conventions.
+2. Review `Backend/database/consolidated_platform.sql` against your deployed schema and current RLS conventions.
 3. Apply it through the Supabase SQL Editor or your migration workflow.
 4. Verify the RLS policies with separate authenticated test users before enabling UI flows.
 5. Keep `service_role` credentials only on trusted backend workers. Never put them in Flutter build arguments, app configuration, or the TrueNAS client.

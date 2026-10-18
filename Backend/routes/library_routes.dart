@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../middleware/authentication.dart';
+import '../arm/media_rights_policy.dart';
 import '../supabase_store.dart';
 
 class LibraryRoutes {
@@ -119,6 +120,21 @@ class LibraryRoutes {
 
         final title = body['title']?.toString().trim() ?? '';
         final type = body['type']?.toString().trim() ?? 'movie';
+        final requestedMetadata = body['metadata'] is Map
+            ? Map<String, dynamic>.from(body['metadata'] as Map)
+            : <String, dynamic>{};
+        final rightsBlockReason = MediaRightsPolicy.blockReason(requestedMetadata);
+        if (rightsBlockReason != null) {
+          await _json(request.response, HttpStatus.forbidden, {
+            'success': false,
+            'code': 'MEDIA_RIGHTS_BLOCKED',
+            'error': 'We do not allow pirated content in this service. $rightsBlockReason',
+          });
+          return;
+        }
+        // Keep the request metadata isolated from the incoming decoded body,
+        // then enrich it with the server-generated import information below.
+        final metadata = Map<String, dynamic>.from(requestedMetadata);
         if (title.isEmpty) {
           await _json(request.response, HttpStatus.badRequest, {
             'success': false,
@@ -193,9 +209,6 @@ class LibraryRoutes {
           return;
         }
 
-        final metadata = body['metadata'] is Map
-            ? Map<String, dynamic>.from(body['metadata'] as Map)
-            : <String, dynamic>{};
         metadata['source'] = 'approved-arm-import';
         metadata['relativeMediaId'] = relative;
         if (isMockOutput) metadata['mockMedia'] = true;

@@ -9,6 +9,7 @@ class MusicFavoritesBridge {
   static final Set<String> _likedTracks = <String>{};
   static final Set<String> _likedAlbums = <String>{};
   static final Set<String> _likedPlaylists = <String>{};
+  static final Set<String> _followedArtists = <String>{};
   static SharedPreferences? _preferences;
   static String _profileKey = 'default';
 
@@ -24,12 +25,22 @@ class MusicFavoritesBridge {
     _likedPlaylists
       ..clear()
       ..addAll(_preferences!.getStringList('music_liked_playlists_$_profileKey') ?? const []);
+    _followedArtists
+      ..clear()
+      ..addAll(_preferences!.getStringList('music_followed_artists_$_profileKey') ?? const []);
     changes.value++;
   }
 
   static List<String> likedTracks() => _likedTracks.toList()..sort();
   static List<String> likedAlbums() => _likedAlbums.toList()..sort();
   static List<String> likedPlaylists() => _likedPlaylists.toList()..sort();
+  static List<String> followedArtists() => _followedArtists.toList()..sort();
+  static void toggleArtist(String artist) {
+    final key = artist.trim();
+    if (key.isEmpty) return;
+    _followedArtists.contains(key) ? _followedArtists.remove(key) : _followedArtists.add(key);
+    unawaited(_persist('music_followed_artists_$_profileKey', _followedArtists));
+  }
   static void toggleTrack(String id) {
     _likedTracks.contains(id) ? _likedTracks.remove(id) : _likedTracks.add(id);
     unawaited(_persist('music_liked_tracks_$_profileKey', _likedTracks));

@@ -23,7 +23,7 @@
 
 ## Supabase migration
 
-Apply `Backend/database/entertainment_studio_records.sql` (mirrored at `lib/supabase/migrations/entertainment_studio_records.sql`) in staging before production. It stores user-authenticated records and applies RLS by `auth.uid()`. Regular notes are queried by their embedded `profileId`; the household watchlist intentionally spans profiles under the same signed-in account. Sharing with other accounts requires explicit membership tables, authorization policies and abuse controls.
+Apply `Backend/database/consolidated_platform.sql` (mirrored at `lib/supabase/migrations/entertainment_studio_records.sql`) in staging before production. It stores user-authenticated records and applies RLS by `auth.uid()`. Regular notes are queried by their embedded `profileId`; the household watchlist intentionally spans profiles under the same signed-in account. Sharing with other accounts requires explicit membership tables, authorization policies and abuse controls.
 
 ## Verification limits
 

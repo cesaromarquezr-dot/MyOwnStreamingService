@@ -42,7 +42,7 @@ class BackendApi {
   BackendApi({
     this.baseUrl = const String.fromEnvironment(
       'BACKEND_API_URL',
-      defaultValue: 'https://127.0.0.1:8080/api/v1',
+      defaultValue: 'https://127.0.0.1:8081/api/v1',
     ),
   }) {
     assertSecureEndpoint();
@@ -3309,6 +3309,107 @@ class BackendApi {
     );
   }
 
+  Future<Map<String, dynamic>> getSocialCommunityDetail({
+    required String profileId,
+    required String communityId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse(
+            '$baseUrl/social/communities/${Uri.encodeComponent(communityId)}')
+        .replace(queryParameters: {'profileId': profileId});
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load community details.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getSocialPostDetail({
+    required String profileId,
+    required String postId,
+  }) async {
+    _requireAuthentication();
+    final uri =
+        Uri.parse('$baseUrl/social/posts/${Uri.encodeComponent(postId)}')
+            .replace(queryParameters: {'profileId': profileId});
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load post details.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getSocialProfile({
+    required String profileId,
+    required String targetAccountId,
+    required String targetProfileId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/social/profile').replace(queryParameters: {
+      'profileId': profileId,
+      'targetAccountId': targetAccountId,
+      'targetProfileId': targetProfileId,
+    });
+    return _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load this profile.',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getSocialFollowing({
+    required String profileId,
+  }) async {
+    _requireAuthentication();
+    final uri = Uri.parse('$baseUrl/social/following').replace(
+      queryParameters: {'profileId': profileId},
+    );
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to load followed stores.',
+    );
+    return (data['following'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> followSocialStore({
+    required String profileId,
+    required String targetType,
+    required String targetId,
+    String? targetAccountExternalId,
+  }) =>
+      _socialPost(
+        'following',
+        {
+          'profileId': profileId,
+          'targetType': targetType,
+          'targetId': targetId,
+          if (targetAccountExternalId != null &&
+              targetAccountExternalId.isNotEmpty)
+            'targetAccountExternalId': targetAccountExternalId,
+        },
+        'Unable to follow this store.',
+      );
+
+  Future<void> unfollowSocialTarget({
+    required String profileId,
+    required String targetType,
+    required String targetKey,
+  }) async {
+    _requireAuthentication();
+    await _requireSuccess(
+      await http.delete(
+        Uri.parse('$baseUrl/social/following'),
+        headers: _headers,
+        body: jsonEncode({
+          'profileId': profileId,
+          'targetType': targetType,
+          'targetKey': targetKey,
+        }),
+      ),
+      'Unable to unfollow this store.',
+    );
+  }
+
   Future<Map<String, dynamic>> getSocialAccountProfiles({
     required String profileId,
   }) async {
@@ -3625,7 +3726,8 @@ class BackendApi {
     required String storyId,
   }) async {
     _requireAuthentication();
-    final uri = Uri.parse('$baseUrl/social/stories/${Uri.encodeComponent(storyId)}/insights')
+    final uri = Uri.parse(
+            '$baseUrl/social/stories/${Uri.encodeComponent(storyId)}/insights')
         .replace(queryParameters: {'profileId': profileId});
     return _requireSuccess(
       await http.get(uri, headers: _headers),
@@ -3776,12 +3878,21 @@ class BackendApi {
         error);
   }
 
-  Future<Map<String, dynamic>> sendFriendRequest(
-          {required String profileId, required String username}) =>
+  Future<Map<String, dynamic>> sendFriendRequest({
+    required String profileId,
+    required String username,
+    String? targetProfileId,
+  }) =>
       _socialPost(
-          'friend-request',
-          {'profileId': profileId, 'username': username},
-          'Unable to send friend request.');
+        'friend-request',
+        {
+          'profileId': profileId,
+          'username': username,
+          if (targetProfileId != null && targetProfileId.trim().isNotEmpty)
+            'targetProfileId': targetProfileId.trim(),
+        },
+        'Unable to send friend request.',
+      );
 
   Future<Map<String, dynamic>> respondFriendRequest(
       {required String profileId,
@@ -3808,7 +3919,8 @@ class BackendApi {
     }
     return _requireSuccess(
       await http.patch(
-        Uri.parse('$baseUrl/social/guardian-friend-request/${Uri.encodeComponent(friendshipId)}'),
+        Uri.parse(
+            '$baseUrl/social/guardian-friend-request/${Uri.encodeComponent(friendshipId)}'),
         headers: _headers,
         body: jsonEncode({'profileId': profileId, 'action': action}),
       ),
@@ -3842,9 +3954,14 @@ class BackendApi {
     String category = 'general',
   }) =>
       _socialPost(
-        'communities',
-        {'profileId': profileId, 'name': name, 'description': description, 'category': category},
-        'Unable to create community.');
+          'communities',
+          {
+            'profileId': profileId,
+            'name': name,
+            'description': description,
+            'category': category
+          },
+          'Unable to create community.');
 
   Future<Map<String, dynamic>> joinSocialCommunity(
           {required String profileId, required String communityId}) =>
@@ -3852,6 +3969,16 @@ class BackendApi {
           'communities/join',
           {'profileId': profileId, 'communityId': communityId},
           'Unable to join community.');
+
+  Future<Map<String, dynamic>> leaveSocialCommunity({
+    required String profileId,
+    required String communityId,
+  }) =>
+      _socialPost(
+        'communities/leave',
+        {'profileId': profileId, 'communityId': communityId},
+        'Unable to leave community.',
+      );
 
   Future<Map<String, dynamic>> saveAppRecord({
     String? profileId,
@@ -4332,7 +4459,6 @@ class BackendApi {
     return data['verified'] == true;
   }
 
-
   // ==========================================================
   // SERVER CONTEXT
   // ==========================================================
@@ -4345,7 +4471,8 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to load server context.');
   }
 
-  Future<Map<String, dynamic>> claimServer({required String serverId, required String displayName}) async {
+  Future<Map<String, dynamic>> claimServer(
+      {required String serverId, required String displayName}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/platform-servers/claim'),
       headers: _headers,
@@ -4354,7 +4481,8 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to claim server.');
   }
 
-  Future<Map<String, dynamic>> renameServer({required String displayName}) async {
+  Future<Map<String, dynamic>> renameServer(
+      {required String displayName}) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/platform-servers/name'),
       headers: _headers,
@@ -4386,23 +4514,33 @@ class BackendApi {
     required String profileId,
     required String phoneDeviceId,
   }) async {
-    return pairTv(code: code, phoneDeviceId: phoneDeviceId, profileId: profileId);
+    return pairTv(
+        code: code, phoneDeviceId: phoneDeviceId, profileId: profileId);
   }
 
-  Future<Map<String, dynamic>> createTvPairingCode({required String tvDeviceId, required String tvDeviceName}) async {
+  Future<Map<String, dynamic>> createTvPairingCode(
+      {required String tvDeviceId, required String tvDeviceName}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/tv-control/pairing-code'),
       headers: _headers,
-      body: jsonEncode({'tvDeviceId': tvDeviceId, 'tvDeviceName': tvDeviceName}),
+      body:
+          jsonEncode({'tvDeviceId': tvDeviceId, 'tvDeviceName': tvDeviceName}),
     );
     return _requireSuccess(response, 'Unable to create TV pairing code.');
   }
 
-  Future<Map<String, dynamic>> pairTv({required String code, required String phoneDeviceId, required String profileId}) async {
+  Future<Map<String, dynamic>> pairTv(
+      {required String code,
+      required String phoneDeviceId,
+      required String profileId}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/tv-control/pair'),
       headers: _headers,
-      body: jsonEncode({'code': code, 'phoneDeviceId': phoneDeviceId, 'profileId': profileId}),
+      body: jsonEncode({
+        'code': code,
+        'phoneDeviceId': phoneDeviceId,
+        'profileId': profileId
+      }),
     );
     return _requireSuccess(response, 'Unable to pair TV.');
   }
@@ -4413,10 +4551,13 @@ class BackendApi {
       headers: _headers,
     );
     final data = await _requireSuccess(response, 'Unable to load TV state.');
-    return data['state'] is Map ? Map<String, dynamic>.from(data['state'] as Map) : <String, dynamic>{};
+    return data['state'] is Map
+        ? Map<String, dynamic>.from(data['state'] as Map)
+        : <String, dynamic>{};
   }
 
-  Future<void> publishTvState({required String tvDeviceId, required Map<String, dynamic> state}) async {
+  Future<void> publishTvState(
+      {required String tvDeviceId, required Map<String, dynamic> state}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/tv-control/state'),
       headers: _headers,
@@ -4425,23 +4566,34 @@ class BackendApi {
     _requireSuccess(response, 'Unable to publish TV state.');
   }
 
-  Future<void> sendTvCommand({required String tvDeviceId, required String profileId, required Map<String, dynamic> command}) async {
+  Future<void> sendTvCommand(
+      {required String tvDeviceId,
+      required String profileId,
+      required Map<String, dynamic> command}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/tv-control/command'),
       headers: _headers,
-      body: jsonEncode({'tvDeviceId': tvDeviceId, 'profileId': profileId, 'command': command}),
+      body: jsonEncode({
+        'tvDeviceId': tvDeviceId,
+        'profileId': profileId,
+        'command': command
+      }),
     );
     _requireSuccess(response, 'Unable to send TV command.');
   }
 
   Future<List<Map<String, dynamic>>> pollTvCommands(String tvDeviceId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/tv-control/commands/${Uri.encodeComponent(tvDeviceId)}'),
+      Uri.parse(
+          '$baseUrl/tv-control/commands/${Uri.encodeComponent(tvDeviceId)}'),
       headers: _headers,
     );
     final data = await _requireSuccess(response, 'Unable to poll TV commands.');
     return data['commands'] is List
-        ? (data['commands'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        ? (data['commands'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
         : <Map<String, dynamic>>[];
   }
 
@@ -4457,18 +4609,24 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to load TV channel capabilities.');
   }
 
-  Future<List<Map<String, dynamic>>> getTvChannelDefinitions({bool kidsProfile = false}) async {
+  Future<List<Map<String, dynamic>>> getTvChannelDefinitions(
+      {bool kidsProfile = false}) async {
     final uri = Uri.parse('$baseUrl/tv-channels/definitions').replace(
       queryParameters: {'kids': kidsProfile.toString()},
     );
     final response = await http.get(uri, headers: _headers);
-    final data = await _requireSuccess(response, 'Unable to load TV channel definitions.');
+    final data = await _requireSuccess(
+        response, 'Unable to load TV channel definitions.');
     return data['channels'] is List
-        ? (data['channels'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList(growable: false)
+        ? (data['channels'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false)
         : <Map<String, dynamic>>[];
   }
 
-  Future<Map<String, dynamic>> getTvSeasonalPolicy({bool kidsProfile = false}) async {
+  Future<Map<String, dynamic>> getTvSeasonalPolicy(
+      {bool kidsProfile = false}) async {
     final uri = Uri.parse('$baseUrl/tv-channels/seasonal-policy').replace(
       queryParameters: {'kids': kidsProfile.toString()},
     );
@@ -4476,7 +4634,8 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to load TV seasonal policy.');
   }
 
-  Future<Map<String, dynamic>> classifyTvContent(Map<String, dynamic> media) async {
+  Future<Map<String, dynamic>> classifyTvContent(
+      Map<String, dynamic> media) async {
     final response = await http.post(
       Uri.parse('$baseUrl/tv-channels/classify'),
       headers: _headers,
@@ -4489,16 +4648,26 @@ class BackendApi {
   // MEDIA DEVICE / PLAYBACK SESSIONS
   // ==========================================================
 
-  Future<Map<String, dynamic>> registerMediaDevice({required String profileId, required String deviceId, required String name, required String type}) async {
+  Future<Map<String, dynamic>> registerMediaDevice(
+      {required String profileId,
+      required String deviceId,
+      required String name,
+      required String type}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/media-intelligence/device'),
       headers: _headers,
-      body: jsonEncode({'profileId': profileId, 'id': deviceId, 'name': name, 'type': type}),
+      body: jsonEncode(
+          {'profileId': profileId, 'id': deviceId, 'name': name, 'type': type}),
     );
     return _requireSuccess(response, 'Unable to register device.');
   }
 
-  Future<Map<String, dynamic>> createPlaybackSession({required String profileId, required String deviceId, String? mediaId, String state = 'idle', double positionSeconds = 0}) async {
+  Future<Map<String, dynamic>> createPlaybackSession(
+      {required String profileId,
+      required String deviceId,
+      String? mediaId,
+      String state = 'idle',
+      double positionSeconds = 0}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/media-intelligence/session'),
       headers: _headers,
@@ -4513,7 +4682,11 @@ class BackendApi {
     return _requireSuccess(response, 'Unable to create playback session.');
   }
 
-  Future<Map<String, dynamic>> updatePlaybackSession({required String sessionId, String? mediaId, String? state, double? positionSeconds}) async {
+  Future<Map<String, dynamic>> updatePlaybackSession(
+      {required String sessionId,
+      String? mediaId,
+      String? state,
+      double? positionSeconds}) async {
     final response = await http.put(
       Uri.parse('$baseUrl/media-intelligence/session'),
       headers: _headers,
@@ -4532,6 +4705,59 @@ class BackendApi {
   // ==========================================================
 
   /// Decodes a backend HTTP response into a JSON map.
+  // ==========================================================
+  // CUSTOMER SUPPORT / TICKETING
+  // ==========================================================
+
+  Future<List<Map<String, dynamic>>> listSupportTickets(
+      {bool allTickets = false}) async {
+    if (!isAuthenticated) {
+      throw BackendApiException('Sign in to view support tickets.');
+    }
+    final response = await http.get(
+        Uri.parse('$baseUrl/support/tickets${allTickets ? '?scope=all' : ''}'),
+        headers: _headers);
+    final data =
+        await _requireSuccess(response, 'Unable to load support tickets.');
+    return (data['tickets'] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createSupportTicket(
+      {required String subject,
+      required String category,
+      required String priority,
+      required String description}) async {
+    if (!isAuthenticated) {
+      throw BackendApiException('Sign in to contact customer support.');
+    }
+    final response = await http.post(Uri.parse('$baseUrl/support/tickets'),
+        headers: _headers,
+        body: jsonEncode({
+          'subject': subject,
+          'category': category,
+          'priority': priority,
+          'description': description
+        }));
+    return _requireSuccess(response, 'Unable to create support ticket.');
+  }
+
+  Future<Map<String, dynamic>> updateSupportTicket(
+      {required String ticketId,
+      required String status,
+      String reply = ''}) async {
+    if (!isAuthenticated) {
+      throw BackendApiException('Sign in to manage support tickets.');
+    }
+    final response = await http.patch(
+        Uri.parse('$baseUrl/support/tickets/${Uri.encodeComponent(ticketId)}'),
+        headers: _headers,
+        body: jsonEncode({'status': status, 'reply': reply}));
+    return _requireSuccess(response, 'Unable to update support ticket.');
+  }
+
   Map<String, dynamic> _decodeResponse(
     http.Response response,
   ) {

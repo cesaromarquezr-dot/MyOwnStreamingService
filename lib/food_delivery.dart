@@ -1578,10 +1578,36 @@ class _FoodOrderingScreenState extends State<FoodOrderingScreen> {
               ),
               const SizedBox(height: 10),
               if (_restaurants.isEmpty)
-                const Card(
+                Card(
                   child: Padding(
-                    padding: EdgeInsets.all(22),
-                    child: Center(child: UniversalText('No nearby restaurants matched that search.')),
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.restaurant_outlined, size: 38),
+                        const SizedBox(height: 10),
+                        const UniversalText(
+                          'No nearby restaurants matched that search.',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 6),
+                        const UniversalText(
+                          'Try a different cuisine, expand the search area, or clear your search to see nearby options.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white60),
+                        ),
+                        if (_activeQuery.trim().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              _searchController.clear();
+                              _loadNearby(query: '');
+                            },
+                            icon: const Icon(Icons.restart_alt_rounded),
+                            label: const UniversalText('Clear search'),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 )
               else

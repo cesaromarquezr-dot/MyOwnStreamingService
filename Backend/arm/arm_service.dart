@@ -32,6 +32,7 @@ import 'arm_client.dart';
 import 'arm_models.dart';
 import 'arm_title_resolver.dart';
 import 'arm_verifier.dart';
+import 'media_rights_policy.dart';
 
 class ArmService {
   final ArmClient client;
@@ -674,6 +675,19 @@ class ArmService {
           ],
         ) ??
         0;
+
+    final rightsBlockReason = MediaRightsPolicy.blockReason(arm);
+    if (rightsBlockReason != null) {
+      // Do not expose a flagged job as importable or reviewable. ARM is an
+      // external worker; a pre-rip veto is only guaranteed when the worker
+      // itself consumes the same policy before starting extraction.
+      local.status = ArmJobStatus.rejected.name;
+      local.progress = 0;
+      local.message =
+          'We do not allow pirated content in this service. $rightsBlockReason';
+      local.completedAt ??= DateTime.now();
+      return;
+    }
 
     final rawStatus =
         (_string(

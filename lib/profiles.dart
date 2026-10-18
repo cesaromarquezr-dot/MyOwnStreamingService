@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'app_core.dart';
 import 'music_achievements.dart';
+import 'music.dart';
 import 'profile_content_safety.dart';
 import 'profile_administration.dart';
 import 'localization.dart';
@@ -77,12 +78,18 @@ class _ProfileSelectionScreenState
     with TickerProviderStateMixin {
   late final AnimationController _animationController;
 
+  void _onContentChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
     // Hide the global navbar before profile selection/creation is rendered.
     widget.onOpened?.call();
+    AppController.instance.addListener(_onContentChanged);
+    MusicLibraryStore.instance.addListener(_onContentChanged);
 
     _animationController = AnimationController(
       vsync: this,
@@ -95,6 +102,8 @@ class _ProfileSelectionScreenState
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    AppController.instance.removeListener(_onContentChanged);
+    MusicLibraryStore.instance.removeListener(_onContentChanged);
     _animationController.dispose();
     super.dispose();
   }
@@ -231,20 +240,199 @@ class _ProfileSelectionScreenState
     Navigator.of(context).pop(AppController.instance.currentProfile);
   }
 
+  List<_ProfileBackdropItem> _profileBackdropItems() {
+    final items = <_ProfileBackdropItem>[];
+    final seenUrls = <String>{};
+    final controller = AppController.instance;
+
+    for (final media in controller.library) {
+      final type = media.type.trim().toLowerCase();
+      final isScreenMedia = type.contains('movie') ||
+          type.contains('show') ||
+          type.contains('series') ||
+          type == 'tv' ||
+          type.contains('television');
+      final url = (media.imageUrl ?? '').trim();
+      if (!isScreenMedia || !_isUsableArtworkUrl(url) || !seenUrls.add(url)) {
+        continue;
+      }
+      items.add(_ProfileBackdropItem(
+        title: media.title,
+        type: type.contains('movie') ? 'MOVIE' : 'SERIES',
+        imageUrl: url,
+      ));
+    }
+
+    for (final track in MusicLibraryStore.instance.tracks) {
+      final url = (track.artworkUrl ?? '').trim();
+      if (!_isUsableArtworkUrl(url) || !seenUrls.add(url)) continue;
+      items.add(_ProfileBackdropItem(
+        title: track.album.trim().isEmpty ? track.title : track.album,
+        type: 'ALBUM',
+        imageUrl: url,
+      ));
+    }
+
+    return items;
+  }
+
+  bool _isUsableArtworkUrl(String url) =>
+      url.startsWith('https://') || url.startsWith('http://');
+
+  Widget _buildCinematicLayout(
+    BuildContext context,
+    List<Profile> profiles,
+    List<_ProfileBackdropItem> artwork,
+  ) {
+    final size = MediaQuery.sizeOf(context);
+    final railWidth = (size.width * 0.29).clamp(270.0, 360.0).toDouble();
+    return Row(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 850),
+          curve: Curves.easeInOutCubic,
+          width: railWidth,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.78),
+            border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _ProfileLogo(),
+                  const SizedBox(height: 30),
+                  const UniversalText("Who's watching?", style: TextStyle(
+                    fontSize: 25, fontWeight: FontWeight.w700, color: Colors.white,
+                  )),
+                  const SizedBox(height: 6),
+                  Text('Choose a profile to continue', style: TextStyle(
+                    fontSize: 13, color: Colors.white.withValues(alpha: 0.58),
+                  )),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      children: [
+                        for (final profile in profiles)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _ProfileCard(
+                              profile: profile,
+                              compact: true,
+                              onTap: () => _selectProfile(profile),
+                              onEdit: () => _editProfile(profile),
+                              onStatistics: () => _showStatistics(profile),
+                              onAchievements: () => _showAchievements(profile),
+                            ),
+                          ),
+                        if (profiles.length < 7)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _CreateProfileButton(onTap: _createProfile),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text('${profiles.length} of 7 profiles', style: const TextStyle(
+                    color: Colors.white38, fontSize: 12,
+                  )),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(30, 26, 32, 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Spacer(),
+                  const Text('YOUR ENTERTAINMENT,\nREADY WHEN YOU ARE', style: TextStyle(
+                    color: Colors.white, fontSize: 30, height: 1.12,
+                    fontWeight: FontWeight.w800, letterSpacing: 1.0,
+                    shadows: [Shadow(color: Colors.black87, blurRadius: 20)],
+                  )),
+                  const SizedBox(height: 10),
+                  Text('Movies, series and albums from your library', style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.75), fontSize: 14,
+                    shadows: const [Shadow(color: Colors.black, blurRadius: 12)],
+                  )),
+                  const Spacer(),
+                  SizedBox(
+                    height: (size.height * 0.29).clamp(150.0, 260.0).toDouble(),
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: artwork.length.clamp(0, 8).toInt(),
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final item = artwork[index];
+                        return AnimatedContainer(
+                          duration: Duration(milliseconds: 500 + (index * 55)),
+                          curve: Curves.easeOutCubic,
+                          width: (size.width * 0.105).clamp(94.0, 150.0).toDouble(),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(
+                                  item.imageUrl,
+                                  fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.medium,
+                                  errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                                ),
+                                DecoratedBox(decoration: BoxDecoration(
+                                  gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.9)]),
+                                )),
+                                Positioned(left: 8, right: 8, bottom: 9, child: Text(
+                                  item.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                )),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
     final account = controller.currentAccount;
     final profiles = account?.profiles ?? <Profile>[];
+    final artwork = _profileBackdropItems();
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
       body: Stack(
         children: [
-          const _ProfileBackground(),
+          if (artwork.isNotEmpty)
+            _ProfileBackdropArtwork(items: artwork)
+          else
+            const ColoredBox(color: Colors.black),
+          if (artwork.isNotEmpty && MediaQuery.sizeOf(context).width < 760)
+            const ColoredBox(color: Color(0x99000000)),
 
-          SafeArea(
+          if (artwork.isNotEmpty && MediaQuery.sizeOf(context).width >= 760)
+            _buildCinematicLayout(context, profiles, artwork)
+          else
+            SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(
@@ -380,6 +568,7 @@ class _ProfileCard extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onStatistics;
   final VoidCallback onAchievements;
+  final bool compact;
 
   const _ProfileCard({
     required this.profile,
@@ -387,6 +576,7 @@ class _ProfileCard extends StatefulWidget {
     required this.onEdit,
     required this.onStatistics,
     required this.onAchievements,
+    this.compact = false,
   });
 
   @override
@@ -499,6 +689,45 @@ class _ProfileCardState extends State<_ProfileCard> {
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
+    if (widget.compact) {
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.98 : (_hovered ? 1.025 : 1),
+          duration: const Duration(milliseconds: 200),
+          child: Material(
+            color: _hovered ? Colors.white.withValues(alpha: 0.10) : Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: widget.onTap,
+              onLongPress: _showProfileMenu,
+              onTapDown: (_) => setState(() => _pressed = true),
+              onTapUp: (_) => setState(() => _pressed = false),
+              onTapCancel: () => setState(() => _pressed = false),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                child: Row(
+                  children: [
+                    _ProfileAvatar(profile: widget.profile, size: 62),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(widget.profile.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: _hovered ? Colors.white : Colors.white70, fontSize: 15, fontWeight: FontWeight.w600))),
+                    IconButton(
+                      tooltip: 'Manage profile',
+                      onPressed: _showProfileMenu,
+                      icon: const Icon(Icons.more_horiz, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) {
@@ -2582,42 +2811,99 @@ class _ProfileLogo extends StatelessWidget {
 /// PROFILE BACKGROUND
 /// ============================================================
 
-class _ProfileBackground
-    extends StatelessWidget {
-  const _ProfileBackground();
+class _ProfileBackdropItem {
+  final String title;
+  final String type;
+  final String imageUrl;
+
+  const _ProfileBackdropItem({required this.title, required this.type, required this.imageUrl});
+}
+
+/// Rotates through actual library artwork. With no valid artwork this widget
+/// is not mounted, leaving the selection screen completely black.
+class _ProfileBackdropArtwork extends StatefulWidget {
+  final List<_ProfileBackdropItem> items;
+
+  const _ProfileBackdropArtwork({required this.items});
 
   @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
+  State<_ProfileBackdropArtwork> createState() => _ProfileBackdropArtworkState();
+}
+
+class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _rotation;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotation = AnimationController(vsync: this, duration: const Duration(seconds: 7));
+    _rotation.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted && widget.items.length > 1) {
+        setState(() => _index = (_index + 1) % widget.items.length);
+        _rotation.forward(from: 0);
+      }
+    });
+    _rotation.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileBackdropArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.items.isEmpty) {
+      _index = 0;
+    } else if (_index >= widget.items.length) {
+      _index = 0;
+    }
+    if (oldWidget.items.length != widget.items.length && widget.items.length > 1) {
+      _rotation.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _rotation.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (widget.items.isEmpty) return const ColoredBox(color: Colors.black);
+    final item = widget.items[_index];
     return IgnorePointer(
       child: Stack(
+        fit: StackFit.expand,
         children: [
-          Positioned(
-            top: -180,
-            left: -150,
-            child: Container(
-              width: 420,
-              height: 420,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(
-                  alpha: 0.018,
-                ),
-              ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 1300),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: SizedBox.expand(
+              key: ValueKey<String>(item.imageUrl),
+              child: Image.network(item.imageUrl, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black)),
             ),
           ),
-
+          Container(color: Colors.black.withValues(alpha: 0.48)),
+          const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+            begin: Alignment.centerLeft, end: Alignment.centerRight,
+            colors: [Colors.black, Color(0xDD000000), Color(0x33000000), Color(0xAA000000)],
+            stops: [0, 0.27, 0.68, 1],
+          ))),
+          const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+            begin: Alignment.bottomCenter, end: Alignment.topCenter,
+            colors: [Colors.black87, Colors.transparent], stops: [0, 0.7],
+          ))),
           Positioned(
-            bottom: -220,
-            right: -180,
-            child: Container(
-              width: 500,
-              height: 500,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(
-                  alpha: 0.014,
-                ),
+            right: 34, top: 28,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              child: Container(
+                key: ValueKey<String>('label-${item.imageUrl}'),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white24)),
+                child: Text(item.type, style: const TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
               ),
             ),
           ),

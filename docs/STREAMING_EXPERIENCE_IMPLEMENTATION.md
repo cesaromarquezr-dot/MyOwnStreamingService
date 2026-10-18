@@ -9,7 +9,7 @@
 - `lib/smart_search.dart` adds bounded typo tolerance and searches more media metadata fields. Recommendation relevance is now a tie-breaker only after the query actually matches, avoiding unrelated recommended titles appearing for every query. The Home recommendation fallback ranks in-library candidates using server recommendations when available, plus likes, unfinished watch progress, shared genres/credits/tags/franchises, ratings, and recency; disliked and completed titles are excluded. This is a transparent local relevance heuristic, not a trained ML model.
 - The Home **Music & Film** section now renders a **Continue Listening** rail for tracks with playable media URLs, ranks previously listened tracks, promotes the current track, and resumes/pauses the current music session when its card is tapped.
 - `scripts/encode_hls_ladder.sh` builds a compatible H.264/AAC HLS VOD ladder (1080p, 720p, 480p) in a separate output directory without modifying the source.
-- `Backend/database/streaming_experience_telemetry.sql` (mirrored under `lib/supabase/migrations/`) creates service-role-only tables for QoE events, discovery feedback, and profile preferences.
+- `Backend/database/consolidated_platform.sql` (mirrored under `lib/supabase/migrations/`) creates service-role-only tables for QoE events, discovery feedback, and profile preferences.
 
 ## Current limitations—do not mistake scaffolding for live infrastructure
 
@@ -35,4 +35,4 @@ These are initial project goals, not guarantees: median player-ready under 2 sec
 
 ## Apply the Supabase schema
 
-Review `Backend/database/streaming_experience_telemetry.sql` against the live schema, then apply it using your normal migration process. These tables intentionally deny direct access to `anon` and `authenticated`; do not add broad client write policies. Implement and test a trusted endpoint with profile ownership checks before wiring remote telemetry or preference synchronization.
+Review `Backend/database/consolidated_platform.sql` against the live schema, then apply it using your normal migration process. These tables intentionally deny direct access to `anon` and `authenticated`; do not add broad client write policies. Implement and test a trusted endpoint with profile ownership checks before wiring remote telemetry or preference synchronization.

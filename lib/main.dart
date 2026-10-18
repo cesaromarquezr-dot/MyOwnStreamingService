@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
 import 'library_release.dart';
+import 'physical_media_library.dart';
 
 import 'signup.dart';
 import 'smart_search.dart';
@@ -25,11 +26,12 @@ import 'film.dart';
 import 'how_it_works.dart';
 import 'shop.dart';
 import 'food_delivery.dart';
+import 'watch_and_enjoy.dart';
 import 'hey_marathon.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
-import 'platform_expansion.dart';
+import 'innovation_features.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
 import 'localization.dart';
@@ -38,6 +40,7 @@ import 'activity_timeline.dart';
 import 'social_home.dart';
 import 'account_profile_activity.dart';
 import 'streaming_experience.dart';
+import 'perfect_streaming_experience.dart';
 import 'app_accessibility.dart';
 import 'accessibility_offline_settings.dart';
 import 'production_readiness.dart';
@@ -45,6 +48,7 @@ import 'security_settings.dart';
 import 'navigation_hubs.dart';
 import 'media_universe.dart';
 import 'my_tv.dart';
+import 'public_live_tv.dart';
 import 'social_story_experience.dart';
 import 'app_customization.dart';
 import 'entertainment_studio.dart';
@@ -53,6 +57,10 @@ import 'social_theme_gallery.dart';
 import 'server_selection.dart';
 import 'tv_controller.dart';
 import 'tv_host.dart';
+import 'connected_command_center.dart';
+import 'customer_support.dart';
+import 'connected_innovation_phases.dart';
+import 'innovation_hub.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -4570,6 +4578,10 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const StreamingExperienceSettingsScreen(), routeName: '/app/page/streaming-experience');
       },
+      onPerfectStreaming: () {
+        Navigator.of(sheetContext).pop();
+        push(const PerfectStreamingExperienceScreen(), routeName: '/app/page/perfect-streaming');
+      },
       onDevices: () {
         Navigator.of(sheetContext).pop();
         push(const DeviceCenterScreen(), routeName: '/app/page/devices');
@@ -4594,6 +4606,10 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const AccountInviteScreen(), routeName: '/app/page/members');
       },
+      onWatchAndEnjoy: () {
+        Navigator.of(sheetContext).pop();
+        push(const WatchAndEnjoyScreen(), routeName: '/app/page/watch-and-enjoy');
+      },
       onShop: () {
         Navigator.of(sheetContext).pop();
         push(
@@ -4615,6 +4631,10 @@ void _showGlobalMore() {
       onMyTv: () {
         Navigator.of(sheetContext).pop();
         push(const MyTvScreen(), routeName: '/app/page/my-tv');
+      },
+      onPublicLiveTv: () {
+        Navigator.of(sheetContext).pop();
+        push(const PublicLiveTvScreen(), routeName: '/app/page/public-live-tv');
       },
       onTvController: () {
         Navigator.of(sheetContext).pop();
@@ -4639,6 +4659,10 @@ void _showGlobalMore() {
       onEntertainmentStudio: () {
         Navigator.of(sheetContext).pop();
         push(const EntertainmentStudioScreen(), routeName: '/app/page/entertainment-studio');
+      },
+      onInnovationHub: () {
+        Navigator.of(sheetContext).pop();
+        push(const InnovationHubScreen(), routeName: '/app/innovation');
       },
     ),
   );
@@ -4719,7 +4743,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         return HomeScreen(
           showAppBar: false,
           onRefresh: () => setState(() {}),
-          onNotifications: () {},
+          onNotifications: null,
           onMessageProfile: _messageAccountProfile,
         );
       case PrimaryDestination.library:
@@ -4748,6 +4772,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     LanguageController.instance.loadForCurrentProfile();
+    unawaited(AppController.instance.loadActivity());
     _startPresenceHeartbeat();
   }
 
@@ -5005,51 +5030,58 @@ class _AppShellHeaderState extends State<AppShellHeader> {
   }
 }
 
-/// The More sheet keeps secondary destinations available without expanding the
-/// primary navigation bar again.
 class _MoreChoice {
   final String title;
   final String subtitle;
   final IconData icon;
   final VoidCallback onSelected;
+
   const _MoreChoice(this.title, this.subtitle, this.icon, this.onSelected);
 }
 
 class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onStreamingExperience;
+  final VoidCallback onPerfectStreaming;
   final VoidCallback onDevices;
   final VoidCallback onHomeServer;
   final VoidCallback onImport;
   final VoidCallback onMembers;
   final VoidCallback onShop;
   final VoidCallback onFoodDelivery;
+  final VoidCallback onWatchAndEnjoy;
   final VoidCallback onHeyMarathon;
   final VoidCallback onMyTv;
+  final VoidCallback onPublicLiveTv;
   final VoidCallback onTvController;
   final VoidCallback onTvHost;
   final VoidCallback onProductionReadiness;
   final VoidCallback onSecurityPrivacy;
   final VoidCallback onAccessibilityOffline;
   final VoidCallback onEntertainmentStudio;
+  final VoidCallback onInnovationHub;
 
   const _MoreActionsSheet({
     required this.onSettings,
     required this.onStreamingExperience,
+    required this.onPerfectStreaming,
     required this.onDevices,
     required this.onHomeServer,
     required this.onImport,
     required this.onMembers,
     required this.onShop,
     required this.onFoodDelivery,
+    required this.onWatchAndEnjoy,
     required this.onHeyMarathon,
     required this.onMyTv,
+    required this.onPublicLiveTv,
     required this.onTvController,
     required this.onTvHost,
     required this.onProductionReadiness,
     required this.onSecurityPrivacy,
     required this.onAccessibilityOffline,
     required this.onEntertainmentStudio,
+    required this.onInnovationHub,
   });
 
   @override
@@ -5075,13 +5107,18 @@ class _MoreActionsSheet extends StatelessWidget {
           _moreCard(Icons.devices_rounded, 'Device Center', 'Downloads and devices', onDevices),
           _moreCard(Icons.settings_rounded, 'Settings', 'Account and subscription', onSettings),
           _moreCard(Icons.high_quality_rounded, 'Streaming Experience', 'Playback quality, accessibility, and player diagnostics', onStreamingExperience),
-          _combinedCard(context, Icons.shopping_bag_outlined, 'Shop & Delivery',
-            'Products, orders and food delivery', [
-              _MoreChoice('Shop', 'Marketplace and product orders', Icons.shopping_bag_outlined, onShop),
-              _MoreChoice('Food Delivery', 'Restaurants and food orders', Icons.delivery_dining_rounded, onFoodDelivery),
-            ]),
+          _moreCard(Icons.auto_awesome_rounded, 'Perfect Streaming', 'Clean navigation, discovery, autoplay, series and Watch Party preferences', onPerfectStreaming),
+          _moreCard(Icons.hub_rounded, 'Innovation & Platform Hub', 'Platform Expansion, Ultimate Features, Expanded Platform and roadmap', onInnovationHub),
+          _moreCard(Icons.movie_filter_rounded, 'Watch & Enjoy',
+            'Pair movie nights with food delivery and entertainment merchandise', onWatchAndEnjoy),
+          _moreCard(Icons.shopping_bag_outlined, 'Shop',
+            'Products, stores, wishlist, bag and seller tools', onShop),
+          _moreCard(Icons.delivery_dining_rounded, 'Food Delivery',
+            'Restaurants, menus, delivery and pickup orders', onFoodDelivery),
           _moreCard(Icons.live_tv_rounded, 'My TV',
-            'Create ad-free channels and view your guide', onMyTv),
+            'Create personal channels from your own media library', onMyTv),
+          _moreCard(Icons.satellite_alt_rounded, 'Public Live TV',
+            'Browse free public broadcast streams by country or category; save favorites', onPublicLiveTv),
           _moreCard(Icons.auto_awesome_rounded, 'Entertainment Studio', 'Calendar, journal, scene memories, editions, media graph and subtitle tools', onEntertainmentStudio),
           _moreCard(Icons.settings_remote_rounded, 'TV Controller', 'Use your phone as the TV remote', onTvController),
           _moreCard(Icons.tv_rounded, 'TV Host', 'Show a pairing code on this TV', onTvHost),
@@ -5344,6 +5381,108 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             SliverToBoxAdapter(
               child: _HomeMediaEntryButtons(settings: settings),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Card(
+                  color: const Color(0xFF171722),
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0x338B7CFF),
+                      child: Icon(Icons.album_rounded, color: Color(0xFF8B7CFF)),
+                    ),
+                    title: const UniversalText('Physical Media'),
+                    subtitle: const UniversalText('Browse imported Blu-ray, DVD, 4K Ultra HD and CD collections'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      settings: const RouteSettings(name: '/app/physical-media'),
+                      builder: (_) => const PhysicalMediaLibraryScreen(),
+                    )),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Card(
+                  color: const Color(0xFF171722),
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0x338B7CFF),
+                      child: Icon(Icons.hub_rounded, color: Color(0xFF8B7CFF)),
+                    ),
+                    title: const UniversalText('Connected Command Center'),
+                    subtitle: const UniversalText('Universal Search, Remote, Movie Night, Media Health, Soundtracks, Recap and account preferences'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      settings: const RouteSettings(name: '/app/connected-command-center'),
+                      builder: (_) => const ConnectedCommandCenterScreen(),
+                    )),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Card(
+                  color: const Color(0xFF203044),
+                  child: ListTile(
+                    leading: const CircleAvatar(backgroundColor: Color(0x338FD9B5), child: Icon(Icons.support_agent_rounded, color: Color(0xFF8FD9B5))),
+                    title: const UniversalText('Customer Support & Tickets'),
+                    subtitle: const UniversalText('Get help, submit a ticket and track support requests'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      settings: const RouteSettings(name: '/app/customer-support'),
+                      builder: (_) => const CustomerSupportScreen(),
+                    )),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Card(
+                  color: const Color(0xFF1D2938),
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0x338B7CFF),
+                      child: Icon(Icons.hub_rounded, color: Color(0xFF9B8CFF)),
+                    ),
+                    title: const UniversalText('Connected Innovation'),
+                    subtitle: const UniversalText('Four implementation phases: access, social, discovery, commerce and reliability'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      settings: const RouteSettings(name: '/app/connected-innovation'),
+                      builder: (_) => const ConnectedInnovationPhasesScreen(),
+                    )),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Card(
+                  color: const Color(0xFF211B35),
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0x33FFD36E),
+                      child: Icon(Icons.layers_rounded, color: Color(0xFFFFD36E)),
+                    ),
+                    title: const UniversalText('Innovation & Platform Hub'),
+                    subtitle: const UniversalText('Platform Expansion, Ultimate Features, Expanded Platform, discovery and roadmap modules in one place'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      settings: const RouteSettings(name: '/app/innovation'),
+                      builder: (_) => const InnovationHubScreen(),
+                    )),
+                  ),
+                ),
+              ),
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -5993,7 +6132,7 @@ class ActivityButton extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             const Icon(Icons.notifications_outlined),
-            if (controller.activity.isNotEmpty)
+            if (controller.unreadActivityCount > 0)
               Positioned(
                 right: -1,
                 top: -1,
@@ -6090,49 +6229,114 @@ class _PremiumSheet extends StatelessWidget {
 }
 
 /// Activity/notification sheet backed by the local account activity feed.
-class _ActivitySheet extends StatelessWidget {
+class _ActivitySheet extends StatefulWidget {
   const _ActivitySheet();
 
   @override
+  State<_ActivitySheet> createState() => _ActivitySheetState();
+}
+
+class _ActivitySheetState extends State<_ActivitySheet> {
+  final AppController _controller = AppController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onActivityChanged);
+    unawaited(_controller.loadActivity());
+  }
+
+  void _onActivityChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onActivityChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final activity = AppController.instance.activity;
+    final activity = _controller.activity;
     return _PremiumSheet(
       title: tr('Notifications'),
-      subtitle: activity.isEmpty ? 'You are all caught up' : 'Recent activity',
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * .55,
-        child: activity.isEmpty
-            ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.notifications_none_rounded,
-                        size: 54, color: Colors.white38),
-                    SizedBox(height: 12),
-                    UniversalText('No activity yet.',
-                        style: TextStyle(color: Colors.white60)),
-                  ],
+      subtitle: activity.isEmpty
+          ? 'You are all caught up'
+          : '${_controller.unreadActivityCount} unread · ${activity.length} recent',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (activity.isNotEmpty)
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _controller.unreadActivityCount == 0
+                      ? null
+                      : _controller.markAllActivityRead,
+                  icon: const Icon(Icons.done_all_rounded, size: 18),
+                  label: const UniversalText('Mark all read'),
                 ),
-              )
-            : ListView.separated(
-                itemCount: activity.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, index) {
-                  final event = activity[index];
-                  return Container(
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _controller.clearActivity,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const UniversalText('Clear all'),
+                ),
+              ],
+            ),
+          if (activity.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 42),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.notifications_none_rounded,
+                      size: 54, color: Colors.white38),
+                  SizedBox(height: 12),
+                  UniversalText('No activity yet.',
+                      style: TextStyle(color: Colors.white60)),
+                  SizedBox(height: 6),
+                  UniversalText('Messages, likes, playback, and other activity will appear here.',
+                      style: TextStyle(color: Colors.white38), textAlign: TextAlign.center),
+                ],
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: activity.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, index) {
+                final event = activity[index];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _controller.markActivityRead(event.id),
+                  child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .045),
+                      color: event.read
+                          ? Colors.white.withValues(alpha: .025)
+                          : const Color(0x22E53935),
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: event.read ? Colors.white10 : Colors.red.withValues(alpha: .25),
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 20,
-                          backgroundColor: Color(0x22FF0000),
-                          child:
-                              Icon(Icons.notifications_none_rounded, size: 20),
+                          backgroundColor: event.read
+                              ? Colors.white10
+                              : const Color(0x22FF0000),
+                          child: Icon(
+                            event.read ? Icons.notifications_none_rounded : Icons.notifications_active_rounded,
+                            size: 20,
+                            color: event.read ? Colors.white54 : Colors.redAccent,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -6140,20 +6344,30 @@ class _ActivitySheet extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(event.title,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w800)),
+                                  style: const TextStyle(fontWeight: FontWeight.w800)),
                               const SizedBox(height: 4),
                               Text(event.action,
-                                  style:
-                                      const TextStyle(color: Colors.white60)),
+                                  style: const TextStyle(color: Colors.white70)),
+                              const SizedBox(height: 5),
+                              Text(
+                                MaterialLocalizations.of(context).formatFullDate(event.timestamp),
+                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              ),
                             ],
                           ),
                         ),
+                        if (!event.read)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8, top: 3),
+                            child: Icon(Icons.circle, size: 8, color: Colors.redAccent),
+                          ),
                       ],
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }
@@ -6361,6 +6575,7 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     'DVD',
     'Blu-ray',
     '4K Ultra HD',
+    'Audio CD',
   ];
 
   static const regions = <String>[
@@ -6385,6 +6600,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   bool importing = false;
   bool verificationPassed = false;
   bool ownershipConfirmed = false;
+  bool rightsBlocked = false;
+  String? rightsBlockReason;
   bool addingToLibrary = false;
   double progress = 0;
   String statusMessage = 'ARM is always enabled for disc imports.';
@@ -6422,6 +6639,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       importing = true;
       progress = 0;
       verificationPassed = false;
+      rightsBlocked = false;
+      rightsBlockReason = null;
       reviewJob = null;
       verification = null;
       statusMessage = 'Connecting to ARM...';
@@ -6450,6 +6669,22 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               );
 
       driveId = drive['id']?.toString() ?? 'arm-auto';
+
+      // Preflight any metadata the connected ARM adapter already exposes.
+      // A missing rights signal is unknown, not a declaration that a disc is
+      // legitimate; explicit blocked signals prevent this app from proceeding.
+      final preflight = await api.scanArmDisc(driveId: driveId!);
+      final scannedDisc = preflight['disc'];
+      if (scannedDisc is Map) {
+        final reason = _rightsBlockReasonFor(
+          Map<String, dynamic>.from(scannedDisc),
+        );
+        if (reason != null) {
+          throw BackendApiException(
+            'We do not allow pirated content in this service. $reason',
+          );
+        }
+      }
 
       final result = await api.startArmImport(driveId: driveId!);
       final job = result['job'];
@@ -6520,14 +6755,19 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
         _prepareReview(map);
       } else if (status == 'rejected' || status == 'failed') {
         _pollTimer?.cancel();
+        final blockReason = _rightsBlockReasonFor(map);
+        final message = map['message']?.toString() ??
+            'Disc rejected by the integrity checks.';
         setState(() {
           importing = false;
           verificationPassed = false;
+          rightsBlocked = blockReason != null ||
+              message.toLowerCase().contains('pirated content');
+          rightsBlockReason = blockReason ?? (rightsBlocked ? message : null);
           verification = map['verification'] is Map
               ? Map<String, dynamic>.from(map['verification'])
               : null;
-          statusMessage = map['message']?.toString() ??
-              'Disc rejected by the integrity checks.';
+          statusMessage = message;
         });
       }
     } catch (_) {
@@ -6536,8 +6776,49 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     }
   }
 
+  String? _rightsBlockReasonFor(Map<String, dynamic> value) {
+    const blockedStatuses = <String>{
+      'pirated', 'piracy_confirmed', 'unauthorized', 'counterfeit',
+      'blocked', 'infringing', 'known_pirated',
+    };
+    const statusKeys = <String>{
+      'rightsStatus', 'rights_status', 'sourceLegitimacy',
+      'source_legitimacy', 'copyrightStatus', 'copyright_status',
+      'contentRightsStatus', 'content_rights_status',
+    };
+    const flagKeys = <String>{
+      'piracyDetected', 'piracy_detected', 'knownPirated',
+      'known_pirated', 'counterfeitDisc', 'counterfeit_disc',
+      'unauthorizedSource', 'unauthorized_source',
+    };
+    for (final entry in value.entries) {
+      final key = entry.key.toString();
+      final raw = entry.value;
+      if (flagKeys.contains(key) && raw == true) {
+        return 'A trusted rights signal marked this disc/source as pirated or unauthorized.';
+      }
+      if (statusKeys.contains(key) &&
+          blockedStatuses.contains(raw.toString().trim().toLowerCase())) {
+        return 'A trusted rights signal marked this disc/source as ${raw.toString()}.';
+      }
+      if (raw is Map) {
+        final nested = _rightsBlockReasonFor(Map<String, dynamic>.from(raw));
+        if (nested != null) return nested;
+      } else if (raw is List) {
+        for (final item in raw) {
+          if (item is Map) {
+            final nested = _rightsBlockReasonFor(Map<String, dynamic>.from(item));
+            if (nested != null) return nested;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   /// Performs `_prepareReview` for this feature. Update this documentation when its contract changes.
   void _prepareReview(Map<String, dynamic> job) {
+    final blockReason = _rightsBlockReasonFor(job);
     final verificationData = job['verification'];
     final discType = job['discType']?.toString();
     final region = job['region']?.toString();
@@ -6584,7 +6865,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       verification = verificationData is Map
           ? Map<String, dynamic>.from(verificationData)
           : null;
-      verificationPassed = verification?['passed'] == true;
+      rightsBlocked = blockReason != null;
+      rightsBlockReason = blockReason;
+      verificationPassed = verification?['passed'] == true && !rightsBlocked;
       detectedDiscTitles = titles;
       selectedDiscTitleIds
         ..clear()
@@ -6619,7 +6902,9 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
           : _strings(sourceMetadata['extras']).isNotEmpty
               ? _strings(sourceMetadata['extras']).join(', ')
               : _strings(job['extras']).join(', ');
-      statusMessage = verificationPassed
+      statusMessage = rightsBlocked
+          ? 'Import blocked: $blockReason We do not allow pirated content in this service.'
+          : verificationPassed
           ? titles.length > 1
               ? 'Disc verified. ARM detected ${titles.length} separate titles on this disc. Review them before adding them to your library.'
               : 'Disc verified. Review the metadata, then click ADD TO LIBRARY.'
@@ -6684,6 +6969,12 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
   /// Performs `_addVerifiedDiscToLibrary` for this feature. Update this documentation when its contract changes.
   Future<void> _addVerifiedDiscToLibrary() async {
     if (addingToLibrary) return;
+    if (rightsBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: UniversalText('We do not allow pirated content in this service. This disc was blocked by a trusted rights signal.'),
+      ));
+      return;
+    }
     if (!verificationPassed || reviewJob == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: UniversalText(
@@ -7054,7 +7345,26 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                   ),
                   const SizedBox(height: 8),
                   const UniversalText(
-                    'ARM stays enabled. Insert a DVD, Blu-ray, or 4K Ultra HD disc and ARM will detect it and perform the extraction automatically.',
+                    'Import movies, TV episodes, and music albums from supported discs. ARM monitors the drive and reports detected titles, tracks, languages, subtitles, chapters, and verification status. Rights checks can block known unauthorized sources; metadata alone cannot prove a disc is legitimate.',
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.redAccent.withValues(alpha: .45)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.gpp_bad_outlined, color: Colors.redAccent),
+                        SizedBox(width: 10),
+                        Expanded(child: Text(
+                          'Copyright protection: We do not allow pirated content in this service. If a trusted rights check flags a disc/source as pirated, counterfeit, or unauthorized, the item is blocked from import. An ownership declaration is still required. Pre-rip stopping depends on the connected ARM worker supporting a pre-extraction rights hook; this app does not bypass DRM or disc copy protection.',
+                        )),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -7158,6 +7468,28 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
               ),
             ),
           ],
+          if (rightsBlocked)
+            Card(
+              color: Colors.red.withValues(alpha: .10),
+              child: const Padding(
+                padding: EdgeInsets.all(18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.block_rounded, color: Colors.redAccent, size: 28),
+                    SizedBox(width: 12),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('IMPORT BLOCKED', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.redAccent)),
+                        SizedBox(height: 6),
+                        Text('We do not allow pirated content in our service. This disc/source was flagged by a rights signal and cannot be added to your library.'),
+                      ],
+                    )),
+                  ],
+                ),
+              ),
+            ),
           if (verification != null)
             Card(
               child: Padding(

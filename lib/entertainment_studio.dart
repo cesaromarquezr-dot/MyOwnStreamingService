@@ -11,7 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_core.dart';
-import 'expanded_platform.dart';
+import 'innovation_features.dart';
 import 'localization.dart';
 import 'media_knowledge.dart';
 import 'music.dart';

@@ -5,7 +5,7 @@
 - Deleted: 0
 
 | Change | File | Bytes | SHA-256 |
-| created | `Backend/database/expanded_platform_phase2.sql` | 9120 | `82fb19a5636cb899da185e772d1f10debead26aee529a7a5a55971d0430d9cac` |
+| created | `Backend/database/consolidated_platform.sql` | 9120 | `82fb19a5636cb899da185e772d1f10debead26aee529a7a5a55971d0430d9cac` |
 | modified | `README.md` | 6406 | `aec98a4074f7bc6e3a963625724f9045cc4eada1edcb585db552161e3fd15115` |
 | created | `docs/EXPANDED_PLATFORM_PHASE2.md` | 4688 | `0faa45434c972faa7d5d77a85a7c666fa01897d240cd5bba1f48ee3a53a17df2` |
 | created | `docs/EXPANDED_PLATFORM_PHASE2_CHANGE_MANIFEST.json` | 1506 | `459aa1065225e701c70f1d128d898bb92b2a170b282f7462ca27654539903b00` |

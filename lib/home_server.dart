@@ -13,6 +13,7 @@ import 'music.dart';
 import 'shop.dart';
 import 'localization.dart';
 import 'entertainment_studio.dart';
+import 'personal_media_server.dart';
 
 /// Displays the authenticated account's home server and its members.
 class HomeServerScreen extends StatefulWidget {
@@ -196,6 +197,23 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                   ),
                 ],
                 const SizedBox(height: 18),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Row(children: [Icon(Icons.video_library_rounded), SizedBox(width: 10), Expanded(child: UniversalText('Personal Media Server', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)))]),
+                      const SizedBox(height: 8),
+                      const UniversalText('Plan a self-hosted setup using an existing computer, NAS, Jellyfin, Plex, or DLNA—then organize your authorized movie, TV, and music library here.'),
+                      const SizedBox(height: 12),
+                      SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalMediaServerScreen())),
+                        icon: const Icon(Icons.tune_rounded),
+                        label: const UniversalText('Configure personal media setup'),
+                      )),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 _infoCard('Architecture', 'Optical drive → ARM → completed media → server importer → database → Flutter. ARM performs ripping; the home server owns the physical media and library storage.', Icons.account_tree_rounded),
                 const SizedBox(height: 10),
                 _statusCard('ARM connection', arm?['connected'] == true, '${arm?['armServerUrl'] ?? 'Not configured'}\nMedia root: ${arm?['mediaRoot'] ?? 'Unknown'}'),

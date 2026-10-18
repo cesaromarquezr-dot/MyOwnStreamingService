@@ -16,8 +16,11 @@ import 'social_video_editor.dart';
 import 'social_sharing.dart';
 import 'social_reels.dart';
 import 'social_story_experience.dart';
+import 'friend_story_profile_viewer.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
+import 'social_detail_pages.dart';
+import 'universal_sharing_hub.dart';
 
 class _SocialPostDraft {
   const _SocialPostDraft({required this.body, this.photo});
@@ -753,6 +756,29 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(child: _profileCountShortcut(
+                      icon: Icons.people_alt_outlined,
+                      label: 'Friends',
+                      value: '$totalFriends',
+                      section: 'Friends',
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: _profileCountShortcut(
+                      icon: Icons.storefront_outlined,
+                      label: 'Following',
+                      value: '${(_data?['followingCount'] as num?)?.toInt() ?? _list('following').length}',
+                      section: 'Following',
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: _profileCountShortcut(
+                      icon: Icons.groups_outlined,
+                      label: 'Communities',
+                      value: '${(_data?['communityCount'] as num?)?.toInt() ?? _list('communities').where((item) => item['joined'] == true).length}',
+                      section: 'Communities',
+                    )),
+                  ]),
                   const SizedBox(height: 14),
                   const UniversalText('Your page combines your social posts, media reviews, shorts, and community shares.',
                     style: TextStyle(color: Colors.white60, height: 1.35),
@@ -828,6 +854,28 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       ),
     );
   }
+
+  Widget _profileCountShortcut({required IconData icon, required String label, required String value, required String section}) =>
+      InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SocialConnectionsScreen(initialSection: section),
+        )),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .04),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(children: [
+            Icon(icon, size: 19, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 5),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          ]),
+        ),
+      );
 
   Future<void> _editMyProfile() async {
     final profile = AppController.instance.currentProfile;
@@ -1451,10 +1499,39 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 ),
               ],
             ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _openPostDetail(post),
+                icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                label: const UniversalText('View discussion'),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openPostDetail(Map<String, dynamic> post) async {
+    final postId = post['id']?.toString() ?? '';
+    if (postId.isEmpty) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SocialPostDetailScreen(postId: postId, initialPost: post),
+    ));
+  }
+
+  Future<void> _openFriendProfile(Map<String, dynamic> friend) async {
+    final accountId = friend['id']?.toString() ?? '';
+    final profileId = friend['profileId']?.toString() ?? '';
+    if (accountId.isEmpty || profileId.isEmpty) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SocialProfileDetailScreen(
+        targetAccountId: accountId,
+        targetProfileId: profileId,
+        initialProfile: friend,
+      ),
+    ));
   }
 
   Widget _socialProductCard(Map<String, dynamic> reference) {
@@ -1570,6 +1647,15 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         tooltip: 'Create group chat with friends',
                         onPressed: _newGroupMessage,
                         icon: const Icon(Icons.group_add_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Share anything, view shared items, polls, and Watch Party plans',
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) => UniversalSharingHubScreen(
+                            conversations: conversations.map((e) => Map<String, dynamic>.from(e)).toList(),
+                          ),
+                        )),
+                        icon: const Icon(Icons.ios_share_rounded),
                       ),
                       IconButton(
                         tooltip: 'New direct message to a friend',
@@ -1703,6 +1789,13 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             children: [
               Row(children: [
                 Expanded(child: Text('Your people • ${friends.length} friends', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const SocialConnectionsScreen(initialSection: 'Friends'),
+                  )),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const UniversalText('View all'),
+                ),
                 FilledButton.icon(onPressed: _addFriend, icon: const Icon(Icons.person_add_alt_1_rounded), label: const UniversalText('Add Friend')),
               ]),
               const SizedBox(height: 10),
@@ -1747,6 +1840,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       leading: _presenceAvatar(friend, name, radius: viewMode == 'Cards' ? 24 : 19),
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+      onTap: () => _openFriendProfile(friend),
       trailing: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
         const Chip(label: UniversalText('Friend')),
         IconButton(tooltip: 'Message', onPressed: () => _startMessageFor(username), icon: const Icon(Icons.chat_bubble_outline_rounded)),
@@ -1775,6 +1869,15 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         }), child: const UniversalText('Approve')),
       ]),
     ));
+  }
+
+  Future<void> _openCommunityDetail(Map<String, dynamic> community) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SocialCommunityDetailScreen(
+        community: Map<String, dynamic>.from(community),
+      ),
+    ));
+    if (mounted) await _load();
   }
 
   Widget _communitiesTab() {
@@ -1842,9 +1945,15 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               final subtitle = <String>[if (category.isNotEmpty) category, if (isJoined) 'Joined', if (currentIsCreator) 'Created by you'].join(' • ');
               if (settings.communitiesViewMode == 'List') {
                 return Card(child: ListTile(
+                  onTap: () => _openCommunityDetail(community),
                   leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
                   title: Text(community['name']?.toString() ?? 'Community'),
-                  subtitle: Text(subtitle.isEmpty ? (community['description']?.toString() ?? '') : subtitle),
+                  subtitle: Text(
+                    '${community['description']?.toString() ?? ''}\n${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts${subtitle.isEmpty ? '' : ' · $subtitle'}',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  isThreeLine: true,
                   trailing: isJoined ? const Chip(label: UniversalText('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const UniversalText('Join')),
                 ));
               }
@@ -1852,14 +1961,21 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 padding: const EdgeInsets.all(12),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   ListTile(
+                    onTap: () => _openCommunityDetail(community),
                     contentPadding: EdgeInsets.zero,
                     leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
                     title: Text(community['name']?.toString() ?? 'Community', style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text('${community['description']?.toString() ?? ''}${subtitle.isEmpty ? '' : '\n$subtitle'}', maxLines: 3, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      '${community['description']?.toString() ?? ''}\n${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts${subtitle.isEmpty ? '' : ' · $subtitle'}',
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    isThreeLine: true,
                     trailing: isJoined ? const Chip(label: UniversalText('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const UniversalText('Join')),
                   ),
                   if (isJoined) ...[
                     Wrap(spacing: 8, children: [
+                      TextButton.icon(onPressed: () => _openCommunityDetail(community), icon: const Icon(Icons.open_in_new_rounded), label: const UniversalText('View community')),
                       TextButton.icon(onPressed: () => _composeCommunityPost(communityId), icon: const Icon(Icons.post_add_rounded), label: const UniversalText('Post')),
                       TextButton.icon(onPressed: () => _composeStory(communityId: communityId), icon: const Icon(Icons.add_circle_outline), label: const UniversalText('Story')),
                     ]),
@@ -3005,11 +3121,17 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   }
 
   void _showStory(Map<String, dynamic> story) {
+    final author = story['author'] is Map
+        ? Map<String, dynamic>.from(story['author'] as Map)
+        : <String, dynamic>{};
+    final authorId = (author['profileId'] ?? author['profile_id'] ?? author['id'])?.toString() ?? '';
     Navigator.push<void>(
       context,
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/story/view'),
-        builder: (_) => StoryViewerScreen(story: story),
+        builder: (_) => authorId.isNotEmpty
+            ? FriendStoryProfileViewer(friend: author)
+            : StoryViewerScreen(story: story),
       ),
     );
   }
@@ -4486,7 +4608,18 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            _presenceAvatar(primaryMember, title),
+            InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _isGroup
+                  ? null
+                  : () {
+                      final friend = Map<String, dynamic>.from(primaryMember);
+                      final profileId = (friend['profileId'] ?? friend['profile_id'] ?? friend['targetProfileId'] ?? friend['target_profile_id'] ?? friend['id'])?.toString() ?? '';
+                      if (profileId.isEmpty) return;
+                      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FriendStoryProfileViewer(friend: friend)));
+                    },
+              child: _presenceAvatar(primaryMember, title),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -5023,36 +5156,83 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         ],
       );
     }
-    if (type == 'product' || type == 'recommendation') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+    if (type == 'product' || type == 'recommendation' ||
+        type == 'shared_item' || type == 'collection' ||
+        type == 'playlist' || type == 'album' || type == 'song' ||
+        type == 'show' || type == 'movie' || type == 'store') {
+      final mediaType = (reference['mediaType'] ?? type).toString().toLowerCase();
+      final mediaId = reference['mediaId']?.toString() ??
+          reference['media_id']?.toString() ?? reference['id']?.toString();
+      final catalogMatches = mediaId == null
+          ? <MediaItem>[]
+          : AppController.instance.library.where((item) => item.id == mediaId).toList();
+      final catalogMatch = catalogMatches.isEmpty ? null : catalogMatches.first;
+      final explicitOwned = reference['isOwned'] ?? reference['owned'] ??
+          reference['is_owned'] ?? reference['hasAccess'];
+      final explicitAvailable = reference['accessEnabled'] ??
+          reference['access_enabled'] ?? reference['isAvailable'];
+      // Ownership/access must come from the recipient's catalog or a server-provided
+      // per-recipient flag. Never infer purchase ownership from a shared link alone.
+      final owned = explicitOwned is bool
+          ? explicitOwned
+          : (explicitAvailable is bool ? explicitAvailable : catalogMatch != null);
+      final title = reference['title']?.toString() ??
+          message['body']?.toString() ?? 'Shared item';
+      final icon = switch (mediaType) {
+        'product' => Icons.shopping_bag_outlined,
+        'store' => Icons.storefront_outlined,
+        'song' || 'album' || 'playlist' || 'music' => Icons.music_note_outlined,
+        'collection' => Icons.collections_bookmark_outlined,
+        'show' || 'tv' || 'episode' => Icons.live_tv_outlined,
+        'movie' || 'film' || 'recommendation' => Icons.movie_outlined,
+        _ => Icons.open_in_new_rounded,
+      };
+      return Container(
+        width: 280,
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: owned ? const Color(0xFF263A36) : const Color(0xFF151A1D),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: owned ? const Color(0xFF4C8A79) : Colors.white12,
+          ),
+        ),
+        child: Opacity(
+          // Unowned items remain readable and tappable for details/save actions.
+          opacity: owned ? 1 : .66,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                type == 'product'
-                    ? Icons.shopping_bag_outlined
-                    : reference['mediaType'] == 'store'
-                        ? Icons.storefront_outlined
-                        : reference['mediaType'] == 'song'
-                            ? Icons.music_note_outlined
-                            : Icons.movie_outlined,
-              ),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  reference['title']?.toString() ??
-                      message['body']?.toString() ??
-                      'Shared item',
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
+              Row(children: [
+                Icon(icon, size: 21),
+                const SizedBox(width: 8),
+                Expanded(child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800))),
+              ]),
+              if (reference['description']?.toString().isNotEmpty == true) ...[
+                const SizedBox(height: 5),
+                Text(reference['description'].toString(), maxLines: 3,
+                  overflow: TextOverflow.ellipsis),
+              ],
+              const SizedBox(height: 8),
+              Row(children: [
+                Icon(owned ? Icons.check_circle_outline : Icons.lock_outline,
+                  size: 15, color: owned ? const Color(0xFF8FE0C5) : Colors.white54),
+                const SizedBox(width: 5),
+                Expanded(child: Text(
+                  owned ? (mediaType == 'product' || mediaType == 'store' ? 'Saved / accessible' : 'Owned or available to you')
+                      : (mediaType == 'product' || mediaType == 'store' ? 'Not saved · details available' : 'Not in your library · preview available'),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                )),
+              ]),
+              if (!owned) ...[
+                const SizedBox(height: 4),
+                const Text('Shared item is still visible to you.',
+                  style: TextStyle(fontSize: 10, color: Colors.white54)),
+              ],
             ],
           ),
-          if (reference['description']?.toString().isNotEmpty == true)
-            Text(reference['description'].toString()),
-        ],
+        ),
       );
     }
     final decorations = <TextDecoration>[
@@ -5280,4 +5460,250 @@ class _TypingDotsState extends State<_TypingDots>
           ],
         ),
       );
+}
+
+
+/// Community detail experience with membership actions and community content.
+/// Join/leave mutations are delegated to the authenticated backend; the page
+/// only changes its local membership state after the mutation succeeds.
+class CommunityDetailPage extends StatefulWidget {
+  const CommunityDetailPage({
+    super.key,
+    required this.community,
+    required this.posts,
+    required this.stories,
+    required this.isJoined,
+    required this.isOwner,
+    required this.onJoin,
+    required this.onLeave,
+    required this.onCreatePost,
+    required this.onCreateStory,
+  });
+
+  final Map<String, dynamic> community;
+  final List<Map<String, dynamic>> posts;
+  final List<Map<String, dynamic>> stories;
+  final bool isJoined;
+  final bool isOwner;
+  final Future<void> Function() onJoin;
+  final Future<void> Function() onLeave;
+  final Future<void> Function() onCreatePost;
+  final Future<void> Function() onCreateStory;
+
+  @override
+  State<CommunityDetailPage> createState() => _CommunityDetailPageState();
+}
+
+class _CommunityDetailPageState extends State<CommunityDetailPage> {
+  late bool _joined;
+  bool _busy = false;
+  String _section = 'Posts';
+
+  @override
+  void initState() {
+    super.initState();
+    _joined = widget.isJoined;
+  }
+
+  Future<void> _membershipAction({required bool join}) async {
+    if (_busy) return;
+    if (!join && widget.isOwner) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Transfer community ownership before leaving.'),
+      ));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      if (join) {
+        await widget.onJoin();
+      } else {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Leave this community?'),
+            content: const Text('You can rejoin later if the community is still available. You will lose access to member-only posts and stories.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Leave community')),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
+        await widget.onLeave();
+      }
+      if (mounted) setState(() => _joined = join);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(join ? 'You joined ${widget.community['name'] ?? 'the community'}.' : 'You left the community.'),
+        ));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final community = widget.community;
+    final name = community['name']?.toString() ?? 'Community';
+    final description = community['description']?.toString().trim() ?? '';
+    final category = (community['category'] ?? 'general').toString();
+    final memberCount = (community['memberCount'] as num?)?.toInt() ?? 0;
+    final postCount = (community['postCount'] as num?)?.toInt() ?? widget.posts.length;
+    final createdAt = DateTime.tryParse((community['created_at'] ?? '').toString());
+    final categoryIcon = switch (category.toLowerCase()) {
+      'movies' => Icons.movie_creation_outlined,
+      'shows' => Icons.live_tv_rounded,
+      'music' => Icons.music_note_rounded,
+      _ => Icons.groups_rounded,
+    };
+
+    return Scaffold(
+      body: CustomScrollView(slivers: [
+        SliverAppBar(
+          pinned: true,
+          expandedHeight: 220,
+          title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF32215D), Color(0xFF6A3CA0), Color(0xFF171B36)],
+                ),
+              ),
+              child: SafeArea(child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 62, 24, 20),
+                child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  CircleAvatar(radius: 28, backgroundColor: Colors.white.withValues(alpha: .16), child: Icon(categoryIcon, size: 30, color: Colors.white)),
+                  const SizedBox(height: 10),
+                  Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text('${category.isEmpty ? 'General' : '${category[0].toUpperCase()}${category.substring(1)}'} community • ${community['visibility'] == 'private' ? 'Private' : 'Public'}', style: const TextStyle(color: Colors.white70)),
+                ]),
+              )),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (description.isNotEmpty) Text(description, style: Theme.of(context).textTheme.bodyLarge),
+            if (description.isNotEmpty) const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: _CommunityStat(icon: Icons.people_alt_outlined, value: _compactCount(memberCount), label: 'Members')),
+              const SizedBox(width: 10),
+              Expanded(child: _CommunityStat(icon: Icons.article_outlined, value: _compactCount(postCount), label: 'Posts')),
+              const SizedBox(width: 10),
+              Expanded(child: _CommunityStat(icon: Icons.auto_awesome_outlined, value: '${widget.stories.length}', label: 'Stories')),
+            ]),
+            const SizedBox(height: 16),
+            SizedBox(width: double.infinity, child: _joined
+                ? OutlinedButton.icon(
+                    onPressed: _busy || widget.isOwner ? null : () => _membershipAction(join: false),
+                    icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check_circle_outline),
+                    label: Text(widget.isOwner ? 'Owner' : 'Joined · Leave community'),
+                  )
+                : FilledButton.icon(
+                    onPressed: _busy ? null : () => _membershipAction(join: true),
+                    icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.group_add_outlined),
+                    label: const Text('Join community'),
+                  )),
+            if (_joined) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(onPressed: _busy ? null : () async { await widget.onCreatePost(); }, icon: const Icon(Icons.post_add_rounded), label: const Text('Create post'))),
+                const SizedBox(width: 8),
+                Expanded(child: OutlinedButton.icon(onPressed: _busy ? null : () async { await widget.onCreateStory(); }, icon: const Icon(Icons.add_circle_outline), label: const Text('Add story'))),
+              ]),
+            ],
+            const SizedBox(height: 18),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'Posts', label: Text('Posts'), icon: Icon(Icons.forum_outlined)),
+                ButtonSegment(value: 'About', label: Text('About'), icon: Icon(Icons.info_outline)),
+              ],
+              selected: {_section},
+              onSelectionChanged: (selection) => setState(() => _section = selection.first),
+            ),
+            const SizedBox(height: 12),
+          ]),
+        )),
+        if (_section == 'About') SliverToBoxAdapter(child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('About this community', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            const SizedBox(height: 12),
+            _CommunityAboutRow(icon: Icons.category_outlined, label: 'Category', value: category),
+            _CommunityAboutRow(icon: Icons.public_outlined, label: 'Visibility', value: community['visibility']?.toString() ?? 'public'),
+            _CommunityAboutRow(icon: Icons.calendar_today_outlined, label: 'Created', value: createdAt == null ? 'Date unavailable' : '${createdAt.day}/${createdAt.month}/${createdAt.year}'),
+            _CommunityAboutRow(icon: Icons.admin_panel_settings_outlined, label: 'Moderation', value: 'Follow community rules and keep discussions respectful.'),
+          ]))),
+        )) else if (!_joined) SliverToBoxAdapter(child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
+            const Icon(Icons.lock_outline_rounded, size: 34),
+            const SizedBox(height: 8),
+            const Text('Join the community to participate', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Join to create posts and stories and take part in the conversation.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+          ]))),
+        )) else if (widget.posts.isEmpty && widget.stories.isEmpty) SliverToBoxAdapter(child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(children: [const Icon(Icons.forum_outlined, size: 42), const SizedBox(height: 8), const Text('No posts yet', style: TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), const Text('Be the first to start a conversation.')]),
+        )) else SliverList(delegate: SliverChildListDelegate([
+          if (_joined && widget.stories.isNotEmpty) ...[
+            const Padding(padding: EdgeInsets.fromLTRB(16, 4, 16, 8), child: Text('Community stories', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+            SizedBox(height: 104, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), children: widget.stories.map((story) {
+              final author = story['author'] is Map ? Map<String, dynamic>.from(story['author'] as Map) : <String, dynamic>{};
+              final label = (author['display_name'] ?? author['username'] ?? 'Member').toString();
+              return SizedBox(width: 90, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const CircleAvatar(child: Icon(Icons.auto_awesome)), const SizedBox(height: 5), Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))]))));
+            }).toList())),
+          ],
+          if (_joined) ...widget.posts.map((post) {
+            final author = post['author'] is Map ? Map<String, dynamic>.from(post['author'] as Map) : <String, dynamic>{};
+            final authorName = (author['display_name'] ?? author['displayName'] ?? author['username'] ?? 'Community member').toString();
+            final body = (post['body'] ?? post['content'] ?? '').toString();
+            final date = DateTime.tryParse((post['created_at'] ?? '').toString());
+            return Card(margin: const EdgeInsets.fromLTRB(16, 4, 16, 8), child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [const CircleAvatar(radius: 17, child: Icon(Icons.person_outline, size: 18)), const SizedBox(width: 9), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(authorName, style: const TextStyle(fontWeight: FontWeight.w800)), Text(date == null ? 'Community post' : '${date.day}/${date.month}/${date.year}', style: Theme.of(context).textTheme.bodySmall)]))]),
+              if (body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(body)),
+            ])));
+          }),
+        ])),
+      ]),
+    );
+  }
+
+  String _compactCount(int value) {
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(value >= 10000000 ? 0 : 1)}M';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1)}K';
+    return '$value';
+  }
+}
+
+class _CommunityStat extends StatelessWidget {
+  const _CommunityStat({required this.icon, required this.value, required this.label});
+  final IconData icon;
+  final String value;
+  final String label;
+  @override
+  Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6), child: Column(children: [Icon(icon, size: 20), const SizedBox(height: 6), Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), Text(label, style: Theme.of(context).textTheme.bodySmall)])));
+}
+
+class _CommunityAboutRow extends StatelessWidget {
+  const _CommunityAboutRow({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [Icon(icon, size: 19), const SizedBox(width: 10), SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))), Expanded(child: Text(value))]));
 }

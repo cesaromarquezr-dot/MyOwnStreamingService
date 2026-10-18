@@ -502,3 +502,26 @@ without changing the conceptual library model.
 
 ARM is therefore treated as an ingestion source rather than as the identity
 system for the entire media library.
+
+## Copyright / unauthorized-disc gate
+
+`media_rights_policy.dart` rejects explicit trusted rights signals such as
+`rightsStatus: pirated`, `sourceLegitimacy: counterfeit`, or
+`piracyDetected: true`. The ARM service marks matching jobs as rejected, and
+the library-import route refuses to index metadata carrying those blocked
+signals. The Flutter Import / Rip screen displays the service policy and
+refuses to add flagged items to the library.
+
+This policy is a gate, not a piracy classifier. A disc's title, barcode,
+region, metadata, or successful verification cannot by itself prove that the
+physical disc is legitimate. Missing rights signals remain unknown. Only a
+trusted rights-screening adapter should populate the block fields.
+
+**Pre-rip enforcement requirement:** the current ARM integration observes an
+external ARM worker whose workflow may begin extraction automatically. This
+application-side gate can reject a flagged job and prevent library import,
+but cannot guarantee that extraction stops before it starts unless the ARM
+worker itself invokes the same rights policy before starting its rip. Do not
+advertise pre-rip prevention as complete until that worker hook exists and is
+verified against real hardware. The service must not bypass DRM or disc
+copy-protection controls.

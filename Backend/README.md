@@ -70,9 +70,9 @@ Open **More → Hey Marathon** to create a timed movie or TV marathon from the c
 
 ## Expanded platform capabilities
 
-The next set of additions (proactive Hey Media suggestions, custom media spaces, franchise viewing orders, metadata provenance, NAS health, integrations, and recovery foundations) is documented in [`docs/EXPANDED_PLATFORM_PHASE2.md`](docs/EXPANDED_PLATFORM_PHASE2.md). Its additive migration is `Backend/database/expanded_platform_phase2.sql`. These are foundations and roadmap entries, not a claim that all integrations are complete.
+The next set of additions (proactive Hey Media suggestions, custom media spaces, franchise viewing orders, metadata provenance, NAS health, integrations, and recovery foundations) is documented in [`docs/EXPANDED_PLATFORM_PHASE2.md`](docs/EXPANDED_PLATFORM_PHASE2.md). Its additive migration is `Backend/database/consolidated_platform.sql`. These are foundations and roadmap entries, not a claim that all integrations are complete.
 
-The next-wave shared foundation is documented in [`docs/EXPANDED_PLATFORM_IMPLEMENTATION.md`](docs/EXPANDED_PLATFORM_IMPLEMENTATION.md). It includes typed Flutter capability metadata and an additive Supabase migration in `Backend/database/expanded_platform_features.sql`. Podcasts and audiobooks are intentionally excluded from the product scope.
+The next-wave shared foundation is documented in [`docs/EXPANDED_PLATFORM_IMPLEMENTATION.md`](docs/EXPANDED_PLATFORM_IMPLEMENTATION.md). It includes typed Flutter capability metadata and an additive Supabase migration in `Backend/database/consolidated_platform.sql`. Podcasts and audiobooks are intentionally excluded from the product scope.
 
 The general product foundations added in Phase 3 are documented in [`docs/PLATFORM_FOUNDATIONS_ARCHITECTURE.md`](docs/PLATFORM_FOUNDATIONS_ARCHITECTURE.md), with owner-scoped collector-edition and recommendation-feedback tables in `Backend/database/expanded_platform_phase3.sql`. This adds source-level foundations and contracts; it does not mean the full gateway, AI orchestration, payments, or NAS health workers are complete.
 
@@ -82,4 +82,7 @@ The project includes profile-scoped playback preferences, device-local QoE diagn
 
 ## Production readiness, privacy, and recovery
 
-See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_AND_RELIABILITY.md) for the rollout steps covering privacy-aware presence/diagnostics, owner-gated operations probes, accessibility, offline progress sync, Hey Media action confirmation, CI quality gates, encrypted database backups, and TrueNAS recovery boundaries. Use [`docs/RECOVERY_DRILL_CHECKLIST.md`](docs/RECOVERY_DRILL_CHECKLIST.md) for scheduled restoration drills. Apply `Backend/database/production_readiness_and_privacy.sql` only after a verified backup and the existing base/account migrations.
+See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_AND_RELIABILITY.md) for the rollout steps covering privacy-aware presence/diagnostics, owner-gated operations probes, accessibility, offline progress sync, Hey Media action confirmation, CI quality gates, encrypted database backups, and TrueNAS recovery boundaries. Use [`docs/RECOVERY_DRILL_CHECKLIST.md`](docs/RECOVERY_DRILL_CHECKLIST.md) for scheduled restoration drills. Apply `Backend/database/consolidated_platform.sql` only after a verified backup and the existing base/account migrations.
+
+## Customer support and ticket management
+The authenticated support ticket API is documented in `../CUSTOMER_SUPPORT_IIS_ACTIVE_DIRECTORY_UPDATE.md`. Configure Supabase and apply `lib/supabase/migrations/20261016_support_ticketing.sql` before enabling ticket persistence. Set `SUPPORT_ADMIN_ACCOUNT_IDS` on the backend host to a comma-separated list of authorized support-staff account IDs; never put this setting in the Flutter client. IIS and Active Directory deployment guidance is in `../deploy/iis/` and `../deploy/active-directory/`.

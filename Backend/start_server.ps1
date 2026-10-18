@@ -21,7 +21,9 @@ if (-not [string]::IsNullOrWhiteSpace($publishableKey)) {
     $env:SUPABASE_PUBLISHABLE_KEY = $publishableKey
 }
 # Never inherit the local seeded server catalog into a persistent deployment.
-$env:PLATFORM_SERVER_MOCK = "false"
+if ([string]::IsNullOrWhiteSpace($env:PLATFORM_SERVER_MOCK)) {
+    $env:PLATFORM_SERVER_MOCK = "false"
+}
 if ([string]::IsNullOrWhiteSpace($env:TLS_CERTIFICATE_PATH)) {
     $env:TLS_CERTIFICATE_PATH = Join-Path $PSScriptRoot "certs\127.0.0.1+2.pem"
 }

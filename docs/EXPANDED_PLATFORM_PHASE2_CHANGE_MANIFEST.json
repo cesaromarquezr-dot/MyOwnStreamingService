@@ -13,7 +13,7 @@
   },
   "files": [
     {
-      "path": "Backend/database/expanded_platform_phase2.sql",
+      "path": "Backend/database/consolidated_platform.sql",
       "change": "created",
       "bytes": 9120,
       "sha256": "82fb19a5636cb899da185e772d1f10debead26aee529a7a5a55971d0430d9cac"

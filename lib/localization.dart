@@ -93,8 +93,198 @@ class LanguageController extends ChangeNotifier {
 }
 
 /// Reusable language picker intended to be placed in any app bar or menu.
-class LanguagePicker extends StatelessWidget {
+///
+/// This control uses an OverlayEntry rather than PopupMenuButton because the
+/// app-wide picker is rendered in an OverlayEntry beside the Navigator. A
+/// PopupMenuButton needs a Navigator ancestor and can therefore appear to do
+/// nothing when used by that global picker.
+class LanguagePicker extends StatefulWidget {
   const LanguagePicker({super.key});
+
+  @override
+  State<LanguagePicker> createState() => _LanguagePickerState();
+}
+
+class _LanguagePickerState extends State<LanguagePicker> {
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _menuEntry;
+  bool _openAbove = false;
+  bool _alignRight = false;
+
+  bool get _isOpen => _menuEntry != null;
+
+  void _toggleMenu() {
+    if (_isOpen) {
+      _hideMenu();
+      return;
+    }
+
+    final renderObject = context.findRenderObject();
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      final origin = renderObject.localToGlobal(Offset.zero);
+      final bottom = origin.dy + renderObject.size.height;
+      final screen = MediaQuery.sizeOf(context);
+      _openAbove = bottom > screen.height * 0.58;
+      _alignRight = origin.dx + renderObject.size.width > screen.width * 0.62;
+    }
+
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      debugPrint('Language picker could not find an Overlay.');
+      return;
+    }
+
+    _menuEntry = OverlayEntry(
+      builder: (overlayContext) {
+        final viewportHeight = MediaQuery.sizeOf(overlayContext).height;
+        final maxMenuHeight = (viewportHeight * 0.62)
+            .clamp(180.0, 460.0)
+            .toDouble();
+        final currentCode = LanguageController.instance.current.code;
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _hideMenu,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              targetAnchor: _openAbove
+                  ? (_alignRight ? Alignment.topRight : Alignment.topLeft)
+                  : (_alignRight ? Alignment.bottomRight : Alignment.bottomLeft),
+              followerAnchor: _openAbove
+                  ? (_alignRight ? Alignment.bottomRight : Alignment.bottomLeft)
+                  : (_alignRight ? Alignment.topRight : Alignment.topLeft),
+              offset: Offset(
+                _alignRight ? -6 : 0,
+                _openAbove ? -8 : 8,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                elevation: 16,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 264,
+                  constraints: BoxConstraints(maxHeight: maxMenuHeight),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF181820),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black54,
+                        blurRadius: 22,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shrinkWrap: true,
+                    itemCount: LanguageController.languages.length,
+                    separatorBuilder: (_, __) => const Divider(
+                      height: 1,
+                      indent: 14,
+                      endIndent: 14,
+                      color: Colors.white10,
+                    ),
+                    itemBuilder: (itemContext, index) {
+                      final item = LanguageController.languages[index];
+                      final selected = item.code == currentCode;
+                      return InkWell(
+                        onTap: () => _selectLanguage(item),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(item.flag, style: const TextStyle(fontSize: 20)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      item.nativeName,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: selected
+                                            ? FontWeight.w800
+                                            : FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.englishName,
+                                      style: const TextStyle(
+                                        color: Colors.white60,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (selected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: Color(0xFF8FE3A2),
+                                  size: 19,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    overlay.insert(_menuEntry!);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _selectLanguage(AppLanguage language) async {
+    _hideMenu();
+    try {
+      await LanguageController.instance.set(language);
+    } catch (error) {
+      // The in-memory language change is applied before persistence is tried.
+      // Keep the picker usable when local preference storage is unavailable.
+      debugPrint('Could not persist app language preference: $error');
+    }
+  }
+
+  void _hideMenu() {
+    final entry = _menuEntry;
+    if (entry == null) return;
+    _menuEntry = null;
+    entry.remove();
+    entry.dispose();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    final entry = _menuEntry;
+    _menuEntry = null;
+    if (entry != null) {
+      entry.remove();
+      entry.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,41 +293,48 @@ class LanguagePicker extends StatelessWidget {
       builder: (_, __) {
         final language = LanguageController.instance.current;
 
-        return PopupMenuButton<AppLanguage>(
-          tooltip: universalTranslate('Language'),
-          onSelected: LanguageController.instance.set,
-          itemBuilder: (_) {
-            return [
-              for (final item in LanguageController.languages)
-                PopupMenuItem<AppLanguage>(
-                  value: item,
-                  child: Row(
-                    children: [
-                      Text(item.flag),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(item.nativeName),
-                      ),
-                    ],
+        return CompositedTransformTarget(
+          link: _layerLink,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _toggleMenu,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                margin: const EdgeInsets.only(right: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .07),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _isOpen ? Colors.white30 : Colors.transparent,
                   ),
                 ),
-            ];
-          },
-          child: Container(
-            margin: const EdgeInsets.only(right: 10),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 8,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .07),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              '${language.flag} ${language.nativeName}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(language.flag),
+                    const SizedBox(width: 6),
+                    Text(
+                      language.nativeName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _isOpen
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: Colors.white70,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
