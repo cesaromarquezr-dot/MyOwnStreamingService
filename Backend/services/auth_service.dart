@@ -195,7 +195,6 @@ class AuthService {
     required String email,
     required String password,
     required SubscriptionPlan plan,
-    required String firstProfileName,
     required String securityQuestion,
     required String securityAnswer,
     required String termsVersion,
@@ -265,13 +264,6 @@ class AuthService {
       throw Exception('Current legal policies must be accepted.');
     }
 
-    if (firstProfileName.trim().isNotEmpty &&
-        firstProfileName.trim().length > Account.maxProfiles) {
-      // This check intentionally does not use the profile count as a name
-      // limit. It is retained only as a defensive upper bound against
-      // pathological input and is followed by normal profile validation below.
-    }
-
     final passwordHash = await _hashPassword(password);
     final securityAnswerHash = await _hashSecurityAnswer(cleanSecurityAnswer);
 
@@ -311,7 +303,7 @@ class AuthService {
         database.saveAccount(account, persist: false);
 
         try {
-          await emailService.welcome(account.email, account.username);
+          await emailService.welcome(account.email);
         } catch (e, stackTrace) {
           // The account has already been durably created. Email delivery is a
           // secondary operation and must not cause the client to retry account
@@ -1479,62 +1471,69 @@ class AuthService {
   // PROFILES
   // ---------------------------------------------------------------------------
 
-  Profile addProfile({
+  Future<Profile> addProfile({
     required Account account,
     required String name,
+    required String username,
     String? avatarUrl,
-  }) {
+  }) async {
     final cleanName = name.trim();
+    final cleanUsername = username.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
 
     if (cleanName.isEmpty) {
-      throw Exception(
-        'Profile name is required.',
-      );
+      throw Exception('Profile name is required.');
     }
-
     if (cleanName.length > 100) {
-      throw Exception(
-        'Profile name is too long.',
-      );
+      throw Exception('Profile name is too long.');
     }
-
     if (!account.canAddProfile) {
-      throw Exception(
-        'You can have a maximum of ${Account.maxProfiles} profiles.',
-      );
+      throw Exception('You can have a maximum of ${Account.maxProfiles} profiles.');
+    }
+    if (account.hasProfile(cleanName)) {
+      throw Exception('A profile with that name already exists.');
+    }
+    if (!RegExp(r'^[a-z0-9_]{3,32}$').hasMatch(cleanUsername)) {
+      throw Exception('Username must be 3–32 characters using letters, numbers, and underscores.');
     }
 
-    if (account.hasProfile(cleanName)) {
-      throw Exception(
-        'A profile with that name already exists.',
-      );
+    // Check every account currently loaded on this server. The case-insensitive
+    // unique index on the shared Supabase profiles table is the final authority
+    // across concurrent requests and any app servers sharing that database.
+    for (final existingAccount in database.accountsById.values) {
+      for (final existingProfile in existingAccount.profiles) {
+        if (existingProfile.username?.trim().toLowerCase() == cleanUsername) {
+          throw Exception('This username is taken');
+        }
+      }
     }
 
     final cleanAvatarUrl = avatarUrl?.trim();
-
     if (cleanAvatarUrl != null && cleanAvatarUrl.length > 2048) {
-      throw Exception(
-        'Avatar URL is too long.',
-      );
+      throw Exception('Avatar URL is too long.');
     }
 
     final profile = Profile(
       id: _generateId('profile'),
       name: cleanName,
-      avatarUrl: cleanAvatarUrl == null || cleanAvatarUrl.isEmpty
-          ? null
-          : cleanAvatarUrl,
+      username: cleanUsername,
+      avatarUrl: cleanAvatarUrl == null || cleanAvatarUrl.isEmpty ? null : cleanAvatarUrl,
     );
 
-    account.addExistingProfile(
-      profile,
-    );
-
-    database.saveAccount(
-      account,
-    );
-
-    return profile;
+    account.addExistingProfile(profile);
+    try {
+      await database.persistAccountAndWait(account);
+      database.saveAccount(account, persist: false);
+      return profile;
+    } catch (error) {
+      account.profiles.removeWhere((item) => item.id == profile.id);
+      final details = error.toString().toLowerCase();
+      if (details.contains('profiles_username_ci_unique') ||
+          (details.contains('duplicate key') && details.contains('username')) ||
+          (details.contains('23505') && details.contains('username'))) {
+        throw Exception('This username is taken');
+      }
+      rethrow;
+    }
   }
 
   void removeProfile({

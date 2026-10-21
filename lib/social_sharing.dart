@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
@@ -15,7 +15,8 @@ Future<void> showSocialShareDialog(
   final profile = AppController.instance.currentProfile;
   if (profile == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: UniversalText('Select a profile before sharing.')),
+      const SnackBar(
+          content: UniversalText('Select a profile before sharing.')),
     );
     return;
   }
@@ -68,7 +69,8 @@ Future<void> showSocialShareDialog(
                   Flexible(
                     child: conversations.isEmpty
                         ? const Center(
-                            child: UniversalText('Start a chat before sharing to conversations.',
+                            child: UniversalText(
+                              'Start a chat before sharing to conversations.',
                             ),
                           )
                         : ListView(
@@ -82,8 +84,7 @@ Future<void> showSocialShareDialog(
                                     conversation['id']?.toString(),
                                   ),
                                   onChanged: (enabled) {
-                                    final id =
-                                        conversation['id']?.toString();
+                                    final id = conversation['id']?.toString();
                                     if (id == null || id.isEmpty) return;
                                     setDialogState(() {
                                       if (enabled) {
@@ -104,7 +105,9 @@ Future<void> showSocialShareDialog(
                         onPressed: () async {
                           await SharePlus.instance.share(ShareParams(
                             title: title,
-                            text: [title, message].where((value) => value.trim().isNotEmpty).join('\n'),
+                            text: [title, message]
+                                .where((value) => value.trim().isNotEmpty)
+                                .join('\n'),
                           ));
                         },
                         icon: const Icon(Icons.ios_share_outlined),
@@ -204,8 +207,8 @@ class _ConversationOption extends StatelessWidget {
         conversation['sendPolicy'] != 'admins_only') {
       return true;
     }
-    final members = (conversation['members'] as List? ?? const [])
-        .whereType<Map>();
+    final members =
+        (conversation['members'] as List? ?? const []).whereType<Map>();
     return members.any((member) {
       if (member['isSelf'] != true ||
           member['profileId']?.toString() != profileId) {
@@ -225,7 +228,9 @@ class _ConversationOption extends StatelessWidget {
       title: Text(_conversationName(conversation)),
       subtitle: Text(
         enabled
-            ? (conversation['kind'] == 'group' ? 'Group chat' : 'Direct message')
+            ? (conversation['kind'] == 'group'
+                ? 'Group chat'
+                : 'Direct message')
             : 'Only group admins can send messages',
       ),
       secondary: Icon(

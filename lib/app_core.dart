@@ -62,7 +62,31 @@ class MediaItem {
   final String type;
   final String? imageUrl;
   final String? description;
+
+  /// Original release year for a movie, or the first-air year for a series.
   final int? releaseYear;
+
+  /// Optional edition-specific release year (e.g. a later theatrical re-release).
+  final int? editionReleaseYear;
+
+  /// Display name for a cut/version, e.g. `Encore Edition` or `Director's Cut`.
+  final String? editionName;
+
+  /// Normalized edition category, e.g. `theatrical`, `extended`, `director-cut`, `rerelease`.
+  final String? editionType;
+
+  /// Shared work ID across distinct editions of the same underlying movie.
+  final String? canonicalWorkId;
+
+  /// Explicit edition-only additions, such as extra scenes or alternate endings.
+  final List<String> editionFeatures;
+
+  /// Explicit TV series run years. If absent, season/episode dates are used as fallbacks.
+  final int? seriesStartYear;
+  final int? seriesEndYear;
+
+  /// True when the series has not concluded; displays `Present` as the end year.
+  final bool seriesOngoing;
 
   /// Official/provider/critic rating (IMDb, Rotten Tomatoes, etc.).
   final double? rating;
@@ -75,6 +99,7 @@ class MediaItem {
   /// Provider ratings are kept as separate source records; they are not combined.
   final List<Map<String, dynamic>> externalRatings;
   final double? userRatingStars;
+
   /// Authorized media-gateway URL for adaptive HLS/DASH or progressive playback.
   /// Never set this to a raw NAS filesystem path.
   final String? playbackUrl;
@@ -123,6 +148,7 @@ class MediaItem {
   final List<String> music;
   final List<String> genres;
   final List<String> tags;
+
   /// Production studios and companies discovered by the content intelligence/import pipeline.
   final List<String> studios;
   final List<String> companies;
@@ -131,8 +157,10 @@ class MediaItem {
   final List<String> subtitles;
   final List<String> extras;
   final List<Map<String, dynamic>> xrayEvents;
+
   /// Indexed TV opening sequences; offsets are bound to the exact media version.
   final List<Map<String, dynamic>> tvIntros;
+
   /// Version/edition identity that anchors version-specific X-Ray offsets.
   final String? mediaVersionId;
 
@@ -187,6 +215,14 @@ class MediaItem {
     this.imageUrl,
     this.description,
     this.releaseYear,
+    this.editionReleaseYear,
+    this.editionName,
+    this.editionType,
+    this.canonicalWorkId,
+    List<String>? editionFeatures,
+    this.seriesStartYear,
+    this.seriesEndYear,
+    this.seriesOngoing = false,
     this.rating,
     this.ratingReason,
     this.audienceRating,
@@ -194,6 +230,7 @@ class MediaItem {
     List<Map<String, dynamic>>? externalRatings,
     this.userRatingStars,
   })  : externalRatings = externalRatings ?? const <Map<String, dynamic>>[],
+        editionFeatures = editionFeatures ?? const <String>[],
         addedAt = addedAt ?? DateTime.now(),
         seasons = seasons ?? <Map<String, dynamic>>[],
         actors = actors ?? <String>[],
@@ -226,105 +263,210 @@ class MediaItem {
   bool get hasEligibleMerchandise => eligibleMerchandiseProductIds.isNotEmpty;
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
+    // Some server/catalog endpoints wrap extended fields inside `metadata`.
+    // Merge nested metadata first so explicit top-level values remain authoritative.
+    final data = <String, dynamic>{
+      if (json['metadata'] is Map)
+        ...Map<String, dynamic>.from(json['metadata'] as Map),
+      ...json,
+    };
     return MediaItem(
-      id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
-      type: json['type']?.toString() ?? 'movie',
-      imageUrl: json['imageUrl']?.toString(),
-      description: json['description']?.toString(),
-      releaseYear: json['releaseYear'] is int
-          ? json['releaseYear'] as int
-          : int.tryParse(
-              json['releaseYear']?.toString() ?? '',
-            ),
-      rating: json['rating'] is num
-          ? (json['rating'] as num).toDouble()
+      id: data['id']?.toString() ?? '',
+      title: data['title']?.toString() ?? '',
+      type: data['type']?.toString() ?? 'movie',
+      imageUrl: (data['imageUrl'] ?? data['posterUrl'])?.toString(),
+      description: data['description']?.toString(),
+      releaseYear: _intValue(data['releaseYear'] ?? data['year']),
+      editionReleaseYear: _intValue(data['editionReleaseYear']),
+      editionName: data['editionName']?.toString(),
+      editionType: data['editionType']?.toString(),
+      canonicalWorkId: data['canonicalWorkId']?.toString(),
+      editionFeatures: _stringList(data['editionFeatures']),
+      seriesStartYear: _intValue(data['seriesStartYear']),
+      seriesEndYear: _intValue(data['seriesEndYear']),
+      seriesOngoing: data['seriesOngoing'] == true,
+      rating: data['rating'] is num
+          ? (data['rating'] as num).toDouble()
           : double.tryParse(
-              json['rating']?.toString() ?? '',
+              data['rating']?.toString() ?? '',
             ),
-      ratingReason: json['ratingReason']?.toString(),
-      audienceRating: json['audienceRating'] is num
-          ? (json['audienceRating'] as num).toDouble()
-          : double.tryParse(json['audienceRating']?.toString() ?? ''),
-      audienceReviewCount: json['audienceReviewCount'] is num
-          ? (json['audienceReviewCount'] as num).toInt()
-          : int.tryParse(json['audienceReviewCount']?.toString() ?? '') ?? 0,
-      externalRatings: json['externalRatings'] is List
-          ? (json['externalRatings'] as List)
+      ratingReason: data['ratingReason']?.toString(),
+      audienceRating: data['audienceRating'] is num
+          ? (data['audienceRating'] as num).toDouble()
+          : double.tryParse(data['audienceRating']?.toString() ?? ''),
+      audienceReviewCount: data['audienceReviewCount'] is num
+          ? (data['audienceReviewCount'] as num).toInt()
+          : int.tryParse(data['audienceReviewCount']?.toString() ?? '') ?? 0,
+      externalRatings: data['externalRatings'] is List
+          ? (data['externalRatings'] as List)
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList()
           : const <Map<String, dynamic>>[],
-      userRatingStars: json['userRatingStars'] is num
-          ? (json['userRatingStars'] as num).toDouble()
-          : double.tryParse(json['userRatingStars']?.toString() ?? ''),
-      playbackUrl: json['playbackUrl']?.toString() ?? json['streamingUrl']?.toString(),
-      trailerUrl: json['trailerUrl']?.toString(),
-      addedAt: DateTime.tryParse(json['addedAt']?.toString() ?? ''),
-      addedByProfileId: json['addedByProfileId']?.toString(),
-      addedByProfileName: json['addedByProfileName']?.toString(),
-      addedSource: json['addedSource']?.toString() ?? 'unknown',
-      discType: json['discType']?.toString(),
-      discRegion: json['discRegion']?.toString(),
-      discCollectionId: json['discCollectionId']?.toString(),
-      discCollectionTitle: json['discCollectionTitle']?.toString(),
-      discNumber: json['discNumber'] is num
-          ? (json['discNumber'] as num).toInt()
-          : int.tryParse(json['discNumber']?.toString() ?? ''),
-      discTitleId: json['discTitleId']?.toString(),
-      discTitle: json['discTitle']?.toString(),
-      discMarketCountry: json['discMarketCountry']?.toString(),
-      originalTitle: json['originalTitle']?.toString(),
-      originalLanguage: json['originalLanguage']?.toString(),
-      countryOfOrigin: json['countryOfOrigin']?.toString(),
-      canonicalTitle: json['canonicalTitle']?.toString(),
-      language: json['language']?.toString(),
-      adaptationGroupId: json['adaptationGroupId']?.toString(),
-      adaptationGroupName: json['adaptationGroupName']?.toString(),
-      relationshipTypes: _stringList(json['relationshipTypes']),
-      accessibleProfileIds: _stringList(json['accessibleProfileIds']),
+      userRatingStars: data['userRatingStars'] is num
+          ? (data['userRatingStars'] as num).toDouble()
+          : double.tryParse(data['userRatingStars']?.toString() ?? ''),
+      playbackUrl:
+          data['playbackUrl']?.toString() ?? data['streamingUrl']?.toString(),
+      trailerUrl: data['trailerUrl']?.toString(),
+      addedAt: DateTime.tryParse(data['addedAt']?.toString() ?? ''),
+      addedByProfileId: data['addedByProfileId']?.toString(),
+      addedByProfileName: data['addedByProfileName']?.toString(),
+      addedSource: data['addedSource']?.toString() ?? 'unknown',
+      discType: data['discType']?.toString(),
+      discRegion: data['discRegion']?.toString(),
+      discCollectionId: data['discCollectionId']?.toString(),
+      discCollectionTitle: data['discCollectionTitle']?.toString(),
+      discNumber: data['discNumber'] is num
+          ? (data['discNumber'] as num).toInt()
+          : int.tryParse(data['discNumber']?.toString() ?? ''),
+      discTitleId: data['discTitleId']?.toString(),
+      discTitle: data['discTitle']?.toString(),
+      discMarketCountry: data['discMarketCountry']?.toString(),
+      originalTitle: data['originalTitle']?.toString(),
+      originalLanguage: data['originalLanguage']?.toString(),
+      countryOfOrigin: data['countryOfOrigin']?.toString(),
+      canonicalTitle: data['canonicalTitle']?.toString(),
+      language: data['language']?.toString(),
+      adaptationGroupId: data['adaptationGroupId']?.toString(),
+      adaptationGroupName: data['adaptationGroupName']?.toString(),
+      relationshipTypes: _stringList(data['relationshipTypes']),
+      accessibleProfileIds: _stringList(data['accessibleProfileIds']),
       eligibleMerchandiseProductIds:
-          _stringList(json['eligibleMerchandiseProductIds']),
-      franchiseId: json['franchiseId']?.toString(),
-      franchiseName: json['franchiseName']?.toString(),
-      franchiseType: json['franchiseType']?.toString(),
-      franchiseOrder: json['franchiseOrder'] is num
-          ? (json['franchiseOrder'] as num).toInt()
-          : int.tryParse(json['franchiseOrder']?.toString() ?? ''),
-      actors: _stringList(json['actors']),
-      directors: _stringList(json['directors']),
-      writers: _stringList(json['writers']),
-      music: _stringList(json['music']),
-      genres: _stringList(json['genres']),
-      tags: _stringList(json['tags']),
-      studios: _stringList(json['studios'] ?? json['productionStudios']),
-      companies: _stringList(json['companies'] ?? json['productionCompanies']),
-      chapters: _stringList(json['chapters']),
-      audioTracks: _stringList(json['audioTracks']),
-      subtitles: _stringList(json['subtitles']),
-      extras: _stringList(json['extras']),
-      tvIntros: json['tvIntros'] is List
-          ? (json['tvIntros'] as List)
+          _stringList(data['eligibleMerchandiseProductIds']),
+      franchiseId: data['franchiseId']?.toString(),
+      franchiseName: data['franchiseName']?.toString(),
+      franchiseType: data['franchiseType']?.toString(),
+      franchiseOrder: data['franchiseOrder'] is num
+          ? (data['franchiseOrder'] as num).toInt()
+          : int.tryParse(data['franchiseOrder']?.toString() ?? ''),
+      actors: _stringList(data['actors']),
+      directors: _stringList(data['directors']),
+      writers: _stringList(data['writers']),
+      music: _stringList(data['music']),
+      genres: _stringList(data['genres']),
+      tags: _stringList(data['tags']),
+      studios: _stringList(data['studios'] ?? data['productionStudios']),
+      companies: _stringList(data['companies'] ?? data['productionCompanies']),
+      chapters: _stringList(data['chapters']),
+      audioTracks: _stringList(data['audioTracks']),
+      subtitles: _stringList(data['subtitles']),
+      extras: _stringList(data['extras']),
+      tvIntros: data['tvIntros'] is List
+          ? (data['tvIntros'] as List)
               .whereType<Map>()
               .map((event) => Map<String, dynamic>.from(event))
               .toList()
           : <Map<String, dynamic>>[],
-      xrayEvents: json['xrayEvents'] is List
-          ? (json['xrayEvents'] as List)
+      xrayEvents: data['xrayEvents'] is List
+          ? (data['xrayEvents'] as List)
               .whereType<Map>()
               .map((event) => Map<String, dynamic>.from(event))
               .toList()
           : <Map<String, dynamic>>[],
-      mediaVersionId:
-          (json['mediaVersionId'] ?? json['versionId'])?.toString(),
-      seasons: (json['seasons'] is List)
-          ? (json['seasons'] as List)
+      mediaVersionId: (data['mediaVersionId'] ?? data['versionId'])?.toString(),
+      seasons: (data['seasons'] is List)
+          ? (data['seasons'] as List)
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList()
           : <Map<String, dynamic>>[],
     );
   }
+
+  static int? _intValue(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  bool get isSeries {
+    final normalized = type.toLowerCase().trim();
+    return normalized == 'tv' ||
+        normalized == 'show' ||
+        normalized == 'tv show' ||
+        normalized == 'tvshow' ||
+        normalized == 'television' ||
+        normalized.startsWith('tv ') ||
+        normalized.contains('series');
+  }
+
+  int? _yearFromMap(Map<String, dynamic> map) {
+    for (final key in const [
+      'releaseYear',
+      'firstAirYear',
+      'airYear',
+      'year',
+      'startYear',
+      'firstAirDate',
+      'airDate',
+      'releaseDate'
+    ]) {
+      final raw = map[key];
+      if (raw is num) {
+        final year = raw.toInt();
+        if (year >= 1800 && year <= 2200) return year;
+        continue;
+      }
+      final value = raw?.toString().trim() ?? '';
+      if (value.isEmpty) continue;
+      final direct = int.tryParse(value);
+      if (direct != null && direct >= 1800 && direct <= 2200) return direct;
+      final match = RegExp(r'^(\d{4})').firstMatch(value);
+      final parsed = int.tryParse(match?.group(1) ?? '');
+      if (parsed != null && parsed >= 1800 && parsed <= 2200) return parsed;
+    }
+    return null;
+  }
+
+  List<int> get _knownSeriesYears {
+    final years = <int>[];
+    for (final season in seasons) {
+      final seasonYear = _yearFromMap(season);
+      if (seasonYear != null) years.add(seasonYear);
+      final episodes = season['episodes'];
+      if (episodes is List) {
+        for (final episode in episodes.whereType<Map>()) {
+          final year = _yearFromMap(Map<String, dynamic>.from(episode));
+          if (year != null) years.add(year);
+        }
+      }
+    }
+    years.sort();
+    return years;
+  }
+
+  /// Year/range used by hero banners, cards, search, and detail metadata.
+  String? get displayYearLabel {
+    if (isSeries) {
+      final years = _knownSeriesYears;
+      final start =
+          seriesStartYear ?? (years.isNotEmpty ? years.first : releaseYear);
+      final end = seriesEndYear ?? (years.isNotEmpty ? years.last : null);
+      if (start == null) return null;
+      if (seriesOngoing) return '$start–Present';
+      if (end != null && end != start) return '$start–$end';
+      return '$start';
+    }
+    final year = editionReleaseYear ?? releaseYear;
+    return year?.toString();
+  }
+
+  String? get displayEditionLabel {
+    final name = editionName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final kind = editionType?.trim();
+    if (kind == null || kind.isEmpty) return null;
+    return switch (kind.toLowerCase()) {
+      'theatrical' => 'Theatrical Edition',
+      'extended' => 'Extended Edition',
+      'director-cut' || 'directors-cut' => "Director's Cut",
+      'rerelease' || 're-release' => 'Re-release',
+      _ => kind,
+    };
+  }
+
+  int? get displaySeasonCount =>
+      isSeries && seasons.isNotEmpty ? seasons.length : null;
 
   static List<String> _stringList(dynamic value) {
     if (value is! List) return <String>[];
@@ -343,6 +485,14 @@ class MediaItem {
       'imageUrl': imageUrl,
       'description': description,
       'releaseYear': releaseYear,
+      'editionReleaseYear': editionReleaseYear,
+      'editionName': editionName,
+      'editionType': editionType,
+      'canonicalWorkId': canonicalWorkId,
+      'editionFeatures': editionFeatures,
+      'seriesStartYear': seriesStartYear,
+      'seriesEndYear': seriesEndYear,
+      'seriesOngoing': seriesOngoing,
       'rating': rating,
       'ratingReason': ratingReason,
       'audienceRating': audienceRating,
@@ -464,20 +614,23 @@ class DescriptionGenerator {
 class Profile {
   final String id;
   String name;
+  String username;
   String? avatarUrl;
   ProfileGovernance governance;
 
   Profile({
     required this.id,
     required this.name,
+    String? username,
     this.avatarUrl,
     this.governance = const ProfileGovernance(),
-  });
+  }) : username = _resolveProfileUsername(username, name);
 
   factory Profile.fromJson(Map<String, dynamic> json) {
     return Profile(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Profile',
+      username: json['username']?.toString(),
       avatarUrl: json['avatarUrl']?.toString(),
       governance: ProfileGovernance.fromJson(
         json['governance'] is Map
@@ -492,10 +645,22 @@ class Profile {
     return {
       'id': id,
       'name': name,
+      'username': username,
       'avatarUrl': avatarUrl,
       'governance': governance.toJson(),
     };
   }
+}
+
+String _resolveProfileUsername(String? username, String name) {
+  final supplied = username?.trim() ?? '';
+  if (supplied.isNotEmpty) return supplied;
+  final normalized = name
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return normalized.isEmpty ? 'profile' : normalized;
 }
 
 /// Implements the `UserAccount` class for this feature or UI component.
@@ -569,8 +734,9 @@ class PageContentCustomization {
   })  : sectionOrder = List<String>.from(sectionOrder),
         hiddenSections = Set<String>.from(hiddenSections ?? const <String>{});
 
-  List<String> get visibleSections =>
-      sectionOrder.where((section) => !hiddenSections.contains(section)).toList();
+  List<String> get visibleSections => sectionOrder
+      .where((section) => !hiddenSections.contains(section))
+      .toList();
 
   PageContentCustomization copy() => PageContentCustomization(
         sectionOrder: sectionOrder,
@@ -592,7 +758,14 @@ class PageContentCustomizationStore {
       'storage',
     ],
     'shop': ['featured', 'related', 'stores', 'media', 'products'],
-    'friends': ['feed', 'reels', 'messages', 'friends', 'communities', 'my-page'],
+    'friends': [
+      'feed',
+      'reels',
+      'messages',
+      'friends',
+      'communities',
+      'my-page'
+    ],
   };
 
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
@@ -614,9 +787,8 @@ class PageContentCustomizationStore {
     if (defaults.isEmpty) {
       return PageContentCustomization(sectionOrder: const <String>[]);
     }
-    final profileId = profile?.id ??
-        AppController.instance.currentProfile?.id ??
-        'default';
+    final profileId =
+        profile?.id ?? AppController.instance.currentProfile?.id ?? 'default';
     final cacheKey = '$profileId:$pageId';
     return _cache.putIfAbsent(cacheKey, () {
       final raw = _preferences?.getString('page_content_$cacheKey');
@@ -655,17 +827,14 @@ class PageContentCustomizationStore {
   }) async {
     final defaults = sectionsFor(pageId);
     if (defaults.isEmpty) return;
-    final profileId = profile?.id ??
-        AppController.instance.currentProfile?.id ??
-        'default';
+    final profileId =
+        profile?.id ?? AppController.instance.currentProfile?.id ?? 'default';
     final allowed = defaults.toSet();
     final order = <String>{
       ...customization.sectionOrder.where(allowed.contains),
       ...defaults,
     }.toList();
-    final hidden = customization.hiddenSections
-        .where(allowed.contains)
-        .toSet();
+    final hidden = customization.hiddenSections.where(allowed.contains).toSet();
     if (hidden.length == order.length) hidden.remove(hidden.first);
 
     final normalized = PageContentCustomization(
@@ -699,6 +868,7 @@ class MediaCollection {
   String? customPosterUrl;
   String? automaticFranchiseId;
   String? automaticFranchiseType;
+
   /// Optional live query used by user-created smart collections.
   /// Supported values: liked_movies, liked_shows, liked_media, watched, unwatched.
   String? smartRule;
@@ -1332,7 +1502,9 @@ class AppController extends ChangeNotifier {
     final accountId = currentAccount?.id;
     final scope = (profileId != null && profileId.isNotEmpty)
         ? 'profile_$profileId'
-        : (accountId != null && accountId.isNotEmpty ? 'account_$accountId' : 'guest');
+        : (accountId != null && accountId.isNotEmpty
+            ? 'account_$accountId'
+            : 'guest');
     return 'moss_activity_feed_$scope';
   }
 
@@ -1526,6 +1698,13 @@ class AppController extends ChangeNotifier {
     // Internal username for compatibility.
     //// The user does not enter or choose this username.
     final username = cleanEmail.split('@').first;
+    final cleanedFirstProfileName = firstProfileName.trim();
+    final firstProfile = Profile(
+      id: _generateId('profile'),
+      name: cleanedFirstProfileName.isEmpty
+          ? 'Profile 1'
+          : cleanedFirstProfileName,
+    );
     final account = UserAccount(
       id: 'local_${DateTime.now().microsecondsSinceEpoch}',
       username: username,
@@ -1534,12 +1713,14 @@ class AppController extends ChangeNotifier {
         plan: plan,
         status: SubscriptionStatus.active,
       ),
-      profiles: <Profile>[],
+      profiles: <Profile>[firstProfile],
     );
 
     currentAccount = account;
-    currentProfile = null;
-    activeProfileIds.clear();
+    currentProfile = firstProfile;
+    activeProfileIds
+      ..clear()
+      ..add(firstProfile.id);
     collections.clear();
     seedCollections();
 
@@ -1559,10 +1740,8 @@ class AppController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> createAccountWithBackend({
     required String email,
-    required String username,
     required String password,
     required SubscriptionPlan plan,
-    required String firstProfileName,
     required String securityQuestion,
     required String securityAnswer,
   }) async {
@@ -1570,9 +1749,7 @@ class AppController extends ChangeNotifier {
 
     final response = await backendApi.signup(
       email: email.trim(),
-      username: username.trim(),
       password: password,
-      firstProfileName: firstProfileName.trim(),
       plan: planValue,
       securityQuestion: securityQuestion,
       securityAnswer: securityAnswer,
@@ -1762,10 +1939,14 @@ class AppController extends ChangeNotifier {
     return context;
   }
 
-  Future<void> claimServer({required String serverId, required String displayName}) async {
-    final data = await backendApi.claimServer(serverId: serverId, displayName: displayName);
+  Future<void> claimServer(
+      {required String serverId, required String displayName}) async {
+    final data = await backendApi.claimServer(
+        serverId: serverId, displayName: displayName);
     final server = data['server'];
-    if (server is! Map) throw BackendApiException('The server assignment response was invalid.');
+    if (server is! Map) {
+      throw BackendApiException('The server assignment response was invalid.');
+    }
     currentServer = PlatformServer.fromJson(Map<String, dynamic>.from(server));
     notifyListeners();
   }
@@ -1773,16 +1954,22 @@ class AppController extends ChangeNotifier {
   Future<void> renameCurrentServer(String displayName) async {
     final data = await backendApi.renameServer(displayName: displayName);
     final server = data['server'];
-    if (server is Map) currentServer = PlatformServer.fromJson(Map<String, dynamic>.from(server));
+    if (server is Map) {
+      currentServer =
+          PlatformServer.fromJson(Map<String, dynamic>.from(server));
+    }
     notifyListeners();
   }
 
   Future<String> ensureDeviceId() async {
-    if (currentDeviceId != null && currentDeviceId!.isNotEmpty) return currentDeviceId!;
+    if (currentDeviceId != null && currentDeviceId!.isNotEmpty) {
+      return currentDeviceId!;
+    }
     final prefs = await SharedPreferences.getInstance();
     currentDeviceId = prefs.getString('platform_device_id');
     if (currentDeviceId == null || currentDeviceId!.isEmpty) {
-      currentDeviceId = 'device_${DateTime.now().microsecondsSinceEpoch}_${DateTime.now().millisecondsSinceEpoch}';
+      currentDeviceId =
+          'device_${DateTime.now().microsecondsSinceEpoch}_${DateTime.now().millisecondsSinceEpoch}';
       await prefs.setString('platform_device_id', currentDeviceId!);
     }
     return currentDeviceId!;
@@ -2160,6 +2347,7 @@ class AppController extends ChangeNotifier {
 
   Profile addProfile(
     String name, {
+    String? username,
     String? avatarUrl,
   }) {
     if (currentAccount == null) {
@@ -2181,6 +2369,7 @@ class AppController extends ChangeNotifier {
       name: cleanedName.isEmpty
           ? 'Profile ${currentAccount!.profiles.length + 1}'
           : cleanedName,
+      username: username,
       avatarUrl: avatarUrl,
     );
 
@@ -2294,7 +2483,8 @@ class AppController extends ChangeNotifier {
         id: 'demo-preview-album',
         title: 'Midnight Signals (Preview Album)',
         type: 'album',
-        description: 'A fictional album used to preview album artwork, metadata, and details layouts. No audio files are attached.',
+        description:
+            'A fictional album used to preview album artwork, metadata, and details layouts. No audio files are attached.',
         releaseYear: 2025,
         genres: const ['Electronic', 'Ambient'],
         tags: const ['demo-preview'],
@@ -2306,7 +2496,8 @@ class AppController extends ChangeNotifier {
         id: 'demo-preview-tv-show',
         title: 'The Last Signal (Preview Show)',
         type: 'tvShow',
-        description: 'A fictional sci-fi mystery series used to preview show details, seasons, and episode layouts. No video files are attached.',
+        description:
+            'A fictional sci-fi mystery series used to preview show details, seasons, and episode layouts. No video files are attached.',
         releaseYear: 2026,
         rating: 8.1,
         genres: const ['Science Fiction', 'Mystery'],
@@ -2317,9 +2508,26 @@ class AppController extends ChangeNotifier {
             'seasonNumber': 1,
             'title': 'Season 1',
             'episodes': [
-              {'episodeNumber': 1, 'title': 'The First Pulse', 'duration': 42, 'description': 'A strange signal interrupts a quiet night.'},
-              {'episodeNumber': 2, 'title': 'Dead Air', 'duration': 44, 'description': 'The team traces the signal to an abandoned relay station.'},
-              {'episodeNumber': 3, 'title': 'Echoes', 'duration': 46, 'description': 'A second transmission reveals a troubling pattern.'},
+              {
+                'episodeNumber': 1,
+                'title': 'The First Pulse',
+                'duration': 42,
+                'description': 'A strange signal interrupts a quiet night.'
+              },
+              {
+                'episodeNumber': 2,
+                'title': 'Dead Air',
+                'duration': 44,
+                'description':
+                    'The team traces the signal to an abandoned relay station.'
+              },
+              {
+                'episodeNumber': 3,
+                'title': 'Echoes',
+                'duration': 46,
+                'description':
+                    'A second transmission reveals a troubling pattern.'
+              },
             ],
           },
         ],
@@ -2345,16 +2553,26 @@ class AppController extends ChangeNotifier {
   Future<void> restoreOfflineMetadataCache({String? profileId}) async {
     final profile = currentProfile;
     final requestedId = profileId?.trim();
-    if (profile == null || requestedId == null || requestedId.isEmpty ||
-        profile.id != requestedId || library.isNotEmpty) {
+    if (profile == null ||
+        requestedId == null ||
+        requestedId.isEmpty ||
+        profile.id != requestedId ||
+        library.isNotEmpty) {
       return;
     }
     try {
       final rows = await OfflineMetadataCache(profileId: requestedId).load();
-      if (rows.isEmpty || currentProfile?.id != requestedId || library.isNotEmpty) return;
+      if (rows.isEmpty ||
+          currentProfile?.id != requestedId ||
+          library.isNotEmpty) {
+        return;
+      }
       final restored = rows
           .map(MediaItem.fromJson)
-          .where((item) => item.id.isNotEmpty && item.title.isNotEmpty && item.isAccessibleTo(currentProfile))
+          .where((item) =>
+              item.id.isNotEmpty &&
+              item.title.isNotEmpty &&
+              item.isAccessibleTo(currentProfile))
           .toList(growable: false);
       if (restored.isEmpty) return;
       library
@@ -2447,11 +2665,13 @@ class AppController extends ChangeNotifier {
       // per profile/title. The queue contains no media bytes or credentials.
       unawaited(OfflineSyncQueue(
         scopeId: currentAccount?.id ?? 'local',
-      ).enqueuePlaybackProgress(
-        profileId: profileId,
-        mediaId: mediaId,
-        progress: clamped.toDouble(),
-      ).catchError((_) {}));
+      )
+          .enqueuePlaybackProgress(
+            profileId: profileId,
+            mediaId: mediaId,
+            progress: clamped.toDouble(),
+          )
+          .catchError((_) {}));
     }
 
     notifyListeners();
@@ -2702,7 +2922,8 @@ class AppController extends ChangeNotifier {
 
   Future<void> _persistActivity() {
     final key = _activityStorageKey;
-    final payload = jsonEncode(activity.map((item) => item.toJson()).toList(growable: false));
+    final payload = jsonEncode(
+        activity.map((item) => item.toJson()).toList(growable: false));
     // Serialize snapshots so an earlier write cannot finish after Clear all and
     // accidentally resurrect notifications that the user already removed.
     final write = _activityPersistenceQueue.then((_) async {
@@ -4978,24 +5199,28 @@ class AppController extends ChangeNotifier {
   void _refreshAutomaticCollections() {
     // User-created smart collections are recalculated from the current profile's
     // authoritative library/reaction/history state whenever that state changes.
-    for (final collection in collections.where((item) => item.smartRule != null)) {
-      final matches = library.where((media) {
-        final isShow = _isShowType(media.type);
-        switch (collection.smartRule) {
-          case 'liked_movies':
-            return !isShow && isLiked(media.id);
-          case 'liked_shows':
-            return isShow && isLiked(media.id);
-          case 'liked_media':
-            return isLiked(media.id);
-          case 'watched':
-            return isWatched(media.id);
-          case 'unwatched':
-            return !isWatched(media.id);
-          default:
-            return false;
-        }
-      }).map((media) => media.id).toList();
+    for (final collection
+        in collections.where((item) => item.smartRule != null)) {
+      final matches = library
+          .where((media) {
+            final isShow = _isShowType(media.type);
+            switch (collection.smartRule) {
+              case 'liked_movies':
+                return !isShow && isLiked(media.id);
+              case 'liked_shows':
+                return isShow && isLiked(media.id);
+              case 'liked_media':
+                return isLiked(media.id);
+              case 'watched':
+                return isWatched(media.id);
+              case 'unwatched':
+                return !isWatched(media.id);
+              default:
+                return false;
+            }
+          })
+          .map((media) => media.id)
+          .toList();
       collection.mediaIds
         ..clear()
         ..addAll(matches);
@@ -5100,8 +5325,10 @@ class AppController extends ChangeNotifier {
 
   bool _isShowType(String type) {
     final value = type.toLowerCase();
-    return value.contains('tv') || value.contains('show') ||
-        value.contains('series') || value.contains('episode');
+    return value.contains('tv') ||
+        value.contains('show') ||
+        value.contains('series') ||
+        value.contains('episode');
   }
 
   /// Creates or retrieves one authoritative automatic franchise collection.

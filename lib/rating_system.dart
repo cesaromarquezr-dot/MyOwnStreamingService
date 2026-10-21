@@ -3,7 +3,7 @@
 // separate 0.5-5 star personal rating. Provider scores are never combined.
 
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
@@ -73,7 +73,8 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
     );
     if (selected == null || AppController.instance.currentProfile == null) {
       return;
-    }try {
+    }
+    try {
       await AppController.instance.backendApi.saveUserRating(
         mediaId: widget.mediaId,
         profileId: AppController.instance.currentProfile!.id,
@@ -92,7 +93,7 @@ class _MediaRatingsPanelState extends State<MediaRatingsPanel> {
     if (loading) {
       return const Padding(
           padding: EdgeInsets.all(8), child: LinearProgressIndicator());
-  }
+    }
     final raw = data?['ratings'];
     final ratings = raw is List
         ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()

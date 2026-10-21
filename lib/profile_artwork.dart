@@ -9,7 +9,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
@@ -41,22 +41,23 @@ class _ProfileArtworkScreenState extends State<ProfileArtworkScreen> {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          const UniversalText('Choose artwork from your library',
+          const UniversalText(
+            'Choose artwork from your library',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 6),
-          const UniversalText('ARM can expose disc artwork, scans and other approved media '
+          const UniversalText(
+            'ARM can expose disc artwork, scans and other approved media '
             'artwork here. The original media artwork is never replaced.',
           ),
           const SizedBox(height: 18),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,

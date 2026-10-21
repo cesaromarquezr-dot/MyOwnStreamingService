@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
+import 'genre_system.dart';
 import 'localization.dart';
 import 'supabase/supabase_config.dart';
 import 'dart:math' as math;
@@ -22,6 +23,7 @@ import 'music_achievements.dart';
 import 'reviews.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
+import 'cinematic_discovery_studio.dart';
 
 // Consolidated from lib/platform_expansion.dart.
 // Profile-scoped settings introduced by the platform expansion pass.
@@ -2682,7 +2684,7 @@ class OwnerDashboardScreen extends StatelessWidget {
                   Text(
                     account == null
                         ? 'No account loaded'
-                        : '${account.username} • ${account.email}',
+                        : account.email,
                   ),
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
@@ -4069,6 +4071,7 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(12, 'Smart Recommendations', Icons.auto_awesome_rounded, 'Use watch behavior, metadata and profile signals.', (_) => const FeatureCenterScreen()),
       _RoadmapFeature(13, 'Smart Collections', Icons.auto_awesome_mosaic_rounded, 'Dynamic collections based on live library rules.', (_) => const SmartCollectionsScreen()),
       _RoadmapFeature(14, 'Advanced Search', Icons.manage_search_rounded, 'Search title, actor, director, genre, tags, year and watched state.', (_) => const AdvancedLibrarySearchScreen()),
+      _RoadmapFeature(144, 'My Cinematic Universe', Icons.auto_awesome_rounded, 'Discover by mood, hybrid genres, pairings, franchise timelines, calendar reminders, vault and viewing recap.', (_) => const CinematicDiscoveryStudioScreen()),
       _RoadmapFeature(15, 'Actor & Franchise Pages', Icons.theaters_rounded, 'Explore catalog actors and related titles.', (_) => const ActorFranchiseRoadmapScreen()),
       _RoadmapFeature(16, 'Trailer Theater', Icons.movie_filter_rounded, 'Browse imported trailers as a dedicated theater.', (_) => const TrailerTheaterScreen()),
       _RoadmapFeature(17, 'Music Mode', Icons.music_note_rounded, 'Browse soundtrack and music metadata from your library.', (_) => const MusicModeScreen()),
@@ -4173,7 +4176,7 @@ class RoadmapFeaturesScreen extends StatelessWidget {
       _RoadmapFeature(133, 'Music Statistics', Icons.bar_chart_rounded, 'Track music songs, playlists and listening alongside movie/TV statistics.', (_) => const StatisticsScreen()),
       _RoadmapFeature(134, 'Music Achievements & Badges', Icons.emoji_events_rounded, 'Badges such as Cultured, Swiftie and Album Collector.', (_) => const AchievementsScreen()),
       _RoadmapFeature(135, 'Profile Reviews', Icons.rate_review_outlined, 'Rate titles from 0-10 with a custom review label and text.', (_) => const ReviewsHubScreen()),
-      _RoadmapFeature(136, 'Global Privacy-Safe Reviews', Icons.public_rounded, 'Publish reviews under a custom username without exposing email or account identity.', (_) => const ReviewsHubScreen()),
+      _RoadmapFeature(136, 'Global Privacy-Safe Reviews', Icons.public_rounded, 'Publish reviews under the active profile’s unique username without exposing email or account identity.', (_) => const ReviewsHubScreen()),
       _RoadmapFeature(137, 'Official vs Viewer Ratings', Icons.star_half_rounded, 'Show provider/critic rating separately from the community 10-point rating.', (_) => const ReviewsHubScreen()),
       _RoadmapFeature(138, 'Review Translation Toggle', Icons.translate_rounded, 'Offer a translation-enabled global review view without exposing private identity.', (_) => const ReviewsHubScreen()),
       _RoadmapFeature(139, 'Home Server Dashboard', Icons.dns_rounded, 'Monitor the home server, media root and ARM connection.', (_) => const HomeServerScreen()),
@@ -4332,8 +4335,159 @@ class _ProfileRelationshipsScreenState extends State<ProfileRelationshipsScreen>
 class ReactionGuideScreen extends StatelessWidget { const ReactionGuideScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Reactions')), body: ListView(padding: const EdgeInsets.all(16), children: const [ListTile(leading: UniversalText('❤️', style: TextStyle(fontSize: 26)), title: UniversalText('Love it')), ListTile(leading: UniversalText('🔥', style: TextStyle(fontSize: 26)), title: UniversalText('Amazing')), ListTile(leading: UniversalText('😂', style: TextStyle(fontSize: 26)), title: UniversalText('Funny')), ListTile(leading: UniversalText('😱', style: TextStyle(fontSize: 26)), title: UniversalText('Scary')), ListTile(leading: UniversalText('😭', style: TextStyle(fontSize: 26)), title: UniversalText('Emotional')), ListTile(leading: UniversalText('🤯', style: TextStyle(fontSize: 26)), title: UniversalText('Mind-blowing'))])); }
 
 /// Implements the `AdvancedLibrarySearchScreen` class for this feature or UI component.
-class AdvancedLibrarySearchScreen extends StatefulWidget { const AdvancedLibrarySearchScreen({super.key}); @override State<AdvancedLibrarySearchScreen> createState() => _AdvancedLibrarySearchScreenState(); }
-class _AdvancedLibrarySearchScreenState extends State<AdvancedLibrarySearchScreen> { final q = TextEditingController(); String type = 'All'; bool unwatched = false; List<MediaItem> results = <MediaItem>[]; void search() { final term = q.text.toLowerCase(); final all = _library(); setState(() => results = all.where((m) => (term.isEmpty || m.title.toLowerCase().contains(term) || m.genres.any((x) => x.toLowerCase().contains(term)) || m.tags.any((x) => x.toLowerCase().contains(term)) || m.actors.any((x) => x.toLowerCase().contains(term)) || m.directors.any((x) => x.toLowerCase().contains(term))) && (type == 'All' || (type == 'Movies' ? m.type == 'movie' : m.type != 'movie')) && (!unwatched || !AppController.instance.isWatched(m.id))).toList()); } @override void dispose() { q.dispose(); super.dispose(); } @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Advanced Search')), body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [TextField(controller: q, onSubmitted: (_) => search(), decoration: InputDecoration(labelText: tr('Title, actor, director, genre or tag'))), Row(children: [Expanded(child: DropdownButton<String>(value: type, isExpanded: true, items: const ['All','Movies','TV Shows'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(), onChanged: (v) => setState(() => type = v!))), Switch(value: unwatched, onChanged: (v) => setState(() => unwatched = v)), const UniversalText('Unwatched'), IconButton(onPressed: search, icon: const Icon(Icons.search))]), Expanded(child: ListView(children: results.map((m) => ListTile(title: Text(m.title), subtitle: UniversalText('${m.releaseYear ?? ''} • ${m.type}'))).toList()))]))); }
+class AdvancedLibrarySearchScreen extends StatefulWidget {
+  const AdvancedLibrarySearchScreen({super.key});
+  @override
+  State<AdvancedLibrarySearchScreen> createState() => _AdvancedLibrarySearchScreenState();
+}
+
+class _AdvancedLibrarySearchScreenState extends State<AdvancedLibrarySearchScreen> {
+  final TextEditingController q = TextEditingController();
+  String type = 'All';
+  String mood = 'Any mood';
+  bool unwatched = false;
+  bool matchAllGenres = true;
+  final Set<String> selectedGenres = <String>{};
+  List<MediaItem> results = <MediaItem>[];
+
+  void search() {
+    final term = q.text.trim().toLowerCase();
+    final mentionedGenres = GenreSystem.genresMentionedIn(term);
+    final filters = <String>{...selectedGenres, ...mentionedGenres};
+    final moodGenres = GenreSystem.moodGenreHints[mood] ?? const <String>[];
+    final all = _library();
+    setState(() {
+      results = all.where((m) {
+        final genreMatch = GenreSystem.matchesGenres(
+          m.genres,
+          filters,
+          matchAll: matchAllGenres,
+        );
+        final moodMatch = moodGenres.isEmpty ||
+            GenreSystem.matchesGenres(m.genres, moodGenres, matchAll: false);
+        final textMatch = term.isEmpty ||
+            mentionedGenres.isNotEmpty ||
+            m.title.toLowerCase().contains(term) ||
+            GenreSystem.searchTerms(m.genres).any((x) => x.toLowerCase().contains(term)) ||
+            m.tags.any((x) => x.toLowerCase().contains(term)) ||
+            m.actors.any((x) => x.toLowerCase().contains(term)) ||
+            m.directors.any((x) => x.toLowerCase().contains(term));
+        return textMatch &&
+            (filters.isEmpty || genreMatch) &&
+            moodMatch &&
+            (type == 'All' || (type == 'Movies' ? m.type.toLowerCase() == 'movie' : m.type.toLowerCase() != 'movie')) &&
+            (!unwatched || !AppController.instance.isWatched(m.id));
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    q.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const UniversalText('Advanced Search')),
+    body: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        TextField(
+          controller: q,
+          onSubmitted: (_) => search(),
+          decoration: InputDecoration(
+            labelText: tr('Title, actor, director, genre or tag'),
+            hintText: 'Try “horror comedy” or “romantic thriller”',
+            prefixIcon: const Icon(Icons.search_rounded),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Genre combinations', style: Theme.of(context).textTheme.titleSmall),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 88,
+          child: SingleChildScrollView(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              children: GenreSystem.canonicalGenres.map((genre) => FilterChip(
+                label: Text(genre),
+                selected: selectedGenres.contains(genre),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      selectedGenres.add(genre);
+                    } else {
+                      selectedGenres.remove(genre);
+                    }
+                  });
+                  search();
+                },
+              )).toList(),
+            ),
+          ),
+        ),
+        Row(children: [
+          Expanded(child: DropdownButton<String>(
+            value: type,
+            isExpanded: true,
+            items: const ['All','Movies','TV Shows'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
+            onChanged: (v) { if (v != null) { setState(() => type = v); search(); } },
+          )),
+          const SizedBox(width: 12),
+          Expanded(child: DropdownButton<String>(
+            value: mood,
+            isExpanded: true,
+            items: <String>['Any mood', ...GenreSystem.moodGenreHints.keys]
+                .map((x) => DropdownMenuItem(value: x, child: Text(x == 'Any mood' ? x : x[0].toUpperCase() + x.substring(1))))
+                .toList(),
+            onChanged: (v) { if (v != null) { setState(() => mood = v); search(); } },
+          )),
+          IconButton(onPressed: search, icon: const Icon(Icons.search)),
+        ]),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 4,
+          children: [
+            const UniversalText('Match all selected genres'),
+            Switch(value: matchAllGenres, onChanged: (v) { setState(() => matchAllGenres = v); search(); }),
+            const UniversalText('Unwatched only'),
+            Switch(value: unwatched, onChanged: (v) { setState(() => unwatched = v); search(); }),
+          ],
+        ),
+        if (selectedGenres.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Combination: ${GenreSystem.displayLabel(selectedGenres)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        Expanded(
+          child: results.isEmpty
+              ? const Center(child: UniversalText('Search your library or choose genres to find a combination.'))
+              : ListView.separated(
+                  itemCount: results.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final media = results[i];
+                    final genreLabel = GenreSystem.displayLabel(media.genres);
+                    return ListTile(
+                      leading: const Icon(Icons.movie_filter_rounded),
+                      title: Text(media.title),
+                      subtitle: Text('${media.releaseYear ?? ''} • ${media.type} • $genreLabel'),
+                    );
+                  },
+                ),
+        ),
+      ]),
+    ),
+  );
+}
 
 class ActorFranchiseRoadmapScreen extends StatelessWidget { const ActorFranchiseRoadmapScreen({super.key}); @override Widget build(BuildContext context) { final actors = _library().expand((m) => m.actors).toSet().toList(); return Scaffold(appBar: AppBar(title: const UniversalText('Actors & Franchises')), body: ListView(padding: const EdgeInsets.all(16), children: [const UniversalText('Actors in your library', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 8), ...actors.map((a) => ListTile(leading: const Icon(Icons.person_outline_rounded), title: Text(a)))])); } }
 

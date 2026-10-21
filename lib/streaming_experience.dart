@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'app_accessibility.dart';
@@ -18,7 +18,13 @@ import 'privacy_preferences.dart';
 
 class StreamingExperiencePreferences {
   static const int automaticResolution = 0;
-  static const List<int> supportedResolutionCaps = <int>[0, 480, 720, 1080, 2160];
+  static const List<int> supportedResolutionCaps = <int>[
+    0,
+    480,
+    720,
+    1080,
+    2160
+  ];
 
   bool dataSaver;
   int maxResolution;
@@ -49,7 +55,8 @@ class StreamingExperiencePreferences {
   static String _key(String profileId) =>
       'mos_streaming_experience_${profileId.trim().isEmpty ? 'default' : profileId.trim()}';
 
-  static Future<StreamingExperiencePreferences> load({String? profileId}) async {
+  static Future<StreamingExperiencePreferences> load(
+      {String? profileId}) async {
     final preferences = await SharedPreferences.getInstance();
     final raw = preferences.getString(_key(profileId ?? 'default'));
     if (raw == null || raw.isEmpty) return StreamingExperiencePreferences();
@@ -59,14 +66,17 @@ class StreamingExperiencePreferences {
       final scale = (map['subtitleScale'] as num?)?.toDouble() ?? 1.0;
       return StreamingExperiencePreferences(
         dataSaver: map['dataSaver'] == true,
-        maxResolution: supportedResolutionCaps.contains(resolution) ? resolution : 0,
+        maxResolution:
+            supportedResolutionCaps.contains(resolution) ? resolution : 0,
         autoplayNext: map['autoplayNext'] != false,
         subtitlesEnabled: map['subtitlesEnabled'] != false,
         subtitleScale: scale.clamp(0.75, 2.0).toDouble(),
         audioDescriptions: map['audioDescriptions'] == true,
         highContrast: map['highContrast'] == true,
         reduceMotion: map['reduceMotion'] == true,
-        appTextScale: ((map['appTextScale'] as num?)?.toDouble() ?? 1.0).clamp(0.85, 1.6).toDouble(),
+        appTextScale: ((map['appTextScale'] as num?)?.toDouble() ?? 1.0)
+            .clamp(0.85, 1.6)
+            .toDouble(),
       );
     } catch (_) {
       return StreamingExperiencePreferences();
@@ -140,7 +150,8 @@ class PlaybackQoeTelemetry {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> loadEvents({String? profileId}) async {
+  static Future<List<Map<String, dynamic>>> loadEvents(
+      {String? profileId}) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_storageKey);
     if (raw == null || raw.isEmpty) return <Map<String, dynamic>>[];
@@ -152,7 +163,9 @@ class PlaybackQoeTelemetry {
           .map((item) => Map<String, dynamic>.from(item))
           .toList(growable: false);
       if (profileId == null || profileId.isEmpty) return all;
-      return all.where((item) => item['profileId'] == profileId).toList(growable: false);
+      return all
+          .where((item) => item['profileId'] == profileId)
+          .toList(growable: false);
     } catch (_) {
       return <Map<String, dynamic>>[];
     }
@@ -184,7 +197,8 @@ class PlaybackQoeTelemetry {
     return <String, num>{
       'sessions': sessions.length,
       'events': events.length,
-      'averageReadyMs': readyCount == 0 ? 0 : (readyTotalMs / readyCount).round(),
+      'averageReadyMs':
+          readyCount == 0 ? 0 : (readyTotalMs / readyCount).round(),
       'bufferedMs': bufferedTotalMs,
       'failures': failures,
       'completed': completed,
@@ -197,7 +211,9 @@ class PlaybackQoeTelemetry {
       await prefs.remove(_storageKey);
       return;
     }
-    final remaining = (await loadEvents()).where((item) => item['profileId'] != profileId).toList();
+    final remaining = (await loadEvents())
+        .where((item) => item['profileId'] != profileId)
+        .toList();
     await prefs.setString(_storageKey, jsonEncode(remaining));
   }
 }
@@ -210,7 +226,8 @@ class StreamingExperienceSettingsScreen extends StatefulWidget {
       _StreamingExperienceSettingsScreenState();
 }
 
-class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceSettingsScreen> {
+class _StreamingExperienceSettingsScreenState
+    extends State<StreamingExperienceSettingsScreen> {
   StreamingExperiencePreferences settings = StreamingExperiencePreferences();
   List<Map<String, dynamic>> events = <Map<String, dynamic>>[];
   bool loading = true;
@@ -225,8 +242,10 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
   }
 
   Future<void> _load() async {
-    final loaded = await StreamingExperiencePreferences.load(profileId: _profileId);
-    final loadedEvents = await PlaybackQoeTelemetry.loadEvents(profileId: _profileId);
+    final loaded =
+        await StreamingExperiencePreferences.load(profileId: _profileId);
+    final loadedEvents =
+        await PlaybackQoeTelemetry.loadEvents(profileId: _profileId);
     if (!mounted) return;
     setState(() {
       settings = loaded;
@@ -248,8 +267,11 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
   @override
   Widget build(BuildContext context) {
     final summary = PlaybackQoeTelemetry.summarize(events);
-    final background = settings.highContrast ? Colors.black : const Color(0xFF09090D);
-    final panel = settings.highContrast ? const Color(0xFF151515) : const Color(0xFF171720);
+    final background =
+        settings.highContrast ? Colors.black : const Color(0xFF09090D);
+    final panel = settings.highContrast
+        ? const Color(0xFF151515)
+        : const Color(0xFF171720);
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
@@ -259,7 +281,11 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
           if (saving)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 18),
-              child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(
+                  child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))),
             ),
         ],
       ),
@@ -272,16 +298,20 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                   context,
                   panel,
                   title: 'Playback quality',
-                  subtitle: 'Preferences are stored separately for the selected profile.',
+                  subtitle:
+                      'Preferences are stored separately for the selected profile.',
                   children: [
                     SwitchListTile(
                       value: settings.dataSaver,
                       title: const UniversalText('Data saver'),
-                      subtitle: const UniversalText('Preference for lower-bandwidth streams where server negotiation supports it.'),
-                      onChanged: (value) => _update(() => settings.dataSaver = value),
+                      subtitle: const UniversalText(
+                          'Preference for lower-bandwidth streams where server negotiation supports it.'),
+                      onChanged: (value) =>
+                          _update(() => settings.dataSaver = value),
                     ),
                     ListTile(
-                      title: const UniversalText('Maximum streaming resolution'),
+                      title:
+                          const UniversalText('Maximum streaming resolution'),
                       subtitle: Text(settings.resolutionLabel),
                       trailing: DropdownButton<int>(
                         value: settings.maxResolution,
@@ -293,13 +323,16 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                           DropdownMenuItem(value: 2160, child: Text('4K')),
                         ],
                         onChanged: (value) {
-                          if (value != null) _update(() => settings.maxResolution = value);
+                          if (value != null) {
+                            _update(() => settings.maxResolution = value);
+                          }
                         },
                       ),
                     ),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: UniversalText('Automatic uses the supplied adaptive HLS master playlist. A resolution cap or data-saver selection only changes the actual stream when the authorized playback service applies that preference to the manifest or transcode profile.'),
+                      child: UniversalText(
+                          'Automatic uses the supplied adaptive HLS master playlist. A resolution cap or data-saver selection only changes the actual stream when the authorized playback service applies that preference to the manifest or transcode profile.'),
                     ),
                   ],
                 ),
@@ -313,21 +346,26 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                     SwitchListTile(
                       value: settings.autoplayNext,
                       title: const UniversalText('Autoplay next episode'),
-                      subtitle: const UniversalText('Show the next-episode countdown when episode metadata is available.'),
-                      onChanged: (value) => _update(() => settings.autoplayNext = value),
+                      subtitle: const UniversalText(
+                          'Show the next-episode countdown when episode metadata is available.'),
+                      onChanged: (value) =>
+                          _update(() => settings.autoplayNext = value),
                     ),
                     SwitchListTile(
                       value: settings.subtitlesEnabled,
                       title: const UniversalText('Enable subtitles by default'),
-                      onChanged: (value) => _update(() => settings.subtitlesEnabled = value),
+                      onChanged: (value) =>
+                          _update(() => settings.subtitlesEnabled = value),
                     ),
                     ListTile(
                       title: const UniversalText('Subtitle text size'),
-                      subtitle: Text('${(settings.subtitleScale * 100).round()}%'),
+                      subtitle:
+                          Text('${(settings.subtitleScale * 100).round()}%'),
                     ),
                     ListTile(
                       title: const UniversalText('App text size'),
-                      subtitle: Text('${(settings.appTextScale * 100).round()}%'),
+                      subtitle:
+                          Text('${(settings.appTextScale * 100).round()}%'),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -335,9 +373,11 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                         min: 0.85,
                         max: 1.6,
                         divisions: 15,
-                        value: settings.appTextScale.clamp(0.85, 1.6).toDouble(),
+                        value:
+                            settings.appTextScale.clamp(0.85, 1.6).toDouble(),
                         label: '${(settings.appTextScale * 100).round()}%',
-                        onChanged: (value) => _update(() => settings.appTextScale = value),
+                        onChanged: (value) =>
+                            _update(() => settings.appTextScale = value),
                       ),
                     ),
                     Padding(
@@ -346,27 +386,35 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                         min: 0.75,
                         max: 2,
                         divisions: 5,
-                        value: settings.subtitleScale.clamp(0.75, 2.0).toDouble(),
+                        value:
+                            settings.subtitleScale.clamp(0.75, 2.0).toDouble(),
                         label: '${(settings.subtitleScale * 100).round()}%',
-                        onChanged: (value) => setState(() => settings.subtitleScale = value),
-                        onChangeEnd: (_) => settings.save(profileId: _profileId),
+                        onChanged: (value) =>
+                            setState(() => settings.subtitleScale = value),
+                        onChangeEnd: (_) =>
+                            settings.save(profileId: _profileId),
                       ),
                     ),
                     SwitchListTile(
                       value: settings.audioDescriptions,
-                      title: const UniversalText('Prefer audio description tracks'),
-                      subtitle: const UniversalText('Used when the selected stream exposes an audio-description track.'),
-                      onChanged: (value) => _update(() => settings.audioDescriptions = value),
+                      title: const UniversalText(
+                          'Prefer audio description tracks'),
+                      subtitle: const UniversalText(
+                          'Used when the selected stream exposes an audio-description track.'),
+                      onChanged: (value) =>
+                          _update(() => settings.audioDescriptions = value),
                     ),
                     SwitchListTile(
                       value: settings.highContrast,
                       title: const UniversalText('High-contrast controls'),
-                      onChanged: (value) => _update(() => settings.highContrast = value),
+                      onChanged: (value) =>
+                          _update(() => settings.highContrast = value),
                     ),
                     SwitchListTile(
                       value: settings.reduceMotion,
                       title: const UniversalText('Reduce motion'),
-                      onChanged: (value) => _update(() => settings.reduceMotion = value),
+                      onChanged: (value) =>
+                          _update(() => settings.reduceMotion = value),
                     ),
                   ],
                 ),
@@ -375,23 +423,33 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                   context,
                   panel,
                   title: 'Playback diagnostics',
-                  subtitle: 'Recent diagnostics from this device and profile only.',
+                  subtitle:
+                      'Recent diagnostics from this device and profile only.',
                   children: [
                     _metricRow('Playback sessions', '${summary['sessions']}'),
-                    _metricRow('Average time to player ready', _formatMs(summary['averageReadyMs'] ?? 0)),
-                    _metricRow('Time spent buffering', _formatMs(summary['bufferedMs'] ?? 0)),
+                    _metricRow('Average time to player ready',
+                        _formatMs(summary['averageReadyMs'] ?? 0)),
+                    _metricRow('Time spent buffering',
+                        _formatMs(summary['bufferedMs'] ?? 0)),
                     _metricRow('Playback errors', '${summary['failures']}'),
                     _metricRow('Completed sessions', '${summary['completed']}'),
                     Padding(
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          Expanded(child: Text('${summary['events']} diagnostic events kept locally (maximum 500).', style: const TextStyle(color: Colors.white60))),
+                          Expanded(
+                              child: Text(
+                                  '${summary['events']} diagnostic events kept locally (maximum 500).',
+                                  style:
+                                      const TextStyle(color: Colors.white60))),
                           TextButton.icon(
-                            onPressed: events.isEmpty ? null : () async {
-                              await PlaybackQoeTelemetry.clearEvents(profileId: _profileId);
-                              await _load();
-                            },
+                            onPressed: events.isEmpty
+                                ? null
+                                : () async {
+                                    await PlaybackQoeTelemetry.clearEvents(
+                                        profileId: _profileId);
+                                    await _load();
+                                  },
                             icon: const Icon(Icons.delete_outline_rounded),
                             label: const UniversalText('Clear'),
                           ),
@@ -401,29 +459,39 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
                   ],
                 ),
                 const SizedBox(height: 16),
-                const UniversalText('Playback diagnostics currently remain on this device. Cross-device QoE reporting requires deploying the trusted-backend ingestion described in docs/STREAMING_EXPERIENCE_IMPLEMENTATION.md.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const UniversalText(
+                    'Playback diagnostics currently remain on this device. Cross-device QoE reporting requires deploying the trusted-backend ingestion described in docs/STREAMING_EXPERIENCE_IMPLEMENTATION.md.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12)),
               ],
             ),
     );
   }
 
-  Widget _sectionCard(BuildContext context, Color panel, {required String title, required String subtitle, required List<Widget> children}) {
+  Widget _sectionCard(BuildContext context, Color panel,
+      {required String title,
+      required String subtitle,
+      required List<Widget> children}) {
     return Card(
       color: panel,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: settings.highContrast ? Colors.white54 : Colors.white10),
+        side: BorderSide(
+            color: settings.highContrast ? Colors.white54 : Colors.white10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(subtitle,
+                  style: const TextStyle(color: Colors.white60, fontSize: 12)),
             ]),
           ),
           ...children,
@@ -434,7 +502,13 @@ class _StreamingExperienceSettingsScreenState extends State<StreamingExperienceS
 
   Widget _metricRow(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(children: [Expanded(child: Text(label)), Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontFeatures: <FontFeature>[FontFeature.tabularFigures()]))]),
+        child: Row(children: [
+          Expanded(child: Text(label)),
+          Text(value,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: <FontFeature>[FontFeature.tabularFigures()]))
+        ]),
       );
 
   static String _formatMs(num value) {
@@ -451,10 +525,12 @@ class AdaptiveStreamingPlayer extends StatefulWidget {
   final MediaItem media;
   final String? activityLabel;
 
-  const AdaptiveStreamingPlayer({super.key, required this.media, this.activityLabel});
+  const AdaptiveStreamingPlayer(
+      {super.key, required this.media, this.activityLabel});
 
   @override
-  State<AdaptiveStreamingPlayer> createState() => _AdaptiveStreamingPlayerState();
+  State<AdaptiveStreamingPlayer> createState() =>
+      _AdaptiveStreamingPlayerState();
 }
 
 class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
@@ -473,7 +549,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   bool _loading = true;
   String? _error;
   String? _backendSessionId;
-  StreamingExperiencePreferences _preferences = StreamingExperiencePreferences();
+  StreamingExperiencePreferences _preferences =
+      StreamingExperiencePreferences();
   String? get _profileId => AppController.instance.currentProfile?.id;
 
   @override
@@ -485,14 +562,19 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
   }
 
   Future<void> _initialize() async {
-    _preferences = await StreamingExperiencePreferences.load(profileId: _profileId);
+    _preferences =
+        await StreamingExperiencePreferences.load(profileId: _profileId);
     if (!mounted) return;
     final rawUrl = widget.media.playbackUrl?.trim() ?? '';
     final uri = Uri.tryParse(rawUrl);
-    if (uri == null || !uri.hasAuthority || uri.userInfo.isNotEmpty || !(uri.scheme == 'https' || uri.scheme == 'http')) {
+    if (uri == null ||
+        !uri.hasAuthority ||
+        uri.userInfo.isNotEmpty ||
+        !(uri.scheme == 'https' || uri.scheme == 'http')) {
       setState(() {
         _loading = false;
-        _error = 'The media gateway did not provide a valid HTTP(S) playback URL.';
+        _error =
+            'The media gateway did not provide a valid HTTP(S) playback URL.';
       });
       await _record('playback_error');
       return;
@@ -505,20 +587,25 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       player.addListener(_onPlayerChanged);
       await player.initialize();
       if (!mounted) return;
-      final resume = AppController.instance.getPlaybackProgress(widget.media.id);
+      final resume =
+          AppController.instance.getPlaybackProgress(widget.media.id);
       if (resume > 0 && player.value.duration > Duration.zero) {
-        final offset = Duration(milliseconds: (player.value.duration.inMilliseconds * resume).round());
+        final offset = Duration(
+            milliseconds:
+                (player.value.duration.inMilliseconds * resume).round());
         if (offset < player.value.duration) await player.seekTo(offset);
       }
       setState(() => _loading = false);
       unawaited(player.play());
       await _createBackendSession();
-      _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) => unawaited(_syncBackendSession()));
+      _syncTimer = Timer.periodic(
+          const Duration(seconds: 15), (_) => unawaited(_syncBackendSession()));
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Unable to start this stream. Check the playback gateway, network access, and device protocol support.';
+        _error =
+            'Unable to start this stream. Check the playback gateway, network access, and device protocol support.';
       });
       if (!_errorLogged) {
         _errorLogged = true;
@@ -533,7 +620,9 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final value = player.value;
     if (!_readyLogged) {
       _readyLogged = true;
-      final elapsed = DateTime.now().difference(_startedAt ?? DateTime.now()).inMilliseconds;
+      final elapsed = DateTime.now()
+          .difference(_startedAt ?? DateTime.now())
+          .inMilliseconds;
       unawaited(_record('player_ready', valueMs: elapsed));
     }
     if (value.isBuffering && !_wasBuffering) {
@@ -544,29 +633,42 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       _wasBuffering = false;
       final started = _bufferStartedAt;
       _bufferStartedAt = null;
-      unawaited(_record('buffer_end', valueMs: started == null ? 0 : DateTime.now().difference(started).inMilliseconds));
+      unawaited(_record('buffer_end',
+          valueMs: started == null
+              ? 0
+              : DateTime.now().difference(started).inMilliseconds));
     }
     if (value.hasError && !_errorLogged) {
       _errorLogged = true;
       unawaited(_record('playback_error'));
     }
-    if (value.duration > Duration.zero && value.position >= value.duration - const Duration(milliseconds: 500) && !_completedLogged) {
+    if (value.duration > Duration.zero &&
+        value.position >= value.duration - const Duration(milliseconds: 500) &&
+        !_completedLogged) {
       _completedLogged = true;
       unawaited(_record('completed'));
       AppController.instance.updatePlaybackProgress(widget.media.id, 1.0);
       AppController.instance.markWatched(widget.media);
       unawaited(_syncBackendSession(state: 'completed'));
     } else if (value.duration > Duration.zero) {
-      final normalized = (value.position.inMilliseconds / value.duration.inMilliseconds).clamp(0.0, 1.0).toDouble();
+      final normalized =
+          (value.position.inMilliseconds / value.duration.inMilliseconds)
+              .clamp(0.0, 1.0)
+              .toDouble();
       final now = DateTime.now();
-      if (_lastProgressSync == null || now.difference(_lastProgressSync!) >= const Duration(seconds: 10)) {
+      if (_lastProgressSync == null ||
+          now.difference(_lastProgressSync!) >= const Duration(seconds: 10)) {
         _lastProgressSync = now;
-        AppController.instance.updatePlaybackProgress(widget.media.id, normalized);
+        AppController.instance
+            .updatePlaybackProgress(widget.media.id, normalized);
         unawaited(_syncBackendSession());
       }
     }
     final now = DateTime.now();
-    if (mounted && (_lastUiUpdate == null || now.difference(_lastUiUpdate!) >= const Duration(milliseconds: 300))) {
+    if (mounted &&
+        (_lastUiUpdate == null ||
+            now.difference(_lastUiUpdate!) >=
+                const Duration(milliseconds: 300))) {
       _lastUiUpdate = now;
       setState(() {});
     }
@@ -607,7 +709,8 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     } catch (_) {}
   }
 
-  Future<void> _record(String event, {int? valueMs}) => PlaybackQoeTelemetry.record(
+  Future<void> _record(String event, {int? valueMs}) =>
+      PlaybackQoeTelemetry.record(
         event: event,
         mediaId: widget.media.id,
         sessionId: _sessionId,
@@ -629,13 +732,18 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     _syncTimer?.cancel();
     final player = _controller;
     if (_wasBuffering && _bufferStartedAt != null) {
-      unawaited(_record('buffer_end', valueMs: DateTime.now().difference(_bufferStartedAt!).inMilliseconds));
+      unawaited(_record('buffer_end',
+          valueMs:
+              DateTime.now().difference(_bufferStartedAt!).inMilliseconds));
     }
     if (player != null) {
       if (player.value.isInitialized && player.value.duration > Duration.zero) {
         AppController.instance.updatePlaybackProgress(
           widget.media.id,
-          (player.value.position.inMilliseconds / player.value.duration.inMilliseconds).clamp(0.0, 1.0).toDouble(),
+          (player.value.position.inMilliseconds /
+                  player.value.duration.inMilliseconds)
+              .clamp(0.0, 1.0)
+              .toDouble(),
         );
       }
       unawaited(_syncBackendSession(state: 'stopped'));
@@ -649,7 +757,9 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return hours > 0 ? '$hours:$minutes:$seconds' : '${duration.inMinutes}:$seconds';
+    return hours > 0
+        ? '$hours:$minutes:$seconds'
+        : '${duration.inMinutes}:$seconds';
   }
 
   @override
@@ -660,17 +770,26 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final value = player?.value;
     final duration = value?.duration ?? Duration.zero;
     final position = value?.position ?? Duration.zero;
-    final maxSeconds = duration.inSeconds > 0 ? duration.inSeconds.toDouble() : 1.0;
-    final currentSeconds = _sliderPreviewSeconds ?? position.inSeconds.clamp(0, maxSeconds.toInt()).toDouble();
+    final maxSeconds =
+        duration.inSeconds > 0 ? duration.inSeconds.toDouble() : 1.0;
+    final currentSeconds = _sliderPreviewSeconds ??
+        position.inSeconds.clamp(0, maxSeconds.toInt()).toDouble();
     return Scaffold(
       backgroundColor: highContrast ? Colors.black : const Color(0xFF08080C),
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: Text(widget.media.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(widget.media.title,
+            maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: Center(child: Text(_preferences.maxResolution == 0 ? 'Adaptive' : 'Up to ${_preferences.maxResolution}p', style: const TextStyle(color: Colors.white60, fontSize: 12))),
+            child: Center(
+                child: Text(
+                    _preferences.maxResolution == 0
+                        ? 'Adaptive'
+                        : 'Up to ${_preferences.maxResolution}p',
+                    style:
+                        const TextStyle(color: Colors.white60, fontSize: 12))),
           ),
         ],
       ),
@@ -681,34 +800,51 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
             padding: const EdgeInsets.all(16),
             children: [
               AspectRatio(
-                aspectRatio: value?.isInitialized == true && (value?.aspectRatio ?? 0) > 0 ? value!.aspectRatio : 16 / 9,
+                aspectRatio: value?.isInitialized == true &&
+                        (value?.aspectRatio ?? 0) > 0
+                    ? value!.aspectRatio
+                    : 16 / 9,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: ColoredBox(
                     color: Colors.black,
                     child: _loading
                         ? const Center(child: CircularProgressIndicator())
-                        : _error != null || player == null || value?.isInitialized != true
-                            ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(_error ?? value?.errorDescription ?? 'Stream not ready.', textAlign: TextAlign.center)))
+                        : _error != null ||
+                                player == null ||
+                                value?.isInitialized != true
+                            ? Center(
+                                child: Padding(
+                                    padding: const EdgeInsets.all(20),
+                                    child: Text(
+                                        _error ??
+                                            value?.errorDescription ??
+                                            'Stream not ready.',
+                                        textAlign: TextAlign.center)))
                             : Stack(
                                 alignment: Alignment.center,
                                 children: [
                                   VideoPlayer(player),
-                                  if (value?.isBuffering == true) const CircularProgressIndicator(),
+                                  if (value?.isBuffering == true)
+                                    const CircularProgressIndicator(),
                                   IconButton.filledTonal(
                                     iconSize: 52,
                                     onPressed: () async {
                                       if (player.value.isPlaying) {
                                         await player.pause();
                                         unawaited(_record('paused'));
-                                        unawaited(_syncBackendSession(state: 'paused'));
+                                        unawaited(_syncBackendSession(
+                                            state: 'paused'));
                                       } else {
                                         await player.play();
                                         unawaited(_record('resumed'));
-                                        unawaited(_syncBackendSession(state: 'playing'));
+                                        unawaited(_syncBackendSession(
+                                            state: 'playing'));
                                       }
                                     },
-                                    icon: Icon(value?.isPlaying == true ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                                    icon: Icon(value?.isPlaying == true
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded),
                                   ),
                                 ],
                               ),
@@ -729,12 +865,14 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
               if (player != null && value?.isInitialized == true) ...[
                 const SizedBox(height: 14),
                 SliderTheme(
-                  data: SliderTheme.of(context).copyWith(activeTrackColor: accent, thumbColor: accent),
+                  data: SliderTheme.of(context)
+                      .copyWith(activeTrackColor: accent, thumbColor: accent),
                   child: Slider(
                     min: 0,
                     max: maxSeconds,
                     value: currentSeconds.clamp(0, maxSeconds).toDouble(),
-                    onChanged: (seconds) => setState(() => _sliderPreviewSeconds = seconds),
+                    onChanged: (seconds) =>
+                        setState(() => _sliderPreviewSeconds = seconds),
                     onChangeEnd: (seconds) {
                       setState(() => _sliderPreviewSeconds = null);
                       unawaited(_seekTo(seconds));
@@ -742,17 +880,27 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                   ),
                 ),
                 Row(
-                  children: [Text(_time(position), style: const TextStyle(color: Colors.white70)), const Spacer(), Text(_time(duration), style: const TextStyle(color: Colors.white70))],
+                  children: [
+                    Text(_time(position),
+                        style: const TextStyle(color: Colors.white70)),
+                    const Spacer(),
+                    Text(_time(duration),
+                        style: const TextStyle(color: Colors.white70))
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.speed_rounded, size: 18, color: Colors.white70),
+                    const Icon(Icons.speed_rounded,
+                        size: 18, color: Colors.white70),
                     const SizedBox(width: 8),
                     const UniversalText('Playback speed'),
                     const Spacer(),
                     DropdownButton<double>(
-                      value: const <double>[0.75, 1.0, 1.25, 1.5, 2.0].contains(value?.playbackSpeed ?? 1.0) ? value?.playbackSpeed ?? 1.0 : 1.0,
+                      value: const <double>[0.75, 1.0, 1.25, 1.5, 2.0]
+                              .contains(value?.playbackSpeed ?? 1.0)
+                          ? value?.playbackSpeed ?? 1.0
+                          : 1.0,
                       dropdownColor: const Color(0xFF1B1B1B),
                       items: const <DropdownMenuItem<double>>[
                         DropdownMenuItem(value: 0.75, child: Text('0.75×')),
@@ -764,17 +912,21 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                       onChanged: (speed) {
                         if (speed == null) return;
                         unawaited(player.setPlaybackSpeed(speed));
-                        unawaited(_record('speed_change', valueMs: (speed * 1000).round()));
+                        unawaited(_record('speed_change',
+                            valueMs: (speed * 1000).round()));
                       },
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(widget.activityLabel ?? 'Playing ${widget.media.title}', style: const TextStyle(color: Colors.white60)),
+                Text(widget.activityLabel ?? 'Playing ${widget.media.title}',
+                    style: const TextStyle(color: Colors.white60)),
                 if (_preferences.dataSaver)
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
-                    child: UniversalText('Data saver is selected. The stream gateway must honor this preference for bitrate to be reduced.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    child: UniversalText(
+                        'Data saver is selected. The stream gateway must honor this preference for bitrate to be reduced.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12)),
                   ),
               ],
             ],
@@ -784,4 +936,3 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     );
   }
 }
-

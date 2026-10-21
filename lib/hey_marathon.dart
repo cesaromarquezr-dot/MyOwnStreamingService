@@ -11,7 +11,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'food_delivery.dart';
 import 'group_watch.dart';
@@ -137,7 +137,9 @@ class MarathonEntry {
     this.episodeOrderNeedsReview = false,
   });
 
-  bool get isEpisode => seasonNumber != null || episodeNumber != null ||
+  bool get isEpisode =>
+      seasonNumber != null ||
+      episodeNumber != null ||
       mediaType.toLowerCase() == 'episode';
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -164,7 +166,8 @@ class MarathonEntry {
         title: json['title']?.toString() ?? '',
         mediaType: json['mediaType']?.toString() ?? 'movie',
         imageUrl: json['imageUrl']?.toString(),
-        runtimeMinutes: (_readInt(json['runtimeMinutes']) ?? 120).clamp(1, 1440).toInt(),
+        runtimeMinutes:
+            (_readInt(json['runtimeMinutes']) ?? 120).clamp(1, 1440).toInt(),
         runtimeEstimated: json['runtimeEstimated'] != false,
         releaseYear: _readInt(json['releaseYear']),
         franchiseId: json['franchiseId']?.toString(),
@@ -174,7 +177,8 @@ class MarathonEntry {
         episodeOrderNeedsReview: json['episodeOrderNeedsReview'] == true,
       );
 
-  MarathonEntry withRuntime(int minutes, {bool estimated = false}) => MarathonEntry(
+  MarathonEntry withRuntime(int minutes, {bool estimated = false}) =>
+      MarathonEntry(
         id: id,
         mediaId: mediaId,
         parentTitle: parentTitle,
@@ -211,7 +215,8 @@ class MarathonEntry {
         title: media.title,
         mediaType: media.type,
         imageUrl: media.imageUrl,
-        runtimeMinutes: looksLikeSeries ? 45 : _defaultRuntimeForType(media.type),
+        runtimeMinutes:
+            looksLikeSeries ? 45 : _defaultRuntimeForType(media.type),
         runtimeEstimated: true,
         releaseYear: media.releaseYear,
         franchiseId: media.franchiseId,
@@ -219,7 +224,8 @@ class MarathonEntry {
         seasonNumber: seasonNumber,
         episodeNumber: episodeNumber,
         episodeOrderNeedsReview: looksLikeSeries ||
-            (type.contains('episode') && (seasonNumber == null || episodeNumber == null)),
+            (type.contains('episode') &&
+                (seasonNumber == null || episodeNumber == null)),
       );
       return <MarathonEntry>[entry];
     }
@@ -249,17 +255,25 @@ class MarathonEntry {
         if (an != null && bn != null) return an.compareTo(bn);
         if (an != null) return -1;
         if (bn != null) return 1;
-        return _episodeTitle(a).toLowerCase().compareTo(_episodeTitle(b).toLowerCase());
+        return _episodeTitle(a)
+            .toLowerCase()
+            .compareTo(_episodeTitle(b).toLowerCase());
       });
       for (var index = 0; index < episodes.length; index++) {
         final episode = episodes[index];
-        final episodeSeason = _readInt(episode['seasonNumber'] ?? episode['season_number']) ??
-            seasonNumber ?? _seasonNumberFromEpisodeLabel(episode);
+        final episodeSeason =
+            _readInt(episode['seasonNumber'] ?? episode['season_number']) ??
+                seasonNumber ??
+                _seasonNumberFromEpisodeLabel(episode);
         final episodeNumber = _episodeNumber(episode);
         final needsReview = episodeSeason == null || episodeNumber == null;
         final episodeTitle = _episodeTitle(episode);
-        final seasonCode = episodeSeason == null ? 'S??' : 'S${episodeSeason.toString().padLeft(2, '0')}';
-        final episodeCode = episodeNumber == null ? 'E??' : 'E${episodeNumber.toString().padLeft(2, '0')}';
+        final seasonCode = episodeSeason == null
+            ? 'S??'
+            : 'S${episodeSeason.toString().padLeft(2, '0')}';
+        final episodeCode = episodeNumber == null
+            ? 'E??'
+            : 'E${episodeNumber.toString().padLeft(2, '0')}';
         final runtime = _episodeRuntime(episode);
         final stableEpisodeId = episode['id']?.toString() ??
             episode['episodeId']?.toString() ??
@@ -270,7 +284,9 @@ class MarathonEntry {
           parentTitle: media.title,
           title: '${media.title} · $seasonCode$episodeCode · $episodeTitle',
           mediaType: 'episode',
-          imageUrl: episode['imageUrl']?.toString() ?? episode['stillUrl']?.toString() ?? media.imageUrl,
+          imageUrl: episode['imageUrl']?.toString() ??
+              episode['stillUrl']?.toString() ??
+              media.imageUrl,
           runtimeMinutes: runtime ?? 45,
           runtimeEstimated: runtime == null,
           releaseYear: media.releaseYear,
@@ -309,42 +325,65 @@ class MarathonEntry {
 
   static int _defaultRuntimeForType(String type) {
     final lower = type.toLowerCase();
-    if (lower.contains('music') || lower.contains('track') || lower.contains('song')) return 5;
+    if (lower.contains('music') ||
+        lower.contains('track') ||
+        lower.contains('song')) {
+      return 5;
+    }
     if (lower.contains('episode')) return 45;
     if (lower.contains('short')) return 20;
     return 120;
   }
 
   static int? _episodeRuntime(Map<String, dynamic> episode) {
-    for (final key in const ['runtimeMinutes', 'durationMinutes', 'runtime_minutes']) {
+    for (final key in const [
+      'runtimeMinutes',
+      'durationMinutes',
+      'runtime_minutes'
+    ]) {
       final value = _readInt(episode[key]);
       if (value != null && value > 0) return value.clamp(1, 1440).toInt();
     }
-    for (final key in const ['durationSeconds', 'runtimeSeconds', 'duration_seconds']) {
+    for (final key in const [
+      'durationSeconds',
+      'runtimeSeconds',
+      'duration_seconds'
+    ]) {
       final value = _readInt(episode[key]);
-      if (value != null && value > 0) return (value / 60).ceil().clamp(1, 1440).toInt();
+      if (value != null && value > 0) {
+        return (value / 60).ceil().clamp(1, 1440).toInt();
+      }
     }
     final duration = _readInt(episode['duration'] ?? episode['runtime']);
     if (duration != null && duration > 0) {
       // Existing series metadata uses values such as 42/44/46 for minutes.
-      return duration > 600 ? (duration / 60).ceil().clamp(1, 1440).toInt() : duration.clamp(1, 1440).toInt();
+      return duration > 600
+          ? (duration / 60).ceil().clamp(1, 1440).toInt()
+          : duration.clamp(1, 1440).toInt();
     }
     return null;
   }
 
   static int? _seasonNumber(Map<String, dynamic> season) {
     final explicit = _readInt(
-      season['seasonNumber'] ?? season['season_number'] ?? season['season'] ?? season['number'],
+      season['seasonNumber'] ??
+          season['season_number'] ??
+          season['season'] ??
+          season['number'],
     );
     if (explicit != null) return explicit;
     final label = _seasonLabel(season);
-    final match = RegExp(r'\b(?:season|series|s)\s*#?0*(\d+)\b', caseSensitive: false).firstMatch(label);
+    final match =
+        RegExp(r'\b(?:season|series|s)\s*#?0*(\d+)\b', caseSensitive: false)
+            .firstMatch(label);
     return match == null ? null : int.tryParse(match.group(1) ?? '');
   }
 
   static int? _seasonNumberFromEpisodeLabel(Map<String, dynamic> episode) {
-    final label = '${episode['episodeCode'] ?? ''} ${episode['filename'] ?? ''} ${episode['title'] ?? episode['name'] ?? ''}';
-    final match = RegExp(r'\bS(\d{1,2})\s*E\d{1,3}\b', caseSensitive: false).firstMatch(label);
+    final label =
+        '${episode['episodeCode'] ?? ''} ${episode['filename'] ?? ''} ${episode['title'] ?? episode['name'] ?? ''}';
+    final match = RegExp(r'\bS(\d{1,2})\s*E\d{1,3}\b', caseSensitive: false)
+        .firstMatch(label);
     return match == null ? null : int.tryParse(match.group(1) ?? '');
   }
 
@@ -353,10 +392,14 @@ class MarathonEntry {
 
   static int? _episodeNumber(Map<String, dynamic> episode) {
     final explicit = _readInt(
-      episode['episodeNumber'] ?? episode['episode_number'] ?? episode['episode'] ?? episode['number'],
+      episode['episodeNumber'] ??
+          episode['episode_number'] ??
+          episode['episode'] ??
+          episode['number'],
     );
     if (explicit != null) return explicit;
-    final label = '${episode['episodeCode'] ?? ''} ${episode['filename'] ?? ''} ${episode['title'] ?? episode['name'] ?? ''}';
+    final label =
+        '${episode['episodeCode'] ?? ''} ${episode['filename'] ?? ''} ${episode['title'] ?? episode['name'] ?? ''}';
     final patterns = <RegExp>[
       RegExp(r'\bS\d{1,2}\s*E(\d{1,3})\b', caseSensitive: false),
       RegExp(r'\bEpisode\s*#?0*(\d{1,3})\b', caseSensitive: false),
@@ -370,7 +413,12 @@ class MarathonEntry {
   }
 
   static String _episodeTitle(Map<String, dynamic> episode) =>
-      (episode['title'] ?? episode['name'] ?? episode['episodeTitle'] ?? 'Untitled episode').toString().trim();
+      (episode['title'] ??
+              episode['name'] ??
+              episode['episodeTitle'] ??
+              'Untitled episode')
+          .toString()
+          .trim();
 }
 
 int? _readInt(Object? value) {
@@ -431,13 +479,16 @@ class MarathonPlan {
         profileId: json['profileId']?.toString() ?? '',
         title: json['title']?.toString() ?? 'Movie Marathon',
         themeId: json['themeId']?.toString() ?? 'cozy-cinema',
-        startAt: DateTime.tryParse(json['startAt']?.toString() ?? '') ?? DateTime.now(),
+        startAt: DateTime.tryParse(json['startAt']?.toString() ?? '') ??
+            DateTime.now(),
         entries: (json['entries'] as List? ?? const [])
             .whereType<Map>()
-            .map((item) => MarathonEntry.fromJson(Map<String, dynamic>.from(item)))
+            .map((item) =>
+                MarathonEntry.fromJson(Map<String, dynamic>.from(item)))
             .toList(),
         breakEvery: (_readInt(json['breakEvery']) ?? 2).clamp(1, 10).toInt(),
-        breakMinutes: (_readInt(json['breakMinutes']) ?? 15).clamp(0, 120).toInt(),
+        breakMinutes:
+            (_readInt(json['breakMinutes']) ?? 15).clamp(0, 120).toInt(),
         foodNotes: json['foodNotes']?.toString() ?? '',
         createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       );
@@ -464,13 +515,19 @@ class MarathonPlannerMath {
     var current = plan.startAt;
     for (var index = 0; index < plan.entries.length; index++) {
       final entry = plan.entries[index];
-      final end = current.add(Duration(minutes: entry.runtimeMinutes.clamp(1, 1440).toInt()));
-      rows.add(MarathonScheduleRow(entry: entry, startsAt: current, endsAt: end, isBreak: false));
+      final end = current
+          .add(Duration(minutes: entry.runtimeMinutes.clamp(1, 1440).toInt()));
+      rows.add(MarathonScheduleRow(
+          entry: entry, startsAt: current, endsAt: end, isBreak: false));
       current = end;
       final afterCount = index + 1;
-      if (afterCount < plan.entries.length && afterCount % plan.breakEvery == 0 && plan.breakMinutes > 0) {
-        final breakEnd = current.add(Duration(minutes: plan.breakMinutes.clamp(0, 120).toInt()));
-        rows.add(MarathonScheduleRow(entry: null, startsAt: current, endsAt: breakEnd, isBreak: true));
+      if (afterCount < plan.entries.length &&
+          afterCount % plan.breakEvery == 0 &&
+          plan.breakMinutes > 0) {
+        final breakEnd = current
+            .add(Duration(minutes: plan.breakMinutes.clamp(0, 120).toInt()));
+        rows.add(MarathonScheduleRow(
+            entry: null, startsAt: current, endsAt: breakEnd, isBreak: true));
         current = breakEnd;
       }
     }
@@ -481,7 +538,9 @@ class MarathonPlannerMath {
     if (a.mediaId == b.mediaId && a.isEpisode && b.isEpisode) {
       final seasonA = a.seasonNumber;
       final seasonB = b.seasonNumber;
-      if (seasonA != null && seasonB != null && seasonA != seasonB) return seasonA.compareTo(seasonB);
+      if (seasonA != null && seasonB != null && seasonA != seasonB) {
+        return seasonA.compareTo(seasonB);
+      }
       if (seasonA == null && seasonB != null) return 1;
       if (seasonB == null && seasonA != null) return -1;
       final epA = a.episodeNumber;
@@ -492,21 +551,27 @@ class MarathonPlannerMath {
       return a.title.toLowerCase().compareTo(b.title.toLowerCase());
     }
     if (a.franchiseId != null && a.franchiseId == b.franchiseId) {
-      if (a.franchiseOrder != null && b.franchiseOrder != null && a.franchiseOrder != b.franchiseOrder) {
+      if (a.franchiseOrder != null &&
+          b.franchiseOrder != null &&
+          a.franchiseOrder != b.franchiseOrder) {
         return a.franchiseOrder!.compareTo(b.franchiseOrder!);
       }
     }
-    if (a.releaseYear != null && b.releaseYear != null && a.releaseYear != b.releaseYear) {
+    if (a.releaseYear != null &&
+        b.releaseYear != null &&
+        a.releaseYear != b.releaseYear) {
       return a.releaseYear!.compareTo(b.releaseYear!);
     }
-    final parent = a.parentTitle.toLowerCase().compareTo(b.parentTitle.toLowerCase());
+    final parent =
+        a.parentTitle.toLowerCase().compareTo(b.parentTitle.toLowerCase());
     if (parent != 0) return parent;
     return a.title.toLowerCase().compareTo(b.title.toLowerCase());
   }
 }
 
 class HeyMarathonStore {
-  static String _key(String profileId) => 'hey_marathon_plans_v1_${profileId.isEmpty ? 'guest' : profileId}';
+  static String _key(String profileId) =>
+      'hey_marathon_plans_v1_${profileId.isEmpty ? 'guest' : profileId}';
 
   static Future<List<MarathonPlan>> load(String profileId) async {
     final preferences = await SharedPreferences.getInstance();
@@ -542,7 +607,8 @@ class HeyMarathonScreen extends StatefulWidget {
 }
 
 class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
-  final TextEditingController _titleController = TextEditingController(text: 'Movie Marathon');
+  final TextEditingController _titleController =
+      TextEditingController(text: 'Movie Marathon');
   final TextEditingController _foodNotesController = TextEditingController();
   final AppController _app = AppController.instance;
   List<MarathonPlan> _plans = <MarathonPlan>[];
@@ -632,7 +698,8 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
     );
     if (!mounted || chosenTime == null) return;
     setState(() {
-      _startAt = DateTime(chosenDate.year, chosenDate.month, chosenDate.day, chosenTime.hour, chosenTime.minute);
+      _startAt = DateTime(chosenDate.year, chosenDate.month, chosenDate.day,
+          chosenTime.hour, chosenTime.minute);
     });
   }
 
@@ -649,7 +716,9 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
       ),
     );
     if (!mounted || selected == null || selected.isEmpty) return;
-    final byId = <String, MarathonEntry>{for (final entry in _draftEntries) entry.id: entry};
+    final byId = <String, MarathonEntry>{
+      for (final entry in _draftEntries) entry.id: entry
+    };
     for (final entry in selected) {
       byId.putIfAbsent(entry.id, () => entry);
     }
@@ -670,10 +739,14 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Minutes', helperText: 'Use the title’s actual runtime when known.'),
+          decoration: const InputDecoration(
+              labelText: 'Minutes',
+              helperText: 'Use the title’s actual runtime when known.'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const UniversalText('Cancel')),
           FilledButton(
             onPressed: () {
               final parsed = int.tryParse(controller.text.trim());
@@ -687,7 +760,8 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
     );
     controller.dispose();
     if (!mounted || result == null) return;
-    setState(() => _draftEntries[index] = entry.withRuntime(result, estimated: false));
+    setState(() =>
+        _draftEntries[index] = entry.withRuntime(result, estimated: false));
   }
 
   void _moveEntry(int index, int offset) {
@@ -704,9 +778,11 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
       _toast('Add at least one movie or episode first.');
       return;
     }
-    final unresolved = _draftEntries.where((entry) => entry.episodeOrderNeedsReview).toList();
+    final unresolved =
+        _draftEntries.where((entry) => entry.episodeOrderNeedsReview).toList();
     if (unresolved.isNotEmpty) {
-      _toast('Fix missing season/episode numbers before saving. ${unresolved.length} item(s) need review.');
+      _toast(
+          'Fix missing season/episode numbers before saving. ${unresolved.length} item(s) need review.');
       return;
     }
     setState(() => _saving = true);
@@ -761,10 +837,15 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const UniversalText('Delete marathon plan?'),
-        content: Text('Delete “${plan.title}” from this profile on this device?'),
+        content:
+            Text('Delete “${plan.title}” from this profile on this device?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Delete')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const UniversalText('Delete')),
         ],
       ),
     );
@@ -790,12 +871,16 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
       'Food inspiration: ${plan.theme.foodIdeas.take(3).join(', ')}',
       '',
       schedule,
-      if (plan.foodNotes.trim().isNotEmpty) ...['', 'Food notes: ${plan.foodNotes.trim()}'],
+      if (plan.foodNotes.trim().isNotEmpty) ...[
+        '',
+        'Food notes: ${plan.foodNotes.trim()}'
+      ],
       '',
       'Made with MyOwnStreamingService · Timings are estimates where marked.',
     ].join('\n');
     try {
-      await SharePlus.instance.share(ShareParams(title: plan.title, text: text));
+      await SharePlus.instance
+          .share(ShareParams(title: plan.title, text: text));
     } catch (error) {
       if (mounted) _toast('Could not open sharing: $error');
     }
@@ -805,14 +890,16 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
     await Navigator.of(context).push<void>(MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/app/page/hey-marathon/food'),
       builder: (_) => FoodOrderingScreen(
-        viewingContext: 'Hey Marathon · ${plan.title} · ${plan.theme.title} · themed food ideas: ${plan.theme.foodIdeas.take(3).join(', ')}${plan.foodNotes.isEmpty ? '' : ' · ${plan.foodNotes}'}',
+        viewingContext:
+            'Hey Marathon · ${plan.title} · ${plan.theme.title} · themed food ideas: ${plan.theme.foodIdeas.take(3).join(', ')}${plan.foodNotes.isEmpty ? '' : ' · ${plan.foodNotes}'}',
       ),
     ));
   }
 
   Future<void> _startGroupWatch(MarathonPlan plan) async {
     if (!_app.backendApi.isAuthenticated) {
-      _toast('Sign in to create a synchronized Group Watch session. You can still share the marathon plan.');
+      _toast(
+          'Sign in to create a synchronized Group Watch session. You can still share the marathon plan.');
       return;
     }
     if (plan.entries.isEmpty) return;
@@ -834,37 +921,48 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
       return;
     }
     try {
-      final session = await _app.createBackendGroupWatchSession(media, profileId: profileId);
+      final session = await _app.createBackendGroupWatchSession(media,
+          profileId: profileId);
       if (!mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute<void>(
-        settings: const RouteSettings(name: '/app/page/hey-marathon/group-watch'),
+        settings:
+            const RouteSettings(name: '/app/page/hey-marathon/group-watch'),
         builder: (_) => GroupWatchScreen(media: media!, sessionId: session.id),
       ));
     } catch (error) {
-      if (mounted) _toast('Could not start Group Watch: ${error.toString().replaceFirst('Exception: ', '')}');
+      if (mounted) {
+        _toast(
+            'Could not start Group Watch: ${error.toString().replaceFirst('Exception: ', '')}');
+      }
     }
   }
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _formatDateTime(DateTime value) {
     final date = MaterialLocalizations.of(context).formatMediumDate(value);
-    final time = MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(value));
+    final time = MaterialLocalizations.of(context)
+        .formatTimeOfDay(TimeOfDay.fromDateTime(value));
     return '$date · $time';
   }
 
-  String _formatTime(DateTime value) => MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(value));
+  String _formatTime(DateTime value) => MaterialLocalizations.of(context)
+      .formatTimeOfDay(TimeOfDay.fromDateTime(value));
 
   @override
   Widget build(BuildContext context) {
-    final unresolvedCount = _draftEntries.where((entry) => entry.episodeOrderNeedsReview).length;
+    final unresolvedCount =
+        _draftEntries.where((entry) => entry.episodeOrderNeedsReview).length;
     final draftPlan = MarathonPlan(
       id: 'draft',
       profileId: _profileId,
-      title: _titleController.text.trim().isEmpty ? 'Movie Marathon' : _titleController.text.trim(),
+      title: _titleController.text.trim().isEmpty
+          ? 'Movie Marathon'
+          : _titleController.text.trim(),
       themeId: _themeId,
       startAt: _startAt,
       entries: _draftEntries,
@@ -874,8 +972,11 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
     );
     final schedule = MarathonPlannerMath.schedule(draftPlan);
     final finish = schedule.isEmpty ? _startAt : schedule.last.endsAt;
-    final plannedMinutes = _draftEntries.fold<int>(0, (sum, entry) => sum + entry.runtimeMinutes) +
-        ((_draftEntries.length <= 1 || _breakMinutes == 0) ? 0 : ((_draftEntries.length - 1) ~/ _breakEvery) * _breakMinutes);
+    final plannedMinutes =
+        _draftEntries.fold<int>(0, (sum, entry) => sum + entry.runtimeMinutes) +
+            ((_draftEntries.length <= 1 || _breakMinutes == 0)
+                ? 0
+                : ((_draftEntries.length - 1) ~/ _breakEvery) * _breakMinutes);
 
     return Scaffold(
       appBar: AppBar(
@@ -884,7 +985,8 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
           const PageCustomizeButton(pageId: 'hey-marathon'),
           IconButton(
             tooltip: 'Share current draft',
-            onPressed: _draftEntries.isEmpty ? null : () => _sharePlan(draftPlan),
+            onPressed:
+                _draftEntries.isEmpty ? null : () => _sharePlan(draftPlan),
             icon: const Icon(Icons.ios_share_rounded),
           ),
         ],
@@ -901,44 +1003,74 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: <Color>[Color(0xFF29204D), Color(0xFF121C2E), Color(0xFF101010)],
+                      colors: <Color>[
+                        Color(0xFF29204D),
+                        Color(0xFF121C2E),
+                        Color(0xFF101010)
+                      ],
                     ),
                   ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Icon(Icons.movie_filter_rounded, size: 34, color: Color(0xFFFFD36E)),
-                    const SizedBox(height: 10),
-                    const UniversalText('Your whole movie night, planned.', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 6),
-                    const UniversalText('Build a watch order from your library, schedule breaks, invite friends, and find themed food.', style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 12),
-                    Wrap(spacing: 8, runSpacing: 8, children: [
-                      _featureChip(Icons.schedule_rounded, 'Runtime-aware schedule'),
-                      _featureChip(Icons.people_alt_rounded, 'Share invitations'),
-                      _featureChip(Icons.restaurant_rounded, 'Food handoff'),
-                    ]),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.movie_filter_rounded,
+                            size: 34, color: Color(0xFFFFD36E)),
+                        const SizedBox(height: 10),
+                        const UniversalText('Your whole movie night, planned.',
+                            style: TextStyle(
+                                fontSize: 25, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        const UniversalText(
+                            'Build a watch order from your library, schedule breaks, invite friends, and find themed food.',
+                            style: TextStyle(color: Colors.white70)),
+                        const SizedBox(height: 12),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          _featureChip(
+                              Icons.schedule_rounded, 'Runtime-aware schedule'),
+                          _featureChip(
+                              Icons.people_alt_rounded, 'Share invitations'),
+                          _featureChip(
+                              Icons.restaurant_rounded, 'Food handoff'),
+                        ]),
+                      ]),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Card(color: Theme.of(context).colorScheme.errorContainer, child: Padding(padding: const EdgeInsets.all(12), child: Text(_error!))),
+                  Card(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(_error!))),
                 ],
                 const SizedBox(height: 18),
-                _sectionTitle('Plan a marathon', 'Create a local plan for the selected profile.'),
+                _sectionTitle('Plan a marathon',
+                    'Create a local plan for the selected profile.'),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _titleController,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'Marathon name', hintText: 'Harry Potter · Saturday night', prefixIcon: Icon(Icons.edit_rounded)),
+                  decoration: const InputDecoration(
+                      labelText: 'Marathon name',
+                      hintText: 'Harry Potter · Saturday night',
+                      prefixIcon: Icon(Icons.edit_rounded)),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _themeId,
-                  decoration: const InputDecoration(labelText: 'Theme', prefixIcon: Icon(Icons.auto_awesome_rounded)),
-                  items: heyMarathonThemes.map((item) => DropdownMenuItem<String>(value: item.id, child: Text(item.title))).toList(),
-                  onChanged: (value) { if (value != null) setState(() => _themeId = value); },
+                  decoration: const InputDecoration(
+                      labelText: 'Theme',
+                      prefixIcon: Icon(Icons.auto_awesome_rounded)),
+                  items: heyMarathonThemes
+                      .map((item) => DropdownMenuItem<String>(
+                          value: item.id, child: Text(item.title)))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) setState(() => _themeId = value);
+                  },
                 ),
                 const SizedBox(height: 8),
-                Text(_theme.description, style: const TextStyle(color: Colors.white60)),
+                Text(_theme.description,
+                    style: const TextStyle(color: Colors.white60)),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: _chooseStartTime,
@@ -947,20 +1079,35 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
-                  Expanded(child: DropdownButtonFormField<int>(
+                  Expanded(
+                      child: DropdownButtonFormField<int>(
                     initialValue: _breakEvery,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Break after'),
-                    items: <int>[1, 2, 3, 4, 5].map((value) => DropdownMenuItem<int>(value: value, child: Text('$value title(s)'))).toList(),
-                    onChanged: (value) { if (value != null) setState(() => _breakEvery = value); },
+                    items: <int>[1, 2, 3, 4, 5]
+                        .map((value) => DropdownMenuItem<int>(
+                            value: value, child: Text('$value title(s)')))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) setState(() => _breakEvery = value);
+                    },
                   )),
                   const SizedBox(width: 10),
-                  Expanded(child: DropdownButtonFormField<int>(
+                  Expanded(
+                      child: DropdownButtonFormField<int>(
                     initialValue: _breakMinutes,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Break length'),
-                    items: <int>[0, 5, 10, 15, 20, 30, 45].map((value) => DropdownMenuItem<int>(value: value, child: Text(value == 0 ? 'No break' : '$value min'))).toList(),
-                    onChanged: (value) { if (value != null) setState(() => _breakMinutes = value); },
+                    decoration:
+                        const InputDecoration(labelText: 'Break length'),
+                    items: <int>[0, 5, 10, 15, 20, 30, 45]
+                        .map((value) => DropdownMenuItem<int>(
+                            value: value,
+                            child:
+                                Text(value == 0 ? 'No break' : '$value min')))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) setState(() => _breakMinutes = value);
+                    },
                   )),
                 ]),
                 const SizedBox(height: 12),
@@ -968,67 +1115,151 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
                   controller: _foodNotesController,
                   onChanged: (_) => setState(() {}),
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Food notes (optional)', hintText: 'Vegetarian options, no nuts, pickup before the first film…', prefixIcon: Icon(Icons.restaurant_menu_rounded)),
+                  decoration: const InputDecoration(
+                      labelText: 'Food notes (optional)',
+                      hintText:
+                          'Vegetarian options, no nuts, pickup before the first film…',
+                      prefixIcon: Icon(Icons.restaurant_menu_rounded)),
                 ),
                 const SizedBox(height: 16),
                 Row(children: [
-                  Expanded(child: Text('Watch order (${_draftEntries.length})', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
-                  TextButton.icon(onPressed: _addFromLibrary, icon: const Icon(Icons.add_rounded), label: const UniversalText('Add from library')),
+                  Expanded(
+                      child: Text('Watch order (${_draftEntries.length})',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900))),
+                  TextButton.icon(
+                      onPressed: _addFromLibrary,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const UniversalText('Add from library')),
                 ]),
                 if (_draftEntries.isEmpty)
-                  _emptyCard(Icons.video_library_outlined, 'No titles added yet', 'Add movies or individual TV episodes from your imported library.')
+                  _emptyCard(
+                      Icons.video_library_outlined,
+                      'No titles added yet',
+                      'Add movies or individual TV episodes from your imported library.')
                 else ...[
                   if (unresolvedCount > 0)
-                    Card(color: const Color(0xFF4B3212), child: const ListTile(
-                      leading: Icon(Icons.warning_amber_rounded, color: Color(0xFFFFD36E)),
-                      title: UniversalText('Episode order needs review'),
-                      subtitle: UniversalText('One or more episodes are missing canonical season/episode numbers. Update media metadata before saving to protect the watch order.'),
-                    )),
+                    Card(
+                        color: const Color(0xFF4B3212),
+                        child: const ListTile(
+                          leading: Icon(Icons.warning_amber_rounded,
+                              color: Color(0xFFFFD36E)),
+                          title: UniversalText('Episode order needs review'),
+                          subtitle: UniversalText(
+                              'One or more episodes are missing canonical season/episode numbers. Update media metadata before saving to protect the watch order.'),
+                        )),
                   for (var index = 0; index < _draftEntries.length; index++)
                     _draftEntryCard(index),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
-                      onPressed: _draftEntries.length < 2 ? null : () => setState(() => _draftEntries.sort(MarathonPlannerMath.compareCanonical)),
+                      onPressed: _draftEntries.length < 2
+                          ? null
+                          : () => setState(() => _draftEntries
+                              .sort(MarathonPlannerMath.compareCanonical)),
                       icon: const Icon(Icons.sort_by_alpha_rounded),
                       label: const UniversalText('Restore canonical order'),
                     ),
                   ),
                 ],
                 const SizedBox(height: 8),
-                _sectionTitle('Schedule preview', 'Includes title runtimes and planned breaks.'),
+                _sectionTitle('Schedule preview',
+                    'Includes title runtimes and planned breaks.'),
                 const SizedBox(height: 8),
-                Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [const Icon(Icons.timelapse_rounded), const SizedBox(width: 8), Expanded(child: Text('Estimated total: ${_formatDuration(plannedMinutes)}', style: const TextStyle(fontWeight: FontWeight.w800))),]),
-                  const SizedBox(height: 4),
-                  Text('Expected finish: ${_formatDateTime(finish)}', style: const TextStyle(color: Colors.white60)),
-                  if (_draftEntries.any((entry) => entry.runtimeEstimated))
-                    const Padding(padding: EdgeInsets.only(top: 8), child: UniversalText('Some runtimes are estimates. Edit a title’s runtime for a more accurate finish time.', style: TextStyle(color: Colors.amberAccent, fontSize: 12))),
-                  const Divider(height: 22),
-                  if (schedule.isEmpty) const UniversalText('Your timed schedule will appear here after you add titles.'),
-                  for (var index = 0; index < schedule.length; index++) _scheduleRow(schedule[index], index),
-                ]))),
+                Card(
+                    child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const Icon(Icons.timelapse_rounded),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                    child: Text(
+                                        'Estimated total: ${_formatDuration(plannedMinutes)}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800))),
+                              ]),
+                              const SizedBox(height: 4),
+                              Text(
+                                  'Expected finish: ${_formatDateTime(finish)}',
+                                  style:
+                                      const TextStyle(color: Colors.white60)),
+                              if (_draftEntries
+                                  .any((entry) => entry.runtimeEstimated))
+                                const Padding(
+                                    padding: EdgeInsets.only(top: 8),
+                                    child: UniversalText(
+                                        'Some runtimes are estimates. Edit a title’s runtime for a more accurate finish time.',
+                                        style: TextStyle(
+                                            color: Colors.amberAccent,
+                                            fontSize: 12))),
+                              const Divider(height: 22),
+                              if (schedule.isEmpty)
+                                const UniversalText(
+                                    'Your timed schedule will appear here after you add titles.'),
+                              for (var index = 0;
+                                  index < schedule.length;
+                                  index++)
+                                _scheduleRow(schedule[index], index),
+                            ]))),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: _saving || _draftEntries.isEmpty || unresolvedCount > 0 ? null : _savePlan,
-                  icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_rounded),
-                  label: UniversalText(_saving ? 'Saving…' : 'Save marathon plan'),
+                  onPressed:
+                      _saving || _draftEntries.isEmpty || unresolvedCount > 0
+                          ? null
+                          : _savePlan,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_rounded),
+                  label:
+                      UniversalText(_saving ? 'Saving…' : 'Save marathon plan'),
                 ),
                 const SizedBox(height: 24),
-                _sectionTitle('Themed food ideas', 'Ideas to discuss with your guests or find through participating restaurants.'),
+                _sectionTitle('Themed food ideas',
+                    'Ideas to discuss with your guests or find through participating restaurants.'),
                 const SizedBox(height: 8),
-                Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [Icon(_theme.icon), const SizedBox(width: 8), Expanded(child: Text(_theme.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)))]),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 8, runSpacing: 8, children: _theme.foodIdeas.map((idea) => Chip(label: Text(idea))).toList()),
-                  const SizedBox(height: 6),
-                  const UniversalText('Fan-inspired suggestions only; not official or licensed menu items. Confirm ingredients and allergy/cross-contact information with the restaurant.', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                ]))),
+                Card(
+                    child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Icon(_theme.icon),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                    child: Text(_theme.title,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 17)))
+                              ]),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _theme.foodIdeas
+                                      .map((idea) => Chip(label: Text(idea)))
+                                      .toList()),
+                              const SizedBox(height: 6),
+                              const UniversalText(
+                                  'Fan-inspired suggestions only; not official or licensed menu items. Confirm ingredients and allergy/cross-contact information with the restaurant.',
+                                  style: TextStyle(
+                                      color: Colors.white60, fontSize: 12)),
+                            ]))),
                 const SizedBox(height: 24),
-                _sectionTitle('Saved plans (${_plans.length})', 'Stored locally for this profile on this device.'),
+                _sectionTitle('Saved plans (${_plans.length})',
+                    'Stored locally for this profile on this device.'),
                 const SizedBox(height: 8),
                 if (_plans.isEmpty)
-                  _emptyCard(Icons.event_note_rounded, 'No saved marathons yet', 'Save a plan above and it will appear here.')
+                  _emptyCard(Icons.event_note_rounded, 'No saved marathons yet',
+                      'Save a plan above and it will appear here.')
                 else
                   for (final plan in _plans) _savedPlanCard(plan),
               ],
@@ -1038,7 +1269,8 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
 
   Widget _featureChip(IconData icon, String label) => Chip(
         avatar: Icon(icon, size: 16, color: const Color(0xFFFFD36E)),
-        label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        label: Text(label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
         backgroundColor: Colors.white.withValues(alpha: .08),
         side: BorderSide.none,
       );
@@ -1046,69 +1278,145 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
   Widget _sectionTitle(String title, String subtitle) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
           const SizedBox(height: 3),
-          Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 13)),
+          Text(subtitle,
+              style: const TextStyle(color: Colors.white60, fontSize: 13)),
         ],
       );
 
   Widget _emptyCard(IconData icon, String title, String subtitle) => Card(
-        child: Padding(padding: const EdgeInsets.all(18), child: Row(children: [
-          Icon(icon, size: 30, color: Colors.white38),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(color: Colors.white60)),
-          ])),
-        ])),
+        child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(children: [
+              Icon(icon, size: 30, color: Colors.white38),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(title,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: const TextStyle(color: Colors.white60)),
+                  ])),
+            ])),
       );
 
   Widget _draftEntryCard(int index) {
     final entry = _draftEntries[index];
     return Card(
       key: ValueKey(entry.id),
-      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Row(children: [
-        if (entry.imageUrl != null && entry.imageUrl!.startsWith('http'))
-          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(entry.imageUrl!, width: 48, height: 68, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 48, height: 68, child: Icon(Icons.movie_outlined))))
-        else
-          Container(width: 48, height: 68, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)), child: Icon(entry.isEpisode ? Icons.tv_rounded : Icons.movie_rounded)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${index + 1}. ${entry.title}', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('${entry.runtimeMinutes} min${entry.runtimeEstimated ? ' · estimated' : ''}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
-          if (entry.episodeOrderNeedsReview) const Text('Episode order unverified', style: TextStyle(color: Colors.orangeAccent, fontSize: 12)),
-        ])),
-        Column(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(tooltip: 'Move up', visualDensity: VisualDensity.compact, onPressed: index == 0 ? null : () => _moveEntry(index, -1), icon: const Icon(Icons.keyboard_arrow_up_rounded)),
-          IconButton(tooltip: 'Move down', visualDensity: VisualDensity.compact, onPressed: index == _draftEntries.length - 1 ? null : () => _moveEntry(index, 1), icon: const Icon(Icons.keyboard_arrow_down_rounded)),
-        ]),
-        PopupMenuButton<String>(
-          tooltip: 'Title options',
-          onSelected: (value) {
-            if (value == 'runtime') _editRuntime(index);
-            if (value == 'remove') setState(() => _draftEntries.removeAt(index));
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'runtime', child: Text('Edit runtime')),
-            PopupMenuItem(value: 'remove', child: Text('Remove')),
-          ],
-        ),
-      ])),
+      child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(children: [
+            if (entry.imageUrl != null && entry.imageUrl!.startsWith('http'))
+              ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(entry.imageUrl!,
+                      width: 48,
+                      height: 68,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox(
+                          width: 48,
+                          height: 68,
+                          child: Icon(Icons.movie_outlined))))
+            else
+              Container(
+                  width: 48,
+                  height: 68,
+                  decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Icon(entry.isEpisode
+                      ? Icons.tv_rounded
+                      : Icons.movie_rounded)),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('${index + 1}. ${entry.title}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(
+                      '${entry.runtimeMinutes} min${entry.runtimeEstimated ? ' · estimated' : ''}',
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 12)),
+                  if (entry.episodeOrderNeedsReview)
+                    const Text('Episode order unverified',
+                        style: TextStyle(
+                            color: Colors.orangeAccent, fontSize: 12)),
+                ])),
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                  tooltip: 'Move up',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: index == 0 ? null : () => _moveEntry(index, -1),
+                  icon: const Icon(Icons.keyboard_arrow_up_rounded)),
+              IconButton(
+                  tooltip: 'Move down',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: index == _draftEntries.length - 1
+                      ? null
+                      : () => _moveEntry(index, 1),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded)),
+            ]),
+            PopupMenuButton<String>(
+              tooltip: 'Title options',
+              onSelected: (value) {
+                if (value == 'runtime') _editRuntime(index);
+                if (value == 'remove') {
+                  setState(() => _draftEntries.removeAt(index));
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'runtime', child: Text('Edit runtime')),
+                PopupMenuItem(value: 'remove', child: Text('Remove')),
+              ],
+            ),
+          ])),
     );
   }
 
   Widget _scheduleRow(MarathonScheduleRow row, int index) {
     final duration = row.endsAt.difference(row.startsAt).inMinutes;
-    return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SizedBox(width: 102, child: Text('${_formatTime(row.startsAt)}\n${_formatTime(row.endsAt)}', style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.45))),
-      Container(width: 3, height: 38, margin: const EdgeInsets.only(right: 10), decoration: BoxDecoration(color: row.isBreak ? Colors.amber : Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(2))),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(row.isBreak ? 'Break · $duration min' : row.entry!.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-        if (!row.isBreak && row.entry!.runtimeEstimated) const UniversalText('Estimated runtime', style: TextStyle(color: Colors.white54, fontSize: 11)),
-      ])),
-    ]));
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 102,
+              child: Text(
+                  '${_formatTime(row.startsAt)}\n${_formatTime(row.endsAt)}',
+                  style: const TextStyle(
+                      color: Colors.white60, fontSize: 12, height: 1.45))),
+          Container(
+              width: 3,
+              height: 38,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                  color: row.isBreak
+                      ? Colors.amber
+                      : Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(2))),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(row.isBreak ? 'Break · $duration min' : row.entry!.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                if (!row.isBreak && row.entry!.runtimeEstimated)
+                  const UniversalText('Estimated runtime',
+                      style: TextStyle(color: Colors.white54, fontSize: 11)),
+              ])),
+        ]));
   }
 
   Widget _savedPlanCard(MarathonPlan plan) {
@@ -1117,28 +1425,62 @@ class _HeyMarathonScreenState extends State<HeyMarathonScreen> {
     return Card(
       child: ExpansionTile(
         leading: CircleAvatar(child: Icon(plan.theme.icon)),
-        title: Text(plan.title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text('${plan.theme.title} · ${plan.entries.length} title(s) · ${_formatDateTime(plan.startAt)}', maxLines: 2),
+        title: Text(plan.title,
+            style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Text(
+            '${plan.theme.title} · ${plan.entries.length} title(s) · ${_formatDateTime(plan.startAt)}',
+            maxLines: 2),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         children: [
-          Align(alignment: Alignment.centerLeft, child: Text('Estimated finish: ${_formatDateTime(finish)}', style: const TextStyle(color: Colors.white60))),
+          Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Estimated finish: ${_formatDateTime(finish)}',
+                  style: const TextStyle(color: Colors.white60))),
           for (var index = 0; index < plan.entries.length; index++)
             ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(radius: 13, child: Text('${index + 1}', style: const TextStyle(fontSize: 11))),
-              title: Text(plan.entries[index].title, maxLines: 2, overflow: TextOverflow.ellipsis),
-              trailing: Text('${plan.entries[index].runtimeMinutes}m${plan.entries[index].runtimeEstimated ? '*' : ''}'),
+              leading: CircleAvatar(
+                  radius: 13,
+                  child: Text('${index + 1}',
+                      style: const TextStyle(fontSize: 11))),
+              title: Text(plan.entries[index].title,
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              trailing: Text(
+                  '${plan.entries[index].runtimeMinutes}m${plan.entries[index].runtimeEstimated ? '*' : ''}'),
             ),
-          if (plan.foodNotes.trim().isNotEmpty) Align(alignment: Alignment.centerLeft, child: Text('Food notes: ${plan.foodNotes}', style: const TextStyle(color: Colors.white60))),
+          if (plan.foodNotes.trim().isNotEmpty)
+            Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Food notes: ${plan.foodNotes}',
+                    style: const TextStyle(color: Colors.white60))),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            OutlinedButton.icon(onPressed: () => _loadDraft(plan), icon: const Icon(Icons.edit_rounded), label: const UniversalText('Load to editor')),
-            OutlinedButton.icon(onPressed: () => _sharePlan(plan), icon: const Icon(Icons.ios_share_rounded), label: const UniversalText('Invite / share')),
-            OutlinedButton.icon(onPressed: () => _openFood(plan), icon: const Icon(Icons.restaurant_rounded), label: const UniversalText('Find themed food')),
-            FilledButton.tonalIcon(onPressed: () => _startGroupWatch(plan), icon: const Icon(Icons.play_circle_outline_rounded), label: const UniversalText('Start Group Watch')),
-            TextButton.icon(onPressed: () => _deletePlan(plan), icon: const Icon(Icons.delete_outline_rounded), label: const UniversalText('Delete')),
+            OutlinedButton.icon(
+                onPressed: () => _loadDraft(plan),
+                icon: const Icon(Icons.edit_rounded),
+                label: const UniversalText('Load to editor')),
+            OutlinedButton.icon(
+                onPressed: () => _sharePlan(plan),
+                icon: const Icon(Icons.ios_share_rounded),
+                label: const UniversalText('Invite / share')),
+            OutlinedButton.icon(
+                onPressed: () => _openFood(plan),
+                icon: const Icon(Icons.restaurant_rounded),
+                label: const UniversalText('Find themed food')),
+            FilledButton.tonalIcon(
+                onPressed: () => _startGroupWatch(plan),
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: const UniversalText('Start Group Watch')),
+            TextButton.icon(
+                onPressed: () => _deletePlan(plan),
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const UniversalText('Delete')),
           ]),
-          const Padding(padding: EdgeInsets.only(top: 6), child: UniversalText('Group Watch synchronizes one selected library title at a time. The complete marathon schedule is shared separately.', style: TextStyle(color: Colors.white54, fontSize: 12))),
+          const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: UniversalText(
+                  'Group Watch synchronizes one selected library title at a time. The complete marathon schedule is shared separately.',
+                  style: TextStyle(color: Colors.white54, fontSize: 12))),
         ],
       ),
     );
@@ -1149,7 +1491,8 @@ class _MarathonLibraryPicker extends StatefulWidget {
   final List<MediaItem> mediaItems;
   final Set<String> alreadySelectedIds;
 
-  const _MarathonLibraryPicker({required this.mediaItems, required this.alreadySelectedIds});
+  const _MarathonLibraryPicker(
+      {required this.mediaItems, required this.alreadySelectedIds});
 
   @override
   State<_MarathonLibraryPicker> createState() => _MarathonLibraryPickerState();
@@ -1163,9 +1506,7 @@ class _MarathonLibraryPickerState extends State<_MarathonLibraryPicker> {
   @override
   void initState() {
     super.initState();
-    _allEntries = widget.mediaItems
-        .expand(MarathonEntry.fromMediaItem)
-        .toList()
+    _allEntries = widget.mediaItems.expand(MarathonEntry.fromMediaItem).toList()
       ..sort(MarathonPlannerMath.compareCanonical);
     _selectedIds = <String>{};
     _searchController.addListener(() => setState(() {}));
@@ -1181,33 +1522,63 @@ class _MarathonLibraryPickerState extends State<_MarathonLibraryPicker> {
   Widget build(BuildContext context) {
     final query = _searchController.text.trim().toLowerCase();
     final filtered = _allEntries.where((entry) =>
-      query.isEmpty || entry.title.toLowerCase().contains(query) || entry.parentTitle.toLowerCase().contains(query));
+        query.isEmpty ||
+        entry.title.toLowerCase().contains(query) ||
+        entry.parentTitle.toLowerCase().contains(query));
     return AlertDialog(
       title: const UniversalText('Add from your library'),
       content: SizedBox(
         width: 600,
         height: MediaQuery.sizeOf(context).height * .62,
         child: Column(children: [
-          TextField(controller: _searchController, decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Search movies or episodes')),
+          TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search_rounded),
+                  hintText: 'Search movies or episodes')),
           const SizedBox(height: 8),
-          Expanded(child: filtered.isEmpty
-            ? const Center(child: UniversalText('No matching titles.'))
-            : ListView(children: [for (final entry in filtered) CheckboxListTile(
-                value: _selectedIds.contains(entry.id),
-                onChanged: widget.alreadySelectedIds.contains(entry.id) ? null : (selected) => setState(() {
-                  if (selected == true) { _selectedIds.add(entry.id); } else { _selectedIds.remove(entry.id); }
-                }),
-                title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                subtitle: Text('${entry.runtimeMinutes} min${entry.runtimeEstimated ? ' · estimate' : ''}${entry.episodeOrderNeedsReview ? ' · episode order needs review' : ''}'),
-                secondary: Icon(entry.isEpisode ? Icons.tv_rounded : Icons.movie_rounded),
-                controlAffinity: ListTileControlAffinity.leading,
-              )]),
+          Expanded(
+            child: filtered.isEmpty
+                ? const Center(child: UniversalText('No matching titles.'))
+                : ListView(children: [
+                    for (final entry in filtered)
+                      CheckboxListTile(
+                        value: _selectedIds.contains(entry.id),
+                        onChanged: widget.alreadySelectedIds.contains(entry.id)
+                            ? null
+                            : (selected) => setState(() {
+                                  if (selected == true) {
+                                    _selectedIds.add(entry.id);
+                                  } else {
+                                    _selectedIds.remove(entry.id);
+                                  }
+                                }),
+                        title: Text(entry.title,
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                            '${entry.runtimeMinutes} min${entry.runtimeEstimated ? ' · estimate' : ''}${entry.episodeOrderNeedsReview ? ' · episode order needs review' : ''}'),
+                        secondary: Icon(entry.isEpisode
+                            ? Icons.tv_rounded
+                            : Icons.movie_rounded),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      )
+                  ]),
           ),
         ]),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')),
-        FilledButton(onPressed: _selectedIds.isEmpty ? null : () => Navigator.pop(context, _allEntries.where((entry) => _selectedIds.contains(entry.id)).toList()), child: Text('Add ${_selectedIds.length}')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const UniversalText('Cancel')),
+        FilledButton(
+            onPressed: _selectedIds.isEmpty
+                ? null
+                : () => Navigator.pop(
+                    context,
+                    _allEntries
+                        .where((entry) => _selectedIds.contains(entry.id))
+                        .toList()),
+            child: Text('Add ${_selectedIds.length}')),
       ],
     );
   }

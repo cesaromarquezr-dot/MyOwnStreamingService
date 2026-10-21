@@ -979,6 +979,42 @@ class FoodDeliveryService {
     return parsed;
   }
 
+  Future<List<Map<String, dynamic>>> listOrders({
+    required Account account,
+    required String profileId,
+    int limit = 30,
+  }) async {
+    final cleanProfileId = _required(profileId, 'profileId', 256);
+    final safeLimit = limit.clamp(1, 100).toInt();
+    final rows = await SupabaseStore.instance.listFoodOrders(
+      accountExternalId: account.id,
+      profileId: cleanProfileId,
+      limit: safeLimit,
+    );
+    final results = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final result = Map<String, dynamic>.from(row);
+      final restaurantId = row['restaurant_id']?.toString() ?? '';
+      final restaurant = restaurantId.isEmpty
+          ? null
+          : await SupabaseStore.instance.getFoodRestaurant(restaurantId);
+      if (restaurant != null) {
+        result['restaurantName'] = restaurant['name']?.toString() ?? 'Restaurant';
+        result['etaMinMinutes'] = max(15, _toInt(restaurant['eta_min_minutes'], fallback: 30));
+        result['etaMaxMinutes'] = max(
+          result['etaMinMinutes'] as int,
+          _toInt(restaurant['eta_max_minutes'], fallback: 45),
+        );
+        result['currencyCode'] = restaurant['currency_code']?.toString() ?? row['currency_code']?.toString() ?? 'USD';
+      } else {
+        result['restaurantName'] = 'Restaurant';
+        result['currencyCode'] = row['currency_code']?.toString() ?? 'USD';
+      }
+      results.add(result);
+    }
+    return results;
+  }
+
   Future<Map<String, dynamic>> getOrder({
     required Account account,
     required String orderId,

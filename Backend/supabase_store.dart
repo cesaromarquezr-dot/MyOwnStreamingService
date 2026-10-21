@@ -143,7 +143,7 @@ class SupabaseStore {
 
     final profiles = await c
         .from('profiles')
-        .select('external_profile_id,name,avatar_url')
+        .select('external_profile_id,name,username,avatar_url')
         .eq('account_id', accountId)
         .eq('is_active', true)
         .not('external_profile_id', 'is', null)
@@ -161,6 +161,7 @@ class SupabaseStore {
       results.add({
         'profileId': profileId,
         'name': row['name']?.toString() ?? 'Profile',
+        'username': row['username']?.toString(),
         'avatarUrl': row['avatar_url']?.toString(),
         'presenceStatus': presence?['availability'] ?? 'away',
         'activityType': presence?['activity_type'],
@@ -218,6 +219,13 @@ class SupabaseStore {
           .eq('id', otherId)
           .maybeSingle();
       if (other != null) {
+        final friendProfile = await c
+            .from('profiles')
+            .select('name,username,avatar_url')
+            .eq('account_id', otherId)
+            .eq('external_profile_id', otherProfile)
+            .eq('is_active', true)
+            .maybeSingle();
         final presence = await c
             .from('social_profile_presence')
             .select('availability,activity_type,activity_text,last_seen_at')
@@ -226,6 +234,10 @@ class SupabaseStore {
             .maybeSingle();
         friends.add({
           ...other,
+          'username': friendProfile?['username']?.toString() ?? other['username']?.toString(),
+          'display_name': friendProfile?['name']?.toString() ?? other['display_name']?.toString(),
+          'avatar_url': friendProfile?['avatar_url'] ?? other['avatar_url'],
+          'profileName': friendProfile?['name']?.toString(),
           'profileId': otherProfile,
           'friends_since': row['created_at'],
           'presenceStatus': presence?['availability'] ?? 'away',
@@ -251,7 +263,24 @@ class SupabaseStore {
           .select('username,display_name,avatar_url')
           .eq('id', row['requester_account_id'].toString())
           .maybeSingle();
-      if (sender != null) requests.add({...row, 'sender': sender});
+      final senderProfile = await c
+          .from('profiles')
+          .select('username,name,avatar_url')
+          .eq('account_id', row['requester_account_id'].toString())
+          .eq('external_profile_id', row['requester_profile_id'].toString())
+          .eq('is_active', true)
+          .maybeSingle();
+      if (sender != null) {
+        requests.add({
+          ...row,
+          'sender': {
+            ...Map<String, dynamic>.from(sender),
+            'username': senderProfile?['username']?.toString() ?? sender['username']?.toString(),
+            'display_name': senderProfile?['name']?.toString() ?? sender['display_name']?.toString(),
+            'avatar_url': senderProfile?['avatar_url'] ?? sender['avatar_url'],
+          },
+        });
+      }
     }
     // Friend requests addressed to supervised profiles are returned only to
     // linked guardians, never to the child profile's pending-request list.
@@ -319,7 +348,7 @@ class SupabaseStore {
       if (suggestions.length >= 10) break;
       final otherProfiles = await c
           .from('profiles')
-          .select('external_profile_id,name')
+          .select('external_profile_id,name,username,avatar_url')
           .eq('account_id', person['id'].toString())
           .eq('is_active', true)
           .not('external_profile_id', 'is', null)
@@ -330,6 +359,9 @@ class SupabaseStore {
       if (excluded.contains(key)) continue;
       suggestions.add({
         ...person,
+        'username': profile['username']?.toString() ?? person['username']?.toString(),
+        'display_name': profile['name']?.toString() ?? person['display_name']?.toString(),
+        'avatar_url': profile['avatar_url'] ?? person['avatar_url'],
         'profileId': profile['external_profile_id'],
         'profileName': profile['name']
       });
@@ -653,33 +685,26 @@ class SupabaseStore {
         .select('id')
         .eq('external_account_id', accountExternalId)
         .maybeSingle();
-    final target = await c
-        .from('accounts')
-        .select('id')
-        .ilike('username', username.trim())
-        .maybeSingle();
-    if (me == null || target == null)
-      throw StateError('Account or user not found.');
-    var targetProfileQuery = c
+    final cleanUsername = username.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+    final targetProfiles = await c
         .from('profiles')
-        .select('external_profile_id')
-        .eq('account_id', target['id'].toString())
+        .select('account_id,external_profile_id,username')
+        .eq('username', cleanUsername)
         .eq('is_active', true)
-        .not('external_profile_id', 'is', null);
+        .not('external_profile_id', 'is', null)
+        .limit(1);
+    if (me == null || targetProfiles.isEmpty) {
+      throw StateError('User not found.');
+    }
+    final matchedProfile = targetProfiles.first;
+    final targetAccountId = matchedProfile['account_id'].toString();
+    final targetProfile = matchedProfile['external_profile_id'].toString();
     final requestedProfile = targetProfileExternalId?.trim();
-    if (requestedProfile != null && requestedProfile.isNotEmpty) {
-      targetProfileQuery = targetProfileQuery.eq(
-        'external_profile_id', requestedProfile,
-      );
+    if (requestedProfile != null && requestedProfile.isNotEmpty &&
+        requestedProfile != targetProfile) {
+      throw StateError('That profile is not available for friend requests.');
     }
-    final targetProfiles = await targetProfileQuery.limit(1);
-    if (targetProfiles.isEmpty) {
-      throw StateError(targetProfileExternalId == null
-          ? 'That user has no active profile.'
-          : 'That profile is not available for friend requests.');
-    }
-    final targetProfile = targetProfiles.first['external_profile_id'].toString();
-    if (me['id'].toString() == target['id'].toString() &&
+    if (me['id'].toString() == targetAccountId &&
         profileExternalId == targetProfile)
       throw StateError('You cannot add yourself.');
     final rows = await c
@@ -687,7 +712,7 @@ class SupabaseStore {
         .select()
         .eq('requester_account_id', me['id'].toString())
         .eq('requester_profile_id', profileExternalId)
-        .eq('recipient_account_id', target['id'].toString())
+        .eq('recipient_account_id', targetAccountId)
         .eq('recipient_profile_id', targetProfile)
         .limit(1);
     if (rows.isNotEmpty &&
@@ -696,7 +721,7 @@ class SupabaseStore {
     final data = {
       'requester_account_id': me['id'],
       'requester_profile_id': profileExternalId,
-      'recipient_account_id': target['id'],
+      'recipient_account_id': targetAccountId,
       'recipient_profile_id': targetProfile,
       'status': 'pending',
       'updated_at': DateTime.now().toUtc().toIso8601String()
@@ -991,7 +1016,7 @@ class SupabaseStore {
     ).eq('id', targetAccountId).maybeSingle();
     if (target == null) throw StateError('Profile not found.');
     final targetProfile = await c.from('profiles').select(
-      'external_profile_id,name,avatar_url,is_active',
+      'external_profile_id,name,username,avatar_url,is_active',
     ).eq('account_id', targetAccountId)
      .eq('external_profile_id', targetProfileId).eq('is_active', true).maybeSingle();
     if (targetProfile == null) throw StateError('Profile not found.');
@@ -1039,6 +1064,7 @@ class SupabaseStore {
         (setting('profile_visibility') == 'friends' && areFriends);
     final profile = <String, dynamic>{
       ...Map<String, dynamic>.from(target),
+      'username': targetProfile['username']?.toString() ?? target['username']?.toString(),
       'profileId': targetProfileId,
       'profileName': targetProfile['name']?.toString() ?? 'Profile',
       'profileAvatarUrl': targetProfile['avatar_url'],
@@ -1087,8 +1113,18 @@ class SupabaseStore {
         final account = await c.from('accounts').select('id,username,display_name,avatar_url')
             .eq('id', otherAccountId).maybeSingle();
         if (account == null) continue;
+        final friendProfile = await c.from('profiles')
+            .select('name,username,avatar_url')
+            .eq('account_id', otherAccountId)
+            .eq('external_profile_id', otherProfileId)
+            .eq('is_active', true)
+            .maybeSingle();
         friendshipRows.add({
           ...Map<String, dynamic>.from(account),
+          'username': friendProfile?['username']?.toString() ?? account['username']?.toString(),
+          'display_name': friendProfile?['name']?.toString() ?? account['display_name']?.toString(),
+          'avatar_url': friendProfile?['avatar_url'] ?? account['avatar_url'],
+          'profileName': friendProfile?['name']?.toString(),
           'profileId': otherProfileId,
           'friends_since': edge['created_at'],
           'relationshipStatus': otherAccountId == viewerAccountId && otherProfileId == profileExternalId ? 'friends' : 'unknown',
@@ -1927,28 +1963,26 @@ class SupabaseStore {
         .select('id,username,display_name')
         .eq('external_account_id', accountExternalId)
         .single();
+    final targetProfile = await c
+        .from('profiles')
+        .select('account_id,external_profile_id,username')
+        .eq('username', username.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase())
+        .eq('is_active', true)
+        .not('external_profile_id', 'is', null)
+        .maybeSingle();
+    if (targetProfile == null) throw StateError('User not found.');
+    final targetAccountId = targetProfile['account_id'].toString();
     final target = await c
         .from('accounts')
         .select('id,username,display_name,avatar_url')
-        .ilike('username', username.trim().replaceFirst('@', ''))
+        .eq('id', targetAccountId)
         .maybeSingle();
     if (target == null) throw StateError('User not found.');
-    if (me['id'].toString() == target['id'].toString()) {
+    if (me['id'].toString() == targetAccountId &&
+        profileExternalId == targetProfile['external_profile_id'].toString()) {
       throw StateError('You cannot start a conversation with yourself.');
     }
-
-    final targetProfiles = await c
-        .from('profiles')
-        .select('external_profile_id')
-        .eq('account_id', target['id'].toString())
-        .eq('is_active', true)
-        .not('external_profile_id', 'is', null)
-        .limit(1);
-    if (targetProfiles.isEmpty) {
-      throw StateError('That user has no active profile.');
-    }
-    final targetProfileId =
-        targetProfiles.first['external_profile_id'].toString();
+    final targetProfileId = targetProfile['external_profile_id'].toString();
 
     final friendship = await c
         .from('social_friendships')
@@ -2214,30 +2248,24 @@ class SupabaseStore {
       },
     ];
     for (final username in cleanNames) {
-      final target = await c
-          .from('accounts')
-          .select('id')
-          .ilike('username', username)
-          .maybeSingle();
-      if (target == null) throw StateError('User @$username was not found.');
-      if (target['id'].toString() == me['id'].toString()) continue;
-      final profiles = await c
+      final targetProfileRow = await c
           .from('profiles')
-          .select('external_profile_id')
-          .eq('account_id', target['id'].toString())
+          .select('account_id,external_profile_id')
+          .eq('username', username)
           .eq('is_active', true)
           .not('external_profile_id', 'is', null)
-          .limit(1);
-      if (profiles.isEmpty)
-        throw StateError('User @$username has no active profile.');
-      final targetProfile = profiles.first['external_profile_id'].toString();
+          .maybeSingle();
+      if (targetProfileRow == null) throw StateError('User @$username was not found.');
+      final targetAccountId = targetProfileRow['account_id'].toString();
+      final targetProfile = targetProfileRow['external_profile_id'].toString();
+      if (targetAccountId == me['id'].toString()) continue;
       final friendship = await c
           .from('social_friendships')
           .select('id')
           .eq('status', 'accepted')
           .or(
-            'and(requester_account_id.eq.${me['id']},requester_profile_id.eq.$profileExternalId,recipient_account_id.eq.${target['id']},recipient_profile_id.eq.$targetProfile),'
-            'and(requester_account_id.eq.${target['id']},requester_profile_id.eq.$targetProfile,recipient_account_id.eq.${me['id']},recipient_profile_id.eq.$profileExternalId)',
+            'and(requester_account_id.eq.${me['id']},requester_profile_id.eq.$profileExternalId,recipient_account_id.eq.${targetAccountId},recipient_profile_id.eq.$targetProfile),'
+            'and(requester_account_id.eq.${targetAccountId},requester_profile_id.eq.$targetProfile,recipient_account_id.eq.${me['id']},recipient_profile_id.eq.$profileExternalId)',
           )
           .limit(1);
       if (friendship.isEmpty) {
@@ -2245,7 +2273,7 @@ class SupabaseStore {
             'You can add @$username to a group after becoming friends.');
       }
       members.add({
-        'account_id': target['id'],
+        'account_id': targetAccountId,
         'profile_id': targetProfile,
         'role': 'member',
       });
@@ -4928,6 +4956,9 @@ class SupabaseStore {
           'account_id': internalAccountId,
           'external_profile_id': profileId,
           'name': profileName,
+          'username': profile.username?.trim().isNotEmpty == true
+              ? profile.username!.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase()
+              : null,
           'avatar_url': _safeNullableText(
             profile.avatarUrl,
             maxLength: 2048,
@@ -5313,6 +5344,7 @@ class SupabaseStore {
             Profile(
               id: profileExternalId,
               name: profileRow['name']?.toString() ?? '',
+              username: _nullable(profileRow['username'])?.toLowerCase(),
               avatarUrl: _nullable(
                 profileRow['avatar_url'],
               ),
@@ -5940,8 +5972,13 @@ class SupabaseStore {
 
     final cleanAccountId =
         _requiredId(accountExternalId, field: 'accountExternalId');
-    final cleanUsername = _boundedText(username.trim(),
-        field: 'username', maxLength: _maxNameLength);
+    final cleanUsername = username
+        .trim()
+        .replaceFirst(RegExp(r'^@'), '')
+        .toLowerCase();
+    if (!RegExp(r'^[a-z0-9_]{3,32}$').hasMatch(cleanUsername)) {
+      throw ArgumentError('Enter a valid profile username.');
+    }
     final normalizedRole =
         role.trim().toLowerCase() == 'admin' ? 'admin' : 'member';
 
@@ -5954,18 +5991,33 @@ class SupabaseStore {
     final currentId =
         _requiredId(current['id']?.toString(), field: 'accounts.id');
 
+    // A public username belongs to an active profile, not an account-level
+    // login handle. The unique profile index guarantees one matching row.
+    final targetProfile = await c
+        .from('profiles')
+        .select('account_id,external_profile_id,username,name')
+        .eq('username', cleanUsername)
+        .eq('is_active', true)
+        .not('external_profile_id', 'is', null)
+        .maybeSingle();
+    if (targetProfile == null) {
+      throw StateError('No active profile was found with @$cleanUsername.');
+    }
+
+    final targetId = _requiredId(
+      targetProfile['account_id']?.toString(),
+      field: 'target profile account_id',
+    );
+    if (targetId == currentId) {
+      throw StateError('That profile belongs to your own account already.');
+    }
+
     final target = await c
         .from('accounts')
         .select('id,username,email,display_name')
-        .ilike('username', cleanUsername)
+        .eq('id', targetId)
         .maybeSingle();
-    if (target == null)
-      throw StateError('No account user was found with @$cleanUsername.');
-
-    final targetId =
-        _requiredId(target['id']?.toString(), field: 'target accounts.id');
-    if (targetId == currentId)
-      throw StateError('That username already belongs to this account.');
+    if (target == null) throw StateError('The profile owner account was not found.');
 
     final ownerMembership = await c
         .from('account_members')
@@ -5975,11 +6027,14 @@ class SupabaseStore {
         .eq('status', 'active')
         .limit(1)
         .maybeSingle();
-    if (ownerMembership == null)
-      throw StateError('That user does not have an active login identity yet.');
+    if (ownerMembership == null) {
+      throw StateError('That profile owner does not have an active login identity yet.');
+    }
 
-    final identityId = _requiredId(ownerMembership['identity_id']?.toString(),
-        field: 'member identity');
+    final identityId = _requiredId(
+      ownerMembership['identity_id']?.toString(),
+      field: 'member identity',
+    );
 
     final existing = await c
         .from('account_members')
@@ -5988,6 +6043,7 @@ class SupabaseStore {
         .eq('identity_id', identityId)
         .maybeSingle();
 
+    final profileName = targetProfile['name']?.toString().trim();
     final row = await c
         .from('account_members')
         .upsert({
@@ -5995,7 +6051,9 @@ class SupabaseStore {
           'identity_id': identityId,
           'role': normalizedRole,
           'status': 'active',
-          'display_name': target['display_name'] ?? target['username'],
+          'display_name': profileName == null || profileName.isEmpty
+              ? (target['display_name'] ?? target['username'])
+              : profileName,
           'accepted_at': DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'account_id,identity_id')
         .select('id,account_id,role,status,display_name')
@@ -6004,7 +6062,9 @@ class SupabaseStore {
     return {
       'id': row['id'],
       'accountId': cleanAccountId,
-      'username': target['username'],
+      'username': cleanUsername,
+      'profileId': targetProfile['external_profile_id'],
+      'profileName': profileName,
       'email': target['email'],
       'displayName': row['display_name'],
       'role': row['role'],
@@ -6798,6 +6858,9 @@ class SupabaseStore {
                   field: 'profile.name',
                   maxLength: _maxNameLength,
                 ),
+                'username': profile.username?.trim().isNotEmpty == true
+                    ? profile.username!.trim().toLowerCase()
+                    : null,
                 'avatar_url': _safeNullableText(
                   profile.avatarUrl,
                   maxLength: 2048,
@@ -7266,6 +7329,45 @@ class SupabaseStore {
       });
     }
     return order;
+  }
+
+  Future<List<Map<String, dynamic>>> listFoodOrders({
+    required String accountExternalId,
+    required String profileId,
+    int limit = 30,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Food order history requires Supabase persistence.');
+    }
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', accountExternalId)
+        .maybeSingle();
+    if (account == null) return <Map<String, dynamic>>[];
+    final internalId = account['id']?.toString();
+    if (internalId == null || internalId.isEmpty) return <Map<String, dynamic>>[];
+    final cleanProfileId = profileId.trim();
+    if (cleanProfileId.isEmpty) return <Map<String, dynamic>>[];
+    final ownedProfile = await c
+        .from('profiles')
+        .select('external_profile_id')
+        .eq('account_id', internalId)
+        .eq('external_profile_id', cleanProfileId)
+        .eq('is_active', true)
+        .maybeSingle();
+    if (ownedProfile == null) {
+      throw StateError('Profile not found for this account.');
+    }
+    final rows = await c
+        .from('food_orders')
+        .select()
+        .eq('account_id', internalId)
+        .eq('profile_id', cleanProfileId)
+        .order('created_at', ascending: false)
+        .limit(limit.clamp(1, 100).toInt());
+    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
   }
 
   Future<Map<String, dynamic>?> getFoodOrder({

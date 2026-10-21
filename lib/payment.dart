@@ -3,7 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
@@ -41,8 +41,7 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController transactionController =
-      TextEditingController();
+  final TextEditingController transactionController = TextEditingController();
 
   bool processing = false;
   bool paymentSucceeded = false;
@@ -52,6 +51,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   late final AnimationController _animationController;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -63,6 +63,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     transactionController.dispose();
@@ -80,8 +81,7 @@ class _PaymentScreenState extends State<PaymentScreen>
       return;
     }
 
-    final processorTransactionId =
-        transactionController.text.trim();
+    final processorTransactionId = transactionController.text.trim();
 
     if (processorTransactionId.isEmpty) {
       setState(() {
@@ -93,8 +93,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
     if (processorTransactionId.length < 6) {
       setState(() {
-        errorMessage =
-            'The payment transaction ID is too short.';
+        errorMessage = 'The payment transaction ID is too short.';
       });
 
       return;
@@ -110,16 +109,16 @@ class _PaymentScreenState extends State<PaymentScreen>
     try {
       final result = await AppController.instance.backendApi
           .verifyCheckoutPayment(
-        paymentId: widget.paymentId,
-        checkoutToken: widget.checkoutToken,
-        processorTransactionId: processorTransactionId,
-      )
+            paymentId: widget.paymentId,
+            checkoutToken: widget.checkoutToken,
+            processorTransactionId: processorTransactionId,
+          )
           .timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw StateError(
-          'Payment verification timed out. Check that the backend is running and try again.',
-        ),
-      );
+            const Duration(seconds: 20),
+            onTimeout: () => throw StateError(
+              'Payment verification timed out. Check that the backend is running and try again.',
+            ),
+          );
 
       if (!mounted) {
         return;
@@ -203,6 +202,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   // ==========================================================
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -213,12 +213,10 @@ class _PaymentScreenState extends State<PaymentScreen>
       body: Stack(
         children: [
           _buildBackground(),
-
           SafeArea(
             child: Column(
               children: [
                 _buildTopBar(isWide),
-
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 450),
@@ -246,8 +244,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     return AnimatedBuilder(
       animation: _animationController,
       builder: (context, child) {
-        final glow = 0.05 +
-            (_animationController.value * 0.025);
+        final glow = 0.05 + (_animationController.value * 0.025);
 
         return Stack(
           children: [
@@ -306,9 +303,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             )
           else
             const SizedBox(width: 44),
-
           const Spacer(),
-
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -321,7 +316,8 @@ class _PaymentScreenState extends State<PaymentScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              UniversalText('SECURE CHECKOUT',
+              UniversalText(
+                'SECURE CHECKOUT',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 11,
@@ -331,9 +327,7 @@ class _PaymentScreenState extends State<PaymentScreen>
               ),
             ],
           ),
-
           const Spacer(),
-
           const SizedBox(width: 44),
         ],
       ),
@@ -391,18 +385,13 @@ class _PaymentScreenState extends State<PaymentScreen>
           child: Column(
             children: [
               _buildHeader(),
-
               const SizedBox(height: 28),
-
               _buildPaymentCard(),
-
               const SizedBox(height: 18),
-
               _buildSecurityNotice(),
-
               const SizedBox(height: 18),
-
-              UniversalText('Payment ID: ${widget.paymentId}',
+              UniversalText(
+                'Payment ID: ${widget.paymentId}',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.32),
@@ -428,8 +417,7 @@ class _PaymentScreenState extends State<PaymentScreen>
         AnimatedBuilder(
           animation: _animationController,
           builder: (context, child) {
-            final scale =
-                1 + (_animationController.value * 0.025);
+            final scale = 1 + (_animationController.value * 0.025);
 
             return Transform.scale(
               scale: scale,
@@ -460,10 +448,9 @@ class _PaymentScreenState extends State<PaymentScreen>
             ),
           ),
         ),
-
         const SizedBox(height: 22),
-
-        const UniversalText('Complete your subscription',
+        const UniversalText(
+          'Complete your subscription',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white,
@@ -472,10 +459,9 @@ class _PaymentScreenState extends State<PaymentScreen>
             letterSpacing: -0.7,
           ),
         ),
-
         const SizedBox(height: 10),
-
-        UniversalText('Activate your account and start watching.',
+        UniversalText(
+          'Activate your account and start watching.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.55),
@@ -514,18 +500,13 @@ class _PaymentScreenState extends State<PaymentScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildPlanSection(),
-
             const SizedBox(height: 26),
-
             _buildTransactionField(),
-
             if (errorMessage != null) ...[
               const SizedBox(height: 14),
               _buildError(),
             ],
-
             const SizedBox(height: 22),
-
             _buildPayButton(),
           ],
         ),
@@ -565,17 +546,15 @@ class _PaymentScreenState extends State<PaymentScreen>
                   size: 24,
                 ),
               ),
-
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        UniversalText('$planName Plan',
+                        UniversalText(
+                          '$planName Plan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
@@ -592,8 +571,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                             color: Colors.white.withValues(
                               alpha: 0.08,
                             ),
-                            borderRadius:
-                                BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             billingShortLabel,
@@ -623,23 +601,18 @@ class _PaymentScreenState extends State<PaymentScreen>
                 ),
               ),
             ],
-
           ),
-
           const SizedBox(height: 18),
-
           Container(
             height: 1,
             color: Colors.white.withValues(alpha: 0.07),
           ),
-
           const SizedBox(height: 17),
-
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              UniversalText('Total',
+              UniversalText(
+                'Total',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.55),
                   fontSize: 14,
@@ -648,7 +621,8 @@ class _PaymentScreenState extends State<PaymentScreen>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  UniversalText('\$${widget.amount.toStringAsFixed(2)}',
+                  UniversalText(
+                    '\$${widget.amount.toStringAsFixed(2)}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 25,
@@ -690,7 +664,8 @@ class _PaymentScreenState extends State<PaymentScreen>
       children: [
         const Padding(
           padding: EdgeInsets.only(left: 3),
-          child: UniversalText('PAYMENT TRANSACTION ID',
+          child: UniversalText(
+            'PAYMENT TRANSACTION ID',
             style: TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -699,9 +674,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             ),
           ),
         ),
-
         const SizedBox(height: 10),
-
         TextField(
           controller: transactionController,
           enabled: !processing,
@@ -757,12 +730,11 @@ class _PaymentScreenState extends State<PaymentScreen>
             ),
           ),
         ),
-
         const SizedBox(height: 8),
-
         Padding(
           padding: const EdgeInsets.only(left: 3),
-          child: UniversalText('Local mock checkout: enter any 6–32 digit number, for example 123456.',
+          child: UniversalText(
+            'Local mock checkout: enter any 6–32 digit number, for example 123456.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.34),
               fontSize: 10.5,
@@ -802,7 +774,8 @@ class _PaymentScreenState extends State<PaymentScreen>
           ),
           const SizedBox(width: 11),
           Expanded(
-            child: UniversalText('Your card or bank details are not sent to this app backend. The payment processor should provide the transaction ID.',
+            child: UniversalText(
+              'Your card or bank details are not sent to this app backend. The payment processor should provide the transaction ID.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.42),
                 fontSize: 11.5,
@@ -882,10 +855,8 @@ class _PaymentScreenState extends State<PaymentScreen>
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: Colors.black,
-            disabledBackgroundColor:
-                Colors.white.withValues(alpha: 0.12),
-            disabledForegroundColor:
-                Colors.white.withValues(alpha: 0.5),
+            disabledBackgroundColor: Colors.white.withValues(alpha: 0.12),
+            disabledForegroundColor: Colors.white.withValues(alpha: 0.5),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -907,7 +878,8 @@ class _PaymentScreenState extends State<PaymentScreen>
                         ),
                       ),
                       SizedBox(width: 11),
-                      UniversalText('VERIFYING PAYMENT...',
+                      UniversalText(
+                        'VERIFYING PAYMENT...',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -925,7 +897,8 @@ class _PaymentScreenState extends State<PaymentScreen>
                         size: 17,
                       ),
                       SizedBox(width: 9),
-                      UniversalText('COMPLETE PAYMENT',
+                      UniversalText(
+                        'COMPLETE PAYMENT',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -959,10 +932,9 @@ class _PaymentScreenState extends State<PaymentScreen>
           child: Column(
             children: [
               _buildSuccessIcon(),
-
               const SizedBox(height: 28),
-
-              const UniversalText('Payment successful',
+              const UniversalText(
+                'Payment successful',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -971,33 +943,27 @@ class _PaymentScreenState extends State<PaymentScreen>
                   letterSpacing: -0.7,
                 ),
               ),
-
               const SizedBox(height: 12),
-
-              UniversalText('Your subscription has been activated.',
+              UniversalText(
+                'Your subscription has been activated.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.62),
                   fontSize: 15,
                 ),
               ),
-
               const SizedBox(height: 7),
-
-              UniversalText('Please log in to continue.',
+              UniversalText(
+                'Please log in to continue.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.4),
                   fontSize: 13,
                 ),
               ),
-
               const SizedBox(height: 30),
-
               _buildSuccessSummary(),
-
               const SizedBox(height: 28),
-
               SizedBox(
                 width: 22,
                 height: 22,
@@ -1006,10 +972,9 @@ class _PaymentScreenState extends State<PaymentScreen>
                   color: Colors.white.withValues(alpha: 0.5),
                 ),
               ),
-
               const SizedBox(height: 13),
-
-              UniversalText('Returning you to the app...',
+              UniversalText(
+                'Returning you to the app...',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.3),
                   fontSize: 11,
@@ -1027,8 +992,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     return AnimatedBuilder(
       animation: _animationController,
       builder: (context, child) {
-        final scale =
-            1 + (_animationController.value * 0.035);
+        final scale = 1 + (_animationController.value * 0.035);
 
         return Transform.scale(
           scale: scale,
@@ -1088,15 +1052,13 @@ class _PaymentScreenState extends State<PaymentScreen>
               size: 22,
             ),
           ),
-
           const SizedBox(width: 13),
-
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                UniversalText('$planName Plan',
+                UniversalText(
+                  '$planName Plan',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -1104,7 +1066,8 @@ class _PaymentScreenState extends State<PaymentScreen>
                   ),
                 ),
                 const SizedBox(height: 4),
-                UniversalText('Subscription activated',
+                UniversalText(
+                  'Subscription activated',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.4),
                     fontSize: 11,
@@ -1113,8 +1076,8 @@ class _PaymentScreenState extends State<PaymentScreen>
               ],
             ),
           ),
-
-          UniversalText('\$${widget.amount.toStringAsFixed(2)}',
+          UniversalText(
+            '\$${widget.amount.toStringAsFixed(2)}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,

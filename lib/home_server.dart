@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'storage_dashboard.dart';
 import 'music.dart';
@@ -83,7 +84,8 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
     if (!AppController.instance.backendApi.isAuthenticated) return;
     setState(() => membersLoading = true);
     try {
-      final loaded = await AppController.instance.backendApi.getAccountMembers();
+      final loaded =
+          await AppController.instance.backendApi.getAccountMembers();
       if (mounted) setState(() => members = loaded);
     } catch (e) {
       if (mounted) {
@@ -112,31 +114,48 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       final raw = data['media'];
       if (raw is! List) return;
       final serverApi = AppController.instance.backendApi;
-      final media = raw.whereType<Map>().where((m) => m['type']?.toString() != 'music').map((m) => MediaItem(
-        id: m['id']?.toString() ?? '',
-        title: m['title']?.toString() ?? 'Imported Media',
-        type: m['type']?.toString() ?? 'movie',
-        description: tr('Imported from the home server media library.'),
-      )).toList();
-      final music = raw.whereType<Map>().where((m) => m['type']?.toString() == 'music').map((m) => MusicTrack(
-        id: m['id']?.toString() ?? '',
-        title: m['title']?.toString() ?? 'Imported Song',
-        artist: m['artist']?.toString() ?? 'Unknown Artist',
-        album: m['album']?.toString() ?? 'Unknown Album',
-        modifiedAt: DateTime.tryParse(m['modifiedAt']?.toString() ?? ''),
-        genres: (m['genres'] is List)
-            ? List<String>.from((m['genres'] as List).map((e) => e.toString()))
-            : const <String>[],
-        subgenres: (m['subgenres'] is List)
-            ? List<String>.from((m['subgenres'] as List).map((e) => e.toString()))
-            : const <String>[],
-        featuredArtists: (m['featuredArtists'] is List)
-            ? List<String>.from((m['featuredArtists'] as List).map((e) => e.toString()))
-            : const <String>[],
-        audioUrl: '${serverApi.baseUrl}/library/stream?path=${Uri.encodeComponent(m['id']?.toString() ?? '')}',
-        musicVideoUrl: (m['musicVideoUrl'] ?? m['music_video_url'])?.toString(),
-        lyrics: m['lyrics']?.toString() ?? '',
-      )).toList();
+      final media = raw
+          .whereType<Map>()
+          .where((m) => m['type']?.toString() != 'music')
+          .map((m) {
+            final parsed = MediaItem.fromJson(Map<String, dynamic>.from(m));
+            if (parsed.description?.trim().isNotEmpty == true) return parsed;
+            return MediaItem.fromJson(<String, dynamic>{
+              ...parsed.toJson(),
+              'description': tr('Imported from the home server media library.'),
+            });
+          })
+          .where((item) => item.id.isNotEmpty)
+          .toList();
+      final music = raw
+          .whereType<Map>()
+          .where((m) => m['type']?.toString() == 'music')
+          .map((m) => MusicTrack(
+                id: m['id']?.toString() ?? '',
+                title: m['title']?.toString() ?? 'Imported Song',
+                artist: m['artist']?.toString() ?? 'Unknown Artist',
+                album: m['album']?.toString() ?? 'Unknown Album',
+                modifiedAt:
+                    DateTime.tryParse(m['modifiedAt']?.toString() ?? ''),
+                genres: (m['genres'] is List)
+                    ? List<String>.from(
+                        (m['genres'] as List).map((e) => e.toString()))
+                    : const <String>[],
+                subgenres: (m['subgenres'] is List)
+                    ? List<String>.from(
+                        (m['subgenres'] as List).map((e) => e.toString()))
+                    : const <String>[],
+                featuredArtists: (m['featuredArtists'] is List)
+                    ? List<String>.from(
+                        (m['featuredArtists'] as List).map((e) => e.toString()))
+                    : const <String>[],
+                audioUrl:
+                    '${serverApi.baseUrl}/library/stream?path=${Uri.encodeComponent(m['id']?.toString() ?? '')}',
+                musicVideoUrl:
+                    (m['musicVideoUrl'] ?? m['music_video_url'])?.toString(),
+                lyrics: m['lyrics']?.toString() ?? '',
+              ))
+          .toList();
       MusicLibraryStore.instance.tracks
         ..clear()
         ..addAll(music);
@@ -145,7 +164,9 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       AppController.instance.replaceLibraryFromServer(media);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: UniversalText('Synced ${media.length} server media files.')),
+          SnackBar(
+              content:
+                  UniversalText('Synced ${media.length} server media files.')),
         );
       }
     } catch (e) {
@@ -160,20 +181,27 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
   @override
   Widget build(BuildContext context) {
     final account = AppController.instance.currentAccount;
-    final serverName = account == null ? 'Home Server' : '${account.username} Server';
+    final serverName =
+        account == null ? 'Home Server' : '${account.username} Server';
     final serverOnline = storage != null;
     final categoryRows = storage?['categories'] is List
         ? (storage!['categories'] as List).whereType<Map>().toList()
         : const <Map>[];
-    final used = categoryRows.fold<int>(0, (sum, row) => sum + ((row['usedBytes'] as num?)?.toInt() ?? 0));
-    final configuredCategories = categoryRows.fold<int>(0, (sum, row) => sum + ((row['capacityBytes'] as num?)?.toInt() ?? 0));
-    final limit = (storage?['totalBytes'] as num?)?.toInt() ?? configuredCategories;
-    final progress = limit > 0 ? (used / limit).clamp(0.0, 1.0).toDouble() : 0.0;
+    final used = categoryRows.fold<int>(
+        0, (sum, row) => sum + ((row['usedBytes'] as num?)?.toInt() ?? 0));
+    final configuredCategories = categoryRows.fold<int>(
+        0, (sum, row) => sum + ((row['capacityBytes'] as num?)?.toInt() ?? 0));
+    final limit =
+        (storage?['totalBytes'] as num?)?.toInt() ?? configuredCategories;
+    final progress =
+        limit > 0 ? (used / limit).clamp(0.0, 1.0).toDouble() : 0.0;
 
     return Scaffold(
       appBar: AppBar(
         title: const UniversalText('Home Server & Members'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -181,7 +209,12 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
               padding: const EdgeInsets.all(18),
               children: [
                 if (error != null)
-                  Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(error!, style: const TextStyle(color: Colors.orangeAccent)))),
+                  Card(
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(error!,
+                              style: const TextStyle(
+                                  color: Colors.orangeAccent)))),
                 _serverBanner(serverName, serverOnline, used, limit, progress),
                 const SizedBox(height: 18),
                 _membersSection(),
@@ -200,64 +233,147 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Row(children: [Icon(Icons.video_library_rounded), SizedBox(width: 10), Expanded(child: UniversalText('Personal Media Server', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)))]),
-                      const SizedBox(height: 8),
-                      const UniversalText('Plan a self-hosted setup using an existing computer, NAS, Jellyfin, Plex, or DLNA—then organize your authorized movie, TV, and music library here.'),
-                      const SizedBox(height: 12),
-                      SizedBox(width: double.infinity, child: OutlinedButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalMediaServerScreen())),
-                        icon: const Icon(Icons.tune_rounded),
-                        label: const UniversalText('Configure personal media setup'),
-                      )),
-                    ]),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(children: [
+                            Icon(Icons.video_library_rounded),
+                            SizedBox(width: 10),
+                            Expanded(
+                                child: UniversalText('Personal Media Server',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 17)))
+                          ]),
+                          const SizedBox(height: 8),
+                          const UniversalText(
+                              'Plan a self-hosted setup using an existing computer, NAS, Jellyfin, Plex, or DLNA—then organize your authorized movie, TV, and music library here.'),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const PersonalMediaServerScreen())),
+                                icon: const Icon(Icons.tune_rounded),
+                                label: const UniversalText(
+                                    'Configure personal media setup'),
+                              )),
+                        ]),
                   ),
                 ),
                 const SizedBox(height: 10),
-                _infoCard('Architecture', 'Optical drive → ARM → completed media → server importer → database → Flutter. ARM performs ripping; the home server owns the physical media and library storage.', Icons.account_tree_rounded),
+                _infoCard(
+                    'Architecture',
+                    'Optical drive → ARM → completed media → server importer → database → Flutter. ARM performs ripping; the home server owns the physical media and library storage.',
+                    Icons.account_tree_rounded),
                 const SizedBox(height: 10),
-                _statusCard('ARM connection', arm?['connected'] == true, '${arm?['armServerUrl'] ?? 'Not configured'}\nMedia root: ${arm?['mediaRoot'] ?? 'Unknown'}'),
-                _statusCard('Server storage', storage != null, storage == null ? 'Unavailable' : '${storage!['root']}'),
+                _statusCard('ARM connection', arm?['connected'] == true,
+                    '${arm?['armServerUrl'] ?? 'Not configured'}\nMedia root: ${arm?['mediaRoot'] ?? 'Unknown'}'),
+                _statusCard('Server storage', storage != null,
+                    storage == null ? 'Unavailable' : '${storage!['root']}'),
                 if (storage != null) ...[
                   const SizedBox(height: 8),
-                  for (final c in (storage!['categories'] as List? ?? const [])) _category(c),
+                  for (final c in (storage!['categories'] as List? ?? const []))
+                    _category(c),
                   const SizedBox(height: 12),
-                  FilledButton.icon(onPressed: _syncLibrary, icon: const Icon(Icons.sync_rounded), label: const UniversalText('Scan & sync server library')),
+                  FilledButton.icon(
+                      onPressed: _syncLibrary,
+                      icon: const Icon(Icons.sync_rounded),
+                      label: const UniversalText('Scan & sync server library')),
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StorageDashboardScreen())), icon: const Icon(Icons.storage_rounded), label: const UniversalText('Open live storage manager')),
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const StorageDashboardScreen())),
+                      icon: const Icon(Icons.storage_rounded),
+                      label: const UniversalText('Open live storage manager')),
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartMediaLibrarianScreen())), icon: const Icon(Icons.health_and_safety_rounded), label: const UniversalText('Audit library metadata')),
+                  OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const SmartMediaLibrarianScreen())),
+                      icon: const Icon(Icons.health_and_safety_rounded),
+                      label: const UniversalText('Audit library metadata')),
                 ],
                 const SizedBox(height: 20),
-                _infoCard('Physical setup', 'Connect a DVD/Blu-ray/UHD-capable optical drive to the ARM host. Configure the exact drive/firmware for UHD support, then point ARM at the server media directories. Do not assume every Blu-ray drive supports UHD ripping.', Icons.album_rounded),
+                _infoCard(
+                    'Physical setup',
+                    'Connect a DVD/Blu-ray/UHD-capable optical drive to the ARM host. Configure the exact drive/firmware for UHD support, then point ARM at the server media directories. Do not assume every Blu-ray drive supports UHD ripping.',
+                    Icons.album_rounded),
               ],
             ),
     );
   }
 
   /// Restores the prominent server banner with online status and capacity.
-  Widget _serverBanner(String name, bool online, int used, int limit, double progress) {
+  Widget _serverBanner(
+      String name, bool online, int used, int limit, double progress) {
     final primary = Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [primary.withValues(alpha: .24), Theme.of(context).colorScheme.surface]),
+        gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              primary.withValues(alpha: .24),
+              Theme.of(context).colorScheme.surface
+            ]),
         border: Border.all(color: primary.withValues(alpha: .24)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(width: 56, height: 56, decoration: BoxDecoration(borderRadius: BorderRadius.circular(17), color: primary.withValues(alpha: .16)), child: const Icon(Icons.dns_rounded, size: 30)),
+          Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(17),
+                  color: primary.withValues(alpha: .16)),
+              child: const Icon(Icons.dns_rounded, size: 30)),
           const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const UniversalText('YOUR SERVER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)), const SizedBox(height: 3), Text(name, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900))])),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                const UniversalText('YOUR SERVER',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5)),
+                const SizedBox(height: 3),
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 25, fontWeight: FontWeight.w900))
+              ])),
           _statusPill(online),
         ]),
         const SizedBox(height: 20),
-        Row(children: [const Icon(Icons.storage_rounded, size: 20), const SizedBox(width: 8), const UniversalText('Storage', style: TextStyle(fontWeight: FontWeight.w800)), const Spacer(), Text(limit > 0 ? '${_bytes(used)} / ${_bytes(limit)}' : 'Unavailable', style: const TextStyle(fontWeight: FontWeight.w700))]),
+        Row(children: [
+          const Icon(Icons.storage_rounded, size: 20),
+          const SizedBox(width: 8),
+          const UniversalText('Storage',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+          const Spacer(),
+          Text(limit > 0 ? '${_bytes(used)} / ${_bytes(limit)}' : 'Unavailable',
+              style: const TextStyle(fontWeight: FontWeight.w700))
+        ]),
         const SizedBox(height: 9),
-        ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(minHeight: 10, value: progress)),
+        ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(minHeight: 10, value: progress)),
         const SizedBox(height: 7),
-        Text(limit > 0 ? '${(progress * 100).round()}% used' : 'Storage capacity is not currently available.', style: const TextStyle(color: Colors.white60)),
+        Text(
+            limit > 0
+                ? '${(progress * 100).round()}% used'
+                : 'Storage capacity is not currently available.',
+            style: const TextStyle(color: Colors.white60)),
       ]),
     );
   }
@@ -268,16 +384,40 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [const Icon(Icons.people_alt_rounded), const SizedBox(width: 9), const Expanded(child: UniversalText('Members', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900))), if (membersLoading) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))]),
+          Row(children: [
+            const Icon(Icons.people_alt_rounded),
+            const SizedBox(width: 9),
+            const Expanded(
+                child: UniversalText('Members',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w900))),
+            if (membersLoading)
+              const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+          ]),
           const SizedBox(height: 5),
-          const UniversalText('People who can use this account and stream from this account’s home server.', style: TextStyle(color: Colors.white60)),
+          const UniversalText(
+              'People who can use this account and stream from this account’s home server.',
+              style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 14),
           if (members.isEmpty)
-            ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.person_outline_rounded), title: UniversalText('No members loaded'), subtitle: UniversalText('The account owner can invite a member below.'))
+            ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.person_outline_rounded),
+                title: UniversalText('No members loaded'),
+                subtitle: UniversalText(
+                    'The account owner can invite a member below.'))
           else
             ...members.map(_memberTile),
           const SizedBox(height: 8),
-          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _inviteMember, icon: const Icon(Icons.person_add_alt_1_rounded), label: const UniversalText('INVITE MEMBER'))),
+          SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                  onPressed: _inviteMember,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: const UniversalText('INVITE MEMBER'))),
         ]),
       ),
     );
@@ -288,35 +428,92 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
     final email = member['email']?.toString() ?? '';
     final role = member['role']?.toString() ?? 'member';
     final status = member['status']?.toString() ?? 'active';
-    final avatarText = name?.isNotEmpty == true ? name![0] : email.isNotEmpty ? email[0] : '?';
+    final avatarText = name?.isNotEmpty == true
+        ? name![0]
+        : email.isNotEmpty
+            ? email[0]
+            : '?';
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(child: Text(avatarText.toUpperCase())),
       title: Text(name?.isNotEmpty == true ? name! : email),
       subtitle: Text(email.isEmpty ? 'Individual login identity' : email),
-      trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [Text(role.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)), Text(status, style: const TextStyle(color: Colors.white54, fontSize: 11))]),
+      trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(role.toUpperCase(),
+                style:
+                    const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+            Text(status,
+                style: const TextStyle(color: Colors.white54, fontSize: 11))
+          ]),
     );
   }
 
   Widget _statusPill(bool online) {
     final color = online ? Colors.greenAccent : Colors.orangeAccent;
-    return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: color.withValues(alpha: .12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.circle, size: 8, color: color), const SizedBox(width: 6), Text(online ? 'ONLINE' : 'OFFLINE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: color))]));
+    return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(99),
+            color: color.withValues(alpha: .12)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.circle, size: 8, color: color),
+          const SizedBox(width: 6),
+          Text(online ? 'ONLINE' : 'OFFLINE',
+              style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w900, color: color))
+        ]));
   }
 
   String _bytes(int bytes) {
-    if (bytes >= 1000000000000) return '${(bytes / 1000000000000).toStringAsFixed(1)} TB';
-    if (bytes >= 1000000000) return '${(bytes / 1000000000).toStringAsFixed(0)} GB';
+    if (bytes >= 1000000000000) {
+      return '${(bytes / 1000000000000).toStringAsFixed(1)} TB';
+    }
+    if (bytes >= 1000000000) {
+      return '${(bytes / 1000000000).toStringAsFixed(0)} GB';
+    }
     if (bytes >= 1000000) return '${(bytes / 1000000).toStringAsFixed(0)} MB';
     return '$bytes B';
   }
 
-  Widget _infoCard(String title, String body, IconData icon) => Card(child: Padding(padding: const EdgeInsets.all(18), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, size: 30), const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), const SizedBox(height: 6), Text(body, style: const TextStyle(color: Colors.white70, height: 1.45))]))])));
+  Widget _infoCard(String title, String body, IconData icon) => Card(
+      child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 30),
+            const SizedBox(width: 14),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text(body,
+                      style:
+                          const TextStyle(color: Colors.white70, height: 1.45))
+                ]))
+          ])));
 
-  Widget _statusCard(String title, bool ok, String body) => Card(child: ListTile(leading: Icon(ok ? Icons.check_circle : Icons.error_outline, color: ok ? Colors.greenAccent : Colors.orangeAccent), title: Text(title), subtitle: Text(body)));
+  Widget _statusCard(String title, bool ok, String body) => Card(
+      child: ListTile(
+          leading: Icon(ok ? Icons.check_circle : Icons.error_outline,
+              color: ok ? Colors.greenAccent : Colors.orangeAccent),
+          title: Text(title),
+          subtitle: Text(body)));
 
   Widget _category(dynamic raw) {
     final c = Map<String, dynamic>.from(raw as Map);
-    return Card(child: ListTile(leading: const Icon(Icons.folder_rounded), title: Text(c['name']?.toString() ?? 'Media'), subtitle: Text(c['path']?.toString() ?? ''), trailing: Text(StorageDashboardScreen.formatBytes((c['usedBytes'] as num?)?.toInt() ?? 0))));
+    return Card(
+        child: ListTile(
+            leading: const Icon(Icons.folder_rounded),
+            title: Text(c['name']?.toString() ?? 'Media'),
+            subtitle: Text(c['path']?.toString() ?? ''),
+            trailing: Text(StorageDashboardScreen.formatBytes(
+                (c['usedBytes'] as num?)?.toInt() ?? 0))));
   }
 }
 
@@ -386,7 +583,8 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
               children: [
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: UniversalText('Add someone who already has a Streaming Service account. They keep their own login and username but gain access to this account’s shared NAS library.'),
+                  child: UniversalText(
+                      'Add someone who already has a Streaming Service account. They keep their own login and username but gain access to this account’s shared NAS library.'),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -403,26 +601,35 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                   initialValue: role,
                   decoration: const InputDecoration(labelText: 'Role'),
                   items: const [
-                    DropdownMenuItem(value: 'member', child: UniversalText('Member')),
-                    DropdownMenuItem(value: 'admin', child: UniversalText('Admin')),
+                    DropdownMenuItem(
+                        value: 'member', child: UniversalText('Member')),
+                    DropdownMenuItem(
+                        value: 'admin', child: UniversalText('Admin')),
                   ],
-                  onChanged: (value) => setDialogState(() => role = value ?? 'member'),
+                  onChanged: (value) =>
+                      setDialogState(() => role = value ?? 'member'),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('CANCEL')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const UniversalText('CANCEL')),
             FilledButton(
               onPressed: () async {
-                final username = usernameController.text.trim().replaceFirst('@', '');
+                final username =
+                    usernameController.text.trim().replaceFirst('@', '');
                 if (username.isEmpty) return;
                 try {
-                  await AppController.instance.backendApi.addExistingAccountMember(username: username, role: role);
+                  await AppController.instance.backendApi
+                      .addExistingAccountMember(username: username, role: role);
                   if (dialogContext.mounted) Navigator.pop(dialogContext, true);
                 } catch (e) {
                   if (!dialogContext.mounted) return;
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
+                      content:
+                          Text(e.toString().replaceFirst('Exception: ', ''))));
                 }
               },
               child: const UniversalText('ADD USER'),
@@ -491,7 +698,8 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  const UniversalText('Invite people to this streaming account. They use their own login while streaming from this account’s home server.',
+                  const UniversalText(
+                    'Invite people to this streaming account. They use their own login while streaming from this account’s home server.',
                     style: TextStyle(color: Colors.white60, height: 1.45),
                   ),
                 ],
@@ -521,7 +729,8 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                         const Icon(Icons.people_alt_rounded),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: UniversalText('MEMBERS (${members.length})',
+                          child: UniversalText(
+                            'MEMBERS (${members.length})',
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.1,
@@ -538,7 +747,8 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                     ),
                     const SizedBox(height: 12),
                     if (!loading && members.isEmpty)
-                      const UniversalText('Only the account owner is currently connected. Invite a member below.',
+                      const UniversalText(
+                        'Only the account owner is currently connected. Invite a member below.',
                         style: TextStyle(color: Colors.white54),
                       ),
                     for (final member in members)
@@ -546,28 +756,31 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
                         contentPadding: EdgeInsets.zero,
                         leading: CircleAvatar(
                           child: Text(
-                            (member['displayName']?.toString().trim().isNotEmpty ==
-                                        true
-                                    ? member['displayName']
-                                        .toString()
-                                        .trim()[0]
-                                    : member['email']
+                            (member['displayName']
                                             ?.toString()
                                             .trim()
                                             .isNotEmpty ==
                                         true
-                                        ? member['email']
-                                            .toString()
-                                            .trim()[0]
+                                    ? member['displayName'].toString().trim()[0]
+                                    : member['email']
+                                                ?.toString()
+                                                .trim()
+                                                .isNotEmpty ==
+                                            true
+                                        ? member['email'].toString().trim()[0]
                                         : '?')
                                 .toUpperCase(),
                           ),
                         ),
-                                        title: Text(
+                        title: Text(
                           member['displayName']?.toString().trim().isNotEmpty ==
                                   true
                               ? member['displayName'].toString()
-                              : member['username']?.toString().trim().isNotEmpty == true
+                              : member['username']
+                                          ?.toString()
+                                          .trim()
+                                          .isNotEmpty ==
+                                      true
                                   ? '@${member['username']}'
                                   : member['email']?.toString() ?? 'Member',
                         ),
@@ -604,7 +817,8 @@ class _AccountInviteScreenState extends State<AccountInviteScreen> {
               child: ListTile(
                 leading: Icon(Icons.lock_outline_rounded),
                 title: UniversalText('Private invitation'),
-                subtitle: UniversalText('Invitation links expire after 7 days. Passwords and server credentials are never placed in the invitation.',
+                subtitle: UniversalText(
+                  'Invitation links expire after 7 days. Passwords and server credentials are never placed in the invitation.',
                 ),
               ),
             ),
@@ -659,49 +873,61 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     final phoneDigits = phoneController.text.replaceAll(RegExp(r'\D'), '');
     // Invitation acceptance authenticates the new member by email. SMS and
     // WhatsApp are delivery channels; they do not replace the login identity.
-    if (email.isEmpty || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Enter a valid member email address so the recipient can finish creating their login.')));
+    if (email.isEmpty ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: UniversalText(
+              'Enter a valid member email address so the recipient can finish creating their login.')));
       return;
     }
     if (deliveryMethod != 'email' &&
         (phoneDigits.length < 7 || phoneDigits.length > 15)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: UniversalText('Enter a valid phone number for SMS.')),
+        const SnackBar(
+            content: UniversalText('Enter a valid phone number for SMS.')),
       );
       return;
     }
     setState(() => submitting = true);
     try {
-      final result = await AppController.instance.backendApi.inviteAccountMember(
+      final result =
+          await AppController.instance.backendApi.inviteAccountMember(
         email: email,
         phone: deliveryMethod == 'email' ? null : '+$callingCode$phoneDigits',
         role: role,
         sendEmail: deliveryMethod == 'email',
       );
       final token = result['invitationToken']?.toString() ?? '';
-      if (token.isEmpty) throw Exception('The server did not return an invitation token.');
+      if (token.isEmpty) {
+        throw Exception('The server did not return an invitation token.');
+      }
 
       final base = Uri.base;
       final link = (base.scheme == 'http' || base.scheme == 'https')
-          ? base.replace(path: '/join', queryParameters: {'token': token}).toString()
+          ? base.replace(
+              path: '/join', queryParameters: {'token': token}).toString()
           : 'streamingservice://join?token=${Uri.encodeComponent(token)}';
 
       if (!mounted) return;
       setState(() {
         invitationLink = link;
         invitationEmail = email;
-        invitationPhone = deliveryMethod == 'email'
-            ? ''
-            : '+$callingCode$phoneDigits';
+        invitationPhone =
+            deliveryMethod == 'email' ? '' : '+$callingCode$phoneDigits';
         expiresAt = DateTime.now().toUtc().add(const Duration(days: 7));
         submitting = false;
       });
-      if (deliveryMethod == 'sms' || deliveryMethod == 'both') await _openSmsComposer();
-      if (deliveryMethod == 'whatsapp' || deliveryMethod == 'both') await _openWhatsAppComposer();
+      if (deliveryMethod == 'sms' || deliveryMethod == 'both') {
+        await _openSmsComposer();
+      }
+      if (deliveryMethod == 'whatsapp' || deliveryMethod == 'both') {
+        await _openWhatsAppComposer();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', ''))));
     }
   }
 
@@ -710,7 +936,10 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
     final link = invitationLink;
     if (link == null) return;
     await Clipboard.setData(ClipboardData(text: link));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Invitation link copied.')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: UniversalText('Invitation link copied.')));
+    }
   }
 
   Future<void> _openSmsComposer() async {
@@ -728,14 +957,17 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: UniversalText('Could not open the SMS app. Copy the invitation link instead.'),
+            content: UniversalText(
+                'Could not open the SMS app. Copy the invitation link instead.'),
           ),
         );
       }
     } on PlatformException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open the SMS app: ${error.message ?? error.code}')),
+          SnackBar(
+              content: Text(
+                  'Could not open the SMS app: ${error.message ?? error.code}')),
         );
       }
     }
@@ -744,15 +976,22 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
   Future<void> _openWhatsAppComposer() async {
     if (invitationLink == null || invitationPhone.isEmpty) return;
     final phoneDigits = invitationPhone.replaceAll(RegExp(r'\D'), '');
-    final message = 'You are invited to join a Streaming Service account. Open this secure link to accept and set up your login: $invitationLink${invitationEmail.isEmpty ? '' : ' (sign in using $invitationEmail)'}';
+    final message =
+        'You are invited to join a Streaming Service account. Open this secure link to accept and set up your login: $invitationLink${invitationEmail.isEmpty ? '' : ' (sign in using $invitationEmail)'}';
     final uri = Uri.https('wa.me', '/$phoneDigits', {'text': message});
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Could not open WhatsApp. Copy the invitation link instead.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: UniversalText(
+                'Could not open WhatsApp. Copy the invitation link instead.')));
       }
     } on PlatformException catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open WhatsApp: ${error.message ?? error.code}')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Could not open WhatsApp: ${error.message ?? error.code}')));
+      }
     }
   }
 
@@ -764,9 +1003,20 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
         width: 520,
         child: invitationLink == null
             ? Column(mainAxisSize: MainAxisSize.min, children: [
-                const Align(alignment: Alignment.centerLeft, child: UniversalText('Invite an individual login to join this existing account. They will use this account’s home server.')),
+                const Align(
+                    alignment: Alignment.centerLeft,
+                    child: UniversalText(
+                        'Invite an individual login to join this existing account. They will use this account’s home server.')),
                 const SizedBox(height: 16),
-                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, enabled: !submitting, decoration: InputDecoration(labelText: deliveryMethod == 'email' ? tr('Member email') : tr('Member email (required for login)'), prefixIcon: Icon(Icons.email_outlined))),
+                TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    enabled: !submitting,
+                    decoration: InputDecoration(
+                        labelText: deliveryMethod == 'email'
+                            ? tr('Member email')
+                            : tr('Member email (required for login)'),
+                        prefixIcon: Icon(Icons.email_outlined))),
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -790,12 +1040,17 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                       ChoiceChip(
                         label: const UniversalText('WhatsApp'),
                         selected: deliveryMethod == 'whatsapp',
-                        onSelected: submitting ? null : (_) => setState(() => deliveryMethod = 'whatsapp'),
+                        onSelected: submitting
+                            ? null
+                            : (_) =>
+                                setState(() => deliveryMethod = 'whatsapp'),
                       ),
                       ChoiceChip(
                         label: const UniversalText('Both'),
                         selected: deliveryMethod == 'both',
-                        onSelected: submitting ? null : (_) => setState(() => deliveryMethod = 'both'),
+                        onSelected: submitting
+                            ? null
+                            : (_) => setState(() => deliveryMethod = 'both'),
                       ),
                     ],
                   ),
@@ -839,36 +1094,97 @@ class _InviteMemberDialogState extends State<_InviteMemberDialog> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(initialValue: role, decoration: InputDecoration(labelText: tr('Role')), items: const [DropdownMenuItem(value: 'member', child: UniversalText('Member')), DropdownMenuItem(value: 'admin', child: UniversalText('Admin'))], onChanged: submitting ? null : (value) => setState(() => role = value ?? 'member')),
+                DropdownButtonFormField<String>(
+                    initialValue: role,
+                    decoration: InputDecoration(labelText: tr('Role')),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'member', child: UniversalText('Member')),
+                      DropdownMenuItem(
+                          value: 'admin', child: UniversalText('Admin'))
+                    ],
+                    onChanged: submitting
+                        ? null
+                        : (value) => setState(() => role = value ?? 'member')),
                 const SizedBox(height: 12),
-                const UniversalText('The invitation expires after 7 days. Only a SHA-256 hash of the token is stored in the database.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const UniversalText(
+                    'The invitation expires after 7 days. Only a SHA-256 hash of the token is stored in the database.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12)),
               ])
-            : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 34),
-                const SizedBox(height: 10),
-                const UniversalText('Invitation created', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 6),
-                UniversalText(invitationPhone.isEmpty
-                    ? 'Send this link to $invitationEmail. It expires in 7 days.'
-                    : 'Send this link to $invitationPhone through SMS/iMessage, WhatsApp, or both. It expires in 7 days.'),
-                const SizedBox(height: 14),
-                SelectableText(invitationLink!, style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 14),
-                if (invitationPhone.isNotEmpty) ...[
-                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _openSmsComposer, icon: const Icon(Icons.sms_outlined), label: const UniversalText('OPEN SMS / IMESSAGE'))),
-                  const SizedBox(height: 8),
-                  SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: _openWhatsAppComposer, icon: const Icon(Icons.chat_rounded), label: const UniversalText('OPEN WHATSAPP'))),
-                  const SizedBox(height: 8),
-                ],
-                SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _copy, icon: const Icon(Icons.copy_rounded), label: const UniversalText('COPY INVITATION LINK'))),
-                const SizedBox(height: 8),
-                const UniversalText('The recipient must use the invited email to finish creating their login. The link grants account membership only; it does not reveal a password or server credentials.', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                if (expiresAt != null) ...[const SizedBox(height: 8), UniversalText('Expires: ${expiresAt!.toLocal()}', style: const TextStyle(color: Colors.white38, fontSize: 11))],
-              ]),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                    const Icon(Icons.check_circle_rounded,
+                        color: Colors.greenAccent, size: 34),
+                    const SizedBox(height: 10),
+                    const UniversalText('Invitation created',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    UniversalText(invitationPhone.isEmpty
+                        ? 'Send this link to $invitationEmail. It expires in 7 days.'
+                        : 'Send this link to $invitationPhone through SMS/iMessage, WhatsApp, or both. It expires in 7 days.'),
+                    const SizedBox(height: 14),
+                    SelectableText(invitationLink!,
+                        style: const TextStyle(fontSize: 13)),
+                    const SizedBox(height: 14),
+                    if (invitationPhone.isNotEmpty) ...[
+                      SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                              onPressed: _openSmsComposer,
+                              icon: const Icon(Icons.sms_outlined),
+                              label:
+                                  const UniversalText('OPEN SMS / IMESSAGE'))),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                              onPressed: _openWhatsAppComposer,
+                              icon: const Icon(Icons.chat_rounded),
+                              label: const UniversalText('OPEN WHATSAPP'))),
+                      const SizedBox(height: 8),
+                    ],
+                    SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                            onPressed: _copy,
+                            icon: const Icon(Icons.copy_rounded),
+                            label:
+                                const UniversalText('COPY INVITATION LINK'))),
+                    const SizedBox(height: 8),
+                    const UniversalText(
+                        'The recipient must use the invited email to finish creating their login. The link grants account membership only; it does not reveal a password or server credentials.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    if (expiresAt != null) ...[
+                      const SizedBox(height: 8),
+                      UniversalText('Expires: ${expiresAt!.toLocal()}',
+                          style: const TextStyle(
+                              color: Colors.white38, fontSize: 11))
+                    ],
+                  ]),
       ),
       actions: invitationLink == null
-          ? [TextButton(onPressed: submitting ? null : () => Navigator.pop(context, false), child: const UniversalText('CANCEL')), FilledButton(onPressed: submitting ? null : _create, child: submitting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const UniversalText('CREATE INVITATION'))]
-          : [TextButton(onPressed: () => Navigator.pop(context, true), child: const UniversalText('DONE'))],
+          ? [
+              TextButton(
+                  onPressed:
+                      submitting ? null : () => Navigator.pop(context, false),
+                  child: const UniversalText('CANCEL')),
+              FilledButton(
+                  onPressed: submitting ? null : _create,
+                  child: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const UniversalText('CREATE INVITATION'))
+            ]
+          : [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const UniversalText('DONE'))
+            ],
     );
   }
 }
@@ -899,7 +1215,9 @@ class _InvitationJoinScreenState extends State<InvitationJoinScreen> {
   Future<void> _accept() async {
     final email = emailController.text.trim().toLowerCase();
     if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: UniversalText('Enter the email address that received the invitation.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: UniversalText(
+              'Enter the email address that received the invitation.')));
       return;
     }
     setState(() => accepting = true);
@@ -907,19 +1225,28 @@ class _InvitationJoinScreenState extends State<InvitationJoinScreen> {
       await AppController.instance.backendApi.acceptAccountInvitation(
         token: widget.token,
         email: email,
-        password: passwordController.text.isEmpty ? null : passwordController.text,
+        password:
+            passwordController.text.isEmpty ? null : passwordController.text,
       );
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
           title: const UniversalText('Invitation accepted'),
-          content: const UniversalText('You are now a member of the account. Sign in with your individual login to access the account’s home server.'),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('OK'))],
+          content: const UniversalText(
+              'You are now a member of the account. Sign in with your individual login to access the account’s home server.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const UniversalText('OK'))
+          ],
         ),
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
     } finally {
       if (mounted) setState(() => accepting = false);
     }
@@ -936,21 +1263,58 @@ class _InvitationJoinScreenState extends State<InvitationJoinScreen> {
             child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.group_add_rounded, size: 44),
-                  const SizedBox(height: 14),
-                  const UniversalText('Join a streaming account', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 8),
-                  const UniversalText('This invitation adds your individual login to an existing account. You will stream from that account’s home server; you do not receive the server password or physical media.'),
-                  const SizedBox(height: 20),
-                  TextField(controller: emailController, enabled: !accepting, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: tr('Invited email'), prefixIcon: Icon(Icons.email_outlined))),
-                  const SizedBox(height: 14),
-                  TextField(controller: passwordController, enabled: !accepting, obscureText: obscurePassword, decoration: InputDecoration(labelText: tr('New password (only if you do not already have a login)'), prefixIcon: const Icon(Icons.lock_outline), suffixIcon: IconButton(icon: Icon(obscurePassword ? Icons.visibility : Icons.visibility_off), onPressed: () => setState(() => obscurePassword = !obscurePassword)))),
-                  const SizedBox(height: 18),
-                  SizedBox(width: double.infinity, child: FilledButton(onPressed: accepting ? null : _accept, child: accepting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const UniversalText('ACCEPT INVITATION'))),
-                  const SizedBox(height: 10),
-                  const UniversalText('Invitation links expire after 7 days and are backed by a token whose hash is stored by the backend.', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.group_add_rounded, size: 44),
+                      const SizedBox(height: 14),
+                      const UniversalText('Join a streaming account',
+                          style: TextStyle(
+                              fontSize: 27, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 8),
+                      const UniversalText(
+                          'This invitation adds your individual login to an existing account. You will stream from that account’s home server; you do not receive the server password or physical media.'),
+                      const SizedBox(height: 20),
+                      TextField(
+                          controller: emailController,
+                          enabled: !accepting,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                              labelText: tr('Invited email'),
+                              prefixIcon: Icon(Icons.email_outlined))),
+                      const SizedBox(height: 14),
+                      TextField(
+                          controller: passwordController,
+                          enabled: !accepting,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                              labelText: tr(
+                                  'New password (only if you do not already have a login)'),
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                  icon: Icon(obscurePassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off),
+                                  onPressed: () => setState(() =>
+                                      obscurePassword = !obscurePassword)))),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                              onPressed: accepting ? null : _accept,
+                              child: accepting
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : const UniversalText('ACCEPT INVITATION'))),
+                      const SizedBox(height: 10),
+                      const UniversalText(
+                          'Invitation links expire after 7 days and are backed by a token whose hash is stored by the backend.',
+                          style:
+                              TextStyle(color: Colors.white54, fontSize: 12)),
+                    ]),
               ),
             ),
           ),

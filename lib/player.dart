@@ -3,7 +3,7 @@
 // This file is part of the documented Flutter/home-server architecture.
 
 import 'dart:async';
-
+import 'backend_api.dart';
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'device_features.dart';
@@ -16,6 +16,7 @@ import 'innovation_features.dart';
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
+
   /// Optional, richer presence label supplied by episodes, collections or TV channels.
   final String? activityLabel;
 
@@ -80,7 +81,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool youtubeUrlInvalid = false;
   bool musicWasPlayingBeforeVideo = false;
   bool _autoplayNextEnabled = true;
-  late final String _qoeSessionId = '${widget.media.id}_${DateTime.now().microsecondsSinceEpoch}';
+  late final String _qoeSessionId =
+      '${widget.media.id}_${DateTime.now().microsecondsSinceEpoch}';
   final DateTime _qoeStartedAt = DateTime.now();
   bool _qoeReadyLogged = false;
 
@@ -88,8 +90,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final value = widget.media.playbackUrl?.trim() ?? '';
     final uri = Uri.tryParse(value);
     return widget.groupWatchSessionId == null &&
-        groupWatchSessionId == null && uri != null && uri.hasAuthority &&
-        uri.userInfo.isEmpty && (uri.scheme == 'https' || uri.scheme == 'http');
+        groupWatchSessionId == null &&
+        uri != null &&
+        uri.hasAuthority &&
+        uri.userInfo.isEmpty &&
+        (uri.scheme == 'https' || uri.scheme == 'http');
   }
 
   StreamSubscription<YoutubeVideoState>? youtubeVideoStateSubscription;
@@ -120,7 +125,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     unawaited(_setSocialWatchActivity(_activityText));
   }
 
-  Future<void> _recordQoe(String event, {int? valueMs}) => PlaybackQoeTelemetry.record(
+  Future<void> _recordQoe(String event, {int? valueMs}) =>
+      PlaybackQoeTelemetry.record(
         event: event,
         mediaId: widget.media.id,
         sessionId: _qoeSessionId,
@@ -165,8 +171,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _syncIndependentPlaybackSession({String? state}) async {
     final sessionId = _playbackSessionId;
     if (sessionId == null || sessionId.isEmpty) return;
-    final duration = youtubeController == null ? 0.0 : await youtubeController!.duration;
-    final seconds = duration > 0 ? (position * duration).clamp(0.0, duration) : 0.0;
+    final duration =
+        youtubeController == null ? 0.0 : await youtubeController!.duration;
+    final seconds =
+        duration > 0 ? (position * duration).clamp(0.0, duration) : 0.0;
     try {
       await AppController.instance.backendApi.updatePlaybackSession(
         sessionId: sessionId,
@@ -328,7 +336,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       });
       if (!_qoeReadyLogged) {
         _qoeReadyLogged = true;
-        unawaited(_recordQoe('player_ready', valueMs: DateTime.now().difference(_qoeStartedAt).inMilliseconds));
+        unawaited(_recordQoe('player_ready',
+            valueMs: DateTime.now().difference(_qoeStartedAt).inMilliseconds));
       }
 
       if (position > 0.0 && position < 1.0) {
@@ -2284,13 +2293,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return hours > 0 ? '$hours:$minutes:$seconds' : '${duration.inMinutes}:$seconds';
+    return hours > 0
+        ? '$hours:$minutes:$seconds'
+        : '${duration.inMinutes}:$seconds';
   }
 
   Future<void> _addSceneBookmark() async {
     final controller = youtubeController;
     if (controller == null) {
-      _showSnackBar('Scene bookmarks are available when timestamped playback is connected.');
+      _showSnackBar(
+          'Scene bookmarks are available when timestamped playback is connected.');
       return;
     }
     if (!ExpandedPlatformRepository.instance.isAvailable) {
@@ -2318,7 +2330,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         title: const Text('Bookmark this scene'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Save ${_bookmarkTimestamp(positionMs)} in “${widget.media.title}”.'),
+            Text(
+                'Save ${_bookmarkTimestamp(positionMs)} in “${widget.media.title}”.'),
             const SizedBox(height: 12),
             TextField(
               controller: labelController,
@@ -2335,7 +2348,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, {
               'label': labelController.text.trim(),
@@ -2364,7 +2379,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _showSnackBar('Scene bookmarked at ${_bookmarkTimestamp(positionMs)}.');
       }
     } catch (error) {
-      if (mounted) _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+      }
     }
   }
 
@@ -2390,13 +2407,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 child: Row(children: [
                   const Icon(Icons.bookmarks_outlined),
                   const SizedBox(width: 10),
-                  Expanded(child: Text('Scenes · ${widget.media.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
-                  IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+                  Expanded(
+                      child: Text('Scenes · ${widget.media.title}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w800))),
+                  IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close_rounded)),
                 ]),
               ),
               const Divider(height: 1),
               if (bookmarks.isEmpty)
-                const Expanded(child: _PlayerMessage(icon: Icons.bookmark_border_rounded, message: 'No saved scenes yet. Add a bookmark while watching.'))
+                const Expanded(
+                    child: _PlayerMessage(
+                        icon: Icons.bookmark_border_rounded,
+                        message:
+                            'No saved scenes yet. Add a bookmark while watching.'))
               else
                 Expanded(
                   child: ListView.separated(
@@ -2405,19 +2433,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     itemBuilder: (context, index) {
                       final bookmark = bookmarks[index];
                       return ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.play_arrow_rounded)),
+                        leading: const CircleAvatar(
+                            child: Icon(Icons.play_arrow_rounded)),
                         title: Text(bookmark.label?.trim().isNotEmpty == true
                             ? bookmark.label!.trim()
                             : 'Scene at ${_bookmarkTimestamp(bookmark.positionMs)}'),
-                        subtitle: Text([
-                          _bookmarkTimestamp(bookmark.positionMs),
-                          if (bookmark.note?.trim().isNotEmpty == true) bookmark.note!.trim(),
-                        ].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                            [
+                              _bookmarkTimestamp(bookmark.positionMs),
+                              if (bookmark.note?.trim().isNotEmpty == true)
+                                bookmark.note!.trim(),
+                            ].join(' · '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
                         onTap: () async {
                           Navigator.pop(sheetContext);
                           final target = bookmark.positionMs / 1000.0;
-                          final current = await youtubeController?.currentTime ?? target;
-                          await _seekYoutubeBySeconds((target - current).round());
+                          final current =
+                              await youtubeController?.currentTime ?? target;
+                          await _seekYoutubeBySeconds(
+                              (target - current).round());
                           _startControlsTimer();
                         },
                       );
@@ -2429,7 +2464,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       );
     } catch (error) {
-      if (mounted) _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
@@ -25,13 +25,16 @@ class MediaFranchiseConnectionsPanel extends StatefulWidget {
   final String mediaId;
   final bool hasSeasons;
 
-  const MediaFranchiseConnectionsPanel({super.key, required this.mediaId, this.hasSeasons = false});
+  const MediaFranchiseConnectionsPanel(
+      {super.key, required this.mediaId, this.hasSeasons = false});
 
   @override
-  State<MediaFranchiseConnectionsPanel> createState() => _MediaFranchiseConnectionsPanelState();
+  State<MediaFranchiseConnectionsPanel> createState() =>
+      _MediaFranchiseConnectionsPanelState();
 }
 
-class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectionsPanel> {
+class _MediaFranchiseConnectionsPanelState
+    extends State<MediaFranchiseConnectionsPanel> {
   late Future<List<Map<String, dynamic>>> _connections;
 
   @override
@@ -56,18 +59,26 @@ class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectio
       api.getMediaConnections(mediaId: widget.mediaId),
       api.getMediaWorks(),
     ]).then((results) {
-      final works = {for (final work in results[1]) work['id']?.toString(): work};
+      final works = {
+        for (final work in results[1]) work['id']?.toString(): work
+      };
       return results[0].where((edge) {
         final kind = (edge['relationshipType'] ?? '').toString().toLowerCase();
-        return kind.contains('sequel') || kind.contains('prequel') ||
-            kind.contains('continu') || kind.contains('revival') ||
-            kind.contains('spin') || kind.contains('reboot') ||
-            kind.contains('remake') || kind.contains('alternate') ||
-            kind.contains('samecontinuity') || kind.contains('same_continuity') ||
+        return kind.contains('sequel') ||
+            kind.contains('prequel') ||
+            kind.contains('continu') ||
+            kind.contains('revival') ||
+            kind.contains('spin') ||
+            kind.contains('reboot') ||
+            kind.contains('remake') ||
+            kind.contains('alternate') ||
+            kind.contains('samecontinuity') ||
+            kind.contains('same_continuity') ||
             kind.contains('anthology');
       }).map((edge) {
         final from = edge['fromId']?.toString();
-        final otherId = from == widget.mediaId ? edge['toId']?.toString() : from;
+        final otherId =
+            from == widget.mediaId ? edge['toId']?.toString() : from;
         final related = works[otherId];
         return <String, dynamic>{
           ...edge,
@@ -82,30 +93,38 @@ class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectio
   Widget build(BuildContext context) => Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const UniversalText('Franchise connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const UniversalText('Franchise connections',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            Text(widget.hasSeasons
-                ? 'Related productions keep their own season numbering and identity.'
-                : 'Related titles remain separate works and can belong to different continuity branches.',
+            Text(
+                widget.hasSeasons
+                    ? 'Related productions keep their own season numbering and identity.'
+                    : 'Related titles remain separate works and can belong to different continuity branches.',
                 style: const TextStyle(color: Colors.white60)),
             if (!AppController.instance.backendApi.isAuthenticated)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
-                child: UniversalText('Sign in to view linked productions.', style: TextStyle(color: Colors.white60)),
+                child: UniversalText('Sign in to view linked productions.',
+                    style: TextStyle(color: Colors.white60)),
               )
             else
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _connections,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(padding: EdgeInsets.only(top: 14), child: LinearProgressIndicator());
+                    return const Padding(
+                        padding: EdgeInsets.only(top: 14),
+                        child: LinearProgressIndicator());
                   }
                   final links = snapshot.data ?? const <Map<String, dynamic>>[];
                   if (links.isEmpty) {
                     return const Padding(
                       padding: EdgeInsets.only(top: 12),
-                      child: UniversalText('No franchise relationships are recorded for this title.', style: TextStyle(color: Colors.white60)),
+                      child: UniversalText(
+                          'No franchise relationships are recorded for this title.',
+                          style: TextStyle(color: Colors.white60)),
                     );
                   }
                   return Column(children: [
@@ -114,7 +133,8 @@ class _MediaFranchiseConnectionsPanelState extends State<MediaFranchiseConnectio
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.account_tree_outlined),
                         title: Text(link['otherTitle'].toString()),
-                        subtitle: Text('${link['relationshipType']}${link['otherYear'] == null ? '' : ' · ${link['otherYear']}'}${widget.hasSeasons ? ' · separate production' : ''}'),
+                        subtitle: Text(
+                            '${link['relationshipType']}${link['otherYear'] == null ? '' : ' · ${link['otherYear']}'}${widget.hasSeasons ? ' · separate production' : ''}'),
                       ),
                   ]);
                 },
@@ -192,21 +212,41 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
         title: const UniversalText('Add a version'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Version name', hintText: 'Encore')),
-            TextField(controller: cut, decoration: const InputDecoration(labelText: 'Cut or edition notes')),
-            TextField(controller: formats, decoration: const InputDecoration(labelText: 'Physical formats', hintText: 'DVD, Blu-ray, 4K UHD')),
+            TextField(
+                controller: name,
+                decoration: const InputDecoration(
+                    labelText: 'Version name', hintText: 'Encore')),
+            TextField(
+                controller: cut,
+                decoration:
+                    const InputDecoration(labelText: 'Cut or edition notes')),
+            TextField(
+                controller: formats,
+                decoration: const InputDecoration(
+                    labelText: 'Physical formats',
+                    hintText: 'DVD, Blu-ray, 4K UHD')),
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add version')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const UniversalText('Add version')),
         ],
       ),
     );
     final versionName = name.text.trim();
     final cutNotes = cut.text.trim();
-    final physicalFormats = formats.text.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
-    name.dispose(); cut.dispose(); formats.dispose();
+    final physicalFormats = formats.text
+        .split(',')
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty)
+        .toList();
+    name.dispose();
+    cut.dispose();
+    formats.dispose();
     if (confirmed != true || versionName.isEmpty) return;
     final versions = _maps(current['versions']);
     versions.add({
@@ -230,15 +270,33 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
         title: const UniversalText('Add a version scene'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: sceneTitle, decoration: const InputDecoration(labelText: 'Scene title', hintText: 'TVA incursion scene')),
-            TextField(controller: position, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Story order', hintText: '1')),
-            TextField(controller: storyDate, decoration: const InputDecoration(labelText: 'Story-time note', hintText: 'After Spider-Man: Brand New Day')),
-            TextField(controller: note, maxLines: 2, decoration: const InputDecoration(labelText: 'Description')),
+            TextField(
+                controller: sceneTitle,
+                decoration: const InputDecoration(
+                    labelText: 'Scene title', hintText: 'TVA incursion scene')),
+            TextField(
+                controller: position,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'Story order', hintText: '1')),
+            TextField(
+                controller: storyDate,
+                decoration: const InputDecoration(
+                    labelText: 'Story-time note',
+                    hintText: 'After Spider-Man: Brand New Day')),
+            TextField(
+                controller: note,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Description')),
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add scene')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const UniversalText('Add scene')),
         ],
       ),
     );
@@ -249,7 +307,10 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
       'storyTime': storyDate.text.trim(),
       'description': note.text.trim(),
     };
-    sceneTitle.dispose(); position.dispose(); storyDate.dispose(); note.dispose();
+    sceneTitle.dispose();
+    position.dispose();
+    storyDate.dispose();
+    note.dispose();
     if (confirmed != true || title.isEmpty) return;
     final versions = _maps(current['versions']);
     if (versionIndex >= versions.length) return;
@@ -269,14 +330,30 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
       builder: (dialogContext) => AlertDialog(
         title: const UniversalText('Link a story'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: target, decoration: const InputDecoration(labelText: 'Related title')),
-          TextField(controller: targetId, decoration: const InputDecoration(labelText: 'Canonical media ID (optional)')),
-          TextField(controller: type, decoration: const InputDecoration(labelText: 'Relationship', hintText: 'leads_into / sequel_to')),
-          TextField(controller: timing, decoration: const InputDecoration(labelText: 'Story timing note')),
+          TextField(
+              controller: target,
+              decoration: const InputDecoration(labelText: 'Related title')),
+          TextField(
+              controller: targetId,
+              decoration: const InputDecoration(
+                  labelText: 'Canonical media ID (optional)')),
+          TextField(
+              controller: type,
+              decoration: const InputDecoration(
+                  labelText: 'Relationship',
+                  hintText: 'leads_into / sequel_to')),
+          TextField(
+              controller: timing,
+              decoration:
+                  const InputDecoration(labelText: 'Story timing note')),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Add link')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const UniversalText('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const UniversalText('Add link')),
         ],
       ),
     );
@@ -284,7 +361,10 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
     final id = targetId.text.trim();
     final relationshipType = type.text.trim();
     final storyTime = timing.text.trim();
-    target.dispose(); targetId.dispose(); type.dispose(); timing.dispose();
+    target.dispose();
+    targetId.dispose();
+    type.dispose();
+    timing.dispose();
     if (confirmed != true || title.isEmpty || relationshipType.isEmpty) return;
     final relationships = _maps(current['relationships'])
       ..add({
@@ -297,7 +377,10 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
   }
 
   List<Map<String, dynamic>> _maps(dynamic value) => value is List
-      ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+      ? value
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
       : <Map<String, dynamic>>[];
 
   @override
@@ -310,67 +393,108 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  const Expanded(child: UniversalText('Versions & story connections', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
-                  IconButton(
-                    onPressed: _saving || !AppController.instance.backendApi.isAuthenticated
-                        ? null
-                        : () => _addVersion(record),
-                    tooltip: 'Add version',
-                    icon: const Icon(Icons.add_circle_outline),
-                  ),
-                ]),
-                if (!AppController.instance.backendApi.isAuthenticated)
-                  const UniversalText('Sign in to save versions and story connections.', style: TextStyle(color: Colors.white60))
-                else if (snapshot.connectionState == ConnectionState.waiting)
-                  const LinearProgressIndicator()
-                else if (versions.isEmpty && relationships.isEmpty)
-                  const UniversalText('Add alternate cuts, their physical editions, version-specific scenes, and story links.', style: TextStyle(color: Colors.white60))
-                else ...[
-                  for (var index = 0; index < versions.length; index++)
-                    _versionTile(record, versions[index], index),
-                  for (final relationship in relationships)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.account_tree_outlined),
-                      title: Text('${relationship['type']} → ${relationship['title']}'),
-                      subtitle: [
-                        if (relationship['storyTime']?.toString().trim().isNotEmpty ?? false)
-                          relationship['storyTime'].toString(),
-                        if (relationship['mediaId']?.toString().trim().isNotEmpty ?? false)
-                          'ID: ${relationship['mediaId']}',
-                      ].isEmpty ? null : Text([
-                        if (relationship['storyTime']?.toString().trim().isNotEmpty ?? false)
-                          relationship['storyTime'].toString(),
-                        if (relationship['mediaId']?.toString().trim().isNotEmpty ?? false)
-                          'ID: ${relationship['mediaId']}',
-                      ].join(' · ')),
-                    ),
-                ],
-                if (AppController.instance.backendApi.isAuthenticated)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _saving ? null : () => _addRelationship(record),
-                      icon: const Icon(Icons.add_link),
-                      label: const UniversalText('Link another story'),
-                    ),
-                  ),
-                if (_saving) const LinearProgressIndicator(),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Expanded(
+                          child: UniversalText('Versions & story connections',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w800))),
+                      IconButton(
+                        onPressed: _saving ||
+                                !AppController
+                                    .instance.backendApi.isAuthenticated
+                            ? null
+                            : () => _addVersion(record),
+                        tooltip: 'Add version',
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ]),
+                    if (!AppController.instance.backendApi.isAuthenticated)
+                      const UniversalText(
+                          'Sign in to save versions and story connections.',
+                          style: TextStyle(color: Colors.white60))
+                    else if (snapshot.connectionState ==
+                        ConnectionState.waiting)
+                      const LinearProgressIndicator()
+                    else if (versions.isEmpty && relationships.isEmpty)
+                      const UniversalText(
+                          'Add alternate cuts, their physical editions, version-specific scenes, and story links.',
+                          style: TextStyle(color: Colors.white60))
+                    else ...[
+                      for (var index = 0; index < versions.length; index++)
+                        _versionTile(record, versions[index], index),
+                      for (final relationship in relationships)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.account_tree_outlined),
+                          title: Text(
+                              '${relationship['type']} → ${relationship['title']}'),
+                          subtitle: [
+                            if (relationship['storyTime']
+                                    ?.toString()
+                                    .trim()
+                                    .isNotEmpty ??
+                                false)
+                              relationship['storyTime'].toString(),
+                            if (relationship['mediaId']
+                                    ?.toString()
+                                    .trim()
+                                    .isNotEmpty ??
+                                false)
+                              'ID: ${relationship['mediaId']}',
+                          ].isEmpty
+                              ? null
+                              : Text([
+                                  if (relationship['storyTime']
+                                          ?.toString()
+                                          .trim()
+                                          .isNotEmpty ??
+                                      false)
+                                    relationship['storyTime'].toString(),
+                                  if (relationship['mediaId']
+                                          ?.toString()
+                                          .trim()
+                                          .isNotEmpty ??
+                                      false)
+                                    'ID: ${relationship['mediaId']}',
+                                ].join(' · ')),
+                        ),
+                    ],
+                    if (AppController.instance.backendApi.isAuthenticated)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed:
+                              _saving ? null : () => _addRelationship(record),
+                          icon: const Icon(Icons.add_link),
+                          label: const UniversalText('Link another story'),
+                        ),
+                      ),
+                    if (_saving) const LinearProgressIndicator(),
+                  ]),
             ),
           );
         },
       );
 
-  Widget _versionTile(Map<String, dynamic> record, Map<String, dynamic> version, int index) {
-    final scenes = _maps(version['scenes'])..sort((a, b) => ((a['storyOrder'] as num?)?.toInt() ?? 999).compareTo((b['storyOrder'] as num?)?.toInt() ?? 999));
-    final formats = (version['physicalFormats'] as List?)?.map((item) => item.toString()).join(', ') ?? '';
+  Widget _versionTile(
+      Map<String, dynamic> record, Map<String, dynamic> version, int index) {
+    final scenes = _maps(version['scenes'])
+      ..sort((a, b) => ((a['storyOrder'] as num?)?.toInt() ?? 999)
+          .compareTo((b['storyOrder'] as num?)?.toInt() ?? 999));
+    final formats = (version['physicalFormats'] as List?)
+            ?.map((item) => item.toString())
+            .join(', ') ??
+        '';
     return ExpansionTile(
       tilePadding: EdgeInsets.zero,
       title: Text(version['name']?.toString() ?? 'Version'),
-      subtitle: Text([version['cut'], if (formats.isNotEmpty) formats].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ')),
+      subtitle: Text([version['cut'], if (formats.isNotEmpty) formats]
+          .whereType<String>()
+          .where((value) => value.trim().isNotEmpty)
+          .join(' · ')),
       children: [
         for (final scene in scenes)
           ListTile(
@@ -378,10 +502,14 @@ class _MediaContinuityPanelState extends State<MediaContinuityPanel> {
             leading: const Icon(Icons.movie_filter_outlined),
             title: Text(scene['title']?.toString() ?? 'Scene'),
             subtitle: Text([
-              if (scene['storyTime']?.toString().trim().isNotEmpty ?? false) scene['storyTime'].toString(),
-              if (scene['description']?.toString().trim().isNotEmpty ?? false) scene['description'].toString(),
+              if (scene['storyTime']?.toString().trim().isNotEmpty ?? false)
+                scene['storyTime'].toString(),
+              if (scene['description']?.toString().trim().isNotEmpty ?? false)
+                scene['description'].toString(),
             ].join(' · ')),
-            trailing: scene['storyOrder'] == null ? null : Text('#${scene['storyOrder']}'),
+            trailing: scene['storyOrder'] == null
+                ? null
+                : Text('#${scene['storyOrder']}'),
           ),
         Align(
           alignment: Alignment.centerLeft,

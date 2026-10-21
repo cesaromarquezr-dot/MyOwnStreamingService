@@ -120,14 +120,14 @@ class EmailService {
   }
 
   /// Sends the account welcome message.
-  Future<void> welcome(String email, String username) async {
+  Future<void> welcome(String email) async {
     await send(
       to: email,
       subject: 'Welcome to your own personal streaming service',
       body:
-          'Welcome to your own personal streaming service, $username!\n\n'
-          'Your account is ready. You can create profiles, build your library, '
-          'watch together, and access your media remotely.',
+          'Welcome to your own personal streaming service!\n\n'
+          'Your account is ready. Create a profile and choose its unique public '
+          'username, build your library, watch together, and access your media remotely.',
     );
   }
 

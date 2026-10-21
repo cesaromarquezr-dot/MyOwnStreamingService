@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'localization.dart';
+import 'backend_api.dart';
 
 class MediaReviewEntry {
   final String username;
@@ -35,7 +36,6 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
   double score = 10;
   final TextEditingController label = TextEditingController(text: 'Excellent');
   final TextEditingController review = TextEditingController();
-  final TextEditingController username = TextEditingController(text: 'SpideyFan0804');
   bool translation = true;
   bool spoiler = false;
   String reviewType = 'written';
@@ -75,7 +75,9 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const UniversalText('Write your review', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  const UniversalText('Write your review',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 12),
                   UniversalText('Your rating: ${score.toStringAsFixed(0)}/10'),
                   Slider(
@@ -100,35 +102,78 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
                     decoration: InputDecoration(labelText: tr('Your review')),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: username,
-                    decoration: InputDecoration(
-                      labelText: tr('Global review username'),
-                      helperText: tr('Only this username is shown publicly; never your email.'),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.alternate_email_rounded),
+                    title: Text(
+                      (AppController.instance.currentProfile?.username ?? '')
+                              .trim()
+                              .isEmpty
+                          ? 'No profile username set'
+                          : '@${AppController.instance.currentProfile!.username}',
+                    ),
+                    subtitle: const UniversalText(
+                      'Public reviews use the username chosen for your active profile.',
                     ),
                   ),
                   Wrap(spacing: 8, children: [
-                    ChoiceChip(label: const UniversalText('Written'), selected: reviewType == 'written', onSelected: (_) => setState(() => reviewType = 'written')),
-                    ChoiceChip(label: const UniversalText('Video link'), selected: reviewType == 'video', onSelected: (_) => setState(() => reviewType = 'video')),
+                    ChoiceChip(
+                        label: const UniversalText('Written'),
+                        selected: reviewType == 'written',
+                        onSelected: (_) =>
+                            setState(() => reviewType = 'written')),
+                    ChoiceChip(
+                        label: const UniversalText('Video link'),
+                        selected: reviewType == 'video',
+                        onSelected: (_) =>
+                            setState(() => reviewType = 'video')),
                   ]),
                   if (reviewType == 'video') ...[
                     const SizedBox(height: 8),
-                    TextField(controller: videoUrl, decoration: const InputDecoration(labelText: 'Video review URL')),
+                    TextField(
+                        controller: videoUrl,
+                        decoration: const InputDecoration(
+                            labelText: 'Video review URL')),
                   ],
                   const SizedBox(height: 8),
-                  const UniversalText('Publish this review to', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const UniversalText('Publish this review to',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
                   Wrap(spacing: 8, runSpacing: 6, children: [
-                    for (final destination in const ['profile', 'story', 'community'])
-                      FilterChip(label: Text(destination == 'profile' ? 'Profile' : destination == 'story' ? 'Story (24h)' : 'Community'), selected: destinations.contains(destination), onSelected: (value) => setState(() => value ? destinations.add(destination) : destinations.remove(destination))),
+                    for (final destination in const [
+                      'profile',
+                      'story',
+                      'community'
+                    ])
+                      FilterChip(
+                          label: Text(destination == 'profile'
+                              ? 'Profile'
+                              : destination == 'story'
+                                  ? 'Story (24h)'
+                                  : 'Community'),
+                          selected: destinations.contains(destination),
+                          onSelected: (value) => setState(() => value
+                              ? destinations.add(destination)
+                              : destinations.remove(destination))),
                   ]),
                   if (destinations.contains('community'))
-                    Padding(padding: const EdgeInsets.only(top: 8), child: TextField(controller: communityId, decoration: const InputDecoration(labelText: 'Community ID'))),
-                  SwitchListTile(contentPadding: EdgeInsets.zero, value: spoiler, onChanged: (value) => setState(() => spoiler = value), title: const UniversalText('Mark review as containing spoilers')),
+                    Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: TextField(
+                            controller: communityId,
+                            decoration: const InputDecoration(
+                                labelText: 'Community ID'))),
+                  SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: spoiler,
+                      onChanged: (value) => setState(() => spoiler = value),
+                      title: const UniversalText(
+                          'Mark review as containing spoilers')),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: translation,
                     onChanged: (value) => setState(() => translation = value),
-                    title: const UniversalText('Translations on for global reviews'),
+                    title: const UniversalText(
+                        'Translations on for global reviews'),
                   ),
                   FilledButton(
                     onPressed: _submit,
@@ -139,7 +184,8 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          const UniversalText('Reviews from profiles on this account',
+          const UniversalText(
+            'Reviews from profiles on this account',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
           ),
           for (final entry in local) _reviewCard(entry, false),
@@ -154,7 +200,8 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
           Row(
             children: <Widget>[
               const Expanded(
-                child: UniversalText('Global reviews',
+                child: UniversalText(
+                  'Global reviews',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                 ),
               ),
@@ -174,7 +221,8 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
   Widget _ratingSummary(MediaItem media) {
     final viewerRating = local.isEmpty
         ? null
-        : local.map((entry) => entry.score).reduce((a, b) => a + b) / local.length;
+        : local.map((entry) => entry.score).reduce((a, b) => a + b) /
+            local.length;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -184,8 +232,11 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const UniversalText('Official / critic rating', style: TextStyle(fontWeight: FontWeight.w800)),
-                  Text(media.rating == null ? 'Not available' : '${media.rating}/10${media.ratingReason == null ? '' : ' • ${media.ratingReason}'}'),
+                  const UniversalText('Official / critic rating',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  Text(media.rating == null
+                      ? 'Not available'
+                      : '${media.rating}/10${media.ratingReason == null ? '' : ' • ${media.ratingReason}'}'),
                 ],
               ),
             ),
@@ -193,8 +244,11 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const UniversalText('Viewer rating', style: TextStyle(fontWeight: FontWeight.w800)),
-                  Text(viewerRating == null ? 'No reviews' : '${viewerRating.toStringAsFixed(1)}/10'),
+                  const UniversalText('Viewer rating',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  Text(viewerRating == null
+                      ? 'No reviews'
+                      : '${viewerRating.toStringAsFixed(1)}/10'),
                 ],
               ),
             ),
@@ -213,7 +267,8 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Text(entry.username, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(entry.username,
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
                 const Spacer(),
                 UniversalText('${entry.score.toStringAsFixed(0)}/10'),
               ],
@@ -225,15 +280,25 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
             if (public && translation)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: UniversalText('Translation: enabled', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                child: UniversalText('Translation: enabled',
+                    style: TextStyle(color: Colors.white38, fontSize: 11)),
               ),
             if (entry.publicationIds.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Wrap(spacing: 8, children: [
-                  TextButton.icon(onPressed: () => _interact(entry, 'reaction'), icon: const Icon(Icons.favorite_border_rounded), label: const UniversalText('React')),
-                  TextButton.icon(onPressed: () => _interact(entry, 'comment'), icon: const Icon(Icons.comment_outlined), label: const UniversalText('Comment')),
-                  TextButton.icon(onPressed: () => _interact(entry, 'note'), icon: const Icon(Icons.sticky_note_2_outlined), label: const UniversalText('Note')),
+                  TextButton.icon(
+                      onPressed: () => _interact(entry, 'reaction'),
+                      icon: const Icon(Icons.favorite_border_rounded),
+                      label: const UniversalText('React')),
+                  TextButton.icon(
+                      onPressed: () => _interact(entry, 'comment'),
+                      icon: const Icon(Icons.comment_outlined),
+                      label: const UniversalText('Comment')),
+                  TextButton.icon(
+                      onPressed: () => _interact(entry, 'note'),
+                      icon: const Icon(Icons.sticky_note_2_outlined),
+                      label: const UniversalText('Note')),
                 ]),
               ),
           ],
@@ -248,9 +313,26 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
     if (text.isEmpty) return;
     final media = widget.media;
     final profile = AppController.instance.currentProfile;
+    final backend = AppController.instance.backendApi;
+    if (media != null &&
+        backend.isAuthenticated &&
+        (profile == null || (profile.username).trim().isEmpty)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: UniversalText(
+              'Choose a profile username before publishing a public review.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     String? reviewId;
     final publicationIds = <String, String>{};
-    if (media != null && profile != null && AppController.instance.backendApi.isAuthenticated) {
+    if (media != null &&
+        profile != null &&
+        AppController.instance.backendApi.isAuthenticated) {
       try {
         final saved = await AppController.instance.backendApi.submitReview(
           mediaId: media.id,
@@ -258,7 +340,6 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
           score: score,
           label: label.text.trim(),
           text: text,
-          globalUsername: username.text.trim(),
           reviewType: reviewType,
           videoUrl: videoUrl.text.trim().isEmpty ? null : videoUrl.text.trim(),
           spoiler: spoiler,
@@ -266,18 +347,25 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
         reviewId = (saved['review'] as Map?)?['id']?.toString();
         if (reviewId != null) {
           for (final destination in destinations) {
-            if (destination == 'community' && communityId.text.trim().isEmpty) continue;
+            if (destination == 'community' && communityId.text.trim().isEmpty) {
+              continue;
+            }
             try {
-              final published = await AppController.instance.backendApi.publishReview(
+              final published =
+                  await AppController.instance.backendApi.publishReview(
                 reviewId: reviewId,
                 mediaId: media.id,
                 profileId: profile.id,
                 destination: destination,
-                destinationId: destination == 'community' ? communityId.text.trim() : null,
+                destinationId:
+                    destination == 'community' ? communityId.text.trim() : null,
                 spoiler: spoiler,
               );
-              final publication = (published['publication'] as Map?)?['id']?.toString();
-              if (publication != null) publicationIds[destination] = publication;
+              final publication =
+                  (published['publication'] as Map?)?['id']?.toString();
+              if (publication != null) {
+                publicationIds[destination] = publication;
+              }
             } catch (_) {}
           }
         }
@@ -287,7 +375,9 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
     }
     setState(() {
       local.add(MediaReviewEntry(
-        username: profile?.name ?? 'Current Profile',
+        username: profile?.username.trim().isNotEmpty == true
+            ? '@${profile!.username}'
+            : (profile?.name ?? 'Current Profile'),
         score: score,
         label: label.text.trim().isEmpty ? 'Review' : label.text.trim(),
         text: text,
@@ -299,7 +389,9 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
   }
 
   Future<void> _interact(MediaReviewEntry entry, String type) async {
-    final publicationId = entry.publicationIds['profile'] ?? entry.publicationIds['story'] ?? entry.publicationIds['community'];
+    final publicationId = entry.publicationIds['profile'] ??
+        entry.publicationIds['story'] ??
+        entry.publicationIds['community'];
     final profile = AppController.instance.currentProfile;
     if (publicationId == null || profile == null) return;
     String body = '';
@@ -318,15 +410,41 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
         body: body,
         reaction: reaction,
       );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(type == 'reaction' ? 'Reaction added.' : '${type[0].toUpperCase()}${type.substring(1)} added.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(type == 'reaction'
+                ? 'Reaction added.'
+                : '${type[0].toUpperCase()}${type.substring(1)} added.')));
+      }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
+      }
     }
   }
 
   Future<String?> _promptInteraction(String type) async {
     final controller = TextEditingController();
-    final value = await showDialog<String>(context: context, builder: (context) => AlertDialog(title: Text(type == 'comment' ? 'Comment on review' : 'Add private note'), content: TextField(controller: controller, autofocus: true, minLines: 2, maxLines: 5), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const UniversalText('Save'))]));
+    final value = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+                title: Text(type == 'comment'
+                    ? 'Comment on review'
+                    : 'Add private note'),
+                content: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    minLines: 2,
+                    maxLines: 5),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const UniversalText('Cancel')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, controller.text),
+                      child: const UniversalText('Save'))
+                ]));
     controller.dispose();
     return value;
   }
@@ -335,7 +453,6 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
   void dispose() {
     label.dispose();
     review.dispose();
-    username.dispose();
     communityId.dispose();
     videoUrl.dispose();
     super.dispose();

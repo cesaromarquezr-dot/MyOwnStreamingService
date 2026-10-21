@@ -7,13 +7,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'music_achievements.dart';
 import 'music.dart';
 import 'profile_content_safety.dart';
 import 'profile_administration.dart';
 import 'localization.dart';
+import 'profile_username.dart';
 
 class _AvatarOption {
   const _AvatarOption(this.label, {this.icon, this.symbol});
@@ -69,12 +70,10 @@ class ProfileSelectionScreen extends StatefulWidget {
   });
 
   @override
-  State<ProfileSelectionScreen> createState() =>
-      _ProfileSelectionScreenState();
+  State<ProfileSelectionScreen> createState() => _ProfileSelectionScreenState();
 }
 
-class _ProfileSelectionScreenState
-    extends State<ProfileSelectionScreen>
+class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     with TickerProviderStateMixin {
   late final AnimationController _animationController;
 
@@ -83,6 +82,7 @@ class _ProfileSelectionScreenState
   }
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -100,6 +100,7 @@ class _ProfileSelectionScreenState
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     AppController.instance.removeListener(_onContentChanged);
@@ -144,7 +145,8 @@ class _ProfileSelectionScreenState
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Profile "${createdProfile.name}" saved. Select a profile to continue.'),
+          content: Text(
+              'Profile "${createdProfile.name}" saved. Select a profile to continue.'),
         ),
       );
       setState(() {});
@@ -198,11 +200,13 @@ class _ProfileSelectionScreenState
       // prevents the Home activity strip from showing a stale green glow for
       // the old profile after the selection handoff.
       try {
-        await controller.backendApi.setSocialProfilePresence(
-          profileId: previousProfile.id,
-          availability: 'away',
-          clearActivity: true,
-        ).timeout(const Duration(seconds: 2));
+        await controller.backendApi
+            .setSocialProfilePresence(
+              profileId: previousProfile.id,
+              availability: 'away',
+              clearActivity: true,
+            )
+            .timeout(const Duration(seconds: 2));
       } catch (_) {
         // Presence must never prevent a profile from opening.
       }
@@ -213,11 +217,13 @@ class _ProfileSelectionScreenState
       // presence record without carrying over an old activity from its prior
       // session; playback can publish its own activity as it starts.
       unawaited(
-        controller.backendApi.setSocialProfilePresence(
-          profileId: profile.id,
-          availability: 'active',
-          clearActivity: true,
-        ).then<void>((_) {}, onError: (_) {}),
+        controller.backendApi
+            .setSocialProfilePresence(
+              profileId: profile.id,
+              availability: 'active',
+              clearActivity: true,
+            )
+            .then<void>((_) {}, onError: (_) {}),
       );
     }
 
@@ -225,7 +231,8 @@ class _ProfileSelectionScreenState
     // enough to open Home; a slow/offline backend must not make selection look
     // like it did nothing.
     unawaited(controller.activateProfile(profile.id).catchError((_) {}));
-    unawaited(LanguageController.instance.loadForCurrentProfile().catchError((_) {}));
+    unawaited(
+        LanguageController.instance.loadForCurrentProfile().catchError((_) {}));
     if (!mounted) return;
     _finishProfileSelection(context);
   }
@@ -294,7 +301,8 @@ class _ProfileSelectionScreenState
           width: railWidth,
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.78),
-            border: Border(right: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+            border: Border(
+                right: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
           ),
           child: SafeArea(
             child: Padding(
@@ -304,13 +312,18 @@ class _ProfileSelectionScreenState
                 children: [
                   const _ProfileLogo(),
                   const SizedBox(height: 30),
-                  const UniversalText("Who's watching?", style: TextStyle(
-                    fontSize: 25, fontWeight: FontWeight.w700, color: Colors.white,
-                  )),
+                  const UniversalText("Who's watching?",
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      )),
                   const SizedBox(height: 6),
-                  Text('Choose a profile to continue', style: TextStyle(
-                    fontSize: 13, color: Colors.white.withValues(alpha: 0.58),
-                  )),
+                  Text('Choose a profile to continue',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.58),
+                      )),
                   const SizedBox(height: 20),
                   Expanded(
                     child: ListView(
@@ -336,9 +349,11 @@ class _ProfileSelectionScreenState
                       ],
                     ),
                   ),
-                  Text('${profiles.length} of 7 profiles', style: const TextStyle(
-                    color: Colors.white38, fontSize: 12,
-                  )),
+                  Text('${profiles.length} of 7 profiles',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                      )),
                 ],
               ),
             ),
@@ -352,16 +367,26 @@ class _ProfileSelectionScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Spacer(),
-                  const Text('YOUR ENTERTAINMENT,\nREADY WHEN YOU ARE', style: TextStyle(
-                    color: Colors.white, fontSize: 30, height: 1.12,
-                    fontWeight: FontWeight.w800, letterSpacing: 1.0,
-                    shadows: [Shadow(color: Colors.black87, blurRadius: 20)],
-                  )),
+                  const Text('YOUR ENTERTAINMENT,\nREADY WHEN YOU ARE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        height: 1.12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                        shadows: [
+                          Shadow(color: Colors.black87, blurRadius: 20)
+                        ],
+                      )),
                   const SizedBox(height: 10),
-                  Text('Movies, series and albums from your library', style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75), fontSize: 14,
-                    shadows: const [Shadow(color: Colors.black, blurRadius: 12)],
-                  )),
+                  Text('Movies, series and albums from your library',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 14,
+                        shadows: const [
+                          Shadow(color: Colors.black, blurRadius: 12)
+                        ],
+                      )),
                   const Spacer(),
                   SizedBox(
                     height: (size.height * 0.29).clamp(150.0, 260.0).toDouble(),
@@ -374,7 +399,9 @@ class _ProfileSelectionScreenState
                         return AnimatedContainer(
                           duration: Duration(milliseconds: 500 + (index * 55)),
                           curve: Curves.easeOutCubic,
-                          width: (size.width * 0.105).clamp(94.0, 150.0).toDouble(),
+                          width: (size.width * 0.105)
+                              .clamp(94.0, 150.0)
+                              .toDouble(),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: Stack(
@@ -384,16 +411,32 @@ class _ProfileSelectionScreenState
                                   item.imageUrl,
                                   fit: BoxFit.cover,
                                   filterQuality: FilterQuality.medium,
-                                  errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                                  errorBuilder: (_, __, ___) =>
+                                      const ColoredBox(color: Colors.black),
                                 ),
-                                DecoratedBox(decoration: BoxDecoration(
-                                  gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.9)]),
+                                DecoratedBox(
+                                    decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withValues(alpha: 0.9)
+                                      ]),
                                 )),
-                                Positioned(left: 8, right: 8, bottom: 9, child: Text(
-                                  item.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                                )),
+                                Positioned(
+                                    left: 8,
+                                    right: 8,
+                                    bottom: 9,
+                                    child: Text(
+                                      item.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600),
+                                    )),
                               ],
                             ),
                           ),
@@ -411,6 +454,7 @@ class _ProfileSelectionScreenState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
@@ -428,130 +472,124 @@ class _ProfileSelectionScreenState
             const ColoredBox(color: Colors.black),
           if (artwork.isNotEmpty && MediaQuery.sizeOf(context).width < 760)
             const ColoredBox(color: Color(0x99000000)),
-
           if (artwork.isNotEmpty && MediaQuery.sizeOf(context).width >= 760)
             _buildCinematicLayout(context, profiles, artwork)
           else
             SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 48,
-                ),
-                child: AnimatedBuilder(
-                  animation: _animationController,
-                  builder: (context, child) {
-                    final animation = CurvedAnimation(
-                      parent: _animationController,
-                      curve: Curves.easeOutCubic,
-                    );
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 48,
+                  ),
+                  child: AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      final animation = CurvedAnimation(
+                        parent: _animationController,
+                        curve: Curves.easeOutCubic,
+                      );
 
-                    return Opacity(
-                      opacity: animation.value,
-                      child: Transform.translate(
-                        offset: Offset(
-                          0,
-                          30 * (1 - animation.value),
+                      return Opacity(
+                        opacity: animation.value,
+                        child: Transform.translate(
+                          offset: Offset(
+                            0,
+                            30 * (1 - animation.value),
+                          ),
+                          child: child,
                         ),
-                        child: child,
+                      );
+                    },
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 1100,
                       ),
-                    );
-                  },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 1100,
-                    ),
-                    child: Column(
-                      children: [
-                        const _ProfileLogo(),
-                        const SizedBox(height: 42),
-
-                        const UniversalText("Who's watching?",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.8,
-                            color: Colors.white,
-                          ),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        UniversalText('Choose a profile to continue',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.white.withValues(
-                              alpha: 0.55,
+                      child: Column(
+                        children: [
+                          const _ProfileLogo(),
+                          const SizedBox(height: 42),
+                          const UniversalText(
+                            "Who's watching?",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.8,
+                              color: Colors.white,
                             ),
                           ),
-                        ),
-
-                        const SizedBox(height: 42),
-
-                        if (profiles.isEmpty)
-                          const _NoProfiles()
-                        else
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 30,
-                            runSpacing: 34,
-                            children: [
-                              ...profiles.map(
-                                (profile) => _ProfileCard(
-                                  profile: profile,
-                                  onTap: () {
-                                    _selectProfile(profile);
-                                  },
-                                  onEdit: () {
-                                    _editProfile(profile);
-                                  },
-                                  onStatistics: () {
-                                    _showStatistics(profile);
-                                  },
-                                  onAchievements: () {
-                                    _showAchievements(profile);
-                                  },
-                                ),
+                          const SizedBox(height: 10),
+                          UniversalText(
+                            'Choose a profile to continue',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.white.withValues(
+                                alpha: 0.55,
                               ),
-                              if (profiles.length < 7)
-                                _CreateProfileCard(
-                                  onTap: _createProfile,
+                            ),
+                          ),
+                          const SizedBox(height: 42),
+                          if (profiles.isEmpty)
+                            const _NoProfiles()
+                          else
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 30,
+                              runSpacing: 34,
+                              children: [
+                                ...profiles.map(
+                                  (profile) => _ProfileCard(
+                                    profile: profile,
+                                    onTap: () {
+                                      _selectProfile(profile);
+                                    },
+                                    onEdit: () {
+                                      _editProfile(profile);
+                                    },
+                                    onStatistics: () {
+                                      _showStatistics(profile);
+                                    },
+                                    onAchievements: () {
+                                      _showAchievements(profile);
+                                    },
+                                  ),
                                 ),
-                            ],
-                          ),
-
-                        if (profiles.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              top: 26,
+                                if (profiles.length < 7)
+                                  _CreateProfileCard(
+                                    onTap: _createProfile,
+                                  ),
+                              ],
                             ),
-                            child: _CreateProfileButton(
-                              onTap: _createProfile,
+                          if (profiles.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 26,
+                              ),
+                              child: _CreateProfileButton(
+                                onTap: _createProfile,
+                              ),
+                            ),
+                          const SizedBox(height: 50),
+                          UniversalText(
+                            '${profiles.length} '
+                            '${profiles.length == 1 ? 'profile' : 'profiles'}'
+                            ' • Maximum 7',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withValues(
+                                alpha: 0.35,
+                              ),
                             ),
                           ),
-
-                        const SizedBox(height: 50),
-
-                        UniversalText('${profiles.length} '
-                          '${profiles.length == 1 ? 'profile' : 'profiles'}'
-                          ' • Maximum 7',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.white.withValues(
-                              alpha: 0.35,
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -617,65 +655,54 @@ class _ProfileCardState extends State<_ProfileCard> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                Container(
-                  width: 44,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-
-                const SizedBox(height: 22),
-
-                _ProfileMenuButton(
-                  icon: Icons.play_circle_outline,
-                  title: tr('Use this profile'),
-                  subtitle:
-                      'Start watching as ${widget.profile.name}',
-                  onTap: () {
-                    Navigator.pop(context);
-                    widget.onTap();
-                  },
-                ),
-
-                const SizedBox(height: 10),
-
-                _ProfileMenuButton(
-                  icon: Icons.edit_outlined,
-                  title: tr('Edit Profile'),
-                  subtitle:
-                      tr('Change name or profile picture'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    widget.onEdit();
-                  },
-                ),
-
-                const SizedBox(height: 10),
-
-                _ProfileMenuButton(
-                  icon: Icons.bar_chart_rounded,
-                  title: tr('See Statistics'),
-                  subtitle:
-                      tr("View this profile's watching activity"),
-                  onTap: () {
-                    Navigator.pop(context);
-                    widget.onStatistics();
-                  },
-                ),
-
-                const SizedBox(height: 10),
-
-                _ProfileMenuButton(
-                  icon: Icons.emoji_events_outlined,
-                  title: tr('Achievements'),
-                  subtitle: tr('View Music, Movies and Shows achievements'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    widget.onAchievements();
-                  },
-                ),
+                    Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    _ProfileMenuButton(
+                      icon: Icons.play_circle_outline,
+                      title: tr('Use this profile'),
+                      subtitle: 'Start watching as ${widget.profile.name}',
+                      onTap: () {
+                        Navigator.pop(context);
+                        widget.onTap();
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _ProfileMenuButton(
+                      icon: Icons.edit_outlined,
+                      title: tr('Edit Profile'),
+                      subtitle: tr('Change name or profile picture'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        widget.onEdit();
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _ProfileMenuButton(
+                      icon: Icons.bar_chart_rounded,
+                      title: tr('See Statistics'),
+                      subtitle: tr("View this profile's watching activity"),
+                      onTap: () {
+                        Navigator.pop(context);
+                        widget.onStatistics();
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _ProfileMenuButton(
+                      icon: Icons.emoji_events_outlined,
+                      title: tr('Achievements'),
+                      subtitle: tr('View Music, Movies and Shows achievements'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        widget.onAchievements();
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -687,6 +714,7 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (widget.compact) {
@@ -698,7 +726,9 @@ class _ProfileCardState extends State<_ProfileCard> {
           scale: _pressed ? 0.98 : (_hovered ? 1.025 : 1),
           duration: const Duration(milliseconds: 200),
           child: Material(
-            color: _hovered ? Colors.white.withValues(alpha: 0.10) : Colors.white.withValues(alpha: 0.035),
+            color: _hovered
+                ? Colors.white.withValues(alpha: 0.10)
+                : Colors.white.withValues(alpha: 0.035),
             borderRadius: BorderRadius.circular(14),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
@@ -708,13 +738,34 @@ class _ProfileCardState extends State<_ProfileCard> {
               onTapUp: (_) => setState(() => _pressed = false),
               onTapCancel: () => setState(() => _pressed = false),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 child: Row(
                   children: [
                     _ProfileAvatar(profile: widget.profile, size: 62),
                     const SizedBox(width: 12),
-                    Expanded(child: Text(widget.profile.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: _hovered ? Colors.white : Colors.white70, fontSize: 15, fontWeight: FontWeight.w600))),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(widget.profile.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color:
+                                      _hovered ? Colors.white : Colors.white70,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600)),
+                          if ((widget.profile.username).trim().isNotEmpty)
+                            Text('@${widget.profile.username}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: Colors.white38, fontSize: 11)),
+                        ],
+                      ),
+                    ),
                     IconButton(
                       tooltip: 'Manage profile',
                       onPressed: _showProfileMenu,
@@ -771,12 +822,9 @@ class _ProfileCardState extends State<_ProfileCard> {
                         _hovered ? 2 : 0,
                       ),
                       decoration: BoxDecoration(
-                        borderRadius:
-                            BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _hovered
-                              ? Colors.white38
-                              : Colors.transparent,
+                          color: _hovered ? Colors.white38 : Colors.transparent,
                           width: 1.2,
                         ),
                       ),
@@ -785,7 +833,6 @@ class _ProfileCardState extends State<_ProfileCard> {
                         size: 142,
                       ),
                     ),
-
                     Positioned(
                       right: -5,
                       top: -5,
@@ -800,8 +847,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                           ),
                           shape: const CircleBorder(),
                           child: InkWell(
-                            customBorder:
-                                const CircleBorder(),
+                            customBorder: const CircleBorder(),
                             onTap: _showProfileMenu,
                             child: const Padding(
                               padding: EdgeInsets.all(9),
@@ -817,9 +863,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 13),
-
                 Text(
                   widget.profile.name,
                   maxLines: 1,
@@ -827,22 +871,26 @@ class _ProfileCardState extends State<_ProfileCard> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: _hovered
-                        ? Colors.white
-                        : Colors.white70,
+                    color: _hovered ? Colors.white : Colors.white70,
                   ),
                 ),
-
+                if ((widget.profile.username).trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    '@${widget.profile.username}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Colors.white38),
+                  ),
+                ],
                 const SizedBox(height: 7),
-
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
                   duration: const Duration(
                     milliseconds: 180,
                   ),
                   child: const Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
                         Icons.edit_outlined,
@@ -850,7 +898,8 @@ class _ProfileCardState extends State<_ProfileCard> {
                         color: Colors.white54,
                       ),
                       SizedBox(width: 4),
-                      UniversalText('Manage',
+                      UniversalText(
+                        'Manage',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white54,
@@ -882,10 +931,10 @@ class _ProfileAvatar extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final avatarValue =
-        profile.avatarUrl?.trim() ?? '';
+    final avatarValue = profile.avatarUrl?.trim() ?? '';
 
     if (avatarValue.startsWith('avatar:')) {
       final index = _avatarIndexFromValue(avatarValue);
@@ -898,9 +947,8 @@ class _ProfileAvatar extends StatelessWidget {
     }
 
     if (avatarValue.isNotEmpty) {
-      final isNetwork =
-          avatarValue.startsWith('http://') ||
-              avatarValue.startsWith('https://');
+      final isNetwork = avatarValue.startsWith('http://') ||
+          avatarValue.startsWith('https://');
 
       if (isNetwork) {
         return ClipRRect(
@@ -970,6 +1018,7 @@ class _IconAvatar extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -1025,8 +1074,7 @@ class _IconAvatar extends StatelessWidget {
                   option.symbol!,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize:
-                        size * (option.symbol!.length > 1 ? 0.28 : 0.42),
+                    fontSize: size * (option.symbol!.length > 1 ? 0.28 : 0.42),
                     fontWeight: FontWeight.w900,
                     letterSpacing: option.symbol == '007' ? -1 : 0,
                   ),
@@ -1054,13 +1102,12 @@ class _FallbackAvatar extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final trimmedName = name.trim();
 
-    final letter = trimmedName.isEmpty
-        ? '?'
-        : trimmedName[0].toUpperCase();
+    final letter = trimmedName.isEmpty ? '?' : trimmedName[0].toUpperCase();
 
     return Container(
       width: size,
@@ -1105,12 +1152,10 @@ class EditProfileSheet extends StatefulWidget {
   });
 
   @override
-  State<EditProfileSheet> createState() =>
-      _EditProfileSheetState();
+  State<EditProfileSheet> createState() => _EditProfileSheetState();
 }
 
-class _EditProfileSheetState
-    extends State<EditProfileSheet> {
+class _EditProfileSheetState extends State<EditProfileSheet> {
   late final TextEditingController _nameController;
 
   final ImagePicker _imagePicker = ImagePicker();
@@ -1121,6 +1166,7 @@ class _EditProfileSheetState
   bool _saving = false;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -1132,6 +1178,7 @@ class _EditProfileSheetState
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _nameController.dispose();
@@ -1158,7 +1205,8 @@ class _EditProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to take photo: $error',
+          content: UniversalText(
+            'Unable to take photo: $error',
           ),
         ),
       );
@@ -1185,7 +1233,8 @@ class _EditProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to choose photo: $error',
+          content: UniversalText(
+            'Unable to choose photo: $error',
           ),
         ),
       );
@@ -1198,18 +1247,17 @@ class _EditProfileSheetState
           context: context,
           builder: (_) => AlertDialog(
             title: const UniversalText('Delete profile?'),
-            content: UniversalText('Delete ${widget.profile.name}? '
+            content: UniversalText(
+              'Delete ${widget.profile.name}? '
               'This cannot be undone.',
             ),
             actions: [
               TextButton(
-                onPressed: () =>
-                    Navigator.pop(context, false),
+                onPressed: () => Navigator.pop(context, false),
                 child: const UniversalText('CANCEL'),
               ),
               FilledButton(
-                onPressed: () =>
-                    Navigator.pop(context, true),
+                onPressed: () => Navigator.pop(context, true),
                 child: const UniversalText('DELETE'),
               ),
             ],
@@ -1252,9 +1300,9 @@ class _EditProfileSheetState
         SnackBar(
           content: Text(
             error.toString().replaceFirst(
-              'Exception: ',
-              '',
-            ),
+                  'Exception: ',
+                  '',
+                ),
           ),
         ),
       );
@@ -1274,7 +1322,8 @@ class _EditProfileSheetState
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Please enter a profile name.',
+          content: UniversalText(
+            'Please enter a profile name.',
           ),
         ),
       );
@@ -1322,9 +1371,9 @@ class _EditProfileSheetState
         SnackBar(
           content: Text(
             error.toString().replaceFirst(
-              'Exception: ',
-              '',
-            ),
+                  'Exception: ',
+                  '',
+                ),
           ),
         ),
       );
@@ -1338,10 +1387,10 @@ class _EditProfileSheetState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final bottom =
-        MediaQuery.viewInsetsOf(context).bottom;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(
       margin: const EdgeInsets.only(top: 50),
@@ -1361,8 +1410,7 @@ class _EditProfileSheetState
         top: false,
         child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
@@ -1370,34 +1418,29 @@ class _EditProfileSheetState
                   height: 5,
                   decoration: BoxDecoration(
                     color: Colors.white24,
-                    borderRadius:
-                        BorderRadius.circular(99),
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
               ),
-
               const SizedBox(height: 28),
-
-              const UniversalText('Edit Profile',
+              const UniversalText(
+                'Edit Profile',
                 style: TextStyle(
                   fontSize: 27,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(height: 7),
-
-              UniversalText('Update your profile information.',
+              UniversalText(
+                'Update your profile information.',
                 style: TextStyle(
                   color: Colors.white.withValues(
                     alpha: 0.55,
                   ),
                 ),
               ),
-
               const SizedBox(height: 28),
-
               Center(
                 child: _EditableProfileAvatar(
                   profile: widget.profile,
@@ -1405,14 +1448,11 @@ class _EditProfileSheetState
                   selectedAvatarIndex: _selectedAvatarIndex,
                 ),
               ),
-
               const SizedBox(height: 25),
-
               TextField(
                 controller: _nameController,
                 enabled: !_saving,
-                textCapitalization:
-                    TextCapitalization.words,
+                textCapitalization: TextCapitalization.words,
                 style: const TextStyle(
                   color: Colors.white,
                 ),
@@ -1430,15 +1470,12 @@ class _EditProfileSheetState
                     alpha: 0.06,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-
               const SizedBox(height: 22),
-
               const UniversalText(
                 'Choose an avatar',
                 style: TextStyle(
@@ -1457,44 +1494,34 @@ class _EditProfileSheetState
                 }),
               ),
               const SizedBox(height: 22),
-
-              const UniversalText('Change profile picture',
+              const UniversalText(
+                'Change profile picture',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(height: 13),
-
               Row(
                 children: [
                   Expanded(
                     child: _PictureButton(
-                      icon:
-                          Icons.camera_alt_outlined,
+                      icon: Icons.camera_alt_outlined,
                       label: 'Take photo',
-                      onTap:
-                          _saving ? null : _takePhoto,
+                      onTap: _saving ? null : _takePhoto,
                     ),
                   ),
-
                   const SizedBox(width: 10),
-
                   Expanded(
                     child: _PictureButton(
-                      icon:
-                          Icons.photo_library_outlined,
+                      icon: Icons.photo_library_outlined,
                       label: 'Choose photo',
-                      onTap:
-                          _saving ? null : _pickPhoto,
+                      onTap: _saving ? null : _pickPhoto,
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
-
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -1512,9 +1539,7 @@ class _EditProfileSheetState
                   label: const UniversalText('CONTENT & SAFETY'),
                 ),
               ),
-
               const SizedBox(height: 18),
-
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -1532,70 +1557,55 @@ class _EditProfileSheetState
                   label: const UniversalText('PROFILE ADMINISTRATION'),
                 ),
               ),
-
               const SizedBox(height: 28),
-
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed:
-                      _saving ? null : _deleteProfile,
+                  onPressed: _saving ? null : _deleteProfile,
                   icon: const Icon(
                     Icons.delete_outline,
                   ),
-                  label:
-                      const UniversalText('DELETE PROFILE'),
+                  label: const UniversalText('DELETE PROFILE'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor:
-                        Colors.redAccent,
+                    foregroundColor: Colors.redAccent,
                     side: BorderSide(
-                      color: Colors.redAccent
-                          .withValues(alpha: 0.5),
+                      color: Colors.redAccent.withValues(alpha: 0.5),
                     ),
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       vertical: 15,
                     ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
               ),
-
               const SizedBox(height: 12),
-
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: FilledButton(
-                  onPressed:
-                      _saving ? null : _save,
+                  onPressed: _saving ? null : _save,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   child: _saving
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child:
-                              CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.black,
                           ),
                         )
-                      : const UniversalText('SAVE CHANGES',
+                      : const UniversalText(
+                          'SAVE CHANGES',
                           style: TextStyle(
-                            fontWeight:
-                                FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: 0.4,
                           ),
                         ),
@@ -1613,8 +1623,7 @@ class _EditProfileSheetState
 /// EDITABLE PROFILE AVATAR
 /// ============================================================
 
-class _EditableProfileAvatar
-    extends StatelessWidget {
+class _EditableProfileAvatar extends StatelessWidget {
   final Profile profile;
   final XFile? selectedPhoto;
   final int? selectedAvatarIndex;
@@ -1626,6 +1635,7 @@ class _EditableProfileAvatar
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (selectedPhoto != null) {
@@ -1654,8 +1664,7 @@ class _EditableProfileAvatar
 /// PROFILE STATISTICS
 /// ============================================================
 
-class ProfileStatisticsSheet
-    extends StatelessWidget {
+class ProfileStatisticsSheet extends StatelessWidget {
   final Profile profile;
 
   const ProfileStatisticsSheet({
@@ -1664,6 +1673,7 @@ class ProfileStatisticsSheet
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -1684,8 +1694,7 @@ class ProfileStatisticsSheet
         top: false,
         child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
@@ -1693,33 +1702,27 @@ class ProfileStatisticsSheet
                   height: 5,
                   decoration: BoxDecoration(
                     color: Colors.white24,
-                    borderRadius:
-                        BorderRadius.circular(99),
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
               ),
-
               const SizedBox(height: 26),
-
               Row(
                 children: [
                   _ProfileAvatar(
                     profile: profile,
                     size: 70,
                   ),
-
                   const SizedBox(width: 16),
-
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const UniversalText('Statistics',
+                        const UniversalText(
+                          'Statistics',
                           style: TextStyle(
                             fontSize: 27,
-                            fontWeight:
-                                FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
                         ),
@@ -1736,9 +1739,7 @@ class ProfileStatisticsSheet
                   ),
                 ],
               ),
-
               const SizedBox(height: 30),
-
               Row(
                 children: [
                   Expanded(
@@ -1758,15 +1759,12 @@ class ProfileStatisticsSheet
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
                     child: _StatisticCard(
-                      icon:
-                          Icons.schedule_outlined,
+                      icon: Icons.schedule_outlined,
                       title: tr('Watch time'),
                       value: '—',
                     ),
@@ -1774,17 +1772,14 @@ class ProfileStatisticsSheet
                   SizedBox(width: 12),
                   Expanded(
                     child: _StatisticCard(
-                      icon:
-                          Icons.check_circle_outline,
+                      icon: Icons.check_circle_outline,
                       title: tr('Completed'),
                       value: '—',
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 26),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -1792,15 +1787,13 @@ class ProfileStatisticsSheet
                   color: Colors.white.withValues(
                     alpha: 0.045,
                   ),
-                  borderRadius:
-                      BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: Colors.white10,
                   ),
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Row(
                       children: [
@@ -1810,20 +1803,19 @@ class ProfileStatisticsSheet
                           size: 20,
                         ),
                         SizedBox(width: 9),
-                        UniversalText('Your watching profile',
+                        UniversalText(
+                          'Your watching profile',
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight:
-                                FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 10),
-
-                    UniversalText('Detailed viewing statistics, '
+                    UniversalText(
+                      'Detailed viewing statistics, '
                       'favorite genres, watch history, '
                       'and yearly Wrapped data will '
                       'appear here.',
@@ -1861,6 +1853,7 @@ class _StatisticCard extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
@@ -1875,17 +1868,14 @@ class _StatisticCard extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
             color: Colors.white54,
             size: 21,
           ),
-
           const SizedBox(height: 14),
-
           Text(
             value,
             style: const TextStyle(
@@ -1894,9 +1884,7 @@ class _StatisticCard extends StatelessWidget {
               color: Colors.white,
             ),
           ),
-
           const SizedBox(height: 3),
-
           Text(
             title,
             style: const TextStyle(
@@ -1914,8 +1902,7 @@ class _StatisticCard extends StatelessWidget {
 /// PROFILE MENU BUTTON
 /// ============================================================
 
-class _ProfileMenuButton
-    extends StatelessWidget {
+class _ProfileMenuButton extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -1929,6 +1916,7 @@ class _ProfileMenuButton
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
@@ -1950,33 +1938,26 @@ class _ProfileMenuButton
                   color: Colors.white.withValues(
                     alpha: 0.06,
                   ),
-                  borderRadius:
-                      BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   icon,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
                       style: const TextStyle(
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
-
                     const SizedBox(height: 4),
-
                     Text(
                       subtitle,
                       style: const TextStyle(
@@ -1987,7 +1968,6 @@ class _ProfileMenuButton
                   ],
                 ),
               ),
-
               const Icon(
                 Icons.chevron_right,
                 color: Colors.white38,
@@ -2016,6 +1996,7 @@ class _PictureButton extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
@@ -2065,13 +2046,12 @@ class CreateProfileSheet extends StatefulWidget {
   });
 
   @override
-  State<CreateProfileSheet> createState() =>
-      _CreateProfileSheetState();
+  State<CreateProfileSheet> createState() => _CreateProfileSheetState();
 }
 
-class _CreateProfileSheetState
-    extends State<CreateProfileSheet> {
+class _CreateProfileSheetState extends State<CreateProfileSheet> {
   late final TextEditingController _nameController;
+  late final TextEditingController _usernameController;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -2082,17 +2062,21 @@ class _CreateProfileSheetState
   int _selectedAvatarIndex = 0;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
 
     _nameController = TextEditingController();
+    _usernameController = TextEditingController();
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _nameController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -2116,7 +2100,8 @@ class _CreateProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to take photo: $error',
+          content: UniversalText(
+            'Unable to take photo: $error',
           ),
         ),
       );
@@ -2143,7 +2128,8 @@ class _CreateProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Unable to choose photo: $error',
+          content: UniversalText(
+            'Unable to choose photo: $error',
           ),
         ),
       );
@@ -2153,11 +2139,13 @@ class _CreateProfileSheetState
   /// Performs `_save` for this feature. Update this documentation when its contract changes.
   Future<void> _save() async {
     final name = _nameController.text.trim();
+    final username = ProfileUsername.normalize(_usernameController.text);
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Please enter a profile name.',
+          content: UniversalText(
+            'Please enter a profile name.',
           ),
         ),
       );
@@ -2167,9 +2155,18 @@ class _CreateProfileSheetState
     if (name.length > 30) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: UniversalText('Profile name must be 30 characters or less.',
+          content: UniversalText(
+            'Profile name must be 30 characters or less.',
           ),
         ),
+      );
+      return;
+    }
+
+    final usernameError = ProfileUsername.validationMessage(username);
+    if (usernameError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(usernameError)),
       );
       return;
     }
@@ -2189,6 +2186,7 @@ class _CreateProfileSheetState
       if (controller.isBackendAuthenticated) {
         final result = await controller.backendApi.addProfile(
           name: name,
+          username: username,
           avatarUrl: avatarUrl,
         );
 
@@ -2203,12 +2201,17 @@ class _CreateProfileSheetState
           }
         }
       } else {
-        savedProfile = controller.addProfile(name, avatarUrl: avatarUrl);
+        savedProfile = controller.addProfile(
+          name,
+          username: username,
+          avatarUrl: avatarUrl,
+        );
       }
 
       if (!mounted) return;
       if (savedProfile == null) {
-        throw StateError('The profile was not returned after saving. Please try again.');
+        throw StateError(
+            'The profile was not returned after saving. Please try again.');
       }
       Navigator.of(context).pop(savedProfile);
 
@@ -2224,12 +2227,7 @@ class _CreateProfileSheetState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst(
-              'Exception: ',
-              '',
-            ),
-          ),
+          content: Text(ProfileUsername.userFacingError(error)),
         ),
       );
     } finally {
@@ -2242,10 +2240,10 @@ class _CreateProfileSheetState
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    final bottom =
-        MediaQuery.viewInsetsOf(context).bottom;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(
       margin: const EdgeInsets.only(top: 50),
@@ -2265,8 +2263,7 @@ class _CreateProfileSheetState
         top: false,
         child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
@@ -2274,49 +2271,40 @@ class _CreateProfileSheetState
                   height: 5,
                   decoration: BoxDecoration(
                     color: Colors.white24,
-                    borderRadius:
-                        BorderRadius.circular(99),
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
               ),
-
               const SizedBox(height: 28),
-
-              const UniversalText('Create Profile',
+              const UniversalText(
+                'Create Profile',
                 style: TextStyle(
                   fontSize: 27,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(height: 7),
-
-              UniversalText('Create a profile for your library.',
+              UniversalText(
+                'Create a profile for your library.',
                 style: TextStyle(
                   color: Colors.white.withValues(
                     alpha: 0.55,
                   ),
                 ),
               ),
-
               const SizedBox(height: 28),
-
               Center(
-                child:
-                    _CreateProfileAvatarPreview(
+                child: _CreateProfileAvatarPreview(
                   selectedPhoto: _selectedPhoto,
                   option: _avatarOptions[_selectedAvatarIndex],
                 ),
               ),
-
               const SizedBox(height: 25),
-
               TextField(
                 controller: _nameController,
                 enabled: !_saving,
-                textCapitalization:
-                    TextCapitalization.words,
+                textCapitalization: TextCapitalization.words,
                 style: const TextStyle(
                   color: Colors.white,
                 ),
@@ -2334,24 +2322,41 @@ class _CreateProfileSheetState
                     alpha: 0.06,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-
+              const SizedBox(height: 14),
+              TextField(
+                controller: _usernameController,
+                enabled: !_saving,
+                autocorrect: false,
+                textCapitalization: TextCapitalization.none,
+                decoration: InputDecoration(
+                  labelText: tr('Username'),
+                  prefixText: '@',
+                  helperText:
+                      '3–32 letters, numbers, or underscores. Availability is checked by the server.',
+                  labelStyle: const TextStyle(color: Colors.white60),
+                  prefixStyle: const TextStyle(color: Colors.white70),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
-
-              const UniversalText('Choose an avatar',
+              const UniversalText(
+                'Choose an avatar',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(height: 14),
-
               _AvatarOptionsGrid(
                 selectedIndex:
                     _selectedPhoto == null ? _selectedAvatarIndex : null,
@@ -2361,66 +2366,52 @@ class _CreateProfileSheetState
                   _selectedAvatarIndex = index;
                 }),
               ),
-
               const SizedBox(height: 20),
-
               Row(
                 children: [
                   Expanded(
                     child: _PictureButton(
-                      icon:
-                          Icons.camera_alt_outlined,
+                      icon: Icons.camera_alt_outlined,
                       label: 'Take photo',
-                      onTap:
-                          _saving ? null : _takePhoto,
+                      onTap: _saving ? null : _takePhoto,
                     ),
                   ),
-
                   const SizedBox(width: 10),
-
                   Expanded(
                     child: _PictureButton(
-                      icon:
-                          Icons.photo_library_outlined,
+                      icon: Icons.photo_library_outlined,
                       label: 'Choose photo',
-                      onTap:
-                          _saving ? null : _pickPhoto,
+                      onTap: _saving ? null : _pickPhoto,
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 28),
-
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: FilledButton(
-                  onPressed:
-                      _saving ? null : _save,
+                  onPressed: _saving ? null : _save,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   child: _saving
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child:
-                              CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.black,
                           ),
                         )
-                      : const UniversalText('CREATE PROFILE',
+                      : const UniversalText(
+                          'CREATE PROFILE',
                           style: TextStyle(
-                            fontWeight:
-                                FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: 0.4,
                           ),
                         ),
@@ -2438,8 +2429,7 @@ class _CreateProfileSheetState
 /// CREATE PROFILE AVATAR PREVIEW
 /// ============================================================
 
-class _CreateProfileAvatarPreview
-    extends StatelessWidget {
+class _CreateProfileAvatarPreview extends StatelessWidget {
   final XFile? selectedPhoto;
   final _AvatarOption option;
 
@@ -2449,6 +2439,7 @@ class _CreateProfileAvatarPreview
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     if (selectedPhoto != null) {
@@ -2547,15 +2538,14 @@ class _CreateProfileCard extends StatefulWidget {
   });
 
   @override
-  State<_CreateProfileCard> createState() =>
-      _CreateProfileCardState();
+  State<_CreateProfileCard> createState() => _CreateProfileCardState();
 }
 
-class _CreateProfileCardState
-    extends State<_CreateProfileCard> {
+class _CreateProfileCardState extends State<_CreateProfileCard> {
   bool _hovered = false;
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -2570,60 +2560,47 @@ class _CreateProfileCardState
         onTap: widget.onTap,
         child: AnimatedScale(
           scale: _hovered ? 1.045 : 1,
-          duration:
-              const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           child: SizedBox(
             width: 150,
             child: Column(
               children: [
                 AnimatedContainer(
-                  duration:
-                      const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 180),
                   width: 142,
                   height: 142,
                   decoration: BoxDecoration(
-                    borderRadius:
-                        BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18),
                     color: Colors.white.withValues(
                       alpha: 0.035,
                     ),
                     border: Border.all(
-                      color: _hovered
-                          ? Colors.white38
-                          : Colors.white12,
+                      color: _hovered ? Colors.white38 : Colors.white12,
                       width: 1.2,
                     ),
                   ),
                   child: Icon(
                     Icons.add,
                     size: 42,
-                    color: _hovered
-                        ? Colors.white
-                        : Colors.white54,
+                    color: _hovered ? Colors.white : Colors.white54,
                   ),
                 ),
-
                 const SizedBox(height: 13),
-
-                UniversalText('Add Profile',
+                UniversalText(
+                  'Add Profile',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight:
-                        FontWeight.w600,
-                    color: _hovered
-                        ? Colors.white
-                        : Colors.white70,
+                    fontWeight: FontWeight.w600,
+                    color: _hovered ? Colors.white : Colors.white70,
                   ),
                 ),
-
                 const SizedBox(height: 7),
-
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
-                  duration:
-                      const Duration(milliseconds: 180),
-                  child: const UniversalText('Create new',
+                  duration: const Duration(milliseconds: 180),
+                  child: const UniversalText(
+                    'Create new',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white54,
@@ -2643,8 +2620,7 @@ class _CreateProfileCardState
 /// CREATE PROFILE BUTTON
 /// ============================================================
 
-class _CreateProfileButton
-    extends StatelessWidget {
+class _CreateProfileButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _CreateProfileButton({
@@ -2652,6 +2628,7 @@ class _CreateProfileButton
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return SizedBox(
@@ -2659,7 +2636,8 @@ class _CreateProfileButton
       child: FilledButton.icon(
         onPressed: onTap,
         icon: const Icon(Icons.add),
-        label: const UniversalText('CREATE PROFILE',
+        label: const UniversalText(
+          'CREATE PROFILE',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             letterSpacing: 0.4,
@@ -2668,14 +2646,11 @@ class _CreateProfileButton
         style: FilledButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
-          padding:
-              const EdgeInsets.symmetric(
+          padding: const EdgeInsets.symmetric(
             horizontal: 22,
           ),
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),
@@ -2691,19 +2666,18 @@ class _NoProfiles extends StatelessWidget {
   const _NoProfiles();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints:
-          const BoxConstraints(maxWidth: 500),
+      constraints: const BoxConstraints(maxWidth: 500),
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white.withValues(
           alpha: 0.035,
         ),
-        borderRadius:
-            BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: Colors.white10,
         ),
@@ -2725,20 +2699,18 @@ class _NoProfiles extends StatelessWidget {
               color: Colors.white54,
             ),
           ),
-
           const SizedBox(height: 18),
-
-          const UniversalText('No profiles yet',
+          const UniversalText(
+            'No profiles yet',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
           ),
-
           const SizedBox(height: 8),
-
-          UniversalText('Create your first profile to start '
+          UniversalText(
+            'Create your first profile to start '
             'using your personal streaming library.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -2762,6 +2734,7 @@ class _ProfileLogo extends StatelessWidget {
   const _ProfileLogo();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Column(
@@ -2770,10 +2743,8 @@ class _ProfileLogo extends StatelessWidget {
           width: 68,
           height: 68,
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(20),
-            gradient:
-                const LinearGradient(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
@@ -2791,10 +2762,9 @@ class _ProfileLogo extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-
         const SizedBox(height: 15),
-
-        const UniversalText('MY STREAMING SERVICE',
+        const UniversalText(
+          'MY STREAMING SERVICE',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -2816,7 +2786,8 @@ class _ProfileBackdropItem {
   final String type;
   final String imageUrl;
 
-  const _ProfileBackdropItem({required this.title, required this.type, required this.imageUrl});
+  const _ProfileBackdropItem(
+      {required this.title, required this.type, required this.imageUrl});
 }
 
 /// Rotates through actual library artwork. With no valid artwork this widget
@@ -2827,7 +2798,8 @@ class _ProfileBackdropArtwork extends StatefulWidget {
   const _ProfileBackdropArtwork({required this.items});
 
   @override
-  State<_ProfileBackdropArtwork> createState() => _ProfileBackdropArtworkState();
+  State<_ProfileBackdropArtwork> createState() =>
+      _ProfileBackdropArtworkState();
 }
 
 class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
@@ -2838,9 +2810,12 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
   @override
   void initState() {
     super.initState();
-    _rotation = AnimationController(vsync: this, duration: const Duration(seconds: 7));
+    _rotation =
+        AnimationController(vsync: this, duration: const Duration(seconds: 7));
     _rotation.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted && widget.items.length > 1) {
+      if (status == AnimationStatus.completed &&
+          mounted &&
+          widget.items.length > 1) {
         setState(() => _index = (_index + 1) % widget.items.length);
         _rotation.forward(from: 0);
       }
@@ -2856,7 +2831,8 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
     } else if (_index >= widget.items.length) {
       _index = 0;
     }
-    if (oldWidget.items.length != widget.items.length && widget.items.length > 1) {
+    if (oldWidget.items.length != widget.items.length &&
+        widget.items.length > 1) {
       _rotation.forward(from: 0);
     }
   }
@@ -2881,29 +2857,53 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
             switchOutCurve: Curves.easeInCubic,
             child: SizedBox.expand(
               key: ValueKey<String>(item.imageUrl),
-              child: Image.network(item.imageUrl, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black)),
+              child: Image.network(item.imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      const ColoredBox(color: Colors.black)),
             ),
           ),
           Container(color: Colors.black.withValues(alpha: 0.48)),
-          const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
-            begin: Alignment.centerLeft, end: Alignment.centerRight,
-            colors: [Colors.black, Color(0xDD000000), Color(0x33000000), Color(0xAA000000)],
+          const DecoratedBox(
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Colors.black,
+              Color(0xDD000000),
+              Color(0x33000000),
+              Color(0xAA000000)
+            ],
             stops: [0, 0.27, 0.68, 1],
           ))),
-          const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
-            begin: Alignment.bottomCenter, end: Alignment.topCenter,
-            colors: [Colors.black87, Colors.transparent], stops: [0, 0.7],
+          const DecoratedBox(
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [Colors.black87, Colors.transparent],
+            stops: [0, 0.7],
           ))),
           Positioned(
-            right: 34, top: 28,
+            right: 34,
+            top: 28,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
               child: Container(
                 key: ValueKey<String>('label-${item.imageUrl}'),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white24)),
-                child: Text(item.type, style: const TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.white24)),
+                child: Text(item.type,
+                    style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        letterSpacing: 1.4,
+                        fontWeight: FontWeight.w700)),
               ),
             ),
           ),

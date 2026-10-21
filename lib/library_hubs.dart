@@ -7,6 +7,7 @@ import 'details.dart';
 import 'feature_center.dart';
 import 'music_favorites.dart';
 import 'music.dart';
+import 'music_genre_system.dart';
 import 'widgets/category_filter_chips.dart';
 import 'widgets/like_toggle_button.dart';
 import 'localization.dart';
@@ -336,7 +337,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final likedSongIds = MusicFavoritesBridge.likedTracks().toSet();
     final likedTracks = musicLibrary.tracks.where((track) => likedSongIds.contains(track.id)).toList();
     final songCategories = _categories(
-      likedTracks.expand((track) => [...track.genres, ...track.subgenres]),
+      likedTracks.expand((track) => <String>[
+        ...track.genres,
+        ...track.subgenres,
+        if (track.hasGenreBlend) track.genreBlendLabel,
+      ]),
       presets: const ['Country', 'Rap', 'Pop', 'Reggaeton', 'Corridos Tumbados', 'Party Dance', 'Nostalgic'],
     );
     final movieCategories = _categories(
@@ -347,7 +352,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       likedShows.expand((media) => [...media.genres, ...media.tags]),
       presets: const ['Action', 'Comedy', 'Sci-Fi', 'Drama', 'Documentary', 'Mockumentary'],
     );
-    final filteredSongs = likedTracks.where((track) => _matches([...track.genres, ...track.subgenres], _songCategory)).toList();
+    final filteredSongs = likedTracks.where((track) =>
+      _matches(<String>[...track.genres, ...track.subgenres, if (track.hasGenreBlend) track.genreBlendLabel], _songCategory) ||
+      MusicGenreSystem.matchesGenres(
+        track.genres,
+        <String>[_songCategory],
+        itemSubgenres: track.subgenres,
+      )
+    ).toList();
     final filteredMovies = likedMovies.where((media) => _matches([...media.genres, ...media.tags], _movieCategory)).toList();
     final filteredShows = likedShows.where((media) => _matches([...media.genres, ...media.tags], _showCategory)).toList();
 

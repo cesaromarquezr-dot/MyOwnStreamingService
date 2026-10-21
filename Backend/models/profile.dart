@@ -20,6 +20,7 @@ class Profile {
   final String id;
 
   String name;
+  String? username;
   String? avatarUrl;
 
   /// Backend-authoritative content and profile administration policy.
@@ -63,6 +64,7 @@ class Profile {
   Profile({
     required this.id,
     required this.name,
+    this.username,
     this.avatarUrl,
     ProfileGovernance? governance,
     List<String>? ownedMediaIds,
@@ -511,6 +513,7 @@ class Profile {
   Profile copyWith({
     String? id,
     String? name,
+    String? username,
     String? avatarUrl,
     List<String>? ownedMediaIds,
     List<String>? watchedMediaIds,
@@ -525,6 +528,7 @@ class Profile {
     return Profile(
       id: id ?? this.id,
       name: name ?? this.name,
+      username: username ?? this.username,
       avatarUrl:
           clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
       ownedMediaIds:
@@ -556,6 +560,7 @@ class Profile {
     return {
       'id': id,
       'name': name,
+      'username': username,
       'avatarUrl': avatarUrl,
       'ownedMediaIds': List<String>.from(ownedMediaIds),
       'watchedMediaIds': List<String>.from(watchedMediaIds),
@@ -579,6 +584,7 @@ class Profile {
     return Profile(
       id: json['id']?.toString().trim() ?? '',
       name: json['name']?.toString() ?? '',
+      username: _nullableString(json['username'])?.toLowerCase(),
       avatarUrl: _nullableString(json['avatarUrl']),
       ownedMediaIds: _stringList(
         json['ownedMediaIds'],

@@ -176,11 +176,19 @@ class ReviewRoutes {
           maxLength: _maxReviewTextLength,
         );
 
-        final globalUsername = _readOptionalString(
-          body['globalUsername'],
-          field: 'globalUsername',
-          maxLength: _maxGlobalUsernameLength,
-        );
+        final globalUsername = profile.username?.trim().toLowerCase() ?? '';
+        if (globalUsername.isEmpty) {
+          responseStarted = true;
+          await _json(
+            request.response,
+            HttpStatus.conflict,
+            {
+              'success': false,
+              'error': 'Choose a profile username before publishing a public review.',
+            },
+          );
+          return;
+        }
         final reviewType = body['reviewType']?.toString() == 'video' ? 'video' : 'written';
         final videoUrl = body['videoUrl']?.toString().trim();
         final spoiler = body['spoiler'] == true;

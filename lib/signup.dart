@@ -21,7 +21,6 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final emailController = TextEditingController();
-  final usernameController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
   final securityAnswerController = TextEditingController();
@@ -47,17 +46,13 @@ class _SignupScreenState extends State<SignupScreen> {
   bool privacyAccepted = false;
   bool acceptableUseAccepted = false;
 
-  bool get _hasMinLength =>
-      passwordController.text.length >= 10;
+  bool get _hasMinLength => passwordController.text.length >= 10;
 
-  bool get _hasUppercase =>
-      RegExp(r'[A-Z]').hasMatch(passwordController.text);
+  bool get _hasUppercase => RegExp(r'[A-Z]').hasMatch(passwordController.text);
 
-  bool get _hasLowercase =>
-      RegExp(r'[a-z]').hasMatch(passwordController.text);
+  bool get _hasLowercase => RegExp(r'[a-z]').hasMatch(passwordController.text);
 
-  bool get _hasNumber =>
-      RegExp(r'[0-9]').hasMatch(passwordController.text);
+  bool get _hasNumber => RegExp(r'[0-9]').hasMatch(passwordController.text);
 
   bool get _hasSpecial =>
       RegExp(r'[^A-Za-z0-9]').hasMatch(passwordController.text);
@@ -72,7 +67,6 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   void dispose() {
     emailController.dispose();
-    usernameController.dispose();
     passwordController.dispose();
     confirmController.dispose();
     securityAnswerController.dispose();
@@ -125,7 +119,6 @@ class _SignupScreenState extends State<SignupScreen> {
     if (creatingAccount) return;
 
     final email = emailController.text.trim();
-    final username = usernameController.text.trim();
     final password = passwordController.text;
     final confirm = confirmController.text;
 
@@ -136,13 +129,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
     final securityAnswer = securityAnswerController.text.trim();
 
-    if (email.isEmpty || username.isEmpty || password.isEmpty || confirm.isEmpty) {
-      _showMessage('Please enter an email, unique username, and password.');
-      return;
-    }
-
-    if (!RegExp(r'^[A-Za-z0-9_]{3,32}$').hasMatch(username)) {
-      _showMessage('Username must be 3–32 characters using letters, numbers, and underscores.');
+    if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
+      _showMessage('Please enter an email address and password.');
       return;
     }
 
@@ -159,9 +147,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    if (!termsAccepted ||
-        !privacyAccepted ||
-        !acceptableUseAccepted) {
+    if (!termsAccepted || !privacyAccepted || !acceptableUseAccepted) {
       _showMessage(
         'Please review and accept the Terms of Service, Privacy Policy, '
         'and Copyright & Acceptable Use Policy.',
@@ -174,13 +160,10 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
-      final signupData =
-          await AppController.instance.createAccountWithBackend(
+      final signupData = await AppController.instance.createAccountWithBackend(
         email: email,
-        username: username,
         password: password,
         plan: selectedPlan,
-        firstProfileName: '',
         securityQuestion: securityQuestion,
         securityAnswer: securityAnswer,
       );
@@ -195,20 +178,15 @@ class _SignupScreenState extends State<SignupScreen> {
         );
       }
 
-      final paymentId =
-          paymentData['id']?.toString() ??
+      final paymentId = paymentData['id']?.toString() ??
           paymentData['paymentId']?.toString() ??
           '';
 
-      final checkoutToken =
-          paymentData['checkoutToken']?.toString() ??
-          '';
+      final checkoutToken = paymentData['checkoutToken']?.toString() ?? '';
 
       final amount = paymentData['amount'];
 
-      final currency =
-          paymentData['currency']?.toString() ??
-          '';
+      final currency = paymentData['currency']?.toString() ?? '';
 
       if (paymentId.isEmpty) {
         throw Exception(
@@ -326,9 +304,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   : Icons.radio_button_unchecked_rounded,
               key: ValueKey(satisfied),
               size: 18,
-              color: satisfied
-                  ? Colors.greenAccent
-                  : Colors.white38,
+              color: satisfied ? Colors.greenAccent : Colors.white38,
             ),
           ),
           const SizedBox(width: 8),
@@ -336,13 +312,9 @@ class _SignupScreenState extends State<SignupScreen> {
             child: UniversalText(
               text,
               style: TextStyle(
-                color: satisfied
-                    ? Colors.white
-                    : Colors.white54,
+                color: satisfied ? Colors.white : Colors.white54,
                 fontSize: 12,
-                fontWeight: satisfied
-                    ? FontWeight.w600
-                    : FontWeight.w400,
+                fontWeight: satisfied ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
@@ -381,9 +353,7 @@ class _SignupScreenState extends State<SignupScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
-            onPressed: creatingAccount
-                ? null
-                : _generateAndSetPassword,
+            onPressed: creatingAccount ? null : _generateAndSetPassword,
             icon: const Icon(
               Icons.auto_awesome_rounded,
               size: 17,
@@ -480,8 +450,7 @@ class _SignupScreenState extends State<SignupScreen> {
             }
           },
         ),
-        if (selectedSecurityQuestion ==
-            'Create my own question') ...[
+        if (selectedSecurityQuestion == 'Create my own question') ...[
           const SizedBox(height: 12),
           TextField(
             controller: customQuestionController,
@@ -570,9 +539,8 @@ class _SignupScreenState extends State<SignupScreen> {
                 : Colors.white.withValues(alpha: 0.035),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: selected
-                  ? Colors.red
-                  : Colors.white.withValues(alpha: 0.08),
+              color:
+                  selected ? Colors.red : Colors.white.withValues(alpha: 0.08),
               width: selected ? 1.4 : 1,
             ),
           ),
@@ -594,9 +562,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     selected
                         ? Icons.radio_button_checked
                         : Icons.radio_button_off,
-                    color: selected
-                        ? Colors.red
-                        : Colors.white54,
+                    color: selected ? Colors.red : Colors.white54,
                   ),
                 ],
               ),
@@ -697,24 +663,18 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             _buildLogo(),
-
                             const SizedBox(height: 24),
-
                             UniversalText(
                               'Create your account',
                               textAlign: TextAlign.center,
-                              style: theme.textTheme.headlineSmall
-                                  ?.copyWith(
+                              style: theme.textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-
                             const SizedBox(height: 8),
-
                             UniversalText(
                               'Start building your personal streaming library.',
                               textAlign: TextAlign.center,
@@ -725,57 +685,32 @@ class _SignupScreenState extends State<SignupScreen> {
                                 fontSize: 14,
                               ),
                             ),
-
                             const SizedBox(height: 30),
-
-                            TextField(
-                              controller: usernameController,
-                              textInputAction: TextInputAction.next,
-                              autocorrect: false,
-                              decoration: _inputDecoration(
-                                label: 'Username',
-                                icon: Icons.alternate_email_rounded,
-                              ).copyWith(
-                                helperText: 'Your unique @username for friends and discovery.',
-                              ),
-                            ),
-
-                            const SizedBox(height: 14),
-
                             TextField(
                               controller: emailController,
-                              keyboardType:
-                                  TextInputType.emailAddress,
-                              textInputAction:
-                                  TextInputAction.next,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
                               decoration: _inputDecoration(
                                 label: 'Email address',
                                 icon: Icons.email_outlined,
                               ),
                             ),
-
                             const SizedBox(height: 14),
-
                             _buildPasswordSection(),
-
                             const SizedBox(height: 14),
-
                             TextField(
                               controller: confirmController,
                               obscureText: obscureConfirm,
-                              textInputAction:
-                                  TextInputAction.done,
+                              textInputAction: TextInputAction.done,
                               onChanged: (_) => setState(() {}),
-                              onSubmitted: (_) =>
-                                  createAccount(),
+                              onSubmitted: (_) => createAccount(),
                               decoration: _inputDecoration(
                                 label: 'Confirm password',
                                 icon: Icons.lock_reset_outlined,
                                 suffixIcon: IconButton(
                                   onPressed: () {
                                     setState(() {
-                                      obscureConfirm =
-                                          !obscureConfirm;
+                                      obscureConfirm = !obscureConfirm;
                                     });
                                   },
                                   icon: Icon(
@@ -786,9 +721,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 26),
-
                             const UniversalText(
                               'Choose your plan',
                               style: TextStyle(
@@ -796,43 +729,33 @@ class _SignupScreenState extends State<SignupScreen> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
                             Row(
                               children: [
                                 _buildPlanCard(
-                                  plan:
-                                      SubscriptionPlan.monthly,
+                                  plan: SubscriptionPlan.monthly,
                                   title: tr('Monthly'),
                                   price: '\$10.00',
-                                  subtitle:
-                                      tr('Billed every month'),
+                                  subtitle: tr('Billed every month'),
                                 ),
                                 const SizedBox(width: 12),
                                 _buildPlanCard(
-                                  plan:
-                                      SubscriptionPlan.yearly,
+                                  plan: SubscriptionPlan.yearly,
                                   title: tr('Yearly'),
                                   price: '\$100.00',
-                                  subtitle:
-                                      tr('Best annual value'),
+                                  subtitle: tr('Best annual value'),
                                 ),
                               ],
                             ),
-
                             _buildSecurityQuestionSection(),
-
                             const SizedBox(height: 18),
-
                             Material(
                               type: MaterialType.transparency,
                               child: CheckboxListTile(
                                 value: rememberLogin,
                                 onChanged: (value) {
                                   setState(() {
-                                    rememberLogin =
-                                        value ?? false;
+                                    rememberLogin = value ?? false;
                                   });
                                 },
                                 contentPadding: EdgeInsets.zero,
@@ -846,29 +769,23 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
                             SizedBox(
                               height: 54,
                               child: ElevatedButton.icon(
-                                onPressed:
-                                    creatingAccount ||
-                                            !_passwordValid
-                                        ? null
-                                        : createAccount,
+                                onPressed: creatingAccount || !_passwordValid
+                                    ? null
+                                    : createAccount,
                                 icon: creatingAccount
                                     ? const SizedBox(
                                         width: 20,
                                         height: 20,
-                                        child:
-                                            CircularProgressIndicator(
+                                        child: CircularProgressIndicator(
                                           strokeWidth: 2,
                                         ),
                                       )
                                     : const Icon(
-                                        Icons
-                                            .arrow_forward_rounded,
+                                        Icons.arrow_forward_rounded,
                                       ),
                                 label: UniversalText(
                                   creatingAccount
@@ -878,24 +795,17 @@ class _SignupScreenState extends State<SignupScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
-                                  disabledBackgroundColor:
-                                      Colors.white12,
-                                  disabledForegroundColor:
-                                      Colors.white38,
-                                  shape:
-                                      RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(16),
+                                  disabledBackgroundColor: Colors.white12,
+                                  disabledForegroundColor: Colors.white38,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 18),
-
                             Align(
-                              alignment:
-                                  Alignment.centerRight,
+                              alignment: Alignment.centerRight,
                               child: TextButton.icon(
                                 onPressed: creatingAccount
                                     ? null
@@ -904,10 +814,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                           context,
                                         ).push(
                                           MaterialPageRoute(
-                                            builder: (_) =>
-                                                LegalCenterScreen(
-                                              onContinue: () =>
-                                                  Navigator.of(
+                                            builder: (_) => LegalCenterScreen(
+                                              onContinue: () => Navigator.of(
                                                 context,
                                               ).pop(),
                                             ),
@@ -923,16 +831,13 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ),
                               ),
                             ),
-
                             Container(
-                              padding:
-                                  const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(
                                   alpha: 0.035,
                                 ),
-                                borderRadius:
-                                    BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                   color: Colors.white.withValues(
                                     alpha: 0.08,
@@ -940,15 +845,13 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ),
                               ),
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const UniversalText(
                                     'LEGAL AGREEMENTS',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight:
-                                          FontWeight.w900,
+                                      fontWeight: FontWeight.w900,
                                       letterSpacing: 1.2,
                                     ),
                                   ),
@@ -957,8 +860,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                     'Please review and accept all three '
                                     'requirements before continuing to payment.',
                                     style: TextStyle(
-                                      color:
-                                          Colors.white.withValues(
+                                      color: Colors.white.withValues(
                                         alpha: 0.58,
                                       ),
                                       fontSize: 12,
@@ -966,84 +868,59 @@ class _SignupScreenState extends State<SignupScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-
                                   Material(
                                     type: MaterialType.transparency,
                                     child: CheckboxListTile(
-                                      contentPadding:
-                                          EdgeInsets.zero,
+                                      contentPadding: EdgeInsets.zero,
                                       dense: true,
                                       value: termsAccepted,
-                                      onChanged:
-                                          creatingAccount
-                                              ? null
-                                              : (value) =>
-                                                  setState(
-                                                    () =>
-                                                        termsAccepted =
-                                                            value ??
-                                                                false,
-                                                  ),
+                                      onChanged: creatingAccount
+                                          ? null
+                                          : (value) => setState(
+                                                () => termsAccepted =
+                                                    value ?? false,
+                                              ),
                                       controlAffinity:
-                                          ListTileControlAffinity
-                                              .leading,
-                                      title:
-                                          const UniversalText(
+                                          ListTileControlAffinity.leading,
+                                      title: const UniversalText(
                                         'I agree to the Terms of Service.',
                                       ),
                                     ),
                                   ),
-
                                   Material(
                                     type: MaterialType.transparency,
                                     child: CheckboxListTile(
-                                      contentPadding:
-                                          EdgeInsets.zero,
+                                      contentPadding: EdgeInsets.zero,
                                       dense: true,
                                       value: privacyAccepted,
-                                      onChanged:
-                                          creatingAccount
-                                              ? null
-                                              : (value) =>
-                                                  setState(
-                                                    () =>
-                                                        privacyAccepted =
-                                                            value ??
-                                                                false,
-                                                  ),
+                                      onChanged: creatingAccount
+                                          ? null
+                                          : (value) => setState(
+                                                () => privacyAccepted =
+                                                    value ?? false,
+                                              ),
                                       controlAffinity:
-                                          ListTileControlAffinity
-                                              .leading,
-                                      title:
-                                          const UniversalText(
+                                          ListTileControlAffinity.leading,
+                                      title: const UniversalText(
                                         'I acknowledge the Privacy Policy.',
                                       ),
                                     ),
                                   ),
-
                                   Material(
                                     type: MaterialType.transparency,
                                     child: CheckboxListTile(
-                                      contentPadding:
-                                          EdgeInsets.zero,
+                                      contentPadding: EdgeInsets.zero,
                                       dense: true,
-                                      value:
-                                          acceptableUseAccepted,
-                                      onChanged:
-                                          creatingAccount
-                                              ? null
-                                              : (value) =>
-                                                  setState(
-                                                    () =>
-                                                        acceptableUseAccepted =
-                                                            value ??
-                                                                false,
-                                                  ),
+                                      value: acceptableUseAccepted,
+                                      onChanged: creatingAccount
+                                          ? null
+                                          : (value) => setState(
+                                                () => acceptableUseAccepted =
+                                                    value ?? false,
+                                              ),
                                       controlAffinity:
-                                          ListTileControlAffinity
-                                              .leading,
-                                      title:
-                                          const UniversalText(
+                                          ListTileControlAffinity.leading,
+                                      title: const UniversalText(
                                         'I agree to the Copyright & '
                                         'Acceptable Use Policy.',
                                       ),
@@ -1052,18 +929,14 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 18),
-
                             Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 UniversalText(
                                   'Already have an account?',
                                   style: TextStyle(
-                                    color:
-                                        Colors.white.withValues(
+                                    color: Colors.white.withValues(
                                       alpha: 0.58,
                                     ),
                                     fontSize: 13,
@@ -1077,16 +950,13 @@ class _SignupScreenState extends State<SignupScreen> {
                                     'Sign in',
                                     style: TextStyle(
                                       color: Colors.red,
-                                      fontWeight:
-                                          FontWeight.w700,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 6),
-
                             UniversalText(
                               'By continuing, you confirm that you have '
                               'reviewed and accepted the Terms of Service, '
@@ -1094,8 +964,7 @@ class _SignupScreenState extends State<SignupScreen> {
                               'Acceptable Use Policy.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color:
-                                    Colors.white.withValues(
+                                color: Colors.white.withValues(
                                   alpha: 0.38,
                                 ),
                                 fontSize: 11,

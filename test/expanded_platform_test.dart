@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_own_streaming_service/expanded_platform.dart';
+import 'package:my_own_streaming_service/innovation_features.dart';
 
 void main() {
   group('Expanded platform catalog', () {

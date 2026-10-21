@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'privacy_preferences.dart';
 import 'details.dart';
@@ -16,6 +16,7 @@ import 'music_favorites.dart';
 import 'shop.dart';
 import 'hollywood.dart';
 import 'social_detail_pages.dart';
+import 'home_streaming_discovery.dart';
 
 class SmartSearch {
   static List<MediaItem> search(
@@ -53,42 +54,40 @@ class SmartSearch {
     final scored = <_SearchMatch>[];
     final recommendationIds = <String, int>{
       for (var i = 0; i < AppController.instance.recommendations.length; i++)
-        AppController.instance.recommendations[i].id: (50 - i).clamp(5, 50).toInt(),
+        AppController.instance.recommendations[i].id:
+            (50 - i).clamp(5, 50).toInt(),
     };
 
     for (final media in library) {
       final title = media.title.toLowerCase();
       final normalizedTitle = _normalize(title);
 
-      final description =
-          (media.description ?? '').toLowerCase();
+      final description = (media.description ?? '').toLowerCase();
 
-      final normalizedDescription =
-          _normalize(description);
+      final normalizedDescription = _normalize(description);
 
       final type = media.type.toLowerCase();
-      final year = media.releaseYear.toString();
+      final year =
+          (media.displayYearLabel ?? media.releaseYear?.toString() ?? '')
+              .toLowerCase();
       final rating = media.rating.toString();
 
       var score = 0;
 
-      final matchesExactTitle =
-          normalizedTitle == normalizedQuery;
+      final matchesExactTitle = normalizedTitle == normalizedQuery;
 
-      final matchesTitle =
-          normalizedTitle.contains(normalizedQuery);
+      final matchesTitle = normalizedTitle.contains(normalizedQuery);
 
       final matchesDescription =
           normalizedDescription.contains(normalizedQuery);
 
-      final matchesType =
-          type.contains(normalizedQuery);
+      final matchesType = type.contains(normalizedQuery);
 
-      final matchesYear =
-          year == normalizedQuery;
+      final normalizedYearQuery = normalizedQuery.replaceAll('-', '–');
+      final matchesYear = year == normalizedYearQuery ||
+          year.split(RegExp(r'[-–]')).contains(normalizedQuery);
 
-      final matchesRating =
-          rating == normalizedQuery;
+      final matchesRating = rating == normalizedQuery;
 
       if (matchesExactTitle) {
         score += 120;
@@ -97,21 +96,31 @@ class SmartSearch {
       } else if (normalizedQuery.length >= 4) {
         // Typo tolerance for short title queries (e.g. "batmn" → "Batman").
         // Bounded edit distance avoids turning broad searches into unrelated matches.
-        final titleTokens = normalizedTitle.split(' ').where((part) => part.isNotEmpty);
-        final queryTokens = normalizedQuery.split(' ').where((part) => part.isNotEmpty).toList();
+        final titleTokens =
+            normalizedTitle.split(' ').where((part) => part.isNotEmpty);
+        final queryTokens = normalizedQuery
+            .split(' ')
+            .where((part) => part.isNotEmpty)
+            .toList();
         if (queryTokens.length == 1) {
           var bestDistance = 99;
           for (final token in titleTokens) {
             if ((token.length - normalizedQuery.length).abs() > 2) continue;
-            final distance = _editDistance(token, normalizedQuery, maxDistance: 2);
+            final distance =
+                _editDistance(token, normalizedQuery, maxDistance: 2);
             if (distance < bestDistance) bestDistance = distance;
           }
           if (bestDistance <= (normalizedQuery.length >= 8 ? 2 : 1)) {
-            score += bestDistance == 0 ? 65 : bestDistance == 1 ? 38 : 24;
+            score += bestDistance == 0
+                ? 65
+                : bestDistance == 1
+                    ? 38
+                    : 24;
           }
-        } else if (queryTokens.every((queryToken) => titleTokens.any((titleToken) =>
-            (titleToken.length - queryToken.length).abs() <= 1 &&
-            _editDistance(titleToken, queryToken, maxDistance: 1) <= 1))) {
+        } else if (queryTokens.every((queryToken) => titleTokens.any(
+            (titleToken) =>
+                (titleToken.length - queryToken.length).abs() <= 1 &&
+                _editDistance(titleToken, queryToken, maxDistance: 1) <= 1))) {
           score += 35;
         }
       }
@@ -167,43 +176,44 @@ class SmartSearch {
     }
 
     scored.sort((a, b) {
-      final scoreCompare =
-          b.score.compareTo(a.score);
+      final scoreCompare = b.score.compareTo(a.score);
 
       if (scoreCompare != 0) {
         return scoreCompare;
       }
 
-      return a.media.title
-          .toLowerCase()
-          .compareTo(
+      return a.media.title.toLowerCase().compareTo(
             b.media.title.toLowerCase(),
           );
     });
 
-    return scored
-        .map((match) => match.media)
-        .toList();
+    return scored.map((match) => match.media).toList();
   }
 
   /// Ranks the account's own library using backend recommendations when present,
   /// plus a transparent local fallback based on likes, watch history and metadata.
   /// This is a lightweight personal relevance model, not a claim of ML training.
-  static List<MediaItem> recommendations(List<MediaItem> library, {int limit = 12}) {
+  static List<MediaItem> recommendations(List<MediaItem> library,
+      {int limit = 12}) {
     if (limit <= 0 || library.isEmpty) return <MediaItem>[];
     final controller = AppController.instance;
     final profileId = controller.currentProfile?.id;
-    if (!PrivacyPreferencesStore.cached(profileId).personalizedRecommendations) {
+    if (!PrivacyPreferencesStore.cached(profileId)
+        .personalizedRecommendations) {
       final excluded = <String>{
         ...controller.disliked.map((item) => item.id),
         ...controller.watched.map((item) => item.id),
       };
-      final generic = library.where((item) =>
-          !excluded.contains(item.id) &&
-          controller.getPlaybackProgress(item.id) < 0.95).toList()
+      final generic = library
+          .where((item) =>
+              !excluded.contains(item.id) &&
+              controller.getPlaybackProgress(item.id) < 0.95)
+          .toList()
         ..sort((a, b) {
           final added = b.addedAt.compareTo(a.addedAt);
-          return added != 0 ? added : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          return added != 0
+              ? added
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
       return generic.take(limit).toList(growable: false);
     }
@@ -222,14 +232,21 @@ class SmartSearch {
       }),
     ];
 
-    final candidates = library.where((media) =>
-        !dislikedIds.contains(media.id) &&
-        !completedIds.contains(media.id) &&
-        controller.getPlaybackProgress(media.id) < 0.95).toList();
+    final candidates = library
+        .where((media) =>
+            !dislikedIds.contains(media.id) &&
+            !completedIds.contains(media.id) &&
+            controller.getPlaybackProgress(media.id) < 0.95)
+        .toList();
 
     int overlap(List<String> left, List<String> right) {
-      final rightValues = right.map(_normalize).where((value) => value.isNotEmpty).toSet();
-      return left.map(_normalize).where((value) => value.isNotEmpty && rightValues.contains(value)).toSet().length;
+      final rightValues =
+          right.map(_normalize).where((value) => value.isNotEmpty).toSet();
+      return left
+          .map(_normalize)
+          .where((value) => value.isNotEmpty && rightValues.contains(value))
+          .toSet()
+          .length;
     }
 
     double similarity(MediaItem candidate, MediaItem seed) {
@@ -244,7 +261,9 @@ class SmartSearch {
       value += overlap(candidate.companies, seed.companies) * 1.5;
       final candidateFranchise = _normalize(candidate.franchiseName ?? '');
       final seedFranchise = _normalize(seed.franchiseName ?? '');
-      if (candidateFranchise.isNotEmpty && candidateFranchise == seedFranchise) value += 9;
+      if (candidateFranchise.isNotEmpty && candidateFranchise == seedFranchise) {
+        value += 9;
+      }
       if (_normalize(candidate.type) == _normalize(seed.type)) value += 1.5;
       return value;
     }
@@ -277,12 +296,14 @@ class SmartSearch {
   }
 
   static bool _matchesMetadata(String query, Iterable<String> fields) {
-    final queryTokens = query.split(' ').where((part) => part.isNotEmpty).toList();
+    final queryTokens =
+        query.split(' ').where((part) => part.isNotEmpty).toList();
     for (final field in fields) {
       final normalized = _normalize(field);
       if (normalized.contains(query)) return true;
       if (query.length < 4) continue;
-      final fieldTokens = normalized.split(' ').where((part) => part.isNotEmpty);
+      final fieldTokens =
+          normalized.split(' ').where((part) => part.isNotEmpty);
       if (queryTokens.every((queryToken) => fieldTokens.any((token) =>
           (token.length - queryToken.length).abs() <= 1 &&
           _editDistance(token, queryToken, maxDistance: 1) <= 1))) {
@@ -292,8 +313,11 @@ class SmartSearch {
     return false;
   }
 
-  static int _editDistance(String left, String right, {required int maxDistance}) {
-    if ((left.length - right.length).abs() > maxDistance) return maxDistance + 1;
+  static int _editDistance(String left, String right,
+      {required int maxDistance}) {
+    if ((left.length - right.length).abs() > maxDistance) {
+      return maxDistance + 1;
+    }
     if (left == right) return 0;
     if (left.isEmpty) return right.length;
     if (right.isEmpty) return left.length;
@@ -304,7 +328,8 @@ class SmartSearch {
       current[0] = i;
       var rowMinimum = current[0];
       for (var j = 1; j <= right.length; j++) {
-        final substitutionCost = left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
+        final substitutionCost =
+            left.codeUnitAt(i - 1) == right.codeUnitAt(j - 1) ? 0 : 1;
         current[j] = <int>[
           current[j - 1] + 1,
           previous[j] + 1,
@@ -366,14 +391,12 @@ class SmartSearchScreen extends StatefulWidget {
   });
 
   @override
-  State<SmartSearchScreen> createState() =>
-      _SmartSearchScreenState();
+  State<SmartSearchScreen> createState() => _SmartSearchScreenState();
 }
 
 class _SmartSearchScreenState extends State<SmartSearchScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController controller =
-      TextEditingController();
+  final TextEditingController controller = TextEditingController();
 
   final FocusNode searchFocusNode = FocusNode();
 
@@ -389,6 +412,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   late AnimationController animationController;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -415,8 +439,10 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   Future<void> _initializeMusicSearch() async {
     final profileId = AppController.instance.currentProfile?.id;
     await Future.wait<void>([
-      _ignoreOptionalInitialization(() => MusicLibraryStore.instance.initializeForProfile(profileId)),
-      _ignoreOptionalInitialization(() => MusicFavoritesBridge.initializeForProfile(profileId)),
+      _ignoreOptionalInitialization(
+          () => MusicLibraryStore.instance.initializeForProfile(profileId)),
+      _ignoreOptionalInitialization(
+          () => MusicFavoritesBridge.initializeForProfile(profileId)),
       _ignoreOptionalInitialization(() => ShopCatalog.instance.initialize()),
     ]);
     if (mounted && controller.text.trim().isNotEmpty) {
@@ -424,7 +450,8 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     }
   }
 
-  Future<void> _ignoreOptionalInitialization(Future<void> Function() initialize) async {
+  Future<void> _ignoreOptionalInitialization(
+      Future<void> Function() initialize) async {
     try {
       await initialize();
     } catch (_) {
@@ -439,6 +466,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   }
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _searchDebounce?.cancel();
@@ -482,8 +510,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final localPeople = _localPeople(normalized);
     final products = normalized.isEmpty
         ? <ShopProduct>[]
-        : (normalized == 'shop' || normalized == 'products' || normalized == 'merchandise'
-            ? ShopCatalog.instance.products.where((product) => product.active).take(12).toList()
+        : (normalized == 'shop' ||
+                normalized == 'products' ||
+                normalized == 'merchandise'
+            ? ShopCatalog.instance.products
+                .where((product) => product.active)
+                .take(12)
+                .toList()
             : ShopCatalog.instance.searchProducts(query).take(12).toList());
     _searchDebounce?.cancel();
     final generation = ++_remoteSearchGeneration;
@@ -522,7 +555,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       'actor' || 'actors' => 'Actor',
       'director' || 'directors' => 'Director',
       'writer' || 'writers' => 'Writer',
-      'artist' || 'artists' || 'band' || 'bands' || 'singer' || 'singers' => 'Artist / band',
+      'artist' ||
+      'artists' ||
+      'band' ||
+      'bands' ||
+      'singer' ||
+      'singers' =>
+        'Artist / band',
       _ => null,
     };
     final found = <String, Map<String, dynamic>>{};
@@ -531,26 +570,34 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       for (final name in entry.value) {
         final clean = name.trim();
         if (clean.isEmpty ||
-            (categoryForQuery == null && !clean.toLowerCase().contains(query))) {
+            (categoryForQuery == null &&
+                !clean.toLowerCase().contains(query))) {
           continue;
         }
-        found.putIfAbsent(clean.toLowerCase(), () => <String, dynamic>{
-              'id': clean,
-              'name': clean,
-              'category': entry.key,
-              'source': 'local-library',
-            });
+        found.putIfAbsent(
+            clean.toLowerCase(),
+            () => <String, dynamic>{
+                  'id': clean,
+                  'name': clean,
+                  'category': entry.key,
+                  'source': 'local-library',
+                });
       }
     }
     return found.values.take(12).toList(growable: false);
   }
 
   List<Map<String, dynamic>> _maps(dynamic value) => value is List
-      ? value.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList()
+      ? value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList()
       : <Map<String, dynamic>>[];
 
-  String _mapText(Map<String, dynamic> value, Iterable<String> keys) =>
-      keys.map((key) => value[key]?.toString() ?? '').where((text) => text.isNotEmpty).join(' ');
+  String _mapText(Map<String, dynamic> value, Iterable<String> keys) => keys
+      .map((key) => value[key]?.toString() ?? '')
+      .where((text) => text.isNotEmpty)
+      .join(' ');
 
   Future<void> _loadRemoteSearch(String query, int generation) async {
     final app = AppController.instance;
@@ -582,15 +629,27 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       for (final key in <String>['friends', 'communities', 'posts']) {
         for (final item in _maps(home[key])) {
           final haystack = _mapText(item, <String>[
-            'name', 'display_name', 'displayName', 'username', 'description',
-            'body', 'text', 'title', 'content', 'message',
+            'name',
+            'display_name',
+            'displayName',
+            'username',
+            'description',
+            'body',
+            'text',
+            'title',
+            'content',
+            'message',
           ]).toLowerCase();
           final categoryBrowse = key == 'friends' && showAllFriends ||
               key == 'communities' && showAllCommunities ||
               key == 'posts' && showAllPosts;
           if (!categoryBrowse && !haystack.contains(query)) continue;
           remoteSocial.add(<String, dynamic>{
-            'kind': key == 'friends' ? 'friend' : key == 'communities' ? 'community' : 'post',
+            'kind': key == 'friends'
+                ? 'friend'
+                : key == 'communities'
+                    ? 'community'
+                    : 'post',
             'data': item,
           });
         }
@@ -599,14 +658,24 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       // Social access may be unavailable for an offline or limited session.
     }
 
-    if (!mounted || generation != _remoteSearchGeneration ||
+    if (!mounted ||
+        generation != _remoteSearchGeneration ||
         controller.text.trim().toLowerCase() != query) {
       return;
     }
 
     final mergedPeople = <String, Map<String, dynamic>>{};
-    for (final person in <Map<String, dynamic>>[...peopleResults, ...remotePeople]) {
-      final name = _mapText(person, <String>['name', 'displayName', 'display_name', 'fullName', 'full_name']).trim();
+    for (final person in <Map<String, dynamic>>[
+      ...peopleResults,
+      ...remotePeople
+    ]) {
+      final name = _mapText(person, <String>[
+        'name',
+        'displayName',
+        'display_name',
+        'fullName',
+        'full_name'
+      ]).trim();
       if (name.isEmpty) continue;
       mergedPeople.putIfAbsent(name.toLowerCase(), () => person);
     }
@@ -618,57 +687,104 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   }
 
   void _openPerson(Map<String, dynamic> person) {
-    final name = _mapText(person, <String>['name', 'displayName', 'display_name', 'fullName', 'full_name']).trim();
+    final name = _mapText(person, <String>[
+      'name',
+      'displayName',
+      'display_name',
+      'fullName',
+      'full_name'
+    ]).trim();
     if (name.isEmpty) return;
     final category = _mapText(person, <String>[
-      'category', 'profession', 'role', 'type', 'knownFor', 'known_for',
+      'category',
+      'profession',
+      'role',
+      'type',
+      'knownFor',
+      'known_for',
     ]).toLowerCase();
     if (category.contains('artist') ||
         category.contains('band') ||
         category.contains('singer') ||
         category.contains('musician')) {
-      Navigator.push<void>(context, MaterialPageRoute<void>(
-        builder: (_) => MusicArtistProfileScreen(artistName: name),
-      ));
+      Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => MusicArtistProfileScreen(artistName: name),
+          ));
       return;
     }
-    Navigator.push<void>(context, MaterialPageRoute<void>(
-      builder: (_) => ActorDetailsScreen(actor: Actor(
-        id: (person['id'] ?? person['personId'] ?? person['person_id'] ?? name).toString(),
-        name: name,
-        photoUrl: (person['photoUrl'] ?? person['photo_url'] ?? person['imageUrl'] ?? person['image_url'] ?? '').toString(),
-        biography: (person['biography'] ?? person['bio'] ?? '').toString(),
-        placeOfBirth: (person['placeOfBirth'] ?? person['place_of_birth'] ?? '').toString(),
-        dateOfBirth: DateTime.tryParse((person['dateOfBirth'] ?? person['date_of_birth'] ?? '').toString()),
-        knownFor: (person['knownFor'] ?? person['known_for'] ?? person['profession'] ?? person['category'] ?? 'Entertainment').toString(),
-      )),
-    ));
+    Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ActorDetailsScreen(
+              actor: Actor(
+            id: (person['id'] ??
+                    person['personId'] ??
+                    person['person_id'] ??
+                    name)
+                .toString(),
+            name: name,
+            photoUrl: (person['photoUrl'] ??
+                    person['photo_url'] ??
+                    person['imageUrl'] ??
+                    person['image_url'] ??
+                    '')
+                .toString(),
+            biography: (person['biography'] ?? person['bio'] ?? '').toString(),
+            placeOfBirth:
+                (person['placeOfBirth'] ?? person['place_of_birth'] ?? '')
+                    .toString(),
+            dateOfBirth: DateTime.tryParse(
+                (person['dateOfBirth'] ?? person['date_of_birth'] ?? '')
+                    .toString()),
+            knownFor: (person['knownFor'] ??
+                    person['known_for'] ??
+                    person['profession'] ??
+                    person['category'] ??
+                    'Entertainment')
+                .toString(),
+          )),
+        ));
   }
 
   void _openSocialResult(Map<String, dynamic> result) {
     final kind = result['kind']?.toString() ?? '';
-    final data = result['data'] is Map ? Map<String, dynamic>.from(result['data'] as Map) : <String, dynamic>{};
+    final data = result['data'] is Map
+        ? Map<String, dynamic>.from(result['data'] as Map)
+        : <String, dynamic>{};
     if (kind == 'community') {
-      Navigator.push<void>(context, MaterialPageRoute<void>(
-        builder: (_) => SocialCommunityDetailScreen(community: data),
-      ));
+      Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => SocialCommunityDetailScreen(community: data),
+          ));
     } else if (kind == 'post') {
-      final id = (data['id'] ?? data['postId'] ?? data['post_id'] ?? '').toString();
+      final id =
+          (data['id'] ?? data['postId'] ?? data['post_id'] ?? '').toString();
       if (id.isEmpty) return;
-      Navigator.push<void>(context, MaterialPageRoute<void>(
-        builder: (_) => SocialPostDetailScreen(postId: id, initialPost: data),
-      ));
+      Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                SocialPostDetailScreen(postId: id, initialPost: data),
+          ));
     } else if (kind == 'friend') {
-      final accountId = (data['id'] ?? data['accountId'] ?? data['account_id'] ?? '').toString();
-      final profileId = (data['profileId'] ?? data['profile_id'] ?? '').toString();
+      final accountId =
+          (data['id'] ?? data['accountId'] ?? data['account_id'] ?? '')
+              .toString();
+      final profileId =
+          (data['profileId'] ?? data['profile_id'] ?? '').toString();
       if (accountId.isEmpty || profileId.isEmpty) return;
-      Navigator.push<void>(context, MaterialPageRoute<void>(
-        builder: (_) => SocialProfileDetailScreen(
-          targetAccountId: accountId,
-          targetProfileId: profileId,
-          initialProfile: data,
-        ),
-      ));
+      Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => SocialProfileDetailScreen(
+              targetAccountId: accountId,
+              targetProfileId: profileId,
+              initialProfile: data,
+            ),
+          ));
     }
   }
 
@@ -721,11 +837,13 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       'channel' || 'livetv' => 'CHANNEL',
       'trailer' => 'TRAILER',
       'short' || 'clip' => 'SHORT',
-      _ => media.type.trim().isEmpty ? 'MEDIA' : media.type.trim().toUpperCase(),
+      _ =>
+        media.type.trim().isEmpty ? 'MEDIA' : media.type.trim().toUpperCase(),
     };
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -735,22 +853,18 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       body: Stack(
         children: [
           const _SearchBackground(),
-
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isDesktop =
-                    constraints.maxWidth >= 900;
+                final isDesktop = constraints.maxWidth >= 900;
 
                 return Center(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth:
-                          isDesktop ? 1100 : 700,
+                      maxWidth: isDesktop ? 1100 : 700,
                     ),
                     child: CustomScrollView(
-                      physics:
-                          const BouncingScrollPhysics(),
+                      physics: const BouncingScrollPhysics(),
                       slivers: [
                         SliverToBoxAdapter(
                           child: _buildHeader(theme),
@@ -759,15 +873,11 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                           child: _buildSearchBar(theme),
                         ),
                         SliverToBoxAdapter(
-                          child: _buildSuggestions(),
-                        ),
-                        SliverToBoxAdapter(
                           child: _buildResultsHeader(),
                         ),
                         _buildResultsList(isDesktop),
                         const SliverPadding(
-                          padding:
-                              EdgeInsets.only(bottom: 50),
+                          padding: EdgeInsets.only(bottom: 50),
                         ),
                       ],
                     ),
@@ -809,20 +919,16 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             children: [
               _GlassIconButton(
                 icon: Icons.arrow_back_rounded,
-                onTap: () =>
-                    Navigator.pop(context),
+                onTap: () => Navigator.pop(context),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     UniversalText(
                       'Smart Search',
-                      style:
-                          theme.textTheme.headlineMedium
-                              ?.copyWith(
+                      style: theme.textTheme.headlineMedium?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.8,
@@ -830,10 +936,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                     ),
                     const SizedBox(height: 3),
                     UniversalText(
-                      'Search entertainment, artists, friends, communities, and products',
+                      'Search movies, shows, music, themes, playlists, and collections',
                       style: TextStyle(
-                        color: Colors.white
-                            .withValues(alpha: 0.52),
+                        color: Colors.white.withValues(alpha: 0.52),
                         fontSize: 14,
                       ),
                     ),
@@ -852,30 +957,23 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final focused = searchFocusNode.hasFocus;
 
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       child: ClipRRect(
-        borderRadius:
-            BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(22),
         child: BackdropFilter(
           filter: ImageFilter.blur(
             sigmaX: 18,
             sigmaY: 18,
           ),
           child: AnimatedContainer(
-            duration:
-                const Duration(milliseconds: 250),
+            duration: const Duration(milliseconds: 250),
             decoration: BoxDecoration(
-              color: Colors.white
-                  .withValues(alpha: 0.075),
-              borderRadius:
-                  BorderRadius.circular(22),
+              color: Colors.white.withValues(alpha: 0.075),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: focused
-                    ? Colors.white
-                        .withValues(alpha: 0.28)
-                    : Colors.white
-                        .withValues(alpha: 0.11),
+                    ? Colors.white.withValues(alpha: 0.28)
+                    : Colors.white.withValues(alpha: 0.11),
               ),
             ),
             child: TextField(
@@ -888,8 +986,7 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                 fontWeight: FontWeight.w500,
               ),
               cursorColor: Colors.white,
-              textInputAction:
-                  TextInputAction.search,
+              textInputAction: TextInputAction.search,
               onChanged: performSearch,
               onSubmitted: performSearch,
               decoration: InputDecoration(
@@ -897,28 +994,24 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                   'Search movies, shows, music, people, friends, communities, products…',
                 ),
                 hintStyle: TextStyle(
-                  color: Colors.white
-                      .withValues(alpha: 0.38),
+                  color: Colors.white.withValues(alpha: 0.38),
                 ),
                 prefixIcon: Icon(
                   Icons.search_rounded,
-                  color: Colors.white
-                      .withValues(alpha: 0.65),
+                  color: Colors.white.withValues(alpha: 0.65),
                   size: 25,
                 ),
-                suffixIcon:
-                    controller.text.isNotEmpty
-                        ? IconButton(
-                            onPressed: clearSearch,
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white70,
-                            ),
-                          )
-                        : null,
+                suffixIcon: controller.text.isNotEmpty
+                    ? IconButton(
+                        onPressed: clearSearch,
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white70,
+                        ),
+                      )
+                    : null,
                 border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(
+                contentPadding: const EdgeInsets.symmetric(
                   horizontal: 18,
                   vertical: 19,
                 ),
@@ -926,76 +1019,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  /// Performs `_buildSuggestions` for this feature. Update this documentation when its contract changes.
-  Widget _buildSuggestions() {
-    if (controller.text.isNotEmpty) {
-      return const SizedBox(height: 8);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        22,
-        18,
-        22,
-        4,
-      ),
-      child: Wrap(
-        spacing: 9,
-        runSpacing: 9,
-        children: [
-          _SuggestionChip(
-            label: 'Movies',
-            icon: Icons.movie_outlined,
-            onTap: () =>
-                useSuggestion('movies'),
-          ),
-          _SuggestionChip(
-            label: 'TV Shows',
-            icon: Icons.tv_outlined,
-            onTap: () =>
-                useSuggestion('tv shows'),
-          ),
-          _SuggestionChip(
-            label: '2024',
-            icon: Icons.calendar_today_outlined,
-            onTap: () =>
-                useSuggestion('2024'),
-          ),
-          _SuggestionChip(
-            label: '5.0',
-            icon: Icons.star_outline_rounded,
-            onTap: () => useSuggestion('5.0'),
-          ),
-          _SuggestionChip(
-            label: 'Actors',
-            icon: Icons.person_outline_rounded,
-            onTap: () => useSuggestion('actors'),
-          ),
-          _SuggestionChip(
-            label: 'Artists',
-            icon: Icons.mic_none_rounded,
-            onTap: () => useSuggestion('artists'),
-          ),
-          _SuggestionChip(
-            label: 'Friends',
-            icon: Icons.people_outline_rounded,
-            onTap: () => useSuggestion('friends'),
-          ),
-          _SuggestionChip(
-            label: 'Communities',
-            icon: Icons.groups_2_outlined,
-            onTap: () => useSuggestion('communities'),
-          ),
-          _SuggestionChip(
-            label: 'Shop',
-            icon: Icons.shopping_bag_outlined,
-            onTap: () => useSuggestion('shop'),
-          ),
-        ],
       ),
     );
   }
@@ -1016,11 +1039,18 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       child: Row(
         children: [
           Text(
-            remoteSearchLoading && results.isEmpty && musicResults.isEmpty &&
-                    productResults.isEmpty && peopleResults.isEmpty && socialResults.isEmpty
+            remoteSearchLoading &&
+                    results.isEmpty &&
+                    musicResults.isEmpty &&
+                    productResults.isEmpty &&
+                    peopleResults.isEmpty &&
+                    socialResults.isEmpty
                 ? 'Searching…'
-                : results.isEmpty && musicResults.isEmpty && productResults.isEmpty &&
-                        peopleResults.isEmpty && socialResults.isEmpty
+                : results.isEmpty &&
+                        musicResults.isEmpty &&
+                        productResults.isEmpty &&
+                        peopleResults.isEmpty &&
+                        socialResults.isEmpty
                     ? 'No results'
                     : '${results.length + musicResults.length + productResults.length + peopleResults.length + socialResults.length} ${(results.length + musicResults.length + productResults.length + peopleResults.length + socialResults.length) == 1 ? 'result' : 'results'}',
             style: const TextStyle(
@@ -1031,13 +1061,19 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           ),
           const Spacer(),
           if (remoteSearchLoading)
-            const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 1.5))
-          else if (results.isNotEmpty || musicResults.isNotEmpty || productResults.isNotEmpty || peopleResults.isNotEmpty || socialResults.isNotEmpty)
+            const SizedBox(
+                width: 13,
+                height: 13,
+                child: CircularProgressIndicator(strokeWidth: 1.5))
+          else if (results.isNotEmpty ||
+              musicResults.isNotEmpty ||
+              productResults.isNotEmpty ||
+              peopleResults.isNotEmpty ||
+              socialResults.isNotEmpty)
             UniversalText(
               'CONNECTED SEARCH',
               style: TextStyle(
-                color: Colors.white
-                    .withValues(alpha: 0.35),
+                color: Colors.white.withValues(alpha: 0.35),
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.4,
@@ -1051,45 +1087,17 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
   /// Performs `_buildResultsList` for this feature. Update this documentation when its contract changes.
   Widget _buildResultsList(bool isDesktop) {
     if (controller.text.trim().isEmpty) {
-      final recommended = SmartSearch.recommendations(AppController.instance.library);
-      return SliverList(
-        delegate: SliverChildListDelegate([
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 30, 22, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const UniversalText('Recommended for you', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 5),
-                UniversalText('Based on your watch history, likes, genres, and the recommendation engine.', style: TextStyle(color: Colors.white.withValues(alpha: .58))),
-              ],
-            ),
-          ),
-          if (recommended.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(22, 60, 22, 40),
-              child: _EmptySearchState(
-                icon: Icons.search_rounded,
-                title: 'Search your library',
-                message: 'Look through your ripped movies and TV shows by title, type, year, or rating.',
-              ),
-            ),
-          for (var index = 0; index < recommended.length; index++)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 5),
-              child: _SearchResultCard(
-                media: recommended[index],
-                typeLabel: _typeLabel(recommended[index]),
-                index: index,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: recommended[index]))),
-              ),
-            ),
-        ]),
+      return SliverToBoxAdapter(
+        child: SearchDiscoveryLanding(onSearch: useSuggestion),
       );
     }
 
-    if (results.isEmpty && musicResults.isEmpty && productResults.isEmpty &&
-        peopleResults.isEmpty && socialResults.isEmpty && !remoteSearchLoading) {
+    if (results.isEmpty &&
+        musicResults.isEmpty &&
+        productResults.isEmpty &&
+        peopleResults.isEmpty &&
+        socialResults.isEmpty &&
+        !remoteSearchLoading) {
       return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -1116,7 +1124,9 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           if (results.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 4, bottom: 8),
-              child: UniversalText('Movies & TV', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+              child: UniversalText('Movies & TV',
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w800)),
             ),
             for (var index = 0; index < results.length; index++)
               _SearchResultCard(
@@ -1124,21 +1134,29 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
                 media: results[index],
                 typeLabel: _typeLabel(results[index]),
                 index: index,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: results[index]))),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            MediaDetailsScreen(media: results[index]))),
               ),
           ],
           if (musicResults.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 18, bottom: 8),
-              child: UniversalText('Music', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+              child: UniversalText('Music',
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w800)),
             ),
             for (final track in musicResults)
               Card(
                 color: Colors.white.withValues(alpha: .055),
                 child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.music_note_rounded)),
+                  leading:
+                      const CircleAvatar(child: Icon(Icons.music_note_rounded)),
                   title: Text(track.title),
-                  subtitle: Text('${track.artist}${track.album.trim().isEmpty ? '' : ' · ${track.album}'}'),
+                  subtitle: Text(
+                      '${track.artist}${track.album.trim().isEmpty ? '' : ' · ${track.album}'}'),
                   trailing: const Icon(Icons.play_arrow_rounded),
                   onTap: () => MusicPlaybackController.instance.play(track),
                 ),
@@ -1147,20 +1165,44 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           if (peopleResults.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 18, bottom: 8),
-              child: UniversalText('Actors, artists & entertainment people', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+              child: UniversalText('Actors, artists & entertainment people',
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w800)),
             ),
             for (final person in peopleResults)
               Card(
                 color: Colors.white.withValues(alpha: .055),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: ((person['photoUrl'] ?? person['photo_url'] ?? person['imageUrl'] ?? person['image_url'])?.toString().trim().isNotEmpty ?? false)
-                        ? NetworkImage((person['photoUrl'] ?? person['photo_url'] ?? person['imageUrl'] ?? person['image_url']).toString())
+                    backgroundImage: ((person['photoUrl'] ??
+                                    person['photo_url'] ??
+                                    person['imageUrl'] ??
+                                    person['image_url'])
+                                ?.toString()
+                                .trim()
+                                .isNotEmpty ??
+                            false)
+                        ? NetworkImage((person['photoUrl'] ??
+                                person['photo_url'] ??
+                                person['imageUrl'] ??
+                                person['image_url'])
+                            .toString())
                         : null,
                     child: const Icon(Icons.person_outline_rounded),
                   ),
-                  title: Text(_mapText(person, <String>['name', 'displayName', 'display_name', 'fullName', 'full_name']).trim()),
-                  subtitle: Text((person['knownFor'] ?? person['known_for'] ?? person['profession'] ?? person['category'] ?? 'Entertainment').toString()),
+                  title: Text(_mapText(person, <String>[
+                    'name',
+                    'displayName',
+                    'display_name',
+                    'fullName',
+                    'full_name'
+                  ]).trim()),
+                  subtitle: Text((person['knownFor'] ??
+                          person['known_for'] ??
+                          person['profession'] ??
+                          person['category'] ??
+                          'Entertainment')
+                      .toString()),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _openPerson(person),
                 ),
@@ -1169,23 +1211,44 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           if (socialResults.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 18, bottom: 8),
-              child: UniversalText('Friends, communities & posts', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+              child: UniversalText('Friends, communities & posts',
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w800)),
             ),
             for (final result in socialResults)
               Builder(builder: (context) {
-                final data = result['data'] is Map ? Map<String, dynamic>.from(result['data'] as Map) : <String, dynamic>{};
+                final data = result['data'] is Map
+                    ? Map<String, dynamic>.from(result['data'] as Map)
+                    : <String, dynamic>{};
                 final kind = result['kind']?.toString() ?? 'social';
-                final title = _mapText(data, <String>['name', 'display_name', 'displayName', 'username', 'title', 'body', 'text', 'content']).trim();
+                final title = _mapText(data, <String>[
+                  'name',
+                  'display_name',
+                  'displayName',
+                  'username',
+                  'title',
+                  'body',
+                  'text',
+                  'content'
+                ]).trim();
                 final subtitle = switch (kind) {
-                  'community' => 'Community · ${data['memberCount'] ?? data['member_count'] ?? ''} members',
+                  'community' =>
+                    'Community · ${data['memberCount'] ?? data['member_count'] ?? ''} members',
                   'post' => 'Community or friend post',
                   _ => 'Friend',
                 };
                 return Card(
                   color: Colors.white.withValues(alpha: .055),
                   child: ListTile(
-                    leading: CircleAvatar(child: Icon(kind == 'community' ? Icons.groups_2_outlined : kind == 'post' ? Icons.forum_outlined : Icons.person_outline_rounded)),
-                    title: Text(title.isEmpty ? 'Untitled $kind' : title, maxLines: kind == 'post' ? 2 : 1, overflow: TextOverflow.ellipsis),
+                    leading: CircleAvatar(
+                        child: Icon(kind == 'community'
+                            ? Icons.groups_2_outlined
+                            : kind == 'post'
+                                ? Icons.forum_outlined
+                                : Icons.person_outline_rounded)),
+                    title: Text(title.isEmpty ? 'Untitled $kind' : title,
+                        maxLines: kind == 'post' ? 2 : 1,
+                        overflow: TextOverflow.ellipsis),
                     subtitle: Text(subtitle),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _openSocialResult(result),
@@ -1196,19 +1259,26 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
           if (productResults.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 18, bottom: 8),
-              child: UniversalText('Shop & merchandise', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+              child: UniversalText('Shop & merchandise',
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w800)),
             ),
             for (final product in productResults)
               Card(
                 color: Colors.white.withValues(alpha: .055),
                 child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.shopping_bag_outlined)),
+                  leading: const CircleAvatar(
+                      child: Icon(Icons.shopping_bag_outlined)),
                   title: Text(product.name),
-                  subtitle: Text('${product.category} · ${product.price.toStringAsFixed(2)} ${product.currency}'),
+                  subtitle: Text(
+                      '${product.category} · ${product.price.toStringAsFixed(2)} ${product.currency}'),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.push<void>(context, MaterialPageRoute<void>(
-                    builder: (_) => ShopProductDetailsScreen(product: product),
-                  )),
+                  onTap: () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            ShopProductDetailsScreen(product: product),
+                      )),
                 ),
               ),
           ],
@@ -1238,15 +1308,14 @@ class _SearchResultCard extends StatefulWidget {
   });
 
   @override
-  State<_SearchResultCard> createState() =>
-      _SearchResultCardState();
+  State<_SearchResultCard> createState() => _SearchResultCardState();
 }
 
-class _SearchResultCardState
-    extends State<_SearchResultCard> {
+class _SearchResultCardState extends State<_SearchResultCard> {
   bool hovering = false;
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final media = widget.media;
@@ -1254,8 +1323,7 @@ class _SearchResultCardState
 
     return TweenAnimationBuilder<double>(
       duration: Duration(
-        milliseconds:
-            350 + (widget.index * 55),
+        milliseconds: 350 + (widget.index * 55),
       ),
       curve: Curves.easeOutCubic,
       tween: Tween(begin: 0, end: 1),
@@ -1276,8 +1344,7 @@ class _SearchResultCardState
         );
       },
       child: Padding(
-        padding:
-            const EdgeInsets.only(bottom: 13),
+        padding: const EdgeInsets.only(bottom: 13),
         child: MouseRegion(
           onEnter: (_) {
             setState(() {
@@ -1292,8 +1359,7 @@ class _SearchResultCardState
           child: GestureDetector(
             onTap: widget.onTap,
             child: AnimatedContainer(
-              duration:
-                  const Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
               transform: Matrix4.identity()
                 ..translateByDouble(
@@ -1304,36 +1370,28 @@ class _SearchResultCardState
                 ),
               decoration: BoxDecoration(
                 color: hovering
-                    ? Colors.white
-                        .withValues(alpha: 0.10)
-                    : Colors.white
-                        .withValues(alpha: 0.055),
-                borderRadius:
-                    BorderRadius.circular(20),
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.white.withValues(alpha: 0.055),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: hovering
-                      ? Colors.white
-                          .withValues(alpha: 0.20)
-                      : Colors.white
-                          .withValues(alpha: 0.075),
+                      ? Colors.white.withValues(alpha: 0.20)
+                      : Colors.white.withValues(alpha: 0.075),
                 ),
                 boxShadow: hovering
                     ? [
                         BoxShadow(
-                          color: Colors.black
-                              .withValues(
+                          color: Colors.black.withValues(
                             alpha: 0.35,
                           ),
                           blurRadius: 22,
-                          offset:
-                              const Offset(0, 9),
+                          offset: const Offset(0, 9),
                         ),
                       ]
                     : null,
               ),
               child: Padding(
-                padding:
-                    const EdgeInsets.all(9),
+                padding: const EdgeInsets.all(9),
                 child: Row(
                   children: [
                     _Poster(
@@ -1344,24 +1402,20 @@ class _SearchResultCardState
                     const SizedBox(width: 15),
                     Expanded(
                       child: Padding(
-                        padding:
-                            const EdgeInsets.symmetric(
+                        padding: const EdgeInsets.symmetric(
                           vertical: 5,
                         ),
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               media.title,
                               maxLines: 2,
-                              overflow:
-                                  TextOverflow.ellipsis,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 17,
-                                fontWeight:
-                                    FontWeight.w700,
+                                fontWeight: FontWeight.w700,
                                 letterSpacing: -0.2,
                               ),
                             ),
@@ -1371,12 +1425,18 @@ class _SearchResultCardState
                               runSpacing: 6,
                               children: [
                                 _MetaPill(
-                                  label:
-                                      widget.typeLabel,
+                                  label: widget.typeLabel,
                                 ),
                                 _MetaPill(
-                                  label: media.releaseYear?.toString() ?? 'Year unknown',
+                                  label:
+                                      media.displayYearLabel ?? 'Year unknown',
                                 ),
+                                if (media.displayEditionLabel != null)
+                                  _MetaPill(label: media.displayEditionLabel!),
+                                if (media.displaySeasonCount != null)
+                                  _MetaPill(
+                                      label:
+                                          '${media.displaySeasonCount} ${media.displaySeasonCount == 1 ? 'Season' : 'Seasons'}'),
                                 if (media.rating != null)
                                   _MetaPill(label: '★ ${media.rating}'),
                               ],
@@ -1388,7 +1448,10 @@ class _SearchResultCardState
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .95),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withValues(alpha: .95),
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -1398,11 +1461,9 @@ class _SearchResultCardState
                             Text(
                               media.description ?? '',
                               maxLines: 3,
-                              overflow:
-                                  TextOverflow.ellipsis,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white
-                                    .withValues(
+                                color: Colors.white.withValues(
                                   alpha: 0.52,
                                 ),
                                 fontSize: 12.5,
@@ -1415,31 +1476,21 @@ class _SearchResultCardState
                     ),
                     const SizedBox(width: 6),
                     AnimatedContainer(
-                      duration:
-                          const Duration(
+                      duration: const Duration(
                         milliseconds: 200,
                       ),
                       width: 35,
                       height: 35,
-                      decoration:
-                          BoxDecoration(
-                        color: Colors.white
-                            .withValues(
-                          alpha:
-                              hovering
-                                  ? 0.13
-                                  : 0.055,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(
+                          alpha: hovering ? 0.13 : 0.055,
                         ),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.chevron_right_rounded,
-                        color: Colors.white
-                            .withValues(
-                          alpha:
-                              hovering
-                                  ? 0.9
-                                  : 0.45,
+                        color: Colors.white.withValues(
+                          alpha: hovering ? 0.9 : 0.45,
                         ),
                         size: 23,
                       ),
@@ -1457,18 +1508,21 @@ class _SearchResultCardState
   String _identityHint(MediaItem media) {
     final hints = <String>[];
     final original = media.originalTitle?.trim();
-    if (original != null && original.isNotEmpty &&
+    if (original != null &&
+        original.isNotEmpty &&
         original.toLowerCase() != media.title.trim().toLowerCase()) {
       hints.add('Original title: $original');
     }
     final disc = media.discTitle?.trim();
-    if (disc != null && disc.isNotEmpty &&
+    if (disc != null &&
+        disc.isNotEmpty &&
         disc.toLowerCase() != media.title.trim().toLowerCase()) {
       hints.add('Edition: $disc');
     }
     final country = media.countryOfOrigin?.trim();
     if (country != null && country.isNotEmpty) hints.add(country);
-    final director = media.directors.isNotEmpty ? media.directors.first.trim() : '';
+    final director =
+        media.directors.isNotEmpty ? media.directors.first.trim() : '';
     if (director.isNotEmpty) hints.add('Directed by $director');
     if (hints.isEmpty && media.franchiseName?.trim().isNotEmpty == true) {
       hints.add('Part of ${media.franchiseName}');
@@ -1489,13 +1543,13 @@ class _Poster extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final imageUrl = media.imageUrl ?? '';
 
     return ClipRRect(
-      borderRadius:
-          BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(14),
       child: SizedBox(
         width: width,
         height: height,
@@ -1526,18 +1580,14 @@ class _Poster extends StatelessWidget {
                   }
 
                   return Container(
-                    color:
-                        const Color(0xFF171717),
+                    color: const Color(0xFF171717),
                     child: const Center(
                       child: SizedBox(
                         width: 18,
                         height: 18,
-                        child:
-                            CircularProgressIndicator(
+                        child: CircularProgressIndicator(
                           strokeWidth: 1.8,
-                          valueColor:
-                              AlwaysStoppedAnimation<
-                                  Color>(
+                          valueColor: AlwaysStoppedAnimation<Color>(
                             Colors.white54,
                           ),
                         ),
@@ -1551,12 +1601,10 @@ class _Poster extends StatelessWidget {
                   stackTrace,
                 ) {
                   return Container(
-                    color:
-                        const Color(0xFF171717),
+                    color: const Color(0xFF171717),
                     child: const Center(
                       child: Icon(
-                        Icons
-                            .broken_image_outlined,
+                        Icons.broken_image_outlined,
                         color: Colors.white30,
                         size: 30,
                       ),
@@ -1571,18 +1619,13 @@ class _Poster extends StatelessWidget {
               height: 65,
               child: IgnorePointer(
                 child: DecoratedBox(
-                  decoration:
-                      BoxDecoration(
-                    gradient:
-                        LinearGradient(
-                      begin:
-                          Alignment.topCenter,
-                      end: Alignment
-                          .bottomCenter,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black
-                            .withValues(
+                        Colors.black.withValues(
                           alpha: 0.7,
                         ),
                       ],
@@ -1606,25 +1649,22 @@ class _MetaPill extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 8,
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: Colors.white
-            .withValues(alpha: 0.075),
-        borderRadius:
-            BorderRadius.circular(7),
+        color: Colors.white.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(7),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: Colors.white
-              .withValues(alpha: 0.68),
+          color: Colors.white.withValues(alpha: 0.68),
           fontSize: 9.5,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.3,
@@ -1634,71 +1674,7 @@ class _MetaPill extends StatelessWidget {
   }
 }
 
-class _SuggestionChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _SuggestionChip({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius:
-            BorderRadius.circular(13),
-        onTap: onTap,
-        child: Ink(
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 13,
-            vertical: 9,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white
-                .withValues(alpha: 0.055),
-            borderRadius:
-                BorderRadius.circular(13),
-            border: Border.all(
-              color: Colors.white
-                  .withValues(alpha: 0.08),
-            ),
-          ),
-          child: Row(
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 15,
-                color: Colors.white54,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassIconButton
-    extends StatelessWidget {
+class _GlassIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
@@ -1708,25 +1684,22 @@ class _GlassIconButton
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius:
-            BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(15),
         child: Ink(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.white
-                .withValues(alpha: 0.07),
-            borderRadius:
-                BorderRadius.circular(15),
+            color: Colors.white.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(15),
             border: Border.all(
-              color: Colors.white
-                  .withValues(alpha: 0.10),
+              color: Colors.white.withValues(alpha: 0.10),
             ),
           ),
           child: Icon(
@@ -1740,8 +1713,7 @@ class _GlassIconButton
   }
 }
 
-class _EmptySearchState
-    extends StatelessWidget {
+class _EmptySearchState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
@@ -1753,6 +1725,7 @@ class _EmptySearchState
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Column(
@@ -1760,20 +1733,16 @@ class _EmptySearchState
         Container(
           width: 78,
           height: 78,
-          decoration:
-              BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white
-                .withValues(alpha: 0.055),
+            color: Colors.white.withValues(alpha: 0.055),
             border: Border.all(
-              color: Colors.white
-                  .withValues(alpha: 0.08),
+              color: Colors.white.withValues(alpha: 0.08),
             ),
           ),
           child: Icon(
             icon,
-            color: Colors.white
-                .withValues(alpha: 0.42),
+            color: Colors.white.withValues(alpha: 0.42),
             size: 34,
           ),
         ),
@@ -1789,17 +1758,14 @@ class _EmptySearchState
         ),
         const SizedBox(height: 9),
         ConstrainedBox(
-          constraints:
-              const BoxConstraints(
+          constraints: const BoxConstraints(
             maxWidth: 420,
           ),
           child: Text(
             message,
-            textAlign:
-                TextAlign.center,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white
-                  .withValues(alpha: 0.45),
+              color: Colors.white.withValues(alpha: 0.45),
               fontSize: 13,
               height: 1.5,
             ),
@@ -1810,11 +1776,11 @@ class _EmptySearchState
   }
 }
 
-class _SearchBackground
-    extends StatelessWidget {
+class _SearchBackground extends StatelessWidget {
   const _SearchBackground();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return IgnorePointer(
@@ -1826,11 +1792,9 @@ class _SearchBackground
             child: Container(
               width: 430,
               height: 430,
-              decoration:
-                  BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white
-                    .withValues(
+                color: Colors.white.withValues(
                   alpha: 0.025,
                 ),
               ),
@@ -1842,11 +1806,9 @@ class _SearchBackground
             child: Container(
               width: 460,
               height: 460,
-              decoration:
-                  BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white
-                    .withValues(
+                color: Colors.white.withValues(
                   alpha: 0.018,
                 ),
               ),
@@ -1854,8 +1816,7 @@ class _SearchBackground
           ),
           CustomPaint(
             size: Size.infinite,
-            painter:
-                _GridPainter(),
+            painter: _GridPainter(),
           ),
         ],
       ),
@@ -1863,26 +1824,21 @@ class _SearchBackground
   }
 }
 
-class _GridPainter
-    extends CustomPainter {
+class _GridPainter extends CustomPainter {
   @override
+
   /// Performs `paint` for this feature. Update this documentation when its contract changes.
   void paint(
     Canvas canvas,
     Size size,
   ) {
     final paint = Paint()
-      ..color = Colors.white
-          .withValues(alpha: 0.018)
+      ..color = Colors.white.withValues(alpha: 0.018)
       ..strokeWidth = 0.5;
 
     const spacing = 45.0;
 
-    for (
-      double x = 0;
-      x < size.width;
-      x += spacing
-    ) {
+    for (double x = 0; x < size.width; x += spacing) {
       canvas.drawLine(
         Offset(x, 0),
         Offset(x, size.height),
@@ -1890,11 +1846,7 @@ class _GridPainter
       );
     }
 
-    for (
-      double y = 0;
-      y < size.height;
-      y += spacing
-    ) {
+    for (double y = 0; y < size.height; y += spacing) {
       canvas.drawLine(
         Offset(0, y),
         Offset(size.width, y),
@@ -1904,6 +1856,7 @@ class _GridPainter
   }
 
   @override
+
   /// Performs `shouldRepaint` for this feature. Update this documentation when its contract changes.
   bool shouldRepaint(
     covariant CustomPainter oldDelegate,

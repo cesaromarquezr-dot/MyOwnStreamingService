@@ -10,9 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'music_favorites.dart';
+import 'music_genre_system.dart';
 import 'details.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
@@ -30,19 +31,25 @@ class MusicTrack {
   final String album;
   final String? artworkUrl;
   final String? audioUrl;
+
   /// Optional locally stored music-video stream for this exact track.
   final String? musicVideoUrl;
   final Duration duration;
   final List<String> genres;
+
   /// Additional artists explicitly credited on the track, such as features.
   final List<String> featuredArtists;
+
   /// Optional richer genre/subgenre metadata from the home-server importer.
   final List<String> subgenres;
+
   /// Explicit-content flag supplied by licensed/import metadata.
   final bool explicit;
+
   /// Mature-theme flag supplied by licensed/import metadata.
   final bool matureTheme;
   final String lyrics;
+
   /// Filesystem modification time supplied by the home-server scanner. This
   /// is a freshness signal, not the official album release date.
   final DateTime? modifiedAt;
@@ -64,6 +71,33 @@ class MusicTrack {
     this.lyrics = '',
     this.modifiedAt,
   });
+
+  /// Canonicalized broad genres plus subgenres, without changing source tags.
+  List<String> get allGenreTags => MusicGenreSystem.allTags(
+        genres,
+        subgenres: subgenres,
+      );
+
+  /// A hybrid/crossover label suitable for cards, search, and generated mixes.
+  String get genreBlendLabel => MusicGenreSystem.displayLabel(
+        genres,
+        subgenres: subgenres,
+      );
+
+  /// True when metadata describes more than one broad genre or style family.
+  bool get hasGenreBlend => MusicGenreSystem.hasBlend(
+        genres,
+        subgenres: subgenres,
+      );
+
+  String get genreDisplayLabel => allGenreTags.isEmpty
+      ? 'Genre not specified'
+      : (hasGenreBlend ? genreBlendLabel : allGenreTags.join(' • '));
+
+  List<String> get genreSearchTerms => MusicGenreSystem.searchTerms(
+        genres,
+        subgenres: subgenres,
+      );
 }
 
 /// Stores per-profile music presentation and discovery preferences.
@@ -114,6 +148,7 @@ class MusicPageCustomization {
               'Albums',
               'Playlists',
               'Soundtrack Universe',
+              'Genre Blends',
             ];
 
   MusicPageCustomization copy() => MusicPageCustomization(
@@ -172,6 +207,7 @@ class MusicPageCustomizationStore {
       'Albums',
       'Playlists',
       'Soundtrack Universe',
+      'Genre Blends',
     ];
     for (final section in defaults) {
       if (!value.sectionOrder.contains(section)) {
@@ -250,13 +286,16 @@ class MusicLibraryStore extends ChangeNotifier {
   Map<String, List<String>> get smartPlaylists {
     final availableIds = tracks.map((track) => track.id).toSet();
     final liked = MusicFavoritesBridge.likedTracks()
-        .where(availableIds.contains).toList(growable: false);
+        .where(availableIds.contains)
+        .toList(growable: false);
     final recentlyAdded = tracks.toList()
       ..sort((a, b) {
         final aDate = a.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bDate = b.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final dateCompare = bDate.compareTo(aDate);
-        return dateCompare != 0 ? dateCompare : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        return dateCompare != 0
+            ? dateCompare
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
       });
     final mostPlayed = listenCounts.entries
         .where((entry) => entry.value > 0 && availableIds.contains(entry.key))
@@ -264,38 +303,68 @@ class MusicLibraryStore extends ChangeNotifier {
       ..sort((a, b) {
         final byCount = b.value.compareTo(a.value);
         if (byCount != 0) return byCount;
-        final aTitle = tracks.firstWhere((track) => track.id == a.key).title.toLowerCase();
-        final bTitle = tracks.firstWhere((track) => track.id == b.key).title.toLowerCase();
+        final aTitle =
+            tracks.firstWhere((track) => track.id == a.key).title.toLowerCase();
+        final bTitle =
+            tracks.firstWhere((track) => track.id == b.key).title.toLowerCase();
         return aTitle.compareTo(bTitle);
       });
-    final rankedIds = mostPlayed.map((entry) => entry.key).toList(growable: false);
+    final rankedIds =
+        mostPlayed.map((entry) => entry.key).toList(growable: false);
     final output = <String, List<String>>{
       'Liked Songs': liked,
-      'Recently Added': recentlyAdded.take(50).map((track) => track.id).toList(growable: false),
+      'Recently Added': recentlyAdded
+          .take(50)
+          .map((track) => track.id)
+          .toList(growable: false),
       'Most Played': rankedIds,
-      'On Repeat': mostPlayed.where((entry) => entry.value >= 2).take(50).map((entry) => entry.key).toList(growable: false),
+      'On Repeat': mostPlayed
+          .where((entry) => entry.value >= 2)
+          .take(50)
+          .map((entry) => entry.key)
+          .toList(growable: false),
       'Top 100 Most Played': rankedIds.take(100).toList(growable: false),
     };
     final genres = <String>{
-      for (final track in tracks)
-        for (final genre in track.genres)
-          if (genre.trim().isNotEmpty) genre.trim(),
-    }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    for (final genre in genres.take(8)) {
+      for (final track in tracks) ...track.allGenreTags,
+    }.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    for (final genre in genres.take(12)) {
       output['$genre Mix'] = tracks
-          .where((track) => track.genres.any((value) => value.trim().toLowerCase() == genre.toLowerCase()))
-          .map((track) => track.id).toList(growable: false);
+          .where((track) => MusicGenreSystem.matchesGenres(
+                track.genres,
+                <String>[genre],
+                itemSubgenres: track.subgenres,
+              ))
+          .map((track) => track.id)
+          .toList(growable: false);
+    }
+
+    final blendLabels = <String>{
+      for (final track in tracks)
+        if (track.hasGenreBlend) track.genreBlendLabel,
+    }.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    for (final label in blendLabels.take(12)) {
+      final mixKey = '$label Mix';
+      output[mixKey] = <String>{
+        ...(output[mixKey] ?? const <String>[]),
+        ...tracks
+            .where((track) =>
+                track.hasGenreBlend && track.genreBlendLabel == label)
+            .map((track) => track.id),
+      }.toList(growable: false);
     }
     return output;
   }
+
   SharedPreferences? _playlistPreferences;
   String _playlistProfileKey = 'default';
 
   Future<void> initializeForProfile(String? profileId) async {
     _playlistPreferences ??= await SharedPreferences.getInstance();
-    _playlistProfileKey = profileId?.trim().isNotEmpty == true
-        ? profileId!.trim()
-        : 'default';
+    _playlistProfileKey =
+        profileId?.trim().isNotEmpty == true ? profileId!.trim() : 'default';
     playlists
       ..clear()
       ..addAll(_decodePlaylists(
@@ -304,7 +373,8 @@ class MusicLibraryStore extends ChangeNotifier {
     listenCounts
       ..clear()
       ..addAll(_decodeListenCounts(
-        _playlistPreferences!.getString('music_listen_counts_$_playlistProfileKey'),
+        _playlistPreferences!
+            .getString('music_listen_counts_$_playlistProfileKey'),
       ));
 
     // Preview-only tracks provide a realistic album page while keeping actual
@@ -347,7 +417,9 @@ class MusicLibraryStore extends ChangeNotifier {
       if (decoded is! Map) return <String, List<String>>{};
       return decoded.map((key, value) => MapEntry(
             key.toString(),
-            value is List ? value.map((id) => id.toString()).toList() : <String>[],
+            value is List
+                ? value.map((id) => id.toString()).toList()
+                : <String>[],
           ));
     } catch (_) {
       return <String, List<String>>{};
@@ -369,7 +441,8 @@ class MusicLibraryStore extends ChangeNotifier {
   }
 
   Future<void> _persistListenCounts() async {
-    final preferences = _playlistPreferences ??= await SharedPreferences.getInstance();
+    final preferences =
+        _playlistPreferences ??= await SharedPreferences.getInstance();
     await preferences.setString(
       'music_listen_counts_$_playlistProfileKey',
       jsonEncode(listenCounts),
@@ -396,6 +469,7 @@ class MusicLibraryStore extends ChangeNotifier {
   /// Audio files and private track data remain on the account's home server.
   void registerShopEntities() {
     final entities = <ShopEntity>[];
+    final registeredGenreBlends = <String>{};
 
     for (final track in tracks) {
       entities.add(
@@ -432,7 +506,7 @@ class MusicLibraryStore extends ChangeNotifier {
         );
       }
 
-      for (final genre in track.genres) {
+      for (final genre in track.allGenreTags) {
         final clean = genre.trim();
         if (clean.isEmpty) continue;
         entities.add(
@@ -443,6 +517,21 @@ class MusicLibraryStore extends ChangeNotifier {
             subtitle: 'Music genre',
           ),
         );
+      }
+
+      if (track.hasGenreBlend) {
+        final blend = track.genreBlendLabel.trim();
+        final key = blend.toLowerCase();
+        if (blend.isNotEmpty && registeredGenreBlends.add(key)) {
+          entities.add(
+            ShopEntity(
+              type: 'genre',
+              id: 'music-genre-blend:$key',
+              name: blend,
+              subtitle: 'Genre blend • Music',
+            ),
+          );
+        }
       }
 
       for (final artist in track.featuredArtists) {
@@ -488,7 +577,8 @@ class MusicLibraryStore extends ChangeNotifier {
   }
 
   /// Creates a user playlist without changing source music.
-  void createPlaylist(String name, {Iterable<String> trackIds = const <String>[]}) {
+  void createPlaylist(String name,
+      {Iterable<String> trackIds = const <String>[]}) {
     final clean = name.trim();
     if (clean.isEmpty || playlists.containsKey(clean)) return;
     playlists[clean] = trackIds.toList();
@@ -591,12 +681,14 @@ class MusicPlaybackController extends ChangeNotifier {
       final ids = library.playlists[playlist] ?? const <String>[];
       final index = ids.indexOf(track.id);
       if (index >= 0) {
-        return _capActivity('Listening to playlist $playlist, item ${index + 1}, ${track.title}');
+        return _capActivity(
+            'Listening to playlist $playlist, item ${index + 1}, ${track.title}');
       }
     }
     final album = track.album.trim();
     if (album.isNotEmpty) {
-      return _capActivity('Listening to album $album, ${track.title} by ${track.artist}');
+      return _capActivity(
+          'Listening to album $album, ${track.title} by ${track.artist}');
     }
     return _capActivity('Listening to ${track.title} by ${track.artist}');
   }
@@ -794,9 +886,7 @@ class MusicPlaybackController extends ChangeNotifier {
         final track = currentTrack;
         unawaited(
           _updateSocialListeningActivity(
-            isPlaying && track != null
-                ? _listeningActivity(track)
-                : null,
+            isPlaying && track != null ? _listeningActivity(track) : null,
           ),
         );
       },
@@ -839,7 +929,8 @@ class _MusicScreenState extends State<MusicScreen> {
     final settings = customization;
 
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[library, playback, MusicFavoritesBridge.changes]),
+      animation: Listenable.merge(
+          <Listenable>[library, playback, MusicFavoritesBridge.changes]),
       builder: (context, _) {
         return Scaffold(
           backgroundColor: Color(int.parse(library.homeBackground)),
@@ -848,7 +939,8 @@ class _MusicScreenState extends State<MusicScreen> {
               slivers: <Widget>[
                 SliverAppBar(
                   pinned: true,
-                  title: const UniversalText('Music',
+                  title: const UniversalText(
+                    'Music',
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                   actions: [
@@ -864,7 +956,10 @@ class _MusicScreenState extends State<MusicScreen> {
                       tooltip: 'Discover music',
                     ),
                     IconButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const NavidromeSetupScreen())),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                              builder: (_) => const NavidromeSetupScreen())),
                       icon: const Icon(Icons.dns_rounded),
                       tooltip: 'Connect personal music server',
                     ),
@@ -944,27 +1039,54 @@ class _MusicScreenState extends State<MusicScreen> {
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            LocalizedMediaText(track.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            Text(track.artist, style: const TextStyle(color: Colors.white60)),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: const Icon(Icons.graphic_eq_rounded), title: const UniversalText('Audio visualizer'),
-              subtitle: const UniversalText('Keep audio playing with an animated visualizer.'),
-              onTap: () => Navigator.of(sheetContext).push(MaterialPageRoute<void>(builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.visualizer))),
-            ),
-            ListTile(
-              leading: const Icon(Icons.lyrics_rounded), title: const UniversalText('Lyrics + visualizer'),
-              subtitle: Text(track.lyrics.trim().isEmpty ? 'No local lyrics are available for this track.' : 'Display available track lyrics with animated visuals.'),
-              onTap: () => Navigator.of(sheetContext).push(MaterialPageRoute<void>(builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.lyricsVisualizer))),
-            ),
-            ListTile(
-              leading: const Icon(Icons.music_video_rounded), title: const UniversalText('Music video'),
-              subtitle: Text((track.musicVideoUrl?.trim().isNotEmpty ?? false) ? 'Play the matching music video.' : 'No matching local music video is linked to this track.'),
-              enabled: track.musicVideoUrl?.trim().isNotEmpty ?? false,
-              onTap: () => Navigator.of(sheetContext).push(MaterialPageRoute<void>(builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.video))),
-            ),
-          ]),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LocalizedMediaText(track.title,
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w800)),
+                Text(track.artist,
+                    style: const TextStyle(color: Colors.white60)),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.graphic_eq_rounded),
+                  title: const UniversalText('Audio visualizer'),
+                  subtitle: const UniversalText(
+                      'Keep audio playing with an animated visualizer.'),
+                  onTap: () => Navigator.of(sheetContext).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => MusicTrackDisplayScreen(
+                              track: track,
+                              mode: MusicTrackDisplayMode.visualizer))),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.lyrics_rounded),
+                  title: const UniversalText('Lyrics + visualizer'),
+                  subtitle: Text(track.lyrics.trim().isEmpty
+                      ? 'No local lyrics are available for this track.'
+                      : 'Display available track lyrics with animated visuals.'),
+                  onTap: () => Navigator.of(sheetContext).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => MusicTrackDisplayScreen(
+                              track: track,
+                              mode: MusicTrackDisplayMode.lyricsVisualizer))),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.music_video_rounded),
+                  title: const UniversalText('Music video'),
+                  subtitle: Text((track.musicVideoUrl?.trim().isNotEmpty ??
+                          false)
+                      ? 'Play the matching music video.'
+                      : 'No matching local music video is linked to this track.'),
+                  enabled: track.musicVideoUrl?.trim().isNotEmpty ?? false,
+                  onTap: () => Navigator.of(sheetContext).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => MusicTrackDisplayScreen(
+                              track: track,
+                              mode: MusicTrackDisplayMode.video))),
+                ),
+              ]),
         ),
       ),
     );
@@ -988,9 +1110,17 @@ class _MusicScreenState extends State<MusicScreen> {
       } else if (section == 'Liked Songs' && settings.showLikedSongs) {
         output.add(_likedSongsSection());
       } else if (section == 'On Repeat') {
-        output.add(_trackSection('On Repeat', 'Songs you have replayed most often', _tracksForSmartPlaylist('On Repeat'), Icons.repeat_rounded));
+        output.add(_trackSection(
+            'On Repeat',
+            'Songs you have replayed most often',
+            _tracksForSmartPlaylist('On Repeat'),
+            Icons.repeat_rounded));
       } else if (section == 'Top 100 Most Played') {
-        output.add(_trackSection('Top 100 Most Played', 'Your personal top tracks, ranked by recorded plays', _tracksForSmartPlaylist('Top 100 Most Played'), Icons.trending_up_rounded));
+        output.add(_trackSection(
+            'Top 100 Most Played',
+            'Your personal top tracks, ranked by recorded plays',
+            _tracksForSmartPlaylist('Top 100 Most Played'),
+            Icons.trending_up_rounded));
       } else if (section == 'Recently Played' && settings.showRecentlyPlayed) {
         output.add(_trackSection(
           'Recently Played',
@@ -1015,20 +1145,35 @@ class _MusicScreenState extends State<MusicScreen> {
             final seenAlbums = <String>{};
             final credits = <Map<String, dynamic>>[];
             for (final track in library.tracks) {
-              if (track.artist.trim().toLowerCase() == normalizedArtist && track.album.trim().isNotEmpty) {
+              if (track.artist.trim().toLowerCase() == normalizedArtist &&
+                  track.album.trim().isNotEmpty) {
                 final key = track.album.trim().toLowerCase();
                 if (seenAlbums.add(key)) {
-                  credits.add({'title': track.album, 'type': 'Album', 'category': 'Music', 'role': 'Artist'});
+                  credits.add({
+                    'title': track.album,
+                    'type': 'Album',
+                    'category': 'Music',
+                    'role': 'Artist'
+                  });
                 }
               }
-              if (track.featuredArtists.any((name) => name.trim().toLowerCase() == normalizedArtist)) {
-                credits.add({'title': track.title, 'type': 'Track', 'category': 'Music', 'role': 'Featured artist', 'creditGroup': track.artist});
+              if (track.featuredArtists.any(
+                  (name) => name.trim().toLowerCase() == normalizedArtist)) {
+                credits.add({
+                  'title': track.title,
+                  'type': 'Track',
+                  'category': 'Music',
+                  'role': 'Featured artist',
+                  'creditGroup': track.artist
+                });
               }
             }
-            Navigator.push(context, MaterialPageRoute<void>(
-              settings: const RouteSettings(name: '/app/page/artists'),
-              builder: (_) => MusicArtistProfileScreen(artistName: artist),
-            ));
+            Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/artists'),
+                  builder: (_) => MusicArtistProfileScreen(artistName: artist),
+                ));
           },
         ));
       } else if (section == 'Albums' && settings.showAlbums) {
@@ -1047,6 +1192,16 @@ class _MusicScreenState extends State<MusicScreen> {
       } else if (section == 'Soundtrack Universe' &&
           settings.showSoundtrackUniverse) {
         output.add(SliverToBoxAdapter(child: _soundtrackFeature()));
+      } else if (section == 'Genre Blends') {
+        output.add(_trackSection(
+          'Genre-Blending Tracks',
+          'Songs in your library that cross genre boundaries',
+          library.tracks
+              .where(_isAllowedForCurrentProfile)
+              .where((track) => track.hasGenreBlend)
+              .toList(growable: false),
+          Icons.merge_type_rounded,
+        ));
       }
     }
     return output;
@@ -1066,7 +1221,9 @@ class _MusicScreenState extends State<MusicScreen> {
     // Discover Weekly follows artist relationships, including featured
     // artists, then uses genres/subgenres and listening activity as supporting
     // signals. Everything remains limited to the imported home-server library.
-    final seeds = tracks.where((track) => (library.listenCounts[track.id] ?? 0) > 0).toList();
+    final seeds = tracks
+        .where((track) => (library.listenCounts[track.id] ?? 0) > 0)
+        .toList();
     final seedTracks = seeds.isEmpty ? tracks.take(5).toList() : seeds;
     final seedArtists = <String>{};
     final seedFeatured = <String>{};
@@ -1075,7 +1232,7 @@ class _MusicScreenState extends State<MusicScreen> {
     for (final track in seedTracks) {
       seedArtists.add(track.artist.toLowerCase());
       seedFeatured.addAll(track.featuredArtists.map((a) => a.toLowerCase()));
-      seedGenres.addAll(track.genres.map((g) => g.toLowerCase()));
+      seedGenres.addAll(track.allGenreTags.map((g) => g.toLowerCase()));
       seedSubgenres.addAll(track.subgenres.map((g) => g.toLowerCase()));
     }
 
@@ -1083,12 +1240,21 @@ class _MusicScreenState extends State<MusicScreen> {
     for (final track in tracks) {
       var score = 0;
       final artist = track.artist.toLowerCase();
-      final features = track.featuredArtists.map((a) => a.toLowerCase()).toSet();
+      final features =
+          track.featuredArtists.map((a) => a.toLowerCase()).toSet();
       if (seedFeatured.contains(artist)) score += 18;
       if (seedArtists.contains(artist)) score += 12;
       if (features.any(seedArtists.contains)) score += 16;
-      score += track.genres.map((g) => g.toLowerCase()).where(seedGenres.contains).length * 4;
-      score += track.subgenres.map((g) => g.toLowerCase()).where(seedSubgenres.contains).length * 6;
+      score += track.allGenreTags
+              .map((g) => g.toLowerCase())
+              .where(seedGenres.contains)
+              .length *
+          4;
+      score += track.subgenres
+              .map((g) => g.toLowerCase())
+              .where(seedSubgenres.contains)
+              .length *
+          6;
       score += (library.listenCounts[track.id] ?? 0).clamp(0, 5);
       if (score > 0) scored[track] = score;
     }
@@ -1128,8 +1294,12 @@ class _MusicScreenState extends State<MusicScreen> {
   List<MusicTrack> _discoverTracks() {
     final tracks = library.tracks.where(_isAllowedForCurrentProfile).toList();
     tracks.sort((a, b) {
-      final aScore = (library.listenCounts[a.id] ?? 0) + a.genres.length + a.subgenres.length;
-      final bScore = (library.listenCounts[b.id] ?? 0) + b.genres.length + b.subgenres.length;
+      final aScore = (library.listenCounts[a.id] ?? 0) +
+          a.genres.length +
+          a.subgenres.length;
+      final bScore = (library.listenCounts[b.id] ?? 0) +
+          b.genres.length +
+          b.subgenres.length;
       return bScore.compareTo(aScore);
     });
     return tracks.take(18).toList();
@@ -1154,7 +1324,9 @@ class _MusicScreenState extends State<MusicScreen> {
               children: [
                 Icon(Icons.auto_awesome_rounded),
                 SizedBox(width: 8),
-                UniversalText('AI DJ', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                UniversalText('AI DJ',
+                    style:
+                        TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
               ],
             ),
             const SizedBox(height: 6),
@@ -1182,7 +1354,9 @@ class _MusicScreenState extends State<MusicScreen> {
             ),
             if (mix.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Text('${mix.length} tracks selected • AI DJ will continue automatically', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              Text(
+                  '${mix.length} tracks selected • AI DJ will continue automatically',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
             ],
           ],
         ),
@@ -1215,23 +1389,39 @@ class _MusicScreenState extends State<MusicScreen> {
     await playback.play(mix.first);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: UniversalText('AI DJ started with ${mix.first.title} and queued ${mix.length} tracks.')),
+      SnackBar(
+          content: UniversalText(
+              'AI DJ started with ${mix.first.title} and queued ${mix.length} tracks.')),
     );
   }
 
   void _openAiDj() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const MusicAiDjScreen()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const MusicAiDjScreen()));
   }
 
   void _openDiscover() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const MusicDiscoverScreen()));
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const MusicDiscoverScreen()));
   }
 
   Widget _systemPlaylistSection() {
     const names = [
-      ('Made For You', 'Personal mix from your listening history', Icons.person_rounded),
-      ('Discover Weekly', 'Fresh tracks from your imported library', Icons.explore_rounded),
-      ('Daily Mix', 'Familiar artists and albums you play often', Icons.repeat_rounded),
+      (
+        'Made For You',
+        'Personal mix from your listening history',
+        Icons.person_rounded
+      ),
+      (
+        'Discover Weekly',
+        'Fresh tracks from your imported library',
+        Icons.explore_rounded
+      ),
+      (
+        'Daily Mix',
+        'Familiar artists and albums you play often',
+        Icons.repeat_rounded
+      ),
     ];
     return SliverToBoxAdapter(
       child: Padding(
@@ -1275,7 +1465,9 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   List<MusicTrack> _tracksForSmartPlaylist(String name) {
-    final byId = <String, MusicTrack>{for (final track in library.tracks) track.id: track};
+    final byId = <String, MusicTrack>{
+      for (final track in library.tracks) track.id: track
+    };
     return (library.smartPlaylists[name] ?? const <String>[])
         .map((id) => byId[id])
         .whereType<MusicTrack>()
@@ -1298,13 +1490,14 @@ class _MusicScreenState extends State<MusicScreen> {
 
   Widget _moodSection() {
     final genres = library.tracks
-        .expand((track) => track.genres)
+        .expand((track) => track.allGenreTags)
         .where((genre) => genre.trim().isNotEmpty)
         .toSet()
         .take(8)
         .toList();
-    final values =
-        genres.isEmpty ? const ['Chill', 'Focus', 'Energy', 'Favorites'] : genres;
+    final values = genres.isEmpty
+        ? const ['Chill', 'Focus', 'Energy', 'Favorites']
+        : genres;
     return _nameSection(
       'Mood & Genre Mixes',
       'Quick mixes based on the music in your library',
@@ -1354,7 +1547,8 @@ class _MusicScreenState extends State<MusicScreen> {
               child: ListTile(
                 leading: const Icon(Icons.music_off_rounded),
                 title: UniversalText('No $title yet'),
-                subtitle: const UniversalText('Import or play music from your account server to build this section.'),
+                subtitle: const UniversalText(
+                    'Import or play music from your account server to build this section.'),
               ),
             )
           else
@@ -1394,20 +1588,36 @@ class _MusicScreenState extends State<MusicScreen> {
                                         style: const TextStyle(
                                             color: Colors.white54,
                                             fontSize: 12)),
+                                    if (track.hasGenreBlend)
+                                      Text(
+                                        track.genreBlendLabel,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 10,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
                               IconButton(
-                                tooltip: MusicFavoritesBridge.likedTracks().contains(track.id) ? 'Liked' : 'Like',
+                                tooltip: MusicFavoritesBridge.likedTracks()
+                                        .contains(track.id)
+                                    ? 'Liked'
+                                    : 'Like',
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () => _toggleTrackLike(track),
                                 icon: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 180),
                                   child: Icon(
-                                    MusicFavoritesBridge.likedTracks().contains(track.id)
+                                    MusicFavoritesBridge.likedTracks()
+                                            .contains(track.id)
                                         ? Icons.favorite
                                         : Icons.favorite_border,
-                                    key: ValueKey(MusicFavoritesBridge.likedTracks().contains(track.id)),
+                                    key: ValueKey(
+                                        MusicFavoritesBridge.likedTracks()
+                                            .contains(track.id)),
                                   ),
                                 ),
                               ),
@@ -1416,7 +1626,10 @@ class _MusicScreenState extends State<MusicScreen> {
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () {
                                   library.addToQueue(track);
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${track.title} to the queue.')));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                              'Added ${track.title} to the queue.')));
                                 },
                                 icon: const Icon(Icons.queue_music_rounded),
                               ),
@@ -1441,12 +1654,8 @@ class _MusicScreenState extends State<MusicScreen> {
   }
 
   Widget _nameSection(
-    String title,
-    String subtitle,
-    List<String> values,
-    IconData icon,
-    {ValueChanged<String>? onItemTap}
-  ) {
+      String title, String subtitle, List<String> values, IconData icon,
+      {ValueChanged<String>? onItemTap}) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
@@ -1467,7 +1676,8 @@ class _MusicScreenState extends State<MusicScreen> {
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                 itemBuilder: (_, index) => InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: onItemTap == null ? null : () => onItemTap(values[index]),
+                  onTap:
+                      onItemTap == null ? null : () => onItemTap(values[index]),
                   child: Container(
                     width: 155,
                     padding: const EdgeInsets.all(12),
@@ -1481,7 +1691,11 @@ class _MusicScreenState extends State<MusicScreen> {
                       children: [
                         Icon(icon),
                         const Spacer(),
-                        Text(values[index], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        Text(values[index],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -1506,15 +1720,22 @@ class _MusicScreenState extends State<MusicScreen> {
           UniversalMediaAction.removeReaction,
         },
       ),
-      action: liked ? UniversalMediaAction.removeReaction : UniversalMediaAction.like,
+      action: liked
+          ? UniversalMediaAction.removeReaction
+          : UniversalMediaAction.like,
       apply: () => MusicFavoritesBridge.toggleTrack(track.id),
     );
     if (result.applied && mounted) setState(() {});
   }
 
   void _showSmartPlaylist(String name, List<String> trackIds) {
-    final byId = <String, MusicTrack>{for (final track in library.tracks) track.id: track};
-    final tracks = trackIds.map((id) => byId[id]).whereType<MusicTrack>().toList(growable: false);
+    final byId = <String, MusicTrack>{
+      for (final track in library.tracks) track.id: track
+    };
+    final tracks = trackIds
+        .map((id) => byId[id])
+        .whereType<MusicTrack>()
+        .toList(growable: false);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1529,27 +1750,46 @@ class _MusicScreenState extends State<MusicScreen> {
                 child: Row(children: [
                   const Icon(Icons.auto_awesome_rounded),
                   const SizedBox(width: 10),
-                  Expanded(child: Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900))),
+                  Expanded(
+                      child: Text(name,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w900))),
                   IconButton(
                     tooltip: 'Share playlist',
                     icon: const Icon(Icons.share_outlined),
                     onPressed: () => showSocialShareDialog(
                       sheetContext,
                       title: name,
-                      message: 'Shared smart playlist: $name (${tracks.length} songs)',
-                      mediaReference: {'type': 'playlist', 'mediaType': 'playlist', 'mediaId': name, 'title': name, 'description': '${tracks.length} songs', 'trackIds': tracks.map((track) => track.id).toList()},
+                      message:
+                          'Shared smart playlist: $name (${tracks.length} songs)',
+                      mediaReference: {
+                        'type': 'playlist',
+                        'mediaType': 'playlist',
+                        'mediaId': name,
+                        'title': name,
+                        'description': '${tracks.length} songs',
+                        'trackIds': tracks.map((track) => track.id).toList()
+                      },
                     ),
                   ),
-                  IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+                  IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close_rounded)),
                 ]),
               ),
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Align(alignment: Alignment.centerLeft, child: Text('This list is generated from your current library and activity.', style: TextStyle(color: Colors.white60))),
+                child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                        'This list is generated from your current library and activity.',
+                        style: TextStyle(color: Colors.white60))),
               ),
               Expanded(
                 child: tracks.isEmpty
-                    ? const Center(child: Text('No matching tracks yet.', style: TextStyle(color: Colors.white60)))
+                    ? const Center(
+                        child: Text('No matching tracks yet.',
+                            style: TextStyle(color: Colors.white60)))
                     : ListView.builder(
                         itemCount: tracks.length,
                         itemBuilder: (_, index) {
@@ -1558,16 +1798,35 @@ class _MusicScreenState extends State<MusicScreen> {
                             leading: const Icon(Icons.music_note_rounded),
                             title: Text(track.title),
                             subtitle: Text(
-                              name == 'On Repeat' || name == 'Top 100 Most Played' || name == 'Most Played'
+                              name == 'On Repeat' ||
+                                      name == 'Top 100 Most Played' ||
+                                      name == 'Most Played'
                                   ? '${track.artist} • ${library.listenCounts[track.id] ?? 0} plays'
                                   : track.artist,
                             ),
                             trailing: Wrap(children: [
-                              IconButton(tooltip: 'Open artist details', icon: const Icon(Icons.person_outline_rounded), onPressed: () => Navigator.of(sheetContext).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: track.artist)))),
-                              IconButton(tooltip: 'Add to queue', icon: const Icon(Icons.queue_music_rounded), onPressed: () => library.addToQueue(track)),
-                              IconButton(tooltip: 'Play', icon: const Icon(Icons.play_arrow_rounded), onPressed: () => unawaited(MusicPlaybackController.instance.play(track))),
+                              IconButton(
+                                  tooltip: 'Open artist details',
+                                  icon:
+                                      const Icon(Icons.person_outline_rounded),
+                                  onPressed: () => Navigator.of(sheetContext)
+                                      .push(MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              MusicArtistProfileScreen(
+                                                  artistName: track.artist)))),
+                              IconButton(
+                                  tooltip: 'Add to queue',
+                                  icon: const Icon(Icons.queue_music_rounded),
+                                  onPressed: () => library.addToQueue(track)),
+                              IconButton(
+                                  tooltip: 'Play',
+                                  icon: const Icon(Icons.play_arrow_rounded),
+                                  onPressed: () => unawaited(
+                                      MusicPlaybackController.instance
+                                          .play(track))),
                             ]),
-                            onTap: () => unawaited(MusicPlaybackController.instance.play(track)),
+                            onTap: () => unawaited(
+                                MusicPlaybackController.instance.play(track)),
                           );
                         },
                       ),
@@ -1602,16 +1861,28 @@ class _MusicScreenState extends State<MusicScreen> {
           const SizedBox(height: 8),
           const Padding(
             padding: EdgeInsets.only(top: 8, bottom: 6),
-            child: UniversalText('Smart playlists', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white70)),
+            child: UniversalText('Smart playlists',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800, color: Colors.white70)),
           ),
           for (final entry in library.smartPlaylists.entries)
             Card(
               child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.auto_awesome_rounded)),
+                leading:
+                    const CircleAvatar(child: Icon(Icons.auto_awesome_rounded)),
                 title: Text(entry.key),
-                subtitle: UniversalText('${entry.value.length} songs · updates automatically'),
+                subtitle: UniversalText(
+                    '${entry.value.length} songs · updates automatically'),
                 trailing: Wrap(children: [
-                  IconButton(tooltip: 'Queue playlist', icon: const Icon(Icons.playlist_add_rounded), onPressed: () { library.setQueue(_tracksForSmartPlaylist(entry.key)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loaded ${entry.key} into the queue.'))); }),
+                  IconButton(
+                      tooltip: 'Queue playlist',
+                      icon: const Icon(Icons.playlist_add_rounded),
+                      onPressed: () {
+                        library.setQueue(_tracksForSmartPlaylist(entry.key));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content:
+                                Text('Loaded ${entry.key} into the queue.')));
+                      }),
                   const Icon(Icons.chevron_right_rounded),
                 ]),
                 onTap: () => _showSmartPlaylist(entry.key, entry.value),
@@ -1619,13 +1890,16 @@ class _MusicScreenState extends State<MusicScreen> {
             ),
           const Padding(
             padding: EdgeInsets.only(top: 16, bottom: 6),
-            child: UniversalText('Your playlists', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white70)),
+            child: UniversalText('Your playlists',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800, color: Colors.white70)),
           ),
           if (library.playlists.isEmpty)
             const Card(
               child: ListTile(
                 title: UniversalText('No custom playlists created yet.'),
-                subtitle: UniversalText('System-created playlists are generated automatically above.'),
+                subtitle: UniversalText(
+                    'System-created playlists are generated automatically above.'),
               ),
             ),
           for (final entry in library.playlists.entries)
@@ -1647,7 +1921,8 @@ class _MusicScreenState extends State<MusicScreen> {
                       onPressed: () => showSocialShareDialog(
                         context,
                         title: entry.key,
-                        message: 'Shared playlist: ${entry.key} (${entry.value.length} songs)',
+                        message:
+                            'Shared playlist: ${entry.key} (${entry.value.length} songs)',
                         mediaReference: {
                           'type': 'playlist',
                           'mediaType': 'playlist',
@@ -1658,7 +1933,10 @@ class _MusicScreenState extends State<MusicScreen> {
                         },
                       ),
                     ),
-                    if (ShopCatalog.instance.productsForAssociation('playlist', entry.key, name: entry.key).isNotEmpty)
+                    if (ShopCatalog.instance
+                        .productsForAssociation('playlist', entry.key,
+                            name: entry.key)
+                        .isNotEmpty)
                       IconButton(
                         tooltip: 'Shop related products',
                         icon: const Icon(Icons.storefront_outlined),
@@ -1676,7 +1954,8 @@ class _MusicScreenState extends State<MusicScreen> {
                       ),
                     IconButton(
                       icon: Icon(
-                        MusicFavoritesBridge.likedPlaylists().contains(entry.key)
+                        MusicFavoritesBridge.likedPlaylists()
+                                .contains(entry.key)
                             ? Icons.favorite
                             : Icons.favorite_border,
                       ),
@@ -1709,7 +1988,8 @@ class _MusicScreenState extends State<MusicScreen> {
           const UniversalText('Soundtrack Universe',
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const UniversalText('Connect songs to the movies and shows where they belong, '
+          const UniversalText(
+            'Connect songs to the movies and shows where they belong, '
             'turning your film and music libraries into one soundtrack universe.',
             style: TextStyle(color: Colors.white70),
           ),
@@ -1780,8 +2060,13 @@ class _MusicScreenState extends State<MusicScreen> {
       isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheetState) {
-          final byId = <String, MusicTrack>{for (final track in library.tracks) track.id: track};
-          final queuedTracks = library.queue.map((id) => byId[id]).whereType<MusicTrack>().toList(growable: false);
+          final byId = <String, MusicTrack>{
+            for (final track in library.tracks) track.id: track
+          };
+          final queuedTracks = library.queue
+              .map((id) => byId[id])
+              .whereType<MusicTrack>()
+              .toList(growable: false);
           return SafeArea(
             child: SizedBox(
               height: MediaQuery.sizeOf(sheetContext).height * .78,
@@ -1790,45 +2075,111 @@ class _MusicScreenState extends State<MusicScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
                     child: Row(children: [
-                      const Expanded(child: UniversalText('QUEUE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2))),
-                      Text('${queuedTracks.length} songs', style: const TextStyle(color: Colors.white60)),
-                      IconButton(tooltip: 'Clear queue', onPressed: queuedTracks.isEmpty ? null : () { library.clearQueue(); setSheetState(() {}); }, icon: const Icon(Icons.clear_all_rounded)),
+                      const Expanded(
+                          child: UniversalText('QUEUE',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.2))),
+                      Text('${queuedTracks.length} songs',
+                          style: const TextStyle(color: Colors.white60)),
+                      IconButton(
+                          tooltip: 'Clear queue',
+                          onPressed: queuedTracks.isEmpty
+                              ? null
+                              : () {
+                                  library.clearQueue();
+                                  setSheetState(() {});
+                                },
+                          icon: const Icon(Icons.clear_all_rounded)),
                     ]),
                   ),
                   if (queuedTracks.isEmpty)
-                    Expanded(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.queue_music_rounded, size: 48, color: Colors.white54),
-                      const SizedBox(height: 8),
-                      const UniversalText('Your queue is empty.'),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(onPressed: () { library.setQueue(_weeklyDiscovery()); setSheetState(() {}); }, icon: const Icon(Icons.auto_awesome_rounded), label: const UniversalText('Load discovery mix')),
-                    ])))
+                    Expanded(
+                        child: Center(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                          const Icon(Icons.queue_music_rounded,
+                              size: 48, color: Colors.white54),
+                          const SizedBox(height: 8),
+                          const UniversalText('Your queue is empty.'),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                              onPressed: () {
+                                library.setQueue(_weeklyDiscovery());
+                                setSheetState(() {});
+                              },
+                              icon: const Icon(Icons.auto_awesome_rounded),
+                              label: const UniversalText('Load discovery mix')),
+                        ])))
                   else
-                    Expanded(child: ReorderableListView.builder(
+                    Expanded(
+                        child: ReorderableListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: queuedTracks.length,
-                      onReorderItem: (oldIndex, newIndex) { library.reorderQueue(oldIndex, newIndex); setSheetState(() {}); },
+                      onReorderItem: (oldIndex, newIndex) {
+                        library.reorderQueue(oldIndex, newIndex);
+                        setSheetState(() {});
+                      },
                       itemBuilder: (context, index) {
                         final track = queuedTracks[index];
                         return ListTile(
                           key: ValueKey('queue-${track.id}'),
-                          leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle_rounded)),
-                          title: LocalizedMediaText(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          leading: ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_handle_rounded)),
+                          title: LocalizedMediaText(track.title,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(track.artist,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: Wrap(children: [
-                            IconButton(tooltip: 'Play now', icon: const Icon(Icons.play_arrow_rounded), onPressed: () { Navigator.pop(sheetContext); unawaited(playback.play(track)); }),
-                            IconButton(tooltip: 'Remove from queue', icon: const Icon(Icons.close_rounded), onPressed: () { library.removeFromQueue(track.id); setSheetState(() {}); }),
+                            IconButton(
+                                tooltip: 'Play now',
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                onPressed: () {
+                                  Navigator.pop(sheetContext);
+                                  unawaited(playback.play(track));
+                                }),
+                            IconButton(
+                                tooltip: 'Remove from queue',
+                                icon: const Icon(Icons.close_rounded),
+                                onPressed: () {
+                                  library.removeFromQueue(track.id);
+                                  setSheetState(() {});
+                                }),
                           ]),
-                          onTap: () { Navigator.pop(sheetContext); unawaited(playback.play(track)); },
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(playback.play(track));
+                          },
                         );
                       },
                     )),
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(children: [
-                      Expanded(child: OutlinedButton.icon(onPressed: () { library.setQueue(_weeklyDiscovery(), aiDj: false); setSheetState(() {}); }, icon: const Icon(Icons.explore_rounded), label: const UniversalText('Replace with discovery mix'))),
+                      Expanded(
+                          child: OutlinedButton.icon(
+                              onPressed: () {
+                                library.setQueue(_weeklyDiscovery(),
+                                    aiDj: false);
+                                setSheetState(() {});
+                              },
+                              icon: const Icon(Icons.explore_rounded),
+                              label: const UniversalText(
+                                  'Replace with discovery mix'))),
                       const SizedBox(width: 8),
-                      Expanded(child: FilledButton.icon(onPressed: () { final track = playback.currentTrack; if (track != null) { library.addToQueue(track); setSheetState(() {}); } }, icon: const Icon(Icons.add_rounded), label: const UniversalText('Add current'))),
+                      Expanded(
+                          child: FilledButton.icon(
+                              onPressed: () {
+                                final track = playback.currentTrack;
+                                if (track != null) {
+                                  library.addToQueue(track);
+                                  setSheetState(() {});
+                                }
+                              },
+                              icon: const Icon(Icons.add_rounded),
+                              label: const UniversalText('Add current'))),
                     ]),
                   ),
                 ],
@@ -1856,8 +2207,8 @@ class _MusicScreenState extends State<MusicScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             UniversalText('Add “${track.title}” to playlist',
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800)),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             for (final entry in library.playlists.entries)
               ListTile(
@@ -1876,8 +2227,8 @@ class _MusicScreenState extends State<MusicScreen> {
       ),
     );
     if (playlistName == null) return;
-    final profileId = AppController.instance.currentProfile?.id ??
-        'local-profile';
+    final profileId =
+        AppController.instance.currentProfile?.id ?? 'local-profile';
     final result = await UniversalMediaActions.perform(
       context: UniversalMediaActionContext(
         contentType: 'music_track',
@@ -1924,23 +2275,23 @@ class _MusicScreenState extends State<MusicScreen> {
                 Expanded(
                   child: library.tracks.isEmpty
                       ? const Center(
-                          child: UniversalText('No songs in your music library yet.'),
+                          child: UniversalText(
+                              'No songs in your music library yet.'),
                         )
                       : ListView.builder(
                           itemCount: library.tracks.length,
                           itemBuilder: (context, index) {
                             final track = library.tracks[index];
-                            final selected = selectedTrackIds.contains(track.id);
+                            final selected =
+                                selectedTrackIds.contains(track.id);
                             return CheckboxListTile(
                               value: selected,
                               dense: true,
                               secondary: _artwork(track, size: 40),
                               title: LocalizedMediaText(track.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
                               subtitle: Text(track.artist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
                               onChanged: (value) => setDialogState(() {
                                 if (value == true) {
                                   selectedTrackIds.add(track.id);
@@ -2031,7 +2382,8 @@ class _MusicScreenState extends State<MusicScreen> {
       ),
     );
     if (result == null) return;
-    final current = List<String>.from(library.playlists[playlistName] ?? const []);
+    final current =
+        List<String>.from(library.playlists[playlistName] ?? const []);
     for (final id in current.where((id) => !result.contains(id))) {
       library.toggleTrackInPlaylist(playlistName, id);
     }
@@ -2047,11 +2399,13 @@ class _MusicScreenState extends State<MusicScreen> {
 enum MusicTrackDisplayMode { visualizer, lyricsVisualizer, video }
 
 class MusicTrackDisplayScreen extends StatefulWidget {
-  const MusicTrackDisplayScreen({super.key, required this.track, required this.mode});
+  const MusicTrackDisplayScreen(
+      {super.key, required this.track, required this.mode});
   final MusicTrack track;
   final MusicTrackDisplayMode mode;
   @override
-  State<MusicTrackDisplayScreen> createState() => _MusicTrackDisplayScreenState();
+  State<MusicTrackDisplayScreen> createState() =>
+      _MusicTrackDisplayScreenState();
 }
 
 class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
@@ -2068,7 +2422,8 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
     final raw = widget.track.musicVideoUrl?.trim();
     final uri = raw == null ? null : Uri.tryParse(raw);
     if (uri == null || !uri.hasScheme) {
-      setState(() => _videoError = 'No valid music-video URL is linked to this track.');
+      setState(() =>
+          _videoError = 'No valid music-video URL is linked to this track.');
       return;
     }
     final controller = VideoPlayerController.networkUrl(uri);
@@ -2078,7 +2433,10 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
       await controller.play();
       if (mounted) setState(() {});
     } catch (_) {
-      if (mounted) setState(() => _videoError = 'The music video could not be loaded. Check the local media gateway and video URL.');
+      if (mounted) {
+        setState(() => _videoError =
+            'The music video could not be loaded. Check the local media gateway and video URL.');
+      }
     }
   }
 
@@ -2103,14 +2461,18 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
             icon: const Icon(Icons.share_outlined),
             onPressed: () => showSocialShareDialog(
               context,
-              title: isVideo ? '${widget.track.title} — Music Video' : widget.track.title,
-              message: '${isVideo ? 'Shared music video' : 'Shared song'}: ${widget.track.title} by ${widget.track.artist}',
+              title: isVideo
+                  ? '${widget.track.title} — Music Video'
+                  : widget.track.title,
+              message:
+                  '${isVideo ? 'Shared music video' : 'Shared song'}: ${widget.track.title} by ${widget.track.artist}',
               mediaReference: {
                 'type': isVideo ? 'music_video' : 'song',
                 'mediaType': isVideo ? 'music_video' : 'song',
                 'mediaId': widget.track.id,
                 'title': widget.track.title,
-                'description': '${widget.track.artist}${widget.track.album.trim().isEmpty ? '' : ' · ${widget.track.album}'}',
+                'description':
+                    '${widget.track.artist}${widget.track.album.trim().isEmpty ? '' : ' · ${widget.track.album}'}',
                 'artist': widget.track.artist,
                 'album': widget.track.album,
                 if (isVideo) 'videoUrl': widget.track.musicVideoUrl,
@@ -2119,22 +2481,55 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
           ),
         ],
       ),
-      body: SafeArea(child: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        if (isVideo) ...[
-          if (_videoError != null) Text(_videoError!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70))
-          else if (_video?.value.isInitialized == true) AspectRatio(aspectRatio: _video!.value.aspectRatio, child: VideoPlayer(_video!))
-          else const CircularProgressIndicator(),
-          if (_video?.value.isInitialized == true) IconButton(onPressed: () { setState(() { _video!.value.isPlaying ? _video!.pause() : _video!.play(); }); }, icon: Icon((_video?.value.isPlaying ?? false) ? Icons.pause_circle : Icons.play_circle, size: 48)),
-        ] else ...[
-          Text(widget.track.artist, style: const TextStyle(color: Colors.white60)),
-          const SizedBox(height: 32),
-          const _MusicVisualizerBars(),
-          if (showLyrics) ...[
-            const SizedBox(height: 28),
-            Text(widget.track.lyrics.trim().isEmpty ? 'Lyrics are not available in your local metadata. Add a licensed lyrics source or an authorized local lyrics file.' : widget.track.lyrics, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, height: 1.7)),
-          ],
-        ],
-      ])))),
+      body: SafeArea(
+          child: Center(
+              child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isVideo) ...[
+                          if (_videoError != null)
+                            Text(_videoError!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white70))
+                          else if (_video?.value.isInitialized == true)
+                            AspectRatio(
+                                aspectRatio: _video!.value.aspectRatio,
+                                child: VideoPlayer(_video!))
+                          else
+                            const CircularProgressIndicator(),
+                          if (_video?.value.isInitialized == true)
+                            IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _video!.value.isPlaying
+                                        ? _video!.pause()
+                                        : _video!.play();
+                                  });
+                                },
+                                icon: Icon(
+                                    (_video?.value.isPlaying ?? false)
+                                        ? Icons.pause_circle
+                                        : Icons.play_circle,
+                                    size: 48)),
+                        ] else ...[
+                          Text(widget.track.artist,
+                              style: const TextStyle(color: Colors.white60)),
+                          const SizedBox(height: 32),
+                          const _MusicVisualizerBars(),
+                          if (showLyrics) ...[
+                            const SizedBox(height: 28),
+                            Text(
+                                widget.track.lyrics.trim().isEmpty
+                                    ? 'Lyrics are not available in your local metadata. Add a licensed lyrics source or an authorized local lyrics file.'
+                                    : widget.track.lyrics,
+                                textAlign: TextAlign.center,
+                                style:
+                                    const TextStyle(fontSize: 18, height: 1.7)),
+                          ],
+                        ],
+                      ])))),
     );
   }
 }
@@ -2142,7 +2537,23 @@ class _MusicTrackDisplayScreenState extends State<MusicTrackDisplayScreen> {
 class _MusicVisualizerBars extends StatelessWidget {
   const _MusicVisualizerBars();
   @override
-  Widget build(BuildContext context) => SizedBox(height: 150, child: Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.center, children: [for (var i = 0; i < 21; i++) Padding(padding: const EdgeInsets.symmetric(horizontal: 3), child: Container(width: 7, height: 24 + ((i * 37) % 100).toDouble(), decoration: BoxDecoration(color: Color.lerp(const Color(0xFF5B8CFF), const Color(0xFFC084FC), i / 20), borderRadius: BorderRadius.circular(8))))]));
+  Widget build(BuildContext context) => SizedBox(
+      height: 150,
+      child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (var i = 0; i < 21; i++)
+              Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Container(
+                      width: 7,
+                      height: 24 + ((i * 37) % 100).toDouble(),
+                      decoration: BoxDecoration(
+                          color: Color.lerp(const Color(0xFF5B8CFF),
+                              const Color(0xFFC084FC), i / 20),
+                          borderRadius: BorderRadius.circular(8))))
+          ]));
 }
 
 /// Artist/band hub. The owned-library sections are always sourced from the
@@ -2153,7 +2564,8 @@ class MusicArtistProfileScreen extends StatelessWidget {
 
   final String artistName;
 
-  bool _same(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
+  bool _same(String a, String b) =>
+      a.trim().toLowerCase() == b.trim().toLowerCase();
 
   @override
   Widget build(BuildContext context) {
@@ -2165,11 +2577,15 @@ class MusicArtistProfileScreen extends StatelessWidget {
       builder: (context, _) {
         final all = MusicLibraryStore.instance.tracks;
         final primary = all.where((t) => _same(t.artist, artistName)).toList();
-        final featured = all.where((t) => t.featuredArtists.any((a) => _same(a, artistName))).toList();
+        final featured = all
+            .where((t) => t.featuredArtists.any((a) => _same(a, artistName)))
+            .toList();
         final albums = <String, List<MusicTrack>>{};
         for (final track in primary) {
           if (track.album.trim().isNotEmpty) {
-            albums.putIfAbsent(track.album.trim(), () => <MusicTrack>[]).add(track);
+            albums
+                .putIfAbsent(track.album.trim(), () => <MusicTrack>[])
+                .add(track);
           }
         }
         final related = <String>{};
@@ -2179,7 +2595,9 @@ class MusicArtistProfileScreen extends StatelessWidget {
             if (!_same(guest, artistName)) related.add(guest);
           }
         }
-        final videos = primary.where((t) => (t.musicVideoUrl ?? '').trim().isNotEmpty).toList();
+        final videos = primary
+            .where((t) => (t.musicVideoUrl ?? '').trim().isNotEmpty)
+            .toList();
         final popular = primary.toList()
           ..sort((a, b) => (MusicLibraryStore.instance.listenCounts[b.id] ?? 0)
               .compareTo(MusicLibraryStore.instance.listenCounts[a.id] ?? 0));
@@ -2187,7 +2605,8 @@ class MusicArtistProfileScreen extends StatelessWidget {
           backgroundColor: const Color(0xFF090909),
           appBar: AppBar(
             backgroundColor: const Color(0xFF090909),
-            title: Text(artistName, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title:
+                Text(artistName, maxLines: 1, overflow: TextOverflow.ellipsis),
             actions: [
               IconButton(
                 tooltip: 'Share artist',
@@ -2196,13 +2615,20 @@ class MusicArtistProfileScreen extends StatelessWidget {
                   context,
                   title: artistName,
                   message: 'Shared artist: $artistName',
-                  mediaReference: {'type': 'artist', 'mediaType': 'artist', 'mediaId': 'artist:${artistName.toLowerCase()}', 'title': artistName},
+                  mediaReference: {
+                    'type': 'artist',
+                    'mediaType': 'artist',
+                    'mediaId': 'artist:${artistName.toLowerCase()}',
+                    'title': artistName
+                  },
                 ),
               ),
             ],
           ),
           body: primary.isEmpty && featured.isEmpty
-              ? const Center(child: UniversalText('No tracks for this artist are indexed in your library.'))
+              ? const Center(
+                  child: UniversalText(
+                      'No tracks for this artist are indexed in your library.'))
               : DefaultTabController(
                   length: 6,
                   child: Column(
@@ -2210,57 +2636,166 @@ class MusicArtistProfileScreen extends StatelessWidget {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(artistName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          Text('${primary.length} owned songs • ${albums.length} owned albums • ${videos.length} local music videos', style: const TextStyle(color: Colors.white60)),
-                          const SizedBox(height: 12),
-                          Wrap(spacing: 8, runSpacing: 8, children: [
-                            FilledButton.icon(
-                              onPressed: primary.isEmpty ? null : () {
-                                MusicLibraryStore.instance.setQueue(primary);
-                                unawaited(MusicPlaybackController.instance.play(primary.first));
-                              },
-                              icon: const Icon(Icons.play_arrow_rounded), label: const UniversalText('Play owned songs')),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                final following = MusicFavoritesBridge.followedArtists().contains(artistName);
-                                MusicFavoritesBridge.toggleArtist(artistName);
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(following ? 'Unfollowed $artistName.' : 'Following $artistName.')));
-                              },
-                              icon: Icon(MusicFavoritesBridge.followedArtists().contains(artistName) ? Icons.check_rounded : Icons.person_add_alt_1_rounded),
-                              label: Text(MusicFavoritesBridge.followedArtists().contains(artistName) ? 'Following' : 'Follow artist')),
-                            OutlinedButton.icon(
-                              onPressed: () => _searchArtist(context, artistName),
-                              icon: const Icon(Icons.travel_explore_rounded), label: const UniversalText('Discover artist')),
-                          ]),
-                        ]),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(artistName,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 6),
+                              Text(
+                                  '${primary.length} owned songs • ${albums.length} owned albums • ${videos.length} local music videos',
+                                  style:
+                                      const TextStyle(color: Colors.white60)),
+                              const SizedBox(height: 12),
+                              Wrap(spacing: 8, runSpacing: 8, children: [
+                                FilledButton.icon(
+                                    onPressed: primary.isEmpty
+                                        ? null
+                                        : () {
+                                            MusicLibraryStore.instance
+                                                .setQueue(primary);
+                                            unawaited(MusicPlaybackController
+                                                .instance
+                                                .play(primary.first));
+                                          },
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: const UniversalText(
+                                        'Play owned songs')),
+                                OutlinedButton.icon(
+                                    onPressed: () {
+                                      final following =
+                                          MusicFavoritesBridge.followedArtists()
+                                              .contains(artistName);
+                                      MusicFavoritesBridge.toggleArtist(
+                                          artistName);
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(SnackBar(
+                                              content: Text(following
+                                                  ? 'Unfollowed $artistName.'
+                                                  : 'Following $artistName.')));
+                                    },
+                                    icon: Icon(
+                                        MusicFavoritesBridge.followedArtists()
+                                                .contains(artistName)
+                                            ? Icons.check_rounded
+                                            : Icons.person_add_alt_1_rounded),
+                                    label: Text(
+                                        MusicFavoritesBridge.followedArtists()
+                                                .contains(artistName)
+                                            ? 'Following'
+                                            : 'Follow artist')),
+                                OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _searchArtist(context, artistName),
+                                    icon: const Icon(
+                                        Icons.travel_explore_rounded),
+                                    label:
+                                        const UniversalText('Discover artist')),
+                              ]),
+                            ]),
                       ),
                       const TabBar(isScrollable: true, tabs: [
-                        Tab(text: 'Songs'), Tab(text: 'Discography'), Tab(text: 'Popular'),
-                        Tab(text: 'Music Videos'), Tab(text: 'Featuring'), Tab(text: 'Fans Also Like'),
+                        Tab(text: 'Songs'),
+                        Tab(text: 'Discography'),
+                        Tab(text: 'Popular'),
+                        Tab(text: 'Music Videos'),
+                        Tab(text: 'Featuring'),
+                        Tab(text: 'Fans Also Like'),
                       ]),
-                      Expanded(child: TabBarView(children: [
-                        _trackList(context, primary, emptyMessage: 'No owned songs found.'),
+                      Expanded(
+                          child: TabBarView(children: [
+                        _trackList(context, primary,
+                            emptyMessage: 'No owned songs found.'),
                         _albumList(context, albums),
-                        _trackList(context, popular, emptyMessage: 'Worldwide chart data is not connected yet. Your owned tracks will appear here once chart metadata is configured.', header: 'Popular in your library', showListenCounts: true),
+                        _trackList(context, popular,
+                            emptyMessage:
+                                'Worldwide chart data is not connected yet. Your owned tracks will appear here once chart metadata is configured.',
+                            header: 'Popular in your library',
+                            showListenCounts: true),
                         videos.isEmpty
-                            ? _empty('No matching music videos are stored on your NAS yet.')
-                            : ListView(children: [for (final track in videos) ListTile(
-                                leading: const Icon(Icons.music_video_rounded), title: LocalizedMediaText(track.title), subtitle: LocalizedMediaText(track.album),
-                                trailing: Wrap(children: [
-                                  IconButton(tooltip: 'Share music video', icon: const Icon(Icons.share_outlined), onPressed: () => showSocialShareDialog(context, title: '${track.title} — Music Video', message: 'Shared music video: ${track.title} by ${track.artist}', mediaReference: {'type': 'music_video', 'mediaType': 'music_video', 'mediaId': track.id, 'title': track.title, 'artist': track.artist, 'album': track.album, 'videoUrl': track.musicVideoUrl})),
-                                  IconButton(tooltip: 'Play music video', icon: const Icon(Icons.play_circle_outline), onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.video)))),
-                                ]),
-                                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.video))),
-                              )]),
-                        _trackList(context, featured, emptyMessage: 'No featured-artist credits for this artist were found.', creditLabel: 'Featured on'),
-                        related.isEmpty
-                            ? _empty('Similar-artist data is not available yet. Collaborations can help seed these suggestions.')
+                            ? _empty(
+                                'No matching music videos are stored on your NAS yet.')
                             : ListView(children: [
-                                const ListTile(title: UniversalText('Fans Also Like'), subtitle: UniversalText('Initial suggestions are based on shared track credits. Connect a music discovery provider for audience-based rankings.')),
-                                for (final name in related.toList()..sort((a,b) => a.toLowerCase().compareTo(b.toLowerCase())))
-                                  ListTile(leading: const CircleAvatar(child: Icon(Icons.person_rounded)), title: Text(name), subtitle: const UniversalText('Related through your music library'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: name)))),
+                                for (final track in videos)
+                                  ListTile(
+                                    leading:
+                                        const Icon(Icons.music_video_rounded),
+                                    title: LocalizedMediaText(track.title),
+                                    subtitle: LocalizedMediaText(track.album),
+                                    trailing: Wrap(children: [
+                                      IconButton(
+                                          tooltip: 'Share music video',
+                                          icon:
+                                              const Icon(Icons.share_outlined),
+                                          onPressed: () =>
+                                              showSocialShareDialog(context,
+                                                  title:
+                                                      '${track.title} — Music Video',
+                                                  message:
+                                                      'Shared music video: ${track.title} by ${track.artist}',
+                                                  mediaReference: {
+                                                    'type': 'music_video',
+                                                    'mediaType': 'music_video',
+                                                    'mediaId': track.id,
+                                                    'title': track.title,
+                                                    'artist': track.artist,
+                                                    'album': track.album,
+                                                    'videoUrl':
+                                                        track.musicVideoUrl
+                                                  })),
+                                      IconButton(
+                                          tooltip: 'Play music video',
+                                          icon: const Icon(
+                                              Icons.play_circle_outline),
+                                          onPressed: () => Navigator.of(context)
+                                              .push(MaterialPageRoute<void>(
+                                                  builder: (_) =>
+                                                      MusicTrackDisplayScreen(
+                                                          track: track,
+                                                          mode:
+                                                              MusicTrackDisplayMode
+                                                                  .video)))),
+                                    ]),
+                                    onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                            builder: (_) =>
+                                                MusicTrackDisplayScreen(
+                                                    track: track,
+                                                    mode: MusicTrackDisplayMode
+                                                        .video))),
+                                  )
+                              ]),
+                        _trackList(context, featured,
+                            emptyMessage:
+                                'No featured-artist credits for this artist were found.',
+                            creditLabel: 'Featured on'),
+                        related.isEmpty
+                            ? _empty(
+                                'Similar-artist data is not available yet. Collaborations can help seed these suggestions.')
+                            : ListView(children: [
+                                const ListTile(
+                                    title: UniversalText('Fans Also Like'),
+                                    subtitle: UniversalText(
+                                        'Initial suggestions are based on shared track credits. Connect a music discovery provider for audience-based rankings.')),
+                                for (final name in related.toList()
+                                  ..sort((a, b) => a
+                                      .toLowerCase()
+                                      .compareTo(b.toLowerCase())))
+                                  ListTile(
+                                      leading: const CircleAvatar(
+                                          child: Icon(Icons.person_rounded)),
+                                      title: Text(name),
+                                      subtitle: const UniversalText(
+                                          'Related through your music library'),
+                                      trailing: const Icon(Icons.chevron_right),
+                                      onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  MusicArtistProfileScreen(
+                                                      artistName: name)))),
                               ]),
                       ])),
                     ],
@@ -2271,48 +2806,209 @@ class MusicArtistProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _trackList(BuildContext context, List<MusicTrack> tracks, {required String emptyMessage, String? header, bool showListenCounts = false, String? creditLabel}) {
+  Widget _trackList(BuildContext context, List<MusicTrack> tracks,
+      {required String emptyMessage,
+      String? header,
+      bool showListenCounts = false,
+      String? creditLabel}) {
     if (tracks.isEmpty) return _empty(emptyMessage);
-    return ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
-      if (header != null) ListTile(title: Text(header, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: const UniversalText('Ranked from local listening history; not a worldwide chart.')),
-      for (final track in tracks) ListTile(
-        leading: _art(track.artworkUrl), title: LocalizedMediaText(track.title),
-        subtitle: Text([if (creditLabel != null) '$creditLabel ${track.artist}', track.album, if (track.featuredArtists.isNotEmpty) 'feat. ${track.featuredArtists.join(', ')}'].where((x) => x.trim().isNotEmpty).join(' • ')),
-        trailing: showListenCounts
-            ? Wrap(children: [
-                Text('${MusicLibraryStore.instance.listenCounts[track.id] ?? 0} plays'),
-                IconButton(tooltip: 'Open artist details', icon: const Icon(Icons.person_outline_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: track.artist)))),
-              ])
-            : Wrap(children: [
-                IconButton(tooltip: 'Open artist details', icon: const Icon(Icons.person_outline_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: track.artist)))),
-                IconButton(tooltip: 'Add to queue', icon: const Icon(Icons.queue_music_rounded), onPressed: () { MusicLibraryStore.instance.addToQueue(track); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${track.title} to the queue.'))); }),
-                IconButton(tooltip: 'Share song', icon: const Icon(Icons.share_outlined), onPressed: () => showSocialShareDialog(context, title: track.title, message: 'Shared song: ${track.title} by ${track.artist}', mediaReference: {'type': 'song', 'mediaType': 'song', 'mediaId': track.id, 'title': track.title, 'artist': track.artist, 'album': track.album})),
-              ]),
-        onTap: () => MusicPlaybackController.instance.play(track),
-      ),
+    return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          if (header != null)
+            ListTile(
+                title: Text(header,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const UniversalText(
+                    'Ranked from local listening history; not a worldwide chart.')),
+          for (final track in tracks)
+            ListTile(
+              leading: _art(track.artworkUrl),
+              title: LocalizedMediaText(track.title),
+              subtitle: Text([
+                if (creditLabel != null) '$creditLabel ${track.artist}',
+                track.album,
+                if (track.featuredArtists.isNotEmpty)
+                  'feat. ${track.featuredArtists.join(', ')}'
+              ].where((x) => x.trim().isNotEmpty).join(' • ')),
+              trailing: showListenCounts
+                  ? Wrap(children: [
+                      Text(
+                          '${MusicLibraryStore.instance.listenCounts[track.id] ?? 0} plays'),
+                      IconButton(
+                          tooltip: 'Open artist details',
+                          icon: const Icon(Icons.person_outline_rounded),
+                          onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                  builder: (_) => MusicArtistProfileScreen(
+                                      artistName: track.artist)))),
+                    ])
+                  : Wrap(children: [
+                      IconButton(
+                          tooltip: 'Open artist details',
+                          icon: const Icon(Icons.person_outline_rounded),
+                          onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                  builder: (_) => MusicArtistProfileScreen(
+                                      artistName: track.artist)))),
+                      IconButton(
+                          tooltip: 'Add to queue',
+                          icon: const Icon(Icons.queue_music_rounded),
+                          onPressed: () {
+                            MusicLibraryStore.instance.addToQueue(track);
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(
+                                    'Added ${track.title} to the queue.')));
+                          }),
+                      IconButton(
+                          tooltip: 'Share song',
+                          icon: const Icon(Icons.share_outlined),
+                          onPressed: () => showSocialShareDialog(context,
+                                  title: track.title,
+                                  message:
+                                      'Shared song: ${track.title} by ${track.artist}',
+                                  mediaReference: {
+                                    'type': 'song',
+                                    'mediaType': 'song',
+                                    'mediaId': track.id,
+                                    'title': track.title,
+                                    'artist': track.artist,
+                                    'album': track.album
+                                  })),
+                    ]),
+              onTap: () => MusicPlaybackController.instance.play(track),
+            ),
+        ]);
+  }
+
+  Widget _albumList(
+      BuildContext context, Map<String, List<MusicTrack>> albums) {
+    if (albums.isEmpty) {
+      return _empty(
+          'No owned albums found. Albums appear here when tracks from them are indexed on your NAS.');
+    }
+    final names = albums.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return ListView(children: [
+      for (final name in names)
+        ListTile(
+          leading: _art(albums[name]!.first.artworkUrl),
+          title: Text(name),
+          subtitle: Text('${albums[name]!.length} owned tracks'),
+          trailing: IconButton(
+              tooltip: 'Share album',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () => showSocialShareDialog(context,
+                      title: name,
+                      message:
+                          'Shared album: $name by ${albums[name]!.first.artist}',
+                      mediaReference: {
+                        'type': 'album',
+                        'mediaType': 'album',
+                        'mediaId':
+                            'album:${albums[name]!.first.artist.toLowerCase()}:$name',
+                        'title': name,
+                        'artist': albums[name]!.first.artist,
+                        'trackIds':
+                            albums[name]!.map((track) => track.id).toList()
+                      })),
+          onTap: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: const Color(0xFF171717),
+              builder: (ctx) => SafeArea(
+                  child: SizedBox(
+                      height: MediaQuery.of(ctx).size.height * .72,
+                      child: Column(children: [
+                        ListTile(
+                            title: Text(name,
+                                style: const TextStyle(
+                                    fontSize: 20, fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                                '${albums[name]!.length} tracks available locally'),
+                            trailing: IconButton(
+                                tooltip: 'Share album',
+                                icon: const Icon(Icons.share_outlined),
+                                onPressed: () => showSocialShareDialog(ctx,
+                                        title: name,
+                                        message:
+                                            'Shared album: $name by ${albums[name]!.first.artist}',
+                                        mediaReference: {
+                                          'type': 'album',
+                                          'mediaType': 'album',
+                                          'mediaId':
+                                              'album:${albums[name]!.first.artist.toLowerCase()}:$name',
+                                          'title': name,
+                                          'artist': albums[name]!.first.artist,
+                                          'trackIds': albums[name]!
+                                              .map((track) => track.id)
+                                              .toList()
+                                        }))),
+                        Expanded(
+                            child: ListView(children: [
+                          for (final track in albums[name]!)
+                            ListTile(
+                                title: LocalizedMediaText(track.title),
+                                subtitle: Text(track.duration == Duration.zero
+                                    ? track.artist
+                                    : '${track.artist} • ${track.duration.inMinutes}:${(track.duration.inSeconds % 60).toString().padLeft(2, '0')}'),
+                                trailing: Wrap(children: [
+                                  IconButton(
+                                      tooltip: 'Open artist',
+                                      icon: const Icon(
+                                          Icons.person_outline_rounded),
+                                      onPressed: () => Navigator.of(ctx).push(
+                                          MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  MusicArtistProfileScreen(
+                                                      artistName:
+                                                          track.artist)))),
+                                  IconButton(
+                                      tooltip: 'Add to queue',
+                                      icon:
+                                          const Icon(Icons.queue_music_rounded),
+                                      onPressed: () => MusicLibraryStore
+                                          .instance
+                                          .addToQueue(track)),
+                                  IconButton(
+                                      icon: const Icon(Icons.play_arrow),
+                                      onPressed: () => MusicPlaybackController
+                                          .instance
+                                          .play(track))
+                                ]),
+                                onTap: () => MusicPlaybackController.instance
+                                    .play(track))
+                        ]))
+                      ])))),
+        )
     ]);
   }
 
-  Widget _albumList(BuildContext context, Map<String, List<MusicTrack>> albums) {
-    if (albums.isEmpty) return _empty('No owned albums found. Albums appear here when tracks from them are indexed on your NAS.');
-    final names = albums.keys.toList()..sort((a,b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return ListView(children: [for (final name in names) ListTile(
-      leading: _art(albums[name]!.first.artworkUrl), title: Text(name), subtitle: Text('${albums[name]!.length} owned tracks'),
-      trailing: IconButton(tooltip: 'Share album', icon: const Icon(Icons.share_outlined), onPressed: () => showSocialShareDialog(context, title: name, message: 'Shared album: $name by ${albums[name]!.first.artist}', mediaReference: {'type': 'album', 'mediaType': 'album', 'mediaId': 'album:${albums[name]!.first.artist.toLowerCase()}:$name', 'title': name, 'artist': albums[name]!.first.artist, 'trackIds': albums[name]!.map((track) => track.id).toList()})),
-      onTap: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, backgroundColor: const Color(0xFF171717), builder: (ctx) => SafeArea(child: SizedBox(height: MediaQuery.of(ctx).size.height * .72, child: Column(children: [ListTile(title: Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), subtitle: Text('${albums[name]!.length} tracks available locally'), trailing: IconButton(tooltip: 'Share album', icon: const Icon(Icons.share_outlined), onPressed: () => showSocialShareDialog(ctx, title: name, message: 'Shared album: $name by ${albums[name]!.first.artist}', mediaReference: {'type': 'album', 'mediaType': 'album', 'mediaId': 'album:${albums[name]!.first.artist.toLowerCase()}:$name', 'title': name, 'artist': albums[name]!.first.artist, 'trackIds': albums[name]!.map((track) => track.id).toList()}))), Expanded(child: ListView(children: [for (final track in albums[name]!) ListTile(title: LocalizedMediaText(track.title), subtitle: Text(track.duration == Duration.zero ? track.artist : '${track.artist} • ${track.duration.inMinutes}:${(track.duration.inSeconds % 60).toString().padLeft(2, '0')}'), trailing: Wrap(children: [IconButton(tooltip: 'Open artist', icon: const Icon(Icons.person_outline_rounded), onPressed: () => Navigator.of(ctx).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: track.artist)))), IconButton(tooltip: 'Add to queue', icon: const Icon(Icons.queue_music_rounded), onPressed: () => MusicLibraryStore.instance.addToQueue(track)), IconButton(icon: const Icon(Icons.play_arrow), onPressed: () => MusicPlaybackController.instance.play(track))]), onTap: () => MusicPlaybackController.instance.play(track))]))])))),
-    )]);
-  }
-
-  Widget _art(String? url) => SizedBox(width: 48, height: 48, child: (url?.trim().isNotEmpty ?? false) ? Image.network(url!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.album_rounded)) : const Icon(Icons.album_rounded));
-  Widget _empty(String message) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
+  Widget _art(String? url) => SizedBox(
+      width: 48,
+      height: 48,
+      child: (url?.trim().isNotEmpty ?? false)
+          ? Image.network(url!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(Icons.album_rounded))
+          : const Icon(Icons.album_rounded));
+  Widget _empty(String message) => Center(
+      child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60))));
 
   Future<void> _searchArtist(BuildContext context, String artist) async {
-    final uri = Uri.https('www.google.com', '/search', {'q': '$artist official music artist'});
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Could not open artist discovery in your browser.')));
+    final uri = Uri.https(
+        'www.google.com', '/search', {'q': '$artist official music artist'});
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: UniversalText(
+              'Could not open artist discovery in your browser.')));
     }
   }
-
 }
 
 class MusicDiscoverScreen extends StatelessWidget {
@@ -2328,8 +3024,12 @@ class MusicDiscoverScreen extends StatelessWidget {
       return true;
     }).toList();
     tracks.sort((a, b) {
-      final aScore = (store.listenCounts[a.id] ?? 0) + a.genres.length * 2 + a.subgenres.length;
-      final bScore = (store.listenCounts[b.id] ?? 0) + b.genres.length * 2 + b.subgenres.length;
+      final aScore = (store.listenCounts[a.id] ?? 0) +
+          a.genres.length * 2 +
+          a.subgenres.length;
+      final bScore = (store.listenCounts[b.id] ?? 0) +
+          b.genres.length * 2 +
+          b.subgenres.length;
       return bScore.compareTo(aScore);
     });
     return Scaffold(
@@ -2337,38 +3037,65 @@ class MusicDiscoverScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          const UniversalText('Discover', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const UniversalText('Discover',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const UniversalText('Explore music already available in your account server using listening history, artists, genres and soundtrack connections.', style: TextStyle(color: Colors.white60)),
+          const UniversalText(
+              'Explore music already available in your account server using listening history, artists, genres and soundtrack connections.',
+              style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 18),
-          _discoverGroup(context, 'Because You Listen', tracks.take(8).toList()),
+          _discoverGroup(
+              context, 'Because You Listen', tracks.take(8).toList()),
           const SizedBox(height: 18),
-          _discoverGroup(context, 'Artists & Genres To Explore', tracks.skip(8).take(8).toList()),
+          _discoverGroup(context, 'Genre-Blending Tracks in Your Library',
+              tracks.where((track) => track.hasGenreBlend).take(12).toList()),
           const SizedBox(height: 18),
-          _discoverGroup(context, 'Soundtrack Connections', tracks.where((track) => track.genres.any((g) => g.toLowerCase().contains('soundtrack'))).take(8).toList()),
+          _discoverGroup(context, 'Artists & Genres To Explore',
+              tracks.skip(8).take(8).toList()),
+          const SizedBox(height: 18),
+          _discoverGroup(
+              context,
+              'Soundtrack Connections',
+              tracks
+                  .where((track) => track.allGenreTags
+                      .any((g) => g.toLowerCase().contains('soundtrack')))
+                  .take(8)
+                  .toList()),
+          const SizedBox(height: 18),
+          const _MusicGenreBlendExamplesSection(),
         ],
       ),
     );
   }
 
-  Widget _discoverGroup(BuildContext context, String title, List<MusicTrack> tracks) {
+  Widget _discoverGroup(
+      BuildContext context, String title, List<MusicTrack> tracks) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        Text(title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
         if (tracks.isEmpty)
-          const Card(child: ListTile(title: UniversalText('Nothing to show yet.')))
+          const Card(
+              child: ListTile(title: UniversalText('Nothing to show yet.')))
         else
           for (final track in tracks)
             Card(
               child: ListTile(
                 leading: _MusicDiscoverArtwork(track: track),
                 title: LocalizedMediaText(track.title),
-                subtitle: Text('${track.artist} • ${track.album}'),
+                subtitle: Text(
+                  track.hasGenreBlend
+                      ? '${track.artist} • ${track.album}\n${track.genreBlendLabel}\nTags: ${track.allGenreTags.join(' • ')}'
+                      : '${track.artist} • ${track.album}',
+                ),
                 trailing: Wrap(
                   children: [
-                    if (ShopCatalog.instance.productsForAssociation('song', track.id, name: track.title).isNotEmpty)
+                    if (ShopCatalog.instance
+                        .productsForAssociation('song', track.id,
+                            name: track.title)
+                        .isNotEmpty)
                       IconButton(
                         tooltip: 'Shop song products',
                         icon: const Icon(Icons.storefront_outlined),
@@ -2384,7 +3111,10 @@ class MusicDiscoverScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (ShopCatalog.instance.productsForAssociation('artist', track.artist, name: track.artist).isNotEmpty)
+                    if (ShopCatalog.instance
+                        .productsForAssociation('artist', track.artist,
+                            name: track.artist)
+                        .isNotEmpty)
                       IconButton(
                         tooltip: 'Shop artist products',
                         icon: const Icon(Icons.person_outline_rounded),
@@ -2400,7 +3130,10 @@ class MusicDiscoverScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (ShopCatalog.instance.productsForAssociation('album', track.album, name: track.album).isNotEmpty)
+                    if (ShopCatalog.instance
+                        .productsForAssociation('album', track.album,
+                            name: track.album)
+                        .isNotEmpty)
                       IconButton(
                         tooltip: 'Shop album products',
                         icon: const Icon(Icons.album_outlined),
@@ -2419,7 +3152,8 @@ class MusicDiscoverScreen extends StatelessWidget {
                     IconButton(
                       tooltip: 'Play',
                       icon: const Icon(Icons.play_arrow_rounded),
-                      onPressed: () => MusicPlaybackController.instance.play(track),
+                      onPressed: () =>
+                          MusicPlaybackController.instance.play(track),
                     ),
                   ],
                 ),
@@ -2427,6 +3161,39 @@ class MusicDiscoverScreen extends StatelessWidget {
               ),
             ),
       ],
+    );
+  }
+}
+
+/// Curated metadata-only examples demonstrate genre crossover labels.
+/// They are not inserted into a user's playable library or used to imply access.
+class _MusicGenreBlendExamplesSection extends StatelessWidget {
+  const _MusicGenreBlendExamplesSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(Icons.merge_type_rounded),
+        title: const UniversalText('Genre-Blending Examples'),
+        subtitle: const UniversalText(
+          'Reference examples • playback depends on your connected library',
+        ),
+        children: [
+          for (final example in MusicGenreSystem.referenceExamples)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.music_note_rounded),
+              title: Text(example.title),
+              subtitle: Text(
+                '${example.artist}\n${example.genreLabel}\n'
+                'Genres and styles: ${example.allGenreTags.join(' • ')}\n'
+                '${example.description}',
+              ),
+              isThreeLine: true,
+            ),
+        ],
+      ),
     );
   }
 }
@@ -2449,18 +3216,31 @@ class MusicAiDjScreen extends StatelessWidget {
       int score(MusicTrack track) {
         var value = (store.listenCounts[track.id] ?? 0) * 4;
         if (likedIds.contains(track.id)) value += 6;
-        if (current != null && track.genres.any((genre) => current.genres.any((active) => active.toLowerCase() == genre.toLowerCase()))) value += 3;
-        if (current != null && (track.artist.toLowerCase() == current.artist.toLowerCase() || track.featuredArtists.any((artist) => artist.toLowerCase() == current.artist.toLowerCase()))) value += 2;
+        if (current != null &&
+            track.genres.any((genre) => current.genres
+                .any((active) => active.toLowerCase() == genre.toLowerCase()))) {
+          value += 3;
+        }
+        if (current != null &&
+            (track.artist.toLowerCase() == current.artist.toLowerCase() ||
+                track.featuredArtists.any((artist) =>
+                    artist.toLowerCase() == current.artist.toLowerCase()))) {
+          value += 2;
+        }
         return value;
       }
+
       final byScore = score(b).compareTo(score(a));
-      return byScore != 0 ? byScore : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      return byScore != 0
+          ? byScore
+          : a.title.toLowerCase().compareTo(b.title.toLowerCase());
     });
     final selected = <MusicTrack>[];
     final remaining = List<MusicTrack>.from(tracks);
     String? lastArtist;
     while (remaining.isNotEmpty && selected.length < 18) {
-      var index = remaining.indexWhere((track) => track.artist.toLowerCase() != lastArtist?.toLowerCase());
+      var index = remaining.indexWhere(
+          (track) => track.artist.toLowerCase() != lastArtist?.toLowerCase());
       if (index < 0) index = 0;
       final track = remaining.removeAt(index);
       selected.add(track);
@@ -2477,16 +3257,21 @@ class MusicAiDjScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          const UniversalText('Your AI DJ', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const UniversalText('Your AI DJ',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const UniversalText('A continuous queue assembled from your listening activity and music library. Playback stays on your account server.', style: TextStyle(color: Colors.white60)),
+          const UniversalText(
+              'A continuous queue assembled from your listening activity and music library. Playback stays on your account server.',
+              style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: mix.isEmpty ? null : () async {
-              MusicLibraryStore.instance.setQueue(mix, aiDj: true);
-              await MusicPlaybackController.instance.play(mix.first);
-              if (context.mounted) Navigator.pop(context);
-            },
+            onPressed: mix.isEmpty
+                ? null
+                : () async {
+                    MusicLibraryStore.instance.setQueue(mix, aiDj: true);
+                    await MusicPlaybackController.instance.play(mix.first);
+                    if (context.mounted) Navigator.pop(context);
+                  },
             icon: const Icon(Icons.play_arrow_rounded),
             label: const UniversalText('START AI DJ'),
           ),
@@ -2494,12 +3279,14 @@ class MusicAiDjScreen extends StatelessWidget {
           for (var i = 0; i < mix.length; i++)
             Card(
               child: ListTile(
-                leading: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                leading: Text('${i + 1}',
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
                 title: Text(mix[i].title),
                 subtitle: Text(mix[i].artist),
                 trailing: IconButton(
                   icon: const Icon(Icons.play_arrow_rounded),
-                  onPressed: () => MusicPlaybackController.instance.play(mix[i]),
+                  onPressed: () =>
+                      MusicPlaybackController.instance.play(mix[i]),
                 ),
               ),
             ),
@@ -2516,7 +3303,9 @@ class _MusicDiscoverArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = track.artworkUrl?.trim();
-    if (url == null || url.isEmpty) return const CircleAvatar(child: Icon(Icons.album_rounded));
+    if (url == null || url.isEmpty) {
+      return const CircleAvatar(child: Icon(Icons.album_rounded));
+    }
     return CircleAvatar(backgroundImage: NetworkImage(url));
   }
 }
@@ -2546,14 +3335,21 @@ class _MusicSearchDelegate extends SearchDelegate<MusicTrack?> {
     final q = query.toLowerCase();
     return ListView(
       children: [
-        for (final track in tracks.where(
-          (track) => '${track.title} ${track.artist} ${track.album}'
-              .toLowerCase()
-              .contains(q),
-        ))
+        for (final track in tracks.where((track) {
+          final searchable = <String>[
+            track.title,
+            track.artist,
+            track.album,
+            ...track.genreSearchTerms,
+          ].join(' ').toLowerCase();
+          return searchable.contains(q);
+        }))
           ListTile(
             title: LocalizedMediaText(track.title),
-            subtitle: UniversalText('${track.artist} • ${track.album}'),
+            subtitle: UniversalText(
+              '${track.artist} • ${track.album}'
+              '${track.allGenreTags.isEmpty ? '' : ' • ${track.genreDisplayLabel}'}',
+            ),
             onTap: () {
               MusicPlaybackController.instance.play(track);
               close(context, track);
@@ -2613,7 +3409,8 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
             const UniversalText('Music customization',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            const UniversalText('Build a Spotify-inspired Music page without moving your audio files from the account server.',
+            const UniversalText(
+              'Build a Spotify-inspired Music page without moving your audio files from the account server.',
               style: TextStyle(color: Colors.white60),
             ),
             const SizedBox(height: 18),
@@ -2622,8 +3419,9 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
               setState(() => draft.cardStyle = v);
             }),
             const SizedBox(height: 10),
-            _dropdown('Player style', draft.playerStyle,
-                ['Bottom player', 'Compact'], (v) {
+            _dropdown(
+                'Player style', draft.playerStyle, ['Bottom player', 'Compact'],
+                (v) {
               setState(() => draft.playerStyle = v);
             }),
             const SizedBox(height: 18),
@@ -2631,20 +3429,28 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
                 (v) => setState(() => draft.showSearch = v)),
             _toggle('Player', 'Show the persistent music player and queue.',
                 draft.showPlayer, (v) => setState(() => draft.showPlayer = v)),
-            _toggle('Weekly Discovery', 'Show your weekly discovery mix.',
+            _toggle(
+                'Weekly Discovery',
+                'Show your weekly discovery mix.',
                 draft.showWeeklyDiscovery,
                 (v) => setState(() => draft.showWeeklyDiscovery = v)),
-            _toggle('AI DJ', 'Show the AI DJ launcher.',
-                draft.showAIDJ, (v) => setState(() => draft.showAIDJ = v)),
-            _toggle('System playlists', 'Show Made For You / Discover Weekly / Daily Mix.',
+            _toggle('AI DJ', 'Show the AI DJ launcher.', draft.showAIDJ,
+                (v) => setState(() => draft.showAIDJ = v)),
+            _toggle(
+                'System playlists',
+                'Show Made For You / Discover Weekly / Daily Mix.',
                 draft.showSystemPlaylists,
                 (v) => setState(() => draft.showSystemPlaylists = v)),
             _toggle('Liked Songs', 'Show liked tracks.', draft.showLikedSongs,
                 (v) => setState(() => draft.showLikedSongs = v)),
-            _toggle('Recently Played', 'Show recent listening activity.',
+            _toggle(
+                'Recently Played',
+                'Show recent listening activity.',
                 draft.showRecentlyPlayed,
                 (v) => setState(() => draft.showRecentlyPlayed = v)),
-            _toggle('Mood & Genre Mixes', 'Show quick mood/genre mixes.',
+            _toggle(
+                'Mood & Genre Mixes',
+                'Show quick mood/genre mixes.',
                 draft.showMoodMixes,
                 (v) => setState(() => draft.showMoodMixes = v)),
             _toggle('Artists', 'Show singers and bands.', draft.showArtists,
@@ -2653,7 +3459,9 @@ class _MusicCustomizationState extends State<_MusicCustomization> {
                 (v) => setState(() => draft.showAlbums = v)),
             _toggle('Playlists', 'Show custom playlists.', draft.showPlaylists,
                 (v) => setState(() => draft.showPlaylists = v)),
-            _toggle('Soundtrack Universe', 'Connect music to films and shows.',
+            _toggle(
+                'Soundtrack Universe',
+                'Connect music to films and shows.',
                 draft.showSoundtrackUniverse,
                 (v) => setState(() => draft.showSoundtrackUniverse = v)),
             const SizedBox(height: 18),
@@ -2748,7 +3556,8 @@ class SoundtrackUniverseScreen extends StatelessWidget {
       appBar: AppBar(title: const UniversalText('Soundtrack Universe')),
       body: rows.isEmpty
           ? const Center(
-              child: UniversalText('No soundtrack metadata has been imported yet.'),
+              child: UniversalText(
+                  'No soundtrack metadata has been imported yet.'),
             )
           : ListView.builder(
               padding: const EdgeInsets.all(18),

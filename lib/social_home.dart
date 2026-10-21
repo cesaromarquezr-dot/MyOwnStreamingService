@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'social_detail_pages.dart';
@@ -179,7 +179,8 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                 ],
               ),
               if (posts.isEmpty)
-                const UniversalText('Posts from your friends will show up here.',
+                const UniversalText(
+                  'Posts from your friends will show up here.',
                   style: TextStyle(color: Colors.white54),
                 )
               else
@@ -238,7 +239,8 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
               ),
               const SizedBox(height: 6),
               if (matchingCommunities.isEmpty)
-                const UniversalText('No matching public communities yet. Create one to get started.',
+                const UniversalText(
+                  'No matching public communities yet. Create one to get started.',
                   style: TextStyle(color: Colors.white54),
                 )
               else
@@ -354,7 +356,12 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          final targetProfileId = (friend['profileId'] ?? friend['profile_id'] ?? friend['targetProfileId'] ?? friend['target_profile_id'])?.toString() ?? '';
+          final targetProfileId = (friend['profileId'] ??
+                      friend['profile_id'] ??
+                      friend['targetProfileId'] ??
+                      friend['target_profile_id'])
+                  ?.toString() ??
+              '';
           if (targetProfileId.isEmpty) return;
           Navigator.of(context).push(MaterialPageRoute<void>(
             builder: (_) => FriendStoryProfileViewer(friend: friend),
@@ -433,7 +440,8 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
                 final postId = post['id']?.toString() ?? '';
                 if (postId.isEmpty) return;
                 Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => SocialPostDetailScreen(postId: postId, initialPost: post),
+                  builder: (_) =>
+                      SocialPostDetailScreen(postId: postId, initialPost: post),
                 ));
               },
               icon: const Icon(Icons.open_in_new_rounded, size: 16),
@@ -518,12 +526,16 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
           leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
           title: Text(
             community['name']?.toString() ?? '',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w800),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(community['description']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54)),
+              Text(community['description']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54)),
               const SizedBox(height: 3),
               Text(
                 '${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts',
@@ -533,14 +545,19 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
           ),
           isThreeLine: true,
           trailing: community['joined'] == true
-              ? const Chip(avatar: Icon(Icons.check_circle, size: 16), label: Text('Joined'))
+              ? const Chip(
+                  avatar: Icon(Icons.check_circle, size: 16),
+                  label: Text('Joined'))
               : TextButton(
-                  onPressed: busy ? null : () => _act(
-                    () => AppController.instance.backendApi.joinSocialCommunity(
-                      profileId: profileId,
-                      communityId: community['id'].toString(),
-                    ),
-                  ),
+                  onPressed: busy
+                      ? null
+                      : () => _act(
+                            () => AppController.instance.backendApi
+                                .joinSocialCommunity(
+                              profileId: profileId,
+                              communityId: community['id'].toString(),
+                            ),
+                          ),
                   child: const UniversalText('Join'),
                 ),
         ),
@@ -672,9 +689,13 @@ class _SocialHomeSectionState extends State<SocialHomeSection> {
     final author = story['author'] is Map
         ? Map<String, dynamic>.from(story['author'] as Map)
         : <String, dynamic>{};
-    final authorId = (author['profileId'] ?? author['profile_id'] ?? author['id'])?.toString() ?? '';
+    final authorId =
+        (author['profileId'] ?? author['profile_id'] ?? author['id'])
+                ?.toString() ??
+            '';
     if (authorId.isNotEmpty) {
-      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FriendStoryProfileViewer(friend: author)));
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => FriendStoryProfileViewer(friend: author)));
       return;
     }
     showDialog<void>(

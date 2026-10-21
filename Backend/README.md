@@ -86,3 +86,7 @@ See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_A
 
 ## Customer support and ticket management
 The authenticated support ticket API is documented in `../CUSTOMER_SUPPORT_IIS_ACTIVE_DIRECTORY_UPDATE.md`. Configure Supabase and apply `lib/supabase/migrations/20261016_support_ticketing.sql` before enabling ticket persistence. Set `SUPPORT_ADMIN_ACCOUNT_IDS` on the backend host to a comma-separated list of authorized support-staff account IDs; never put this setting in the Flutter client. IIS and Active Directory deployment guidance is in `../deploy/iis/` and `../deploy/active-directory/`.
+
+## Real optical-disc imports
+
+For actual disc ripping, configure `ARM_SERVER_URL` to the external ARM worker's web/API URL, plus backend-only `ARM_USERNAME` / `ARM_PASSWORD` where ARM login is enabled. `ARM_DRIVES` can optionally list ARM-reported device paths such as `/dev/sr0`. If `ARM_SERVER_URL` is omitted, real ARM integration is disabled and the app must not treat its own backend API as a ripping worker. See `docs/REAL_DISC_IMPORT_SETUP.md` for storage-sharing, hardware, and test instructions.

@@ -168,7 +168,9 @@ class PublicTvPlaylistParser {
 /// externally maintained stream URLs; MyOwnStreamingService does not host or
 /// guarantee these streams.
 class PublicLiveTvScreen extends StatefulWidget {
-  const PublicLiveTvScreen({super.key});
+  final bool showAppBar;
+
+  const PublicLiveTvScreen({super.key, this.showAppBar = true});
 
   @override
   State<PublicLiveTvScreen> createState() => _PublicLiveTvScreenState();
@@ -189,6 +191,7 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
   VideoPlayerController? _player;
   PublicTvChannel? _playing;
   bool _playerLoading = false;
+  bool _playerMinimized = false;
   String? _playerError;
   int _playerGeneration = 0;
   final TextEditingController _searchController = TextEditingController();
@@ -371,6 +374,7 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
     if (previous != null) unawaited(previous.dispose());
     setState(() {
       _playing = channel;
+      _playerMinimized = false;
       _playerLoading = true;
       _playerError = null;
     });
@@ -413,6 +417,7 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
     if (!mounted) return;
     setState(() {
       _playing = null;
+      _playerMinimized = false;
       _playerLoading = false;
       _playerError = null;
     });
@@ -456,7 +461,7 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
     final playing = _playing;
     final wide = MediaQuery.sizeOf(context).width >= 920;
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.showAppBar ? AppBar(
         title: const Text('Public Live TV'),
         actions: <Widget>[
           IconButton(
@@ -470,10 +475,26 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
             icon: const Icon(Icons.copy_rounded),
           ),
         ],
-      ),
+      ) : null,
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: <Widget>[
+          if (!widget.showAppBar)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(spacing: 8, runSpacing: 8, children: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _loadPlaylist,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh channels'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _copyPlaylistUrl,
+                  icon: const Icon(Icons.copy_rounded),
+                  label: const Text('Copy playlist'),
+                ),
+              ]),
+            ),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -705,8 +726,61 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
     );
   }
 
+  Future<void> _openFullscreenPlayer(VideoPlayerController player, PublicTvChannel channel) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/page/public-live-tv/fullscreen'),
+        builder: (fullscreenContext) => _PublicTvFullscreenPlayer(
+          player: player,
+          channel: channel,
+          onMinimize: () {
+            if (mounted) setState(() => _playerMinimized = true);
+            Navigator.of(fullscreenContext).pop();
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlayerPanel(VideoPlayerController? player, PublicTvChannel? playing) {
     final theme = Theme.of(context);
+    if (_playerMinimized && player != null && playing != null && player.value.isInitialized) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            children: <Widget>[
+              const Icon(Icons.picture_in_picture_alt_rounded),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Mini player · ${playing.name}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              IconButton(
+                tooltip: player.value.isPlaying ? 'Pause' : 'Play',
+                onPressed: () async {
+                  if (player.value.isPlaying) { await player.pause(); } else { await player.play(); }
+                  if (mounted) setState(() {});
+                },
+                icon: Icon(player.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+              ),
+              IconButton(
+                tooltip: 'Restore player',
+                onPressed: () => setState(() => _playerMinimized = false),
+                icon: const Icon(Icons.open_in_full_rounded),
+              ),
+              IconButton(
+                tooltip: 'Fullscreen',
+                onPressed: () => _openFullscreenPlayer(player, playing),
+                icon: const Icon(Icons.fullscreen_rounded),
+              ),
+              IconButton(tooltip: 'Stop playback', onPressed: _stopPlayer,
+                icon: const Icon(Icons.stop_circle_outlined)),
+            ],
+          ),
+        ),
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: .35),
@@ -724,7 +798,19 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
                 const Icon(Icons.play_circle_outline_rounded),
                 const SizedBox(width: 8),
                 Expanded(child: Text(playing?.name ?? 'Choose a channel to start watching', style: const TextStyle(fontWeight: FontWeight.w800))),
-                if (playing != null)
+                if (playing != null && player != null && player.value.isInitialized) ...<Widget>[
+                  IconButton(
+                    tooltip: 'Minimize player',
+                    onPressed: () => setState(() => _playerMinimized = true),
+                    icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Fullscreen',
+                    onPressed: () => _openFullscreenPlayer(player, playing),
+                    icon: const Icon(Icons.fullscreen_rounded),
+                  ),
+                  IconButton(tooltip: 'Stop playback', onPressed: _stopPlayer, icon: const Icon(Icons.stop_circle_outlined)),
+                ] else if (playing != null)
                   IconButton(tooltip: 'Stop playback', onPressed: _stopPlayer, icon: const Icon(Icons.stop_circle_outlined)),
               ],
             ),
@@ -897,6 +983,120 @@ class _MessagePanel extends StatelessWidget {
             Align(alignment: Alignment.centerLeft, child: OutlinedButton(onPressed: onAction, child: Text(actionLabel!))),
           ],
         ],
+      ),
+    );
+  }
+}
+
+
+/// Fullscreen shell for the currently selected public stream. The parent keeps
+/// ownership of the video controller, so exiting fullscreen never restarts it.
+class _PublicTvFullscreenPlayer extends StatefulWidget {
+  final VideoPlayerController player;
+  final PublicTvChannel channel;
+  final VoidCallback onMinimize;
+
+  const _PublicTvFullscreenPlayer({
+    required this.player,
+    required this.channel,
+    required this.onMinimize,
+  });
+
+  @override
+  State<_PublicTvFullscreenPlayer> createState() => _PublicTvFullscreenPlayerState();
+}
+
+class _PublicTvFullscreenPlayerState extends State<_PublicTvFullscreenPlayer> {
+  @override
+  void initState() {
+    super.initState();
+    widget.player.addListener(_refresh);
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky).catchError((Object _) {}));
+  }
+
+  @override
+  void dispose() {
+    widget.player.removeListener(_refresh);
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge).catchError((Object _) {}));
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final player = widget.player;
+    final value = player.value;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SizedBox.expand(
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (value.isInitialized)
+              Center(
+                child: AspectRatio(
+                  aspectRatio: value.aspectRatio > 0 ? value.aspectRatio : 16 / 9,
+                  child: VideoPlayer(player),
+                ),
+              )
+            else
+              const Center(child: CircularProgressIndicator()),
+            if (value.isBuffering)
+              const Center(child: CircularProgressIndicator()),
+            Positioned(
+              top: 12,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: <Widget>[
+                  IconButton.filledTonal(
+                    tooltip: 'Exit fullscreen',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.fullscreen_exit_rounded),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(widget.channel.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: 'Minimize player',
+                    onPressed: widget.onMinimize,
+                    icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 18,
+              child: Row(
+                children: <Widget>[
+                  IconButton.filledTonal(
+                    tooltip: value.isPlaying ? 'Pause' : 'Play',
+                    onPressed: () async {
+                      if (value.isPlaying) { await player.pause(); } else { await player.play(); }
+                    },
+                    icon: Icon(value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: value.volume > 0 ? 'Mute' : 'Unmute',
+                    onPressed: () async => player.setVolume(value.volume > 0 ? 0 : 1),
+                    icon: Icon(value.volume > 0 ? Icons.volume_up_rounded : Icons.volume_off_rounded),
+                  ),
+                  const Spacer(),
+                  const Text('Live stream', style: TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'app_customization.dart';
 import 'social_theme_gallery.dart';
@@ -58,11 +59,12 @@ String _presenceState(Map<String, dynamic> member) {
   return 'active';
 }
 
-Color? _presenceGlowColor(Map<String, dynamic> member) => switch (_presenceState(member)) {
-  'active' => Colors.greenAccent,
-  'busy' => Colors.redAccent,
-  _ => null,
-};
+Color? _presenceGlowColor(Map<String, dynamic> member) =>
+    switch (_presenceState(member)) {
+      'active' => Colors.greenAccent,
+      'busy' => Colors.redAccent,
+      _ => null,
+    };
 
 String _lastSeenPhrase(Map<String, dynamic> member) {
   final raw = (member['lastSeenAt'] ?? member['last_seen_at'])?.toString();
@@ -70,9 +72,15 @@ String _lastSeenPhrase(Map<String, dynamic> member) {
   if (date == null) return 'Last seen time unavailable';
   final difference = DateTime.now().toUtc().difference(date.toUtc());
   if (difference.inMinutes < 1) return 'Last seen just now';
-  if (difference.inMinutes < 60) return 'Last seen ${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
-  if (difference.inHours < 24) return 'Last seen ${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
-  if (difference.inDays < 7) return 'Last seen ${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'} ago';
+  if (difference.inMinutes < 60) {
+    return 'Last seen ${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
+  }
+  if (difference.inHours < 24) {
+    return 'Last seen ${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
+  }
+  if (difference.inDays < 7) {
+    return 'Last seen ${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'} ago';
+  }
   if (difference.inDays < 30) {
     final weeks = (difference.inDays / 7).floor();
     return 'Last seen $weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
@@ -87,13 +95,23 @@ String _lastSeenPhrase(Map<String, dynamic> member) {
 
 String _presenceTooltip(Map<String, dynamic> member) {
   final state = _presenceState(member);
-  final activity = (member['activityText'] ?? member['activity_text'])?.toString().trim();
-  if (state == 'busy') return activity == null || activity.isEmpty ? 'Occupied' : 'Occupied • $activity';
-  if (state == 'active') return activity == null || activity.isEmpty ? 'Online' : 'Online • $activity';
+  final activity =
+      (member['activityText'] ?? member['activity_text'])?.toString().trim();
+  if (state == 'busy') {
+    return activity == null || activity.isEmpty
+        ? 'Occupied'
+        : 'Occupied • $activity';
+  }
+  if (state == 'active') {
+    return activity == null || activity.isEmpty
+        ? 'Online'
+        : 'Online • $activity';
+  }
   return _lastSeenPhrase(member);
 }
 
-Widget _presenceAvatar(Map<String, dynamic> member, String name, {double radius = 20}) {
+Widget _presenceAvatar(Map<String, dynamic> member, String name,
+    {double radius = 20}) {
   final glow = _presenceGlowColor(member);
   final avatarUrl = (member['avatar_url'] ?? member['avatarUrl'])?.toString();
   return Tooltip(
@@ -102,15 +120,24 @@ Widget _presenceAvatar(Map<String, dynamic> member, String name, {double radius 
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: glow == null ? const <BoxShadow>[] : [
-          BoxShadow(color: glow.withValues(alpha: .8), blurRadius: 11, spreadRadius: 2),
-        ],
+        boxShadow: glow == null
+            ? const <BoxShadow>[]
+            : [
+                BoxShadow(
+                    color: glow.withValues(alpha: .8),
+                    blurRadius: 11,
+                    spreadRadius: 2),
+              ],
         border: glow == null ? null : Border.all(color: glow, width: 1.5),
       ),
       child: CircleAvatar(
         radius: radius,
-        backgroundImage: avatarUrl == null || avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
-        child: avatarUrl == null || avatarUrl.isEmpty ? Text(_socialInitial(name)) : null,
+        backgroundImage: avatarUrl == null || avatarUrl.isEmpty
+            ? null
+            : NetworkImage(avatarUrl),
+        child: avatarUrl == null || avatarUrl.isEmpty
+            ? Text(_socialInitial(name))
+            : null,
       ),
     ),
   );
@@ -217,16 +244,28 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   }
 
   List<String> get _configuredTabSections {
-    final configured = PageContentCustomizationStore.settingsFor('friends').visibleSections;
+    final configured =
+        PageContentCustomizationStore.settingsFor('friends').visibleSections;
     final sections = configured.isEmpty ? <String>['feed'] : configured;
-    final settings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final settings = AppSectionCustomizationStore.settingsFor(
+        AppController.instance.currentProfile);
     String idForLabel(String label) => switch (label) {
-      'Feed' => 'feed', 'Reels' => 'reels', 'Messages' => 'messages',
-      'Communities' => 'communities', 'Friends' => 'friends', 'My Page' => 'my-page',
-      _ => label.toLowerCase(),
-    };
-    final preferred = settings.socialNavOrder.map(idForLabel).where(sections.contains).toList();
-    return <String>[...preferred, ...sections.where((section) => !preferred.contains(section))];
+          'Feed' => 'feed',
+          'Reels' => 'reels',
+          'Messages' => 'messages',
+          'Communities' => 'communities',
+          'Friends' => 'friends',
+          'My Page' => 'my-page',
+          _ => label.toLowerCase(),
+        };
+    final preferred = settings.socialNavOrder
+        .map(idForLabel)
+        .where(sections.contains)
+        .toList();
+    return <String>[
+      ...preferred,
+      ...sections.where((section) => !preferred.contains(section))
+    ];
   }
 
   List<String> get _tabSections => _visibleTabSections;
@@ -279,8 +318,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     }
 
     try {
-      final data =
-          await controller.backendApi.getSocialCenter(profileId: profile.id).timeout(const Duration(seconds: 15), onTimeout: () => throw Exception('Friends could not load in time. Check your connection and try again.')); 
+      final data = await controller.backendApi
+          .getSocialCenter(profileId: profile.id)
+          .timeout(const Duration(seconds: 15),
+              onTimeout: () => throw Exception(
+                  'Friends could not load in time. Check your connection and try again.'));
       if (!mounted) return;
       setState(() {
         _data = data;
@@ -326,13 +368,18 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     return AnimatedBuilder(
       animation: AppSectionCustomizationStore.revision,
       builder: (context, _) {
-        final settings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+        final settings = AppSectionCustomizationStore.settingsFor(
+            AppController.instance.currentProfile);
         return AnimatedBuilder(
           animation: _tabs,
           builder: (context, _) {
-            final activeSection = _tabSections.isEmpty ? 'feed' : _tabSections[_tabs.index.clamp(0, _tabSections.length - 1).toInt()];
+            final activeSection = _tabSections.isEmpty
+                ? 'feed'
+                : _tabSections[
+                    _tabs.index.clamp(0, _tabSections.length - 1).toInt()];
             return Theme(
-              data: _themeForSocialStyle(Theme.of(context), _styleForSurface(settings, activeSection)),
+              data: _themeForSocialStyle(
+                  Theme.of(context), _styleForSurface(settings, activeSection)),
               child: _buildSocialContent(),
             );
           },
@@ -341,15 +388,16 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     );
   }
 
-  String _styleForSurface(AppSectionCustomization settings, String section) => switch (section) {
-    'feed' => settings.feedStyle,
-    'my-page' => settings.profilePageStyle,
-    'communities' => settings.communitiesStyle,
-    'friends' => settings.friendsStyle,
-    'messages' => settings.messagesStyle,
-    'reels' => settings.reelsStyle,
-    _ => 'Casual',
-  };
+  String _styleForSurface(AppSectionCustomization settings, String section) =>
+      switch (section) {
+        'feed' => settings.feedStyle,
+        'my-page' => settings.profilePageStyle,
+        'communities' => settings.communitiesStyle,
+        'friends' => settings.friendsStyle,
+        'messages' => settings.messagesStyle,
+        'reels' => settings.reelsStyle,
+        _ => 'Casual',
+      };
 
   ThemeData _themeForSocialStyle(ThemeData base, String style) {
     final tokens = socialThemeTokensFor(style);
@@ -384,9 +432,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       scaffoldBackgroundColor: tokens.canvas,
       canvasColor: tokens.canvas,
       colorScheme: scheme,
-      visualDensity: style == 'Compact'
-          ? VisualDensity.compact
-          : VisualDensity.standard,
+      visualDensity:
+          style == 'Compact' ? VisualDensity.compact : VisualDensity.standard,
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: tokens.canvas,
         foregroundColor: tokens.text,
@@ -426,7 +473,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         labelStyle: TextStyle(color: tokens.muted),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: tokens.border, width: tokens.borderWidth),
+          borderSide:
+              BorderSide(color: tokens.border, width: tokens.borderWidth),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
@@ -436,7 +484,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: tokens.accent,
-          foregroundColor: tokens.isLight ? Colors.white : const Color(0xFF111218),
+          foregroundColor:
+              tokens.isLight ? Colors.white : const Color(0xFF111218),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(
               style == 'Brutalism' || style == 'Flat' ? 2 : radius,
@@ -456,7 +505,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
 
   Widget _buildSocialContent() {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    final socialSettings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    final socialSettings = AppSectionCustomizationStore.settingsFor(
+        AppController.instance.currentProfile);
     final navPosition = socialSettings.socialNavPosition;
 
     return Column(
@@ -481,15 +531,19 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           child: navPosition == 'Left' || navPosition == 'Right'
               ? Row(children: [
                   if (navPosition == 'Left') _sideSectionNavigation(),
-                  Expanded(child: TabBarView(controller: _tabs, children: _tabSections.map(_pageForTab).toList())),
+                  Expanded(
+                      child: TabBarView(
+                          controller: _tabs,
+                          children: _tabSections.map(_pageForTab).toList())),
                   if (navPosition == 'Right') _sideSectionNavigation(),
                 ])
-              : TabBarView(controller: _tabs, children: _tabSections.map(_pageForTab).toList()),
+              : TabBarView(
+                  controller: _tabs,
+                  children: _tabSections.map(_pageForTab).toList()),
         ),
       ],
     );
   }
-
 
   Widget _header({bool showSectionNavigation = true}) {
     final stories = _list('stories');
@@ -508,11 +562,13 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    UniversalText('Friends & Community',
+                    UniversalText(
+                      'Friends & Community',
                       style:
                           TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
                     ),
-                    UniversalText('Watch together, talk about media, and share what you are enjoying.',
+                    UniversalText(
+                      'Watch together, talk about media, and share what you are enjoying.',
                       style: TextStyle(color: Colors.white54),
                     ),
                   ],
@@ -536,45 +592,47 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             ],
           ),
           const SizedBox(height: 12),
-          if (showSectionNavigation) TabBar(
-            controller: _tabs,
-            isScrollable: true,
-            tabs: _tabSections.map((section) {
-              return switch (section) {
-                'feed' => const Tab(
-                    text: 'Feed',
-                    icon: Icon(Icons.dynamic_feed_rounded),
-                  ),
-                'reels' => const Tab(
-                    text: 'Reels',
-                    icon: Icon(Icons.play_circle_outline_rounded),
-                  ),
-                'messages' => Tab(
-                    text: conversations.isEmpty
-                        ? 'Messages'
-                        : 'Messages (${conversations.length})',
-                    icon: const Icon(Icons.forum_rounded),
-                  ),
-                'friends' => Tab(
-                    text: requests.isEmpty
-                        ? 'Friends'
-                        : 'Friends (${requests.length})',
-                    icon: const Icon(Icons.people_outline_rounded),
-                  ),
-                'communities' => const Tab(
-                    text: 'Communities',
-                    icon: Icon(Icons.groups_rounded),
-                  ),
-                'my-page' => const Tab(
-                    text: 'My Page',
-                    icon: Icon(Icons.account_circle_outlined),
-                  ),
-                _ => const Tab(text: 'Social'),
-              };
-            }).toList(),
-          ),
+          if (showSectionNavigation)
+            TabBar(
+              controller: _tabs,
+              isScrollable: true,
+              tabs: _tabSections.map((section) {
+                return switch (section) {
+                  'feed' => const Tab(
+                      text: 'Feed',
+                      icon: Icon(Icons.dynamic_feed_rounded),
+                    ),
+                  'reels' => const Tab(
+                      text: 'Reels',
+                      icon: Icon(Icons.play_circle_outline_rounded),
+                    ),
+                  'messages' => Tab(
+                      text: conversations.isEmpty
+                          ? 'Messages'
+                          : 'Messages (${conversations.length})',
+                      icon: const Icon(Icons.forum_rounded),
+                    ),
+                  'friends' => Tab(
+                      text: requests.isEmpty
+                          ? 'Friends'
+                          : 'Friends (${requests.length})',
+                      icon: const Icon(Icons.people_outline_rounded),
+                    ),
+                  'communities' => const Tab(
+                      text: 'Communities',
+                      icon: Icon(Icons.groups_rounded),
+                    ),
+                  'my-page' => const Tab(
+                      text: 'My Page',
+                      icon: Icon(Icons.account_circle_outlined),
+                    ),
+                  _ => const Tab(text: 'Social'),
+                };
+              }).toList(),
+            ),
           const SizedBox(height: 10),
-          if (StoryPlacementStore.showsOnFriends(AppController.instance.currentProfile))
+          if (StoryPlacementStore.showsOnFriends(
+              AppController.instance.currentProfile))
             SizedBox(
               height: 106,
               child: ListView(
@@ -591,10 +649,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   }
 
   String _socialSurfaceLabel(String section) => switch (section) {
-    'feed' => 'Feed', 'reels' => 'Reels', 'messages' => 'Messages',
-    'friends' => 'Friends', 'communities' => 'Communities', 'my-page' => 'My Page',
-    _ => section,
-  };
+        'feed' => 'Feed',
+        'reels' => 'Reels',
+        'messages' => 'Messages',
+        'friends' => 'Friends',
+        'communities' => 'Communities',
+        'my-page' => 'My Page',
+        _ => section,
+      };
 
   Widget _sideSectionNavigation() {
     final selectedIndex = _tabs.index.clamp(0, _tabSections.length - 1).toInt();
@@ -619,18 +681,30 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Material(
-              color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: .18) : Colors.transparent,
+              color: selected
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: .18)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
                 onTap: () => _tabs.animateTo(index),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
                   child: Column(children: [
-                    Icon(icon, color: selected ? Theme.of(context).colorScheme.primary : null),
+                    Icon(icon,
+                        color: selected
+                            ? Theme.of(context).colorScheme.primary
+                            : null),
                     const SizedBox(height: 4),
-                    Text(_socialSurfaceLabel(section), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, fontWeight: selected ? FontWeight.w800 : FontWeight.w500)),
+                    Text(_socialSurfaceLabel(section),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w500)),
                   ]),
                 ),
               ),
@@ -644,12 +718,12 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Widget _pageForTab(String section) => switch (section) {
         'feed' => _feedTab(),
         'reels' => SocialReelsScreen(
-              posts: <Map<String, dynamic>>[
-                ..._list('posts'),
-                ..._list('communityPosts'),
-              ],
-              onRefresh: _load,
-            ),
+            posts: <Map<String, dynamic>>[
+              ..._list('posts'),
+              ..._list('communityPosts'),
+            ],
+            onRefresh: _load,
+          ),
         'messages' => _messagesTab(),
         'friends' => _friendsTab(),
         'communities' => _communitiesTab(),
@@ -661,9 +735,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final posts = <Map<String, dynamic>>[
       ..._list('posts'),
       ..._list('communityPosts'),
-    ]
-      ..sort((a, b) => (b['created_at']?.toString() ?? '')
-          .compareTo(a['created_at']?.toString() ?? ''));
+    ]..sort((a, b) => (b['created_at']?.toString() ?? '')
+        .compareTo(a['created_at']?.toString() ?? ''));
     final profile = AppController.instance.currentProfile;
     if (profile == null) return const SizedBox.shrink();
 
@@ -679,7 +752,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: ListTile(
                 leading: Icon(Icons.dynamic_feed_outlined),
                 title: UniversalText('Your social feed is quiet'),
-                subtitle: UniversalText('Add friends, join a community, or share a story to get started.',
+                subtitle: UniversalText(
+                  'Add friends, join a community, or share a story to get started.',
                 ),
               ),
             ),
@@ -694,17 +768,25 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     if (profile == null) return const SizedBox.shrink();
     final profileSettings = AppSectionCustomizationStore.settingsFor(profile);
     final posts = _list('posts')
-        .where((post) => post['isMine'] == true ||
+        .where((post) =>
+            post['isMine'] == true ||
             post['author_profile_id']?.toString() == profile.id ||
             post['authorProfileId']?.toString() == profile.id)
         .toList()
       ..sort((a, b) {
-        final dateA = DateTime.tryParse((a['created_at'] ?? a['createdAt'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final dateB = DateTime.tryParse((b['created_at'] ?? b['createdAt'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return profileSettings.profilePostsSortOrder == 'Oldest to Newest' ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+        final dateA = DateTime.tryParse(
+                (a['created_at'] ?? a['createdAt'])?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final dateB = DateTime.tryParse(
+                (b['created_at'] ?? b['createdAt'])?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return profileSettings.profilePostsSortOrder == 'Oldest to Newest'
+            ? dateA.compareTo(dateB)
+            : dateB.compareTo(dateA);
       });
     final totalFriends = _list('friends').length;
-    final totalPosts = (_data?['ownPostCount'] as num?)?.toInt() ?? posts.length;
+    final totalPosts =
+        (_data?['ownPostCount'] as num?)?.toInt() ?? posts.length;
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -758,29 +840,35 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   ),
                   const SizedBox(height: 12),
                   Row(children: [
-                    Expanded(child: _profileCountShortcut(
+                    Expanded(
+                        child: _profileCountShortcut(
                       icon: Icons.people_alt_outlined,
                       label: 'Friends',
                       value: '$totalFriends',
                       section: 'Friends',
                     )),
                     const SizedBox(width: 8),
-                    Expanded(child: _profileCountShortcut(
+                    Expanded(
+                        child: _profileCountShortcut(
                       icon: Icons.storefront_outlined,
                       label: 'Following',
-                      value: '${(_data?['followingCount'] as num?)?.toInt() ?? _list('following').length}',
+                      value:
+                          '${(_data?['followingCount'] as num?)?.toInt() ?? _list('following').length}',
                       section: 'Following',
                     )),
                     const SizedBox(width: 8),
-                    Expanded(child: _profileCountShortcut(
+                    Expanded(
+                        child: _profileCountShortcut(
                       icon: Icons.groups_outlined,
                       label: 'Communities',
-                      value: '${(_data?['communityCount'] as num?)?.toInt() ?? _list('communities').where((item) => item['joined'] == true).length}',
+                      value:
+                          '${(_data?['communityCount'] as num?)?.toInt() ?? _list('communities').where((item) => item['joined'] == true).length}',
                       section: 'Communities',
                     )),
                   ]),
                   const SizedBox(height: 14),
-                  const UniversalText('Your page combines your social posts, media reviews, shorts, and community shares.',
+                  const UniversalText(
+                    'Your page combines your social posts, media reviews, shorts, and community shares.',
                     style: TextStyle(color: Colors.white60, height: 1.35),
                   ),
                   const SizedBox(height: 12),
@@ -815,36 +903,65 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: ListTile(
                 leading: Icon(Icons.lock_outline_rounded),
                 title: UniversalText('Your friends-only page is ready'),
-                subtitle: UniversalText('Share a post, a photo, or a media review to get started.',
+                subtitle: UniversalText(
+                  'Share a post, a photo, or a media review to get started.',
                 ),
               ),
             ),
-          if (profileSettings.profilePageViewMode == 'Post cards' && posts.isNotEmpty)
+          if (profileSettings.profilePageViewMode == 'Post cards' &&
+              posts.isNotEmpty)
             LayoutBuilder(
               builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 800 ? 3 : constraints.maxWidth >= 520 ? 2 : 1;
-                final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+                final columns = constraints.maxWidth >= 800
+                    ? 3
+                    : constraints.maxWidth >= 520
+                        ? 2
+                        : 1;
+                final width =
+                    (constraints.maxWidth - (columns - 1) * 10) / columns;
                 return Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: posts.map((post) => SizedBox(
-                    width: width,
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [const Icon(Icons.article_outlined, size: 18), const SizedBox(width: 6), Expanded(child: Text(post['author_profile_name']?.toString() ?? profile.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)))]),
-                            const SizedBox(height: 8),
-                            Text(post['body']?.toString() ?? '', maxLines: 6, overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 8),
-                            Text(post['created_at']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )).toList(),
+                  children: posts
+                      .map((post) => SizedBox(
+                            width: width,
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(children: [
+                                      const Icon(Icons.article_outlined,
+                                          size: 18),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                          child: Text(
+                                              post['author_profile_name']
+                                                      ?.toString() ??
+                                                  profile.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w800)))
+                                    ]),
+                                    const SizedBox(height: 8),
+                                    Text(post['body']?.toString() ?? '',
+                                        maxLines: 6,
+                                        overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 8),
+                                    Text(post['created_at']?.toString() ?? '',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 10)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ))
+                      .toList(),
                 );
               },
             )
@@ -855,7 +972,11 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     );
   }
 
-  Widget _profileCountShortcut({required IconData icon, required String label, required String value, required String section}) =>
+  Widget _profileCountShortcut(
+          {required IconData icon,
+          required String label,
+          required String value,
+          required String section}) =>
       InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
@@ -871,8 +992,13 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           child: Column(children: [
             Icon(icon, size: 19, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 5),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+            Text(value,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white60, fontSize: 11)),
           ]),
         ),
       );
@@ -881,7 +1007,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final profile = AppController.instance.currentProfile;
     if (profile == null) return;
     final nameController = TextEditingController(text: profile.name);
-    final avatarController = TextEditingController(text: profile.avatarUrl ?? '');
+    final avatarController =
+        TextEditingController(text: profile.avatarUrl ?? '');
     final result = await showDialog<(String, String?)>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -917,10 +1044,12 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           FilledButton(
             onPressed: () => Navigator.pop(
               dialogContext,
-              (nameController.text.trim(),
-                  avatarController.text.trim().isEmpty
-                      ? null
-                      : avatarController.text.trim()),
+              (
+                nameController.text.trim(),
+                avatarController.text.trim().isEmpty
+                    ? null
+                    : avatarController.text.trim()
+              ),
             ),
             child: const UniversalText('Save'),
           ),
@@ -988,7 +1117,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               ),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: UniversalText('Photos are private and shown only to authorized friends.',
+                child: UniversalText(
+                  'Photos are private and shown only to authorized friends.',
                   style: TextStyle(color: Colors.white54, fontSize: 12),
                 ),
               ),
@@ -1071,7 +1201,6 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         score: draft.score,
         label: label,
         text: draft.body.trim(),
-        globalUsername: '',
       );
       final review = response['review'] is Map
           ? Map<String, dynamic>.from(response['review'] as Map)
@@ -1162,12 +1291,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const UniversalText('Share to My Page'),
-                subtitle: const UniversalText('Visible to your accepted friends'),
+                subtitle:
+                    const UniversalText('Visible to your accepted friends'),
                 value: shareToPage,
                 onChanged: (value) => setDialogState(() => shareToPage = value),
               ),
               if (communities.isNotEmpty) ...[
-                const UniversalText('Also share to communities',
+                const UniversalText(
+                  'Also share to communities',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 for (final community in communities)
@@ -1257,7 +1388,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                     color: Colors.white.withValues(alpha: .06),
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: const UniversalText('What are you watching, listening to, or collecting?',
+                  child: const UniversalText(
+                    'What are you watching, listening to, or collecting?',
                     style: TextStyle(color: Colors.white54),
                   ),
                 ),
@@ -1383,8 +1515,15 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(mediaReference['conversationTitle']?.toString() ?? 'Group chat', style: const TextStyle(fontWeight: FontWeight.w900)),
-                          const UniversalText('Group chat invitation · expires in 30 days', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                          Text(
+                              mediaReference['conversationTitle']?.toString() ??
+                                  'Group chat',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900)),
+                          const UniversalText(
+                              'Group chat invitation · expires in 30 days',
+                              style: TextStyle(
+                                  color: Colors.white60, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -1434,12 +1573,12 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: Image.network(
-                              mediaReference['coverUrl'].toString(),
-                              width: double.infinity,
-                              height: 260,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const SizedBox(height: 160),
+                            mediaReference['coverUrl'].toString(),
+                            width: double.infinity,
+                            height: 260,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const SizedBox(height: 160),
                           ),
                         ),
                         const CircleAvatar(
@@ -1536,9 +1675,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
 
   Widget _socialProductCard(Map<String, dynamic> reference) {
     final productId = reference['productId']?.toString();
-    final product = productId == null
-        ? null
-        : ShopCatalog.instance.productById(productId);
+    final product =
+        productId == null ? null : ShopCatalog.instance.productById(productId);
     final title = product?.name ?? reference['title']?.toString() ?? 'Product';
     final description = product?.description ??
         reference['description']?.toString() ??
@@ -1569,7 +1707,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const UniversalText('PRODUCT',
+                    const UniversalText(
+                      'PRODUCT',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
@@ -1626,7 +1765,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   child: Row(
                     children: [
                       const Expanded(
-                        child: UniversalText('Messages',
+                        child: UniversalText(
+                          'Messages',
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
@@ -1649,10 +1789,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         icon: const Icon(Icons.group_add_outlined),
                       ),
                       IconButton(
-                        tooltip: 'Share anything, view shared items, polls, and Watch Party plans',
-                        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        tooltip:
+                            'Share anything, view shared items, polls, and Watch Party plans',
+                        onPressed: () =>
+                            Navigator.of(context).push(MaterialPageRoute<void>(
                           builder: (_) => UniversalSharingHubScreen(
-                            conversations: conversations.map((e) => Map<String, dynamic>.from(e)).toList(),
+                            conversations: conversations
+                                .map((e) => Map<String, dynamic>.from(e))
+                                .toList(),
                           ),
                         )),
                         icon: const Icon(Icons.ios_share_rounded),
@@ -1697,11 +1841,13 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               children: [
                 Icon(Icons.forum_rounded, size: 58, color: Colors.white24),
                 SizedBox(height: 12),
-                UniversalText('Select a conversation',
+                UniversalText(
+                  'Select a conversation',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 SizedBox(height: 4),
-                UniversalText('Messages stay profile-scoped and never grant media playback access.',
+                UniversalText(
+                  'Messages stay profile-scoped and never grant media playback access.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
@@ -1769,12 +1915,21 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     return AnimatedBuilder(
       animation: AppSectionCustomizationStore.revision,
       builder: (context, _) {
-        final settings = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+        final settings = AppSectionCustomizationStore.settingsFor(
+            AppController.instance.currentProfile);
         friends.sort((a, b) {
-          final nameA = (a['display_name'] ?? a['username'] ?? '').toString().toLowerCase();
-          final nameB = (b['display_name'] ?? b['username'] ?? '').toString().toLowerCase();
-          final dateA = DateTime.tryParse((a['friends_since'] ?? a['created_at'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final dateB = DateTime.tryParse((b['friends_since'] ?? b['created_at'])?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final nameA = (a['display_name'] ?? a['username'] ?? '')
+              .toString()
+              .toLowerCase();
+          final nameB = (b['display_name'] ?? b['username'] ?? '')
+              .toString()
+              .toLowerCase();
+          final dateA = DateTime.tryParse(
+                  (a['friends_since'] ?? a['created_at'])?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final dateB = DateTime.tryParse(
+                  (b['friends_since'] ?? b['created_at'])?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
           return switch (settings.friendsSortOrder) {
             'Z-A' => nameB.compareTo(nameA),
             'Newest to Oldest' => dateB.compareTo(dateA),
@@ -1788,35 +1943,58 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             padding: const EdgeInsets.all(18),
             children: [
               Row(children: [
-                Expanded(child: Text('Your people • ${friends.length} friends', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+                Expanded(
+                    child: Text('Your people • ${friends.length} friends',
+                        style: const TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.w900))),
                 TextButton.icon(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => const SocialConnectionsScreen(initialSection: 'Friends'),
+                  onPressed: () =>
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const SocialConnectionsScreen(
+                        initialSection: 'Friends'),
                   )),
                   icon: const Icon(Icons.open_in_new_rounded),
                   label: const UniversalText('View all'),
                 ),
-                FilledButton.icon(onPressed: _addFriend, icon: const Icon(Icons.person_add_alt_1_rounded), label: const UniversalText('Add Friend')),
+                FilledButton.icon(
+                    onPressed: _addFriend,
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const UniversalText('Add Friend')),
               ]),
               const SizedBox(height: 10),
-              if (friends.isEmpty) const Card(child: ListTile(leading: Icon(Icons.person_search_rounded), title: UniversalText('No friends yet'), subtitle: UniversalText('Use a unique @username to connect.'))),
-              ...friends.map((friend) => _friendDisplayCard(friend, settings.friendsViewMode)),
+              if (friends.isEmpty)
+                const Card(
+                    child: ListTile(
+                        leading: Icon(Icons.person_search_rounded),
+                        title: UniversalText('No friends yet'),
+                        subtitle: UniversalText(
+                            'Use a unique @username to connect.'))),
+              ...friends.map((friend) =>
+                  _friendDisplayCard(friend, settings.friendsViewMode)),
               if (requests.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const UniversalText('Friend requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const UniversalText('Friend requests',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 ...requests.map(_requestCard),
               ],
               if (guardianRequests.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const UniversalText('Guardian approval queue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const UniversalText('Requests sent to a supervised profile are held here for a guardian decision.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                const UniversalText('Guardian approval queue',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const UniversalText(
+                    'Requests sent to a supervised profile are held here for a guardian decision.',
+                    style: TextStyle(color: Colors.white60, fontSize: 12)),
                 const SizedBox(height: 8),
                 ...guardianRequests.map(_guardianRequestCard),
               ],
               if (suggestions.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                const UniversalText('People you may know', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const UniversalText('People you may know',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 ...suggestions.map(_suggestionCard),
               ],
             ],
@@ -1829,44 +2007,81 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
   Widget _friendDisplayCard(Map<String, dynamic> friend, String viewMode) {
     final name = friend['display_name']?.toString() ?? 'Friend';
     final username = friend['username']?.toString() ?? '';
-    final friendSince = DateTime.tryParse((friend['friends_since'] ?? friend['created_at'])?.toString() ?? '');
+    final friendSince = DateTime.tryParse(
+        (friend['friends_since'] ?? friend['created_at'])?.toString() ?? '');
     final subtitle = <String>[
       if (username.isNotEmpty) '@$username',
-      if (friendSince != null) 'Friends since ${friendSince.toLocal().toString().split(' ').first}',
+      if (friendSince != null)
+        'Friends since ${friendSince.toLocal().toString().split(' ').first}',
       _presenceTooltip(friend),
     ].join(' • ');
     final content = ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      leading: _presenceAvatar(friend, name, radius: viewMode == 'Cards' ? 24 : 19),
-      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+      leading:
+          _presenceAvatar(friend, name, radius: viewMode == 'Cards' ? 24 : 19),
+      title: Text(name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
       onTap: () => _openFriendProfile(friend),
-      trailing: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        const Chip(label: UniversalText('Friend')),
-        IconButton(tooltip: 'Message', onPressed: () => _startMessageFor(username), icon: const Icon(Icons.chat_bubble_outline_rounded)),
-      ]),
+      trailing: Wrap(
+          spacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Chip(label: UniversalText('Friend')),
+            IconButton(
+                tooltip: 'Message',
+                onPressed: () => _startMessageFor(username),
+                icon: const Icon(Icons.chat_bubble_outline_rounded)),
+          ]),
     );
-    return viewMode == 'Cards' ? Card(clipBehavior: Clip.antiAlias, child: content) : content;
+    return viewMode == 'Cards'
+        ? Card(clipBehavior: Clip.antiAlias, child: content)
+        : content;
   }
 
   Widget _guardianRequestCard(Map<String, dynamic> request) {
-    final sender = request['sender'] is Map ? Map<String, dynamic>.from(request['sender'] as Map) : <String, dynamic>{};
+    final sender = request['sender'] is Map
+        ? Map<String, dynamic>.from(request['sender'] as Map)
+        : <String, dynamic>{};
     final profile = AppController.instance.currentProfile;
     if (profile == null) return const SizedBox.shrink();
     final friendshipId = request['id']?.toString() ?? '';
-    final senderName = sender['display_name']?.toString() ?? sender['username']?.toString() ?? 'Someone';
-    final childName = request['childProfileName']?.toString() ?? 'child profile';
-    return Card(child: ListTile(
+    final senderName = sender['display_name']?.toString() ??
+        sender['username']?.toString() ??
+        'Someone';
+    final childName =
+        request['childProfileName']?.toString() ?? 'child profile';
+    return Card(
+        child: ListTile(
       leading: const Icon(Icons.family_restroom_rounded),
       title: Text('$senderName wants to add $childName'),
-      subtitle: Text('@${sender['username'] ?? ''} • Waiting for guardian approval'),
+      subtitle:
+          Text('@${sender['username'] ?? ''} • Waiting for guardian approval'),
       trailing: Wrap(spacing: 4, children: [
-        TextButton(onPressed: friendshipId.isEmpty ? null : () => _act(() async {
-          await AppController.instance.backendApi.respondGuardianFriendRequest(profileId: profile.id, friendshipId: friendshipId, action: 'block');
-        }), child: const UniversalText('Block')),
-        FilledButton(onPressed: friendshipId.isEmpty ? null : () => _act(() async {
-          await AppController.instance.backendApi.respondGuardianFriendRequest(profileId: profile.id, friendshipId: friendshipId, action: 'approve');
-        }), child: const UniversalText('Approve')),
+        TextButton(
+            onPressed: friendshipId.isEmpty
+                ? null
+                : () => _act(() async {
+                      await AppController.instance.backendApi
+                          .respondGuardianFriendRequest(
+                              profileId: profile.id,
+                              friendshipId: friendshipId,
+                              action: 'block');
+                    }),
+            child: const UniversalText('Block')),
+        FilledButton(
+            onPressed: friendshipId.isEmpty
+                ? null
+                : () => _act(() async {
+                      await AppController.instance.backendApi
+                          .respondGuardianFriendRequest(
+                              profileId: profile.id,
+                              friendshipId: friendshipId,
+                              action: 'approve');
+                    }),
+            child: const UniversalText('Approve')),
       ]),
     ));
   }
@@ -1891,62 +2106,109 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         final settings = AppSectionCustomizationStore.settingsFor(profile);
         final communities = allCommunities.where((community) {
           final joined = community['joined'] == true;
-          final creator = (community['created_by_profile_id'] ?? community['createdByProfileId'] ?? community['owner_profile_id'])?.toString();
+          final creator = (community['created_by_profile_id'] ??
+                  community['createdByProfileId'] ??
+                  community['owner_profile_id'])
+              ?.toString();
           switch (settings.communitiesMembershipFilter) {
-            case 'Joined': return joined;
-            case 'Created': return profile != null && creator == profile.id;
-            default: return true;
+            case 'Joined':
+              return joined;
+            case 'Created':
+              return profile != null && creator == profile.id;
+            default:
+              return true;
           }
         }).toList();
-        int dateCompare(Map<String, dynamic> a, Map<String, dynamic> b, String field) {
-          final da = DateTime.tryParse((a[field] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = DateTime.tryParse((b[field] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        int dateCompare(
+            Map<String, dynamic> a, Map<String, dynamic> b, String field) {
+          final da = DateTime.tryParse((a[field] ?? '').toString()) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse((b[field] ?? '').toString()) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
           return da.compareTo(db);
         }
+
         communities.sort((a, b) {
           switch (settings.communitiesSortOrder) {
-            case 'Oldest to Newest': return dateCompare(a, b, 'created_at');
-            case 'Newest to Oldest': return dateCompare(b, a, 'created_at');
-            case 'Joined': return dateCompare(b, a, 'joined_at');
-            case 'Created': return dateCompare(b, a, 'created_at');
+            case 'Oldest to Newest':
+              return dateCompare(a, b, 'created_at');
+            case 'Newest to Oldest':
+              return dateCompare(b, a, 'created_at');
+            case 'Joined':
+              return dateCompare(b, a, 'joined_at');
+            case 'Created':
+              return dateCompare(b, a, 'created_at');
             case 'Movies':
             case 'Shows':
             case 'Music':
               final target = settings.communitiesSortOrder.toLowerCase();
               int rank(Map<String, dynamic> community) {
-                final type = (community['category'] ?? community['media_type'] ?? '').toString().toLowerCase();
+                final type =
+                    (community['category'] ?? community['media_type'] ?? '')
+                        .toString()
+                        .toLowerCase();
                 return type == target ? 0 : 1;
               }
               final byCategory = rank(a).compareTo(rank(b));
-              return byCategory != 0 ? byCategory : (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? '');
-            default: return (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? '');
+              return byCategory != 0
+                  ? byCategory
+                  : (a['name']?.toString() ?? '')
+                      .compareTo(b['name']?.toString() ?? '');
+            default:
+              return (a['name']?.toString() ?? '')
+                  .compareTo(b['name']?.toString() ?? '');
           }
         });
         return RefreshIndicator(
           onRefresh: _load,
           child: ListView(padding: const EdgeInsets.all(18), children: [
             Row(children: [
-              Expanded(child: Text('Communities • ${communities.length}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
-              FilledButton.icon(onPressed: _createCommunity, icon: const Icon(Icons.add_rounded), label: const UniversalText('Create')),
+              Expanded(
+                  child: Text('Communities • ${communities.length}',
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w900))),
+              FilledButton.icon(
+                  onPressed: _createCommunity,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const UniversalText('Create')),
             ]),
             const SizedBox(height: 10),
-            if (communities.isEmpty) const Card(child: ListTile(leading: Icon(Icons.groups_rounded), title: UniversalText('No matching communities'), subtitle: UniversalText('Try another filter or create a community.'))),
+            if (communities.isEmpty)
+              const Card(
+                  child: ListTile(
+                      leading: Icon(Icons.groups_rounded),
+                      title: UniversalText('No matching communities'),
+                      subtitle: UniversalText(
+                          'Try another filter or create a community.'))),
             ...communities.map((community) {
               final communityId = community['id']?.toString() ?? '';
               final isJoined = community['joined'] == true;
-              final creatorId = (community['created_by_profile_id'] ?? community['createdByProfileId'] ?? community['owner_profile_id'])?.toString();
-              final currentIsCreator = profile != null && creatorId == profile.id;
+              final creatorId = (community['created_by_profile_id'] ??
+                      community['createdByProfileId'] ??
+                      community['owner_profile_id'])
+                  ?.toString();
+              final currentIsCreator =
+                  profile != null && creatorId == profile.id;
               final communityPosts = posts.where((post) {
-                final ids = (post['communityIds'] as List? ?? const []).map((id) => id.toString());
-                return post['community_id']?.toString() == communityId || ids.contains(communityId);
+                final ids = (post['communityIds'] as List? ?? const [])
+                    .map((id) => id.toString());
+                return post['community_id']?.toString() == communityId ||
+                    ids.contains(communityId);
               });
-              final communityStories = stories.where((story) => story['community_id']?.toString() == communityId);
+              final communityStories = stories.where(
+                  (story) => story['community_id']?.toString() == communityId);
               final category = (community['category'] ?? 'general').toString();
-              final subtitle = <String>[if (category.isNotEmpty) category, if (isJoined) 'Joined', if (currentIsCreator) 'Created by you'].join(' • ');
+              final subtitle = <String>[
+                if (category.isNotEmpty) category,
+                if (isJoined) 'Joined',
+                if (currentIsCreator) 'Created by you'
+              ].join(' • ');
               if (settings.communitiesViewMode == 'List') {
-                return Card(child: ListTile(
+                return Card(
+                    child: ListTile(
                   onTap: () => _openCommunityDetail(community),
-                  leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                  leading:
+                      const CircleAvatar(child: Icon(Icons.groups_rounded)),
                   title: Text(community['name']?.toString() ?? 'Community'),
                   subtitle: Text(
                     '${community['description']?.toString() ?? ''}\n${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts${subtitle.isEmpty ? '' : ' · $subtitle'}',
@@ -1954,44 +2216,88 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                     overflow: TextOverflow.ellipsis,
                   ),
                   isThreeLine: true,
-                  trailing: isJoined ? const Chip(label: UniversalText('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const UniversalText('Join')),
+                  trailing: isJoined
+                      ? const Chip(label: UniversalText('Joined'))
+                      : FilledButton(
+                          onPressed: () => _act(() => AppController
+                              .instance.backendApi
+                              .joinSocialCommunity(
+                                  profileId:
+                                      AppController.instance.currentProfile!.id,
+                                  communityId: communityId)),
+                          child: const UniversalText('Join')),
                 ));
               }
-              return Card(child: Padding(
+              return Card(
+                  child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  ListTile(
-                    onTap: () => _openCommunityDetail(community),
-                    contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
-                    title: Text(community['name']?.toString() ?? 'Community', style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text(
-                      '${community['description']?.toString() ?? ''}\n${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts${subtitle.isEmpty ? '' : ' · $subtitle'}',
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    isThreeLine: true,
-                    trailing: isJoined ? const Chip(label: UniversalText('Joined')) : FilledButton(onPressed: () => _act(() => AppController.instance.backendApi.joinSocialCommunity(profileId: AppController.instance.currentProfile!.id, communityId: communityId)), child: const UniversalText('Join')),
-                  ),
-                  if (isJoined) ...[
-                    Wrap(spacing: 8, children: [
-                      TextButton.icon(onPressed: () => _openCommunityDetail(community), icon: const Icon(Icons.open_in_new_rounded), label: const UniversalText('View community')),
-                      TextButton.icon(onPressed: () => _composeCommunityPost(communityId), icon: const Icon(Icons.post_add_rounded), label: const UniversalText('Post')),
-                      TextButton.icon(onPressed: () => _composeStory(communityId: communityId), icon: const Icon(Icons.add_circle_outline), label: const UniversalText('Story')),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        onTap: () => _openCommunityDetail(community),
+                        contentPadding: EdgeInsets.zero,
+                        leading: const CircleAvatar(
+                            child: Icon(Icons.groups_rounded)),
+                        title: Text(
+                            community['name']?.toString() ?? 'Community',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800)),
+                        subtitle: Text(
+                          '${community['description']?.toString() ?? ''}\n${community['memberCount'] ?? 0} members · ${community['postCount'] ?? 0} posts${subtitle.isEmpty ? '' : ' · $subtitle'}',
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        isThreeLine: true,
+                        trailing: isJoined
+                            ? const Chip(label: UniversalText('Joined'))
+                            : FilledButton(
+                                onPressed: () => _act(() => AppController
+                                    .instance.backendApi
+                                    .joinSocialCommunity(
+                                        profileId: AppController
+                                            .instance.currentProfile!.id,
+                                        communityId: communityId)),
+                                child: const UniversalText('Join')),
+                      ),
+                      if (isJoined) ...[
+                        Wrap(spacing: 8, children: [
+                          TextButton.icon(
+                              onPressed: () => _openCommunityDetail(community),
+                              icon: const Icon(Icons.open_in_new_rounded),
+                              label: const UniversalText('View community')),
+                          TextButton.icon(
+                              onPressed: () =>
+                                  _composeCommunityPost(communityId),
+                              icon: const Icon(Icons.post_add_rounded),
+                              label: const UniversalText('Post')),
+                          TextButton.icon(
+                              onPressed: () =>
+                                  _composeStory(communityId: communityId),
+                              icon: const Icon(Icons.add_circle_outline),
+                              label: const UniversalText('Story')),
+                        ]),
+                        if (communityStories.isNotEmpty) ...[
+                          const UniversalText('Stories',
+                              style: TextStyle(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                              height: 92,
+                              child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: communityStories
+                                      .map(_storyBubble)
+                                      .toList())),
+                        ],
+                        if (communityPosts.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          const UniversalText('Community posts',
+                              style: TextStyle(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 8),
+                          ...communityPosts.map(_postCard),
+                        ],
+                      ],
                     ]),
-                    if (communityStories.isNotEmpty) ...[
-                      const UniversalText('Stories', style: TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 6),
-                      SizedBox(height: 92, child: ListView(scrollDirection: Axis.horizontal, children: communityStories.map(_storyBubble).toList())),
-                    ],
-                    if (communityPosts.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      const UniversalText('Community posts', style: TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 8),
-                      ...communityPosts.map(_postCard),
-                    ],
-                  ],
-                ]),
               ));
             }),
           ]),
@@ -2076,7 +2382,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: Icon(Icons.add_rounded),
             ),
             const SizedBox(height: 5),
-            const UniversalText('Your story',
+            const UniversalText(
+              'Your story',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11),
@@ -2246,7 +2553,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           _showError('Choose a JPEG, PNG, WebP, MP4, MOV, or WebM Story file.');
           return;
         }
-        attachmentPath = await AppController.instance.backendApi.uploadSocialAttachment(
+        attachmentPath =
+            await AppController.instance.backendApi.uploadSocialAttachment(
           profileId: profile.id,
           bytes: bytes,
           contentType: contentType,
@@ -2257,9 +2565,14 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       }
     }
     final reference = <String, dynamic>{
-      'type': draft.mediaType == 'photo' ? 'photo' : draft.mediaType == 'video' ? 'video' : 'story',
+      'type': draft.mediaType == 'photo'
+          ? 'photo'
+          : draft.mediaType == 'video'
+              ? 'video'
+              : 'story',
       if (attachmentPath != null)
-        (draft.mediaType == 'photo' ? 'photoPath' : 'videoPath'): attachmentPath,
+        (draft.mediaType == 'photo' ? 'photoPath' : 'videoPath'):
+            attachmentPath,
       if (draft.media != null) 'fileName': draft.media!.name,
       if (draft.storyData.isNotEmpty) 'storyData': draft.storyData,
     };
@@ -2269,7 +2582,9 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         body: draft.body.trim().isEmpty ? 'Story' : draft.body.trim(),
         communityId: communityId,
         expiresInHours: draft.expiresInHours,
-        mediaReference: reference['type'] == 'story' && draft.storyData.isEmpty ? null : reference,
+        mediaReference: reference['type'] == 'story' && draft.storyData.isEmpty
+            ? null
+            : reference,
       ),
     );
   }
@@ -2320,7 +2635,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
             content: SizedBox(
               width: 440,
               child: links.isEmpty
-                  ? const UniversalText('Add a movie, show, or song to this profile’s library first.',
+                  ? const UniversalText(
+                      'Add a movie, show, or song to this profile’s library first.',
                     )
                   : RadioGroup<Map<String, String>>(
                       groupValue: selected,
@@ -2387,7 +2703,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: const ListTile(
                 leading: Icon(Icons.flash_on_rounded),
                 title: UniversalText('Short'),
-                subtitle: UniversalText('Quick vertical clip tied to a movie, show, or song.'),
+                subtitle: UniversalText(
+                    'Quick vertical clip tied to a movie, show, or song.'),
               ),
             ),
             SimpleDialogOption(
@@ -2395,7 +2712,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: const ListTile(
                 leading: Icon(Icons.star_rate_rounded),
                 title: UniversalText('Video review'),
-                subtitle: UniversalText('Review a movie, show, or song in vertical format.'),
+                subtitle: UniversalText(
+                    'Review a movie, show, or song in vertical format.'),
               ),
             ),
             SimpleDialogOption(
@@ -2403,7 +2721,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               child: const ListTile(
                 leading: Icon(Icons.theater_comedy_rounded),
                 title: UniversalText('Skit'),
-                subtitle: UniversalText('A scene, parody, or character skit inspired by media.'),
+                subtitle: UniversalText(
+                    'A scene, parody, or character skit inspired by media.'),
               ),
             ),
           ],
@@ -2566,7 +2885,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     if (profile == null) return;
     final name = await _prompt('Create community', 'Community name');
     if (name == null || name.trim().isEmpty) return;
-    final description = await _prompt('Community description', 'Description') ?? '';
+    final description =
+        await _prompt('Community description', 'Description') ?? '';
     if (!mounted) return;
     var category = 'general';
     final selected = await showDialog<String>(
@@ -2581,24 +2901,31 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               DropdownMenuItem(value: 'movies', child: UniversalText('Movies')),
               DropdownMenuItem(value: 'shows', child: UniversalText('Shows')),
               DropdownMenuItem(value: 'music', child: UniversalText('Music')),
-              DropdownMenuItem(value: 'general', child: UniversalText('General')),
+              DropdownMenuItem(
+                  value: 'general', child: UniversalText('General')),
             ],
-            onChanged: (value) { if (value != null) setDialogState(() => category = value); },
+            onChanged: (value) {
+              if (value != null) setDialogState(() => category = value);
+            },
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, category), child: const UniversalText('Create')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const UniversalText('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, category),
+                child: const UniversalText('Create')),
           ],
         ),
       ),
     );
     if (selected == null) return;
     await _act(() => AppController.instance.backendApi.createSocialCommunity(
-      profileId: profile.id,
-      name: name.trim(),
-      description: description.trim(),
-      category: selected,
-    ));
+          profileId: profile.id,
+          name: name.trim(),
+          description: description.trim(),
+          category: selected,
+        ));
   }
 
   Future<void> _newAccountDirectMessage() async {
@@ -2609,7 +2936,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         .where((profile) => profile.id != current.id)
         .toList();
     if (profiles.isEmpty) {
-      _showMessage('Create another profile on this account before starting an account chat.');
+      _showMessage(
+          'Create another profile on this account before starting an account chat.');
       return;
     }
     final selectedId = await showDialog<String>(
@@ -2626,16 +2954,22 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 onChanged: (value) => setDialogState(() => selected = value),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: profiles.map((profile) => RadioListTile<String>(
-                    value: profile.id,
-                    title: Text(profile.name),
-                  )).toList(),
+                  children: profiles
+                      .map((profile) => RadioListTile<String>(
+                            value: profile.id,
+                            title: Text(profile.name),
+                          ))
+                      .toList(),
                 ),
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, selected), child: const UniversalText('Open chat')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const UniversalText('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, selected),
+                  child: const UniversalText('Open chat')),
             ],
           ),
         );
@@ -2643,7 +2977,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     );
     if (selectedId == null) return;
     try {
-      final response = await controller.backendApi.createSocialAccountConversation(
+      final response =
+          await controller.backendApi.createSocialAccountConversation(
         profileId: current.id,
         targetProfileId: selectedId,
       );
@@ -2657,7 +2992,9 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
       await _openConversation(id);
     } catch (error) {
-      if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
     }
   }
 
@@ -2673,7 +3010,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
         .where((profile) => profile.id != current.id)
         .toList();
     if (profiles.isEmpty) {
-      _showMessage('Create another profile on this account before creating a group chat.');
+      _showMessage(
+          'Create another profile on this account before creating a group chat.');
       return;
     }
 
@@ -2701,24 +3039,26 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                     child: UniversalText('Choose profiles from this account'),
                   ),
                   ...profiles.map((profile) => CheckboxListTile(
-                    value: selectedIds.contains(profile.id),
-                    onChanged: (checked) => setDialogState(() {
-                      if (checked == true) {
-                        selectedIds.add(profile.id);
-                      } else {
-                        selectedIds.remove(profile.id);
-                      }
-                    }),
-                    title: Text(profile.name),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  )),
+                        value: selectedIds.contains(profile.id),
+                        onChanged: (checked) => setDialogState(() {
+                          if (checked == true) {
+                            selectedIds.add(profile.id);
+                          } else {
+                            selectedIds.remove(profile.id);
+                          }
+                        }),
+                        title: Text(profile.name),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      )),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const UniversalText('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const UniversalText('Cancel')),
             FilledButton(
               onPressed: selectedIds.isEmpty
                   ? null
@@ -2735,7 +3075,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     titleController.dispose();
     if (result == null || result.$2.isEmpty) return;
     try {
-      final response = await controller.backendApi.createSocialAccountGroupConversation(
+      final response =
+          await controller.backendApi.createSocialAccountGroupConversation(
         profileId: current.id,
         title: result.$1,
         profileIds: result.$2,
@@ -2750,7 +3091,9 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
       await _openConversation(id);
     } catch (error) {
-      if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
     }
   }
 
@@ -2827,7 +3170,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
       await _showGroupChatInviteOptions(
         conversationId: id,
-        conversationTitle: result.$1.trim().isEmpty ? 'Group chat' : result.$1.trim(),
+        conversationTitle:
+            result.$1.trim().isEmpty ? 'Group chat' : result.$1.trim(),
       );
       await _openConversation(id);
     } catch (error) {
@@ -2867,7 +3211,9 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
           ? Map<String, dynamic>.from(response['invite'] as Map)
           : <String, dynamic>{};
       token = invite['token']?.toString() ?? '';
-      if (token.isEmpty) throw StateError('The server did not return an invite token.');
+      if (token.isEmpty) {
+        throw StateError('The server did not return an invite token.');
+      }
     } catch (error) {
       if (mounted) {
         _showMessage(
@@ -2881,9 +3227,8 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     final communities = _list('communities')
         .where((community) => community['joined'] == true)
         .toList(growable: false);
-    String? selectedCommunityId = communities.isEmpty
-        ? null
-        : communities.first['id']?.toString();
+    String? selectedCommunityId =
+        communities.isEmpty ? null : communities.first['id']?.toString();
     if (!mounted) return;
 
     await showDialog<void>(
@@ -2898,24 +3243,36 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Share a link for “$conversationTitle”. It expires in 30 days and allows up to 100 joins.'),
+                  Text(
+                      'Share a link for “$conversationTitle”. It expires in 30 days and allows up to 100 joins.'),
                   const SizedBox(height: 12),
-                  SelectableText(inviteUrl, style: const TextStyle(color: Colors.lightBlueAccent)),
+                  SelectableText(inviteUrl,
+                      style: const TextStyle(color: Colors.lightBlueAccent)),
                   const SizedBox(height: 18),
                   if (communities.isNotEmpty) ...[
-                    const UniversalText('Post this invite in a community', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const UniversalText('Post this invite in a community',
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       initialValue: selectedCommunityId,
-                      decoration: const InputDecoration(labelText: 'Joined community'),
-                      items: communities.map((community) => DropdownMenuItem<String>(
-                        value: community['id']?.toString(),
-                        child: Text(community['name']?.toString() ?? 'Community', overflow: TextOverflow.ellipsis),
-                      )).toList(),
-                      onChanged: (value) => setDialogState(() => selectedCommunityId = value),
+                      decoration:
+                          const InputDecoration(labelText: 'Joined community'),
+                      items: communities
+                          .map((community) => DropdownMenuItem<String>(
+                                value: community['id']?.toString(),
+                                child: Text(
+                                    community['name']?.toString() ??
+                                        'Community',
+                                    overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => selectedCommunityId = value),
                     ),
                   ] else
-                    const UniversalText('Join a community first to post the invite there.', style: TextStyle(color: Colors.white60)),
+                    const UniversalText(
+                        'Join a community first to post the invite there.',
+                        style: TextStyle(color: Colors.white60)),
                 ],
               ),
             ),
@@ -2935,27 +3292,36 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               label: const UniversalText('Copy link'),
             ),
             FilledButton.icon(
-              onPressed: selectedCommunityId == null ? null : () async {
-                final communityId = selectedCommunityId!;
-                Navigator.pop(dialogContext);
-                try {
-                  await AppController.instance.backendApi.createSocialPost(
-                    profileId: profile.id,
-                    body: 'Join our group chat “$conversationTitle” using the Join chat card below.',
-                    communityIds: [communityId],
-                    mediaReference: {
-                      'type': 'chat_invite',
-                      'inviteToken': token,
-                      'inviteUrl': inviteUrl,
-                      'conversationTitle': conversationTitle,
+              onPressed: selectedCommunityId == null
+                  ? null
+                  : () async {
+                      final communityId = selectedCommunityId!;
+                      Navigator.pop(dialogContext);
+                      try {
+                        await AppController.instance.backendApi
+                            .createSocialPost(
+                          profileId: profile.id,
+                          body:
+                              'Join our group chat “$conversationTitle” using the Join chat card below.',
+                          communityIds: [communityId],
+                          mediaReference: {
+                            'type': 'chat_invite',
+                            'inviteToken': token,
+                            'inviteUrl': inviteUrl,
+                            'conversationTitle': conversationTitle,
+                          },
+                        );
+                        await _load();
+                        if (mounted) {
+                          _showMessage('Invite posted to the community.');
+                        }
+                      } catch (error) {
+                        if (mounted) {
+                          _showMessage(
+                              error.toString().replaceFirst('Exception: ', ''));
+                        }
+                      }
                     },
-                  );
-                  await _load();
-                  if (mounted) _showMessage('Invite posted to the community.');
-                } catch (error) {
-                  if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
-                }
-              },
               icon: const Icon(Icons.groups_rounded),
               label: const UniversalText('Share to community'),
             ),
@@ -2973,22 +3339,29 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       return;
     }
     try {
-      final response = await AppController.instance.backendApi.acceptSocialConversationInvite(
+      final response = await AppController.instance.backendApi
+          .acceptSocialConversationInvite(
         profileId: profile.id,
         token: token,
       );
       final conversation = response['conversation'] is Map
           ? Map<String, dynamic>.from(response['conversation'] as Map)
           : <String, dynamic>{};
-      final conversationId = response['conversationId']?.toString() ?? conversation['id']?.toString() ?? '';
-      if (conversationId.isEmpty) throw StateError('The invite did not identify a conversation.');
+      final conversationId = response['conversationId']?.toString() ??
+          conversation['id']?.toString() ??
+          '';
+      if (conversationId.isEmpty) {
+        throw StateError('The invite did not identify a conversation.');
+      }
       await _load();
       if (!mounted) return;
       final messagesIndex = _tabSections.indexOf('messages');
       if (messagesIndex >= 0) _tabs.animateTo(messagesIndex);
       await _openConversation(conversationId);
     } catch (error) {
-      if (mounted) _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
     }
   }
 
@@ -3111,20 +3484,25 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
       title: 'post',
       message: post['body']?.toString() ?? '',
       mediaReference: messageReference,
-      sourcePostId:
-          type == 'video' ? post['id']?.toString() : null,
+      sourcePostId: type == 'video' ? post['id']?.toString() : null,
     );
   }
 
   void _showError(String message) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message.replaceFirst('Exception: ', ''))));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message.replaceFirst('Exception: ', ''))));
+    }
   }
 
   void _showStory(Map<String, dynamic> story) {
     final author = story['author'] is Map
         ? Map<String, dynamic>.from(story['author'] as Map)
         : <String, dynamic>{};
-    final authorId = (author['profileId'] ?? author['profile_id'] ?? author['id'])?.toString() ?? '';
+    final authorId =
+        (author['profileId'] ?? author['profile_id'] ?? author['id'])
+                ?.toString() ??
+            '';
     Navigator.push<void>(
       context,
       MaterialPageRoute(
@@ -3930,9 +4308,9 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
   }
 
   Future<void> _suggestFriend() async {
-    final username = AppController.instance.currentAccount?.username;
+    final username = AppController.instance.currentProfile?.username;
     if (username == null || username.trim().isEmpty) {
-      _showError('Your account needs a username before you can suggest it.');
+      _showError('Choose a profile with a username before inviting friends.');
       return;
     }
     await _sendMessage(
@@ -4156,7 +4534,8 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  UniversalText('Text style',
+                  UniversalText(
+                    'Text style',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 10),
@@ -4227,8 +4606,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                           child: InkWell(
                             onTap: () => setSheetState(() {
                               next['color'] =
-                                  '#${_hexColor(entry.value)}'
-                                      .toUpperCase();
+                                  '#${_hexColor(entry.value)}'.toUpperCase();
                             }),
                             borderRadius: BorderRadius.circular(20),
                             child: Padding(
@@ -4242,10 +4620,10 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                                     ? Icon(
                                         Icons.check_rounded,
                                         size: 16,
-                                        color: entry.value.computeLuminance() <
-                                                .4
-                                            ? Colors.white
-                                            : Colors.black,
+                                        color:
+                                            entry.value.computeLuminance() < .4
+                                                ? Colors.white
+                                                : Colors.black,
                                       )
                                     : null,
                               ),
@@ -4305,7 +4683,8 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              UniversalText('Chat background',
+              UniversalText(
+                'Chat background',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -4319,8 +4698,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                         onTap: () async {
                           Navigator.pop(sheetContext);
                           final color =
-                              '#${_hexColor(entry.value)}'
-                                  .toUpperCase();
+                              '#${_hexColor(entry.value)}'.toUpperCase();
                           await _saveChatAppearance(
                             backgroundColor:
                                 entry.key == 'Default' ? null : color,
@@ -4333,7 +4711,8 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                           radius: 22,
                           backgroundColor: entry.value,
                           child: currentColor == _hexColor(entry.value) ||
-                              (entry.key == 'Default' && currentColor == null)
+                                  (entry.key == 'Default' &&
+                                      currentColor == null)
                               ? const Icon(Icons.check_rounded)
                               : null,
                         ),
@@ -4387,8 +4766,8 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         'webp' => 'image/webp',
         _ => 'image/jpeg',
       };
-      final path = await AppController.instance.backendApi
-          .uploadSocialAttachment(
+      final path =
+          await AppController.instance.backendApi.uploadSocialAttachment(
         profileId: widget.profileId,
         bytes: bytes,
         contentType: contentType,
@@ -4614,9 +4993,17 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                   ? null
                   : () {
                       final friend = Map<String, dynamic>.from(primaryMember);
-                      final profileId = (friend['profileId'] ?? friend['profile_id'] ?? friend['targetProfileId'] ?? friend['target_profile_id'] ?? friend['id'])?.toString() ?? '';
+                      final profileId = (friend['profileId'] ??
+                                  friend['profile_id'] ??
+                                  friend['targetProfileId'] ??
+                                  friend['target_profile_id'] ??
+                                  friend['id'])
+                              ?.toString() ??
+                          '';
                       if (profileId.isEmpty) return;
-                      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FriendStoryProfileViewer(friend: friend)));
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) =>
+                              FriendStoryProfileViewer(friend: friend)));
                     },
               child: _presenceAvatar(primaryMember, title),
             ),
@@ -4729,283 +5116,288 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
                 ),
         ),
         child: Column(
-        children: [
-          Expanded(
-            child: messages.isEmpty
-                ? const Center(
-                    child: UniversalText('Say hello 👋',
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: messages.length,
-                    itemBuilder: (_, index) {
-                      final message = messages[index];
-                      final mine = message['isMine'] == true;
-                      final mediaReference = message['mediaReference'] is Map
-                          ? Map<String, dynamic>.from(
-                              message['mediaReference'] as Map,
-                            )
-                          : message['media_reference'] is Map
-                              ? Map<String, dynamic>.from(
-                                  message['media_reference'] as Map,
-                                )
-                              : <String, dynamic>{};
-                      final poll = message['poll'] is Map
-                          ? Map<String, dynamic>.from(message['poll'] as Map)
-                          : null;
-                      final sender = members.firstWhere(
-                        (member) =>
-                            member['accountId']?.toString() ==
-                                message['sender_account_id']?.toString() &&
-                            member['profileId']?.toString() ==
-                                message['sender_profile_id']?.toString(),
-                        orElse: () => <String, dynamic>{},
-                      );
-                      final reactionSummary = message['reactionSummary'] is Map
-                          ? Map<String, dynamic>.from(
-                              message['reactionSummary'] as Map,
-                            )
-                          : <String, dynamic>{};
-                      return Align(
-                        alignment:
-                            mine ? Alignment.centerRight : Alignment.centerLeft,
-                        child: GestureDetector(
-                          onLongPress: () =>
-                              _react(message['id']?.toString() ?? ''),
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.sizeOf(context).width * .72,
-                            ),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: mine
-                                  ? const Color(0xFF005C4B)
-                                  : const Color(0xFF202C33),
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(18),
-                                topRight: const Radius.circular(18),
-                                bottomLeft: Radius.circular(mine ? 18 : 4),
-                                bottomRight: Radius.circular(mine ? 4 : 18),
+          children: [
+            Expanded(
+              child: messages.isEmpty
+                  ? const Center(
+                      child: UniversalText(
+                        'Say hello 👋',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: messages.length,
+                      itemBuilder: (_, index) {
+                        final message = messages[index];
+                        final mine = message['isMine'] == true;
+                        final mediaReference = message['mediaReference'] is Map
+                            ? Map<String, dynamic>.from(
+                                message['mediaReference'] as Map,
+                              )
+                            : message['media_reference'] is Map
+                                ? Map<String, dynamic>.from(
+                                    message['media_reference'] as Map,
+                                  )
+                                : <String, dynamic>{};
+                        final poll = message['poll'] is Map
+                            ? Map<String, dynamic>.from(message['poll'] as Map)
+                            : null;
+                        final sender = members.firstWhere(
+                          (member) =>
+                              member['accountId']?.toString() ==
+                                  message['sender_account_id']?.toString() &&
+                              member['profileId']?.toString() ==
+                                  message['sender_profile_id']?.toString(),
+                          orElse: () => <String, dynamic>{},
+                        );
+                        final reactionSummary =
+                            message['reactionSummary'] is Map
+                                ? Map<String, dynamic>.from(
+                                    message['reactionSummary'] as Map,
+                                  )
+                                : <String, dynamic>{};
+                        return Align(
+                          alignment: mine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: GestureDetector(
+                            onLongPress: () =>
+                                _react(message['id']?.toString() ?? ''),
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.sizeOf(context).width * .72,
+                              ),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: mine
+                                    ? const Color(0xFF005C4B)
+                                    : const Color(0xFF202C33),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(18),
+                                  topRight: const Radius.circular(18),
+                                  bottomLeft: Radius.circular(mine ? 18 : 4),
+                                  bottomRight: Radius.circular(mine ? 4 : 18),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (_isGroup && sender.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 5),
+                                      child: _memberNameLabel(sender),
+                                    ),
+                                  if (message['reply_to_message_id'] != null)
+                                    _replyPreview(
+                                      messages,
+                                      message['reply_to_message_id'].toString(),
+                                    ),
+                                  _messageContent(
+                                      message, mediaReference, poll),
+                                  if (reactionSummary.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 5),
+                                      child: Wrap(
+                                        spacing: 6,
+                                        children: [
+                                          for (final entry
+                                              in reactionSummary.entries)
+                                            Text(
+                                              '${entry.key} ${entry.value}',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (mine)
+                                        _messageDeliveryIndicator(
+                                          message,
+                                          members,
+                                        ),
+                                      if (mediaReference['type'] == 'video')
+                                        IconButton(
+                                          tooltip: 'Share video to chats',
+                                          visualDensity: VisualDensity.compact,
+                                          onPressed: () =>
+                                              showSocialShareDialog(
+                                            context,
+                                            title: mediaReference['title']
+                                                    ?.toString() ??
+                                                'video',
+                                            message:
+                                                message['body']?.toString() ??
+                                                    'Shared video',
+                                            mediaReference: mediaReference,
+                                            sourceMessageId:
+                                                message['id']?.toString(),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.share_outlined,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      TextButton(
+                                        onPressed: () => setState(
+                                          () => replyingTo = message,
+                                        ),
+                                        child: const UniversalText('Reply'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (_isGroup && sender.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 5),
-                                    child: _memberNameLabel(sender),
-                                  ),
-                                if (message['reply_to_message_id'] != null)
-                                  _replyPreview(
-                                    messages,
-                                    message['reply_to_message_id'].toString(),
-                                  ),
-                                _messageContent(message, mediaReference, poll),
-                                if (reactionSummary.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 5),
-                                    child: Wrap(
-                                      spacing: 6,
-                                      children: [
-                                        for (final entry
-                                            in reactionSummary.entries)
-                                          Text(
-                                            '${entry.key} ${entry.value}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                      ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            if (_typingLabel(typingMembers) case final typingLabel?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _TypingDots(color: Colors.white.withValues(alpha: .7)),
+                      const SizedBox(width: 8),
+                      Text(
+                        typingLabel,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (replyingTo != null)
+                      ListTile(
+                        dense: true,
+                        title: Text(
+                          'Replying to: ${replyingTo!['body'] ?? 'attachment'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: IconButton(
+                          onPressed: () => setState(() => replyingTo = null),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Attachments, polls, media, and sharing',
+                          onPressed:
+                              sending || !_canSend ? null : _chooseAttachment,
+                          icon: const Icon(Icons.add_circle_outline_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Emoji',
+                          onPressed:
+                              sending || !_canSend ? null : () => _sendEmoji(),
+                          icon: const Icon(Icons.emoji_emotions_outlined),
+                        ),
+                        if (!recording)
+                          IconButton(
+                            tooltip: viewOnceNext
+                                ? 'View-once attachment enabled'
+                                : 'Make next attachment view once',
+                            onPressed: !_canSend
+                                ? null
+                                : () => setState(
+                                      () => viewOnceNext = !viewOnceNext,
                                     ),
-                                  ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (mine)
-                                      _messageDeliveryIndicator(
-                                        message,
-                                        members,
-                                      ),
-                                    if (mediaReference['type'] == 'video')
-                                      IconButton(
-                                        tooltip: 'Share video to chats',
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () => showSocialShareDialog(
-                                          context,
-                                          title: mediaReference['title']
-                                                  ?.toString() ??
-                                              'video',
-                                          message: message['body']?.toString() ??
-                                              'Shared video',
-                                          mediaReference: mediaReference,
-                                          sourceMessageId:
-                                              message['id']?.toString(),
-                                        ),
-                                        icon: const Icon(
-                                          Icons.share_outlined,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    TextButton(
-                                      onPressed: () => setState(
-                                        () => replyingTo = message,
-                                      ),
-                                      child: const UniversalText('Reply'),
-                                    ),
-                                  ],
+                            icon: Icon(
+                              Icons.timer_outlined,
+                              color: viewOnceNext ? Colors.amber : null,
+                            ),
+                          ),
+                        Expanded(
+                          child: TextField(
+                            controller: messageController,
+                            minLines: 1,
+                            maxLines: 5,
+                            onSubmitted: (_) => _send(),
+                            decoration: InputDecoration(
+                              prefixIcon: IconButton(
+                                tooltip: 'Text style',
+                                onPressed: sending || !_canSend
+                                    ? null
+                                    : _editTextFormat,
+                                icon: Icon(
+                                  Icons.format_color_text_rounded,
+                                  color: _textFormat.isEmpty
+                                      ? null
+                                      : Theme.of(context).colorScheme.secondary,
                                 ),
-                              ],
+                              ),
+                              hintText: !_canSend
+                                  ? 'Only group admins can send'
+                                  : recording
+                                      ? 'Recording voice message… tap mic to send'
+                                      : 'Message $title',
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: .06),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabled: _canSend && !recording,
                             ),
                           ),
                         ),
-                      );
-                    },
-                  ),
-          ),
-          if (_typingLabel(typingMembers) case final typingLabel?)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _TypingDots(color: Colors.white.withValues(alpha: .7)),
-                    const SizedBox(width: 8),
-                    Text(
-                      typingLabel,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
+                        const SizedBox(width: 6),
+                        if (recording)
+                          IconButton(
+                            onPressed: sending ? null : _toggleVoiceRecording,
+                            icon: const Icon(Icons.stop_circle_outlined),
+                            color: Colors.redAccent,
+                          )
+                        else if (messageController.text.trim().isNotEmpty)
+                          IconButton(
+                            onPressed: sending || !_canSend ? null : _send,
+                            icon: const Icon(Icons.send_rounded),
+                          )
+                        else
+                          IconButton(
+                            tooltip: 'Record voice message',
+                            onPressed: sending || !_canSend
+                                ? null
+                                : _toggleVoiceRecording,
+                            icon: const Icon(Icons.mic_none_rounded),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (replyingTo != null)
-                    ListTile(
-                      dense: true,
-                      title: Text(
-                        'Replying to: ${replyingTo!['body'] ?? 'attachment'}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        onPressed: () => setState(() => replyingTo = null),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Attachments, polls, media, and sharing',
-                        onPressed:
-                            sending || !_canSend ? null : _chooseAttachment,
-                        icon: const Icon(Icons.add_circle_outline_rounded),
-                      ),
-                      IconButton(
-                        tooltip: 'Emoji',
-                        onPressed:
-                            sending || !_canSend ? null : () => _sendEmoji(),
-                        icon: const Icon(Icons.emoji_emotions_outlined),
-                      ),
-                      if (!recording)
-                        IconButton(
-                          tooltip: viewOnceNext
-                              ? 'View-once attachment enabled'
-                              : 'Make next attachment view once',
-                          onPressed: !_canSend
-                              ? null
-                              : () => setState(
-                                    () => viewOnceNext = !viewOnceNext,
-                                  ),
-                          icon: Icon(
-                            Icons.timer_outlined,
-                            color: viewOnceNext ? Colors.amber : null,
-                          ),
-                        ),
-                      Expanded(
-                        child: TextField(
-                          controller: messageController,
-                          minLines: 1,
-                          maxLines: 5,
-                          onSubmitted: (_) => _send(),
-                          decoration: InputDecoration(
-                            prefixIcon: IconButton(
-                              tooltip: 'Text style',
-                              onPressed: sending || !_canSend
-                                  ? null
-                                  : _editTextFormat,
-                              icon: Icon(
-                                Icons.format_color_text_rounded,
-                                color: _textFormat.isEmpty
-                                    ? null
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .secondary,
-                              ),
-                            ),
-                            hintText: !_canSend
-                                ? 'Only group admins can send'
-                                : recording
-                                    ? 'Recording voice message… tap mic to send'
-                                    : 'Message $title',
-                            filled: true,
-                            fillColor: Colors.white.withValues(alpha: .06),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabled: _canSend && !recording,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      if (recording)
-                        IconButton(
-                          onPressed: sending ? null : _toggleVoiceRecording,
-                          icon: const Icon(Icons.stop_circle_outlined),
-                          color: Colors.redAccent,
-                        )
-                      else if (messageController.text.trim().isNotEmpty)
-                        IconButton(
-                          onPressed: sending || !_canSend ? null : _send,
-                          icon: const Icon(Icons.send_rounded),
-                        )
-                      else
-                        IconButton(
-                          tooltip: 'Record voice message',
-                          onPressed: sending || !_canSend
-                              ? null
-                              : _toggleVoiceRecording,
-                          icon: const Icon(Icons.mic_none_rounded),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+          ],
         ),
+      ),
     );
   }
 
@@ -5099,7 +5491,8 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
             url,
             width: 250,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const UniversalText('Image unavailable'),
+            errorBuilder: (_, __, ___) =>
+                const UniversalText('Image unavailable'),
           ),
         );
       }
@@ -5156,28 +5549,44 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
         ],
       );
     }
-    if (type == 'product' || type == 'recommendation' ||
-        type == 'shared_item' || type == 'collection' ||
-        type == 'playlist' || type == 'album' || type == 'song' ||
-        type == 'show' || type == 'movie' || type == 'store') {
-      final mediaType = (reference['mediaType'] ?? type).toString().toLowerCase();
+    if (type == 'product' ||
+        type == 'recommendation' ||
+        type == 'shared_item' ||
+        type == 'collection' ||
+        type == 'playlist' ||
+        type == 'album' ||
+        type == 'song' ||
+        type == 'show' ||
+        type == 'movie' ||
+        type == 'store') {
+      final mediaType =
+          (reference['mediaType'] ?? type).toString().toLowerCase();
       final mediaId = reference['mediaId']?.toString() ??
-          reference['media_id']?.toString() ?? reference['id']?.toString();
+          reference['media_id']?.toString() ??
+          reference['id']?.toString();
       final catalogMatches = mediaId == null
           ? <MediaItem>[]
-          : AppController.instance.library.where((item) => item.id == mediaId).toList();
+          : AppController.instance.library
+              .where((item) => item.id == mediaId)
+              .toList();
       final catalogMatch = catalogMatches.isEmpty ? null : catalogMatches.first;
-      final explicitOwned = reference['isOwned'] ?? reference['owned'] ??
-          reference['is_owned'] ?? reference['hasAccess'];
+      final explicitOwned = reference['isOwned'] ??
+          reference['owned'] ??
+          reference['is_owned'] ??
+          reference['hasAccess'];
       final explicitAvailable = reference['accessEnabled'] ??
-          reference['access_enabled'] ?? reference['isAvailable'];
+          reference['access_enabled'] ??
+          reference['isAvailable'];
       // Ownership/access must come from the recipient's catalog or a server-provided
       // per-recipient flag. Never infer purchase ownership from a shared link alone.
       final owned = explicitOwned is bool
           ? explicitOwned
-          : (explicitAvailable is bool ? explicitAvailable : catalogMatch != null);
+          : (explicitAvailable is bool
+              ? explicitAvailable
+              : catalogMatch != null);
       final title = reference['title']?.toString() ??
-          message['body']?.toString() ?? 'Shared item';
+          message['body']?.toString() ??
+          'Shared item';
       final icon = switch (mediaType) {
         'product' => Icons.shopping_bag_outlined,
         'store' => Icons.storefront_outlined,
@@ -5206,29 +5615,40 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
               Row(children: [
                 Icon(icon, size: 21),
                 const SizedBox(width: 8),
-                Expanded(child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800))),
+                Expanded(
+                    child: Text(title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800))),
               ]),
               if (reference['description']?.toString().isNotEmpty == true) ...[
                 const SizedBox(height: 5),
-                Text(reference['description'].toString(), maxLines: 3,
-                  overflow: TextOverflow.ellipsis),
+                Text(reference['description'].toString(),
+                    maxLines: 3, overflow: TextOverflow.ellipsis),
               ],
               const SizedBox(height: 8),
               Row(children: [
                 Icon(owned ? Icons.check_circle_outline : Icons.lock_outline,
-                  size: 15, color: owned ? const Color(0xFF8FE0C5) : Colors.white54),
+                    size: 15,
+                    color: owned ? const Color(0xFF8FE0C5) : Colors.white54),
                 const SizedBox(width: 5),
-                Expanded(child: Text(
-                  owned ? (mediaType == 'product' || mediaType == 'store' ? 'Saved / accessible' : 'Owned or available to you')
-                      : (mediaType == 'product' || mediaType == 'store' ? 'Not saved · details available' : 'Not in your library · preview available'),
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                Expanded(
+                    child: Text(
+                  owned
+                      ? (mediaType == 'product' || mediaType == 'store'
+                          ? 'Saved / accessible'
+                          : 'Owned or available to you')
+                      : (mediaType == 'product' || mediaType == 'store'
+                          ? 'Not saved · details available'
+                          : 'Not in your library · preview available'),
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w600),
                 )),
               ]),
               if (!owned) ...[
                 const SizedBox(height: 4),
                 const Text('Shared item is still visible to you.',
-                  style: TextStyle(fontSize: 10, color: Colors.white54)),
+                    style: TextStyle(fontSize: 10, color: Colors.white54)),
               ],
             ],
           ),
@@ -5240,10 +5660,10 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
       if (format['strikeThrough'] == true) TextDecoration.lineThrough,
     ];
     final rawColor = format['color']?.toString();
-    final color = rawColor != null &&
-            RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(rawColor)
-        ? Color(int.parse(rawColor.substring(1), radix: 16) | 0xFF000000)
-        : null;
+    final color =
+        rawColor != null && RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(rawColor)
+            ? Color(int.parse(rawColor.substring(1), radix: 16) | 0xFF000000)
+            : null;
     final text = Text(
       message['body']?.toString() ?? '',
       style: TextStyle(
@@ -5462,7 +5882,6 @@ class _TypingDotsState extends State<_TypingDots>
       );
 }
 
-
 /// Community detail experience with membership actions and community content.
 /// Join/leave mutations are delegated to the authenticated backend; the page
 /// only changes its local membership state after the mutation succeeds.
@@ -5522,10 +5941,15 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Leave this community?'),
-            content: const Text('You can rejoin later if the community is still available. You will lose access to member-only posts and stories.'),
+            content: const Text(
+                'You can rejoin later if the community is still available. You will lose access to member-only posts and stories.'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Leave community')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Leave community')),
             ],
           ),
         );
@@ -5535,7 +5959,9 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
       if (mounted) setState(() => _joined = join);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(join ? 'You joined ${widget.community['name'] ?? 'the community'}.' : 'You left the community.'),
+          content: Text(join
+              ? 'You joined ${widget.community['name'] ?? 'the community'}.'
+              : 'You left the community.'),
         ));
       }
     } catch (error) {
@@ -5556,8 +5982,10 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     final description = community['description']?.toString().trim() ?? '';
     final category = (community['category'] ?? 'general').toString();
     final memberCount = (community['memberCount'] as num?)?.toInt() ?? 0;
-    final postCount = (community['postCount'] as num?)?.toInt() ?? widget.posts.length;
-    final createdAt = DateTime.tryParse((community['created_at'] ?? '').toString());
+    final postCount =
+        (community['postCount'] as num?)?.toInt() ?? widget.posts.length;
+    final createdAt =
+        DateTime.tryParse((community['created_at'] ?? '').toString());
     final categoryIcon = switch (category.toLowerCase()) {
       'movies' => Icons.movie_creation_outlined,
       'shows' => Icons.live_tv_rounded,
@@ -5577,133 +6005,355 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF32215D), Color(0xFF6A3CA0), Color(0xFF171B36)],
+                  colors: [
+                    Color(0xFF32215D),
+                    Color(0xFF6A3CA0),
+                    Color(0xFF171B36)
+                  ],
                 ),
               ),
-              child: SafeArea(child: Padding(
+              child: SafeArea(
+                  child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 62, 24, 20),
-                child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  CircleAvatar(radius: 28, backgroundColor: Colors.white.withValues(alpha: .16), child: Icon(categoryIcon, size: 30, color: Colors.white)),
-                  const SizedBox(height: 10),
-                  Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
-                  const SizedBox(height: 4),
-                  Text('${category.isEmpty ? 'General' : '${category[0].toUpperCase()}${category.substring(1)}'} community • ${community['visibility'] == 'private' ? 'Private' : 'Public'}', style: const TextStyle(color: Colors.white70)),
-                ]),
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.white.withValues(alpha: .16),
+                          child: Icon(categoryIcon,
+                              size: 30, color: Colors.white)),
+                      const SizedBox(height: 10),
+                      Text(name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white)),
+                      const SizedBox(height: 4),
+                      Text(
+                          '${category.isEmpty ? 'General' : '${category[0].toUpperCase()}${category.substring(1)}'} community • ${community['visibility'] == 'private' ? 'Private' : 'Public'}',
+                          style: const TextStyle(color: Colors.white70)),
+                    ]),
               )),
             ),
           ),
         ),
-        SliverToBoxAdapter(child: Padding(
+        SliverToBoxAdapter(
+            child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (description.isNotEmpty) Text(description, style: Theme.of(context).textTheme.bodyLarge),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (description.isNotEmpty)
+              Text(description, style: Theme.of(context).textTheme.bodyLarge),
             if (description.isNotEmpty) const SizedBox(height: 16),
             Row(children: [
-              Expanded(child: _CommunityStat(icon: Icons.people_alt_outlined, value: _compactCount(memberCount), label: 'Members')),
+              Expanded(
+                  child: _CommunityStat(
+                      icon: Icons.people_alt_outlined,
+                      value: _compactCount(memberCount),
+                      label: 'Members')),
               const SizedBox(width: 10),
-              Expanded(child: _CommunityStat(icon: Icons.article_outlined, value: _compactCount(postCount), label: 'Posts')),
+              Expanded(
+                  child: _CommunityStat(
+                      icon: Icons.article_outlined,
+                      value: _compactCount(postCount),
+                      label: 'Posts')),
               const SizedBox(width: 10),
-              Expanded(child: _CommunityStat(icon: Icons.auto_awesome_outlined, value: '${widget.stories.length}', label: 'Stories')),
+              Expanded(
+                  child: _CommunityStat(
+                      icon: Icons.auto_awesome_outlined,
+                      value: '${widget.stories.length}',
+                      label: 'Stories')),
             ]),
             const SizedBox(height: 16),
-            SizedBox(width: double.infinity, child: _joined
-                ? OutlinedButton.icon(
-                    onPressed: _busy || widget.isOwner ? null : () => _membershipAction(join: false),
-                    icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check_circle_outline),
-                    label: Text(widget.isOwner ? 'Owner' : 'Joined · Leave community'),
-                  )
-                : FilledButton.icon(
-                    onPressed: _busy ? null : () => _membershipAction(join: true),
-                    icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.group_add_outlined),
-                    label: const Text('Join community'),
-                  )),
+            SizedBox(
+                width: double.infinity,
+                child: _joined
+                    ? OutlinedButton.icon(
+                        onPressed: _busy || widget.isOwner
+                            ? null
+                            : () => _membershipAction(join: false),
+                        icon: _busy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.check_circle_outline),
+                        label: Text(widget.isOwner
+                            ? 'Owner'
+                            : 'Joined · Leave community'),
+                      )
+                    : FilledButton.icon(
+                        onPressed:
+                            _busy ? null : () => _membershipAction(join: true),
+                        icon: _busy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.group_add_outlined),
+                        label: const Text('Join community'),
+                      )),
             if (_joined) ...[
               const SizedBox(height: 8),
               Row(children: [
-                Expanded(child: OutlinedButton.icon(onPressed: _busy ? null : () async { await widget.onCreatePost(); }, icon: const Icon(Icons.post_add_rounded), label: const Text('Create post'))),
+                Expanded(
+                    child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                await widget.onCreatePost();
+                              },
+                        icon: const Icon(Icons.post_add_rounded),
+                        label: const Text('Create post'))),
                 const SizedBox(width: 8),
-                Expanded(child: OutlinedButton.icon(onPressed: _busy ? null : () async { await widget.onCreateStory(); }, icon: const Icon(Icons.add_circle_outline), label: const Text('Add story'))),
+                Expanded(
+                    child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                await widget.onCreateStory();
+                              },
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Add story'))),
               ]),
             ],
             const SizedBox(height: 18),
             SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: 'Posts', label: Text('Posts'), icon: Icon(Icons.forum_outlined)),
-                ButtonSegment(value: 'About', label: Text('About'), icon: Icon(Icons.info_outline)),
+                ButtonSegment(
+                    value: 'Posts',
+                    label: Text('Posts'),
+                    icon: Icon(Icons.forum_outlined)),
+                ButtonSegment(
+                    value: 'About',
+                    label: Text('About'),
+                    icon: Icon(Icons.info_outline)),
               ],
               selected: {_section},
-              onSelectionChanged: (selection) => setState(() => _section = selection.first),
+              onSelectionChanged: (selection) =>
+                  setState(() => _section = selection.first),
             ),
             const SizedBox(height: 12),
           ]),
         )),
-        if (_section == 'About') SliverToBoxAdapter(child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          child: Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('About this community', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 12),
-            _CommunityAboutRow(icon: Icons.category_outlined, label: 'Category', value: category),
-            _CommunityAboutRow(icon: Icons.public_outlined, label: 'Visibility', value: community['visibility']?.toString() ?? 'public'),
-            _CommunityAboutRow(icon: Icons.calendar_today_outlined, label: 'Created', value: createdAt == null ? 'Date unavailable' : '${createdAt.day}/${createdAt.month}/${createdAt.year}'),
-            _CommunityAboutRow(icon: Icons.admin_panel_settings_outlined, label: 'Moderation', value: 'Follow community rules and keep discussions respectful.'),
-          ]))),
-        )) else if (!_joined) SliverToBoxAdapter(child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-            const Icon(Icons.lock_outline_rounded, size: 34),
-            const SizedBox(height: 8),
-            const Text('Join the community to participate', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('Join to create posts and stories and take part in the conversation.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
-          ]))),
-        )) else if (widget.posts.isEmpty && widget.stories.isEmpty) SliverToBoxAdapter(child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(children: [const Icon(Icons.forum_outlined, size: 42), const SizedBox(height: 8), const Text('No posts yet', style: TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), const Text('Be the first to start a conversation.')]),
-        )) else SliverList(delegate: SliverChildListDelegate([
-          if (_joined && widget.stories.isNotEmpty) ...[
-            const Padding(padding: EdgeInsets.fromLTRB(16, 4, 16, 8), child: Text('Community stories', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-            SizedBox(height: 104, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), children: widget.stories.map((story) {
-              final author = story['author'] is Map ? Map<String, dynamic>.from(story['author'] as Map) : <String, dynamic>{};
-              final label = (author['display_name'] ?? author['username'] ?? 'Member').toString();
-              return SizedBox(width: 90, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const CircleAvatar(child: Icon(Icons.auto_awesome)), const SizedBox(height: 5), Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))]))));
-            }).toList())),
-          ],
-          if (_joined) ...widget.posts.map((post) {
-            final author = post['author'] is Map ? Map<String, dynamic>.from(post['author'] as Map) : <String, dynamic>{};
-            final authorName = (author['display_name'] ?? author['displayName'] ?? author['username'] ?? 'Community member').toString();
-            final body = (post['body'] ?? post['content'] ?? '').toString();
-            final date = DateTime.tryParse((post['created_at'] ?? '').toString());
-            return Card(margin: const EdgeInsets.fromLTRB(16, 4, 16, 8), child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [const CircleAvatar(radius: 17, child: Icon(Icons.person_outline, size: 18)), const SizedBox(width: 9), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(authorName, style: const TextStyle(fontWeight: FontWeight.w800)), Text(date == null ? 'Community post' : '${date.day}/${date.month}/${date.year}', style: Theme.of(context).textTheme.bodySmall)]))]),
-              if (body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(body)),
-            ])));
-          }),
-        ])),
+        if (_section == 'About')
+          SliverToBoxAdapter(
+              child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Card(
+                child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('About this community',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800, fontSize: 18)),
+                          const SizedBox(height: 12),
+                          _CommunityAboutRow(
+                              icon: Icons.category_outlined,
+                              label: 'Category',
+                              value: category),
+                          _CommunityAboutRow(
+                              icon: Icons.public_outlined,
+                              label: 'Visibility',
+                              value: community['visibility']?.toString() ??
+                                  'public'),
+                          _CommunityAboutRow(
+                              icon: Icons.calendar_today_outlined,
+                              label: 'Created',
+                              value: createdAt == null
+                                  ? 'Date unavailable'
+                                  : '${createdAt.day}/${createdAt.month}/${createdAt.year}'),
+                          _CommunityAboutRow(
+                              icon: Icons.admin_panel_settings_outlined,
+                              label: 'Moderation',
+                              value:
+                                  'Follow community rules and keep discussions respectful.'),
+                        ]))),
+          ))
+        else if (!_joined)
+          SliverToBoxAdapter(
+              child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Card(
+                child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(children: [
+                      const Icon(Icons.lock_outline_rounded, size: 34),
+                      const SizedBox(height: 8),
+                      const Text('Join the community to participate',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(
+                          'Join to create posts and stories and take part in the conversation.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ]))),
+          ))
+        else if (widget.posts.isEmpty && widget.stories.isEmpty)
+          SliverToBoxAdapter(
+              child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(children: [
+              const Icon(Icons.forum_outlined, size: 42),
+              const SizedBox(height: 8),
+              const Text('No posts yet',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              const Text('Be the first to start a conversation.')
+            ]),
+          ))
+        else
+          SliverList(
+              delegate: SliverChildListDelegate([
+            if (_joined && widget.stories.isNotEmpty) ...[
+              const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Text('Community stories',
+                      style: TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w800))),
+              SizedBox(
+                  height: 104,
+                  child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      children: widget.stories.map((story) {
+                        final author = story['author'] is Map
+                            ? Map<String, dynamic>.from(story['author'] as Map)
+                            : <String, dynamic>{};
+                        final label = (author['display_name'] ??
+                                author['username'] ??
+                                'Member')
+                            .toString();
+                        return SizedBox(
+                            width: 90,
+                            child: Card(
+                                child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const CircleAvatar(
+                                              child: Icon(Icons.auto_awesome)),
+                                          const SizedBox(height: 5),
+                                          Text(label,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style:
+                                                  const TextStyle(fontSize: 12))
+                                        ]))));
+                      }).toList())),
+            ],
+            if (_joined)
+              ...widget.posts.map((post) {
+                final author = post['author'] is Map
+                    ? Map<String, dynamic>.from(post['author'] as Map)
+                    : <String, dynamic>{};
+                final authorName = (author['display_name'] ??
+                        author['displayName'] ??
+                        author['username'] ??
+                        'Community member')
+                    .toString();
+                final body = (post['body'] ?? post['content'] ?? '').toString();
+                final date =
+                    DateTime.tryParse((post['created_at'] ?? '').toString());
+                return Card(
+                    margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const CircleAvatar(
+                                    radius: 17,
+                                    child:
+                                        Icon(Icons.person_outline, size: 18)),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text(authorName,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w800)),
+                                      Text(
+                                          date == null
+                                              ? 'Community post'
+                                              : '${date.day}/${date.month}/${date.year}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall)
+                                    ]))
+                              ]),
+                              if (body.isNotEmpty)
+                                Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: Text(body)),
+                            ])));
+              }),
+          ])),
       ]),
     );
   }
 
   String _compactCount(int value) {
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(value >= 10000000 ? 0 : 1)}M';
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1)}K';
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(value >= 10000000 ? 0 : 1)}M';
+    }
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1)}K';
+    }
     return '$value';
   }
 }
 
 class _CommunityStat extends StatelessWidget {
-  const _CommunityStat({required this.icon, required this.value, required this.label});
+  const _CommunityStat(
+      {required this.icon, required this.value, required this.label});
   final IconData icon;
   final String value;
   final String label;
   @override
-  Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6), child: Column(children: [Icon(icon, size: 20), const SizedBox(height: 6), Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)), Text(label, style: Theme.of(context).textTheme.bodySmall)])));
+  Widget build(BuildContext context) => Card(
+      child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+          child: Column(children: [
+            Icon(icon, size: 20),
+            const SizedBox(height: 6),
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(label, style: Theme.of(context).textTheme.bodySmall)
+          ])));
 }
 
 class _CommunityAboutRow extends StatelessWidget {
-  const _CommunityAboutRow({required this.icon, required this.label, required this.value});
+  const _CommunityAboutRow(
+      {required this.icon, required this.label, required this.value});
   final IconData icon;
   final String label;
   final String value;
   @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [Icon(icon, size: 19), const SizedBox(width: 10), SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))), Expanded(child: Text(value))]));
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(children: [
+        Icon(icon, size: 19),
+        const SizedBox(width: 10),
+        SizedBox(
+            width: 100,
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w700))),
+        Expanded(child: Text(value))
+      ]));
 }

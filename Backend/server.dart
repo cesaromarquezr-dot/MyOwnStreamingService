@@ -369,6 +369,8 @@ Future<void> main() async {
 
   final armMockEnabled =
       (Platform.environment['ARM_MOCK'] ?? '').trim().toLowerCase() == 'true';
+  final armServerUrlConfigured =
+      (Platform.environment['ARM_SERVER_URL'] ?? '').trim().isNotEmpty;
 
   final armVerificationPasses =
       (Platform.environment['ARM_MOCK_VERIFY_FAIL'] ?? '')
@@ -386,13 +388,15 @@ Future<void> main() async {
             username: Platform.environment['ARM_USERNAME'],
             password: Platform.environment['ARM_PASSWORD'],
           ),
+          enabled: armServerUrlConfigured,
         );
 
-  _log(
-    armMockEnabled
-        ? 'ARM mode: MOCK (Phase 1)'
-        : 'ARM mode: REAL',
-  );
+  final armModeMessage = armMockEnabled
+      ? 'ARM mode: MOCK (development only)'
+      : armServerUrlConfigured
+          ? 'ARM mode: REAL (ARM_SERVER_URL configured)'
+          : 'ARM mode: DISABLED — set ARM_SERVER_URL to the actual ARM worker URL';
+  _log(armModeMessage);
 
   final armRoutes = ArmRoutes(
     armService: armService,

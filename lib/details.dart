@@ -148,6 +148,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildEditionSelector(),
           for (final section in customization.sectionOrder)
             _buildSection(section),
           _buildExternalPurchaseOptions(),
@@ -160,11 +161,75 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     );
   }
 
+  /// Lists distinct cuts/re-releases only when the catalog explicitly links
+  /// them through the same canonicalWorkId. Similar titles are never merged by name.
+  Widget _buildEditionSelector() {
+    if (media.isSeries) return const SizedBox.shrink();
+    final workId = media.canonicalWorkId?.trim();
+    if (workId == null || workId.isEmpty) return const SizedBox.shrink();
+
+    final byId = <String, MediaItem>{media.id: media};
+    for (final candidate in AppController.instance.library) {
+      if (candidate.id == media.id || candidate.isSeries) continue;
+      if (candidate.canonicalWorkId?.trim() == workId) {
+        byId.putIfAbsent(candidate.id, () => candidate);
+      }
+    }
+    final editions = byId.values.toList()
+      ..sort((a, b) => (a.editionReleaseYear ?? a.releaseYear ?? 0)
+          .compareTo(b.editionReleaseYear ?? b.releaseYear ?? 0));
+    if (editions.length < 2) return const SizedBox.shrink();
+
+    return Card(
+      color: const Color(0xFF151515),
+      margin: const EdgeInsets.only(bottom: 18),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const UniversalText('Editions & Versions',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 5),
+            const UniversalText('Choose the exact cut you want to watch.',
+                style: TextStyle(color: Colors.white60, fontSize: 12)),
+            const SizedBox(height: 8),
+            for (final edition in editions)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(edition.id == media.id
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.movie_filter_outlined),
+                title: Text(edition.displayEditionLabel ?? 'Standard Edition'),
+                subtitle: Text([
+                  if (edition.displayYearLabel != null) edition.displayYearLabel!,
+                  if (edition.editionFeatures.isNotEmpty)
+                    edition.editionFeatures.take(2).join(' • '),
+                ].join(' • ')),
+                trailing: edition.id == media.id
+                    ? const Icon(Icons.check_circle_rounded, color: Colors.greenAccent)
+                    : null,
+                selected: edition.id == media.id,
+                onTap: edition.id == media.id
+                    ? null
+                    : () => Navigator.of(context).pushReplacement(
+                          MaterialPageRoute<void>(
+                            settings: const RouteSettings(name: '/app/details'),
+                            builder: (_) => MediaDetailsScreen(media: edition),
+                          ),
+                        ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Opens retailer search results rather than claiming that a specific copy
   /// is in stock. Availability, format and regional eligibility are determined
   /// by the retailer after the user follows the link.
   Widget _buildExternalPurchaseOptions() {
-    final query = '${media.title} ${media.releaseYear ?? ''}'.trim();
+    final query = '${media.title} ${media.displayEditionLabel ?? ''} ${media.editionReleaseYear ?? media.releaseYear ?? ''}'.trim();
     final encoded = Uri.encodeQueryComponent(query);
     final retailers = <({String name, IconData icon, String url})>[
       (name: 'Amazon', icon: Icons.shopping_bag_outlined, url: 'https://www.amazon.com/s?k=$encoded'),
@@ -1046,14 +1111,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Widget _buildMetadata() {
     final pills = <Widget>[];
 
-    if (customization.showReleaseYear &&
-        media.releaseYear != null) {
-      pills.add(
-        _metadataPill(
-          Icons.calendar_today_outlined,
-          media.releaseYear.toString(),
-        ),
-      );
+    if (customization.showReleaseYear && media.displayYearLabel != null) {
+      pills.add(_metadataPill(
+        Icons.calendar_today_outlined,
+        media.displayYearLabel!,
+      ));
+    }
+    if (media.displayEditionLabel != null) {
+      pills.add(_metadataPill(Icons.movie_filter_outlined, media.displayEditionLabel!));
+    }
+    if (media.displaySeasonCount != null) {
+      final count = media.displaySeasonCount!;
+      pills.add(_metadataPill(Icons.live_tv_outlined,
+          '$count ${count == 1 ? 'Season' : 'Seasons'}'));
+    }
+    if (!media.isSeries && media.editionReleaseYear != null &&
+        media.releaseYear != null && media.editionReleaseYear != media.releaseYear) {
+      pills.add(_metadataPill(Icons.history_rounded, 'Original ${media.releaseYear}'));
     }
 
     if (customization.showRating &&
@@ -1105,11 +1179,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Widget _buildSmallMetadata() {
     final items = <String>[];
 
-    if (customization.showReleaseYear &&
-        media.releaseYear != null) {
-      items.add(
-        media.releaseYear.toString(),
-      );
+    if (customization.showReleaseYear && media.displayYearLabel != null) {
+      items.add(media.displayYearLabel!);
+    }
+    if (media.displayEditionLabel != null) items.add(media.displayEditionLabel!);
+    if (media.displaySeasonCount != null) {
+      final count = media.displaySeasonCount!;
+      items.add('$count ${count == 1 ? 'Season' : 'Seasons'}');
     }
 
     if (customization.showRating &&
@@ -1593,14 +1669,27 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Widget _buildInformation() {
     final rows = <Widget>[];
 
-    if (customization.showReleaseYear &&
-        media.releaseYear != null) {
-      rows.add(
-        _infoRow(
-          'Release Year',
-          media.releaseYear.toString(),
-        ),
-      );
+    if (customization.showReleaseYear && media.displayYearLabel != null) {
+      rows.add(_infoRow(
+        media.isSeries
+            ? 'Series Run'
+            : (media.editionReleaseYear != null ? 'Edition Release Year' : 'Release Year'),
+        media.displayYearLabel!,
+      ));
+    }
+    if (!media.isSeries && media.editionReleaseYear != null &&
+        media.releaseYear != null && media.editionReleaseYear != media.releaseYear) {
+      rows.add(_infoRow('Original Release Year', media.releaseYear.toString()));
+    }
+    if (media.displayEditionLabel != null) {
+      rows.add(_infoRow('Edition', media.displayEditionLabel!));
+    }
+    if (media.editionFeatures.isNotEmpty) {
+      rows.add(_infoRow('Edition Includes', media.editionFeatures.join(' • ')));
+    }
+    if (media.displaySeasonCount != null) {
+      final count = media.displaySeasonCount!;
+      rows.add(_infoRow('Seasons', '$count ${count == 1 ? 'Season' : 'Seasons'}'));
     }
 
     if (media.directors.isNotEmpty) {

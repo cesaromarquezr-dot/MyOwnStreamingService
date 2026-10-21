@@ -4,7 +4,7 @@
 // inside these hubs or behind More.
 
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'app_customization.dart';
 import 'feature_center.dart';
@@ -43,7 +43,8 @@ class LibraryHubScreen extends StatelessWidget {
               type.contains('track');
         }).length;
         final settings = PageContentCustomizationStore.settingsFor('library');
-        final sectionDraft = AppSectionCustomizationStore.settingsFor(controller.currentProfile);
+        final sectionDraft =
+            AppSectionCustomizationStore.settingsFor(controller.currentProfile);
         final entries = <String, _HubEntry>{
           'movies': _HubEntry(
             'Movies',
@@ -105,9 +106,8 @@ class LibraryHubScreen extends StatelessWidget {
         // enough to remain readable on narrow phones.
         final responsiveMaxColumns =
             (availableWidth / 118).floor().clamp(1, 6).toInt();
-        final gridColumns = sectionDraft.libraryColumns
-            .clamp(1, responsiveMaxColumns)
-            .toInt();
+        final gridColumns =
+            sectionDraft.libraryColumns.clamp(1, responsiveMaxColumns).toInt();
         final gridCardWidth =
             (availableWidth - (10 * (gridColumns - 1))) / gridColumns;
         var gridInserted = false;
@@ -117,13 +117,21 @@ class LibraryHubScreen extends StatelessWidget {
             children.add(
               Row(
                 children: [
-                  Expanded(child: _statCard(context, 'Media', '${library.length}', Icons.library_music_outlined)),
+                  Expanded(
+                      child: _statCard(context, 'Media', '${library.length}',
+                          Icons.library_music_outlined)),
                   const SizedBox(width: 10),
-                  Expanded(child: _statCard(context, 'Movies', '$movies', Icons.movie_outlined)),
+                  Expanded(
+                      child: _statCard(
+                          context, 'Movies', '$movies', Icons.movie_outlined)),
                   const SizedBox(width: 10),
-                  Expanded(child: _statCard(context, 'TV', '$shows', Icons.tv_outlined)),
+                  Expanded(
+                      child: _statCard(
+                          context, 'TV', '$shows', Icons.tv_outlined)),
                   const SizedBox(width: 10),
-                  Expanded(child: _statCard(context, 'Music', '$music', Icons.album_outlined)),
+                  Expanded(
+                      child: _statCard(
+                          context, 'Music', '$music', Icons.album_outlined)),
                 ],
               ),
             );
@@ -151,12 +159,17 @@ class LibraryHubScreen extends StatelessWidget {
                         _hubGridCard(
                           context,
                           entries[itemSection]!,
-                          width: (sectionDraft.libraryWidgetSizes[itemSection] == 'Large' && gridColumns > 1)
-                              ? gridCardWidth * 2 + 10
-                              : gridCardWidth,
-                          size: sectionDraft.libraryWidgetSizes[itemSection] ?? 'Medium',
+                          width:
+                              (sectionDraft.libraryWidgetSizes[itemSection] ==
+                                          'Large' &&
+                                      gridColumns > 1)
+                                  ? gridCardWidth * 2 + 10
+                                  : gridCardWidth,
+                          size: sectionDraft.libraryWidgetSizes[itemSection] ??
+                              'Medium',
                           compact: sectionDraft.libraryCardStyle == 'Compact',
-                          landscape: sectionDraft.libraryCardStyle == 'Landscape',
+                          landscape:
+                              sectionDraft.libraryCardStyle == 'Landscape',
                         ),
                     ],
                   ),
@@ -179,7 +192,8 @@ class LibraryHubScreen extends StatelessWidget {
 
         return _HubScaffold(
           title: 'Library',
-          subtitle: 'Everything published to this account’s shared home-server library.',
+          subtitle:
+              'Everything published to this account’s shared home-server library.',
           icon: Icons.video_library_rounded,
           children: children,
         );
@@ -187,7 +201,8 @@ class LibraryHubScreen extends StatelessWidget {
     );
   }
 
-  Widget _statCard(BuildContext context, String title, String value, IconData icon) {
+  Widget _statCard(
+      BuildContext context, String title, String value, IconData icon) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -196,8 +211,13 @@ class LibraryHubScreen extends StatelessWidget {
           children: [
             Icon(icon, size: 22),
             const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-            Text(title, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            Text(value,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w900)),
+            Text(title,
+                style: const TextStyle(color: Colors.white54, fontSize: 11)),
           ],
         ),
       ),
@@ -248,9 +268,13 @@ class _HubScaffold extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+                      Text(title,
+                          style: const TextStyle(
+                              fontSize: 28, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 5),
-                      Text(subtitle, style: const TextStyle(color: Colors.white60, height: 1.4)),
+                      Text(subtitle,
+                          style: const TextStyle(
+                              color: Colors.white60, height: 1.4)),
                     ],
                   ),
                 ),
@@ -284,7 +308,8 @@ Widget _hubCard(
     Card(
       child: ListTile(
         dense: compact || size == 'Small',
-        minVerticalPadding: size == 'Large' ? 18 : (compact || size == 'Small' ? 3 : 8),
+        minVerticalPadding:
+            size == 'Large' ? 18 : (compact || size == 'Small' ? 3 : 8),
         leading: landscape
             ? CircleAvatar(child: Icon(entry.icon, size: 20))
             : Icon(entry.icon),
@@ -330,22 +355,29 @@ Widget _hubGridCard(
       child: InkWell(
         onTap: entry.onTap,
         child: Padding(
-          padding: EdgeInsets.all(size == 'Small' ? 10 : (size == 'Large' ? 18 : 14)),
+          padding: EdgeInsets.all(
+              size == 'Small' ? 10 : (size == 'Large' ? 18 : 14)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(entry.icon, size: iconSize),
               const Spacer(),
-              Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+              Text(entry.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w900)),
               if (size != 'Small') ...[
                 const SizedBox(height: 4),
-                Text(entry.subtitle, maxLines: size == 'Large' ? 3 : 2,
+                Text(entry.subtitle,
+                    maxLines: size == 'Large' ? 3 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                    style:
+                        const TextStyle(color: Colors.white60, fontSize: 11)),
               ],
               if (landscape || compact)
-                const Align(alignment: Alignment.bottomRight, child: Icon(Icons.chevron_right_rounded, size: 18)),
+                const Align(
+                    alignment: Alignment.bottomRight,
+                    child: Icon(Icons.chevron_right_rounded, size: 18)),
             ],
           ),
         ),
@@ -369,7 +401,8 @@ void _push(BuildContext context, Widget page) {
   Navigator.push(
     context,
     MaterialPageRoute(
-      settings: pageId == null ? null : RouteSettings(name: '/app/page/$pageId'),
+      settings:
+          pageId == null ? null : RouteSettings(name: '/app/page/$pageId'),
       builder: (_) => page,
     ),
   );

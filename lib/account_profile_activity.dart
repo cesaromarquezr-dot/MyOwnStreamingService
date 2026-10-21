@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'privacy_preferences.dart';
+import 'backend_api.dart';
 
 /// Shows the *other* profiles on the signed-in account, with live presence and
 /// profile-to-profile messaging. The currently selected profile is deliberately
@@ -21,7 +22,8 @@ class AccountProfileActivityStrip extends StatefulWidget {
       _AccountProfileActivityStripState();
 }
 
-class _AccountProfileActivityStripState extends State<AccountProfileActivityStrip> {
+class _AccountProfileActivityStripState
+    extends State<AccountProfileActivityStrip> {
   Timer? _refreshTimer;
   bool _requestInFlight = false;
   List<Map<String, dynamic>> _presenceProfiles = const <Map<String, dynamic>>[];
@@ -60,7 +62,9 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
     final current = controller.currentProfile;
     final account = controller.currentAccount;
     if (current == null || account == null) {
-      if (mounted) setState(() => _presenceProfiles = const <Map<String, dynamic>>[]);
+      if (mounted) {
+        setState(() => _presenceProfiles = const <Map<String, dynamic>>[]);
+      }
       return;
     }
 
@@ -84,7 +88,8 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
             .map((profile) {
               final normalized = Map<String, dynamic>.from(profile);
               normalized['name'] ??= normalized['displayName'] ??
-                  normalized['display_name'] ?? normalized['profileName'] ??
+                  normalized['display_name'] ??
+                  normalized['profileName'] ??
                   normalized['profile_name'];
               normalized['avatarUrl'] ??= normalized['avatar_url'];
               normalized['profileId'] ??= normalized['profile_id'];
@@ -119,11 +124,13 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
     final currentId = controller.currentProfile?.id;
     if (!controller.backendApi.isAuthenticated) return;
     final profiles = _presenceProfiles.where((profile) {
-      final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '').toString();
+      final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '')
+          .toString();
       return id.isNotEmpty && id != currentId;
     }).toList();
     await Future.wait(profiles.map((profile) async {
-      final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '').toString();
+      final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '')
+          .toString();
       if (id.isEmpty || _activityLoading.contains(id)) return;
       _activityLoading.add(id);
       try {
@@ -135,8 +142,8 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
           _recentActivity[id] = const <Map<String, dynamic>>[];
           return;
         }
-        final items = await controller.backendApi.getMediaActivity(
-          profileId: id, limit: 5);
+        final items = await controller.backendApi
+            .getMediaActivity(profileId: id, limit: 5);
         _recentActivity[id] = items;
       } catch (_) {
         _recentActivity.putIfAbsent(id, () => const <Map<String, dynamic>>[]);
@@ -151,7 +158,8 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
   Widget build(BuildContext context) {
     final currentId = AppController.instance.currentProfile?.id;
     final others = _presenceProfiles.where((profile) {
-      final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '').toString();
+      final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '')
+          .toString();
       return id.isNotEmpty && id != currentId;
     }).toList();
     if (others.isEmpty) return const SizedBox.shrink();
@@ -196,18 +204,26 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
   }
 
   String _profileDisplayName(Map<String, dynamic> profile) {
-    final id = (profile['profileId'] ?? profile['profile_id'] ??
-        profile['external_profile_id'] ?? '');
-    final fromResponse = (profile['displayName'] ?? profile['display_name'] ??
-        profile['profileName'] ?? profile['profile_name'] ?? profile['name'] ?? '')
-        .toString().trim();
+    final id = (profile['profileId'] ??
+        profile['profile_id'] ??
+        profile['external_profile_id'] ??
+        '');
+    final fromResponse = (profile['displayName'] ??
+            profile['display_name'] ??
+            profile['profileName'] ??
+            profile['profile_name'] ??
+            profile['name'] ??
+            '')
+        .toString()
+        .trim();
     if (fromResponse.isNotEmpty &&
         !RegExp(r'^user\s*\d+$', caseSensitive: false).hasMatch(fromResponse)) {
       return fromResponse;
     }
     // Social API responses can omit the display name. Resolve the profile ID
     // against this account's profile objects before using a generic fallback.
-    final accountProfiles = AppController.instance.currentAccount?.profiles ?? const [];
+    final accountProfiles =
+        AppController.instance.currentAccount?.profiles ?? const [];
     for (final candidate in accountProfiles) {
       if (candidate.id == id.toString()) {
         final accountName = candidate.name.trim();
@@ -218,7 +234,8 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
   }
 
   Widget _profileRecentActivitySection(Map<String, dynamic> profile) {
-    final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '').toString();
+    final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '')
+        .toString();
     final name = _profileDisplayName(profile);
     final items = _recentActivity[id] ?? const <Map<String, dynamic>>[];
     final loading = _activityLoading.contains(id);
@@ -231,8 +248,9 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
           Row(children: [
             const Icon(Icons.history_rounded, size: 17, color: Colors.white70),
             const SizedBox(width: 7),
-            Expanded(child: Text('$name recently watched / listened to',
-                style: const TextStyle(fontWeight: FontWeight.w800))),
+            Expanded(
+                child: Text('$name recently watched / listened to',
+                    style: const TextStyle(fontWeight: FontWeight.w800))),
           ]),
           if (loading && items.isEmpty)
             const Padding(
@@ -250,13 +268,23 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
   Widget _activityTile(Map<String, dynamic> item) {
     final action = (item['action'] ?? '').toString().toLowerCase();
     final type = (item['contentType'] ?? item['content_type'] ?? 'media')
-        .toString().toLowerCase();
-    final title = (item['title'] ?? item['contentTitle'] ?? item['content_title'] ??
-            item['name'] ?? item['contentId'] ?? item['content_id'] ?? 'Untitled')
+        .toString()
+        .toLowerCase();
+    final title = (item['title'] ??
+            item['contentTitle'] ??
+            item['content_title'] ??
+            item['name'] ??
+            item['contentId'] ??
+            item['content_id'] ??
+            'Untitled')
         .toString();
-    final isMusic = type.contains('song') || type.contains('track') ||
-        type.contains('music') || type.contains('album');
-    final isEpisode = type.contains('episode') || type.contains('tv') || type.contains('show');
+    final isMusic = type.contains('song') ||
+        type.contains('track') ||
+        type.contains('music') ||
+        type.contains('album');
+    final isEpisode = type.contains('episode') ||
+        type.contains('tv') ||
+        type.contains('show');
     final subtitle = isMusic
         ? 'Listened to${(item['artist'] ?? item['artistName'] ?? item['artist_name']) == null ? '' : ' · ${item['artist'] ?? item['artistName'] ?? item['artist_name']}'}'
         : isEpisode
@@ -271,22 +299,33 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
       contentPadding: const EdgeInsets.only(left: 2, right: 2),
       leading: Icon(isMusic ? Icons.music_note_rounded : Icons.movie_outlined,
           color: isMusic ? Colors.purpleAccent : Colors.white70),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+      title: Text(title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-      subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+      subtitle: Text(subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(color: Colors.white60, fontSize: 12)),
-      trailing: timestamp == null ? null : Text(
-        MaterialLocalizations.of(context).formatShortDate(timestamp.toLocal()),
-        style: const TextStyle(color: Colors.white54, fontSize: 10)),
+      trailing: timestamp == null
+          ? null
+          : Text(
+              MaterialLocalizations.of(context)
+                  .formatShortDate(timestamp.toLocal()),
+              style: const TextStyle(color: Colors.white54, fontSize: 10)),
     );
   }
 
   String _episodeSubtitle(Map<String, dynamic> item) {
-    final season = item['seasonNumber'] ?? item['season_number'] ?? item['season'];
-    final episode = item['episodeNumber'] ?? item['episode_number'] ?? item['episode'];
+    final season =
+        item['seasonNumber'] ?? item['season_number'] ?? item['season'];
+    final episode =
+        item['episodeNumber'] ?? item['episode_number'] ?? item['episode'];
     final show = item['showTitle'] ?? item['show_title'];
     final parts = <String>[];
-    if (show != null && show.toString().trim().isNotEmpty) parts.add(show.toString());
+    if (show != null && show.toString().trim().isNotEmpty) {
+      parts.add(show.toString());
+    }
     if (season != null && episode != null) {
       parts.add('Season $season · Episode $episode');
     } else {
@@ -296,10 +335,14 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
   }
 
   Widget _profileCard(Map<String, dynamic> profile) {
-    final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '').toString();
+    final id = (profile['profileId'] ?? profile['external_profile_id'] ?? '')
+        .toString();
     final name = _profileDisplayName(profile);
-    final avatarUrl = (profile['avatarUrl'] ?? profile['avatar_url'])?.toString();
-    final activity = (profile['activityText'] ?? profile['activity_text'])?.toString().trim();
+    final avatarUrl =
+        (profile['avatarUrl'] ?? profile['avatar_url'])?.toString();
+    final activity = (profile['activityText'] ?? profile['activity_text'])
+        ?.toString()
+        .trim();
     final active = _isActive(profile);
     final lastSeenText = active ? 'User is active' : _inactivePhrase(profile);
     final imageUri = Uri.tryParse(avatarUrl ?? '');
@@ -354,11 +397,14 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
                 child: CircleAvatar(
                   radius: 23,
                   backgroundColor: const Color(0xFF292D34),
-                  backgroundImage: hasNetworkAvatar ? NetworkImage(avatarUrl!) : null,
+                  backgroundImage:
+                      hasNetworkAvatar ? NetworkImage(avatarUrl!) : null,
                   child: hasNetworkAvatar
                       ? null
                       : Text(
-                          name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+                          name.trim().isEmpty
+                              ? '?'
+                              : name.trim()[0].toUpperCase(),
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                 ),
@@ -394,10 +440,13 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
                     child: Text(
                       activity != null && activity.isNotEmpty
                           ? activity
-                          : (active ? 'Using MyOwnStreamingService' : 'No current activity'),
+                          : (active
+                              ? 'Using MyOwnStreamingService'
+                              : 'No current activity'),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.2),
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 11, height: 1.2),
                     ),
                   ),
                   if (widget.onMessageProfile != null)
@@ -405,15 +454,21 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
                       alignment: Alignment.centerRight,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: id.isEmpty ? null : () => widget.onMessageProfile!(id),
+                        onTap: id.isEmpty
+                            ? null
+                            : () => widget.onMessageProfile!(id),
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.chat_bubble_outline_rounded, size: 14),
                               SizedBox(width: 4),
-                              Text('Message', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                              Text('Message',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
                             ],
                           ),
                         ),
@@ -429,10 +484,13 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
   }
 
   bool _isActive(Map<String, dynamic> profile) {
-    final status = (profile['presenceStatus'] ?? profile['availability'] ?? 'away')
-        .toString()
-        .toLowerCase();
-    if (status == 'away' || status == 'offline' || status == 'invisible') return false;
+    final status =
+        (profile['presenceStatus'] ?? profile['availability'] ?? 'away')
+            .toString()
+            .toLowerCase();
+    if (status == 'away' || status == 'offline' || status == 'invisible') {
+      return false;
+    }
     final lastSeen = DateTime.tryParse(
       (profile['lastSeenAt'] ?? profile['last_seen_at'] ?? '').toString(),
     );
@@ -453,9 +511,15 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
 
   String _elapsedParts(DateTime start, DateTime end) {
     var cursor = DateTime.utc(
-      start.year, start.month, start.day, start.hour, start.minute, start.second,
+      start.year,
+      start.month,
+      start.day,
+      start.hour,
+      start.minute,
+      start.second,
     );
-    final target = DateTime.utc(end.year, end.month, end.day, end.hour, end.minute, end.second);
+    final target = DateTime.utc(
+        end.year, end.month, end.day, end.hour, end.minute, end.second);
     if (!target.isAfter(cursor)) return 'less than 1 second';
 
     int years = target.year - cursor.year;
@@ -489,6 +553,7 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
     void add(int value, String unit) {
       if (value > 0) parts.add('$value $unit${value == 1 ? '' : 's'}');
     }
+
     add(years, 'year');
     add(months, 'month');
     add(weeks, 'week');
@@ -501,8 +566,10 @@ class _AccountProfileActivityStripState extends State<AccountProfileActivityStri
 
   DateTime _addYearsClamped(DateTime date, int years) {
     final year = date.year + years;
-    final day = date.day.clamp(1, DateTime.utc(year, date.month + 1, 0).day).toInt();
-    return DateTime.utc(year, date.month, day, date.hour, date.minute, date.second);
+    final day =
+        date.day.clamp(1, DateTime.utc(year, date.month + 1, 0).day).toInt();
+    return DateTime.utc(
+        year, date.month, day, date.hour, date.minute, date.second);
   }
 
   DateTime _addMonthsClamped(DateTime date, int months) {

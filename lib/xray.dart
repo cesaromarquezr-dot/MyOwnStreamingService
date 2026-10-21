@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
@@ -29,13 +29,24 @@ class XRayScreen extends StatefulWidget {
   State<XRayScreen> createState() => _XRayScreenState();
 }
 
-enum SpoilerProtectionLevel { noSpoilers, currentScene, currentMovie, franchise, everything }
+enum SpoilerProtectionLevel {
+  noSpoilers,
+  currentScene,
+  currentMovie,
+  franchise,
+  everything
+}
 
 class _XRayScreenState extends State<XRayScreen> {
   SpoilerProtectionLevel _spoilerLevel = SpoilerProtectionLevel.currentScene;
   final Set<String> _followedEntities = <String>{};
   final Set<String> _visibleSections = <String>{
-    'People', 'Characters', 'Music', 'Locations', 'Trivia', 'Production',
+    'People',
+    'Characters',
+    'Music',
+    'Locations',
+    'Trivia',
+    'Production',
     'Connections',
   };
   List<Map<String, dynamic>> _privateNotes = <Map<String, dynamic>>[];
@@ -144,8 +155,7 @@ class _XRayScreenState extends State<XRayScreen> {
           .toList();
       if (remoteNotes.isNotEmpty && mounted) {
         final merged = <String, Map<String, dynamic>>{
-          for (final note in _privateNotes)
-            note['id'].toString(): note,
+          for (final note in _privateNotes) note['id'].toString(): note,
           for (final note in remoteNotes) note['id'].toString(): note,
         };
         setState(() => _privateNotes = merged.values.toList()
@@ -254,8 +264,8 @@ class _XRayScreenState extends State<XRayScreen> {
         'Position milliseconds: ${note['positionMilliseconds']}';
     await Clipboard.setData(ClipboardData(text: reference));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: UniversalText('Version-aware X-Ray reference copied.')));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: UniversalText('Version-aware X-Ray reference copied.')));
   }
 
   Future<void> _toggleFollow(String type, String name) async {
@@ -273,8 +283,15 @@ class _XRayScreenState extends State<XRayScreen> {
 
   Future<void> _chooseSections() async {
     const options = <String>[
-      'People', 'Characters', 'Music', 'Locations', 'Trivia', 'Props',
-      'Behind the Scenes', 'Production', 'Connections',
+      'People',
+      'Characters',
+      'Music',
+      'Locations',
+      'Trivia',
+      'Props',
+      'Behind the Scenes',
+      'Production',
+      'Connections',
     ];
     final selected = Set<String>.from(_visibleSections);
     final result = await showDialog<Set<String>>(
@@ -350,11 +367,21 @@ class _XRayScreenState extends State<XRayScreen> {
             initialValue: _spoilerLevel,
             onSelected: _setSpoilerLevel,
             itemBuilder: (_) => const [
-              PopupMenuItem(value: SpoilerProtectionLevel.noSpoilers, child: UniversalText('No spoilers')),
-              PopupMenuItem(value: SpoilerProtectionLevel.currentScene, child: UniversalText('Current scene')),
-              PopupMenuItem(value: SpoilerProtectionLevel.currentMovie, child: UniversalText('Current movie')),
-              PopupMenuItem(value: SpoilerProtectionLevel.franchise, child: UniversalText('Franchise')),
-              PopupMenuItem(value: SpoilerProtectionLevel.everything, child: UniversalText('Everything')),
+              PopupMenuItem(
+                  value: SpoilerProtectionLevel.noSpoilers,
+                  child: UniversalText('No spoilers')),
+              PopupMenuItem(
+                  value: SpoilerProtectionLevel.currentScene,
+                  child: UniversalText('Current scene')),
+              PopupMenuItem(
+                  value: SpoilerProtectionLevel.currentMovie,
+                  child: UniversalText('Current movie')),
+              PopupMenuItem(
+                  value: SpoilerProtectionLevel.franchise,
+                  child: UniversalText('Franchise')),
+              PopupMenuItem(
+                  value: SpoilerProtectionLevel.everything,
+                  child: UniversalText('Everything')),
             ],
             icon: const Icon(Icons.visibility_outlined),
           ),
@@ -379,7 +406,8 @@ class _XRayScreenState extends State<XRayScreen> {
             children: [
               _heroCard(),
               const SizedBox(height: 18),
-              if (event != null && _spoilerLevel != SpoilerProtectionLevel.noSpoilers) ...[
+              if (event != null &&
+                  _spoilerLevel != SpoilerProtectionLevel.noSpoilers) ...[
                 _sceneCard(event, currentPosition),
                 const SizedBox(height: 18),
               ],
@@ -395,35 +423,47 @@ class _XRayScreenState extends State<XRayScreen> {
                       showActor: _visibleSections.contains('People'),
                       showCharacter: _visibleSections.contains('Characters')),
               ],
-              if (event != null && _spoilerLevel != SpoilerProtectionLevel.noSpoilers) ...[
+              if (event != null &&
+                  _spoilerLevel != SpoilerProtectionLevel.noSpoilers) ...[
                 if (_visibleSections.contains('Music'))
-                  _contextSection(event, 'music', 'MUSIC', Icons.music_note_rounded),
+                  _contextSection(
+                      event, 'music', 'MUSIC', Icons.music_note_rounded),
                 if (_visibleSections.contains('Trivia'))
-                  _contextSection(event, 'trivia', 'TRIVIA', Icons.lightbulb_outline_rounded),
-                if (_visibleSections.contains('Locations'))
-                  ...[
-                    _contextSection(event, 'location', 'LOCATION', Icons.place_outlined),
-                    _contextSection(event, 'filmingLocation', 'FILMING LOCATION', Icons.location_on_outlined),
-                  ],
+                  _contextSection(event, 'trivia', 'TRIVIA',
+                      Icons.lightbulb_outline_rounded),
+                if (_visibleSections.contains('Locations')) ...[
+                  _contextSection(
+                      event, 'location', 'LOCATION', Icons.place_outlined),
+                  _contextSection(event, 'filmingLocation', 'FILMING LOCATION',
+                      Icons.location_on_outlined),
+                ],
                 if (_visibleSections.contains('Production')) ...[
-                  _contextSection(event, 'composer', 'MUSIC BY', Icons.music_note_rounded),
-                  _contextSection(event, 'cinematographer', 'CINEMATOGRAPHY', Icons.camera_alt_outlined),
+                  _contextSection(
+                      event, 'composer', 'MUSIC BY', Icons.music_note_rounded),
+                  _contextSection(event, 'cinematographer', 'CINEMATOGRAPHY',
+                      Icons.camera_alt_outlined),
                 ],
                 if (_visibleSections.contains('Props'))
-                  _contextSection(event, 'objects', 'OBJECTS', Icons.category_outlined),
+                  _contextSection(
+                      event, 'objects', 'OBJECTS', Icons.category_outlined),
                 if (_visibleSections.contains('Behind the Scenes'))
-                  _contextSection(event, 'behindTheScenes', 'BEHIND THE SCENES', Icons.movie_filter_outlined),
+                  _contextSection(event, 'behindTheScenes', 'BEHIND THE SCENES',
+                      Icons.movie_filter_outlined),
                 if (_visibleSections.contains('Connections')) ...[
-                  _contextSection(event, 'references', 'REFERENCES', Icons.link_rounded),
-                  _contextSection(event, 'relatedMedia', 'RELATED', Icons.movie_outlined),
+                  _contextSection(
+                      event, 'references', 'REFERENCES', Icons.link_rounded),
+                  _contextSection(
+                      event, 'relatedMedia', 'RELATED', Icons.movie_outlined),
                 ],
-              ] else if (_spoilerLevel != SpoilerProtectionLevel.noSpoilers && media.music.isNotEmpty) ...[
+              ] else if (_spoilerLevel != SpoilerProtectionLevel.noSpoilers &&
+                  media.music.isNotEmpty) ...[
                 const SizedBox(height: 18),
                 _heading('MUSIC', Icons.music_note_rounded),
                 const SizedBox(height: 10),
                 _contextItems(media.music),
               ],
-              if (_visibleSections.contains('Production') && directors.isNotEmpty) ...[
+              if (_visibleSections.contains('Production') &&
+                  directors.isNotEmpty) ...[
                 const SizedBox(height: 18),
                 _heading('DIRECTORS', Icons.movie_creation_outlined),
                 const SizedBox(height: 10),
@@ -434,7 +474,8 @@ class _XRayScreenState extends State<XRayScreen> {
                       icon: Icons.videocam_outlined,
                       followType: 'director'),
               ],
-              if (_visibleSections.contains('Production') && writers.isNotEmpty) ...[
+              if (_visibleSections.contains('Production') &&
+                  writers.isNotEmpty) ...[
                 const SizedBox(height: 18),
                 _heading('WRITERS', Icons.edit_note_rounded),
                 const SizedBox(height: 10),
@@ -482,16 +523,16 @@ class _XRayScreenState extends State<XRayScreen> {
               ListTile(
                 dense: true,
                 title: Text(note['text']?.toString() ?? ''),
-              subtitle: Text(
-                  '${_formatPosition(Duration(milliseconds: (note['positionMilliseconds'] as num?)?.toInt() ?? 0))} · ${note['mediaVersionId'] ?? 'unversioned'}'),
-              trailing: IconButton(
-                tooltip: note['mediaVersionId'] == null
-                    ? 'A version ID is required for an exact reference'
-                    : 'Copy X-Ray reference',
-                onPressed: note['mediaVersionId'] == null
-                    ? null
-                    : () => _copyXRayShareLink(note),
-                icon: const Icon(Icons.share_outlined),
+                subtitle: Text(
+                    '${_formatPosition(Duration(milliseconds: (note['positionMilliseconds'] as num?)?.toInt() ?? 0))} · ${note['mediaVersionId'] ?? 'unversioned'}'),
+                trailing: IconButton(
+                  tooltip: note['mediaVersionId'] == null
+                      ? 'A version ID is required for an exact reference'
+                      : 'Copy X-Ray reference',
+                  onPressed: note['mediaVersionId'] == null
+                      ? null
+                      : () => _copyXRayShareLink(note),
+                  icon: const Icon(Icons.share_outlined),
                 ),
               ),
           ],
@@ -815,13 +856,14 @@ class _XRayScreenState extends State<XRayScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (showActor) Text(
-                      cast.actor,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
+                    if (showActor)
+                      Text(
+                        cast.actor,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 4),
                     if (showCharacter)
                       Text('as ${cast.character}',
@@ -845,15 +887,16 @@ class _XRayScreenState extends State<XRayScreen> {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (showActor) IconButton(
-                    tooltip: _followedEntities.contains(actorKey)
-                        ? 'Unfollow actor'
-                        : 'Follow actor',
-                    onPressed: () => _toggleFollow('actor', cast.actor),
-                    icon: Icon(_followedEntities.contains(actorKey)
-                        ? Icons.person_remove_alt_1
-                        : Icons.person_add_alt_1),
-                  ),
+                  if (showActor)
+                    IconButton(
+                      tooltip: _followedEntities.contains(actorKey)
+                          ? 'Unfollow actor'
+                          : 'Follow actor',
+                      onPressed: () => _toggleFollow('actor', cast.actor),
+                      icon: Icon(_followedEntities.contains(actorKey)
+                          ? Icons.person_remove_alt_1
+                          : Icons.person_add_alt_1),
+                    ),
                   if (showCharacter && cast.character != 'Featured cast')
                     IconButton(
                       tooltip: _followedEntities.contains(characterKey)
@@ -1040,7 +1083,8 @@ class ActorBiographyScreen extends StatelessWidget {
       return item.actors.any((credit) {
         final normalized = credit.trim().toLowerCase();
         final actor = actorName.trim().toLowerCase();
-        return normalized == actor || normalized.startsWith('$actor as ') ||
+        return normalized == actor ||
+            normalized.startsWith('$actor as ') ||
             normalized.startsWith('$actor - ');
       });
     }).toList();

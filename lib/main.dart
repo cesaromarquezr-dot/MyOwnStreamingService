@@ -1,8 +1,6 @@
 // FILE: `lib/main.dart`.
 // Purpose: Implements the main portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
-
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -18,19 +16,21 @@ import 'physical_media_library.dart';
 import 'signup.dart';
 import 'smart_search.dart';
 import 'details.dart';
+import 'player.dart';
 import 'seasonal_collections.dart';
 import 'profiles.dart';
 import 'account_settings.dart';
 import 'device_features.dart';
-import 'film.dart';
 import 'how_it_works.dart';
 import 'shop.dart';
-import 'food_delivery.dart';
 import 'watch_and_enjoy.dart';
 import 'hey_marathon.dart';
 import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
+import 'home_streaming_discovery.dart';
+import 'movies.dart';
+import 'series.dart';
 import 'innovation_features.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
@@ -47,8 +47,8 @@ import 'production_readiness.dart';
 import 'security_settings.dart';
 import 'navigation_hubs.dart';
 import 'media_universe.dart';
-import 'my_tv.dart';
-import 'public_live_tv.dart';
+import 'watch_hub.dart';
+import 'marketplace_hub.dart';
 import 'social_story_experience.dart';
 import 'app_customization.dart';
 import 'entertainment_studio.dart';
@@ -185,7 +185,9 @@ class _AppPageRouteObserver extends NavigatorObserver {
     if (name == '/app/server-selection') return 'server-selection';
     if (name != null && name.startsWith('/main/')) {
       final destination = name.substring('/main/'.length);
-      if (destination == 'home' || destination == 'library' || destination == 'friends') {
+      if (destination == 'home' ||
+          destination == 'library' ||
+          destination == 'friends') {
         return destination;
       }
     }
@@ -358,42 +360,41 @@ class _MyStreamingServiceState extends State<MyStreamingService> {
             OverlayEntry(
               builder: (overlayContext) => Positioned.fill(
                 child: AnimatedBuilder(
-                    animation: _appPageState,
-                    builder: (context, _) {
-                      final profileSelected =
-                          AppController.instance.currentProfile != null;
-                      final routeIsOnboarding =
-                          _appPageState.pageId == 'boot' ||
-                          _appPageState.pageId == 'profiles' ||
-                          _appPageState.pageId == 'server-selection' ||
-                          _appPageState.pageId == 'import';
+                  animation: _appPageState,
+                  builder: (context, _) {
+                    final profileSelected =
+                        AppController.instance.currentProfile != null;
+                    final routeIsOnboarding = _appPageState.pageId == 'boot' ||
+                        _appPageState.pageId == 'profiles' ||
+                        _appPageState.pageId == 'server-selection' ||
+                        _appPageState.pageId == 'import';
 
-                      if (!profileSelected ||
-                          routeIsOnboarding ||
-                          _appPageState.pageId == 'player') {
-                        return const SizedBox.shrink();
-                      }
+                    if (!profileSelected ||
+                        routeIsOnboarding ||
+                        _appPageState.pageId == 'player') {
+                      return const SizedBox.shrink();
+                    }
 
-                      return Align(
-                        alignment: Alignment.bottomLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            left: 12,
-                            bottom: MediaQuery.paddingOf(context).bottom + 12,
-                          ),
-                          child: const IgnorePointer(
-                            ignoring: false,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: LanguagePicker(),
-                            ),
+                    return Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          left: 12,
+                          bottom: MediaQuery.paddingOf(context).bottom + 12,
+                        ),
+                        child: const IgnorePointer(
+                          ignoring: false,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: LanguagePicker(),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
+            ),
           ],
         );
       },
@@ -558,7 +559,9 @@ class _AppPageSurface extends StatelessWidget {
           onSurface: Colors.white,
         );
         final theme = baseTheme.copyWith(
-          scaffoldBackgroundColor: accessibility.highContrast ? Colors.black : Color(appearance.backgroundColor),
+          scaffoldBackgroundColor: accessibility.highContrast
+              ? Colors.black
+              : Color(appearance.backgroundColor),
           colorScheme: accessibility.highContrast
               ? highContrastScheme
               : ColorScheme.fromSeed(
@@ -566,13 +569,16 @@ class _AppPageSurface extends StatelessWidget {
                   brightness: baseTheme.brightness,
                 ),
           textTheme: accessibility.highContrast
-              ? baseTheme.textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white)
+              ? baseTheme.textTheme
+                  .apply(bodyColor: Colors.white, displayColor: Colors.white)
               : baseTheme.textTheme,
           visualDensity: density,
         );
         final media = MediaQuery.of(context);
         final systemScale = media.textScaler.scale(14.0) / 14.0;
-        final effectiveTextScale = (systemScale * accessibility.appTextScale).clamp(0.75, 2.2).toDouble();
+        final effectiveTextScale = (systemScale * accessibility.appTextScale)
+            .clamp(0.75, 2.2)
+            .toDouble();
         final showGlobalNavigation =
             AppController.instance.currentProfile != null &&
                 _appPageState.pageId != 'boot' &&
@@ -622,7 +628,7 @@ class _AppPageSurface extends StatelessWidget {
 
 String _pageTitleFor(String pageId) => switch (pageId) {
       'home' => 'Home',
-      'library' => 'Library',
+      'library' => 'Watch',
       'friends' => 'Friends',
       'movies' => 'Movies',
       'series' => 'TV Shows',
@@ -718,11 +724,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     super.initState();
     draft = _PageAppearanceStore.forPage(widget.pageId);
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
-    sectionDraft = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
+    sectionDraft = AppSectionCustomizationStore.settingsFor(
+        AppController.instance.currentProfile);
     StoryPlacementStore.load(AppController.instance.currentProfile);
   }
 
-  Widget _socialThemeDropdown(String label, String value, ValueChanged<String> onChanged) {
+  Widget _socialThemeDropdown(
+      String label, String value, ValueChanged<String> onChanged) {
     return SocialThemePickerField(
       label: label,
       value: value,
@@ -748,10 +756,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const UniversalText('These settings apply only to this page.',
+          const UniversalText(
+            'These settings apply only to this page.',
             style: TextStyle(color: Colors.white70),
           ),
-          if (widget.pageId == 'shop' || widget.pageId == 'library' || widget.pageId == 'friends') ...[
+          if (widget.pageId == 'shop' ||
+              widget.pageId == 'library' ||
+              widget.pageId == 'friends') ...[
             const SizedBox(height: 4),
             Card(
               child: Padding(
@@ -759,56 +770,110 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$title layout', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text('$title layout',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 10),
                     if (widget.pageId == 'shop') ...[
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.shopCardStyle,
-                        decoration: const InputDecoration(labelText: 'Product card style'),
-                        items: const ['Compact', 'Comfortable', 'Large'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.shopCardStyle = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Product card style'),
+                        items: const ['Compact', 'Comfortable', 'Large']
+                            .map((v) =>
+                                DropdownMenuItem(value: v, child: Text(v)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => sectionDraft.shopCardStyle = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<int>(
                         initialValue: sectionDraft.shopColumns,
-                        decoration: const InputDecoration(labelText: 'Products per row'),
-                        items: const [1,2,3,4].map((v) => DropdownMenuItem(value: v, child: Text('$v'))).toList(),
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.shopColumns = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Products per row'),
+                        items: const [1, 2, 3, 4]
+                            .map((v) =>
+                                DropdownMenuItem(value: v, child: Text('$v')))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => sectionDraft.shopColumns = v);
+                          }
+                        },
                       ),
-                      SwitchListTile(contentPadding: EdgeInsets.zero, value: sectionDraft.showShopPrices, onChanged: (v) => setState(() => sectionDraft.showShopPrices = v), title: const UniversalText('Show prices')),
-                      SwitchListTile(contentPadding: EdgeInsets.zero, value: sectionDraft.showShopInventory, onChanged: (v) => setState(() => sectionDraft.showShopInventory = v), title: const UniversalText('Show inventory counts')),
+                      SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: sectionDraft.showShopPrices,
+                          onChanged: (v) =>
+                              setState(() => sectionDraft.showShopPrices = v),
+                          title: const UniversalText('Show prices')),
+                      SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: sectionDraft.showShopInventory,
+                          onChanged: (v) => setState(
+                              () => sectionDraft.showShopInventory = v),
+                          title: const UniversalText('Show inventory counts')),
                     ] else if (widget.pageId == 'library') ...[
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.libraryViewMode,
-                        decoration: const InputDecoration(labelText: 'Library layout'),
+                        decoration:
+                            const InputDecoration(labelText: 'Library layout'),
                         items: const [
-                          DropdownMenuItem(value: 'List', child: UniversalText('List view')),
-                          DropdownMenuItem(value: 'Grid', child: UniversalText('Grid view')),
+                          DropdownMenuItem(
+                              value: 'List', child: UniversalText('List view')),
+                          DropdownMenuItem(
+                              value: 'Grid', child: UniversalText('Grid view')),
                         ],
                         onChanged: (v) {
-                          if (v != null) setState(() => sectionDraft.libraryViewMode = v);
+                          if (v != null) {
+                            setState(() => sectionDraft.libraryViewMode = v);
+                          }
                         },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.libraryCardStyle,
-                        decoration: const InputDecoration(labelText: 'Library card appearance'),
-                        items: const ['Poster', 'Landscape', 'Compact'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryCardStyle = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Library card appearance'),
+                        items: const ['Poster', 'Landscape', 'Compact']
+                            .map((v) =>
+                                DropdownMenuItem(value: v, child: Text(v)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => sectionDraft.libraryCardStyle = v);
+                          }
+                        },
                       ),
                       if (sectionDraft.libraryViewMode == 'Grid') ...[
                         const SizedBox(height: 10),
                         DropdownButtonFormField<int>(
-                          initialValue: sectionDraft.libraryColumns.clamp(1, 6).toInt(),
-                          decoration: const InputDecoration(labelText: 'Widgets per row'),
-                          items: const [1, 2, 3, 4, 5, 6].map((v) => DropdownMenuItem(value: v, child: Text('$v per row'))).toList(),
-                          onChanged: (v) { if (v != null) setState(() => sectionDraft.libraryColumns = v); },
+                          initialValue:
+                              sectionDraft.libraryColumns.clamp(1, 6).toInt(),
+                          decoration: const InputDecoration(
+                              labelText: 'Widgets per row'),
+                          items: const [1, 2, 3, 4, 5, 6]
+                              .map((v) => DropdownMenuItem(
+                                  value: v, child: Text('$v per row')))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() => sectionDraft.libraryColumns = v);
+                            }
+                          },
                         ),
                       ],
                       const SizedBox(height: 16),
-                      const UniversalText('Individual widget sizes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      const UniversalText('Individual widget sizes',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 4),
-                      const UniversalText('Choose the size of each library shortcut independently.', style: TextStyle(color: Colors.white60)),
+                      const UniversalText(
+                          'Choose the size of each library shortcut independently.',
+                          style: TextStyle(color: Colors.white60)),
                       const SizedBox(height: 8),
                       for (final item in const <Map<String, String>>[
                         {'id': 'movies', 'label': 'Movies'},
@@ -822,11 +887,20 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: DropdownButtonFormField<String>(
-                            initialValue: const ['Small', 'Medium', 'Large'].contains(sectionDraft.libraryWidgetSizes[item['id']])
+                            initialValue: const [
+                              'Small',
+                              'Medium',
+                              'Large'
+                            ].contains(
+                                    sectionDraft.libraryWidgetSizes[item['id']])
                                 ? sectionDraft.libraryWidgetSizes[item['id']]
                                 : 'Medium',
-                            decoration: InputDecoration(labelText: '${item['label']} widget size'),
-                            items: const ['Small', 'Medium', 'Large'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                            decoration: InputDecoration(
+                                labelText: '${item['label']} widget size'),
+                            items: const ['Small', 'Medium', 'Large']
+                                .map((v) =>
+                                    DropdownMenuItem(value: v, child: Text(v)))
+                                .toList(),
                             onChanged: (v) {
                               if (v != null) {
                                 setState(() {
@@ -840,106 +914,286 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                           ),
                         ),
                     ] else ...[
-                      const UniversalText('Customize each social surface', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      const UniversalText('Customize each social surface',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 4),
-                      const UniversalText('Use general design styles for each section. These presets do not use another service’s name, logo, or branded assets.', style: TextStyle(color: Colors.white60)),
+                      const UniversalText(
+                          'Use general design styles for each section. These presets do not use another service’s name, logo, or branded assets.',
+                          style: TextStyle(color: Colors.white60)),
                       const SizedBox(height: 12),
-                      _socialThemeDropdown('Feed theme', sectionDraft.feedStyle, (v) => setState(() => sectionDraft.feedStyle = v)),
+                      _socialThemeDropdown('Feed theme', sectionDraft.feedStyle,
+                          (v) => setState(() => sectionDraft.feedStyle = v)),
                       const SizedBox(height: 10),
-                      _socialThemeDropdown('Profile page theme', sectionDraft.profilePageStyle, (v) => setState(() => sectionDraft.profilePageStyle = v)),
+                      _socialThemeDropdown(
+                          'Profile page theme',
+                          sectionDraft.profilePageStyle,
+                          (v) => setState(
+                              () => sectionDraft.profilePageStyle = v)),
                       const SizedBox(height: 10),
-                      _socialThemeDropdown('Communities theme', sectionDraft.communitiesStyle, (v) => setState(() => sectionDraft.communitiesStyle = v)),
+                      _socialThemeDropdown(
+                          'Communities theme',
+                          sectionDraft.communitiesStyle,
+                          (v) => setState(
+                              () => sectionDraft.communitiesStyle = v)),
                       const SizedBox(height: 10),
-                      _socialThemeDropdown('Friends theme', sectionDraft.friendsStyle, (v) => setState(() => sectionDraft.friendsStyle = v)),
+                      _socialThemeDropdown(
+                          'Friends theme',
+                          sectionDraft.friendsStyle,
+                          (v) => setState(() => sectionDraft.friendsStyle = v)),
                       const SizedBox(height: 10),
-                      _socialThemeDropdown('Messages theme', sectionDraft.messagesStyle, (v) => setState(() => sectionDraft.messagesStyle = v)),
+                      _socialThemeDropdown(
+                          'Messages theme',
+                          sectionDraft.messagesStyle,
+                          (v) =>
+                              setState(() => sectionDraft.messagesStyle = v)),
                       const SizedBox(height: 10),
-                      _socialThemeDropdown('Reels / Shorts / Videos theme', sectionDraft.reelsStyle, (v) => setState(() => sectionDraft.reelsStyle = v)),
+                      _socialThemeDropdown(
+                          'Reels / Shorts / Videos theme',
+                          sectionDraft.reelsStyle,
+                          (v) => setState(() => sectionDraft.reelsStyle = v)),
                       const SizedBox(height: 18),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.socialNavPosition,
-                        decoration: const InputDecoration(labelText: 'Social navigation position'),
+                        decoration: const InputDecoration(
+                            labelText: 'Social navigation position'),
                         items: const [
-                          DropdownMenuItem(value: 'Top', child: UniversalText('Top bar')),
-                          DropdownMenuItem(value: 'Left', child: UniversalText('Left side rail')),
-                          DropdownMenuItem(value: 'Right', child: UniversalText('Right side rail')),
+                          DropdownMenuItem(
+                              value: 'Top', child: UniversalText('Top bar')),
+                          DropdownMenuItem(
+                              value: 'Left',
+                              child: UniversalText('Left side rail')),
+                          DropdownMenuItem(
+                              value: 'Right',
+                              child: UniversalText('Right side rail')),
                         ],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.socialNavPosition = v); },
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => sectionDraft.socialNavPosition = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
-                      const UniversalText('Social section order', style: TextStyle(fontWeight: FontWeight.w800)),
-                      const UniversalText('Choose each profile’s preferred order.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      const UniversalText('Social section order',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      const UniversalText(
+                          'Choose each profile’s preferred order.',
+                          style:
+                              TextStyle(color: Colors.white60, fontSize: 12)),
                       const SizedBox(height: 6),
-                      for (var index = 0; index < sectionDraft.socialNavOrder.length; index++)
+                      for (var index = 0;
+                          index < sectionDraft.socialNavOrder.length;
+                          index++)
                         Card(
                           child: ListTile(
                             title: Text(sectionDraft.socialNavOrder[index]),
-                            leading: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              IconButton(visualDensity: VisualDensity.compact, tooltip: 'Move up', onPressed: index == 0 ? null : () => _moveSocialNavItem(index, index - 1), icon: const Icon(Icons.keyboard_arrow_up_rounded)),
-                              IconButton(visualDensity: VisualDensity.compact, tooltip: 'Move down', onPressed: index == sectionDraft.socialNavOrder.length - 1 ? null : () => _moveSocialNavItem(index, index + 1), icon: const Icon(Icons.keyboard_arrow_down_rounded)),
-                            ]),
+                            leading: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Move up',
+                                      onPressed: index == 0
+                                          ? null
+                                          : () => _moveSocialNavItem(
+                                              index, index - 1),
+                                      icon: const Icon(
+                                          Icons.keyboard_arrow_up_rounded)),
+                                  IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Move down',
+                                      onPressed: index ==
+                                              sectionDraft
+                                                      .socialNavOrder.length -
+                                                  1
+                                          ? null
+                                          : () => _moveSocialNavItem(
+                                              index, index + 1),
+                                      icon: const Icon(
+                                          Icons.keyboard_arrow_down_rounded)),
+                                ]),
                           ),
                         ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.profilePageViewMode,
-                        decoration: const InputDecoration(labelText: 'Profile posts layout'),
-                        items: const [DropdownMenuItem(value: 'Post cards', child: UniversalText('Post card boxes')), DropdownMenuItem(value: 'Timeline', child: UniversalText('Scrollable timeline'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.profilePageViewMode = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Profile posts layout'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'Post cards',
+                              child: UniversalText('Post card boxes')),
+                          DropdownMenuItem(
+                              value: 'Timeline',
+                              child: UniversalText('Scrollable timeline'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(
+                                () => sectionDraft.profilePageViewMode = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.profilePostsSortOrder,
-                        decoration: const InputDecoration(labelText: 'Profile post order'),
-                        items: const [DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')), DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.profilePostsSortOrder = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Profile post order'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'Newest to Oldest',
+                              child: UniversalText('Newest to Oldest')),
+                          DropdownMenuItem(
+                              value: 'Oldest to Newest',
+                              child: UniversalText('Oldest to Newest'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(
+                                () => sectionDraft.profilePostsSortOrder = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.friendsViewMode,
-                        decoration: const InputDecoration(labelText: 'Friends layout'),
-                        items: const [DropdownMenuItem(value: 'List', child: UniversalText('List view')), DropdownMenuItem(value: 'Cards', child: UniversalText('Card view'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.friendsViewMode = v); },
+                        decoration:
+                            const InputDecoration(labelText: 'Friends layout'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'List', child: UniversalText('List view')),
+                          DropdownMenuItem(
+                              value: 'Cards', child: UniversalText('Card view'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => sectionDraft.friendsViewMode = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.friendsSortOrder,
-                        decoration: const InputDecoration(labelText: 'Friends order'),
-                        items: const [DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')), DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')), DropdownMenuItem(value: 'A-Z', child: UniversalText('Alphabetical A-Z')), DropdownMenuItem(value: 'Z-A', child: UniversalText('Alphabetical Z-A'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.friendsSortOrder = v); },
+                        decoration:
+                            const InputDecoration(labelText: 'Friends order'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'Oldest to Newest',
+                              child: UniversalText('Oldest to Newest')),
+                          DropdownMenuItem(
+                              value: 'Newest to Oldest',
+                              child: UniversalText('Newest to Oldest')),
+                          DropdownMenuItem(
+                              value: 'A-Z',
+                              child: UniversalText('Alphabetical A-Z')),
+                          DropdownMenuItem(
+                              value: 'Z-A',
+                              child: UniversalText('Alphabetical Z-A'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => sectionDraft.friendsSortOrder = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.communitiesViewMode,
-                        decoration: const InputDecoration(labelText: 'Communities layout'),
-                        items: const [DropdownMenuItem(value: 'List', child: UniversalText('List view')), DropdownMenuItem(value: 'Cards', child: UniversalText('Card view'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.communitiesViewMode = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Communities layout'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'List', child: UniversalText('List view')),
+                          DropdownMenuItem(
+                              value: 'Cards', child: UniversalText('Card view'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(
+                                () => sectionDraft.communitiesViewMode = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.communitiesMembershipFilter,
-                        decoration: const InputDecoration(labelText: 'Communities to show'),
-                        items: const [DropdownMenuItem(value: 'All', child: UniversalText('All available')), DropdownMenuItem(value: 'Joined', child: UniversalText('Joined communities')), DropdownMenuItem(value: 'Created', child: UniversalText('Communities I created'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.communitiesMembershipFilter = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Communities to show'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'All',
+                              child: UniversalText('All available')),
+                          DropdownMenuItem(
+                              value: 'Joined',
+                              child: UniversalText('Joined communities')),
+                          DropdownMenuItem(
+                              value: 'Created',
+                              child: UniversalText('Communities I created'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() =>
+                                sectionDraft.communitiesMembershipFilter = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         initialValue: sectionDraft.communitiesSortOrder,
-                        decoration: const InputDecoration(labelText: 'Communities order'),
-                        items: const [DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')), DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')), DropdownMenuItem(value: 'Movies', child: UniversalText('Movies')), DropdownMenuItem(value: 'Shows', child: UniversalText('Shows')), DropdownMenuItem(value: 'Music', child: UniversalText('Music')), DropdownMenuItem(value: 'Joined', child: UniversalText('Recently joined')), DropdownMenuItem(value: 'Created', child: UniversalText('Recently created'))],
-                        onChanged: (v) { if (v != null) setState(() => sectionDraft.communitiesSortOrder = v); },
+                        decoration: const InputDecoration(
+                            labelText: 'Communities order'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'Newest to Oldest',
+                              child: UniversalText('Newest to Oldest')),
+                          DropdownMenuItem(
+                              value: 'Oldest to Newest',
+                              child: UniversalText('Oldest to Newest')),
+                          DropdownMenuItem(
+                              value: 'Movies', child: UniversalText('Movies')),
+                          DropdownMenuItem(
+                              value: 'Shows', child: UniversalText('Shows')),
+                          DropdownMenuItem(
+                              value: 'Music', child: UniversalText('Music')),
+                          DropdownMenuItem(
+                              value: 'Joined',
+                              child: UniversalText('Recently joined')),
+                          DropdownMenuItem(
+                              value: 'Created',
+                              child: UniversalText('Recently created'))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(
+                                () => sectionDraft.communitiesSortOrder = v);
+                          }
+                        },
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        initialValue: StoryPlacementStore.forProfile(AppController.instance.currentProfile),
-                        decoration: const InputDecoration(labelText: 'Friends’ Stories placement'),
+                        initialValue: StoryPlacementStore.forProfile(
+                            AppController.instance.currentProfile),
+                        decoration: const InputDecoration(
+                            labelText: 'Friends’ Stories placement'),
                         items: const [
-                          DropdownMenuItem(value: 'none', child: UniversalText('Don’t show')),
-                          DropdownMenuItem(value: 'home', child: UniversalText('Home only')),
-                          DropdownMenuItem(value: 'friends', child: UniversalText('Friends only')),
-                          DropdownMenuItem(value: 'both', child: UniversalText('Home + Friends')),
+                          DropdownMenuItem(
+                              value: 'none',
+                              child: UniversalText('Don’t show')),
+                          DropdownMenuItem(
+                              value: 'home', child: UniversalText('Home only')),
+                          DropdownMenuItem(
+                              value: 'friends',
+                              child: UniversalText('Friends only')),
+                          DropdownMenuItem(
+                              value: 'both',
+                              child: UniversalText('Home + Friends')),
                         ],
-                        onChanged: (v) { if (v != null) StoryPlacementStore.setForProfile(AppController.instance.currentProfile, v); },
+                        onChanged: (v) {
+                          if (v != null) {
+                            StoryPlacementStore.setForProfile(
+                                AppController.instance.currentProfile, v);
+                          }
+                        },
                       ),
                     ],
                   ],
@@ -980,10 +1234,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             initialValue: draft.backgroundColor,
             decoration: const InputDecoration(labelText: 'Page background'),
             items: const [
-              DropdownMenuItem(value: 0xFF090909, child: UniversalText('Black')),
-              DropdownMenuItem(value: 0xFF151515, child: UniversalText('Charcoal')),
+              DropdownMenuItem(
+                  value: 0xFF090909, child: UniversalText('Black')),
+              DropdownMenuItem(
+                  value: 0xFF151515, child: UniversalText('Charcoal')),
               DropdownMenuItem(value: 0xFF071A33, child: UniversalText('Navy')),
-              DropdownMenuItem(value: 0xFF0B2B17, child: UniversalText('Forest')),
+              DropdownMenuItem(
+                  value: 0xFF0B2B17, child: UniversalText('Forest')),
             ],
             onChanged: (value) {
               if (value != null) {
@@ -996,10 +1253,12 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             initialValue: draft.density,
             decoration: const InputDecoration(labelText: 'Content spacing'),
             items: const [
-              DropdownMenuItem(value: 'Compact', child: UniversalText('Compact')),
+              DropdownMenuItem(
+                  value: 'Compact', child: UniversalText('Compact')),
               DropdownMenuItem(
                   value: 'Comfortable', child: UniversalText('Comfortable')),
-              DropdownMenuItem(value: 'Spacious', child: UniversalText('Spacious')),
+              DropdownMenuItem(
+                  value: 'Spacious', child: UniversalText('Spacious')),
             ],
             onChanged: (value) {
               if (value != null) {
@@ -1009,11 +1268,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
           ),
           if (sections.isNotEmpty) ...[
             const SizedBox(height: 24),
-            const UniversalText('Page sections',
+            const UniversalText(
+              'Page sections',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 4),
-            const UniversalText('Choose what appears and use the arrows to change its order.',
+            const UniversalText(
+              'Choose what appears and use the arrows to change its order.',
               style: TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 8),
@@ -1040,10 +1301,9 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         tooltip: 'Move down',
-                        onPressed:
-                            index == contentDraft.sectionOrder.length - 1
-                                ? null
-                                : () => _moveContentSection(index, index + 1),
+                        onPressed: index == contentDraft.sectionOrder.length - 1
+                            ? null
+                            : () => _moveContentSection(index, index + 1),
                         icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       ),
                     ],
@@ -1101,7 +1361,9 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     } else {
       if (contentDraft.visibleSections.length <= 1) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: UniversalText('Keep at least one page section visible.')),
+          const SnackBar(
+              content:
+                  UniversalText('Keep at least one page section visible.')),
         );
         return;
       }
@@ -1173,9 +1435,10 @@ Future<void> _navigateToMainHome([BuildContext? sourceContext]) async {
     try {
       await AppController.instance.backendApi
           .acceptSocialConversationInvite(
-        profileId: profile.id,
-        token: token,
-      ).timeout(const Duration(seconds: 8));
+            profileId: profile.id,
+            token: token,
+          )
+          .timeout(const Duration(seconds: 8));
       destination = PrimaryDestination.friends;
     } catch (_) {
       destination = PrimaryDestination.home;
@@ -1224,16 +1487,23 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          settings: RouteSettings(name: serverContext.needsServerSelection ? '/app/server-selection' : '/app/profiles'),
+          settings: RouteSettings(
+              name: serverContext.needsServerSelection
+                  ? '/app/server-selection'
+                  : '/app/profiles'),
           builder: (_) => serverContext.needsServerSelection
               ? ServerSelectionScreen(
                   onProfileReady: _enterMainHomeFrom,
-                  onOpened: () => _appPageState.setPage('server-selection', selectedPrimaryIndex: 0, customizing: false),
-                  onServerSaved: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+                  onOpened: () => _appPageState.setPage('server-selection',
+                      selectedPrimaryIndex: 0, customizing: false),
+                  onServerSaved: () => _appPageState.setPage('profiles',
+                      selectedPrimaryIndex: 0, customizing: false),
                 )
               : ProfileSelectionScreen(
-                  onProfileSelected: (profileContext) => _enterMainHomeFrom(profileContext),
-                  onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+                  onProfileSelected: (profileContext) =>
+                      _enterMainHomeFrom(profileContext),
+                  onOpened: () => _appPageState.setPage('profiles',
+                      selectedPrimaryIndex: 0, customizing: false),
                 ),
         ),
       );
@@ -1465,8 +1735,10 @@ class _LoginScreenState extends State<LoginScreen> {
             settings: const RouteSettings(name: '/app/server-selection'),
             builder: (_) => ServerSelectionScreen(
               onProfileReady: _enterMainHomeFrom,
-              onOpened: () => _appPageState.setPage('server-selection', selectedPrimaryIndex: 0, customizing: false),
-              onServerSaved: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+              onOpened: () => _appPageState.setPage('server-selection',
+                  selectedPrimaryIndex: 0, customizing: false),
+              onServerSaved: () => _appPageState.setPage('profiles',
+                  selectedPrimaryIndex: 0, customizing: false),
             ),
           ),
         );
@@ -1477,8 +1749,10 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => ProfileSelectionScreen(
-            onProfileSelected: (profileContext) => _enterMainHomeFrom(profileContext),
-            onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+            onProfileSelected: (profileContext) =>
+                _enterMainHomeFrom(profileContext),
+            onOpened: () => _appPageState.setPage('profiles',
+                selectedPrimaryIndex: 0, customizing: false),
           ),
           settings: const RouteSettings(name: '/app/profiles'),
         ),
@@ -1710,14 +1984,14 @@ class HomeCustomization {
     List<String>? navigationOrder,
   })  : sectionOrder = sectionOrder ??
             [
-              'Friends & Communities',
+              'Recommendations',
               'Continue Watching',
+              'Friends & Communities',
               'Recently Watched',
               'Movies',
               'TV Shows',
               'New Additions',
               'All Library',
-              'Recommendations',
               'Music & Film',
               'Seasonal Collections',
             ],
@@ -1972,18 +2246,43 @@ class HomeCustomizationStore {
         navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
         navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
         sectionOrder: m['sectionOrder'] is List
-            ? List<String>.from(m['sectionOrder'] as List).where((item) => <String>{
-                'Continue Watching', 'Recently Added', 'Recommended', 'Popular',
-                'Movies', 'TV Shows', 'Music', 'Collections', 'Friends & Community',
-                'Seasonal Collections', 'Recently Watched', 'New Additions', 'All Library',
-                'Music & Film',
-              }.contains(item)).toList()
+            ? List<String>.from(m['sectionOrder'] as List)
+                .where((item) => <String>{
+                      'Continue Watching',
+                      'Recently Added',
+                      'Recommended',
+                      'Popular',
+                      'Movies',
+                      'TV Shows',
+                      'Music',
+                      'Collections',
+                      'Friends & Community',
+                      'Seasonal Collections',
+                      'Recently Watched',
+                      'New Additions',
+                      'All Library',
+                      'Music & Film',
+                    }.contains(item))
+                .toList()
             : null,
         navigationOrder: m['navigationOrder'] is List
-            ? List<String>.from(m['navigationOrder'] as List).where((item) => <String>{
-                'Home', 'Profile', 'Surprise Me', 'More', 'Music', 'Film',
-                'Collections', 'My TV', 'Shop', 'Movies', 'TV Shows', 'Friends', 'Library',
-              }.contains(item)).toList()
+            ? List<String>.from(m['navigationOrder'] as List)
+                .where((item) => <String>{
+                      'Home',
+                      'Profile',
+                      'Surprise Me',
+                      'More',
+                      'Music',
+                      'Film',
+                      'Collections',
+                      'My TV',
+                      'Shop',
+                      'Movies',
+                      'TV Shows',
+                      'Friends',
+                      'Library',
+                    }.contains(item))
+                .toList()
             : null,
       );
 }
@@ -2151,7 +2450,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     musicDraft = MusicPageCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     );
-    storyPlacement = StoryPlacementStore.forProfile(AppController.instance.currentProfile);
+    storyPlacement =
+        StoryPlacementStore.forProfile(AppController.instance.currentProfile);
     unawaited(_loadStoryPlacementPreference());
     _normalizeHomePositions();
   }
@@ -2160,7 +2460,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     await StoryPlacementStore.load(AppController.instance.currentProfile);
     if (mounted) {
       setState(() {
-        storyPlacement = StoryPlacementStore.forProfile(AppController.instance.currentProfile);
+        storyPlacement = StoryPlacementStore.forProfile(
+            AppController.instance.currentProfile);
       });
     }
   }
@@ -2346,7 +2647,9 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
         for (var index = 0; index < values.length; index++)
           DropdownMenuItem<String>(
             value: values[index],
-            child: Text(labels != null && index < labels.length ? labels[index] : values[index]),
+            child: Text(labels != null && index < labels.length
+                ? labels[index]
+                : values[index]),
           ),
       ],
       onChanged: (next) {
@@ -2619,7 +2922,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.collections_bookmark_outlined),
           title: UniversalText('Collections'),
-          subtitle: UniversalText('Collections is available from the Library hub.'),
+          subtitle:
+              UniversalText('Collections is available from the Library hub.'),
         ),
         const SizedBox(height: 24),
         const UniversalText(
@@ -2700,7 +3004,12 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           label: 'Show friends’ Stories',
           value: storyPlacement,
           values: const ['none', 'home', 'friends', 'both'],
-          labels: const ["Don't show", 'Home only', 'Friends only', 'Home + Friends'],
+          labels: const [
+            "Don't show",
+            'Home only',
+            'Friends only',
+            'Home + Friends'
+          ],
           onChanged: (value) => setState(() => storyPlacement = value),
         ),
         const SizedBox(height: 24),
@@ -4505,7 +4814,7 @@ class _GlobalPrimaryNavigationBar extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.video_library_outlined),
             selectedIcon: Icon(Icons.video_library_rounded),
-            label: 'Library',
+            label: 'Watch',
           ),
           NavigationDestination(
             icon: Icon(Icons.people_outline_rounded),
@@ -4576,11 +4885,13 @@ void _showGlobalMore() {
       },
       onStreamingExperience: () {
         Navigator.of(sheetContext).pop();
-        push(const StreamingExperienceSettingsScreen(), routeName: '/app/page/streaming-experience');
+        push(const StreamingExperienceSettingsScreen(),
+            routeName: '/app/page/streaming-experience');
       },
       onPerfectStreaming: () {
         Navigator.of(sheetContext).pop();
-        push(const PerfectStreamingExperienceScreen(), routeName: '/app/page/perfect-streaming');
+        push(const PerfectStreamingExperienceScreen(),
+            routeName: '/app/page/perfect-streaming');
       },
       onDevices: () {
         Navigator.of(sheetContext).pop();
@@ -4608,20 +4919,21 @@ void _showGlobalMore() {
       },
       onWatchAndEnjoy: () {
         Navigator.of(sheetContext).pop();
-        push(const WatchAndEnjoyScreen(), routeName: '/app/page/watch-and-enjoy');
+        push(const WatchAndEnjoyScreen(),
+            routeName: '/app/page/watch-and-enjoy');
       },
       onShop: () {
         Navigator.of(sheetContext).pop();
         push(
-          ShopScreen(onHome: () => navigator.pop()),
-          routeName: '/app/shop',
+          const MarketplaceHubScreen(initialMode: MarketplaceMode.shop),
+          routeName: '/app/marketplace/shop',
         );
       },
       onFoodDelivery: () {
         Navigator.of(sheetContext).pop();
         push(
-          const FoodOrderingScreen(),
-          routeName: '/app/page/food-delivery',
+          const MarketplaceHubScreen(initialMode: MarketplaceMode.food),
+          routeName: '/app/marketplace/food',
         );
       },
       onHeyMarathon: () {
@@ -4630,11 +4942,17 @@ void _showGlobalMore() {
       },
       onMyTv: () {
         Navigator.of(sheetContext).pop();
-        push(const MyTvScreen(), routeName: '/app/page/my-tv');
+        push(
+            const WatchHubScreen(
+                initialMode: WatchHubMode.myTv, standalone: true),
+            routeName: '/app/watch/my-tv');
       },
       onPublicLiveTv: () {
         Navigator.of(sheetContext).pop();
-        push(const PublicLiveTvScreen(), routeName: '/app/page/public-live-tv');
+        push(
+            const WatchHubScreen(
+                initialMode: WatchHubMode.liveTv, standalone: true),
+            routeName: '/app/watch/live-tv');
       },
       onTvController: () {
         Navigator.of(sheetContext).pop();
@@ -4646,19 +4964,23 @@ void _showGlobalMore() {
       },
       onProductionReadiness: () {
         Navigator.of(sheetContext).pop();
-        push(const ProductionReadinessDashboardScreen(), routeName: '/app/page/production-readiness');
+        push(const ProductionReadinessDashboardScreen(),
+            routeName: '/app/page/production-readiness');
       },
       onSecurityPrivacy: () {
         Navigator.of(sheetContext).pop();
-        push(const SecuritySettingsScreen(), routeName: '/app/page/security-privacy');
+        push(const SecuritySettingsScreen(),
+            routeName: '/app/page/security-privacy');
       },
       onAccessibilityOffline: () {
         Navigator.of(sheetContext).pop();
-        push(const AccessibilityOfflineSettingsScreen(), routeName: '/app/page/accessibility-offline');
+        push(const AccessibilityOfflineSettingsScreen(),
+            routeName: '/app/page/accessibility-offline');
       },
       onEntertainmentStudio: () {
         Navigator.of(sheetContext).pop();
-        push(const EntertainmentStudioScreen(), routeName: '/app/page/entertainment-studio');
+        push(const EntertainmentStudioScreen(),
+            routeName: '/app/page/entertainment-studio');
       },
       onInnovationHub: () {
         Navigator.of(sheetContext).pop();
@@ -4673,7 +4995,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   String get _pageTitle => switch (selected) {
         PrimaryDestination.home => 'Home',
-        PrimaryDestination.library => 'Library',
+        PrimaryDestination.library => 'Watch',
         PrimaryDestination.friends => 'Friends',
       };
 
@@ -4682,12 +5004,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final profile = controller.currentProfile;
     if (profile == null || !controller.backendApi.isAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: UniversalText('Sign in to message account profiles.')),
+        const SnackBar(
+            content: UniversalText('Sign in to message account profiles.')),
       );
       return;
     }
     try {
-      final result = await controller.backendApi.createSocialAccountConversation(
+      final result =
+          await controller.backendApi.createSocialAccountConversation(
         profileId: profile.id,
         targetProfileId: targetProfileId,
       );
@@ -4709,7 +5033,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', ''))),
       );
     }
   }
@@ -4720,12 +5045,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       MaterialPageRoute(
         settings: const RouteSettings(name: '/app/profiles'),
         builder: (_) => ProfileSelectionScreen(
-          onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+          onOpened: () => _appPageState.setPage('profiles',
+              selectedPrimaryIndex: 0, customizing: false),
           onProfileSelected: (selectionContext) {
-            Navigator.of(selectionContext, rootNavigator: true).pushAndRemoveUntil<void>(
+            Navigator.of(selectionContext, rootNavigator: true)
+                .pushAndRemoveUntil<void>(
               MaterialPageRoute<void>(
                 settings: const RouteSettings(name: '/main/home'),
-                builder: (_) => const MainScreen(initialDestination: PrimaryDestination.home),
+                builder: (_) => const MainScreen(
+                    initialDestination: PrimaryDestination.home),
               ),
               (route) => false,
             );
@@ -4747,7 +5075,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           onMessageProfile: _messageAccountProfile,
         );
       case PrimaryDestination.library:
-        return const LibraryHubScreen();
+        return const WatchHubScreen();
       case PrimaryDestination.friends:
         return FriendsAndCommunitiesScreen(
           initialConversationId: widget.initialConversationId,
@@ -4786,14 +5114,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _touchSocialPresence() async {
-    if (!mounted || <String>{'boot', 'profiles', 'server-selection'}.contains(_appPageState.pageId)) return;
+    if (!mounted ||
+        <String>{'boot', 'profiles', 'server-selection'}
+            .contains(_appPageState.pageId)) {
+      return;
+    }
     final controller = AppController.instance;
     final profile = controller.currentProfile;
     if (profile == null || !controller.backendApi.isAuthenticated) return;
     try {
       // A heartbeat updates last-seen without overriding the current
       // availability or the watching/listening activity set by the player.
-      await controller.backendApi.setSocialProfilePresence(profileId: profile.id);
+      await controller.backendApi
+          .setSocialProfilePresence(profileId: profile.id);
     } catch (_) {
       // Presence is advisory and must never interrupt playback or navigation.
     }
@@ -4895,7 +5228,7 @@ class SimplePrimaryNavigationBar extends StatelessWidget {
       const NavigationDestination(
         icon: Icon(Icons.video_library_outlined),
         selectedIcon: Icon(Icons.video_library_rounded),
-        label: 'Library',
+        label: 'Watch',
       ),
       const NavigationDestination(
         icon: Icon(Icons.people_outline_rounded),
@@ -5097,40 +5430,92 @@ class _MoreActionsSheet extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         childAspectRatio: 1.25,
         children: [
-          _combinedCard(context, Icons.manage_accounts_outlined, 'Account & Server',
-            'Manage members, profiles, storage and server', [
-              _MoreChoice('Account Members', 'Invite or manage account members', Icons.people_alt_outlined, onMembers),
-              _MoreChoice('Home Server', 'Server status and storage', Icons.dns_rounded, onHomeServer),
-            ]),
-          _moreCard(Icons.album_rounded, 'Import / Rip', 'Import media and run the ARM disc-ripping workflow', onImport),
-          _moreCard(Icons.movie_filter_rounded, 'Hey Marathon', 'Plan movie nights, TV binges, breaks, invitations and themed food', onHeyMarathon),
-          _moreCard(Icons.devices_rounded, 'Device Center', 'Downloads and devices', onDevices),
-          _moreCard(Icons.settings_rounded, 'Settings', 'Account and subscription', onSettings),
-          _moreCard(Icons.high_quality_rounded, 'Streaming Experience', 'Playback quality, accessibility, and player diagnostics', onStreamingExperience),
-          _moreCard(Icons.auto_awesome_rounded, 'Perfect Streaming', 'Clean navigation, discovery, autoplay, series and Watch Party preferences', onPerfectStreaming),
-          _moreCard(Icons.hub_rounded, 'Innovation & Platform Hub', 'Platform Expansion, Ultimate Features, Expanded Platform and roadmap', onInnovationHub),
-          _moreCard(Icons.movie_filter_rounded, 'Watch & Enjoy',
-            'Pair movie nights with food delivery and entertainment merchandise', onWatchAndEnjoy),
-          _moreCard(Icons.shopping_bag_outlined, 'Shop',
-            'Products, stores, wishlist, bag and seller tools', onShop),
-          _moreCard(Icons.delivery_dining_rounded, 'Food Delivery',
-            'Restaurants, menus, delivery and pickup orders', onFoodDelivery),
+          _combinedCard(
+              context,
+              Icons.manage_accounts_outlined,
+              'Account & Server',
+              'Manage members, profiles, storage and server', [
+            _MoreChoice('Account Members', 'Invite or manage account members',
+                Icons.people_alt_outlined, onMembers),
+            _MoreChoice('Home Server', 'Server status and storage',
+                Icons.dns_rounded, onHomeServer),
+          ]),
+          _moreCard(Icons.album_rounded, 'Import / Rip',
+              'Import media and run the ARM disc-ripping workflow', onImport),
+          _moreCard(
+              Icons.movie_filter_rounded,
+              'Hey Marathon',
+              'Plan movie nights, TV binges, breaks, invitations and themed food',
+              onHeyMarathon),
+          _moreCard(Icons.devices_rounded, 'Device Center',
+              'Downloads and devices', onDevices),
+          _moreCard(Icons.settings_rounded, 'Settings',
+              'Account and subscription', onSettings),
+          _moreCard(
+              Icons.high_quality_rounded,
+              'Streaming Experience',
+              'Playback quality, accessibility, and player diagnostics',
+              onStreamingExperience),
+          _moreCard(
+              Icons.auto_awesome_rounded,
+              'Perfect Streaming',
+              'Clean navigation, discovery, autoplay, series and Watch Party preferences',
+              onPerfectStreaming),
+          _moreCard(
+              Icons.hub_rounded,
+              'Innovation & Platform Hub',
+              'Platform Expansion, Ultimate Features, Expanded Platform and roadmap',
+              onInnovationHub),
+          _moreCard(
+              Icons.movie_filter_rounded,
+              'Watch & Enjoy',
+              'Pair movie nights with food delivery and entertainment merchandise',
+              onWatchAndEnjoy),
+          _moreCard(
+              Icons.shopping_bag_outlined,
+              'Marketplace',
+              'Shared front door for products, restaurants, bag and storefronts',
+              onShop),
+          _moreCard(
+              Icons.delivery_dining_rounded,
+              'Food Delivery',
+              'Open the Food tab inside the shared Marketplace',
+              onFoodDelivery),
           _moreCard(Icons.live_tv_rounded, 'My TV',
-            'Create personal channels from your own media library', onMyTv),
-          _moreCard(Icons.satellite_alt_rounded, 'Public Live TV',
-            'Browse free public broadcast streams by country or category; save favorites', onPublicLiveTv),
-          _moreCard(Icons.auto_awesome_rounded, 'Entertainment Studio', 'Calendar, journal, scene memories, editions, media graph and subtitle tools', onEntertainmentStudio),
-          _moreCard(Icons.settings_remote_rounded, 'TV Controller', 'Use your phone as the TV remote', onTvController),
-          _moreCard(Icons.tv_rounded, 'TV Host', 'Show a pairing code on this TV', onTvHost),
-          _moreCard(Icons.admin_panel_settings_rounded, 'Production Readiness', 'Owner-only service health, backups and operations', onProductionReadiness),
-          _moreCard(Icons.security_rounded, 'Security & Privacy', 'Sessions, MFA and account security', onSecurityPrivacy),
-          _moreCard(Icons.accessibility_new_rounded, 'Accessibility & Offline', 'Text scaling, activity privacy and pending sync', onAccessibilityOffline),
+              'Open personal channels inside the unified Watch hub', onMyTv),
+          _moreCard(
+              Icons.satellite_alt_rounded,
+              'Public Live TV',
+              'Browse broadcasts inside Watch; fullscreen and minimize playback',
+              onPublicLiveTv),
+          _moreCard(
+              Icons.auto_awesome_rounded,
+              'Entertainment Studio',
+              'Calendar, journal, scene memories, editions, media graph and subtitle tools',
+              onEntertainmentStudio),
+          _moreCard(Icons.settings_remote_rounded, 'TV Controller',
+              'Use your phone as the TV remote', onTvController),
+          _moreCard(Icons.tv_rounded, 'TV Host',
+              'Show a pairing code on this TV', onTvHost),
+          _moreCard(
+              Icons.admin_panel_settings_rounded,
+              'Production Readiness',
+              'Owner-only service health, backups and operations',
+              onProductionReadiness),
+          _moreCard(Icons.security_rounded, 'Security & Privacy',
+              'Sessions, MFA and account security', onSecurityPrivacy),
+          _moreCard(
+              Icons.accessibility_new_rounded,
+              'Accessibility & Offline',
+              'Text scaling, activity privacy and pending sync',
+              onAccessibilityOffline),
         ],
       ),
     );
   }
 
-  Widget _combinedCard(BuildContext context, IconData icon, String title, String subtitle, List<_MoreChoice> choices) {
+  Widget _combinedCard(BuildContext context, IconData icon, String title,
+      String subtitle, List<_MoreChoice> choices) {
     return Material(
       color: Colors.white.withValues(alpha: .045),
       borderRadius: BorderRadius.circular(18),
@@ -5142,24 +5527,41 @@ class _MoreActionsSheet extends StatelessWidget {
           builder: (choiceContext) => _PremiumSheet(
             title: title,
             subtitle: subtitle,
-            child: Column(mainAxisSize: MainAxisSize.min, children: choices.map((choice) => ListTile(
-              leading: Icon(choice.icon),
-              title: Text(choice.title),
-              subtitle: Text(choice.subtitle),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () { Navigator.of(choiceContext).pop(); choice.onSelected(); },
-            )).toList()),
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: choices
+                    .map((choice) => ListTile(
+                          leading: Icon(choice.icon),
+                          title: Text(choice.title),
+                          subtitle: Text(choice.subtitle),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () {
+                            Navigator.of(choiceContext).pop();
+                            choice.onSelected();
+                          },
+                        ))
+                    .toList()),
           ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, size: 26),
-            const SizedBox(height: 8),
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 3),
-            Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 26),
+                const SizedBox(height: 8),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 11)),
+              ]),
         ),
       ),
     );
@@ -5297,15 +5699,31 @@ class _HomeScreenState extends State<HomeScreen>
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
     }).toList();
-    // The Home shell must remain renderable when the profile library is empty.
-    // There is no valid hero item in that state, so keep it nullable instead of
-    // calling library.first and throwing Bad state: No element.
-    final heroMedia = watched.isNotEmpty
-        ? watched.first
-        : (library.isNotEmpty ? library.first : null);
     // Compute personalized ranking once per Home build rather than once per
     // section, keeping search/discovery overhead bounded on larger libraries.
     final homeRecommendations = SmartSearch.recommendations(library);
+    // Prefer personalized, recently watched, and then remaining library titles
+    // for the rotating hero. Deduplicate so a title never repeats in one cycle.
+    final homeHeroItems = <MediaItem>[];
+    final homeHeroSeen = <String>{};
+    final homeHeroCandidates = <MediaItem>[
+      ...homeRecommendations
+          .where((item) => item.imageUrl?.trim().isNotEmpty == true),
+      ...watched.where((item) => item.imageUrl?.trim().isNotEmpty == true),
+      ...library.where((item) => item.imageUrl?.trim().isNotEmpty == true),
+      ...homeRecommendations,
+      ...watched,
+      ...library,
+    ];
+    for (final item in homeHeroCandidates) {
+      if (homeHeroItems.length >= 8) break;
+      if (homeHeroSeen.add(item.id)) homeHeroItems.add(item);
+    }
+    // If the current catalog is sparse, still render titles even if poster art
+    // has not finished importing yet.
+    if (homeHeroItems.isEmpty && library.isNotEmpty) {
+      homeHeroItems.addAll(library.take(8));
+    }
 
     return Scaffold(
       backgroundColor: homeBackground,
@@ -5339,14 +5757,51 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             SliverToBoxAdapter(
-              child: _HomeWelcomeBanner(
-                serverName: controller.currentServer?.customName?.trim().isNotEmpty == true
-                    ? controller.currentServer!.customName!.trim()
-                    : (controller.currentServer?.name.trim().isNotEmpty == true
-                        ? controller.currentServer!.name.trim()
-                        : 'your server'),
+              child: HomeBrowseNavigation(
+                onMovies: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: '/app/page/movies'),
+                      builder: (_) => const MoviesScreen(),
+                    )),
+                onShows: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: '/app/page/series'),
+                      builder: (_) => const SeriesScreen(),
+                    )),
+                onMusic: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: '/app/page/music'),
+                      builder: (_) => const MusicScreen(),
+                    )),
               ),
             ),
+            if (settings.showHero && homeHeroItems.isNotEmpty)
+              SliverToBoxAdapter(
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                      parent: _heroController, curve: Curves.easeOut),
+                  child: HomeHeroCarousel(
+                    items: homeHeroItems,
+                    onOpen: (media) => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        settings: RouteSettings(
+                          name: media.playbackUrl?.trim().isNotEmpty == true
+                              ? '/app/player'
+                              : '/app/details',
+                        ),
+                        builder: (_) =>
+                            media.playbackUrl?.trim().isNotEmpty == true
+                                ? PlayerScreen(media: media)
+                                : MediaDetailsScreen(media: media),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             SliverToBoxAdapter(
               child: AccountProfileActivityStrip(
                 onMessageProfile: widget.onMessageProfile,
@@ -5356,22 +5811,6 @@ class _HomeScreenState extends State<HomeScreen>
               SliverToBoxAdapter(
                 child: FriendsStoriesStrip(profileId: profile.id),
               ),
-            if (settings.showHero && library.isNotEmpty)
-              SliverToBoxAdapter(
-                child: FadeTransition(
-                  opacity: CurvedAnimation(
-                      parent: _heroController, curve: Curves.easeOut),
-                  child: _HomeHero(
-                    media: heroMedia!,
-                    onPlay: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            settings: const RouteSettings(name: '/app/details'),
-                            builder: (_) =>
-                                MediaDetailsScreen(media: heroMedia))),
-                  ),
-                ),
-              ),
             if (settings.storageBarPosition != 'Hidden')
               SliverToBoxAdapter(
                 child: HomeStorageProgressBar(
@@ -5379,9 +5818,50 @@ class _HomeScreenState extends State<HomeScreen>
                   axis: Axis.horizontal,
                 ),
               ),
-            SliverToBoxAdapter(
-              child: _HomeMediaEntryButtons(settings: settings),
-            ),
+            if (library.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        UniversalText('Your library is empty',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 25, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 8),
+                        UniversalText(
+                            'Please add using the 3 dots in the navbar.',
+                            textAlign: TextAlign.center,
+                            style:
+                                TextStyle(color: Colors.white54, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            for (final section in settings.sectionOrder) ...[
+              ..._buildHomeSectionSlivers(section, settings, watched, movies,
+                  tvShows, library, homeRecommendations),
+              if (section == 'Continue Watching') ...[
+                const SliverToBoxAdapter(child: HomeThemedEpisodesSection()),
+                SliverToBoxAdapter(
+                  child: HomeYouMayAlsoLikeSection(
+                      library: library, watched: watched),
+                ),
+                const SliverToBoxAdapter(child: HomeCollectionShelves()),
+              ],
+            ],
+            if (!settings.sectionOrder.contains('Continue Watching')) ...[
+              const SliverToBoxAdapter(child: HomeThemedEpisodesSection()),
+              SliverToBoxAdapter(
+                child: HomeYouMayAlsoLikeSection(
+                    library: library, watched: watched),
+              ),
+              const SliverToBoxAdapter(child: HomeCollectionShelves()),
+            ],
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -5390,15 +5870,20 @@ class _HomeScreenState extends State<HomeScreen>
                   child: ListTile(
                     leading: const CircleAvatar(
                       backgroundColor: Color(0x338B7CFF),
-                      child: Icon(Icons.album_rounded, color: Color(0xFF8B7CFF)),
+                      child:
+                          Icon(Icons.album_rounded, color: Color(0xFF8B7CFF)),
                     ),
                     title: const UniversalText('Physical Media'),
-                    subtitle: const UniversalText('Browse imported Blu-ray, DVD, 4K Ultra HD and CD collections'),
+                    subtitle: const UniversalText(
+                        'Browse imported Blu-ray, DVD, 4K Ultra HD and CD collections'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                      settings: const RouteSettings(name: '/app/physical-media'),
-                      builder: (_) => const PhysicalMediaLibraryScreen(),
-                    )),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings:
+                              const RouteSettings(name: '/app/physical-media'),
+                          builder: (_) => const PhysicalMediaLibraryScreen(),
+                        )),
                   ),
                 ),
               ),
@@ -5414,12 +5899,16 @@ class _HomeScreenState extends State<HomeScreen>
                       child: Icon(Icons.hub_rounded, color: Color(0xFF8B7CFF)),
                     ),
                     title: const UniversalText('Connected Command Center'),
-                    subtitle: const UniversalText('Universal Search, Remote, Movie Night, Media Health, Soundtracks, Recap and account preferences'),
+                    subtitle: const UniversalText(
+                        'Universal Search, Remote, Movie Night, Media Health, Soundtracks, Recap and account preferences'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                      settings: const RouteSettings(name: '/app/connected-command-center'),
-                      builder: (_) => const ConnectedCommandCenterScreen(),
-                    )),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings: const RouteSettings(
+                              name: '/app/connected-command-center'),
+                          builder: (_) => const ConnectedCommandCenterScreen(),
+                        )),
                   ),
                 ),
               ),
@@ -5430,14 +5919,21 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Card(
                   color: const Color(0xFF203044),
                   child: ListTile(
-                    leading: const CircleAvatar(backgroundColor: Color(0x338FD9B5), child: Icon(Icons.support_agent_rounded, color: Color(0xFF8FD9B5))),
+                    leading: const CircleAvatar(
+                        backgroundColor: Color(0x338FD9B5),
+                        child: Icon(Icons.support_agent_rounded,
+                            color: Color(0xFF8FD9B5))),
                     title: const UniversalText('Customer Support & Tickets'),
-                    subtitle: const UniversalText('Get help, submit a ticket and track support requests'),
+                    subtitle: const UniversalText(
+                        'Get help, submit a ticket and track support requests'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                      settings: const RouteSettings(name: '/app/customer-support'),
-                      builder: (_) => const CustomerSupportScreen(),
-                    )),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings: const RouteSettings(
+                              name: '/app/customer-support'),
+                          builder: (_) => const CustomerSupportScreen(),
+                        )),
                   ),
                 ),
               ),
@@ -5453,12 +5949,17 @@ class _HomeScreenState extends State<HomeScreen>
                       child: Icon(Icons.hub_rounded, color: Color(0xFF9B8CFF)),
                     ),
                     title: const UniversalText('Connected Innovation'),
-                    subtitle: const UniversalText('Four implementation phases: access, social, discovery, commerce and reliability'),
+                    subtitle: const UniversalText(
+                        'Four implementation phases: access, social, discovery, commerce and reliability'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                      settings: const RouteSettings(name: '/app/connected-innovation'),
-                      builder: (_) => const ConnectedInnovationPhasesScreen(),
-                    )),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings: const RouteSettings(
+                              name: '/app/connected-innovation'),
+                          builder: (_) =>
+                              const ConnectedInnovationPhasesScreen(),
+                        )),
                   ),
                 ),
               ),
@@ -5471,15 +5972,20 @@ class _HomeScreenState extends State<HomeScreen>
                   child: ListTile(
                     leading: const CircleAvatar(
                       backgroundColor: Color(0x33FFD36E),
-                      child: Icon(Icons.layers_rounded, color: Color(0xFFFFD36E)),
+                      child:
+                          Icon(Icons.layers_rounded, color: Color(0xFFFFD36E)),
                     ),
                     title: const UniversalText('Innovation & Platform Hub'),
-                    subtitle: const UniversalText('Platform Expansion, Ultimate Features, Expanded Platform, discovery and roadmap modules in one place'),
+                    subtitle: const UniversalText(
+                        'Platform Expansion, Ultimate Features, Expanded Platform, discovery and roadmap modules in one place'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                      settings: const RouteSettings(name: '/app/innovation'),
-                      builder: (_) => const InnovationHubScreen(),
-                    )),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings:
+                              const RouteSettings(name: '/app/innovation'),
+                          builder: (_) => const InnovationHubScreen(),
+                        )),
                   ),
                 ),
               ),
@@ -5525,44 +6031,21 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Card(
                   child: ListTile(
                     leading: const Icon(Icons.auto_awesome_rounded, size: 30),
-                    title: const UniversalText('Entertainment Studio', style: TextStyle(fontWeight: FontWeight.w900)),
-                    subtitle: const UniversalText('Plan events, save scenes, manage editions, audit your library, and explore connections.'),
+                    title: const UniversalText('Entertainment Studio',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
+                    subtitle: const UniversalText(
+                        'Plan events, save scenes, manage editions, audit your library, and explore connections.'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/app/page/entertainment-studio'),
+                    onTap: () => Navigator.of(context)
+                        .push<void>(MaterialPageRoute<void>(
+                      settings: const RouteSettings(
+                          name: '/app/page/entertainment-studio'),
                       builder: (_) => const EntertainmentStudioScreen(),
                     )),
                   ),
                 ),
               ),
             ),
-            if (library.isEmpty)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        UniversalText('Your library is empty',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontSize: 25, fontWeight: FontWeight.w800)),
-                        SizedBox(height: 8),
-                        UniversalText(
-                            'Please add using the 3 dots in the navbar.',
-                            textAlign: TextAlign.center,
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            for (final section in settings.sectionOrder)
-              ..._buildHomeSectionSlivers(section, settings, watched, movies,
-                  tvShows, library, homeRecommendations),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
@@ -5644,7 +6127,10 @@ List<Widget> _buildHomeSectionSlivers(
   if (!enabled || items.isEmpty) return const [];
   return [
     SliverToBoxAdapter(
-        child: _PremiumSectionHeader(title: section, subtitle: subtitle)),
+        child: _PremiumSectionHeader(
+      title: section == 'Recommendations' ? 'Recommended for You' : section,
+      subtitle: subtitle,
+    )),
     SliverToBoxAdapter(child: MediaHorizontalList(media: items)),
   ];
 }
@@ -5716,7 +6202,8 @@ class _HomeContinueListeningSectionState
                           child: InkWell(
                             onTap: () {
                               final playback = MusicPlaybackController.instance;
-                              if (playback.currentTrack?.id == track.id && playback.isReady) {
+                              if (playback.currentTrack?.id == track.id &&
+                                  playback.isReady) {
                                 unawaited(playback.toggle());
                               } else {
                                 unawaited(playback.play(track));
@@ -5731,18 +6218,30 @@ class _HomeContinueListeningSectionState
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(10),
                                       child: SizedBox.expand(
-                                        child: track.artworkUrl?.trim().isNotEmpty == true
+                                        child: track.artworkUrl
+                                                    ?.trim()
+                                                    .isNotEmpty ==
+                                                true
                                             ? Image.network(
                                                 track.artworkUrl!,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => const ColoredBox(
+                                                errorBuilder: (_, __, ___) =>
+                                                    const ColoredBox(
                                                   color: Color(0xFF252525),
-                                                  child: Center(child: Icon(Icons.music_note_rounded, size: 36)),
+                                                  child: Center(
+                                                      child: Icon(
+                                                          Icons
+                                                              .music_note_rounded,
+                                                          size: 36)),
                                                 ),
                                               )
                                             : const ColoredBox(
                                                 color: Color(0xFF252525),
-                                                child: Center(child: Icon(Icons.music_note_rounded, size: 36)),
+                                                child: Center(
+                                                    child: Icon(
+                                                        Icons
+                                                            .music_note_rounded,
+                                                        size: 36)),
                                               ),
                                       ),
                                     ),
@@ -5753,14 +6252,18 @@ class _HomeContinueListeningSectionState
                                       if (playing)
                                         const Padding(
                                           padding: EdgeInsets.only(right: 4),
-                                          child: Icon(Icons.graphic_eq_rounded, size: 14, color: Colors.greenAccent),
+                                          child: Icon(Icons.graphic_eq_rounded,
+                                              size: 14,
+                                              color: Colors.greenAccent),
                                         ),
                                       Expanded(
                                         child: Text(
                                           track.title,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800),
                                         ),
                                       ),
                                     ],
@@ -5769,7 +6272,8 @@ class _HomeContinueListeningSectionState
                                     track.artist,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 11, color: Colors.white60),
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.white60),
                                   ),
                                 ],
                               ),
@@ -5848,7 +6352,8 @@ class _HomeSeasonalCollections extends StatelessWidget {
                 height: 90,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: (matches.length + songs.length).clamp(0, 8).toInt(),
+                  itemCount:
+                      (matches.length + songs.length).clamp(0, 8).toInt(),
                   separatorBuilder: (_, __) => const SizedBox(width: 9),
                   itemBuilder: (_, index) => Container(
                     width: 150,
@@ -5888,202 +6393,6 @@ class _HomeSeasonalCollections extends StatelessWidget {
 }
 
 /// Implements the `_HomeMusicFilmChooser` class for this feature or UI component.
-class _HomeMediaEntryButtons extends StatelessWidget {
-  final HomeCustomization settings;
-  const _HomeMediaEntryButtons({required this.settings});
-
-  Widget _button(BuildContext context, String title, String subtitle,
-          IconData icon, Widget page) =>
-      Expanded(
-        child: OutlinedButton.icon(
-          onPressed: () {
-            final pageId = page is MusicScreen ? 'music' : 'movies';
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                settings: RouteSettings(name: '/app/page/$pageId'),
-                builder: (_) => page,
-              ),
-            );
-          },
-          icon: Icon(icon),
-          label: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-              Text(subtitle,
-                  style: const TextStyle(fontSize: 10, color: Colors.white54)),
-            ],
-          ),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            alignment: Alignment.centerLeft,
-          ),
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final buttons = <Widget>[
-      if (settings.showMusic)
-        _button(context, 'Music', 'Songs, albums & playlists',
-            Icons.music_note_rounded, const MusicScreen()),
-      if (settings.showFilm)
-        _button(context, 'Film', 'Movies, TV & franchises',
-            Icons.movie_creation_outlined, const FilmExperienceScreen()),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-      child: settings.homeMediaLayout == 'Top & Bottom'
-          ? Column(children: [
-              for (var i = 0; i < buttons.length; i++) ...[
-                buttons[i],
-                if (i != buttons.length - 1) const SizedBox(height: 8)
-              ]
-            ])
-          : Row(children: [
-              for (var i = 0; i < buttons.length; i++) ...[
-                buttons[i],
-                if (i != buttons.length - 1) const SizedBox(width: 10)
-              ]
-            ]),
-    );
-  }
-}
-
-class _HomeWelcomeBanner extends StatelessWidget {
-  final String serverName;
-
-  const _HomeWelcomeBanner({
-    required this.serverName,
-  });
-
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 12) return 'Good morning';
-    if (hour >= 12 && hour < 17) return 'Good afternoon';
-    return 'Good night';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _greeting,
-            style: const TextStyle(
-              fontSize: 27,
-              height: 1.1,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Welcome to $serverName.',
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Implements the `_HomeHero` class for this feature or UI component.
-class _HomeHero extends StatelessWidget {
-  final MediaItem media;
-  final VoidCallback onPlay;
-
-  const _HomeHero({
-    required this.media,
-    required this.onPlay,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Container(
-      height: 430,
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        color: const Color(0xFF151515),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (media.imageUrl != null)
-            Image.network(
-              media.imageUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: .08),
-                  Colors.black.withValues(alpha: .26),
-                  Colors.black.withValues(alpha: .95),
-                ],
-                stops: const [0, .42, 1],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 24,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  media.type.toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
-                      color: Colors.white70),
-                ),
-                const SizedBox(height: 9),
-                Text(
-                  media.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 31, height: 1.05, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 17),
-                FilledButton.icon(
-                  onPressed: onPlay,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const UniversalText('Open',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Implements the `_PremiumSectionHeader` class for this feature or UI component.
 class _PremiumSectionHeader extends StatelessWidget {
   final String title;
@@ -6297,8 +6606,10 @@ class _ActivitySheetState extends State<_ActivitySheet> {
                   UniversalText('No activity yet.',
                       style: TextStyle(color: Colors.white60)),
                   SizedBox(height: 6),
-                  UniversalText('Messages, likes, playback, and other activity will appear here.',
-                      style: TextStyle(color: Colors.white38), textAlign: TextAlign.center),
+                  UniversalText(
+                      'Messages, likes, playback, and other activity will appear here.',
+                      style: TextStyle(color: Colors.white38),
+                      textAlign: TextAlign.center),
                 ],
               ),
             )
@@ -6321,7 +6632,9 @@ class _ActivitySheetState extends State<_ActivitySheet> {
                           : const Color(0x22E53935),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: event.read ? Colors.white10 : Colors.red.withValues(alpha: .25),
+                        color: event.read
+                            ? Colors.white10
+                            : Colors.red.withValues(alpha: .25),
                       ),
                     ),
                     child: Row(
@@ -6333,9 +6646,12 @@ class _ActivitySheetState extends State<_ActivitySheet> {
                               ? Colors.white10
                               : const Color(0x22FF0000),
                           child: Icon(
-                            event.read ? Icons.notifications_none_rounded : Icons.notifications_active_rounded,
+                            event.read
+                                ? Icons.notifications_none_rounded
+                                : Icons.notifications_active_rounded,
                             size: 20,
-                            color: event.read ? Colors.white54 : Colors.redAccent,
+                            color:
+                                event.read ? Colors.white54 : Colors.redAccent,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -6344,14 +6660,18 @@ class _ActivitySheetState extends State<_ActivitySheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(event.title,
-                                  style: const TextStyle(fontWeight: FontWeight.w800)),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800)),
                               const SizedBox(height: 4),
                               Text(event.action,
-                                  style: const TextStyle(color: Colors.white70)),
+                                  style:
+                                      const TextStyle(color: Colors.white70)),
                               const SizedBox(height: 5),
                               Text(
-                                MaterialLocalizations.of(context).formatFullDate(event.timestamp),
-                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                MaterialLocalizations.of(context)
+                                    .formatFullDate(event.timestamp),
+                                style: const TextStyle(
+                                    color: Colors.white38, fontSize: 11),
                               ),
                             ],
                           ),
@@ -6359,7 +6679,8 @@ class _ActivitySheetState extends State<_ActivitySheet> {
                         if (!event.read)
                           const Padding(
                             padding: EdgeInsets.only(left: 8, top: 3),
-                            child: Icon(Icons.circle, size: 8, color: Colors.redAccent),
+                            child: Icon(Icons.circle,
+                                size: 8, color: Colors.redAccent),
                           ),
                       ],
                     ),
@@ -6503,9 +6824,15 @@ class MediaCard extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (media.releaseYear != null)
+            if (media.displayYearLabel != null)
               Text(
-                media.releaseYear.toString(),
+                [
+                  media.displayYearLabel!,
+                  if (media.displayEditionLabel != null)
+                    media.displayEditionLabel!,
+                ].join(' • '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.grey.shade500,
                   fontSize: 12,
@@ -6778,18 +7105,33 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
 
   String? _rightsBlockReasonFor(Map<String, dynamic> value) {
     const blockedStatuses = <String>{
-      'pirated', 'piracy_confirmed', 'unauthorized', 'counterfeit',
-      'blocked', 'infringing', 'known_pirated',
+      'pirated',
+      'piracy_confirmed',
+      'unauthorized',
+      'counterfeit',
+      'blocked',
+      'infringing',
+      'known_pirated',
     };
     const statusKeys = <String>{
-      'rightsStatus', 'rights_status', 'sourceLegitimacy',
-      'source_legitimacy', 'copyrightStatus', 'copyright_status',
-      'contentRightsStatus', 'content_rights_status',
+      'rightsStatus',
+      'rights_status',
+      'sourceLegitimacy',
+      'source_legitimacy',
+      'copyrightStatus',
+      'copyright_status',
+      'contentRightsStatus',
+      'content_rights_status',
     };
     const flagKeys = <String>{
-      'piracyDetected', 'piracy_detected', 'knownPirated',
-      'known_pirated', 'counterfeitDisc', 'counterfeit_disc',
-      'unauthorizedSource', 'unauthorized_source',
+      'piracyDetected',
+      'piracy_detected',
+      'knownPirated',
+      'known_pirated',
+      'counterfeitDisc',
+      'counterfeit_disc',
+      'unauthorizedSource',
+      'unauthorized_source',
     };
     for (final entry in value.entries) {
       final key = entry.key.toString();
@@ -6807,7 +7149,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       } else if (raw is List) {
         for (final item in raw) {
           if (item is Map) {
-            final nested = _rightsBlockReasonFor(Map<String, dynamic>.from(item));
+            final nested =
+                _rightsBlockReasonFor(Map<String, dynamic>.from(item));
             if (nested != null) return nested;
           }
         }
@@ -6905,10 +7248,10 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
       statusMessage = rightsBlocked
           ? 'Import blocked: $blockReason We do not allow pirated content in this service.'
           : verificationPassed
-          ? titles.length > 1
-              ? 'Disc verified. ARM detected ${titles.length} separate titles on this disc. Review them before adding them to your library.'
-              : 'Disc verified. Review the metadata, then click ADD TO LIBRARY.'
-          : 'Disc rejected. It cannot be added to your library.';
+              ? titles.length > 1
+                  ? 'Disc verified. ARM detected ${titles.length} separate titles on this disc. Review them before adding them to your library.'
+                  : 'Disc verified. Review the metadata, then click ADD TO LIBRARY.'
+              : 'Disc rejected. It cannot be added to your library.';
     });
   }
 
@@ -6971,7 +7314,8 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
     if (addingToLibrary) return;
     if (rightsBlocked) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: UniversalText('We do not allow pirated content in this service. This disc was blocked by a trusted rights signal.'),
+        content: UniversalText(
+            'We do not allow pirated content in this service. This disc was blocked by a trusted rights signal.'),
       ));
       return;
     }
@@ -7353,14 +7697,16 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                     decoration: BoxDecoration(
                       color: Colors.red.withValues(alpha: .08),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.redAccent.withValues(alpha: .45)),
+                      border: Border.all(
+                          color: Colors.redAccent.withValues(alpha: .45)),
                     ),
                     child: const Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(Icons.gpp_bad_outlined, color: Colors.redAccent),
                         SizedBox(width: 10),
-                        Expanded(child: Text(
+                        Expanded(
+                            child: Text(
                           'Copyright protection: We do not allow pirated content in this service. If a trusted rights check flags a disc/source as pirated, counterfeit, or unauthorized, the item is blocked from import. An ownership declaration is still required. Pre-rip stopping depends on the connected ARM worker supporting a pre-extraction rights hook; this app does not bypass DRM or disc copy protection.',
                         )),
                       ],
@@ -7476,14 +7822,20 @@ class _ImportMediaScreenState extends State<ImportMediaScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.block_rounded, color: Colors.redAccent, size: 28),
+                    Icon(Icons.block_rounded,
+                        color: Colors.redAccent, size: 28),
                     SizedBox(width: 12),
-                    Expanded(child: Column(
+                    Expanded(
+                        child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('IMPORT BLOCKED', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.redAccent)),
+                        Text('IMPORT BLOCKED',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: Colors.redAccent)),
                         SizedBox(height: 6),
-                        Text('We do not allow pirated content in our service. This disc/source was flagged by a rights signal and cannot be added to your library.'),
+                        Text(
+                            'We do not allow pirated content in our service. This disc/source was flagged by a rights signal and cannot be added to your library.'),
                       ],
                     )),
                   ],

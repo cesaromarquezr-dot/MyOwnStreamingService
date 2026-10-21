@@ -9,6 +9,7 @@ import 'localization.dart';
 import 'details.dart';
 import 'watch_party_lobby.dart';
 import 'platform_operations_center.dart';
+import 'cinematic_discovery_studio.dart';
 
 const _accent = Color(0xFF8B7CFF);
 
@@ -25,6 +26,7 @@ class ConnectedCommandCenterScreen extends StatelessWidget {
         Text(profile == null ? 'Your entertainment, connected' : 'Personalized for ${profile.name}', style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         _FeatureTile(icon: Icons.search_rounded, title: 'Hey Universal Search', subtitle: 'Search your media library by title, person, genre or soundtrack.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UniversalSearchHubScreen()))),
+        _FeatureTile(icon: Icons.auto_awesome_rounded, title: 'My Cinematic Universe', subtitle: 'Mood Mixer, hybrid genres, Smart Double Features, franchises, calendar, vault and Media Wrapped.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CinematicDiscoveryStudioScreen()))),
         _FeatureTile(icon: Icons.gamepad_rounded, title: 'Hey Remote', subtitle: 'Playback controls and connected-device shortcuts.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HeyRemoteScreen()))),
         _FeatureTile(icon: Icons.event_rounded, title: 'Hey Movie Night', subtitle: 'Build a movie-night shortlist and save your plan.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MovieNightScreen()))),
         _FeatureTile(icon: Icons.groups_rounded, title: 'Hey Watch Party', subtitle: 'Invite participants, configure individual audio and subtitles, and wait until everyone is ready.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WatchPartyLobbyScreen()))),

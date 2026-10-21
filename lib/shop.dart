@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'worldwide_location.dart';
@@ -152,7 +152,8 @@ class ShopProduct implements ShopProductSource {
         'active': active,
         'imageUrls': imageUrls,
         'associations': associations.map((a) => a.toJson()).toList(),
-        'customizationGroups': customizationGroups.map((g) => g.toJson()).toList(),
+        'customizationGroups':
+            customizationGroups.map((g) => g.toJson()).toList(),
       };
 
   factory ShopProduct.fromJson(Map<String, dynamic> json) => ShopProduct(
@@ -179,7 +180,8 @@ class ShopProduct implements ShopProductSource {
             .toList(),
         customizationGroups: (json['customizationGroups'] as List?)
             ?.whereType<Map>()
-            .map((e) => ShopCustomizationGroup.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) =>
+                ShopCustomizationGroup.fromJson(Map<String, dynamic>.from(e)))
             .toList(),
       );
 }
@@ -514,6 +516,7 @@ class ShopOrder {
   final List<ShopBagLine> lines;
   final double total;
   final String transactionId;
+  final String? profileId;
   final DateTime createdAt;
 
   ShopOrder(
@@ -521,6 +524,7 @@ class ShopOrder {
       required this.lines,
       required this.total,
       required this.transactionId,
+      this.profileId,
       DateTime? createdAt})
       : createdAt = createdAt ?? DateTime.now();
 
@@ -535,6 +539,7 @@ class ShopOrder {
             .toList(),
         'total': total,
         'transactionId': transactionId,
+        'profileId': profileId,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -555,6 +560,7 @@ class ShopOrder {
             ? (json['total'] as num).toDouble()
             : double.tryParse(json['total']?.toString() ?? '') ?? 0,
         transactionId: json['transactionId']?.toString() ?? '',
+        profileId: json['profileId']?.toString(),
         createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       );
 }
@@ -658,8 +664,11 @@ class ShopCatalog extends ChangeNotifier {
     await prefs.setString(
         'shop_bag',
         jsonEncode(bag
-            .map((line) =>
-                {'productId': line.productId, 'quantity': line.quantity, 'customization': line.customization})
+            .map((line) => {
+                  'productId': line.productId,
+                  'quantity': line.quantity,
+                  'customization': line.customization
+                })
             .toList()));
     await prefs.setString('shop_orders',
         jsonEncode(orders.map((order) => order.toJson()).toList()));
@@ -962,7 +971,9 @@ class ShopCatalog extends ChangeNotifier {
     }
     if (featured != null) product.featured = featured;
     if (active != null) product.active = active;
-    if (customizationGroups != null) product.customizationGroups = customizationGroups;
+    if (customizationGroups != null) {
+      product.customizationGroups = customizationGroups;
+    }
     notifyListeners();
     _save();
   }
@@ -1138,12 +1149,19 @@ class ShopCatalog extends ChangeNotifier {
     return 0;
   }
 
-  void addToBag(String productId, {int quantity = 1, Map<String, dynamic>? customization}) {
+  void addToBag(String productId,
+      {int quantity = 1, Map<String, dynamic>? customization}) {
     final product = productById(productId);
-    if (product == null || !product.active || product.inventoryQuantity <= 0) return;
+    if (product == null || !product.active || product.inventoryQuantity <= 0) {
+      return;
+    }
     final selectedCustomization = customization ?? <String, dynamic>{};
     final key = customizationKey(selectedCustomization);
-    final existing = bag.where((line) => line.productId == productId && customizationKey(line.customization) == key).toList();
+    final existing = bag
+        .where((line) =>
+            line.productId == productId &&
+            customizationKey(line.customization) == key)
+        .toList();
     if (existing.isEmpty) {
       bag.add(ShopBagLine(
         productId: productId,
@@ -1151,7 +1169,9 @@ class ShopCatalog extends ChangeNotifier {
         customization: copyCustomizationMap(selectedCustomization),
       ));
     } else {
-      existing.first.quantity = (existing.first.quantity + quantity).clamp(1, product.inventoryQuantity).toInt();
+      existing.first.quantity = (existing.first.quantity + quantity)
+          .clamp(1, product.inventoryQuantity)
+          .toInt();
     }
     notifyListeners();
     _save();
@@ -1182,8 +1202,10 @@ class ShopCatalog extends ChangeNotifier {
 
   List<ShopBagLine> linesForStore(String storeId) => bag
       .where((line) => productById(line.productId)?.storeId == storeId)
-      .map((line) =>
-          ShopBagLine(productId: line.productId, quantity: line.quantity, customization: copyCustomizationMap(line.customization)))
+      .map((line) => ShopBagLine(
+          productId: line.productId,
+          quantity: line.quantity,
+          customization: copyCustomizationMap(line.customization)))
       .toList();
 
   double subtotal([Iterable<ShopBagLine>? lines]) {
@@ -1192,7 +1214,16 @@ class ShopCatalog extends ChangeNotifier {
       final product = productById(line.productId);
       final base = (product?.price ?? 0) * line.quantity;
       final adjustments = line.customization['selections'] is Map
-          ? (line.customization['selections'] as Map).values.whereType<Map>().fold<double>(0, (sum, item) => sum + ((item['priceAdjustment'] as num?)?.toDouble() ?? 0)) * line.quantity
+          ? (line.customization['selections'] as Map)
+                  .values
+                  .whereType<Map>()
+                  .fold<double>(
+                      0,
+                      (sum, item) =>
+                          sum +
+                          ((item['priceAdjustment'] as num?)?.toDouble() ??
+                              0)) *
+              line.quantity
           : 0;
       return total + base + adjustments;
     });
@@ -1217,6 +1248,7 @@ class ShopCatalog extends ChangeNotifier {
               .toList(),
           total: total,
           transactionId: transactionId,
+          profileId: AppController.instance.currentProfile?.id,
         ));
     if (orders.length > 500) orders.removeRange(500, orders.length);
     _save();
@@ -1235,7 +1267,8 @@ class ShopCatalog extends ChangeNotifier {
       }
       final lineMatches = bag.where((x) =>
           x.productId == purchased.productId &&
-          customizationKey(x.customization) == customizationKey(purchased.customization));
+          customizationKey(x.customization) ==
+              customizationKey(purchased.customization));
       final line = lineMatches.isEmpty ? null : lineMatches.first;
       if (line == null) continue;
       line.quantity -= purchased.quantity;
@@ -1248,7 +1281,8 @@ class ShopCatalog extends ChangeNotifier {
 /// Customer-facing product details page used by shop cards, social shares,
 /// and live-shopping featured products.
 class ShopProductDetailsScreen extends StatelessWidget {
-  const ShopProductDetailsScreen({super.key, required this.product, this.onHome});
+  const ShopProductDetailsScreen(
+      {super.key, required this.product, this.onHome});
 
   final ShopProduct product;
   final VoidCallback? onHome;
@@ -1268,7 +1302,8 @@ class ShopProductDetailsScreen extends StatelessWidget {
     final customization = await _customize(context);
     if (!context.mounted) return;
     ShopCatalog.instance.addToBag(product.id, customization: customization);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Added to bag')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: UniversalText('Added to bag')));
   }
 
   Future<void> _buy(BuildContext context) async {
@@ -1278,7 +1313,9 @@ class ShopProductDetailsScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (_) => ShopCheckoutScreen(
-          lines: [ShopBagLine(productId: product.id, customization: customization)],
+          lines: [
+            ShopBagLine(productId: product.id, customization: customization)
+          ],
           title: 'Checkout • ${product.name}',
           storeSpecific: false,
           onHome: onHome,
@@ -1290,7 +1327,8 @@ class ShopProductDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final catalog = ShopCatalog.instance;
-    final matchingStores = catalog.stores.where((item) => item.id == product.storeId);
+    final matchingStores =
+        catalog.stores.where((item) => item.id == product.storeId);
     final store = matchingStores.isEmpty ? null : matchingStores.first;
     return Scaffold(
       appBar: AppBar(
@@ -1379,7 +1417,9 @@ class ShopProductDetailsScreen extends StatelessWidget {
                       : null,
                   child: store.logoUrl?.isNotEmpty == true
                       ? null
-                      : Text(store.name.isEmpty ? '?' : store.name[0].toUpperCase()),
+                      : Text(store.name.isEmpty
+                          ? '?'
+                          : store.name[0].toUpperCase()),
                 ),
                 const SizedBox(width: 9),
                 Expanded(
@@ -1419,7 +1459,8 @@ class ShopProductDetailsScreen extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.tune_rounded),
                 title: const UniversalText('This product is customizable'),
-                subtitle: Text('${product.customizationGroups.length} customization group${product.customizationGroups.length == 1 ? '' : 's'} available before checkout.'),
+                subtitle: Text(
+                    '${product.customizationGroups.length} customization group${product.customizationGroups.length == 1 ? '' : 's'} available before checkout.'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _customize(context),
               ),
@@ -1427,13 +1468,15 @@ class ShopProductDetailsScreen extends StatelessWidget {
           ],
           if (product.description.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
-            const UniversalText('About this product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const UniversalText('About this product',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
             Text(product.description, style: const TextStyle(height: 1.45)),
           ],
           if (product.associations.isNotEmpty) ...[
             const SizedBox(height: 18),
-            const UniversalText('Related to', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const UniversalText('Related to',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             for (final association in product.associations)
               ListTile(
@@ -1448,7 +1491,9 @@ class ShopProductDetailsScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: product.inventoryQuantity <= 0 ? null : () => _add(context),
+                  onPressed: product.inventoryQuantity <= 0
+                      ? null
+                      : () => _add(context),
                   icon: const Icon(Icons.add_shopping_cart),
                   label: const UniversalText('Add to bag'),
                 ),
@@ -1456,7 +1501,9 @@ class ShopProductDetailsScreen extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: product.inventoryQuantity <= 0 ? null : () => _buy(context),
+                  onPressed: product.inventoryQuantity <= 0
+                      ? null
+                      : () => _buy(context),
                   icon: const Icon(Icons.bolt_rounded),
                   label: const UniversalText('Buy now'),
                 ),
@@ -1471,6 +1518,8 @@ class ShopProductDetailsScreen extends StatelessWidget {
 
 /// Top-level marketplace. Search covers products, stores, and entertainment relationships.
 class ShopScreen extends StatefulWidget {
+  final bool showAppBar;
+  final String initialQuery;
   final VoidCallback? onHome;
   final String? contextAssociationType;
   final String? contextAssociationId;
@@ -1478,6 +1527,8 @@ class ShopScreen extends StatefulWidget {
 
   const ShopScreen({
     super.key,
+    this.showAppBar = true,
+    this.initialQuery = '',
     this.onHome,
     this.contextAssociationType,
     this.contextAssociationId,
@@ -1499,6 +1550,8 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   void initState() {
     super.initState();
+    search = widget.initialQuery.trim();
+    searchController.text = search;
     catalog.syncShopEntityIndex();
     unawaited(_setProfileActivity('Shopping'));
   }
@@ -1603,46 +1656,85 @@ class _ShopScreenState extends State<ShopScreen> {
                     s.description.toLowerCase().contains(search.toLowerCase())))
             .toList();
         return Scaffold(
-          appBar: AppBar(
-            automaticallyImplyLeading: false,
-            title: UniversalText(widget.contextAssociationName == null
-                ? 'Shop'
-                : 'Shop • ${widget.contextAssociationName}'),
-            actions: [
-              const PageCustomizeButton(pageId: 'shop'),
-              IconButton(
-                tooltip: 'Wishlist',
-                icon: const Icon(Icons.favorite_border_rounded),
-                onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const ShopWishlistScreen())),
-              ),
-              IconButton(
-                tooltip: 'Compare selected products',
-                onPressed: catalog.compareProductIds.isEmpty
-                    ? null
-                    : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                const ShopProductComparisonScreen())),
-                icon: Badge(
-                    label: Text('${catalog.compareProductIds.length}'),
-                    child: const Icon(Icons.compare_arrows)),
-              ),
-              _BagButton(
-                  onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) =>
-                              ShopBagScreen(onHome: widget.onHome)))),
-              const LanguagePicker(),
-            ],
-          ),
+          appBar: widget.showAppBar
+              ? AppBar(
+                  automaticallyImplyLeading: false,
+                  title: UniversalText(widget.contextAssociationName == null
+                      ? 'Shop'
+                      : 'Shop • ${widget.contextAssociationName}'),
+                  actions: [
+                    const PageCustomizeButton(pageId: 'shop'),
+                    IconButton(
+                      tooltip: 'Wishlist',
+                      icon: const Icon(Icons.favorite_border_rounded),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ShopWishlistScreen())),
+                    ),
+                    IconButton(
+                      tooltip: 'Compare selected products',
+                      onPressed: catalog.compareProductIds.isEmpty
+                          ? null
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ShopProductComparisonScreen())),
+                      icon: Badge(
+                          label: Text('${catalog.compareProductIds.length}'),
+                          child: const Icon(Icons.compare_arrows)),
+                    ),
+                    _BagButton(
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    ShopBagScreen(onHome: widget.onHome)))),
+                    const LanguagePicker(),
+                  ],
+                )
+              : null,
           body: ListView(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
             children: [
+              if (!widget.showAppBar)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: <Widget>[
+                    const PageCustomizeButton(pageId: 'shop'),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ShopWishlistScreen())),
+                      icon: const Icon(Icons.favorite_border_rounded),
+                      label: const Text('Wishlist'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: catalog.compareProductIds.isEmpty
+                          ? null
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ShopProductComparisonScreen())),
+                      icon: const Icon(Icons.compare_arrows_rounded),
+                      label:
+                          Text('Compare (${catalog.compareProductIds.length})'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  ShopBagScreen(onHome: widget.onHome))),
+                      icon: const Icon(Icons.shopping_bag_outlined),
+                      label: Text('Bag (${catalog.bag.length})'),
+                    ),
+                    const LanguagePicker(),
+                  ]),
+                ),
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -1787,7 +1879,9 @@ class _ShopScreenState extends State<ShopScreen> {
                           : 'No products match “${search.trim()}”. Try a broader search or reset your filters.')
                       : 'No seller product is currently associated with this title.'),
                   if (widget.contextAssociationName == null &&
-                      (search.trim().isNotEmpty || categoryFilter != 'All' || sortMode != 'Relevance'))
+                      (search.trim().isNotEmpty ||
+                          categoryFilter != 'All' ||
+                          sortMode != 'Relevance'))
                     Align(
                       alignment: Alignment.center,
                       child: OutlinedButton.icon(
@@ -1855,7 +1949,8 @@ class _ShopScreenState extends State<ShopScreen> {
           value: sortMode,
           underline: const SizedBox.shrink(),
           items: const [
-            DropdownMenuItem(value: 'Relevance', child: UniversalText('Relevance')),
+            DropdownMenuItem(
+                value: 'Relevance', child: UniversalText('Relevance')),
             DropdownMenuItem(value: 'Newest', child: UniversalText('Newest')),
             DropdownMenuItem(
                 value: 'Price: low to high', child: UniversalText('Price ↑')),
@@ -2080,7 +2175,8 @@ class _CreateStoreDialogState extends State<_CreateStoreDialog> {
         address.addressLine1.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: UniversalText('Enter the complete store address, including country, city and postal/ZIP code.',
+          content: UniversalText(
+            'Enter the complete store address, including country, city and postal/ZIP code.',
           ),
         ),
       );
@@ -2493,8 +2589,10 @@ class ShopStoreScreen extends StatelessWidget {
   Widget _productGrid(BuildContext context, List<ShopProduct> products,
       StorefrontDesign design) {
     final width = MediaQuery.sizeOf(context).width;
-    final personal = AppSectionCustomizationStore.settingsFor(AppController.instance.currentProfile);
-    final baseCount = width < 600 ? design.mobileColumns : design.desktopColumns;
+    final personal = AppSectionCustomizationStore.settingsFor(
+        AppController.instance.currentProfile);
+    final baseCount =
+        width < 600 ? design.mobileColumns : design.desktopColumns;
     final count = personal.shopColumns > 0 ? personal.shopColumns : baseCount;
     return GridView.count(
         shrinkWrap: true,
@@ -2734,8 +2832,10 @@ class SellerDashboardScreen extends StatelessWidget {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          settings: const RouteSettings(name: '/app/page/store-creation'),
-                          builder: (_) => ShopStoreSettingsScreen(store: activeStore),
+                          settings: const RouteSettings(
+                              name: '/app/page/store-creation'),
+                          builder: (_) =>
+                              ShopStoreSettingsScreen(store: activeStore),
                         ),
                       ),
                     ),
@@ -2759,7 +2859,8 @@ class SellerDashboardScreen extends StatelessWidget {
                       onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              settings: const RouteSettings(name: '/app/page/store-creation'),
+                              settings: const RouteSettings(
+                                  name: '/app/page/store-creation'),
                               builder: (_) => ShopStoreSettingsScreen(
                                   store: activeStore, designerOnly: true))),
                       icon: const Icon(Icons.palette_outlined),
@@ -2769,8 +2870,10 @@ class SellerDashboardScreen extends StatelessWidget {
                       onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              settings: const RouteSettings(name: '/app/page/store-creation'),
-                              builder: (_) => ShopStoreSettingsScreen(store: activeStore))),
+                              settings: const RouteSettings(
+                                  name: '/app/page/store-creation'),
+                              builder: (_) =>
+                                  ShopStoreSettingsScreen(store: activeStore))),
                       icon: const Icon(Icons.settings_outlined),
                       label: const UniversalText('Store Settings & Payouts')),
                   const SizedBox(height: 14),
@@ -2814,7 +2917,8 @@ class SellerDashboardScreen extends StatelessWidget {
                                               'Edit Product')),
                                       const PopupMenuItem(
                                           value: 'customize',
-                                          child: UniversalText('Customize Product')),
+                                          child: UniversalText(
+                                              'Customize Product')),
                                       PopupMenuItem(
                                           value: 'feature',
                                           child: UniversalText(product.featured
@@ -2837,7 +2941,8 @@ class SellerDashboardScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _customizeProduct(BuildContext context, ShopProduct product) async {
+  Future<void> _customizeProduct(
+      BuildContext context, ShopProduct product) async {
     final result = await Navigator.push<List<ShopCustomizationGroup>>(
       context,
       MaterialPageRoute(
@@ -3133,7 +3238,8 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
           const SizedBox(height: 22),
           const UniversalText('Storefront Designer',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-          const UniversalText('Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
+          const UniversalText(
+              'Preview changes on the public Store page after saving. Commerce behavior remains shared across storefront themes.'),
           const SizedBox(height: 12),
           TextField(
               controller: logo,
@@ -3150,11 +3256,15 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration: const InputDecoration(
                   labelText: 'Theme preset', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'Indigo', child: UniversalText('Indigo')),
+                DropdownMenuItem(
+                    value: 'Indigo', child: UniversalText('Indigo')),
                 DropdownMenuItem(value: 'Ocean', child: UniversalText('Ocean')),
-                DropdownMenuItem(value: 'Forest', child: UniversalText('Forest')),
-                DropdownMenuItem(value: 'Sunset', child: UniversalText('Sunset')),
-                DropdownMenuItem(value: 'Custom', child: UniversalText('Custom'))
+                DropdownMenuItem(
+                    value: 'Forest', child: UniversalText('Forest')),
+                DropdownMenuItem(
+                    value: 'Sunset', child: UniversalText('Sunset')),
+                DropdownMenuItem(
+                    value: 'Custom', child: UniversalText('Custom'))
               ],
               onChanged: (value) => _applyThemePreset(value)),
           const SizedBox(height: 10),
@@ -3165,7 +3275,8 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
                   border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(
-                    value: 'system', child: UniversalText('Auto (follow device)')),
+                    value: 'system',
+                    child: UniversalText('Auto (follow device)')),
                 DropdownMenuItem(value: 'light', child: UniversalText('Light')),
                 DropdownMenuItem(value: 'dark', child: UniversalText('Dark'))
               ],
@@ -3194,8 +3305,10 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration: const InputDecoration(
                   labelText: 'Store background', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'solid', child: UniversalText('Solid color')),
-                DropdownMenuItem(value: 'gradient', child: UniversalText('Gradient')),
+                DropdownMenuItem(
+                    value: 'solid', child: UniversalText('Solid color')),
+                DropdownMenuItem(
+                    value: 'gradient', child: UniversalText('Gradient')),
                 DropdownMenuItem(value: 'image', child: UniversalText('Image'))
               ],
               onChanged: (value) {
@@ -3243,9 +3356,12 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
                     decoration:
                         const InputDecoration(labelText: 'Hero image position'),
                     items: const [
-                      DropdownMenuItem(value: 'left', child: UniversalText('Left')),
-                      DropdownMenuItem(value: 'center', child: UniversalText('Center')),
-                      DropdownMenuItem(value: 'right', child: UniversalText('Right'))
+                      DropdownMenuItem(
+                          value: 'left', child: UniversalText('Left')),
+                      DropdownMenuItem(
+                          value: 'center', child: UniversalText('Center')),
+                      DropdownMenuItem(
+                          value: 'right', child: UniversalText('Right'))
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -3278,9 +3394,11 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               initialValue: designDraft.fontFamily,
               decoration: const InputDecoration(labelText: 'Typography'),
               items: const [
-                DropdownMenuItem(value: 'Default', child: UniversalText('System')),
+                DropdownMenuItem(
+                    value: 'Default', child: UniversalText('System')),
                 DropdownMenuItem(value: 'Serif', child: UniversalText('Serif')),
-                DropdownMenuItem(value: 'Monospace', child: UniversalText('Monospace'))
+                DropdownMenuItem(
+                    value: 'Monospace', child: UniversalText('Monospace'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3313,8 +3431,10 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration:
                   const InputDecoration(labelText: 'Product presentation'),
               items: const [
-                DropdownMenuItem(value: 'list', child: UniversalText('Compact list')),
-                DropdownMenuItem(value: 'grid', child: UniversalText('Product grid'))
+                DropdownMenuItem(
+                    value: 'list', child: UniversalText('Compact list')),
+                DropdownMenuItem(
+                    value: 'grid', child: UniversalText('Product grid'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3354,9 +3474,12 @@ class _ShopStoreSettingsScreenState extends State<ShopStoreSettingsScreen> {
               decoration:
                   const InputDecoration(labelText: 'Product image ratio'),
               items: const [
-                DropdownMenuItem(value: 'Square', child: UniversalText('Square')),
-                DropdownMenuItem(value: 'Portrait', child: UniversalText('Portrait')),
-                DropdownMenuItem(value: 'Landscape', child: UniversalText('Landscape'))
+                DropdownMenuItem(
+                    value: 'Square', child: UniversalText('Square')),
+                DropdownMenuItem(
+                    value: 'Portrait', child: UniversalText('Portrait')),
+                DropdownMenuItem(
+                    value: 'Landscape', child: UniversalText('Landscape'))
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -3925,7 +4048,8 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
   final inventory = TextEditingController();
   final List<String> imageDataUris = <String>[];
   final List<ShopAssociation> associations = <ShopAssociation>[];
-  final List<ShopCustomizationGroup> customizationGroups = <ShopCustomizationGroup>[];
+  final List<ShopCustomizationGroup> customizationGroups =
+      <ShopCustomizationGroup>[];
   String productType = 'Merchandise';
   String category = 'Other';
   bool featured = false;
@@ -4180,14 +4304,25 @@ class _AddShopProductScreenState extends State<AddShopProductScreen> {
               child: ListTile(
                 leading: const Icon(Icons.tune_rounded),
                 title: const UniversalText('Customize Product'),
-                subtitle: Text(customizationGroups.isEmpty ? 'Add buyer controls such as size, color, text, image, font, icon, or character options.' : '${customizationGroups.length} buyer customization groups configured.'),
+                subtitle: Text(customizationGroups.isEmpty
+                    ? 'Add buyer controls such as size, color, text, image, font, icon, or character options.'
+                    : '${customizationGroups.length} buyer customization groups configured.'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () async {
-                  final result = await Navigator.push<List<ShopCustomizationGroup>>(
+                  final result =
+                      await Navigator.push<List<ShopCustomizationGroup>>(
                     context,
-                    MaterialPageRoute(builder: (_) => ShopProductCustomizationEditor(initialGroups: customizationGroups)),
+                    MaterialPageRoute(
+                        builder: (_) => ShopProductCustomizationEditor(
+                            initialGroups: customizationGroups)),
                   );
-                  if (result != null) setState(() { customizationGroups..clear()..addAll(result); });
+                  if (result != null) {
+                    setState(() {
+                      customizationGroups
+                        ..clear()
+                        ..addAll(result);
+                    });
+                  }
                 },
               ),
             ),
@@ -4324,7 +4459,8 @@ class ShopBagScreen extends StatelessWidget {
     final product = catalog.productById(line.productId);
     if (product == null) return const SizedBox.shrink();
     final selectionText = line.customization['selections'] is Map
-        ? (line.customization['selections'] as Map).values
+        ? (line.customization['selections'] as Map)
+            .values
             .whereType<Map>()
             .map((item) => item['label']?.toString())
             .whereType<String>()
@@ -4334,7 +4470,8 @@ class ShopBagScreen extends StatelessWidget {
     return Card(
         child: ListTile(
       title: Text(product.name),
-      subtitle: Text('${product.price.toStringAsFixed(2)} ${product.currency}${selectionText.isEmpty ? '' : '\n$selectionText'}'),
+      subtitle: Text(
+          '${product.price.toStringAsFixed(2)} ${product.currency}${selectionText.isEmpty ? '' : '\n$selectionText'}'),
       trailing: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
         IconButton(
             onPressed: () => catalog.changeQuantity(product.id, -1),
@@ -4376,7 +4513,8 @@ class ShopProductComparisonScreen extends StatelessWidget {
               appBar: AppBar(title: const UniversalText('Compare products')),
               body: products.isEmpty
                   ? const Center(
-                      child: UniversalText('Select products from the marketplace to compare them.'))
+                      child: UniversalText(
+                          'Select products from the marketplace to compare them.'))
                   : ListView(padding: const EdgeInsets.all(16), children: [
                       for (final product in products)
                         Card(
@@ -4419,7 +4557,8 @@ class ShopProductComparisonScreen extends StatelessWidget {
                                                       ? null
                                                       : () => catalog
                                                           .addToBag(product.id),
-                                              child: const UniversalText('Add to bag'))),
+                                              child: const UniversalText(
+                                                  'Add to bag'))),
                                     ]))),
                     ]));
         },
@@ -4846,7 +4985,8 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
     final product = ShopCatalog.instance.productById(line.productId);
     if (product == null) return const SizedBox.shrink();
     final selectionText = line.customization['selections'] is Map
-        ? (line.customization['selections'] as Map).values
+        ? (line.customization['selections'] as Map)
+            .values
             .whereType<Map>()
             .map((item) => item['label']?.toString())
             .whereType<String>()
@@ -4855,15 +4995,33 @@ class _ShopCheckoutScreenState extends State<ShopCheckoutScreen> {
         : '';
     final lineTotal = (product.price * line.quantity) +
         (line.customization['selections'] is Map
-            ? (line.customization['selections'] as Map).values.whereType<Map>().fold<double>(0, (sum, item) => sum + ((item['priceAdjustment'] as num?)?.toDouble() ?? 0)) * line.quantity
+            ? (line.customization['selections'] as Map)
+                    .values
+                    .whereType<Map>()
+                    .fold<double>(
+                        0,
+                        (sum, item) =>
+                            sum +
+                            ((item['priceAdjustment'] as num?)?.toDouble() ??
+                                0)) *
+                line.quantity
             : 0);
     return Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(product.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-            if (selectionText.isNotEmpty) Text(selectionText, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.white54)),
-          ])),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(product.name,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                if (selectionText.isNotEmpty)
+                  Text(selectionText,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(fontSize: 11, color: Colors.white54)),
+              ])),
           Text('× ${line.quantity}'),
           const SizedBox(width: 14),
           Text('${lineTotal.toStringAsFixed(2)} ${product.currency}')
@@ -5124,7 +5282,8 @@ class _StorefrontDevicePreviewState extends State<StorefrontDevicePreview> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const UniversalText('Live Preview',
+            const UniversalText(
+              'Live Preview',
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),

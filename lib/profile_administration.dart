@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'core/models/profile_governance.dart';
 import 'core/services/profile_governance_api.dart';
@@ -16,10 +16,12 @@ class ProfileAdministrationScreen extends StatefulWidget {
   });
 
   @override
-  State<ProfileAdministrationScreen> createState() => _ProfileAdministrationScreenState();
+  State<ProfileAdministrationScreen> createState() =>
+      _ProfileAdministrationScreenState();
 }
 
-class _ProfileAdministrationScreenState extends State<ProfileAdministrationScreen> {
+class _ProfileAdministrationScreenState
+    extends State<ProfileAdministrationScreen> {
   late ProfileGovernance _governance;
   bool _loading = true;
   bool _saving = false;
@@ -38,7 +40,8 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
     try {
       final api = ProfileGovernanceApi(AppController.instance.backendApi);
       final capabilities = await api.getCapabilities();
-      _allowMembersToManageOwnProfiles = capabilities['allowMembersToManageOwnProfiles'] == true;
+      _allowMembersToManageOwnProfiles =
+          capabilities['allowMembersToManageOwnProfiles'] == true;
       _isAccountOwner = capabilities['isAccountOwner'] == true;
       _governance = await api.getGovernance(widget.profile.id);
       widget.profile.governance = _governance;
@@ -64,7 +67,8 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+        setState(
+            () => _error = error.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -81,32 +85,50 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
           : ListView(
               padding: const EdgeInsets.all(18),
               children: [
-                const UniversalText('Profile administration', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                const UniversalText('Profile administration',
+                    style:
+                        TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
-                const UniversalText('The account owner is always able to manage this profile. Self-management is optional and remains limited by backend permissions.'),
+                const UniversalText(
+                    'The account owner is always able to manage this profile. Self-management is optional and remains limited by backend permissions.'),
                 const SizedBox(height: 18),
                 if (_error != null)
-                  Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(_error!))),
+                  Card(
+                      child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text(_error!))),
                 if (_isAccountOwner)
                   Card(
                     child: SwitchListTile(
-                      title: const UniversalText('Allow members to manage their own profiles'),
-                      subtitle: const UniversalText('Members can manage only profiles assigned to them that are marked self-managed. The owner remains authoritative.'),
+                      title: const UniversalText(
+                          'Allow members to manage their own profiles'),
+                      subtitle: const UniversalText(
+                          'Members can manage only profiles assigned to them that are marked self-managed. The owner remains authoritative.'),
                       value: _allowMembersToManageOwnProfiles,
                       onChanged: _saving
                           ? null
                           : (value) async {
-                              setState(() { _saving = true; _error = null; });
+                              setState(() {
+                                _saving = true;
+                                _error = null;
+                              });
                               try {
-                                await AppController.instance.backendApi.updateAccountProfileAdministrationPolicy(
+                                await AppController.instance.backendApi
+                                    .updateAccountProfileAdministrationPolicy(
                                   allowMembersToManageOwnProfiles: value,
                                 );
                                 _allowMembersToManageOwnProfiles = value;
-                                if (AppController.instance.currentAccount != null) {
-                                  AppController.instance.currentAccount!.allowMembersToManageOwnProfiles = value;
+                                if (AppController.instance.currentAccount !=
+                                    null) {
+                                  AppController.instance.currentAccount!
+                                      .allowMembersToManageOwnProfiles = value;
                                 }
                               } catch (error) {
-                                if (mounted) setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+                                if (mounted) {
+                                  setState(() => _error = error
+                                      .toString()
+                                      .replaceFirst('Exception: ', ''));
+                                }
                               } finally {
                                 if (mounted) setState(() => _saving = false);
                               }
@@ -119,60 +141,93 @@ class _ProfileAdministrationScreenState extends State<ProfileAdministrationScree
                     padding: const EdgeInsets.all(16),
                     child: DropdownButtonFormField<ProfileContentLevel>(
                       initialValue: _governance.contentLevel,
-                      decoration: const InputDecoration(labelText: 'Maximum content level'),
-                      items: levels.map((level) => DropdownMenuItem(value: level, child: Text(_label(level)))).toList(),
-                      onChanged: _saving ? null : (value) {
-                        if (value != null) _save(_governance.copyWith(contentLevel: value));
-                      },
+                      decoration: const InputDecoration(
+                          labelText: 'Maximum content level'),
+                      items: levels
+                          .map((level) => DropdownMenuItem(
+                              value: level, child: Text(_label(level))))
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                _save(
+                                    _governance.copyWith(contentLevel: value));
+                              }
+                            },
                     ),
                   ),
                 ),
                 SwitchListTile(
-                  title: const UniversalText('Allow this profile to self-manage'),
-                  subtitle: const UniversalText('Members still cannot manage other profiles or account/server settings.'),
+                  title:
+                      const UniversalText('Allow this profile to self-manage'),
+                  subtitle: const UniversalText(
+                      'Members still cannot manage other profiles or account/server settings.'),
                   value: _governance.isSelfManaged,
                   onChanged: _saving
                       ? null
                       : (value) => _save(_governance.copyWith(
-                            adminMode: value ? ProfileAdminMode.selfManaged : ProfileAdminMode.ownerManaged,
+                            adminMode: value
+                                ? ProfileAdminMode.selfManaged
+                                : ProfileAdminMode.ownerManaged,
                           )),
                 ),
                 if (_isAccountOwner)
                   SwitchListTile(
-                    title: const UniversalText('Allow a self-managed member to change content controls'),
-                    subtitle: const UniversalText('This separately permits the member to change this profile’s content level and related policy.'),
-                    value: _governance.permissions.contains(ProfilePermission.manageContentPolicy),
+                    title: const UniversalText(
+                        'Allow a self-managed member to change content controls'),
+                    subtitle: const UniversalText(
+                        'This separately permits the member to change this profile’s content level and related policy.'),
+                    value: _governance.permissions
+                        .contains(ProfilePermission.manageContentPolicy),
                     onChanged: _saving
                         ? null
                         : (value) {
-                            final permissions = <ProfilePermission>{..._governance.permissions};
+                            final permissions = <ProfilePermission>{
+                              ..._governance.permissions
+                            };
                             if (value) {
-                              permissions.add(ProfilePermission.manageContentPolicy);
+                              permissions
+                                  .add(ProfilePermission.manageContentPolicy);
                             } else {
-                              permissions.remove(ProfilePermission.manageContentPolicy);
+                              permissions.remove(
+                                  ProfilePermission.manageContentPolicy);
                             }
-                            _save(_governance.copyWith(permissions: permissions));
+                            _save(
+                                _governance.copyWith(permissions: permissions));
                           },
                   ),
                 SwitchListTile(
                   title: const UniversalText('Allow explicit music'),
                   value: _governance.explicitMusicAllowed,
-                  onChanged: _saving ? null : (value) => _save(_governance.copyWith(explicitMusicAllowed: value)),
+                  onChanged: _saving
+                      ? null
+                      : (value) => _save(
+                          _governance.copyWith(explicitMusicAllowed: value)),
                 ),
                 SwitchListTile(
                   title: const UniversalText('Allow explicit lyrics'),
                   value: _governance.explicitLyricsAllowed,
-                  onChanged: _saving ? null : (value) => _save(_governance.copyWith(explicitLyricsAllowed: value)),
+                  onChanged: _saving
+                      ? null
+                      : (value) => _save(
+                          _governance.copyWith(explicitLyricsAllowed: value)),
                 ),
                 SwitchListTile(
                   title: const UniversalText('Restrict purchases'),
                   value: _governance.purchasesRestricted,
-                  onChanged: _saving ? null : (value) => _save(_governance.copyWith(purchasesRestricted: value)),
+                  onChanged: _saving
+                      ? null
+                      : (value) => _save(
+                          _governance.copyWith(purchasesRestricted: value)),
                 ),
                 SwitchListTile(
                   title: const UniversalText('Require profile PIN protection'),
                   value: _governance.profilePinEnabled,
-                  onChanged: _saving ? null : (value) => _save(_governance.copyWith(profilePinEnabled: value)),
+                  onChanged: _saving
+                      ? null
+                      : (value) =>
+                          _save(_governance.copyWith(profilePinEnabled: value)),
                 ),
               ],
             ),

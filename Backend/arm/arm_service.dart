@@ -38,6 +38,10 @@ class ArmService {
   final ArmClient client;
   final ArmVerifier verifier;
 
+  /// False when the backend has no explicit ARM_SERVER_URL. This prevents
+  /// the app from treating its own API URL as a ripping worker.
+  final bool enabled;
+
   final Random _random = Random();
 
   final Map<String, ArmRipJob> _jobs = {};
@@ -48,12 +52,13 @@ class ArmService {
   ArmService({
     required this.client,
     this.verifier = const ArmVerifier(),
+    this.enabled = true,
   });
 
   String _generateId(String prefix) =>
       '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${_random.nextInt(100000)}';
 
-  Future<bool> isConnected() => client.checkConnection();
+  Future<bool> isConnected() => enabled ? client.checkConnection() : Future<bool>.value(false);
 
   /// Finds optical drives known to ARM.
   ///
@@ -61,6 +66,10 @@ class ArmService {
   /// uses configured drives plus device paths reported by ARM jobs rather than
   /// inventing a drive-control API that ARM does not expose.
   Future<List<ArmDrive>> findDrives() async {
+    if (!enabled) {
+      return <ArmDrive>[];
+    }
+
     final configured = (
       Platform.environment['ARM_DRIVES'] ??
           const String.fromEnvironment(
@@ -149,6 +158,12 @@ class ArmService {
   Future<ArmDisc> scanDisc({
     required String driveId,
   }) async {
+    if (!enabled) {
+      throw StateError(
+        'Real disc import is not configured. Set ARM_SERVER_URL to the ARM worker web/API URL.',
+      );
+    }
+
     final jobs = await _getArmJobs();
 
     final matching = jobs.where((job) {
@@ -291,6 +306,12 @@ class ArmService {
   Future<ArmRipJob> startImport({
     required String driveId,
   }) async {
+    if (!enabled) {
+      throw StateError(
+        'Real disc import is not configured. Set ARM_SERVER_URL to the ARM worker web/API URL.',
+      );
+    }
+
     final local = ArmRipJob(
       id: _generateId('rip'),
       driveId: driveId,

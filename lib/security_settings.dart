@@ -1,7 +1,7 @@
 // FILE: `lib/security_settings.dart`.
 // Purpose: Provides the account Security & Privacy screen for password, MFA,
 // sessions, and security-posture visibility. Credentials are never displayed.
-
+import 'backend_api.dart';
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'localization.dart';
@@ -37,7 +37,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         mfaEnabled = status['mfaEnabled'] == true;
         final rawSessions = active['sessions'];
         sessions = rawSessions is List
-            ? rawSessions.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+            ? rawSessions
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
             : <Map<String, dynamic>>[];
         error = null;
         loading = false;
@@ -63,8 +66,20 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const UniversalText('Verify MFA'),
-            content: TextField(controller: controller, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit email code')),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const UniversalText('Verify'))],
+            content: TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration:
+                    const InputDecoration(labelText: '6-digit email code')),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const UniversalText('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, controller.text),
+                  child: const UniversalText('Verify'))
+            ],
           ),
         );
         controller.dispose();
@@ -75,7 +90,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       }
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -90,21 +108,53 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         builder: (context) => AlertDialog(
           title: const UniversalText('Change password'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: current, obscureText: true, decoration: const InputDecoration(labelText: 'Current password')),
-            TextField(controller: next, obscureText: true, decoration: const InputDecoration(labelText: 'New password (10+ characters)')),
-            TextField(controller: confirmed, obscureText: true, decoration: const InputDecoration(labelText: 'Confirm new password')),
+            TextField(
+                controller: current,
+                obscureText: true,
+                decoration:
+                    const InputDecoration(labelText: 'Current password')),
+            TextField(
+                controller: next,
+                obscureText: true,
+                decoration: const InputDecoration(
+                    labelText: 'New password (10+ characters)')),
+            TextField(
+                controller: confirmed,
+                obscureText: true,
+                decoration:
+                    const InputDecoration(labelText: 'Confirm new password')),
           ]),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const UniversalText('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, [current.text, next.text, confirmed.text]), child: const UniversalText('Change'))],
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const UniversalText('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(
+                    context, [current.text, next.text, confirmed.text]),
+                child: const UniversalText('Change'))
+          ],
         ),
       );
       if (values == null) return;
-      if (values[1] != values[2]) throw Exception('New passwords do not match.');
-      await AppController.instance.backendApi.changePassword(currentPassword: values[0], newPassword: values[1]);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: UniversalText('Password changed. Sign in again on this device.')));
+      if (values[1] != values[2]) {
+        throw Exception('New passwords do not match.');
+      }
+      await AppController.instance.backendApi
+          .changePassword(currentPassword: values[0], newPassword: values[1]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: UniversalText(
+                'Password changed. Sign in again on this device.')));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     } finally {
-      current.dispose(); next.dispose(); confirmed.dispose();
+      current.dispose();
+      next.dispose();
+      confirmed.dispose();
     }
   }
 
@@ -117,26 +167,75 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(padding: const EdgeInsets.all(18), children: [
-                if (error != null) Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(error!))),
-                Card(child: Column(children: [
-                  SwitchListTile(title: const UniversalText('Multi-factor authentication'), subtitle: Text(mfaEnabled ? 'Enabled — email verification is required after password authentication.' : 'Disabled'), value: mfaEnabled, onChanged: (_) => _mfa()),
-                  const ListTile(title: UniversalText('Password protection'), subtitle: UniversalText('Backend password hashes use Argon2id. Plaintext passwords are never stored in the application database.')),
-                  ListTile(leading: const Icon(Icons.password), title: const UniversalText('Change password'), onTap: _changePassword),
-                  const ListTile(title: UniversalText('Passkeys'), subtitle: UniversalText('The security API reserves the WebAuthn/passkey integration surface; passkey credentials are not exposed as passwords or bearer tokens.')),
+                if (error != null)
+                  Card(
+                      child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(error!))),
+                Card(
+                    child: Column(children: [
+                  SwitchListTile(
+                      title: const UniversalText('Multi-factor authentication'),
+                      subtitle: Text(mfaEnabled
+                          ? 'Enabled — email verification is required after password authentication.'
+                          : 'Disabled'),
+                      value: mfaEnabled,
+                      onChanged: (_) => _mfa()),
+                  const ListTile(
+                      title: UniversalText('Password protection'),
+                      subtitle: UniversalText(
+                          'Backend password hashes use Argon2id. Plaintext passwords are never stored in the application database.')),
+                  ListTile(
+                      leading: const Icon(Icons.password),
+                      title: const UniversalText('Change password'),
+                      onTap: _changePassword),
+                  const ListTile(
+                      title: UniversalText('Passkeys'),
+                      subtitle: UniversalText(
+                          'The security API reserves the WebAuthn/passkey integration surface; passkey credentials are not exposed as passwords or bearer tokens.')),
                 ])),
                 const SizedBox(height: 12),
-                Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Active sessions (${sessions.length})', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  for (final session in sessions) ListTile(
-                    leading: Icon(session['current'] == true ? Icons.devices : Icons.device_unknown),
-                    title: Text(session['current'] == true ? 'This session' : 'Signed-in session'),
-                    subtitle: Text('${session['ipAddress'] ?? 'unknown'}\n${session['userAgent'] ?? 'unknown'}\nLast used: ${session['lastUsedAt'] ?? 'unknown'}'),
-                    trailing: session['current'] == true ? null : IconButton(icon: const Icon(Icons.logout), onPressed: () async { await AppController.instance.backendApi.revokeSecuritySession(sessionId: session['sessionId'].toString()); await _load(); }),
-                  ),
-                ]))),
+                Card(
+                    child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Active sessions (${sessions.length})',
+                                  style:
+                                      Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 8),
+                              for (final session in sessions)
+                                ListTile(
+                                  leading: Icon(session['current'] == true
+                                      ? Icons.devices
+                                      : Icons.device_unknown),
+                                  title: Text(session['current'] == true
+                                      ? 'This session'
+                                      : 'Signed-in session'),
+                                  subtitle: Text(
+                                      '${session['ipAddress'] ?? 'unknown'}\n${session['userAgent'] ?? 'unknown'}\nLast used: ${session['lastUsedAt'] ?? 'unknown'}'),
+                                  trailing: session['current'] == true
+                                      ? null
+                                      : IconButton(
+                                          icon: const Icon(Icons.logout),
+                                          onPressed: () async {
+                                            await AppController
+                                                .instance.backendApi
+                                                .revokeSecuritySession(
+                                                    sessionId:
+                                                        session['sessionId']
+                                                            .toString());
+                                            await _load();
+                                          }),
+                                ),
+                            ]))),
                 const SizedBox(height: 12),
-                const Card(child: Padding(padding: EdgeInsets.all(16), child: UniversalText('Transport protection: HTTPS is required for non-local backend endpoints. The backend also applies security headers, CORS restrictions, rate limiting, proxy validation, and bearer-token session authentication.'))),
+                const Card(
+                    child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: UniversalText(
+                            'Transport protection: HTTPS is required for non-local backend endpoints. The backend also applies security headers, CORS restrictions, rate limiting, proxy validation, and bearer-token session authentication.'))),
               ]),
             ),
     );

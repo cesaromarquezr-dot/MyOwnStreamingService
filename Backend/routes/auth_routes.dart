@@ -122,6 +122,12 @@ class AuthRoutes {
       }
 
       if (request.method == 'POST' &&
+          path == '/api/v1/auth/members/add') {
+        await _addExistingAccountMember(request);
+        return;
+      }
+
+      if (request.method == 'POST' &&
           path == '/api/v1/auth/verify-security') {
         await _verifySecurity(request);
         return;
@@ -315,9 +321,6 @@ class AuthRoutes {
       name: 'AuthRoutes',
     );
 
-    final firstProfileName =
-        body['firstProfileName']?.toString().trim() ?? '';
-
     final securityQuestion =
         _readRequiredString(body, 'securityQuestion');
 
@@ -354,7 +357,6 @@ class AuthRoutes {
       email: email,
       password: password,
       plan: plan,
-      firstProfileName: firstProfileName,
       securityQuestion: securityQuestion,
       securityAnswer: securityAnswer,
       termsVersion: termsVersion,
@@ -453,6 +455,48 @@ class AuthRoutes {
         'members': members,
       },
     );
+  }
+
+  Future<void> _addExistingAccountMember(HttpRequest request) async {
+    final principal = authentication.principal(request);
+    if (principal == null) {
+      await _sendAuthenticationRequired(request.response);
+      return;
+    }
+    if (!principal.isOwner) {
+      await _sendJson(
+        request.response,
+        statusCode: HttpStatus.forbidden,
+        body: {
+          'success': false,
+          'error': 'Only the account owner can add an existing account member.',
+        },
+      );
+      return;
+    }
+
+    final body = await _readJsonBody(request);
+    final username = _readRequiredString(body, 'username');
+    final role = body['role']?.toString() ?? 'member';
+    try {
+      final member = await SupabaseStore.instance.addExistingAccountMemberByUsername(
+        accountExternalId: principal.account.id,
+        username: username,
+        role: role,
+      );
+      await _sendJson(
+        request.response,
+        statusCode: HttpStatus.ok,
+        body: {'success': true, 'member': member},
+      );
+    } catch (error) {
+      final message = _errorMessage(error);
+      await _sendJson(
+        request.response,
+        statusCode: _authErrorStatusCode(message),
+        body: {'success': false, 'error': message},
+      );
+    }
   }
 
   Future<void> _acceptInvitation(HttpRequest request) async {
@@ -1399,15 +1443,14 @@ class AuthRoutes {
 
     final body = await _readJsonBody(request);
 
-    final name =
-        _readRequiredString(body, 'name');
+    final name = _readRequiredString(body, 'name');
+    final username = _readRequiredString(body, 'username');
+    final avatarUrl = body['avatarUrl']?.toString();
 
-    final avatarUrl =
-        body['avatarUrl']?.toString();
-
-    final profile = authService.addProfile(
+    final profile = await authService.addProfile(
       account: account,
       name: name,
+      username: username,
       avatarUrl: avatarUrl,
     );
 
@@ -1789,7 +1832,8 @@ class AuthRoutes {
       return HttpStatus.unauthorized;
     }
 
-    if (normalized.contains(
+    if (normalized.contains('username is taken') ||
+        normalized.contains(
           'already in use',
         ) ||
         normalized.contains(

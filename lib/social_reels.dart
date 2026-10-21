@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'shop.dart';
 import 'social_sharing.dart';
@@ -46,11 +46,10 @@ class _SocialReelsScreenState extends State<SocialReelsScreen> {
     final candidates = widget.posts
         .map(Map<String, dynamic>.from)
         .where((post) {
-          final reference = _mediaReference(post);
-          return reference['type']?.toString() == 'video' &&
-              reference['videoUrl']?.toString().isNotEmpty == true;
-        })
-        .toList()
+      final reference = _mediaReference(post);
+      return reference['type']?.toString() == 'video' &&
+          reference['videoUrl']?.toString().isNotEmpty == true;
+    }).toList()
       ..sort((a, b) => (b['created_at']?.toString() ?? '')
           .compareTo(a['created_at']?.toString() ?? ''));
     _reels = candidates;
@@ -85,7 +84,8 @@ class _SocialReelsScreenState extends State<SocialReelsScreen> {
             Icon(Icons.play_circle_outline_rounded, size: 64),
             SizedBox(height: 14),
             Center(
-              child: UniversalText('No Shorts yet',
+              child: UniversalText(
+                'No Shorts yet',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
               ),
             ),
@@ -93,7 +93,8 @@ class _SocialReelsScreenState extends State<SocialReelsScreen> {
             Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 28),
-                child: UniversalText('Create a short linked to a movie, show, or song. Reviews and skits can use the same vertical-video format.',
+                child: UniversalText(
+                  'Create a short linked to a movie, show, or song. Reviews and skits can use the same vertical-video format.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
@@ -139,7 +140,8 @@ class _SocialReelPageState extends State<_SocialReelPage> {
   int _reactionCount = 0;
 
   Map<String, dynamic> get _reference {
-    final value = widget.post['mediaReference'] ?? widget.post['media_reference'];
+    final value =
+        widget.post['mediaReference'] ?? widget.post['media_reference'];
     return value is Map
         ? Map<String, dynamic>.from(value)
         : <String, dynamic>{};
@@ -265,7 +267,8 @@ class _SocialReelPageState extends State<_SocialReelPage> {
             child: const UniversalText('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
             child: const UniversalText('Post'),
           ),
         ],
@@ -398,7 +401,8 @@ class _SocialReelPageState extends State<_SocialReelPage> {
                 if (hasProduct)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: _ReelProductCard(product: product, onTap: _openProduct),
+                    child:
+                        _ReelProductCard(product: product, onTap: _openProduct),
                   ),
               ],
             ),
@@ -409,7 +413,9 @@ class _SocialReelPageState extends State<_SocialReelPage> {
             child: Column(
               children: [
                 _ReelAction(
-                  icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  icon: _liked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
                   label: '$_reactionCount',
                   active: _liked,
                   onTap: _toggleLike,
@@ -443,11 +449,10 @@ class _SocialReelPageState extends State<_SocialReelPage> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   child: Text(
-                    contentMode == 'short'
-                        ? 'Reels'
-                        : _prettyType(contentMode),
+                    contentMode == 'short' ? 'Reels' : _prettyType(contentMode),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -463,7 +468,10 @@ class _SocialReelPageState extends State<_SocialReelPage> {
                 ),
               ),
             ),
-          if (!_loading && controller != null && controller.value.isInitialized && !controller.value.isPlaying)
+          if (!_loading &&
+              controller != null &&
+              controller.value.isInitialized &&
+              !controller.value.isPlaying)
             const Center(
               child: CircleAvatar(
                 radius: 28,
@@ -539,7 +547,8 @@ class _ReelProductCard extends StatelessWidget {
                         width: 44,
                         height: 44,
                         color: Colors.white10,
-                        child: const Icon(Icons.shopping_bag_outlined, size: 20),
+                        child:
+                            const Icon(Icons.shopping_bag_outlined, size: 20),
                       )
                     : Image.network(
                         product.imageUrls.first,
@@ -553,8 +562,10 @@ class _ReelProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const UniversalText('SHOP',
-                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900),
+                    const UniversalText(
+                      'SHOP',
+                      style:
+                          TextStyle(fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                     Text(
                       product.name,
@@ -564,7 +575,8 @@ class _ReelProductCard extends StatelessWidget {
                     ),
                     Text(
                       '${product.price.toStringAsFixed(2)} ${product.currency}',
-                      style: const TextStyle(fontSize: 11, color: Colors.white70),
+                      style:
+                          const TextStyle(fontSize: 11, color: Colors.white70),
                     ),
                   ],
                 ),

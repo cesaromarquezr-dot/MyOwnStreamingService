@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 
@@ -30,7 +30,9 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
       if (!mounted) return;
       setState(() {
         _pairings = pairings;
-        _selectedTvId ??= pairings.isNotEmpty ? pairings.first['tvDeviceId']?.toString() : null;
+        _selectedTvId ??= pairings.isNotEmpty
+            ? pairings.first['tvDeviceId']?.toString()
+            : null;
         _loading = false;
       });
     } catch (_) {
@@ -45,10 +47,18 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const UniversalText('Pair a TV'),
-          content: TextField(controller: codeController, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit TV code')),
+          content: TextField(
+              controller: codeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              decoration: const InputDecoration(labelText: '6-digit TV code')),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const UniversalText('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const UniversalText('Pair')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const UniversalText('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const UniversalText('Pair')),
           ],
         ),
       );
@@ -56,7 +66,8 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
       await AppController.instance.backendApi.pairTvDevice(
         codeController.text.trim(),
         profileId: AppController.instance.currentProfile?.id ?? '',
-        phoneDeviceId: _phoneDeviceId ?? await AppController.instance.ensureDeviceId(),
+        phoneDeviceId:
+            _phoneDeviceId ?? await AppController.instance.ensureDeviceId(),
       );
       await _load();
     } finally {
@@ -73,7 +84,12 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const UniversalText('TV Controller'),
-        actions: [IconButton(onPressed: _pair, icon: const Icon(Icons.add_link_rounded), tooltip: 'Pair TV')],
+        actions: [
+          IconButton(
+              onPressed: _pair,
+              icon: const Icon(Icons.add_link_rounded),
+              tooltip: 'Pair TV')
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -81,12 +97,22 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
               padding: const EdgeInsets.all(18),
               children: [
                 if (_pairings.isEmpty)
-                  const Card(child: Padding(padding: EdgeInsets.all(20), child: UniversalText('Pair a TV to use your phone as a remote, keyboard, or second screen.')))
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: UniversalText(
+                              'Pair a TV to use your phone as a remote, keyboard, or second screen.')))
                 else ...[
                   DropdownButtonFormField<String>(
                     initialValue: _selectedTvId,
-                    decoration: const InputDecoration(labelText: 'Connected TV', border: OutlineInputBorder()),
-                    items: _pairings.map((pairing) => DropdownMenuItem(value: pairing['tvDeviceId']?.toString(), child: Text(pairing['tvName']?.toString() ?? 'TV'))).toList(),
+                    decoration: const InputDecoration(
+                        labelText: 'Connected TV',
+                        border: OutlineInputBorder()),
+                    items: _pairings
+                        .map((pairing) => DropdownMenuItem(
+                            value: pairing['tvDeviceId']?.toString(),
+                            child: Text(pairing['tvName']?.toString() ?? 'TV')))
+                        .toList(),
                     onChanged: (value) => setState(() => _selectedTvId = value),
                   ),
                   const SizedBox(height: 16),
@@ -94,12 +120,22 @@ class _TvControllerScreenState extends State<TvControllerScreen> {
                     scrollDirection: Axis.horizontal,
                     child: SegmentedButton<String>(
                       segments: const [
-                        ButtonSegment(value: 'remote', label: UniversalText('Remote'), icon: Icon(Icons.settings_remote_rounded)),
-                        ButtonSegment(value: 'second-screen', label: UniversalText('Second Screen'), icon: Icon(Icons.phone_android)),
-                        ButtonSegment(value: 'keyboard', label: UniversalText('Keyboard'), icon: Icon(Icons.keyboard_outlined)),
+                        ButtonSegment(
+                            value: 'remote',
+                            label: UniversalText('Remote'),
+                            icon: Icon(Icons.settings_remote_rounded)),
+                        ButtonSegment(
+                            value: 'second-screen',
+                            label: UniversalText('Second Screen'),
+                            icon: Icon(Icons.phone_android)),
+                        ButtonSegment(
+                            value: 'keyboard',
+                            label: UniversalText('Keyboard'),
+                            icon: Icon(Icons.keyboard_outlined)),
                       ],
                       selected: {_mode},
-                      onSelectionChanged: (selection) => setState(() => _mode = selection.first),
+                      onSelectionChanged: (selection) =>
+                          setState(() => _mode = selection.first),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -120,8 +156,14 @@ class _RemoteControls extends StatelessWidget {
   const _RemoteControls({required this.tvId});
 
   void _send(BuildContext context, String action) {
-    AppController.instance.backendApi.sendTvCommand(tvDeviceId: tvId ?? '', profileId: AppController.instance.currentProfile?.id ?? '', command: {'type': 'remote', 'action': action}).catchError((error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    AppController.instance.backendApi.sendTvCommand(
+        tvDeviceId: tvId ?? '',
+        profileId: AppController.instance.currentProfile?.id ?? '',
+        command: {'type': 'remote', 'action': action}).catchError((error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
+      }
     });
   }
 
@@ -132,23 +174,44 @@ class _RemoteControls extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         child: Column(children: [
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            IconButton(onPressed: () => _send(context, 'back'), icon: const Icon(Icons.arrow_back)),
-            IconButton(onPressed: () => _send(context, 'home'), icon: const Icon(Icons.home_outlined)),
-            IconButton(onPressed: () => _send(context, 'guide'), icon: const Icon(Icons.tv_outlined)),
+            IconButton(
+                onPressed: () => _send(context, 'back'),
+                icon: const Icon(Icons.arrow_back)),
+            IconButton(
+                onPressed: () => _send(context, 'home'),
+                icon: const Icon(Icons.home_outlined)),
+            IconButton(
+                onPressed: () => _send(context, 'guide'),
+                icon: const Icon(Icons.tv_outlined)),
           ]),
           const SizedBox(height: 8),
-          IconButton.filled(onPressed: () => _send(context, 'play_pause'), icon: const Icon(Icons.play_arrow_rounded), iconSize: 34),
+          IconButton.filled(
+              onPressed: () => _send(context, 'play_pause'),
+              icon: const Icon(Icons.play_arrow_rounded),
+              iconSize: 34),
           const SizedBox(height: 8),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            IconButton(onPressed: () => _send(context, 'rewind'), icon: const Icon(Icons.replay_10)),
-            IconButton(onPressed: () => _send(context, 'forward'), icon: const Icon(Icons.forward_10)),
-            IconButton(onPressed: () => _send(context, 'next'), icon: const Icon(Icons.skip_next)),
+            IconButton(
+                onPressed: () => _send(context, 'rewind'),
+                icon: const Icon(Icons.replay_10)),
+            IconButton(
+                onPressed: () => _send(context, 'forward'),
+                icon: const Icon(Icons.forward_10)),
+            IconButton(
+                onPressed: () => _send(context, 'next'),
+                icon: const Icon(Icons.skip_next)),
           ]),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
-            OutlinedButton(onPressed: () => _send(context, 'volume_down'), child: const UniversalText('Vol -')),
-            OutlinedButton(onPressed: () => _send(context, 'volume_up'), child: const UniversalText('Vol +')),
-            OutlinedButton(onPressed: () => _send(context, 'mute'), child: const UniversalText('Mute')),
+            OutlinedButton(
+                onPressed: () => _send(context, 'volume_down'),
+                child: const UniversalText('Vol -')),
+            OutlinedButton(
+                onPressed: () => _send(context, 'volume_up'),
+                child: const UniversalText('Vol +')),
+            OutlinedButton(
+                onPressed: () => _send(context, 'mute'),
+                child: const UniversalText('Mute')),
           ]),
         ]),
       ),
@@ -162,11 +225,20 @@ class _KeyboardController extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(child: Padding(padding: const EdgeInsets.all(16), child: TextField(
-      autofocus: true,
-      decoration: const InputDecoration(labelText: 'Type on TV', border: OutlineInputBorder()),
-      onChanged: (value) => AppController.instance.backendApi.sendTvCommand(tvDeviceId: tvId ?? '', profileId: AppController.instance.currentProfile?.id ?? '', command: {'type': 'keyboard', 'text': value}),
-    )));
+    return Card(
+        child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                  labelText: 'Type on TV', border: OutlineInputBorder()),
+              onChanged: (value) => AppController.instance.backendApi
+                  .sendTvCommand(
+                      tvDeviceId: tvId ?? '',
+                      profileId:
+                          AppController.instance.currentProfile?.id ?? '',
+                      command: {'type': 'keyboard', 'text': value}),
+            )));
   }
 }
 
@@ -176,13 +248,29 @@ class _SecondScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(tv['tvName']?.toString() ?? 'TV', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 6),
-      const UniversalText('Companion / second-screen mode does not take over playback. It displays synchronized information while the TV remains the primary screen.', style: TextStyle(color: Colors.white60)),
-      const SizedBox(height: 14),
-      const ListTile(leading: Icon(Icons.info_outline), title: UniversalText('Now Playing'), subtitle: UniversalText('The TV app can publish the current title, episode, cast, soundtrack, trivia and synchronized controls here.')),
-      const ListTile(leading: Icon(Icons.people_outline), title: UniversalText('Social'), subtitle: UniversalText('Friends, reactions, chat and watch-party controls can appear here while the TV stays focused on playback.')),
-    ])));
+    return Card(
+        child: Padding(
+            padding: const EdgeInsets.all(18),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(tv['tvName']?.toString() ?? 'TV',
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              const UniversalText(
+                  'Companion / second-screen mode does not take over playback. It displays synchronized information while the TV remains the primary screen.',
+                  style: TextStyle(color: Colors.white60)),
+              const SizedBox(height: 14),
+              const ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: UniversalText('Now Playing'),
+                  subtitle: UniversalText(
+                      'The TV app can publish the current title, episode, cast, soundtrack, trivia and synchronized controls here.')),
+              const ListTile(
+                  leading: Icon(Icons.people_outline),
+                  title: UniversalText('Social'),
+                  subtitle: UniversalText(
+                      'Friends, reactions, chat and watch-party controls can appear here while the TV stays focused on playback.')),
+            ])));
   }
 }

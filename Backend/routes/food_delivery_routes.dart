@@ -329,6 +329,21 @@ class FoodDeliveryRoutes {
         return;
       }
 
+      if (request.method == 'GET' && path == '/api/v1/food/orders') {
+        final profileId = request.uri.queryParameters['profileId'] ?? '';
+        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '30') ?? 30;
+        final orders = await service.listOrders(
+          account: account,
+          profileId: profileId,
+          limit: limit,
+        );
+        await _json(request.response, HttpStatus.ok, {
+          'success': true,
+          'orders': orders,
+        });
+        return;
+      }
+
       if (request.method == 'POST' && path == '/api/v1/food/orders') {
         final body = await _readJson(request);
         final rawItems = body['items'];
