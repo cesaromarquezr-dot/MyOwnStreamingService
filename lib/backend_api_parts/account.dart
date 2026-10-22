@@ -791,6 +791,7 @@ extension BackendApiAccountMethods on BackendApi {
   Future<Map<String, dynamic>> updateProfile({
     required String profileId,
     required String name,
+    String? username,
     String? avatarUrl,
   }) async {
     _requireAuthentication();
@@ -802,6 +803,7 @@ extension BackendApiAccountMethods on BackendApi {
       headers: _headers,
       body: jsonEncode({
         'name': name.trim(),
+        if (username != null) 'username': username.trim(),
         'avatarUrl': avatarUrl,
       }),
     );

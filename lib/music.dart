@@ -669,6 +669,8 @@ class MusicPlaybackController extends ChangeNotifier {
   bool loading = false;
   bool _resumeAfterVideo = false;
   bool _advancing = false;
+  bool _wrappedCompletionRecordedForCurrentPlayback = false;
+  String? _playbackProfileId;
   Timer? _presenceHeartbeat;
 
   VideoPlayerController? get videoController => _controller;
@@ -707,6 +709,8 @@ class MusicPlaybackController extends ChangeNotifier {
     }
     final url = track.audioUrl?.trim();
     currentTrack = track;
+    _playbackProfileId = profile?.id;
+    _wrappedCompletionRecordedForCurrentPlayback = false;
     MusicLibraryStore.instance.currentTrackId = track.id;
 
     if (url == null || url.isEmpty) {
@@ -753,6 +757,21 @@ class MusicPlaybackController extends ChangeNotifier {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     if (!controller.value.isCompleted || _advancing) return;
+
+    final finishedTrack = currentTrack;
+    if (finishedTrack != null && !_wrappedCompletionRecordedForCurrentPlayback) {
+      _wrappedCompletionRecordedForCurrentPlayback = true;
+      unawaited(AppController.instance.recordWrappedActivityDetails(
+        mediaId: finishedTrack.id,
+        canonicalWorkId: finishedTrack.id,
+        title: finishedTrack.title,
+        type: 'song',
+        genres: finishedTrack.allGenreTags,
+        artist: finishedTrack.artist,
+        album: finishedTrack.album,
+        profileIdOverride: _playbackProfileId,
+      ));
+    }
 
     final store = MusicLibraryStore.instance;
     if (!store.aiDjActive || store.queue.isEmpty) return;

@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'physical_media_library.dart';
 
 const String _iptvOrgBase = 'https://iptv-org.github.io/iptv';
 const String _allChannelsPlaylist = '$_iptvOrgBase/index.m3u';
@@ -539,6 +540,38 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
                   ],
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text('Physical media', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  const Text('Browse discs already recorded in your library. These shortcuts stay out of the fullscreen broadcast player.', style: TextStyle(color: Colors.white60)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <Widget>[
+                      for (final format in PhysicalMediaLibraryScreen.formats)
+                        OutlinedButton.icon(
+                          icon: Icon(format.icon, size: 17),
+                          label: Text(format.label),
+                          onPressed: () => Navigator.of(context).push<void>(
+                            MaterialPageRoute<void>(
+                              settings: RouteSettings(name: '/app/physical-media/${format.sourceType.toLowerCase().replaceAll(" ", "-")}'),
+                              builder: (_) => PhysicalMediaFormatScreen(format: format),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),

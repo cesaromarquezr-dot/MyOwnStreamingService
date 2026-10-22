@@ -178,6 +178,45 @@ class BackendApi {
     return data['verified'] == true;
   }
 
+  // ==========================================================
+  // SECURITY BOT CONTROL CENTER
+  // Keep these as BackendApi class methods so all consumers can call them
+  // without relying on extension-import visibility.
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getSecurityBotsStatus() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/security-bots/status'),
+        headers: _headers,
+      ),
+      'Unable to load the Security Bot Control Center.',
+    );
+  }
+
+  Future<Map<String, dynamic>> runSecurityBotChecks() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/security-bots/run'),
+        headers: _headers,
+      ),
+      'Security diagnostics could not be completed.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getSecurityBotsAudit({int limit = 40}) async {
+    _requireAuthentication();
+    final bounded = limit.clamp(1, 100).toInt();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/security-bots/audit?limit=$bounded'),
+        headers: _headers,
+      ),
+      'Unable to load the security bot audit history.',
+    );
+  }
 
   // ==========================================================
   // RESPONSE DECODING

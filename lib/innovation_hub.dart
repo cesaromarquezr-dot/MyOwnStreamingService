@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'innovation_features.dart';
 import 'feature_center.dart';
+import 'platform_capability_registry.dart';
+import 'security_bot_center.dart';
 
 /// A discoverable entry point for major feature modules that previously lived
 /// as separate Dart screens. It links the modules into the primary app flow
@@ -40,6 +42,13 @@ class InnovationHubScreen extends StatelessWidget {
       stage: 'Platform suite',
     ),
     _InnovationEntry(
+      title: 'Security Bot Control Center',
+      subtitle: 'Run read-only security, database, backup, transport, and dependency-scan status checks.',
+      icon: Icons.security_rounded,
+      builder: () => const ServerSecurityBotCenterScreen(),
+      stage: 'Security bots',
+    ),
+    _InnovationEntry(
       title: 'Discover & Recaps',
       subtitle: 'Recommendations, collections, entertainment recaps and shared actors.',
       icon: Icons.explore_rounded,
@@ -52,6 +61,13 @@ class InnovationHubScreen extends StatelessWidget {
       icon: Icons.map_outlined,
       builder: () => RoadmapFeaturesScreen(),
       stage: 'Roadmap',
+    ),
+    _InnovationEntry(
+      title: 'Capability Registry & Master Roadmap',
+      subtitle: 'Search all major capabilities, status, acceptance criteria, and integration dependencies.',
+      icon: Icons.fact_check_outlined,
+      builder: () => const PlatformCapabilityRegistryScreen(),
+      stage: 'Capability Registry',
     ),
   ];
 

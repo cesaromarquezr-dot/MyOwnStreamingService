@@ -80,16 +80,25 @@ MediaCollection? _makeVirtualThemeCollection({
 }
 
 /// A compact streaming-service category row placed directly under the Home app bar.
+/// A compact streaming-style category row placed directly under the Home app bar.
 class HomeBrowseNavigation extends StatelessWidget {
   final VoidCallback onMovies;
   final VoidCallback onShows;
   final VoidCallback onMusic;
+  final VoidCallback? onPhysicalMedia;
+  final VoidCallback? onFranchises;
+  final VoidCallback? onCinematicUniverses;
+  final VoidCallback? onAiBots;
 
   const HomeBrowseNavigation({
     super.key,
     required this.onMovies,
     required this.onShows,
     required this.onMusic,
+    this.onPhysicalMedia,
+    this.onFranchises,
+    this.onCinematicUniverses,
+    this.onAiBots,
   });
 
   @override
@@ -107,6 +116,22 @@ class HomeBrowseNavigation extends StatelessWidget {
             _tab('Shows', onTap: onShows),
             const SizedBox(width: 9),
             _tab('Music', onTap: onMusic),
+            if (onPhysicalMedia != null) ...[
+              const SizedBox(width: 9),
+              _tab('Physical Media', onTap: onPhysicalMedia!),
+            ],
+            if (onFranchises != null) ...[
+              const SizedBox(width: 9),
+              _tab('Franchises', onTap: onFranchises!),
+            ],
+            if (onCinematicUniverses != null) ...[
+              const SizedBox(width: 9),
+              _tab('Cinematic Universes', onTap: onCinematicUniverses!),
+            ],
+            if (onAiBots != null) ...[
+              const SizedBox(width: 9),
+              _tab('AI Bots', onTap: onAiBots!),
+            ],
           ],
         ),
       ),
@@ -126,8 +151,7 @@ class HomeBrowseNavigation extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color:
-                  selected ? Colors.black : Colors.white.withValues(alpha: .82),
+              color: selected ? Colors.black : Colors.white.withValues(alpha: .82),
               fontSize: 13,
               fontWeight: FontWeight.w800,
             ),
@@ -137,6 +161,7 @@ class HomeBrowseNavigation extends StatelessWidget {
     );
   }
 }
+
 
 /// Large landscape Home banner with automatic 12-second rotation and manual controls.
 class HomeHeroCarousel extends StatefulWidget {
@@ -782,7 +807,11 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
       ...(seed?.genres ?? const <String>[]).map((e) => e.toLowerCase()),
       ...(seed?.tags ?? const <String>[]).map((e) => e.toLowerCase())
     };
-    final items = library.where((m) => !watchedIds.contains(m.id)).toList();
+    final items = library
+        .where((m) =>
+            !watchedIds.contains(m.id) &&
+            !isExcludedEntertainmentType(m.type))
+        .toList();
     items.sort((a, b) {
       int score(MediaItem item) {
         final fields = <String>{...item.genres, ...item.tags}

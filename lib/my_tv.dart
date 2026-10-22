@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
+import 'entertainment_extensions.dart';
 import 'food_delivery.dart';
 import 'music.dart';
 import 'music_favorites.dart';
@@ -1273,6 +1274,18 @@ class _MyTvScreenState extends State<MyTvScreen> {
               title: const UniversalText('My TV'),
               actions: [
                 const PageCustomizeButton(pageId: 'my-tv'),
+                IconButton(
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const MyTvSpecialEventsScreen(),
+                            ),
+                          ),
+                  tooltip: 'Special events',
+                  icon: const Icon(Icons.celebration_outlined),
+                ),
                 IconButton(
                   onPressed: _loading
                       ? null

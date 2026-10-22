@@ -602,12 +602,14 @@ class AuthService {
   }) async {
     final normalizedProvider = provider.trim().toLowerCase();
     if (!const {'google', 'apple'}.contains(normalizedProvider)) {
-      throw ArgumentError.value(provider, 'provider', 'Unsupported sign-in provider.');
+      throw ArgumentError.value(
+          provider, 'provider', 'Unsupported sign-in provider.');
     }
     if (!account.hasActiveSubscription) {
-      await _audit('login_blocked_subscription', accountId: account.id,
-          metadata: {'provider': normalizedProvider});
-      throw Exception('Your subscription is not active. Complete payment before logging in.');
+      await _audit('login_blocked_subscription',
+          accountId: account.id, metadata: {'provider': normalizedProvider});
+      throw Exception(
+          'Your subscription is not active. Complete payment before logging in.');
     }
 
     const ownerMemberIdPrefix = 'owner_';
@@ -616,8 +618,8 @@ class AuthService {
       database.saveAccount(account);
       await database.persistAccountAndWait(account);
       await startMfaChallenge(account);
-      await _audit('federated_login_mfa_required', accountId: account.id,
-          metadata: {'provider': normalizedProvider});
+      await _audit('federated_login_mfa_required',
+          accountId: account.id, metadata: {'provider': normalizedProvider});
       return const AuthLoginResult(
         token: null,
         suspicious: false,
@@ -637,9 +639,10 @@ class AuthService {
       ipAddress: normalizedIp,
       userAgent: normalizedAgent,
     );
-    await _audit('federated_login_success', accountId: account.id,
-        metadata: {'provider': normalizedProvider});
-    return AuthLoginResult(token: token, suspicious: false, reasons: const <String>[]);
+    await _audit('federated_login_success',
+        accountId: account.id, metadata: {'provider': normalizedProvider});
+    return AuthLoginResult(
+        token: token, suspicious: false, reasons: const <String>[]);
   }
 
   Future<void> _recordLoginFailure(
@@ -1195,15 +1198,18 @@ class AuthService {
     // The acceptance flow uses the invite email as the login identity even
     // when the secure invite URL is delivered through SMS or WhatsApp.
     if (cleanEmail.length > maximumEmailLength || !_isValidEmail(cleanEmail)) {
-      throw Exception('A valid member email address is required so the recipient can finish setting up their login.');
+      throw Exception(
+          'A valid member email address is required so the recipient can finish setting up their login.');
     }
-    if (!sendEmail && cleanPhone.isNotEmpty &&
+    if (!sendEmail &&
+        cleanPhone.isNotEmpty &&
         (cleanPhone.replaceAll('+', '').length < 7 ||
-         cleanPhone.replaceAll('+', '').length > 15)) {
+            cleanPhone.replaceAll('+', '').length > 15)) {
       throw Exception('Enter a valid member phone number.');
     }
 
-    if (cleanEmail.isNotEmpty && cleanEmail == account.email.trim().toLowerCase()) {
+    if (cleanEmail.isNotEmpty &&
+        cleanEmail == account.email.trim().toLowerCase()) {
       throw Exception(
         'The account owner is already a member.',
       );
@@ -1268,7 +1274,9 @@ class AuthService {
       accountId: account.id,
       metadata: {
         'role': cleanRole,
-        'delivery': sendEmail ? 'email' : (cleanPhone.isNotEmpty ? 'sms' : 'share-link'),
+        'delivery': sendEmail
+            ? 'email'
+            : (cleanPhone.isNotEmpty ? 'sms' : 'share-link'),
       },
     );
 
@@ -1478,7 +1486,8 @@ class AuthService {
     String? avatarUrl,
   }) async {
     final cleanName = name.trim();
-    final cleanUsername = username.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+    final cleanUsername =
+        username.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
 
     if (cleanName.isEmpty) {
       throw Exception('Profile name is required.');
@@ -1487,13 +1496,15 @@ class AuthService {
       throw Exception('Profile name is too long.');
     }
     if (!account.canAddProfile) {
-      throw Exception('You can have a maximum of ${Account.maxProfiles} profiles.');
+      throw Exception(
+          'You can have a maximum of ${Account.maxProfiles} profiles.');
     }
     if (account.hasProfile(cleanName)) {
       throw Exception('A profile with that name already exists.');
     }
     if (!RegExp(r'^[a-z0-9_]{3,32}$').hasMatch(cleanUsername)) {
-      throw Exception('Username must be 3–32 characters using letters, numbers, and underscores.');
+      throw Exception(
+          'Username must be 3–32 characters using letters, numbers, and underscores.');
     }
 
     // Check every account currently loaded on this server. The case-insensitive
@@ -1502,7 +1513,7 @@ class AuthService {
     for (final existingAccount in database.accountsById.values) {
       for (final existingProfile in existingAccount.profiles) {
         if (existingProfile.username?.trim().toLowerCase() == cleanUsername) {
-          throw Exception('This username is taken');
+          throw Exception('this username is taken');
         }
       }
     }
@@ -1516,7 +1527,9 @@ class AuthService {
       id: _generateId('profile'),
       name: cleanName,
       username: cleanUsername,
-      avatarUrl: cleanAvatarUrl == null || cleanAvatarUrl.isEmpty ? null : cleanAvatarUrl,
+      avatarUrl: cleanAvatarUrl == null || cleanAvatarUrl.isEmpty
+          ? null
+          : cleanAvatarUrl,
     );
 
     account.addExistingProfile(profile);
@@ -1530,7 +1543,7 @@ class AuthService {
       if (details.contains('profiles_username_ci_unique') ||
           (details.contains('duplicate key') && details.contains('username')) ||
           (details.contains('23505') && details.contains('username'))) {
-        throw Exception('This username is taken');
+        throw Exception('this username is taken');
       }
       rethrow;
     }
@@ -1667,6 +1680,7 @@ class AuthService {
     required Account account,
     required String profileId,
     required String name,
+    String? username,
     String? avatarUrl,
   }) async {
     final cleanId = profileId.trim();
@@ -1711,27 +1725,59 @@ class AuthService {
       );
     }
 
-    final cleanAvatar = avatarUrl?.trim();
-
-    if (cleanAvatar != null && cleanAvatar.length > 2048) {
-      throw Exception(
-        'Avatar URL is too long.',
-      );
+    String? cleanUsername;
+    if (username != null) {
+      cleanUsername =
+          username.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+      if (!RegExp(r'^[a-z0-9_]{3,32}$').hasMatch(cleanUsername)) {
+        throw Exception(
+            'Username must be 3–32 characters using letters, numbers, and underscores.');
+      }
+      final duplicateInLoadedAccounts = database.accountsById.values.any(
+          (otherAccount) => otherAccount.profiles.any((otherProfile) =>
+              !(otherAccount.id == account.id && otherProfile.id == cleanId) &&
+              (otherProfile.username?.trim().toLowerCase() ?? '') ==
+                  cleanUsername));
+      if (duplicateInLoadedAccounts) {
+        throw Exception('this username is taken');
+      }
     }
 
-    profile.name = cleanName;
+    final cleanAvatar = avatarUrl?.trim();
+    if (cleanAvatar != null && cleanAvatar.length > 2048) {
+      throw Exception('Avatar URL is too long.');
+    }
 
+    final previousName = profile.name;
+    final previousUsername = profile.username;
+    final previousAvatarUrl = profile.avatarUrl;
+
+    profile.name = cleanName;
+    if (cleanUsername != null) profile.username = cleanUsername;
     profile.avatarUrl =
         cleanAvatar == null || cleanAvatar.isEmpty ? null : cleanAvatar;
 
-    database.saveAccount(
-      account,
-    );
+    database.saveAccount(account, persist: false);
+    try {
+      await database.persistAccountAndWait(account);
+    } catch (error) {
+      // Restore the in-memory aggregate on any persistence failure so a failed
+      // edit cannot appear successful on later requests in the same process.
+      profile.name = previousName;
+      profile.username = previousUsername;
+      profile.avatarUrl = previousAvatarUrl;
+      database.saveAccount(account, persist: false);
 
-    await database.persistAccountAndWait(
-      account,
-    );
-
+      final details = error.toString().toLowerCase();
+      if (cleanUsername != null &&
+          (details.contains('profiles_username_ci_unique') ||
+              (details.contains('duplicate key') &&
+                  details.contains('username')) ||
+              (details.contains('23505') && details.contains('username')))) {
+        throw Exception('this username is taken');
+      }
+      rethrow;
+    }
     return profile;
   }
 

@@ -116,6 +116,28 @@ extension BackendApiDiscoveryMethods on BackendApi {
         : <Map<String, dynamic>>[];
   }
 
+  /// Searches verified person-to-character credits in the media intelligence graph.
+  /// Returns metadata only; it does not grant playback access to any work.
+  Future<List<Map<String, dynamic>>> searchMediaCharacters({
+    required String query,
+  }) async {
+    _requireAuthentication();
+    final clean = query.trim();
+    if (clean.length < 2) return <Map<String, dynamic>>[];
+    final uri = Uri.parse('$baseUrl/media-intelligence/characters')
+        .replace(queryParameters: {'q': clean});
+    final data = await _requireSuccess(
+      await http.get(uri, headers: _headers),
+      'Unable to search character credits.',
+    );
+    return data['characters'] is List
+        ? (data['characters'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
+        : <Map<String, dynamic>>[];
+  }
+
   Future<Map<String, dynamic>> createMediaPerson(
       {required String id, required String name}) async {
     _requireAuthentication();

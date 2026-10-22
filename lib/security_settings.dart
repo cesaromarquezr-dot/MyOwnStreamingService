@@ -5,6 +5,7 @@ import 'backend_api.dart';
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'localization.dart';
+import 'security_bot_center.dart';
 
 /// Displays account security controls backed by the authenticated API.
 class SecuritySettingsScreen extends StatefulWidget {
@@ -193,6 +194,18 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       title: UniversalText('Passkeys'),
                       subtitle: UniversalText(
                           'The security API reserves the WebAuthn/passkey integration surface; passkey credentials are not exposed as passwords or bearer tokens.')),
+                  ListTile(
+                    leading: const Icon(Icons.security_rounded),
+                    title: const UniversalText('Security Bot Control Center'),
+                    subtitle: const UniversalText(
+                        'On-demand read-only checks for authentication signals, database connectivity, backups, and transport configuration.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ServerSecurityBotCenterScreen(),
+                      ),
+                    ),
+                  ),
                 ])),
                 const SizedBox(height: 12),
                 Card(

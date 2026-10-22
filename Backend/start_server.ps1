@@ -29,6 +29,17 @@ if ([string]::IsNullOrWhiteSpace($env:TLS_PRIVATE_KEY_PATH)) {
     $env:TLS_PRIVATE_KEY_PATH = Join-Path $PSScriptRoot "certs\127.0.0.1+2-key.pem"
 }
 
+# The clean source archive intentionally excludes development TLS material.
+# For local development, generate a fresh pair from the project root. Never
+# generate or reuse this self-signed certificate as a production certificate.
+$tlsMode = [Environment]::GetEnvironmentVariable("BACKEND_TLS_ENABLED", "Process")
+if ([string]::IsNullOrWhiteSpace($tlsMode) -or $tlsMode.Trim().ToLowerInvariant() -ne "false") {
+    if (-not (Test-Path -LiteralPath $env:TLS_CERTIFICATE_PATH) -or
+        -not (Test-Path -LiteralPath $env:TLS_PRIVATE_KEY_PATH)) {
+        throw "TLS files were not found. For local development run .\scripts\dev\generate_local_tls.ps1 from the project root, then start the backend again. For production, configure your own certificate/private key or a trusted TLS-terminating proxy."
+    }
+}
+
 Push-Location $PSScriptRoot
 try {
     & dart run server.dart

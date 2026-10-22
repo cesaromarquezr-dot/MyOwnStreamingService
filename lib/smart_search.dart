@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
 import 'privacy_preferences.dart';
+import 'profile_content_safety.dart';
 import 'details.dart';
 import 'localization.dart';
 import 'music.dart';
@@ -59,6 +60,7 @@ class SmartSearch {
     };
 
     for (final media in library) {
+      if (_isExcludedContentType(media.type)) continue;
       final title = media.title.toLowerCase();
       final normalizedTitle = _normalize(title);
 
@@ -206,6 +208,7 @@ class SmartSearch {
       };
       final generic = library
           .where((item) =>
+              !_isExcludedContentType(item.type) &&
               !excluded.contains(item.id) &&
               controller.getPlaybackProgress(item.id) < 0.95)
           .toList()
@@ -234,6 +237,7 @@ class SmartSearch {
 
     final candidates = library
         .where((media) =>
+            !_isExcludedContentType(media.type) &&
             !dislikedIds.contains(media.id) &&
             !completedIds.contains(media.id) &&
             controller.getPlaybackProgress(media.id) < 0.95)
@@ -342,6 +346,9 @@ class SmartSearch {
     }
     return previous[right.length];
   }
+
+  static bool _isExcludedContentType(String rawType) =>
+      isExcludedEntertainmentType(rawType);
 
   static String _normalize(String value) {
     return value
@@ -487,9 +494,16 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
     final query = value ?? controller.text;
     final library = AppController.instance.library;
     final normalized = query.trim().toLowerCase();
+    final activeProfile = AppController.instance.currentProfile;
     final musicMatches = normalized.isEmpty
         ? <MusicTrack>[]
         : MusicLibraryStore.instance.tracks.where((track) {
+            if (profileBlocksExplicitMusic(activeProfile) && track.explicit) {
+              return false;
+            }
+            if (profileBlocksMatureMusic(activeProfile) && track.matureTheme) {
+              return false;
+            }
             final searchable = <String>[
               track.title,
               track.artist,
@@ -831,8 +845,6 @@ class _SmartSearchScreenState extends State<SmartSearchScreen>
       'musicvideo' => 'MUSIC VIDEO',
       'special' || 'tvspecial' => 'SPECIAL',
       'documentary' => 'DOCUMENTARY',
-      'podcast' => 'PODCAST',
-      'audiobook' => 'AUDIOBOOK',
       'concert' || 'liveevent' => 'LIVE EVENT',
       'channel' || 'livetv' => 'CHANNEL',
       'trailer' => 'TRAILER',

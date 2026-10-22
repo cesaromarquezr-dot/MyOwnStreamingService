@@ -1157,6 +1157,7 @@ class EditProfileSheet extends StatefulWidget {
 
 class _EditProfileSheetState extends State<EditProfileSheet> {
   late final TextEditingController _nameController;
+  late final TextEditingController _usernameController;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -1171,8 +1172,9 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
   void initState() {
     super.initState();
 
-    _nameController = TextEditingController(
-      text: widget.profile.name,
+    _nameController = TextEditingController(text: widget.profile.name);
+    _usernameController = TextEditingController(
+      text: widget.profile.username,
     );
     _selectedAvatarIndex = _avatarIndexFromValue(widget.profile.avatarUrl);
   }
@@ -1182,6 +1184,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     _nameController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -1298,12 +1301,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst(
-                  'Exception: ',
-                  '',
-                ),
-          ),
+          content: Text(ProfileUsername.userFacingError(error)),
         ),
       );
     } finally {
@@ -1318,6 +1316,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
   /// Performs `_save` for this feature. Update this documentation when its contract changes.
   Future<void> _save() async {
     final name = _nameController.text.trim();
+    final username = ProfileUsername.normalize(_usernameController.text);
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1326,6 +1325,14 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
             'Please enter a profile name.',
           ),
         ),
+      );
+      return;
+    }
+
+    final usernameError = ProfileUsername.validationMessage(username);
+    if (usernameError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(usernameError)),
       );
       return;
     }
@@ -1346,12 +1353,14 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         await api.updateProfile(
           profileId: widget.profile.id,
           name: name,
+          username: username,
           avatarUrl: avatarUrl,
         );
       }
 
       widget.profile.avatarUrl = avatarUrl;
       widget.profile.name = name;
+      widget.profile.username = username;
 
       if (!mounted) return;
 
@@ -1369,12 +1378,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst(
-                  'Exception: ',
-                  '',
-                ),
-          ),
+          content: Text(ProfileUsername.userFacingError(error)),
         ),
       );
     } finally {
@@ -1469,6 +1473,26 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                   fillColor: Colors.white.withValues(
                     alpha: 0.06,
                   ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _usernameController,
+                enabled: !_saving,
+                autocorrect: false,
+                textCapitalization: TextCapitalization.none,
+                decoration: InputDecoration(
+                  labelText: 'Profile username',
+                  prefixText: '@',
+                  helperText: '3–32 letters, numbers, or underscores. Must be unique.',
+                  labelStyle: const TextStyle(color: Colors.white60),
+                  prefixStyle: const TextStyle(color: Colors.white70),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,

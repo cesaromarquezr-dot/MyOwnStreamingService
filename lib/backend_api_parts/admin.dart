@@ -17,6 +17,33 @@ extension BackendApiAdminMethods on BackendApi {
     );
   }
 
+
+  // ==========================================================
+  // OWNER-ONLY OPERATIONS BOT SCANS
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getOperationsBotStatus() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/operations/bots/status'),
+        headers: _headers,
+      ),
+      'Unable to load operations bot status.',
+    );
+  }
+
+  Future<Map<String, dynamic>> runOperationsBotScan() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/operations/bots/run'),
+        headers: _headers,
+      ),
+      'Unable to run the operations bot scan.',
+    );
+  }
+
   // ==========================================================
   // MASTER PRODUCT ARCHITECTURE
   // ==========================================================
@@ -256,5 +283,43 @@ extension BackendApiAdminMethods on BackendApi {
     return data;
   }
 
+
+  // ==========================================================
+  // SECURITY BOT CONTROL CENTER (administrator allowlist enforced by backend)
+  // ==========================================================
+
+  Future<Map<String, dynamic>> getSecurityBotsStatus() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/security-bots/status'),
+        headers: _headers,
+      ),
+      'Unable to load the Security Bot Control Center.',
+    );
+  }
+
+  Future<Map<String, dynamic>> runSecurityBotChecks() async {
+    _requireAuthentication();
+    return _requireSuccess(
+      await http.post(
+        Uri.parse('$baseUrl/security-bots/run'),
+        headers: _headers,
+      ),
+      'Security diagnostics could not be completed.',
+    );
+  }
+
+  Future<Map<String, dynamic>> getSecurityBotsAudit({int limit = 40}) async {
+    _requireAuthentication();
+    final bounded = limit.clamp(1, 100);
+    return _requireSuccess(
+      await http.get(
+        Uri.parse('$baseUrl/security-bots/audit?limit=$bounded'),
+        headers: _headers,
+      ),
+      'Unable to load the security bot audit history.',
+    );
+  }
 
 }

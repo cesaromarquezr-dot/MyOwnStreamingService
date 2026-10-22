@@ -12,6 +12,8 @@ import 'app_core.dart';
 import 'backend_api.dart';
 import 'library_release.dart';
 import 'physical_media_library.dart';
+import 'franchise_universe_browse_hub.dart';
+import 'ai_bot_center.dart';
 
 import 'signup.dart';
 import 'smart_search.dart';
@@ -57,9 +59,7 @@ import 'social_theme_gallery.dart';
 import 'server_selection.dart';
 import 'tv_controller.dart';
 import 'tv_host.dart';
-import 'connected_command_center.dart';
-import 'customer_support.dart';
-import 'connected_innovation_phases.dart';
+import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
 
 Future<void> main() async {
@@ -2004,8 +2004,6 @@ class HomeCustomization {
               'Music',
               'Film',
               'Collections',
-              'My TV',
-              'Shop',
             ];
 
   HomeCustomization copy() => HomeCustomization(
@@ -2067,7 +2065,8 @@ class HomeCustomizationStore {
             settings.sectionOrder.insert(0, 'Friends & Communities');
           }
           settings.navigationOrder.removeWhere(
-            (item) => item == 'Group Chat' || item == 'Discover',
+            (item) => item == 'Group Chat' || item == 'Discover' ||
+                item == 'My TV' || item == 'Shop',
           );
           if (!settings.navigationOrder.contains('Surprise Me')) {
             final moreIndex = settings.navigationOrder.indexOf('More');
@@ -2091,7 +2090,8 @@ class HomeCustomizationStore {
     final value =
         _settings.putIfAbsent(_key(profile), () => HomeCustomization());
     value.navigationOrder.removeWhere(
-      (item) => item == 'Group Chat' || item == 'Discover',
+      (item) => item == 'Group Chat' || item == 'Discover' ||
+          item == 'My TV' || item == 'Shop',
     );
     if (!value.navigationOrder.contains('Surprise Me')) {
       final moreIndex = value.navigationOrder.indexOf('More');
@@ -2120,7 +2120,8 @@ class HomeCustomizationStore {
     final key = _key(profile ?? AppController.instance.currentProfile);
     final copy = value.copy();
     copy.navigationOrder.removeWhere(
-      (item) => item == 'Group Chat' || item == 'Discover',
+      (item) => item == 'Group Chat' || item == 'Discover' ||
+          item == 'My TV' || item == 'Shop',
     );
     _settings[key] = copy;
     _prefs?.setString('home_customization_$key', jsonEncode(_toJson(copy)));
@@ -2275,8 +2276,6 @@ class HomeCustomizationStore {
                       'Music',
                       'Film',
                       'Collections',
-                      'My TV',
-                      'Shop',
                       'Movies',
                       'TV Shows',
                       'Friends',
@@ -4986,6 +4985,22 @@ void _showGlobalMore() {
         Navigator.of(sheetContext).pop();
         push(const InnovationHubScreen(), routeName: '/app/innovation');
       },
+      onWrapped: () {
+        Navigator.of(sheetContext).pop();
+        push(const MediaWrappedCollectionsScreen(), routeName: '/app/page/wrapped');
+      },
+      onSpecialEvents: () {
+        Navigator.of(sheetContext).pop();
+        push(const MyTvSpecialEventsScreen(), routeName: '/app/page/special-events');
+      },
+      onInterruptionMode: () {
+        Navigator.of(sheetContext).pop();
+        push(const RealLifeInterruptionModeScreen(), routeName: '/app/page/interruption-mode');
+      },
+      onSecurityBots: () {
+        Navigator.of(sheetContext).pop();
+        push(const SecurityBotCenterScreen(), routeName: '/app/page/security-bots');
+      },
     ),
   );
 }
@@ -5294,9 +5309,7 @@ class _AppShellHeaderState extends State<AppShellHeader> {
   }
 
   void _submit() {
-    final query = controller.text.trim();
-    if (query.isEmpty) return;
-    widget.onSearch(query);
+    widget.onSearch(controller.text.trim());
   }
 
   @override
@@ -5322,6 +5335,9 @@ class _AppShellHeaderState extends State<AppShellHeader> {
           Expanded(
             child: TextField(
               controller: controller,
+              readOnly: true,
+              showCursor: false,
+              onTap: _submit,
               onSubmitted: (_) => _submit(),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
@@ -5393,6 +5409,10 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onAccessibilityOffline;
   final VoidCallback onEntertainmentStudio;
   final VoidCallback onInnovationHub;
+  final VoidCallback onWrapped;
+  final VoidCallback onSpecialEvents;
+  final VoidCallback onInterruptionMode;
+  final VoidCallback onSecurityBots;
 
   const _MoreActionsSheet({
     required this.onSettings,
@@ -5415,6 +5435,10 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onAccessibilityOffline,
     required this.onEntertainmentStudio,
     required this.onInnovationHub,
+    required this.onWrapped,
+    required this.onSpecialEvents,
+    required this.onInterruptionMode,
+    required this.onSecurityBots,
   });
 
   @override
@@ -5431,84 +5455,33 @@ class _MoreActionsSheet extends StatelessWidget {
         childAspectRatio: 1.25,
         children: [
           _combinedCard(
-              context,
-              Icons.manage_accounts_outlined,
-              'Account & Server',
-              'Manage members, profiles, storage and server', [
-            _MoreChoice('Account Members', 'Invite or manage account members',
-                Icons.people_alt_outlined, onMembers),
-            _MoreChoice('Home Server', 'Server status and storage',
-                Icons.dns_rounded, onHomeServer),
-          ]),
+            context,
+            Icons.manage_accounts_outlined,
+            'Account & Server',
+            'Manage members, profiles, storage and server',
+            [
+              _MoreChoice('Account Members', 'Invite or manage account members', Icons.people_alt_outlined, onMembers),
+              _MoreChoice('Home Server', 'Server status and storage', Icons.dns_rounded, onHomeServer),
+            ],
+          ),
           _moreCard(Icons.album_rounded, 'Import / Rip',
-              'Import media and run the ARM disc-ripping workflow', onImport),
-          _moreCard(
-              Icons.movie_filter_rounded,
-              'Hey Marathon',
-              'Plan movie nights, TV binges, breaks, invitations and themed food',
-              onHeyMarathon),
-          _moreCard(Icons.devices_rounded, 'Device Center',
-              'Downloads and devices', onDevices),
+              'Import media and run the ARM disc-import workflow', onImport),
           _moreCard(Icons.settings_rounded, 'Settings',
-              'Account and subscription', onSettings),
-          _moreCard(
-              Icons.high_quality_rounded,
-              'Streaming Experience',
-              'Playback quality, accessibility, and player diagnostics',
-              onStreamingExperience),
-          _moreCard(
-              Icons.auto_awesome_rounded,
-              'Perfect Streaming',
-              'Clean navigation, discovery, autoplay, series and Watch Party preferences',
-              onPerfectStreaming),
-          _moreCard(
-              Icons.hub_rounded,
-              'Innovation & Platform Hub',
-              'Platform Expansion, Ultimate Features, Expanded Platform and roadmap',
-              onInnovationHub),
-          _moreCard(
-              Icons.movie_filter_rounded,
-              'Watch & Enjoy',
-              'Pair movie nights with food delivery and entertainment merchandise',
-              onWatchAndEnjoy),
-          _moreCard(
-              Icons.shopping_bag_outlined,
-              'Marketplace',
-              'Shared front door for products, restaurants, bag and storefronts',
-              onShop),
-          _moreCard(
-              Icons.delivery_dining_rounded,
-              'Food Delivery',
-              'Open the Food tab inside the shared Marketplace',
-              onFoodDelivery),
-          _moreCard(Icons.live_tv_rounded, 'My TV',
-              'Open personal channels inside the unified Watch hub', onMyTv),
-          _moreCard(
-              Icons.satellite_alt_rounded,
-              'Public Live TV',
-              'Browse broadcasts inside Watch; fullscreen and minimize playback',
-              onPublicLiveTv),
-          _moreCard(
-              Icons.auto_awesome_rounded,
-              'Entertainment Studio',
-              'Calendar, journal, scene memories, editions, media graph and subtitle tools',
-              onEntertainmentStudio),
-          _moreCard(Icons.settings_remote_rounded, 'TV Controller',
-              'Use your phone as the TV remote', onTvController),
-          _moreCard(Icons.tv_rounded, 'TV Host',
-              'Show a pairing code on this TV', onTvHost),
-          _moreCard(
-              Icons.admin_panel_settings_rounded,
-              'Production Readiness',
-              'Owner-only service health, backups and operations',
-              onProductionReadiness),
+              'Account, subscription, device, playback and support settings', onSettings),
+          _moreCard(Icons.auto_awesome_rounded, 'My Entertainment Wrapped',
+              'Monthly/yearly recaps and archived Wrapped Collections', onWrapped),
+          _moreCard(Icons.event_available_rounded, 'My TV Special Events',
+              'Stable, randomized theme weeks spread throughout the year', onSpecialEvents),
+          _moreCard(Icons.pause_circle_outline_rounded, 'Interruption Mode',
+              'Pause, save playback position and resume with explicit controls', onInterruptionMode),
+          _moreCard(Icons.health_and_safety_outlined, 'Security & Database Bots',
+              'Run owner-only read-only security and integrity checks', onSecurityBots),
+          _moreCard(Icons.admin_panel_settings_rounded, 'Production Readiness',
+              'Owner-only service health, backups and operations', onProductionReadiness),
           _moreCard(Icons.security_rounded, 'Security & Privacy',
               'Sessions, MFA and account security', onSecurityPrivacy),
-          _moreCard(
-              Icons.accessibility_new_rounded,
-              'Accessibility & Offline',
-              'Text scaling, activity privacy and pending sync',
-              onAccessibilityOffline),
+          _moreCard(Icons.accessibility_new_rounded, 'Accessibility & Offline',
+              'Text scaling, activity privacy and pending sync', onAccessibilityOffline),
         ],
       ),
     );
@@ -5776,6 +5749,34 @@ class _HomeScreenState extends State<HomeScreen>
                       settings: const RouteSettings(name: '/app/page/music'),
                       builder: (_) => const MusicScreen(),
                     )),
+                onPhysicalMedia: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(name: '/app/physical-media'),
+                    builder: (_) => const PhysicalMediaLibraryScreen(),
+                  ),
+                ),
+                onFranchises: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(name: '/app/franchises'),
+                    builder: (_) => const FranchiseUniverseBrowseHubScreen(mode: FranchiseUniverseBrowseMode.franchises),
+                  ),
+                ),
+                onCinematicUniverses: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(name: '/app/cinematic-universes'),
+                    builder: (_) => const FranchiseUniverseBrowseHubScreen(mode: FranchiseUniverseBrowseMode.universes),
+                  ),
+                ),
+                onAiBots: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(name: '/app/ai-bots'),
+                    builder: (_) => const AiBotCenterScreen(),
+                  ),
+                ),
               ),
             ),
             if (settings.showHero && homeHeroItems.isNotEmpty)
@@ -5862,190 +5863,6 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               const SliverToBoxAdapter(child: HomeCollectionShelves()),
             ],
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Card(
-                  color: const Color(0xFF171722),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0x338B7CFF),
-                      child:
-                          Icon(Icons.album_rounded, color: Color(0xFF8B7CFF)),
-                    ),
-                    title: const UniversalText('Physical Media'),
-                    subtitle: const UniversalText(
-                        'Browse imported Blu-ray, DVD, 4K Ultra HD and CD collections'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings:
-                              const RouteSettings(name: '/app/physical-media'),
-                          builder: (_) => const PhysicalMediaLibraryScreen(),
-                        )),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Card(
-                  color: const Color(0xFF171722),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0x338B7CFF),
-                      child: Icon(Icons.hub_rounded, color: Color(0xFF8B7CFF)),
-                    ),
-                    title: const UniversalText('Connected Command Center'),
-                    subtitle: const UniversalText(
-                        'Universal Search, Remote, Movie Night, Media Health, Soundtracks, Recap and account preferences'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(
-                              name: '/app/connected-command-center'),
-                          builder: (_) => const ConnectedCommandCenterScreen(),
-                        )),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Card(
-                  color: const Color(0xFF203044),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                        backgroundColor: Color(0x338FD9B5),
-                        child: Icon(Icons.support_agent_rounded,
-                            color: Color(0xFF8FD9B5))),
-                    title: const UniversalText('Customer Support & Tickets'),
-                    subtitle: const UniversalText(
-                        'Get help, submit a ticket and track support requests'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(
-                              name: '/app/customer-support'),
-                          builder: (_) => const CustomerSupportScreen(),
-                        )),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Card(
-                  color: const Color(0xFF1D2938),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0x338B7CFF),
-                      child: Icon(Icons.hub_rounded, color: Color(0xFF9B8CFF)),
-                    ),
-                    title: const UniversalText('Connected Innovation'),
-                    subtitle: const UniversalText(
-                        'Four implementation phases: access, social, discovery, commerce and reliability'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(
-                              name: '/app/connected-innovation'),
-                          builder: (_) =>
-                              const ConnectedInnovationPhasesScreen(),
-                        )),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Card(
-                  color: const Color(0xFF211B35),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0x33FFD36E),
-                      child:
-                          Icon(Icons.layers_rounded, color: Color(0xFFFFD36E)),
-                    ),
-                    title: const UniversalText('Innovation & Platform Hub'),
-                    subtitle: const UniversalText(
-                        'Platform Expansion, Ultimate Features, Expanded Platform, discovery and roadmap modules in one place'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings:
-                              const RouteSettings(name: '/app/innovation'),
-                          builder: (_) => const InnovationHubScreen(),
-                        )),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-                child: Card(
-                  color: const Color(0xFF211B35),
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.movie_filter_rounded,
-                      size: 32,
-                      color: Color(0xFFFFD36E),
-                    ),
-                    title: const UniversalText(
-                      'Hey Marathon',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: const UniversalText(
-                      'Plan a movie night or TV binge, schedule breaks, invite friends, and discover themed food.',
-                    ),
-                    trailing: FilledButton.icon(
-                      onPressed: () => Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          settings: const RouteSettings(
-                            name: '/app/page/hey-marathon',
-                          ),
-                          builder: (_) => const HeyMarathonScreen(),
-                        ),
-                      ),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: const UniversalText('Plan'),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.auto_awesome_rounded, size: 30),
-                    title: const UniversalText('Entertainment Studio',
-                        style: TextStyle(fontWeight: FontWeight.w900)),
-                    subtitle: const UniversalText(
-                        'Plan events, save scenes, manage editions, audit your library, and explore connections.'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.of(context)
-                        .push<void>(MaterialPageRoute<void>(
-                      settings: const RouteSettings(
-                          name: '/app/page/entertainment-studio'),
-                      builder: (_) => const EntertainmentStudioScreen(),
-                    )),
-                  ),
-                ),
-              ),
-            ),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),

@@ -94,8 +94,19 @@ class GenreSystem {
   /// Known pairs are searched across every pair (not just the first two genres),
   /// so a title such as Horror + Comedy + Fantasy still gets the Horror-Comedy
   /// label regardless of metadata order.
-  static String displayLabel(Iterable<String> genres) {
-    final normalized = normalizeGenres(genres);
+  static String displayLabel(
+    Iterable<String> genres, {
+    String? primaryGenre,
+    String? overrideLabel,
+  }) {
+    final explicitLabel = overrideLabel?.trim() ?? '';
+    if (explicitLabel.isNotEmpty) return explicitLabel;
+
+    final primary = primaryGenre?.trim() ?? '';
+    final normalized = normalizeGenres(<String>[
+      ...genres,
+      if (primary.isNotEmpty) primary,
+    ]);
     if (normalized.isEmpty) return 'Genre not specified';
     if (normalized.length == 1) return normalized.single;
 

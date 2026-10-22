@@ -13,8 +13,24 @@ import 'offline_sync_queue.dart';
 import 'offline_metadata_cache.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
+import 'genre_system.dart';
 import 'core/models/profile_governance.dart';
 import 'core/models/platform_server.dart';
+
+/// Keeps legacy or externally supplied metadata outside this product's media scope.
+/// MyOwnStreamingService supports movies, series, episodes, and music tracks/albums;
+/// podcasts, audiobooks, and internet radio are intentionally not product categories.
+bool isExcludedEntertainmentType(String rawType) {
+  final normalized = rawType
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_\-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(' ', '');
+  return normalized.contains('podcast') ||
+      normalized.contains('audiobook') ||
+      normalized.contains('radio');
+}
 
 enum SubscriptionPlan {
   monthly,
@@ -63,6 +79,19 @@ class MediaItem {
   final String? imageUrl;
   final String? description;
 
+  /// Optional authorized title-logo/key-art asset. It is not extracted from a trailer.
+  final String? titleLogoUrl;
+  /// Provenance for the title-logo asset (provider/catalog/rights note).
+  final String? titleLogoSource;
+  /// False by default: only display title-logo artwork when catalog metadata says it is authorized.
+  final bool titleLogoAuthorized;
+  /// Optional fallback style key: cinematic, horror, sciFi, fantasy, western, romance, retro, animation.
+  final String? titleStyleKey;
+  /// Optional #RRGGBB or #AARRGGBB accent for the styled-text fallback.
+  final String? titleAccentColor;
+  /// Controls cinematic reveal animation; reduced-motion OS settings still take priority.
+  final bool titleRevealAnimation;
+
   /// Original release year for a movie, or the first-air year for a series.
   final int? releaseYear;
 
@@ -86,7 +115,12 @@ class MediaItem {
   final int? seriesEndYear;
 
   /// True when the series has not concluded; displays `Present` as the end year.
+  /// Kept for compatibility with older catalog records.
   final bool seriesOngoing;
+
+  /// Explicit lifecycle state: `upcoming`, `ongoing`, `ended`, or `unknown`.
+  /// This disambiguates an ended series from a title whose status is not known.
+  final String? seriesStatus;
 
   /// Official/provider/critic rating (IMDb, Rotten Tomatoes, etc.).
   final double? rating;
@@ -140,13 +174,33 @@ class MediaItem {
   final String? franchiseName;
   final String? franchiseType;
   final int? franchiseOrder;
+  final List<String> franchiseNames;
+  final List<Map<String, dynamic>> universeMemberships;
+  final String? continuityId;
+  final String? continuityName;
+
+  // Explicit universe ordering data; keep unknown values absent rather than inferred.
+  final List<String> cinematicUniverseIds;
+  final List<String> cinematicUniverseNames;
+  final String? cinematicUniverseSaga;
+  final String? cinematicUniversePhase;
+  final int? cinematicUniverseTimelineOrder;
+  final int? cinematicUniverseReleaseOrder;
+  final int? postCreditSceneCount;
+  final List<String> narrativePrerequisiteIds;
+  final String? universeMetadataSource;
+  final DateTime? universeMetadataVerifiedAt;
 
   // Catalog entities and technical metadata discovered during import.
   final List<String> actors;
+  /// Explicit character names linked to this work by catalog metadata.
+  final List<String> characters;
   final List<String> directors;
   final List<String> writers;
   final List<String> music;
   final List<String> genres;
+  final String? primaryGenre;
+  final String? genreBlendLabelOverride;
   final List<String> tags;
 
   /// Production studios and companies discovered by the content intelligence/import pipeline.
@@ -194,11 +248,28 @@ class MediaItem {
     this.franchiseName,
     this.franchiseType,
     this.franchiseOrder,
+    List<String>? franchiseNames,
+    List<Map<String, dynamic>>? universeMemberships,
+    this.continuityId,
+    this.continuityName,
+    List<String>? cinematicUniverseIds,
+    List<String>? cinematicUniverseNames,
+    this.cinematicUniverseSaga,
+    this.cinematicUniversePhase,
+    this.cinematicUniverseTimelineOrder,
+    this.cinematicUniverseReleaseOrder,
+    this.postCreditSceneCount,
+    List<String>? narrativePrerequisiteIds,
+    this.universeMetadataSource,
+    this.universeMetadataVerifiedAt,
+    List<String>? characters,
     List<String>? actors,
     List<String>? directors,
     List<String>? writers,
     List<String>? music,
     List<String>? genres,
+    String? primaryGenre,
+    String? genreBlendLabelOverride,
     List<String>? tags,
     List<String>? studios,
     List<String>? companies,
@@ -214,6 +285,12 @@ class MediaItem {
     required this.type,
     this.imageUrl,
     this.description,
+    this.titleLogoUrl,
+    this.titleLogoSource,
+    this.titleLogoAuthorized = false,
+    this.titleStyleKey,
+    this.titleAccentColor,
+    this.titleRevealAnimation = true,
     this.releaseYear,
     this.editionReleaseYear,
     this.editionName,
@@ -223,6 +300,7 @@ class MediaItem {
     this.seriesStartYear,
     this.seriesEndYear,
     this.seriesOngoing = false,
+    this.seriesStatus,
     this.rating,
     this.ratingReason,
     this.audienceRating,
@@ -234,10 +312,16 @@ class MediaItem {
         addedAt = addedAt ?? DateTime.now(),
         seasons = seasons ?? <Map<String, dynamic>>[],
         actors = actors ?? <String>[],
+        characters = characters ?? <String>[],
         directors = directors ?? <String>[],
         writers = writers ?? <String>[],
         music = music ?? <String>[],
-        genres = genres ?? <String>[],
+        genres = _normalizeMediaGenres(genres, primaryGenre),
+        primaryGenre = _normalizePrimaryGenre(
+          primaryGenre,
+          _normalizeMediaGenres(genres, primaryGenre),
+        ),
+        genreBlendLabelOverride = _normalizeGenreBlendLabel(genreBlendLabelOverride),
         tags = tags ?? <String>[],
         studios = studios ?? <String>[],
         companies = companies ?? <String>[],
@@ -250,7 +334,46 @@ class MediaItem {
         relationshipTypes = relationshipTypes ?? <String>[],
         accessibleProfileIds = accessibleProfileIds ?? <String>[],
         eligibleMerchandiseProductIds =
-            eligibleMerchandiseProductIds ?? <String>[];
+            eligibleMerchandiseProductIds ?? <String>[],
+        franchiseNames = franchiseNames ?? <String>[],
+        universeMemberships = universeMemberships ?? <Map<String, dynamic>>[],
+        cinematicUniverseIds = cinematicUniverseIds ?? <String>[],
+        cinematicUniverseNames = cinematicUniverseNames ?? <String>[],
+        narrativePrerequisiteIds = narrativePrerequisiteIds ?? <String>[];
+
+  static List<String> _normalizeMediaGenres(
+    List<String>? rawGenres,
+    String? rawPrimaryGenre,
+  ) {
+    final values = <String>[...?rawGenres];
+    final primary = rawPrimaryGenre?.trim() ?? '';
+    if (primary.isNotEmpty) values.add(primary);
+    return GenreSystem.normalizeGenres(values);
+  }
+
+  static String? _normalizePrimaryGenre(
+    String? rawPrimaryGenre,
+    List<String> normalizedGenres,
+  ) {
+    final raw = rawPrimaryGenre?.trim() ?? '';
+    if (raw.isEmpty) return null;
+    final canonical = GenreSystem.canonicalize(raw).toLowerCase();
+    for (final genre in normalizedGenres) {
+      if (genre.toLowerCase() == canonical) return genre;
+    }
+    return null;
+  }
+
+  static String? _normalizeGenreBlendLabel(String? value) {
+    final clean = value?.trim() ?? '';
+    return clean.isEmpty ? null : clean;
+  }
+
+  String get genreDisplayLabel => GenreSystem.displayLabel(
+        genres,
+        primaryGenre: primaryGenre,
+        overrideLabel: genreBlendLabelOverride,
+      );
 
   /// Returns whether the current profile has explicit access to this library item.
   bool isAccessibleTo(Profile? profile) {
@@ -276,15 +399,31 @@ class MediaItem {
       type: data['type']?.toString() ?? 'movie',
       imageUrl: (data['imageUrl'] ?? data['posterUrl'])?.toString(),
       description: data['description']?.toString(),
-      releaseYear: _intValue(data['releaseYear'] ?? data['year']),
-      editionReleaseYear: _intValue(data['editionReleaseYear']),
-      editionName: data['editionName']?.toString(),
-      editionType: data['editionType']?.toString(),
-      canonicalWorkId: data['canonicalWorkId']?.toString(),
-      editionFeatures: _stringList(data['editionFeatures']),
-      seriesStartYear: _intValue(data['seriesStartYear']),
-      seriesEndYear: _intValue(data['seriesEndYear']),
-      seriesOngoing: data['seriesOngoing'] == true,
+      titleLogoUrl: (data['titleLogoUrl'] ?? data['title_logo_url'] ?? data['logoUrl'])?.toString(),
+      titleLogoSource: (data['titleLogoSource'] ?? data['title_logo_source'])?.toString(),
+      titleLogoAuthorized: _boolValue(data['titleLogoAuthorized'] ?? data['title_logo_authorized']),
+      titleStyleKey: (data['titleStyleKey'] ?? data['title_style_key'])?.toString(),
+      titleAccentColor: (data['titleAccentColor'] ?? data['title_accent_color'])?.toString(),
+      titleRevealAnimation: (data.containsKey('titleRevealAnimation') || data.containsKey('title_reveal_animation'))
+          ? _boolValue(data['titleRevealAnimation'] ?? data['title_reveal_animation'])
+          : true,
+      releaseYear: _intValue(data['releaseYear'] ?? data['release_year'] ?? data['year']),
+      editionReleaseYear: _intValue(
+        data['editionReleaseYear'] ?? data['edition_release_year'],
+      ),
+      editionName: (data['editionName'] ?? data['edition_name'])?.toString(),
+      editionType: (data['editionType'] ?? data['edition_type'])?.toString(),
+      canonicalWorkId:
+          (data['canonicalWorkId'] ?? data['canonical_work_id'])?.toString(),
+      editionFeatures:
+          _stringList(data['editionFeatures'] ?? data['edition_features']),
+      seriesStartYear:
+          _intValue(data['seriesStartYear'] ?? data['series_start_year']),
+      seriesEndYear:
+          _intValue(data['seriesEndYear'] ?? data['series_end_year']),
+      seriesOngoing: _boolValue(data['seriesOngoing'] ?? data['series_ongoing']),
+      seriesStatus:
+          (data['seriesStatus'] ?? data['series_status'])?.toString(),
       rating: data['rating'] is num
           ? (data['rating'] as num).toDouble()
           : double.tryParse(
@@ -340,11 +479,33 @@ class MediaItem {
       franchiseOrder: data['franchiseOrder'] is num
           ? (data['franchiseOrder'] as num).toInt()
           : int.tryParse(data['franchiseOrder']?.toString() ?? ''),
+      franchiseNames: _stringList(data['franchiseNames'] ?? data['franchises']),
+      universeMemberships: (data['universeMemberships'] ?? data['universe_memberships']) is List
+          ? ((data['universeMemberships'] ?? data['universe_memberships']) as List)
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList()
+          : const <Map<String, dynamic>>[],
+      continuityId: (data['continuityId'] ?? data['continuity_id'])?.toString(),
+      continuityName: (data['continuityName'] ?? data['continuity_name'])?.toString(),
+      cinematicUniverseIds: _stringList(data['cinematicUniverseIds'] ?? data['cinematic_universe_ids']),
+      cinematicUniverseNames: _stringList(data['cinematicUniverseNames'] ?? data['cinematic_universe_names']),
+      cinematicUniverseSaga: (data['cinematicUniverseSaga'] ?? data['cinematic_universe_saga'])?.toString(),
+      cinematicUniversePhase: (data['cinematicUniversePhase'] ?? data['cinematic_universe_phase'])?.toString(),
+      cinematicUniverseTimelineOrder: _intValue(data['cinematicUniverseTimelineOrder'] ?? data['cinematic_universe_timeline_order']),
+      cinematicUniverseReleaseOrder: _intValue(data['cinematicUniverseReleaseOrder'] ?? data['cinematic_universe_release_order']),
+      postCreditSceneCount: _intValue(data['postCreditSceneCount'] ?? data['post_credit_scene_count']),
+      narrativePrerequisiteIds: _stringList(data['narrativePrerequisiteIds'] ?? data['narrative_prerequisite_ids']),
+      universeMetadataSource: (data['universeMetadataSource'] ?? data['universe_metadata_source'])?.toString(),
+      universeMetadataVerifiedAt: DateTime.tryParse((data['universeMetadataVerifiedAt'] ?? data['universe_metadata_verified_at'])?.toString() ?? ''),
       actors: _stringList(data['actors']),
+      characters: _stringList(data['characters'] ?? data['characterNames'] ?? data['character_names']),
       directors: _stringList(data['directors']),
       writers: _stringList(data['writers']),
       music: _stringList(data['music']),
       genres: _stringList(data['genres']),
+      primaryGenre: (data['primaryGenre'] ?? data['primary_genre'])?.toString(),
+      genreBlendLabelOverride: (data['genreBlendLabelOverride'] ?? data['genre_blend_label_override'])?.toString(),
       tags: _stringList(data['tags']),
       studios: _stringList(data['studios'] ?? data['productionStudios']),
       companies: _stringList(data['companies'] ?? data['productionCompanies']),
@@ -379,6 +540,20 @@ class MediaItem {
     return int.tryParse(value?.toString() ?? '');
   }
 
+  static bool _boolValue(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    switch (value?.toString().trim().toLowerCase()) {
+      case 'true':
+      case '1':
+      case 'yes':
+      case 'on':
+        return true;
+      default:
+        return false;
+    }
+  }
+
   bool get isSeries {
     final normalized = type.toLowerCase().trim();
     return normalized == 'tv' ||
@@ -390,78 +565,145 @@ class MediaItem {
         normalized.contains('series');
   }
 
-  int? _yearFromMap(Map<String, dynamic> map) {
-    for (final key in const [
-      'releaseYear',
-      'firstAirYear',
-      'airYear',
-      'year',
-      'startYear',
-      'firstAirDate',
-      'airDate',
-      'releaseDate'
-    ]) {
-      final raw = map[key];
-      if (raw is num) {
-        final year = raw.toInt();
-        if (year >= 1800 && year <= 2200) return year;
-        continue;
-      }
-      final value = raw?.toString().trim() ?? '';
-      if (value.isEmpty) continue;
-      final direct = int.tryParse(value);
-      if (direct != null && direct >= 1800 && direct <= 2200) return direct;
-      final match = RegExp(r'^(\d{4})').firstMatch(value);
-      final parsed = int.tryParse(match?.group(1) ?? '');
-      if (parsed != null && parsed >= 1800 && parsed <= 2200) return parsed;
+  static const List<String> _yearMetadataKeys = <String>[
+    'releaseYear', 'release_year', 'firstAirYear', 'first_air_year',
+    'airYear', 'air_year', 'year', 'startYear', 'start_year',
+    'endYear', 'end_year', 'firstAirDate', 'first_air_date',
+    'airDate', 'air_date', 'releaseDate', 'release_date',
+    'premiereDate', 'premiere_date', 'firstAired', 'first_aired',
+    'lastAirYear', 'last_air_year', 'lastAirDate', 'last_air_date',
+    'finalAirDate', 'final_air_date', 'endDate', 'end_date',
+    'lastAired', 'last_aired', 'finaleDate', 'finale_date',
+    'firstEpisodeAirDate', 'first_episode_air_date',
+    'lastEpisodeAirDate', 'last_episode_air_date', 'date',
+  ];
+
+  static int? _yearFromValue(dynamic raw) {
+    if (raw is DateTime) return raw.year;
+    if (raw is num) {
+      final year = raw.toInt();
+      return year >= 1800 && year <= 2200 ? year : null;
     }
-    return null;
+    final value = raw?.toString().trim() ?? '';
+    if (value.isEmpty) return null;
+    final direct = int.tryParse(value);
+    if (direct != null) return direct >= 1800 && direct <= 2200 ? direct : null;
+    final date = DateTime.tryParse(value);
+    if (date != null) return date.year;
+    final match = RegExp(r'\b((?:18|19|20|21|22)\d{2})\b')
+        .firstMatch(value);
+    final parsed = int.tryParse(match?.group(1) ?? '');
+    return parsed != null && parsed >= 1800 && parsed <= 2200 ? parsed : null;
+  }
+
+  static List<int> _yearsFromMap(Map<String, dynamic> map) {
+    final years = <int>[];
+    for (final key in _yearMetadataKeys) {
+      if (!map.containsKey(key)) continue;
+      final year = _yearFromValue(map[key]);
+      if (year != null) years.add(year);
+    }
+    return years;
   }
 
   List<int> get _knownSeriesYears {
     final years = <int>[];
     for (final season in seasons) {
-      final seasonYear = _yearFromMap(season);
-      if (seasonYear != null) years.add(seasonYear);
+      years.addAll(_yearsFromMap(season));
       final episodes = season['episodes'];
       if (episodes is List) {
         for (final episode in episodes.whereType<Map>()) {
-          final year = _yearFromMap(Map<String, dynamic>.from(episode));
-          if (year != null) years.add(year);
+          years.addAll(_yearsFromMap(Map<String, dynamic>.from(episode)));
         }
       }
     }
     years.sort();
-    return years;
+    return years.toSet().toList(growable: false);
   }
 
-  /// Year/range used by hero banners, cards, search, and detail metadata.
+  String get _normalizedSeriesStatus => (seriesStatus ?? '')
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+
+  bool get isSeriesOngoing => seriesOngoing || const <String>{
+        'ongoing', 'airing', 'returning', 'returning series',
+      }.contains(_normalizedSeriesStatus);
+
+  bool get isSeriesUpcoming => const <String>{
+        'upcoming', 'announced', 'in development', 'coming soon',
+      }.contains(_normalizedSeriesStatus);
+
+  /// Derives a single season's run from the season metadata and episode air dates.
+  /// For example, `Season 1 • 2005–2006`; returns null if no year is known.
+  String? displaySeasonYearLabel(Map<String, dynamic> season) {
+    final years = _yearsFromMap(season);
+    final episodes = season['episodes'];
+    if (episodes is List) {
+      for (final episode in episodes.whereType<Map>()) {
+        years.addAll(_yearsFromMap(Map<String, dynamic>.from(episode)));
+      }
+    }
+    if (years.isEmpty) return null;
+    years.sort();
+    final start = years.first;
+    final end = years.last;
+    return end > start ? '$start–$end' : '$start';
+  }
+
+  /// Label used by hero banners, cards, search, and detail metadata.
+  /// Series use their complete run; movie editions use their own release year.
   String? get displayYearLabel {
     if (isSeries) {
       final years = _knownSeriesYears;
-      final start =
-          seriesStartYear ?? (years.isNotEmpty ? years.first : releaseYear);
+      if (isSeriesUpcoming) {
+        final comingYear = seriesStartYear ?? releaseYear ??
+            (years.isNotEmpty ? years.first : null);
+        return comingYear == null ? 'Coming soon' : 'Coming $comingYear';
+      }
+      final start = seriesStartYear ??
+          (years.isNotEmpty ? years.first : releaseYear);
       final end = seriesEndYear ?? (years.isNotEmpty ? years.last : null);
-      if (start == null) return null;
-      if (seriesOngoing) return '$start–Present';
-      if (end != null && end != start) return '$start–$end';
+      if (isSeriesOngoing) return start == null ? 'Ongoing' : '$start–Present';
+      if (start == null) return end?.toString();
+      if (end != null && end > start) return '$start–$end';
       return '$start';
     }
     final year = editionReleaseYear ?? releaseYear;
     return year?.toString();
   }
 
+  /// Original movie year shown alongside a later edition/re-release.
+  String? get displayOriginalReleaseYearLabel {
+    if (isSeries ||
+        releaseYear == null ||
+        editionReleaseYear == null ||
+        editionReleaseYear == releaseYear) {
+      return null;
+    }
+    return 'Original release $releaseYear';
+  }
+
   String? get displayEditionLabel {
     final name = editionName?.trim();
     if (name != null && name.isNotEmpty) return name;
-    final kind = editionType?.trim();
-    if (kind == null || kind.isEmpty) return null;
-    return switch (kind.toLowerCase()) {
-      'theatrical' => 'Theatrical Edition',
-      'extended' => 'Extended Edition',
-      'director-cut' || 'directors-cut' => "Director's Cut",
-      'rerelease' || 're-release' => 'Re-release',
-      _ => kind,
+    final kind = (editionType ?? '').trim().toLowerCase()
+        .replaceAll(RegExp(r'[_\s]+'), '-');
+    if (kind.isEmpty) return null;
+    return switch (kind) {
+      'theatrical' || 'theatrical-edition' => 'Theatrical Edition',
+      'extended' || 'extended-edition' || 'extended-cut' => 'Extended Edition',
+      'director-cut' || 'directors-cut' || 'director-s-cut' => "Director's Cut",
+      'rerelease' || 're-release' || 're-release-edition' => 'Re-release',
+      'encore' || 'encore-edition' => 'Encore Edition',
+      'special-edition' => 'Special Edition',
+      'collector-edition' || 'collectors-edition' => "Collector's Edition",
+      'remastered' || 'remastered-edition' => 'Remastered Edition',
+      'alternate-cut' => 'Alternate Cut',
+      'international-version' => 'International Version',
+      'final-cut' => 'Final Cut',
+      _ => kind.replaceAll('-', ' '),
     };
   }
 
@@ -484,6 +726,12 @@ class MediaItem {
       'type': type,
       'imageUrl': imageUrl,
       'description': description,
+      'titleLogoUrl': titleLogoUrl,
+      'titleLogoSource': titleLogoSource,
+      'titleLogoAuthorized': titleLogoAuthorized,
+      'titleStyleKey': titleStyleKey,
+      'titleAccentColor': titleAccentColor,
+      'titleRevealAnimation': titleRevealAnimation,
       'releaseYear': releaseYear,
       'editionReleaseYear': editionReleaseYear,
       'editionName': editionName,
@@ -493,6 +741,7 @@ class MediaItem {
       'seriesStartYear': seriesStartYear,
       'seriesEndYear': seriesEndYear,
       'seriesOngoing': seriesOngoing,
+      'seriesStatus': seriesStatus,
       'rating': rating,
       'ratingReason': ratingReason,
       'audienceRating': audienceRating,
@@ -526,11 +775,28 @@ class MediaItem {
       'franchiseName': franchiseName,
       'franchiseType': franchiseType,
       'franchiseOrder': franchiseOrder,
+      'franchiseNames': franchiseNames,
+      'universeMemberships': universeMemberships,
+      'continuityId': continuityId,
+      'continuityName': continuityName,
+      'cinematicUniverseIds': cinematicUniverseIds,
+      'cinematicUniverseNames': cinematicUniverseNames,
+      'cinematicUniverseSaga': cinematicUniverseSaga,
+      'cinematicUniversePhase': cinematicUniversePhase,
+      'cinematicUniverseTimelineOrder': cinematicUniverseTimelineOrder,
+      'cinematicUniverseReleaseOrder': cinematicUniverseReleaseOrder,
+      'postCreditSceneCount': postCreditSceneCount,
+      'narrativePrerequisiteIds': narrativePrerequisiteIds,
+      'universeMetadataSource': universeMetadataSource,
+      'universeMetadataVerifiedAt': universeMetadataVerifiedAt?.toIso8601String(),
       'actors': actors,
+      'characters': characters,
       'directors': directors,
       'writers': writers,
       'music': music,
       'genres': genres,
+      'primaryGenre': primaryGenre,
+      'genreBlendLabelOverride': genreBlendLabelOverride,
       'tags': tags,
       'studios': studios,
       'companies': companies,
@@ -2678,12 +2944,83 @@ class AppController extends ChangeNotifier {
   }
 
   /// Performs `markWatched` for this feature. Update this documentation when its contract changes.
+  /// Adds a profile-scoped playback completion event for Wrapped. This is a
+  /// compact activity record only: it stores metadata and timestamps, never
+  /// media bytes, credentials, or a raw storage path.
+  Future<void> recordWrappedActivity(MediaItem media) => recordWrappedActivityDetails(
+        mediaId: media.id,
+        canonicalWorkId: media.canonicalWorkId ?? media.id,
+        title: media.title,
+        type: media.type,
+        genres: media.genres,
+      );
+
+  /// Shared recorder used by video completions and completed music tracks.
+  /// Only profile-scoped metadata is kept; files and server paths are not copied.
+  Future<void> recordWrappedActivityDetails({
+    required String mediaId,
+    String? canonicalWorkId,
+    required String title,
+    required String type,
+    List<String> genres = const <String>[],
+    String? artist,
+    String? album,
+    String? profileIdOverride,
+  }) async {
+    final profileId = (profileIdOverride ?? currentProfile?.id ?? '').trim();
+    if (profileId.isEmpty || mediaId.trim().isEmpty || title.trim().isEmpty) return;
+
+    try {
+      final prefs = _badgePrefs ?? await SharedPreferences.getInstance();
+      _badgePrefs ??= prefs;
+      final key = 'moss_wrapped_activity_$profileId';
+      final raw = prefs.getString(key);
+      final records = <Map<String, dynamic>>[];
+      if (raw != null) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            records.addAll(decoded.whereType<Map>().map(
+              (entry) => Map<String, dynamic>.from(entry),
+            ));
+          }
+        } catch (_) {
+          // Start a fresh bounded journal if an old local cache is malformed.
+        }
+      }
+      final occurredAt = DateTime.now();
+      records.add(<String, dynamic>{
+        'eventId': '${mediaId}_${occurredAt.microsecondsSinceEpoch}',
+        'profileId': profileId,
+        'mediaId': mediaId,
+        'canonicalWorkId': (canonicalWorkId?.trim().isNotEmpty == true)
+            ? canonicalWorkId!.trim()
+            : mediaId,
+        'title': title.trim(),
+        'type': type.trim(),
+        'genres': genres,
+        if (artist?.trim().isNotEmpty == true) 'artist': artist!.trim(),
+        if (album?.trim().isNotEmpty == true) 'album': album!.trim(),
+        'occurredAt': occurredAt.toIso8601String(),
+        'action': 'completed',
+      });
+      if (records.length > 10000) {
+        records.removeRange(0, records.length - 10000);
+      }
+      await prefs.setString(key, jsonEncode(records));
+    } catch (_) {
+      // Wrapped is best-effort and must never interrupt playback.
+    }
+  }
+
+  /// Performs `markWatched` for this feature. Update this documentation when its contract changes.
   void markWatched(
     MediaItem media,
   ) {
     if (!isWatched(media.id)) {
       watched.add(media);
       _recordMonthlyWatch(media);
+      unawaited(recordWrappedActivity(media));
 
       _addActivity(
         title: media.title,
@@ -2697,11 +3034,14 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Performs `finishWatching` for this feature. Update this documentation when its contract changes.
+  /// Marks the title as complete and records repeat completions separately for
+  /// period-aware Wrapped statistics.
   void finishWatching(
     MediaItem media,
   ) {
+    final alreadyWatched = isWatched(media.id);
     markWatched(media);
+    if (alreadyWatched) unawaited(recordWrappedActivity(media));
   }
 
   // ---------------------------------------------------------------------------
@@ -2809,6 +3149,7 @@ class AppController extends ChangeNotifier {
         }
       }
 
+      loaded.removeWhere((item) => isExcludedEntertainmentType(item.type));
       recommendations = loaded;
     } catch (error) {
       recommendationsError = error.toString();
@@ -2955,7 +3296,9 @@ class AppController extends ChangeNotifier {
         changed = true;
       }
     }
-    if (!changed) return;
+    if (!changed) {
+      return;
+    }
     _activityRevision++;
     _persistOrRestoreActivity();
     notifyListeners();

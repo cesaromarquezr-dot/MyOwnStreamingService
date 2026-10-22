@@ -5204,6 +5204,89 @@ class SupabaseStore {
     });
   }
 
+  /// Performs a minimal read-only query to confirm the configured client can
+  /// reach the database. No customer rows or secrets are returned to callers.
+  Future<void> probeConnection() async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Supabase store is not initialized.');
+    }
+    await c.from('accounts').select('id').limit(1);
+  }
+
+  /// Returns aggregate authentication signal counts from the existing
+  /// security-events table. It deliberately selects only event type and time;
+  /// account identifiers, metadata, IPs and identifier hashes are not exposed.
+  Future<Map<String, int>> summarizeRecentSecuritySignals({
+    required DateTime since,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Supabase store is not initialized.');
+    }
+
+    final rows = await c
+        .from('security_events')
+        .select('event_type,created_at')
+        .gte('created_at', since.toUtc().toIso8601String())
+        .order('created_at', ascending: false)
+        .limit(2000);
+
+    final result = <String, int>{};
+    const watchedTypes = <String>{
+      'login_failed',
+      'mfa_login_failed',
+      'password_recovery_failed',
+      'suspicious_login',
+    };
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final type = row['event_type']?.toString() ?? '';
+      if (watchedTypes.contains(type)) {
+        result[type] = (result[type] ?? 0) + 1;
+      }
+    }
+    result['sampledEvents'] = rows.length;
+    return result;
+  }
+
+  /// Lists only the current administrator's own bot scan records. The
+  /// SECURITY_BOT_ADMIN_ACCOUNT_IDS allowlist is checked by the HTTP route;
+  /// this query does not grant or infer administrator privileges.
+  Future<List<Map<String, dynamic>>> loadSecurityBotScanEvents({
+    required String accountId,
+    int limit = 40,
+  }) async {
+    final c = _db;
+    if (c == null) {
+      throw StateError('Supabase store is not initialized.');
+    }
+    final cleanAccountId = _requiredId(accountId, field: 'accountId');
+    final account = await c
+        .from('accounts')
+        .select('id')
+        .eq('external_account_id', cleanAccountId)
+        .maybeSingle();
+    final internalAccountId = account?['id']?.toString();
+    if (internalAccountId == null || internalAccountId.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+
+    final boundedLimit = limit.clamp(1, 100).toInt();
+    final rows = await c
+        .from('security_events')
+        .select('id,event_type,metadata,created_at')
+        .eq('account_id', internalAccountId)
+        .eq('event_type', 'security_bot_scan')
+        .order('created_at', ascending: false)
+        .limit(boundedLimit);
+
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
   // ---------------------------------------------------------------------------
   // SCHEDULED LIBRARY PUBLICATION
   // ---------------------------------------------------------------------------

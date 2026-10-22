@@ -1529,14 +1529,16 @@ class AuthRoutes {
     final name =
         _readRequiredString(body, 'name');
 
-    final avatarUrl =
-        body['avatarUrl']?.toString();
+    final avatarUrl = body['avatarUrl']?.toString();
+    final username = body.containsKey('username')
+        ? body['username']?.toString()
+        : null;
 
-    final updatedProfile =
-        await authService.updateProfile(
+    final updatedProfile = await authService.updateProfile(
       account: account,
       profileId: profileId,
       name: name,
+      username: username,
       avatarUrl: avatarUrl,
     );
 

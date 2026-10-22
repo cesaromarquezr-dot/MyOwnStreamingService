@@ -15,6 +15,7 @@ import 'app_core.dart';
 import 'localization.dart';
 import 'app_accessibility.dart';
 import 'privacy_preferences.dart';
+import 'playback_interruption_bridge.dart';
 
 class StreamingExperiencePreferences {
   static const int automaticResolution = 0;
@@ -587,6 +588,30 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
       player.addListener(_onPlayerChanged);
       await player.initialize();
       if (!mounted) return;
+      PlaybackInterruptionBridge.attach(
+        owner: this,
+        title: widget.media.title,
+        pause: () {
+          unawaited(player.pause());
+          unawaited(_syncBackendSession(state: 'paused'));
+        },
+        resume: () {
+          unawaited(player.play());
+          unawaited(_syncBackendSession(state: 'playing'));
+        },
+        savePosition: () {
+          final duration = player.value.duration;
+          if (duration > Duration.zero) {
+            final normalized = (player.value.position.inMilliseconds /
+                    duration.inMilliseconds)
+                .clamp(0.0, 1.0)
+                .toDouble();
+            AppController.instance
+                .updatePlaybackProgress(widget.media.id, normalized);
+          }
+          unawaited(_syncBackendSession());
+        },
+      );
       final resume =
           AppController.instance.getPlaybackProgress(widget.media.id);
       if (resume > 0 && player.value.duration > Duration.zero) {
@@ -729,6 +754,7 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
 
   @override
   void dispose() {
+    PlaybackInterruptionBridge.detach(this);
     _syncTimer?.cancel();
     final player = _controller;
     if (_wasBuffering && _bufferStartedAt != null) {

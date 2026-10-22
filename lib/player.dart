@@ -13,6 +13,8 @@ import 'xray.dart';
 import 'localization.dart';
 import 'streaming_experience.dart';
 import 'innovation_features.dart';
+import 'playback_interruption_bridge.dart';
+
 
 class PlayerScreen extends StatefulWidget {
   final MediaItem media;
@@ -116,6 +118,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     if (!_usesAdaptivePlayback) {
       _initializeYoutubePlayer();
+      if (youtubeController != null) {
+        PlaybackInterruptionBridge.attach(
+          owner: this,
+          title: widget.media.title,
+          pause: _pauseYoutubeVideo,
+          resume: _playYoutubeVideo,
+          savePosition: () {
+            AppController.instance.updatePlaybackProgress(widget.media.id, position);
+            unawaited(_syncIndependentPlaybackSession());
+          },
+        );
+      }
       _initializeGroupWatch();
       unawaited(_startIndependentPlaybackSession());
       unawaited(_recordQoe('play_requested'));
@@ -407,6 +421,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     controlsTimer?.cancel();
     _socialActivityHeartbeat?.cancel();
     _socialActivityHeartbeat = null;
+    PlaybackInterruptionBridge.detach(this);
 
     unawaited(_syncIndependentPlaybackSession(state: 'stopped'));
     _playbackSessionId = null;

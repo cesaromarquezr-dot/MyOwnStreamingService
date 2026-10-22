@@ -8,11 +8,13 @@ import 'localization.dart';
 class PeopleCareerTimelineScreen extends StatefulWidget {
   final String personName;
   final List<Map<String, dynamic>> localCredits;
+  final bool allowCreateIfMissing;
 
   const PeopleCareerTimelineScreen({
     super.key,
     required this.personName,
     this.localCredits = const [],
+    this.allowCreateIfMissing = true,
   });
 
   @override
@@ -55,10 +57,27 @@ class _PeopleCareerTimelineScreenState
       final matchingPeople = matches.where((entry) =>
           (entry['name'] ?? '').toString().trim().toLowerCase() == normalized);
       final person = matchingPeople.isEmpty ? null : matchingPeople.first;
+      // Character discovery can open a local, explicitly credited performer
+      // without mutating the global catalog. Other existing callers retain
+      // their prior opt-in behavior when no catalog person exists.
+      if (person == null && !widget.allowCreateIfMissing) {
+        if (mounted) {
+          setState(() {
+            _personId = null;
+            _catalogCredits = const <Map<String, dynamic>>[];
+            _loading = false;
+          });
+        }
+        return;
+      }
       final id = person?['id']?.toString() ??
           'person:${Uri.encodeComponent(normalized)}';
       if (person == null) {
         await api.createMediaPerson(id: id, name: widget.personName.trim());
+      }
+      if (id.trim().isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        return;
       }
       final timeline = await api.getPersonCareerTimeline(personId: id);
       final raw = timeline['credits'];

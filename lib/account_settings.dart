@@ -7,6 +7,12 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'backend_api.dart';
+import 'device_features.dart';
+import 'streaming_experience.dart';
+import 'perfect_streaming_experience.dart';
+import 'customer_support.dart';
+import 'tv_controller.dart';
+import 'tv_host.dart';
 
 /// Implements the `AccountSettingsScreen` class for this feature or UI component.
 class AccountSettingsScreen extends StatefulWidget {
@@ -287,6 +293,24 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         children: [
           Card(
             child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const UniversalText('General settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                const UniversalText('Playback, connected devices, remote controls and support live here so Watch and the More menu remain consolidated.', style: TextStyle(color: Colors.white60)),
+                const SizedBox(height: 8),
+                ListTile(leading: const Icon(Icons.devices_rounded), title: const UniversalText('Device Center'), subtitle: const UniversalText('Devices, downloads and connected screens'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceCenterScreen()))),
+                ListTile(leading: const Icon(Icons.high_quality_rounded), title: const UniversalText('Streaming Experience'), subtitle: const UniversalText('Playback quality, accessibility and player diagnostics'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StreamingExperienceSettingsScreen()))),
+                ListTile(leading: const Icon(Icons.tune_rounded), title: const UniversalText('Perfect Streaming'), subtitle: const UniversalText('Autoplay, discovery and watch-party preferences'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfectStreamingExperienceScreen()))),
+                ListTile(leading: const Icon(Icons.settings_remote_rounded), title: const UniversalText('TV Controller'), subtitle: const UniversalText('Pair and control a supported TV'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TvControllerScreen()))),
+                ListTile(leading: const Icon(Icons.tv_rounded), title: const UniversalText('TV Host'), subtitle: const UniversalText('Display a pairing code on this TV'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TvHostScreen()))),
+                ListTile(leading: const Icon(Icons.support_agent_rounded), title: const UniversalText('Customer Support & Tickets'), subtitle: const UniversalText('Get help and track support requests'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerSupportScreen()))),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +324,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   UniversalText(
-                    'Your base plan is \$10/month or \$100/year USD equivalent. '
+                    'Your base plan is \$54.99/month or \$599.99/year USD equivalent. '
                     'Your checkout display uses your device/account country: '
                     '${_currency()}. Current conversion is configurable by '
                     'the service and should be refreshed by the production '
@@ -308,7 +332,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   UniversalText(
-                    'Monthly: ${_price(10)}   •   Yearly: ${_price(100)}',
+                    'Monthly: ${_price(54.99)}   •   Yearly: ${_price(599.99)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                     ),

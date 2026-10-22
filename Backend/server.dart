@@ -78,6 +78,7 @@ import 'routes/profile_governance_routes.dart';
 import 'routes/rating_routes.dart';
 import 'routes/recommendations_routes.dart';
 import 'routes/remote_access_routes.dart';
+import 'routes/operations_bot_routes.dart';
 import 'routes/review_routes.dart';
 import 'routes/search_routes.dart';
 import 'routes/self_hosting_routes.dart';
@@ -85,6 +86,7 @@ import 'routes/server_agent_routes.dart';
 import 'routes/shop_routes.dart';
 import 'routes/storage_routes.dart';
 import 'routes/support_routes.dart';
+import 'routes/security_bot_routes.dart';
 import 'routes/supabase_sync_routes.dart';
 import 'routes/tv_channel_routes.dart';
 import 'routes/tv_pairing_routes.dart';
@@ -111,6 +113,7 @@ import 'services/remote_access_service.dart';
 import 'services/review_publication_service.dart';
 import 'services/review_service.dart';
 import 'services/search_service.dart';
+import 'services/security_bot_service.dart';
 import 'services/shop_service.dart';
 import 'services/storage_manager_service.dart';
 import 'services/subscription_service.dart';
@@ -118,6 +121,7 @@ import 'services/tv_channel_service.dart';
 import 'services/tv_pairing_service.dart';
 import 'services/transcode_cache_service.dart';
 import 'services/transcoding_service.dart';
+import 'services/operations_bot_service.dart';
 import 'supabase_store.dart';
 
 PaymentProcessorVerifier? _createPaymentProcessorVerifier() {
@@ -312,6 +316,11 @@ Future<void> main() async {
 
   final supportRoutes = SupportRoutes(authentication: authentication);
 
+  final securityBotRoutes = SecurityBotRoutes(
+    authentication: authentication,
+    service: SecurityBotService(),
+  );
+
   final searchRoutes = SearchRoutes(
     authenticationMiddleware: authentication,
     searchService: searchService,
@@ -466,6 +475,11 @@ Future<void> main() async {
     security: selfHostingSecurity,
   );
 
+  final operationsBotRoutes = OperationsBotRoutes(
+    authentication: authentication,
+    service: OperationsBotService(database: database),
+  );
+
   final mediaIntelligenceRoutes = MediaIntelligenceRoutes(
     authentication: authentication,
     service: mediaIntelligenceService,
@@ -532,6 +546,7 @@ Future<void> main() async {
       mediaIntelligenceRoutes,
       locationRoutes,
       selfHostingRoutes,
+      operationsBotRoutes,
       selfHostingSecurity,
       physicalItemRoutes,
       profileGovernanceRoutes,
@@ -541,6 +556,7 @@ Future<void> main() async {
       tvPairingRoutes,
       tvChannelRoutes,
       supportRoutes,
+      securityBotRoutes,
     ).catchError(
       (Object error, StackTrace stackTrace) {
         developer.log(
@@ -582,6 +598,7 @@ Future<void> _handleRequest(
   MediaIntelligenceRoutes mediaIntelligenceRoutes,
   LocationRoutes locationRoutes,
   SelfHostingRoutes selfHostingRoutes,
+  OperationsBotRoutes operationsBotRoutes,
   SelfHostingSecurity selfHostingSecurity,
   PhysicalItemRoutes physicalItemRoutes,
   ProfileGovernanceRoutes profileGovernanceRoutes,
@@ -591,6 +608,7 @@ Future<void> _handleRequest(
   TvPairingRoutes tvPairingRoutes,
   TvChannelRoutes tvChannelRoutes,
   SupportRoutes supportRoutes,
+  SecurityBotRoutes securityBotRoutes,
 ) async {
   var responseStarted = false;
 
@@ -673,9 +691,23 @@ Future<void> _handleRequest(
 
     final path = request.uri.path;
 
+    // SECURITY BOT CONTROL CENTER (explicit administrator allowlist)
+    if (path.startsWith('/api/v1/security-bots')) {
+      await securityBotRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
+
     // CUSTOMER SUPPORT / TICKETING
     if (path == '/api/v1/support/tickets' || path.startsWith('/api/v1/support/tickets/')) {
       await supportRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
+
+    // OWNER-ONLY READ-ONLY OPERATIONS BOT SCANS
+    if (path.startsWith('/api/v1/operations/bots/')) {
+      await operationsBotRoutes.handle(request);
       responseStarted = true;
       return;
     }

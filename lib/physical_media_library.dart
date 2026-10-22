@@ -8,16 +8,23 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
   const PhysicalMediaLibraryScreen({super.key});
 
   static const formats = <DiscFormat>[
-    DiscFormat('Blu-ray', 'Blu-ray', Icons.album_rounded, 'HD movies and TV imported from Blu-ray discs'),
     DiscFormat('DVD', 'DVD', Icons.album_outlined, 'Movies, TV, and extras imported from DVDs'),
-    DiscFormat('4K Ultra HD', '4K Ultra HD', Icons.high_quality_rounded, '4K UHD editions and their available HDR/audio metadata'),
+    DiscFormat('Blu-ray', 'Blu-ray', Icons.album_rounded, 'HD movies and TV imported from Blu-ray discs'),
     DiscFormat('CD', 'Audio CD', Icons.music_note_rounded, 'Albums and tracks imported from audio CDs'),
+    DiscFormat('4K Ultra', '4K Ultra HD', Icons.high_quality_rounded, '4K UHD editions and their available HDR/audio metadata'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final library = AppController.instance.library;
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final library = controller.library.where((media) => media.isAccessibleTo(profile)).toList(growable: false);
     int countFor(DiscFormat f) => library.where((m) => _matches(m.discType, f.sourceType)).length;
+    final dvdTotal = library.where((m) => _matches(m.discType, 'DVD')).length;
+    final bluRayTotal = library.where((m) => _matches(m.discType, 'Blu-ray')).length;
+    final fourKUltraTotal = library.where((m) => _matches(m.discType, '4K Ultra HD')).length;
+    final cdTotal = library.where((m) => _matches(m.discType, 'Audio CD')).length;
+    final totalAmount = library.where((m) => _isKnownDiscType(m.discType)).length;
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B10),
       appBar: AppBar(title: const Text('Physical Media'), backgroundColor: const Color(0xFF11111A)),
@@ -28,6 +35,18 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
           const SizedBox(height: 6),
           const Text('Browse imported media by the format recorded in its disc metadata.', style: TextStyle(color: Colors.white60)),
           const SizedBox(height: 18),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _PhysicalMediaSummaryStat(label: 'Total', count: totalAmount, featured: true),
+              _PhysicalMediaSummaryStat(label: 'DVD', count: dvdTotal),
+              _PhysicalMediaSummaryStat(label: 'Blu-ray', count: bluRayTotal),
+              _PhysicalMediaSummaryStat(label: '4K Ultra', count: fourKUltraTotal),
+              _PhysicalMediaSummaryStat(label: 'CD', count: cdTotal),
+            ],
+          ),
+          const SizedBox(height: 16),
           ...formats.map((format) {
             final count = countFor(format);
             return Card(
@@ -52,6 +71,30 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
   }
 }
 
+class _PhysicalMediaSummaryStat extends StatelessWidget {
+  const _PhysicalMediaSummaryStat({required this.label, required this.count, this.featured = false});
+
+  final String label;
+  final int count;
+  final bool featured;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 142,
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: featured ? const Color(0xFF28213F) : const Color(0xFF171722),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: featured ? _physicalAccent : Colors.white12),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 5),
+      Text('$count', style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
+    ]),
+  );
+}
+
 class PhysicalMediaFormatScreen extends StatefulWidget {
   final DiscFormat format;
   const PhysicalMediaFormatScreen({super.key, required this.format});
@@ -73,7 +116,10 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
   Widget build(BuildContext context) {
     final format = widget.format;
     final query = _searchController.text.trim().toLowerCase();
-    final items = AppController.instance.library.where((m) =>
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final items = controller.library.where((m) =>
+      m.isAccessibleTo(profile) &&
       _matches(m.discType, format.sourceType) &&
       (query.isEmpty || m.title.toLowerCase().contains(query) ||
        (m.discTitle ?? '').toLowerCase().contains(query) ||
@@ -145,7 +191,24 @@ class _PhysicalMediaFormatScreenState extends State<PhysicalMediaFormatScreen> {
   }
 }
 
-bool _matches(String? value, String expected) => (value ?? '').trim().toLowerCase() == expected.toLowerCase();
+String _discKey(String? value) => (value ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+bool _matches(String? value, String expected) {
+  final actual = _discKey(value);
+  final wanted = _discKey(expected);
+  if (actual.isEmpty) return false;
+  if (wanted == 'dvd') return actual == 'dvd' || actual == 'dvddisc';
+  if (wanted == 'bluray') return actual == 'bluray' || actual == 'bluraydisc' || actual == 'bd';
+  if (wanted == '4kultrahd') return <String>{'4kultrahd', '4kuhd', 'uhd4k', '4kbluray', '4kultra'}.contains(actual);
+  if (wanted == 'audiocd') return <String>{'cd', 'audiocd', 'compactdisc'}.contains(actual);
+  return actual == wanted;
+}
+
+bool _isKnownDiscType(String? value) =>
+    _matches(value, 'DVD') ||
+    _matches(value, 'Blu-ray') ||
+    _matches(value, '4K Ultra HD') ||
+    _matches(value, 'Audio CD');
 
 class DiscFormat {
   final String label;
