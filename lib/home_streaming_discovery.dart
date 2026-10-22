@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
@@ -162,6 +163,166 @@ class HomeBrowseNavigation extends StatelessWidget {
   }
 }
 
+
+
+/// Reusable streaming-service content rail with smooth, per-section arrow navigation.
+/// Touch, trackpad, mouse-wheel/shift-wheel, and keyboard focus scrolling remain available.
+class HomeHorizontalArrowRail extends StatefulWidget {
+  final double height;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  final IndexedWidgetBuilder separatorBuilder;
+  final EdgeInsetsGeometry padding;
+  final double scrollFactor;
+
+  const HomeHorizontalArrowRail({
+    super.key,
+    required this.height,
+    required this.itemCount,
+    required this.itemBuilder,
+    required this.separatorBuilder,
+    this.padding = const EdgeInsets.symmetric(horizontal: 46),
+    this.scrollFactor = .78,
+  });
+
+  @override
+  State<HomeHorizontalArrowRail> createState() => _HomeHorizontalArrowRailState();
+}
+
+class _HomeHorizontalArrowRailState extends State<HomeHorizontalArrowRail> {
+  final ScrollController _controller = ScrollController();
+  bool _hasOverflow = false;
+  bool _canScrollBack = false;
+  bool _canScrollForward = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_syncArrowState);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncArrowState());
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeHorizontalArrowRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.itemCount != widget.itemCount ||
+        oldWidget.height != widget.height) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncArrowState());
+    }
+  }
+
+  void _syncArrowState() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    final hasOverflow = position.maxScrollExtent > 2;
+    final canScrollBack = position.pixels > 2;
+    final canScrollForward = position.pixels < position.maxScrollExtent - 2;
+    if (hasOverflow != _hasOverflow ||
+        canScrollBack != _canScrollBack ||
+        canScrollForward != _canScrollForward) {
+      setState(() {
+        _hasOverflow = hasOverflow;
+        _canScrollBack = canScrollBack;
+        _canScrollForward = canScrollForward;
+      });
+    }
+  }
+
+  Future<void> _scrollByPage(double direction) async {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final distance = position.viewportDimension * widget.scrollFactor;
+    final target = (position.pixels + distance * direction)
+        .clamp(0.0, position.maxScrollExtent)
+        .toDouble();
+    if ((target - position.pixels).abs() < 1) return;
+    await _controller.animateTo(
+      target,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  Widget _arrow({required bool left, required bool enabled}) {
+    return AnimatedOpacity(
+      opacity: enabled ? 1 : .42,
+      duration: const Duration(milliseconds: 160),
+      child: Material(
+        color: const Color(0xE8141418),
+        shape: const CircleBorder(),
+        elevation: 8,
+        shadowColor: Colors.black54,
+        clipBehavior: Clip.antiAlias,
+        child: IconButton(
+          tooltip: left ? 'Scroll shelf left' : 'Scroll shelf right',
+          onPressed: enabled ? () => _scrollByPage(left ? -1 : 1) : null,
+          constraints: const BoxConstraints.tightFor(width: 46, height: 46),
+          padding: EdgeInsets.zero,
+          icon: Icon(
+            left ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
+            size: 32,
+          ),
+          color: Colors.white,
+          disabledColor: Colors.white38,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_syncArrowState);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: widget.height,
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.arrowLeft):
+              () => _scrollByPage(-1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight):
+              () => _scrollByPage(1),
+        },
+        child: NotificationListener<ScrollMetricsNotification>(
+          onNotification: (_) {
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => _syncArrowState());
+            return false;
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(
+                child: ListView.separated(
+                  controller: _controller,
+                  padding: widget.padding,
+                  scrollDirection: Axis.horizontal,
+                  itemCount: widget.itemCount,
+                  separatorBuilder: widget.separatorBuilder,
+                  itemBuilder: widget.itemBuilder,
+                ),
+              ),
+              if (_hasOverflow) ...[
+                Positioned(
+                  left: 5,
+                  child: _arrow(left: true, enabled: _canScrollBack),
+                ),
+                Positioned(
+                  right: 5,
+                  child: _arrow(left: false, enabled: _canScrollForward),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// Large landscape Home banner with automatic 12-second rotation and manual controls.
 class HomeHeroCarousel extends StatefulWidget {
@@ -766,24 +927,21 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                   style: TextStyle(color: Colors.white54, fontSize: 12)),
             )
           else
-            SizedBox(
+            HomeHorizontalArrowRail(
               height: 210,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: entries.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final entry = entries[index];
-                  return _DiscoveryMediaCard(
-                    title: entry.title,
-                    subtitle: entry.detail,
-                    imageUrl: entry.imageUrl,
-                    onTap: () => _openEntry(context, entry),
-                    width: 148,
-                  );
-                },
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              itemCount: entries.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return _DiscoveryMediaCard(
+                  title: entry.title,
+                  subtitle: entry.detail,
+                  imageUrl: entry.imageUrl,
+                  onTap: () => _openEntry(context, entry),
+                  width: 148,
+                );
+              },
             ),
         ],
       ),
@@ -843,29 +1001,25 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
                 style: TextStyle(color: Colors.white54, fontSize: 12)),
           )
         else
-          SizedBox(
+          HomeHorizontalArrowRail(
             height: 210,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final media = items[index];
-                return _DiscoveryMediaCard(
-                  title: media.title,
-                  subtitle:
-                      '${media.displayYearLabel ?? ''} ${media.type}${media.displayEditionLabel == null ? '' : ' • ${media.displayEditionLabel}'}'
-                          .trim(),
-                  imageUrl: media.imageUrl,
-                  onTap: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                    settings: const RouteSettings(name: '/app/details'),
-                    builder: (_) => MediaDetailsScreen(media: media),
-                  )),
-                );
-              },
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final media = items[index];
+              return _DiscoveryMediaCard(
+                title: media.title,
+                subtitle:
+                    '${media.displayYearLabel ?? ''} ${media.type}${media.displayEditionLabel == null ? '' : ' • ${media.displayEditionLabel}'}'
+                        .trim(),
+                imageUrl: media.imageUrl,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/details'),
+                  builder: (_) => MediaDetailsScreen(media: media),
+                )),
+              );
+            },
           ),
       ],
     );
@@ -1023,28 +1177,25 @@ class _CollectionMemberRail extends StatelessWidget {
         ),
       );
     }
-    return SizedBox(
+    return HomeHorizontalArrowRail(
       height: 184,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 11),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return _DiscoveryMediaCard(
-            title: item.title,
-            subtitle: item.type,
-            imageUrl: item.imageUrl,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-              settings: const RouteSettings(name: '/app/details'),
-              builder: (_) => MediaDetailsScreen(media: item),
-            )),
-            width: 124,
-            posterOnly: true,
-          );
-        },
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 48),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 11),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return _DiscoveryMediaCard(
+          title: item.title,
+          subtitle: item.type,
+          imageUrl: item.imageUrl,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            settings: const RouteSettings(name: '/app/details'),
+            builder: (_) => MediaDetailsScreen(media: item),
+          )),
+          width: 124,
+          posterOnly: true,
+        );
+      },
     );
   }
 }
@@ -1186,29 +1337,23 @@ class SearchDiscoveryLanding extends StatelessWidget {
                 style: TextStyle(color: Colors.white54, fontSize: 12)),
           )
         else
-          SizedBox(
+          HomeHorizontalArrowRail(
             height: 166,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              scrollDirection: Axis.horizontal,
-              itemCount: collectionCards.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final collection = collectionCards[index];
-                final poster = _posterForCollection(collection);
-                return _CollectionSearchCard(
-                  collection: collection,
-                  imageUrl: poster,
-                  onTap: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                    settings: const RouteSettings(
-                        name: '/app/page/collection-details'),
-                    builder: (_) =>
-                        CollectionDetailsScreen(collection: collection),
-                  )),
-                );
-              },
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemCount: collectionCards.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final collection = collectionCards[index];
+              final poster = _posterForCollection(collection);
+              return _CollectionSearchCard(
+                collection: collection,
+                imageUrl: poster,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/collection-details'),
+                  builder: (_) => CollectionDetailsScreen(collection: collection),
+                )),
+              );
+            },
           ),
         const SizedBox(height: 22),
       ],

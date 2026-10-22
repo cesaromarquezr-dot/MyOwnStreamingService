@@ -161,7 +161,7 @@ class _HomeServerScreenState extends State<HomeServerScreen> {
         ..addAll(music);
       MusicLibraryStore.instance.registerShopEntities();
       ShopCatalog.instance.syncShopEntityIndex();
-      AppController.instance.replaceLibraryFromServer(media);
+      AppController.instance.mergeServerScanIntoLibrary(media);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

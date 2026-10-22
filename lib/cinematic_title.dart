@@ -1,6 +1,10 @@
 // FILE: lib/cinematic_title.dart
-// Purpose: Authorized title-logo presentation with a readable, title-specific fallback.
-// Logos are supplied as explicit catalog metadata; trailer frames are never scraped here.
+// Purpose: Shared cinematic title presentation for Home hero and media details.
+// Artwork is shown only when the selected source mode is explicit and the user
+// has confirmed authorization. Trailer/movie stills are supplied assets; this
+// widget does not silently scrape or copy frames from a video.
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -8,11 +12,28 @@ import 'app_core.dart';
 
 enum CinematicTitlePlacement { hero, detail }
 
-/// Displays the authorized logo artwork for a title, or a responsive stylized
-/// text fallback when a logo is missing, unauthorized, or fails to load.
+/// Stable presentation modes serialized in MediaItem.titleArtworkMode.
+/// Keep these values in sync with the import/editor dropdown and SQL migration.
+const Set<String> cinematicTitleArtworkModes = <String>{
+  'auto',
+  'logo',
+  'trailer_title_card',
+  'movie_title_card',
+  'case_cover',
+};
+
+String normalizeTitleArtworkMode(String? value) {
+  final mode = (value ?? '').trim().toLowerCase();
+  return cinematicTitleArtworkModes.contains(mode) ? mode : 'auto';
+}
+
+/// Displays a selected authorized title logo, title-card still, or physical
+/// case cover, then falls back to a readable genre-aware text title.
 ///
-/// The metadata label remains accessible to screen readers even when the logo
-/// is an image. OS reduced-motion settings override per-title animation.
+/// `titleLogoUrl` is used for logo/trailer-title-card/movie-title-card modes.
+/// `imageUrl` (poster/case-cover URL) is used for the `case_cover` mode.
+/// Both source types require `titleLogoAuthorized == true` before being used
+/// as part of the title treatment. Screen readers always receive `media.title`.
 class CinematicTitle extends StatelessWidget {
   final MediaItem media;
   final CinematicTitlePlacement placement;
@@ -31,16 +52,35 @@ class CinematicTitle extends StatelessWidget {
     this.animate,
   });
 
-  bool get _canUseLogo {
-    if (!media.titleLogoAuthorized) return false;
-    final raw = media.titleLogoUrl?.trim() ?? '';
-    final uri = Uri.tryParse(raw);
-    return uri != null &&
-        uri.host.isNotEmpty &&
-        (uri.scheme == 'https' ||
-            (uri.scheme == 'http' &&
-                (uri.host == 'localhost' || uri.host == '127.0.0.1')));
+  String get _mode => normalizeTitleArtworkMode(media.titleArtworkMode);
+
+  String? _safeImageUrl(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) {
+      return null;
+    }
+    final uri = Uri.tryParse(value);
+    if (uri == null || uri.host.isEmpty) return null;
+    if (uri.scheme == 'https') return value;
+    if (uri.scheme == 'http' &&
+        (uri.host == 'localhost' || uri.host == '127.0.0.1')) {
+      return value;
+    }
+    return null;
   }
+
+  bool get _isTitleCardMode =>
+      _mode == 'trailer_title_card' || _mode == 'movie_title_card';
+
+  bool get _canUseDedicatedAsset =>
+      media.titleLogoAuthorized &&
+      _mode != 'case_cover' &&
+      _safeImageUrl(media.titleLogoUrl) != null;
+
+  bool get _canUseCaseCover =>
+      _mode == 'case_cover' &&
+      media.titleLogoAuthorized &&
+      _safeImageUrl(media.imageUrl) != null;
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +89,35 @@ class CinematicTitle extends StatelessWidget {
     final duration = shouldAnimate
         ? const Duration(milliseconds: 520)
         : Duration.zero;
-    final contentHeight = height ??
+    final baseHeight = height ??
         (placement == CinematicTitlePlacement.hero ? 106.0 : 98.0);
     final contentWidth = maxWidth ??
         (placement == CinematicTitlePlacement.hero ? 720.0 : 680.0);
+    // Title-card frames contain more visual information than a transparent
+    // logo, so provide a larger landscape viewing area without cropping them.
+    final contentHeight = _canUseDedicatedAsset && _isTitleCardMode
+        ? math.max(baseHeight, placement == CinematicTitlePlacement.hero ? 190.0 : 150.0).toDouble()
+        : baseHeight;
+
+    final Widget content;
+    final String visualKey;
+    if (_canUseCaseCover) {
+      content = _caseCoverAndText(context, contentHeight);
+      visualKey = '${media.id}:case-cover:${media.imageUrl}';
+    } else if (_canUseDedicatedAsset) {
+      final url = _safeImageUrl(media.titleLogoUrl)!;
+      content = Image.network(
+        url,
+        fit: BoxFit.contain,
+        alignment: _alignment,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => _fallback(context),
+      );
+      visualKey = '${media.id}:$_mode:$url';
+    } else {
+      content = _fallback(context);
+      visualKey = '${media.id}:text:${media.title}';
+    }
 
     return Semantics(
       header: true,
@@ -78,23 +143,44 @@ class CinematicTitle extends StatelessWidget {
                 ),
               ),
               child: SizedBox.expand(
-                key: ValueKey<String>(
-                  '${media.id}:${_canUseLogo ? media.titleLogoUrl : 'text'}',
-                ),
-                child: _canUseLogo
-                    ? Image.network(
-                        media.titleLogoUrl!.trim(),
-                        fit: BoxFit.contain,
-                        alignment: _alignment,
-                        filterQuality: FilterQuality.medium,
-                        errorBuilder: (_, __, ___) => _fallback(context),
-                      )
-                    : _fallback(context),
+                key: ValueKey<String>(visualKey),
+                child: content,
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _caseCoverAndText(BuildContext context, double contentHeight) {
+    final url = _safeImageUrl(media.imageUrl);
+    if (url == null) return _fallback(context);
+    final coverWidth = math.min(contentHeight * .66, 118.0).toDouble();
+    return Row(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            width: coverWidth,
+            height: contentHeight,
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, __, ___) => Container(
+                color: const Color(0xFF1A1A1A),
+                alignment: Alignment.center,
+                child: const Icon(Icons.movie_outlined, color: Colors.white54),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: _fallback(context)),
+      ],
     );
   }
 
@@ -107,7 +193,9 @@ class CinematicTitle extends StatelessWidget {
   Widget _fallback(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final hero = placement == CinematicTitlePlacement.hero;
-    final baseSize = hero ? (width < 600 ? 31.0 : 45.0) : (width < 600 ? 30.0 : 38.0);
+    final baseSize = hero
+        ? (width < 600 ? 31.0 : 45.0)
+        : (width < 600 ? 30.0 : 38.0);
     final style = _styleFor(media);
     final customColor = _parseColor(media.titleAccentColor);
     final color = customColor ?? style.color;

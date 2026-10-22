@@ -2012,6 +2012,20 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   /// Performs `playMedia` for this feature. Update this documentation when its contract changes.
   void playMedia() {
+    if (media.tags.any((tag) => const <String>{
+          'not-playable',
+          'demo-placeholder',
+          'arm-mock-placeholder',
+        }.contains(tag.toLowerCase()))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: UniversalText(
+            'This is an ARM demo placeholder, not a playable movie or show. Replace it with a real media file.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() {
       pressedPlay = true;
     });

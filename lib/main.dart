@@ -31,6 +31,7 @@ import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
 import 'home_streaming_discovery.dart';
+import 'home_hero_rotation.dart';
 import 'movies.dart';
 import 'series.dart';
 import 'innovation_features.dart';
@@ -5601,6 +5602,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _heroController;
+  Timer? _dailyHeroRefreshTimer;
+  bool _homeServerSyncInProgress = false;
 
   @override
 
@@ -5609,10 +5612,25 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
     unawaited(_loadStoryPlacement());
+    unawaited(_syncHomeServerCatalog(showErrors: false));
     _heroController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
+    _scheduleDailyHeroRefresh();
+  }
+
+  /// Rebuild Home at local midnight so the daily hero selection changes even
+  /// when the app remains open overnight.
+  void _scheduleDailyHeroRefresh() {
+    _dailyHeroRefreshTimer?.cancel();
+    final now = DateTime.now();
+    final nextLocalDay = DateTime(now.year, now.month, now.day + 1);
+    _dailyHeroRefreshTimer = Timer(nextLocalDay.difference(now), () {
+      if (!mounted) return;
+      setState(() {});
+      _scheduleDailyHeroRefresh();
+    });
   }
 
   Future<void> _loadStoryPlacement() async {
@@ -5629,14 +5647,40 @@ class _HomeScreenState extends State<HomeScreen>
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
+    _dailyHeroRefreshTimer?.cancel();
     _heroController.dispose();
     super.dispose();
   }
 
   /// Performs `_refresh` for this feature. Update this documentation when its contract changes.
+  Future<void> _syncHomeServerCatalog({required bool showErrors}) async {
+    final controller = AppController.instance;
+    if (!controller.backendApi.isAuthenticated || _homeServerSyncInProgress) {
+      return;
+    }
+    _homeServerSyncInProgress = true;
+    try {
+      await controller.syncHomeServerLibrary();
+    } catch (error) {
+      if (showErrors && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Home library sync failed: ${error.toString().replaceFirst('Exception: ', '')}',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _homeServerSyncInProgress = false;
+      if (mounted) setState(() {});
+    }
+  }
+
   Future<void> _refresh() async {
     final controller = AppController.instance;
     if (controller.backendApi.isAuthenticated) {
+      await _syncHomeServerCatalog(showErrors: true);
       await controller.loadRecommendations();
       await controller.loadGroupWishlist();
       await controller.loadGroupRecommendations();
@@ -5675,27 +5719,37 @@ class _HomeScreenState extends State<HomeScreen>
     // Compute personalized ranking once per Home build rather than once per
     // section, keeping search/discovery overhead bounded on larger libraries.
     final homeRecommendations = SmartSearch.recommendations(library);
-    // Prefer personalized, recently watched, and then remaining library titles
-    // for the rotating hero. Deduplicate so a title never repeats in one cycle.
-    final homeHeroItems = <MediaItem>[];
-    final homeHeroSeen = <String>{};
-    final homeHeroCandidates = <MediaItem>[
+    // Build a daily-stable, date-seeded hero lineup. The ordering and (when the
+    // catalog has more than 15 candidates) the selected titles change each day,
+    // while rebuilding Home during the same day does not reshuffle the banner.
+    // Prefer artwork for the visual hero, then fill any remaining slots with
+    // other accessible movies/shows if the artwork-ready pool is too small.
+    final heroDay = DateTime.now();
+    final homeHeroVisualCandidates = <MediaItem>[
       ...homeRecommendations
           .where((item) => item.imageUrl?.trim().isNotEmpty == true),
       ...watched.where((item) => item.imageUrl?.trim().isNotEmpty == true),
       ...library.where((item) => item.imageUrl?.trim().isNotEmpty == true),
-      ...homeRecommendations,
-      ...watched,
-      ...library,
     ];
-    for (final item in homeHeroCandidates) {
-      if (homeHeroItems.length >= 8) break;
-      if (homeHeroSeen.add(item.id)) homeHeroItems.add(item);
-    }
-    // If the current catalog is sparse, still render titles even if poster art
-    // has not finished importing yet.
-    if (homeHeroItems.isEmpty && library.isNotEmpty) {
-      homeHeroItems.addAll(library.take(8));
+    final homeHeroItems = dailyHeroSelection<MediaItem>(
+      candidates: homeHeroVisualCandidates,
+      keyOf: (item) => item.id,
+      date: heroDay,
+      limit: 15,
+    ).toList();
+    if (homeHeroItems.length < 15) {
+      final selectedHeroIds = homeHeroItems.map((item) => item.id).toSet();
+      final heroFallbackCandidates = <MediaItem>[
+        ...homeRecommendations,
+        ...watched,
+        ...library,
+      ].where((item) => !selectedHeroIds.contains(item.id));
+      homeHeroItems.addAll(dailyHeroSelection<MediaItem>(
+        candidates: heroFallbackCandidates,
+        keyOf: (item) => item.id,
+        date: heroDay,
+        limit: 15 - homeHeroItems.length,
+      ));
     }
 
     return Scaffold(
@@ -5999,12 +6053,9 @@ class _HomeContinueListeningSectionState
                   title: 'Continue Listening',
                   subtitle: 'Pick up your music where you left off',
                 ),
-                SizedBox(
+                HomeHorizontalArrowRail(
                   height: 176,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: tracks.take(12).length,
+                  itemCount: tracks.take(12).length,
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final track = tracks[index];
@@ -6100,7 +6151,6 @@ class _HomeContinueListeningSectionState
                       );
                     },
                   ),
-                ),
                 const SizedBox(height: 8),
               ],
             );
@@ -6165,11 +6215,9 @@ class _HomeSeasonalCollections extends StatelessWidget {
                 style: TextStyle(color: Colors.white38),
               )
             else
-              SizedBox(
+              HomeHorizontalArrowRail(
                 height: 90,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount:
+                itemCount:
                       (matches.length + songs.length).clamp(0, 8).toInt(),
                   separatorBuilder: (_, __) => const SizedBox(width: 9),
                   itemBuilder: (_, index) => Container(
@@ -6189,7 +6237,6 @@ class _HomeSeasonalCollections extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: () => Navigator.push(
@@ -6556,18 +6603,12 @@ class MediaHorizontalList extends StatelessWidget {
 
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    return SizedBox(
+    return HomeHorizontalArrowRail(
       height: 245,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: media.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, index) {
-          return MediaCard(
-            media: media[index],
-          );
-        },
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 48),
+      itemCount: media.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 12),
+      itemBuilder: (_, index) => MediaCard(media: media[index]),
     );
   }
 }

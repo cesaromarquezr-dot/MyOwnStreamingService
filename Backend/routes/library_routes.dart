@@ -478,6 +478,18 @@ class LibraryRoutes {
       );
       return;
     }
+    if (relativePath.toLowerCase().startsWith('arm_mock/')) {
+      await _json(
+        request.response,
+        HttpStatus.conflict,
+        <String, dynamic>{
+          'success': false,
+          'code': 'DEMO_PLACEHOLDER_NOT_PLAYABLE',
+          'error': 'ARM mock artifacts are text placeholders, not playable media.',
+        },
+      );
+      return;
+    }
 
     final root = _mediaRoot();
 
@@ -686,6 +698,10 @@ class LibraryRoutes {
         final title = _cleanTitle(fileName);
         final fileSize = entity.lengthSync();
         final modifiedAt = entity.lastModifiedSync().toUtc().toIso8601String();
+        final isDemoArtifact = relative
+            .replaceAll('\\', '/')
+            .toLowerCase()
+            .startsWith('arm_mock/');
 
         final item = <String, dynamic>{
           'id': relative,
@@ -693,6 +709,11 @@ class LibraryRoutes {
           'type': type,
           'fileSize': fileSize,
           'modifiedAt': modifiedAt,
+          'isDemoArtifact': isDemoArtifact,
+          'playable': !isDemoArtifact,
+          if (isDemoArtifact) 'availability': 'demo-placeholder',
+          if (isDemoArtifact)
+            'description': 'ARM mock placeholder only; the file contains text, not playable media.',
         };
         if (type == 'music') {
           final album = _inferMusicAlbum(segments);
@@ -701,31 +722,35 @@ class LibraryRoutes {
           if (artist != null) item['artist'] = artist;
         }
 
-        try {
-          await store.upsertServerMedia(
-            accountExternalId: accountExternalId,
-            relativeMediaId: relative,
-            title: title,
-            type: type,
-            metadata: <String, dynamic>{
-              'source': 'home-server-scanner',
-              'relativeMediaId': relative,
-              'modifiedAt': modifiedAt,
-              if (item['album'] != null) 'album': item['album'],
-              if (item['artist'] != null) 'artist': item['artist'],
-            },
-            fileSizeBytes: fileSize,
-          );
+        // ARM_MOCK outputs are intentionally tiny text fixtures. Surface their
+        // status to the UI, but never index them as real catalog/playback media.
+        if (!isDemoArtifact) {
+          try {
+            await store.upsertServerMedia(
+              accountExternalId: accountExternalId,
+              relativeMediaId: relative,
+              title: title,
+              type: type,
+              metadata: <String, dynamic>{
+                'source': 'home-server-scanner',
+                'relativeMediaId': relative,
+                'modifiedAt': modifiedAt,
+                if (item['album'] != null) 'album': item['album'],
+                if (item['artist'] != null) 'artist': item['artist'],
+              },
+              fileSizeBytes: fileSize,
+            );
 
-          persisted++;
-        } catch (error, stackTrace) {
-          // Local discovery should continue even if the remote database is
-          // temporarily unavailable.
-          stderr.writeln(
-            'LibraryRoutes: unable to persist scanned media '
-            '"$relative": $error',
-          );
-          stderr.writeln(stackTrace);
+            persisted++;
+          } catch (error, stackTrace) {
+            // Local discovery should continue even if the remote database is
+            // temporarily unavailable.
+            stderr.writeln(
+              'LibraryRoutes: unable to persist scanned media '
+              '"$relative": $error',
+            );
+            stderr.writeln(stackTrace);
+          }
         }
 
         files.add(item);
@@ -992,6 +1017,8 @@ class LibraryRoutes {
 
         return lower.contains('series') ||
             lower.contains('tv') ||
+            RegExp(r'(^|[._\s-])(show|shows|episode|episodes)([._\s-]|$)')
+                .hasMatch(lower) ||
             RegExp(r's\d{1,2}')
                 .hasMatch(lower) ||
             RegExp(r'\bseason[\s._-]*\d+\b')
@@ -1069,6 +1096,10 @@ class LibraryRoutes {
     final name = value
         .replaceFirst(
           RegExp(r'\.[^.]+$'),
+          '',
+        )
+        .replaceFirst(
+          RegExp(r'^\d{10,}[_\s-]+'),
           '',
         )
         .replaceAll(

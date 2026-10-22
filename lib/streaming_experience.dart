@@ -583,7 +583,22 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
 
     await _record('play_requested');
     try {
-      final player = VideoPlayerController.networkUrl(uri);
+      final api = AppController.instance.backendApi;
+      final apiUri = api.baseUri;
+      final apiPathPrefix = apiUri.path.endsWith('/')
+          ? apiUri.path
+          : '${apiUri.path}/';
+      final isAuthenticatedBackendUrl = uri.scheme == apiUri.scheme &&
+          uri.host == apiUri.host &&
+          uri.port == apiUri.port &&
+          (uri.path == apiUri.path || uri.path.startsWith(apiPathPrefix));
+      final token = isAuthenticatedBackendUrl ? api.token : null;
+      final player = VideoPlayerController.networkUrl(
+        uri,
+        httpHeaders: token == null || token.isEmpty
+            ? const <String, String>{}
+            : <String, String>{'Authorization': 'Bearer $token'},
+      );
       _controller = player;
       player.addListener(_onPlayerChanged);
       await player.initialize();
