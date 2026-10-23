@@ -21,6 +21,7 @@ import 'food_delivery.dart';
 import 'details_recommendations.dart';
 import 'catalog_entity_details.dart';
 import 'page_customization_button.dart';
+import 'recommendation_ownership.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -149,9 +150,14 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildEditionSelector(),
+          // The Shop marketplace action now lives in the unified purchase
+          // card below, preventing duplicate Shop buttons in Details.
           for (final section in customization.sectionOrder)
-            _buildSection(section),
-          _buildExternalPurchaseOptions(),
+            if (section != 'Shop') _buildSection(section),
+          if (shouldShowBuySectionForOwnership(
+            isOwned: AppController.instance.isOwned(media.id),
+          ))
+            _buildExternalPurchaseOptions(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
           MediaFranchiseConnectionsPanel(mediaId: media.id, hasSeasons: isTvShow),
           const SizedBox(height: 12),
@@ -249,6 +255,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             const UniversalText('Search retailers for digital rentals, purchases, DVDs, Blu-rays, or used copies. These are search links; stock, format, price, and region availability are confirmed by each retailer.', style: TextStyle(color: Colors.white60)),
             const SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [
+              if (customization.showShop)
+                ContextualShopButton.forMedia(context, media),
               for (final retailer in retailers)
                 OutlinedButton.icon(
                   icon: Icon(retailer.icon, size: 18),
@@ -2054,18 +2062,32 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           SizedBox(
             height: 52,
             child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
+              onPressed: () async {
+                try {
                   if (owned) {
-                    controller.removeFromLibrary(
-                      media.id,
-                    );
+                    await controller.removeFromLibrary(media.id);
                   } else {
-                    controller.addToLibrary(
-                      media,
-                    );
+                    await controller.addToLibrary(media);
                   }
-                });
+                  if (!mounted) return;
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(owned
+                          ? 'Removed from this profile’s library.'
+                          : 'Added to this profile’s library.'),
+                    ),
+                  );
+                } catch (error) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Could not save this library change: ${error.toString().replaceFirst('Exception: ', '')}',
+                      ),
+                    ),
+                  );
+                }
               },
               icon: Icon(
                 owned

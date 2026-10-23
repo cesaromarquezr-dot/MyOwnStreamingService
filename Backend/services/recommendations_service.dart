@@ -130,8 +130,12 @@ class RecommendationMedia {
   final String title;
 
   final int? year;
+  final String? posterUrl;
+  final String? description;
+  final double? rating;
+  final String? ratingReason;
 
-  /// movie / tvShow / episode / special, etc.
+  /// movie / tvShow / album / episode / special, etc.
   final String mediaType;
 
   final String? seriesId;
@@ -162,6 +166,10 @@ class RecommendationMedia {
     required this.id,
     required this.title,
     this.year,
+    this.posterUrl,
+    this.description,
+    this.rating,
+    this.ratingReason,
     this.mediaType = 'movie',
     this.seriesId,
     this.franchiseId,
@@ -190,6 +198,10 @@ class RecommendationMedia {
       'id': id,
       'title': title,
       'year': year,
+      'posterUrl': posterUrl,
+      'description': description,
+      'rating': rating,
+      'ratingReason': ratingReason,
       'mediaType': mediaType,
       'seriesId': seriesId,
       'franchiseId': franchiseId,
@@ -275,6 +287,11 @@ class RecommendationWeights {
   final double alreadyWatchedPenalty;
   final double recentlyWatchedPenalty;
 
+  /// Weak preference signal from owned titles that are not already liked or
+  /// present in watch history. This lets the service recommend adjacent
+  /// unowned works without treating ownership as proof the user watched them.
+  final double ownedCollectionMultiplier;
+
   const RecommendationWeights({
     this.franchise = 50,
     this.character = 40,
@@ -293,6 +310,7 @@ class RecommendationWeights {
     this.dislikedPenalty = 1000,
     this.alreadyWatchedPenalty = 20,
     this.recentlyWatchedPenalty = 25,
+    this.ownedCollectionMultiplier = 0.25,
   });
 }
 
@@ -436,6 +454,15 @@ class RecommendationsService {
       }
     }
 
+    final ownedMedia = <RecommendationMedia>[];
+    for (final ownedId in ownedIds) {
+      // Avoid double-counting a title which already contributes through an
+      // explicit like or viewing-history signal.
+      if (likedIds.contains(ownedId) || watchedIds.contains(ownedId)) continue;
+      final media = mediaById[ownedId];
+      if (media != null) ownedMedia.add(media);
+    }
+
     final results = <RecommendationResult>[];
     final seenIds = <String>{};
 
@@ -458,6 +485,7 @@ class RecommendationsService {
         candidate: candidate,
         likedMedia: likedMedia,
         watchedMedia: watchedMedia,
+        ownedMedia: ownedMedia,
         history: profile.history,
         watchedIds: watchedIds,
       );
@@ -484,6 +512,7 @@ class RecommendationsService {
     required RecommendationMedia candidate,
     required List<RecommendationMedia> likedMedia,
     required List<RecommendationMedia> watchedMedia,
+    required List<RecommendationMedia> ownedMedia,
     required List<RecommendationHistoryItem> history,
     required Set<String> watchedIds,
   }) {
@@ -537,6 +566,38 @@ class RecommendationsService {
           _recencyMultiplier(historyItem.watchedAt);
 
       reasons.addAll(comparison.reasons);
+    }
+
+    var bestOwnedMatchScore = 0.0;
+    String? bestOwnedMatchTitle;
+    String? bestOwnedMatchId;
+    List<String> bestOwnedMatchSignals = const <String>[];
+    for (final owned in ownedMedia) {
+      if (_normalize(owned.id) == _normalize(candidate.id)) continue;
+      final comparison = _compare(candidate: candidate, source: owned);
+      if (comparison.score <= 0) continue;
+      score += comparison.score * weights.ownedCollectionMultiplier;
+      if (comparison.score > bestOwnedMatchScore) {
+        bestOwnedMatchScore = comparison.score;
+        bestOwnedMatchTitle = owned.title;
+        bestOwnedMatchId = owned.id;
+        bestOwnedMatchSignals = comparison.reasons
+            .map((reason) => reason.title)
+            .toSet()
+            .take(3)
+            .toList(growable: false);
+      }
+    }
+    if (bestOwnedMatchTitle != null) {
+      final signalText = bestOwnedMatchSignals.isEmpty
+          ? 'catalog metadata'
+          : bestOwnedMatchSignals.join(', ').toLowerCase();
+      reasons.add(RecommendationReason(
+        type: RecommendationReasonType.preference,
+        title: 'Related to your library',
+        description: 'Shares $signalText with "$bestOwnedMatchTitle", which is in your library.',
+        relatedMediaIds: <String>[if (bestOwnedMatchId != null) bestOwnedMatchId],
+      ));
     }
 
     final recentHistory = history

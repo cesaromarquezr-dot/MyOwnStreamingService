@@ -5218,15 +5218,23 @@ class ContextualShopButton extends StatelessWidget {
   }
 
   /// Convenience helper for media details.
-  static Widget forMedia(BuildContext context, MediaItem media) =>
-      ContextualShopButton(
-          associationType: (media.type.toLowerCase() == 'tvshow' ||
-                  media.type.toLowerCase() == 'tv_show' ||
-                  media.type.toLowerCase() == 'tv show')
-              ? 'show'
-              : 'movie',
-          associationId: media.id,
-          associationName: media.title);
+  static Widget forMedia(BuildContext context, MediaItem media) {
+    final normalizedType = media.type
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s_-]+'), '');
+    final associationType = switch (normalizedType) {
+      'tv' || 'tvshow' || 'television' || 'series' || 'episode' => 'show',
+      'album' || 'musicalbum' || 'soundtrack' => 'album',
+      'song' || 'track' || 'musictrack' => 'track',
+      _ => 'movie',
+    };
+    return ContextualShopButton(
+      associationType: associationType,
+      associationId: media.id,
+      associationName: media.title,
+    );
+  }
 
   /// Convenience helper for music entities.
   static Widget forMusic(

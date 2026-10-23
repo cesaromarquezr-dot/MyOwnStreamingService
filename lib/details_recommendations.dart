@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'localization.dart';
+import 'recommendation_ownership.dart';
 
 /// Builds profile-local related titles from known recommendations and the
 /// account's existing library. The ranking favours shared franchise, genre,
@@ -38,18 +39,21 @@ class DetailsRecommendationsSection extends StatelessWidget {
     final sourcePeople = _normalized(<String>[
       ...source.actors,
       ...source.directors,
+      ...source.writers,
       ...source.music,
+      ...source.studios,
+      ...source.companies,
     ]);
     final candidatePeople = _normalized(<String>[
       ...candidate.actors,
       ...candidate.directors,
+      ...candidate.writers,
       ...candidate.music,
+      ...candidate.studios,
+      ...candidate.companies,
     ]);
     score += sourcePeople.intersection(candidatePeople).length * 2;
 
-    final sourceType = source.type.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
-    final candidateType = candidate.type.toLowerCase().replaceAll('_', '').replaceAll(' ', '');
-    if (sourceType == candidateType) score += 1;
     return score;
   }
 
@@ -62,9 +66,17 @@ class DetailsRecommendationsSection extends StatelessWidget {
       ...controller.watched,
       ...controller.liked,
     ]) {
-      if (item.id != source.id) byId.putIfAbsent(item.id, () => item);
+      if (item.id == source.id ||
+          item.id.trim().isEmpty ||
+          !item.isAccessibleTo(controller.currentProfile) ||
+          isExcludedEntertainmentType(item.type)) {
+        continue;
+      }
+      byId.putIfAbsent(item.id, () => item);
     }
-    final items = byId.values.toList()
+    // This is a title-to-title shelf, so unrelated catalog entries are not
+    // included just because they exist. Global profile picks remain on Home.
+    final items = byId.values.where((item) => _score(item) > 0).toList()
       ..sort((a, b) {
         final scoreOrder = _score(b).compareTo(_score(a));
         if (scoreOrder != 0) return scoreOrder;
@@ -130,6 +142,11 @@ class DetailsRecommendationsSection extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      const SizedBox(height: 5),
+                      RecommendationOwnershipBadge(
+                        isOwned: AppController.instance.isOwned(item.id),
+                        compact: true,
                       ),
                     ],
                   ),

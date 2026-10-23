@@ -18,6 +18,7 @@ import 'music.dart';
 import 'profile_content_safety.dart';
 import 'localization.dart';
 import 'player.dart';
+import 'recommendation_ownership.dart';
 
 const Color _discoveryAccent = Color(0xFF8B7CFF);
 const Color _discoveryPanel = Color(0xFF171722);
@@ -821,28 +822,77 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
       {super.key, required this.library, required this.watched});
 
   List<MediaItem> _recommendations() {
-    if (library.isEmpty) return const [];
+    final controller = AppController.instance;
     final watchedIds = watched.map((m) => m.id).toSet();
-    final seed = watched.isNotEmpty ? watched.first : null;
-    final genrePrefs = <String>{
+    final sortedLibrary = List<MediaItem>.from(library)
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final seed = watched.isNotEmpty
+        ? watched.first
+        : (sortedLibrary.isNotEmpty
+            ? sortedLibrary.first
+            : (controller.liked.isNotEmpty ? controller.liked.first : null));
+    final seedFields = <String>{
       ...(seed?.genres ?? const <String>[]).map((e) => e.toLowerCase()),
-      ...(seed?.tags ?? const <String>[]).map((e) => e.toLowerCase())
+      ...(seed?.tags ?? const <String>[]).map((e) => e.toLowerCase()),
     };
-    final items = library
-        .where((m) =>
-            !watchedIds.contains(m.id) &&
-            !isExcludedEntertainmentType(m.type))
+    final backendRecommendedIds =
+        controller.recommendations.map((item) => item.id).toSet();
+    final byId = <String, MediaItem>{};
+    for (final item in <MediaItem>[
+      ...library,
+      ...controller.recommendations,
+      ...controller.liked
+    ]) {
+      if (item.id.trim().isEmpty ||
+          item.id == seed?.id ||
+          watchedIds.contains(item.id) ||
+          isExcludedEntertainmentType(item.type) ||
+          !item.isAccessibleTo(controller.currentProfile)) {
+        continue;
+      }
+      byId.putIfAbsent(item.id, () => item);
+    }
+    int score(MediaItem item) {
+      final fields = <String>{...item.genres, ...item.tags}
+          .map((e) => e.toLowerCase())
+          .toSet();
+      final overlap = fields.intersection(seedFields).length;
+      final sharedFranchise = seed?.franchiseName?.trim().isNotEmpty == true &&
+          seed?.franchiseName?.toLowerCase() ==
+              item.franchiseName?.toLowerCase();
+      final sharedCredits = <String>{
+        ...(seed?.actors ?? const <String>[]).map((e) => e.toLowerCase()),
+        ...(seed?.directors ?? const <String>[]).map((e) => e.toLowerCase()),
+        ...(seed?.writers ?? const <String>[]).map((e) => e.toLowerCase()),
+        ...(seed?.music ?? const <String>[]).map((e) => e.toLowerCase()),
+        ...(seed?.studios ?? const <String>[]).map((e) => e.toLowerCase()),
+        ...(seed?.companies ?? const <String>[]).map((e) => e.toLowerCase()),
+      }.intersection(<String>{
+        ...item.actors.map((e) => e.toLowerCase()),
+        ...item.directors.map((e) => e.toLowerCase()),
+        ...item.writers.map((e) => e.toLowerCase()),
+        ...item.music.map((e) => e.toLowerCase()),
+        ...item.studios.map((e) => e.toLowerCase()),
+        ...item.companies.map((e) => e.toLowerCase()),
+      }).length;
+      // Only shared metadata establishes relevance. Rating is a tie-breaker,
+      // not a substitute for a relationship to the seed title.
+      return overlap * 10 + sharedCredits * 5 + (sharedFranchise ? 20 : 0);
+    }
+
+    // Backend picks already passed the full-catalog recommendation engine;
+    // local candidates must have a real overlap with the current seed.
+    final items = byId.values
+        .where((item) =>
+            backendRecommendedIds.contains(item.id) ||
+            (seed != null && score(item) > 0))
         .toList();
     items.sort((a, b) {
-      int score(MediaItem item) {
-        final fields = <String>{...item.genres, ...item.tags}
-            .map((e) => e.toLowerCase())
-            .toSet();
-        final overlap = fields.intersection(genrePrefs).length;
-        return overlap * 10 + (item.rating ?? 0).round();
-      }
-
-      return score(b).compareTo(score(a));
+      final byScore = score(b).compareTo(score(a));
+      if (byScore != 0) return byScore;
+      final byRating = (b.rating ?? 0).compareTo(a.rating ?? 0);
+      if (byRating != 0) return byRating;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
     });
     return items.take(12).toList(growable: false);
   }
@@ -877,8 +927,8 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
                     '${media.displayYearLabel ?? ''} ${media.type}${media.displayEditionLabel == null ? '' : ' • ${media.displayEditionLabel}'}'
                         .trim(),
                 imageUrl: media.imageUrl,
-                onTap: () =>
-                    Navigator.of(context).push(MaterialPageRoute<void>(
+                isOwned: AppController.instance.isOwned(media.id),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
                 )),
@@ -891,7 +941,8 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
 }
 
 /// Explainable Home rails seeded from the newest title, recent viewing, and
-/// recent music listening. Recommendations use the local catalog only.
+/// recent music listening. Suggestions combine local items with catalog-wide
+/// candidates returned by the recommendation backend.
 class HomeReasonedRecommendationShelves extends StatelessWidget {
   final List<MediaItem> library;
   final List<MediaItem> watched;
@@ -912,27 +963,51 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       ...candidate.tags.map((value) => value.toLowerCase()),
     };
     final commonGenres = seedGenres.intersection(candidateGenres).length;
-    final commonPeople = <String>{
+    final commonCredits = <String>{
       ...seed.actors.map((value) => value.toLowerCase()),
       ...seed.directors.map((value) => value.toLowerCase()),
+      ...seed.writers.map((value) => value.toLowerCase()),
+      ...seed.music.map((value) => value.toLowerCase()),
+      ...seed.studios.map((value) => value.toLowerCase()),
+      ...seed.companies.map((value) => value.toLowerCase()),
     }.intersection(<String>{
       ...candidate.actors.map((value) => value.toLowerCase()),
       ...candidate.directors.map((value) => value.toLowerCase()),
+      ...candidate.writers.map((value) => value.toLowerCase()),
+      ...candidate.music.map((value) => value.toLowerCase()),
+      ...candidate.studios.map((value) => value.toLowerCase()),
+      ...candidate.companies.map((value) => value.toLowerCase()),
     }).length;
     final seedFranchise = (seed.franchiseName ?? '').trim().toLowerCase();
-    final candidateFranchise = (candidate.franchiseName ?? '').trim().toLowerCase();
-    return commonGenres * 12 + commonPeople * 18 +
-        (seedFranchise.isNotEmpty && seedFranchise == candidateFranchise ? 45 : 0) +
-        ((seed.type.toLowerCase() == candidate.type.toLowerCase()) ? 3 : 0) +
-        (candidate.rating ?? 0).round();
+    final candidateFranchise =
+        (candidate.franchiseName ?? '').trim().toLowerCase();
+    return commonGenres * 12 +
+        commonCredits * 18 +
+        (seedFranchise.isNotEmpty && seedFranchise == candidateFranchise
+            ? 45
+            : 0);
   }
 
-  List<MediaItem> _related(MediaItem seed, {Set<String> excludeIds = const <String>{}}) {
-    final matches = library.where((item) =>
-        item.id != seed.id && !excludeIds.contains(item.id) &&
-        !isExcludedEntertainmentType(item.type)).toList();
+  List<MediaItem> _related(MediaItem seed,
+      {Set<String> excludeIds = const <String>{}}) {
+    final controller = AppController.instance;
+    final byId = <String, MediaItem>{};
+    for (final item in <MediaItem>[...library, ...controller.recommendations]) {
+      if (item.id.trim().isEmpty ||
+          item.id == seed.id ||
+          excludeIds.contains(item.id) ||
+          isExcludedEntertainmentType(item.type) ||
+          !item.isAccessibleTo(controller.currentProfile)) {
+        continue;
+      }
+      byId.putIfAbsent(item.id, () => item);
+    }
+    final matches = byId.values
+        .where((candidate) => _mediaSimilarity(seed, candidate) > 0)
+        .toList();
     matches.sort((a, b) {
-      final scoreCompare = _mediaSimilarity(seed, b).compareTo(_mediaSimilarity(seed, a));
+      final scoreCompare =
+          _mediaSimilarity(seed, b).compareTo(_mediaSimilarity(seed, a));
       if (scoreCompare != 0) return scoreCompare;
       final byRating = (b.rating ?? 0).compareTo(a.rating ?? 0);
       if (byRating != 0) return byRating;
@@ -941,7 +1016,54 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
     return matches.take(12).toList(growable: false);
   }
 
-  Widget _mediaShelf(BuildContext context, String title, String subtitle, List<MediaItem> items) {
+  List<MediaItem> _relatedAlbumsForTrack(MusicTrack track) {
+    final controller = AppController.instance;
+    final albumCandidates = <String, MediaItem>{};
+    for (final item in <MediaItem>[...library, ...controller.recommendations]) {
+      final compactType =
+          item.type.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+      if (!<String>{'album', 'musicalbum', 'soundtrack'}
+              .contains(compactType) ||
+          item.id.trim().isEmpty ||
+          !item.isAccessibleTo(controller.currentProfile) ||
+          isExcludedEntertainmentType(item.type) ||
+          item.title.trim().toLowerCase() == track.album.trim().toLowerCase()) {
+        continue;
+      }
+      albumCandidates.putIfAbsent(item.id, () => item);
+    }
+    final seedGenres =
+        track.allGenreTags.map((value) => value.toLowerCase()).toSet();
+    int score(MediaItem album) {
+      final albumGenres = <String>{
+        ...album.genres.map((value) => value.toLowerCase()),
+        ...album.tags.map((value) => value.toLowerCase()),
+      };
+      var value = seedGenres.intersection(albumGenres).length * 10;
+      final artist = track.artist.trim().toLowerCase();
+      final artistText = <String>[
+        album.title,
+        album.description ?? '',
+        ...album.music,
+        ...album.actors,
+        ...album.tags,
+      ].join(' ').toLowerCase();
+      if (artist.isNotEmpty && artistText.contains(artist)) value += 20;
+      return value;
+    }
+
+    final matches =
+        albumCandidates.values.where((album) => score(album) > 0).toList();
+    matches.sort((a, b) {
+      final byScore = score(b).compareTo(score(a));
+      if (byScore != 0) return byScore;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return matches.take(12).toList(growable: false);
+  }
+
+  Widget _mediaShelf(BuildContext context, String title, String subtitle,
+      List<MediaItem> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -951,7 +1073,8 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(20, 0, 20, 10),
             child: Text(
               'Add more related titles or import genre, cast, and franchise metadata to grow these recommendations.',
-              style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+              style:
+                  TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
             ),
           )
         else
@@ -964,8 +1087,10 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
               final media = items[index];
               return _DiscoveryMediaCard(
                 title: media.title,
-                subtitle: '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
+                subtitle:
+                    '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
                 imageUrl: media.imageUrl,
+                isOwned: AppController.instance.isOwned(media.id),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
@@ -977,7 +1102,8 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
     );
   }
 
-  Widget _buildWithTracks(BuildContext context, List<MediaItem> visibleLibrary, List<MediaItem> visibleWatched) {
+  Widget _buildWithTracks(BuildContext context, List<MediaItem> visibleLibrary,
+      List<MediaItem> visibleWatched) {
     final added = List<MediaItem>.from(visibleLibrary)
       ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
     final watchedSeed = visibleWatched.isEmpty ? null : visibleWatched.last;
@@ -988,15 +1114,16 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
         (!profileBlocksMatureMusic(profile) || !track.matureTheme);
     final currentTrack = MusicPlaybackController.instance.currentTrack;
     MusicTrack? listened;
-    if (currentTrack != null &&
-        currentTrack.audioUrl?.trim().isNotEmpty == true &&
-        trackAllowedForProfile(currentTrack)) {
+    if (currentTrack?.audioUrl?.trim().isNotEmpty == true &&
+        trackAllowedForProfile(currentTrack!)) {
       listened = currentTrack;
     } else {
-      final recentlyListened = musicStore.tracks.where((track) =>
-          (musicStore.listenCounts[track.id] ?? 0) > 0 &&
-          track.audioUrl?.trim().isNotEmpty == true &&
-          trackAllowedForProfile(track)).toList()
+      final recentlyListened = musicStore.tracks
+          .where((track) =>
+              (musicStore.listenCounts[track.id] ?? 0) > 0 &&
+              track.audioUrl?.trim().isNotEmpty == true &&
+              trackAllowedForProfile(track))
+          .toList()
         ..sort((a, b) => (musicStore.listenCounts[b.id] ?? 0)
             .compareTo(musicStore.listenCounts[a.id] ?? 0));
       if (recentlyListened.isNotEmpty) listened = recentlyListened.first;
@@ -1039,13 +1166,17 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
             genreTags.intersection(candidateGenres).isNotEmpty;
       }).toList()
         ..sort((a, b) {
-          final sameArtistA = a.artist.toLowerCase() == track.artist.toLowerCase() ? 1 : 0;
-          final sameArtistB = b.artist.toLowerCase() == track.artist.toLowerCase() ? 1 : 0;
+          final sameArtistA =
+              a.artist.toLowerCase() == track.artist.toLowerCase() ? 1 : 0;
+          final sameArtistB =
+              b.artist.toLowerCase() == track.artist.toLowerCase() ? 1 : 0;
           final byArtist = sameArtistB.compareTo(sameArtistA);
           if (byArtist != 0) return byArtist;
           final countCompare = (musicStore.listenCounts[b.id] ?? 0)
               .compareTo(musicStore.listenCounts[a.id] ?? 0);
-          return countCompare != 0 ? countCompare : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          return countCompare != 0
+              ? countCompare
+              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
       children.add(Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1068,8 +1199,16 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
               itemCount: relatedTracks.length,
               separatorExtent: 12,
               padding: const EdgeInsets.symmetric(horizontal: 48),
-              itemBuilder: (context, index) => _HomeReasonedTrackCard(track: relatedTracks[index]),
+              itemBuilder: (context, index) =>
+                  _HomeReasonedTrackCard(track: relatedTracks[index]),
             ),
+          const SizedBox(height: 14),
+          _mediaShelf(
+            context,
+            'Albums related to “${track.title}”',
+            'Catalog albums matched by genre and credited artists; status shows whether each album is in your library.',
+            _relatedAlbumsForTrack(track),
+          ),
         ],
       ));
     }
@@ -1083,8 +1222,12 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       builder: (context, _) {
         final profile = AppController.instance.currentProfile;
         if (profile == null) return const SizedBox.shrink();
-        final visibleLibrary = library.where((item) => item.isAccessibleTo(profile)).toList(growable: false);
-        final visibleWatched = watched.where((item) => item.isAccessibleTo(profile)).toList(growable: false);
+        final visibleLibrary = library
+            .where((item) => item.isAccessibleTo(profile))
+            .toList(growable: false);
+        final visibleWatched = watched
+            .where((item) => item.isAccessibleTo(profile))
+            .toList(growable: false);
         return AnimatedBuilder(
           animation: MusicLibraryStore.instance,
           builder: (context, _) => AnimatedBuilder(
@@ -1113,7 +1256,9 @@ class _HomeReasonedTrackCard extends StatelessWidget {
             onTap: () {
               if (track.audioUrl?.trim().isNotEmpty != true) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('This track has no playable audio source configured yet.')),
+                  const SnackBar(
+                      content: Text(
+                          'This track has no playable audio source configured yet.')),
                 );
                 return;
               }
@@ -1121,22 +1266,46 @@ class _HomeReasonedTrackCard extends StatelessWidget {
             },
             child: Padding(
               padding: const EdgeInsets.all(9),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: SizedBox.expand(
-                      child: track.artworkUrl?.trim().isNotEmpty == true
-                          ? Image.network(track.artworkUrl!, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF252532), child: Icon(Icons.music_note_rounded)))
-                          : const ColoredBox(color: Color(0xFF252532), child: Center(child: Icon(Icons.music_note_rounded, size: 34))),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Stack(fit: StackFit.expand, children: [
+                          if (track.artworkUrl?.trim().isNotEmpty == true)
+                            Image.network(track.artworkUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const ColoredBox(
+                                    color: Color(0xFF252532),
+                                    child: Icon(Icons.music_note_rounded)))
+                          else
+                            const ColoredBox(
+                                color: Color(0xFF252532),
+                                child: Center(
+                                    child: Icon(Icons.music_note_rounded,
+                                        size: 34))),
+                          const Positioned(
+                            top: 6,
+                            left: 6,
+                            child: RecommendationOwnershipBadge(
+                                isOwned: true, compact: true),
+                          ),
+                        ]),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
-              ]),
+                    const SizedBox(height: 6),
+                    Text(track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 12)),
+                    Text(track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 11)),
+                  ]),
             ),
           ),
         ),
@@ -1160,17 +1329,20 @@ class HomeFranchiseSagaHub extends StatelessWidget {
         final visibleLibrary = controller.library
             .where((item) => item.isAccessibleTo(profile))
             .toList(growable: false);
-        final catalogFranchiseGroups = HomeFranchiseProgressLogic.franchiseSagaGroups(
+        final catalogFranchiseGroups =
+            HomeFranchiseProgressLogic.franchiseSagaGroups(
           visibleLibrary,
           collections: controller.collections,
         );
-        final franchiseGroups = HomeFranchiseProgressLogic.franchiseSagaExamples(
+        final franchiseGroups =
+            HomeFranchiseProgressLogic.franchiseSagaExamples(
           visibleLibrary,
           catalogFranchiseGroups,
         );
         final catalogUniverseGroups =
             HomeFranchiseProgressLogic.cinematicUniverseGroups(visibleLibrary);
-        final universeGroups = HomeFranchiseProgressLogic.cinematicUniverseExamples(
+        final universeGroups =
+            HomeFranchiseProgressLogic.cinematicUniverseExamples(
           visibleLibrary,
           catalogUniverseGroups,
         );
@@ -1197,7 +1369,8 @@ class HomeFranchiseSagaHub extends StatelessWidget {
               ),
               _HomeFranchiseProgressShelf(
                 title: 'Cinematic Universe Hub',
-                subtitle: 'See your collection progress across connected worlds',
+                subtitle:
+                    'See your collection progress across connected worlds',
                 emptyMessage:
                     'No cinematic-universe links found yet. Import universe memberships to see your progress.',
                 groups: universeGroups,
@@ -1218,7 +1391,8 @@ class HomeFranchiseSagaHub extends StatelessWidget {
                     settings: const RouteSettings(
                       name: '/app/multiverse-hub',
                     ),
-                    builder: (_) => MultiverseHubScreen(library: visibleLibrary),
+                    builder: (_) =>
+                        MultiverseHubScreen(library: visibleLibrary),
                   ),
                 ),
               ),
@@ -1368,7 +1542,10 @@ class _HomeFranchiseProgressCard extends StatelessWidget {
                     'FEATURED EXAMPLE • catalog totals may be refreshed by metadata import',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700),
                   ),
                 ],
                 const SizedBox(height: 6),
@@ -1540,7 +1717,8 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
                   const SizedBox(height: 5),
                   Text(
                     group.exampleNote!,
-                    style: const TextStyle(color: Colors.white54, fontSize: 11, height: 1.35),
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 11, height: 1.35),
                   ),
                 ],
                 const Divider(height: 24, color: Colors.white12),
@@ -1570,7 +1748,8 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
                 'No titles from this group are currently indexed in your profile library. The reference examples below do not count as owned.',
-                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                style: TextStyle(
+                    color: Colors.white54, fontSize: 12, height: 1.35),
               ),
             ),
           for (final media in group.ownedTitles)
@@ -1617,11 +1796,15 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
           if (group.exampleTitles.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.fromLTRB(2, 22, 2, 4),
-              child: Text('Example catalog titles', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              child: Text('Example catalog titles',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
             ),
             const Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: Text('Reference examples only. A check mark means a matching title was found in your profile library; unchecked items are not counted as owned.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35)),
+              child: Text(
+                  'Reference examples only. A check mark means a matching title was found in your profile library; unchecked items are not counted as owned.',
+                  style: TextStyle(
+                      color: Colors.white54, fontSize: 11, height: 1.35)),
             ),
             for (final example in group.exampleTitles)
               Builder(builder: (context) {
@@ -1630,7 +1813,10 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
                   ...example.aliases.map(_normalizeHomeCatalogTitle),
                 };
                 final owned = group.ownedTitles.where((media) {
-                  if (_homeMediaTypeLabel(media.type).toLowerCase() != example.type.toLowerCase()) return false;
+                  if (_homeMediaTypeLabel(media.type).toLowerCase() !=
+                      example.type.toLowerCase()) {
+                    return false;
+                  }
                   final candidates = <String>{
                     _normalizeHomeCatalogTitle(media.title),
                     _normalizeHomeCatalogTitle(media.originalTitle ?? ''),
@@ -1642,11 +1828,33 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
                 return ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(found ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: found ? const Color(0xFF9DE5B0) : Colors.white38),
-                  title: Text(example.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: found ? Colors.white : Colors.white70)),
-                  subtitle: Text('${example.type} · ${found ? 'Found in your library' : 'Not matched in your library'}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                  trailing: found ? const Icon(Icons.chevron_right_rounded, color: Colors.white54) : null,
-                  onTap: found ? () => Navigator.of(context).push(MaterialPageRoute<void>(settings: const RouteSettings(name: '/app/details'), builder: (_) => MediaDetailsScreen(media: owned.first))) : null,
+                  leading: Icon(
+                      found
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: found ? const Color(0xFF9DE5B0) : Colors.white38),
+                  title: Text(example.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: found ? Colors.white : Colors.white70)),
+                  subtitle: Text(
+                      '${example.type} · ${found ? 'Found in your library' : 'Not matched in your library'}',
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 11)),
+                  trailing: found
+                      ? const Icon(Icons.chevron_right_rounded,
+                          color: Colors.white54)
+                      : null,
+                  onTap: found
+                      ? () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              settings:
+                                  const RouteSettings(name: '/app/details'),
+                              builder: (_) =>
+                                  MediaDetailsScreen(media: owned.first)))
+                      : null,
                 );
               }),
           ],
@@ -1656,10 +1864,8 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
   }
 }
 
-String _normalizeHomeCatalogTitle(String value) => value
-    .toLowerCase()
-    .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-    .trim();
+String _normalizeHomeCatalogTitle(String value) =>
+    value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
 
 String _homeMediaTypeLabel(String type) {
   final value = type.toLowerCase();
@@ -1706,7 +1912,8 @@ class HomeCollectionShelves extends StatelessWidget {
         .toList(growable: false);
     final collections = List<MediaCollection>.from(controller.collections)
         .where((collection) =>
-            (collection.isShared || collection.createdByProfileId == profile?.id) &&
+            (collection.isShared ||
+                collection.createdByProfileId == profile?.id) &&
             (_itemsFor(collection).isNotEmpty || collection.mediaIds.isEmpty))
         .toList()
       ..sort((a, b) {
@@ -1792,14 +1999,26 @@ class HomeCollectionShelves extends StatelessWidget {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(collection.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                  Text(collection.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 12)),
                                   const SizedBox(height: 4),
-                                  Text('$count titles', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                                  if (collection.isAutomatic) const Text('Auto-curated', style: TextStyle(color: Colors.white38, fontSize: 9)),
+                                  Text('$count titles',
+                                      style: const TextStyle(
+                                          color: Colors.white60, fontSize: 11)),
+                                  if (collection.isAutomatic)
+                                    const Text('Auto-curated',
+                                        style: TextStyle(
+                                            color: Colors.white38,
+                                            fontSize: 9)),
                                 ],
                               ),
                             ),
-                            const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                            const Icon(Icons.chevron_right_rounded,
+                                color: Colors.white54),
                           ],
                         ),
                       ),
@@ -2486,6 +2705,7 @@ class _DiscoveryMediaCard extends StatelessWidget {
   final VoidCallback onTap;
   final double width;
   final bool posterOnly;
+  final bool? isOwned;
 
   const _DiscoveryMediaCard(
       {required this.title,
@@ -2493,7 +2713,8 @@ class _DiscoveryMediaCard extends StatelessWidget {
       required this.imageUrl,
       required this.onTap,
       this.width = 148,
-      this.posterOnly = false});
+      this.posterOnly = false,
+      this.isOwned});
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -2520,6 +2741,15 @@ class _DiscoveryMediaCard extends StatelessWidget {
                         bottom: 8,
                         child: Icon(Icons.play_circle_fill_rounded,
                             size: 27, color: Colors.white)),
+                  if (isOwned != null)
+                    Positioned(
+                      left: 7,
+                      top: 7,
+                      child: RecommendationOwnershipBadge(
+                        isOwned: isOwned!,
+                        compact: true,
+                      ),
+                    ),
                 ]),
               ),
               Padding(

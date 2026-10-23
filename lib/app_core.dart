@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'backend_api.dart';
 import 'offline_sync_queue.dart';
 import 'offline_metadata_cache.dart';
+import 'library_membership_store.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
 import 'genre_system.dart';
@@ -93,6 +94,16 @@ class MediaItem {
   final String? titleAccentColor;
   /// Controls cinematic reveal animation; reduced-motion OS settings still take priority.
   final bool titleRevealAnimation;
+
+  /// Per-screen title-artwork choices. `inherit` preserves the shared setting.
+  final String heroTitleArtworkMode;
+  final String detailTitleArtworkMode;
+  final String? heroTitleArtworkUrl;
+  final String? detailTitleArtworkUrl;
+  final String? heroTitleArtworkSource;
+  final String? detailTitleArtworkSource;
+  final bool heroTitleArtworkAuthorized;
+  final bool detailTitleArtworkAuthorized;
 
   /// Original release year for a movie, or the first-air year for a series.
   final int? releaseYear;
@@ -329,6 +340,14 @@ class MediaItem {
     this.titleStyleKey,
     this.titleAccentColor,
     this.titleRevealAnimation = true,
+    this.heroTitleArtworkMode = 'inherit',
+    this.detailTitleArtworkMode = 'inherit',
+    this.heroTitleArtworkUrl,
+    this.detailTitleArtworkUrl,
+    this.heroTitleArtworkSource,
+    this.detailTitleArtworkSource,
+    this.heroTitleArtworkAuthorized = false,
+    this.detailTitleArtworkAuthorized = false,
     this.releaseYear,
     this.releaseDate,
     this.editionReleaseYear,
@@ -542,6 +561,36 @@ class MediaItem {
       titleRevealAnimation: (data.containsKey('titleRevealAnimation') || data.containsKey('title_reveal_animation'))
           ? _boolValue(data['titleRevealAnimation'] ?? data['title_reveal_animation'])
           : true,
+      heroTitleArtworkMode: (
+        data['heroTitleArtworkMode'] ??
+        data['hero_title_artwork_mode'] ??
+        'inherit'
+      ).toString(),
+      detailTitleArtworkMode: (
+        data['detailTitleArtworkMode'] ??
+        data['detail_title_artwork_mode'] ??
+        'inherit'
+      ).toString(),
+      heroTitleArtworkUrl: (
+        data['heroTitleArtworkUrl'] ?? data['hero_title_artwork_url']
+      )?.toString(),
+      detailTitleArtworkUrl: (
+        data['detailTitleArtworkUrl'] ?? data['detail_title_artwork_url']
+      )?.toString(),
+      heroTitleArtworkSource: (
+        data['heroTitleArtworkSource'] ?? data['hero_title_artwork_source']
+      )?.toString(),
+      detailTitleArtworkSource: (
+        data['detailTitleArtworkSource'] ?? data['detail_title_artwork_source']
+      )?.toString(),
+      heroTitleArtworkAuthorized: _boolValue(
+        data['heroTitleArtworkAuthorized'] ??
+        data['hero_title_artwork_authorized'],
+      ),
+      detailTitleArtworkAuthorized: _boolValue(
+        data['detailTitleArtworkAuthorized'] ??
+        data['detail_title_artwork_authorized'],
+      ),
       releaseYear: _intValue(
             data['releaseYear'] ?? data['release_year'] ?? data['year'],
           ) ??
@@ -1112,6 +1161,14 @@ class MediaItem {
       'titleStyleKey': titleStyleKey,
       'titleAccentColor': titleAccentColor,
       'titleRevealAnimation': titleRevealAnimation,
+      'heroTitleArtworkMode': heroTitleArtworkMode,
+      'detailTitleArtworkMode': detailTitleArtworkMode,
+      'heroTitleArtworkUrl': heroTitleArtworkUrl,
+      'detailTitleArtworkUrl': detailTitleArtworkUrl,
+      'heroTitleArtworkSource': heroTitleArtworkSource,
+      'detailTitleArtworkSource': detailTitleArtworkSource,
+      'heroTitleArtworkAuthorized': heroTitleArtworkAuthorized,
+      'detailTitleArtworkAuthorized': detailTitleArtworkAuthorized,
       'releaseYear': releaseYear,
       'releaseDate': releaseDate?.toIso8601String().substring(0, 10),
       'editionReleaseYear': editionReleaseYear,
@@ -1210,6 +1267,57 @@ class MediaItem {
 /// Builds the conversational, streaming-service-style synopses used when a
 /// description is not supplied manually. Story notes can be entered during
 /// import when a more title-specific synopsis is desired.
+/// Normalizes the backend recommendation envelope into the media JSON shape
+/// expected by [MediaItem.fromJson]. The recommendation API returns
+/// { media: {...}, score, matchPercentage, reasons }; older or local providers
+/// may return the media object at the top level. This function supports both.
+Map<String, dynamic>? normalizeRecommendationMediaPayload(dynamic value) {
+  if (value is! Map) return null;
+  final wrapper = Map<String, dynamic>.from(value);
+  final nested = wrapper['media'];
+  final media = nested is Map
+      ? Map<String, dynamic>.from(nested)
+      : Map<String, dynamic>.from(wrapper);
+
+  final rawType = (media['type'] ?? media['mediaType'] ?? 'movie')
+      .toString()
+      .trim();
+  final compactType = rawType.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+  final String normalizedType = switch (compactType) {
+    'tv' || 'tvshow' || 'television' || 'series' || 'episode' => 'tv show',
+    'music_album' || 'musicalbum' || 'album' || 'soundtrack' => 'album',
+    'track' || 'song' || 'musictrack' => 'song',
+    _ => rawType.isEmpty ? 'movie' : rawType,
+  };
+
+  final normalized = <String, dynamic>{
+    ...media,
+    'type': normalizedType,
+    if (media['releaseYear'] == null && media['release_year'] == null && media['year'] != null)
+      'releaseYear': media['year'],
+    if (media['imageUrl'] == null && media['posterUrl'] != null)
+      'imageUrl': media['posterUrl'],
+    if (media['franchiseNames'] == null && media['franchises'] != null)
+      'franchiseNames': media['franchises'],
+    if (media['genres'] == null && media['subgenres'] != null)
+      'genres': media['subgenres'],
+    if (media['tags'] == null && media['themes'] != null)
+      'tags': media['themes'],
+  };
+  final franchises = normalized['franchiseNames'];
+  if ((normalized['franchiseName'] == null ||
+          normalized['franchiseName'].toString().trim().isEmpty) &&
+      franchises is List &&
+      franchises.isNotEmpty) {
+    normalized['franchiseName'] = franchises.first.toString();
+  }
+  if ((normalized['id']?.toString().trim().isNotEmpty ?? false) == false ||
+      (normalized['title']?.toString().trim().isNotEmpty ?? false) == false) {
+    return null;
+  }
+  return normalized;
+}
+
 class DescriptionGenerator {
   static String movie({
     required String title,
@@ -2145,6 +2253,60 @@ class AppController extends ChangeNotifier {
 
   final List<MediaItem> library = <MediaItem>[];
 
+  // Profile-scoped removals survive server scans, app restarts, and login
+  // restoration. Media files are never deleted by Remove from Library.
+  String? _loadedLibraryMembershipScope;
+  final Set<String> _hiddenLibraryMediaIds = <String>{};
+
+  String get _libraryMembershipScope {
+    final accountId = currentAccount?.id.trim();
+    final profileId = currentProfile?.id.trim();
+    final accountScope =
+        accountId != null && accountId.isNotEmpty ? accountId : 'local';
+    final profileScope =
+        profileId != null && profileId.isNotEmpty ? profileId : 'guest';
+    return '$accountScope::$profileScope';
+  }
+
+  bool _isHiddenFromCurrentProfile(String mediaId) {
+    return _loadedLibraryMembershipScope == _libraryMembershipScope &&
+        _hiddenLibraryMediaIds.contains(mediaId.trim());
+  }
+
+  Future<void> _ensureLibraryMembershipLoaded() async {
+    final scope = _libraryMembershipScope;
+    if (_loadedLibraryMembershipScope == scope) return;
+
+    final hiddenIds = await LibraryMembershipStore(scopeId: scope)
+        .loadHiddenMediaIds();
+    // A profile switch may happen while the preferences read is pending.
+    if (_libraryMembershipScope != scope) return;
+
+    _hiddenLibraryMediaIds
+      ..clear()
+      ..addAll(hiddenIds);
+    _loadedLibraryMembershipScope = scope;
+
+    final oldLength = library.length;
+    library.removeWhere((item) => hiddenIds.contains(item.id.trim()));
+    if (library.length != oldLength) {
+      _refreshAutomaticCollections();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveLibraryMembership(Set<String> hiddenIds,
+      {required String scope}) async {
+    await LibraryMembershipStore(scopeId: scope).saveHiddenMediaIds(hiddenIds);
+    if (_libraryMembershipScope != scope) {
+      throw StateError('The active profile changed before the library update completed.');
+    }
+    _hiddenLibraryMediaIds
+      ..clear()
+      ..addAll(hiddenIds);
+    _loadedLibraryMembershipScope = scope;
+  }
+
   // Catalog sections populated when a confirmed ARM import is added.
   final List<String> actorsCatalog = <String>[];
   final List<String> directorsCatalog = <String>[];
@@ -2400,6 +2562,7 @@ class AppController extends ChangeNotifier {
     activeProfileIds
       ..clear()
       ..add(firstProfile.id);
+    unawaited(_ensureLibraryMembershipLoaded());
     collections.clear();
     seedCollections();
 
@@ -2530,6 +2693,9 @@ class AppController extends ChangeNotifier {
 
     currentAccount = account;
     currentProfile = profiles.isEmpty ? null : profiles.first;
+    _loadedLibraryMembershipScope = null;
+    _hiddenLibraryMediaIds.clear();
+    await _ensureLibraryMembershipLoaded();
 
     activeProfileIds.clear();
     if (profiles.isNotEmpty) {
@@ -2685,6 +2851,7 @@ class AppController extends ChangeNotifier {
       }
 
       _applyBackendAccount(Map<String, dynamic>.from(accountData));
+      await _ensureLibraryMembershipLoaded();
       final restoredProfileId = currentProfile?.id;
       if (library.isEmpty && restoredProfileId != null) {
         await restoreOfflineMetadataCache(profileId: restoredProfileId);
@@ -2695,6 +2862,8 @@ class AppController extends ChangeNotifier {
       await backendApi.clearToken();
       currentAccount = null;
       currentProfile = null;
+      _loadedLibraryMembershipScope = null;
+      _hiddenLibraryMediaIds.clear();
       return false;
     }
   }
@@ -2762,6 +2931,11 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..addAll(
           currentProfile == null ? <String>[] : <String>[currentProfile!.id]);
+
+    if (_loadedLibraryMembershipScope != _libraryMembershipScope) {
+      _loadedLibraryMembershipScope = null;
+      _hiddenLibraryMediaIds.clear();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -2793,6 +2967,7 @@ class AppController extends ChangeNotifier {
     }
 
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
+    await _ensureLibraryMembershipLoaded();
 
     recommendations.clear();
     groupRecommendations.clear();
@@ -2841,6 +3016,7 @@ class AppController extends ChangeNotifier {
           'The server returned an invalid account response.');
     }
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
+    unawaited(_ensureLibraryMembershipLoaded());
     notifyListeners();
   }
 
@@ -2864,6 +3040,7 @@ class AppController extends ChangeNotifier {
           'The server returned an invalid account response.');
     }
     _applyBackendAccount(Map<String, dynamic>.from(accountData));
+    await _ensureLibraryMembershipLoaded();
     notifyListeners();
     return response;
   }
@@ -2883,6 +3060,8 @@ class AppController extends ChangeNotifier {
 
       currentAccount = null;
       currentProfile = null;
+      _loadedLibraryMembershipScope = null;
+      _hiddenLibraryMediaIds.clear();
       currentServer = null;
       activePlaybackSessionId = null;
 
@@ -2938,6 +3117,7 @@ class AppController extends ChangeNotifier {
 
     if (currentAccount!.profiles.isNotEmpty) {
       currentProfile = currentAccount!.profiles.first;
+      unawaited(_ensureLibraryMembershipLoaded());
 
       activeProfileIds
         ..clear()
@@ -2959,6 +3139,8 @@ class AppController extends ChangeNotifier {
 
     currentAccount = null;
     currentProfile = null;
+    _loadedLibraryMembershipScope = null;
+    _hiddenLibraryMediaIds.clear();
 
     activeProfileIds.clear();
 
@@ -3106,6 +3288,7 @@ class AppController extends ChangeNotifier {
     }
 
     currentProfile = profile;
+    unawaited(_ensureLibraryMembershipLoaded());
 
     activeProfileIds
       ..clear()
@@ -3143,8 +3326,11 @@ class AppController extends ChangeNotifier {
 
   /// Performs `isOwned` for this feature. Update this documentation when its contract changes.
   bool isOwned(String mediaId) {
+    if (_isHiddenFromCurrentProfile(mediaId)) return false;
     return library.any(
-      (item) => item.id == mediaId && item.isAccessibleTo(currentProfile),
+      (item) => item.id == mediaId &&
+          !_isHiddenFromCurrentProfile(item.id) &&
+          item.isAccessibleTo(currentProfile),
     );
   }
 
@@ -3165,6 +3351,7 @@ class AppController extends ChangeNotifier {
   /// arm_mock/ are grouped as explicit, non-playable demo placeholders.
   Future<int> syncHomeServerLibrary() async {
     if (!backendApi.isAuthenticated) return 0;
+    await _ensureLibraryMembershipLoaded();
     final result = await backendApi.scanServerLibrary();
     final raw = result['media'];
     if (raw is! List) return 0;
@@ -3216,7 +3403,7 @@ class AppController extends ChangeNotifier {
 
     for (final scanned in serverMedia) {
       final id = scanned.id.trim();
-      if (id.isEmpty) continue;
+      if (id.isEmpty || _isHiddenFromCurrentProfile(id)) continue;
       final isMock = isArmMockServerMediaId(id) ||
           scanned.addedSource == 'arm-mock-placeholder' ||
           scanned.tags.contains('not-playable');
@@ -3270,8 +3457,10 @@ class AppController extends ChangeNotifier {
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
           .replaceAll(RegExp(r'^-+|-+$'), '');
-      merged['arm-mock-demo:$slug'] = MediaItem(
-        id: 'arm-mock-demo:$slug',
+      final placeholderId = 'arm-mock-demo:$slug';
+      if (_isHiddenFromCurrentProfile(placeholderId)) continue;
+      merged[placeholderId] = MediaItem(
+        id: placeholderId,
         title: '$title (Demo placeholder)',
         type: first.type,
         description:
@@ -3283,7 +3472,9 @@ class AppController extends ChangeNotifier {
 
     library
       ..clear()
-      ..addAll(merged.values);
+      ..addAll(merged.values.where(
+        (item) => !_isHiddenFromCurrentProfile(item.id),
+      ));
     _refreshAutomaticCollections();
     notifyListeners();
     return serverMedia.length;
@@ -3296,6 +3487,7 @@ class AppController extends ChangeNotifier {
     var changed = false;
 
     void addOrNormalizePreview(MediaItem item) {
+      if (_isHiddenFromCurrentProfile(item.id)) return;
       final index = library.indexWhere((existing) => existing.id == item.id);
       if (index < 0) {
         library.add(item);
@@ -3394,10 +3586,13 @@ class AppController extends ChangeNotifier {
   }
 
   /// Replaces the client library with media discovered on the home server.
-  void replaceLibraryFromServer(List<MediaItem> media) {
+  Future<void> replaceLibraryFromServer(List<MediaItem> media) async {
+    await _ensureLibraryMembershipLoaded();
     library
       ..clear()
-      ..addAll(media);
+      ..addAll(media.where(
+        (item) => !_isHiddenFromCurrentProfile(item.id),
+      ));
 
     // Clearly labeled local preview entries are kept local and are never
     // sent to the media server as imported files.
@@ -3420,6 +3615,7 @@ class AppController extends ChangeNotifier {
   /// Restores only sanitized catalog metadata, and only when no online library
   /// is already available. Playback/trailer URLs are never stored by the cache.
   Future<void> restoreOfflineMetadataCache({String? profileId}) async {
+    await _ensureLibraryMembershipLoaded();
     final profile = currentProfile;
     final requestedId = profileId?.trim();
     if (profile == null ||
@@ -3441,6 +3637,7 @@ class AppController extends ChangeNotifier {
           .where((item) =>
               item.id.isNotEmpty &&
               item.title.isNotEmpty &&
+              !_isHiddenFromCurrentProfile(item.id) &&
               item.isAccessibleTo(currentProfile))
           .toList(growable: false);
       if (restored.isEmpty) return;
@@ -3454,14 +3651,18 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// Performs `addToLibrary` for this feature. Update this documentation when its contract changes.
-  void addToLibrary(
-    MediaItem media,
-  ) {
-    if (isOwned(media.id)) {
-      return;
-    }
+  /// Adds the title to the active profile's library and clears any saved
+  /// removal marker. The original server file is not re-ripped or copied.
+  Future<void> addToLibrary(MediaItem media) async {
+    await _ensureLibraryMembershipLoaded();
+    if (isOwned(media.id)) return;
 
+    final scope = _libraryMembershipScope;
+    final updatedHiddenIds = Set<String>.from(_hiddenLibraryMediaIds)
+      ..remove(media.id.trim());
+    await _saveLibraryMembership(updatedHiddenIds, scope: scope);
+
+    library.removeWhere((item) => item.id == media.id);
     library.add(media);
 
     _mergeCatalog(actorsCatalog, media.actors);
@@ -3491,14 +3692,23 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// Performs `removeFromLibrary` for this feature. Update this documentation when its contract changes.
-  void removeFromLibrary(
-    String mediaId,
-  ) {
-    library.removeWhere(
-      (item) => item.id == mediaId,
-    );
+  /// Removes the title from this profile's library persistently. The server
+  /// file and its catalog metadata are not deleted; later scans respect the
+  /// saved marker until Add to Library explicitly clears it.
+  Future<void> removeFromLibrary(String mediaId) async {
+    final normalizedId = mediaId.trim();
+    if (normalizedId.isEmpty) return;
 
+    await _ensureLibraryMembershipLoaded();
+    final scope = _libraryMembershipScope;
+    final updatedHiddenIds = Set<String>.from(_hiddenLibraryMediaIds)
+      ..add(normalizedId);
+    // Persist first so a failed write cannot make the UI claim the removal is
+    // durable when the server scan would otherwise put it back.
+    await _saveLibraryMembership(updatedHiddenIds, scope: scope);
+
+    library.removeWhere((item) => item.id.trim() == normalizedId);
+    _refreshAutomaticCollections();
     notifyListeners();
   }
 
@@ -4541,6 +4751,7 @@ class AppController extends ChangeNotifier {
         'You must be logged in.',
       );
     }
+    await _ensureLibraryMembershipLoaded();
 
     final cleanedMediaId = mediaId.trim();
 
@@ -4576,7 +4787,9 @@ class AppController extends ChangeNotifier {
         ),
       );
 
-      if (media.id.isNotEmpty && !isOwned(media.id)) {
+      if (media.id.isNotEmpty &&
+          !isOwned(media.id) &&
+          !_isHiddenFromCurrentProfile(media.id)) {
         library.add(media);
 
         _addActivity(
@@ -5692,6 +5905,8 @@ class AppController extends ChangeNotifier {
 
     currentAccount = null;
     currentProfile = null;
+    _loadedLibraryMembershipScope = null;
+    _hiddenLibraryMediaIds.clear();
 
     library.clear();
     watched.clear();

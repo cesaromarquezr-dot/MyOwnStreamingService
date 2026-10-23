@@ -13,6 +13,7 @@ import '../models/media.dart';
 enum SearchResultType {
   movie,
   tvShow,
+  album,
 }
 
 /// A single media search result.
@@ -26,8 +27,13 @@ class SearchResult {
   });
 
   Map<String, dynamic> toJson() {
+    final type = switch (media.type) {
+      MediaType.movie => 'movie',
+      MediaType.tvShow => 'tvShow',
+      MediaType.album => 'album',
+    };
     return {
-      'type': media.type == MediaType.movie ? 'movie' : 'tvShow',
+      'type': type,
       'media': media.toJson(),
       'matchedBy': List<String>.unmodifiable(matchedBy),
     };
@@ -282,6 +288,21 @@ class SearchService {
       (result) => result.media.type == MediaType.tvShow,
     );
 
+    return effectiveLimit == null
+        ? filtered.toList(growable: false)
+        : filtered.take(effectiveLimit).toList(growable: false);
+  }
+
+  /// Searches only music albums in the shared catalog.
+  List<SearchResult> searchAlbums(
+    String query, {
+    int? limit,
+  }) {
+    final effectiveLimit = _validateLimit(limit);
+    final results = search(query);
+    final filtered = results.where(
+      (result) => result.media.type == MediaType.album,
+    );
     return effectiveLimit == null
         ? filtered.toList(growable: false)
         : filtered.take(effectiveLimit).toList(growable: false);

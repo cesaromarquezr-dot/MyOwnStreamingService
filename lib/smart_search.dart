@@ -197,11 +197,20 @@ class SmartSearch {
   /// This is a lightweight personal relevance model, not a claim of ML training.
   static List<MediaItem> recommendations(List<MediaItem> library,
       {int limit = 12}) {
-    if (limit <= 0 || library.isEmpty) return <MediaItem>[];
+    if (limit <= 0) return <MediaItem>[];
     final controller = AppController.instance;
-    final profileId = controller.currentProfile?.id;
-    if (!PrivacyPreferencesStore.cached(profileId)
-        .personalizedRecommendations) {
+    final profile = controller.currentProfile;
+    final profileId = profile?.id;
+    final personalized = PrivacyPreferencesStore.cached(profileId)
+        .personalizedRecommendations;
+
+    // When personalization is disabled, only show generic picks from the
+    // profile's local library. Do not consume backend suggestions that may have
+    // been ranked from account activity. With personalization enabled, combine
+    // local library entries and the full-catalog backend recommendations so
+    // titles the user does not own can be discovered too.
+    if (!personalized) {
+      if (library.isEmpty) return <MediaItem>[];
       final excluded = <String>{
         ...controller.disliked.map((item) => item.id),
         ...controller.watched.map((item) => item.id),
@@ -209,6 +218,7 @@ class SmartSearch {
       final generic = library
           .where((item) =>
               !_isExcludedContentType(item.type) &&
+              item.isAccessibleTo(profile) &&
               !excluded.contains(item.id) &&
               controller.getPlaybackProgress(item.id) < 0.95)
           .toList()
@@ -220,6 +230,21 @@ class SmartSearch {
         });
       return generic.take(limit).toList(growable: false);
     }
+
+    final poolById = <String, MediaItem>{};
+    for (final media in <MediaItem>[...library, ...controller.recommendations]) {
+      final id = media.id.trim();
+      if (id.isEmpty ||
+          _isExcludedContentType(media.type) ||
+          !media.isAccessibleTo(profile)) {
+        continue;
+      }
+      // Prefer the user's local record when the ID exists in both sources.
+      poolById.putIfAbsent(id, () => media);
+    }
+    final candidatePool = poolById.values.toList(growable: false);
+    if (candidatePool.isEmpty) return <MediaItem>[];
+
     final explicitRank = <String, int>{
       for (var i = 0; i < controller.recommendations.length; i++)
         controller.recommendations[i].id: (100 - i).clamp(20, 100).toInt(),
@@ -235,9 +260,8 @@ class SmartSearch {
       }),
     ];
 
-    final candidates = library
+    final candidates = candidatePool
         .where((media) =>
-            !_isExcludedContentType(media.type) &&
             !dislikedIds.contains(media.id) &&
             !completedIds.contains(media.id) &&
             controller.getPlaybackProgress(media.id) < 0.95)

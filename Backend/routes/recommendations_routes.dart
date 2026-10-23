@@ -430,6 +430,10 @@ class RecommendationsRoutes {
       id: media.id,
       title: media.title,
       year: media.year,
+      posterUrl: media.posterUrl,
+      description: media.description,
+      rating: media.rating,
+      ratingReason: media.ratingReason,
       mediaType: media.type.name,
       seriesId: media.seriesId,
       franchiseId: media.franchises.isNotEmpty

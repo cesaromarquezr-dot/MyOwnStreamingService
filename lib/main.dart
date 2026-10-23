@@ -12,7 +12,7 @@ import 'app_core.dart';
 import 'backend_api.dart';
 import 'library_release.dart';
 import 'physical_media_library.dart';
-
+import 'media_health_screen.dart';
 import 'signup.dart';
 import 'smart_search.dart';
 import 'details.dart';
@@ -29,11 +29,12 @@ import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
 import 'home_streaming_discovery.dart';
+import 'cinematic_discovery_studio.dart';
 import 'home_arrow_rail.dart';
+import 'recommendation_ownership.dart';
 import 'home_franchise_progress.dart';
 import 'playback_diagnostics_center.dart';
 import 'platform_reliability_center.dart';
-import 'connected_command_center.dart';
 import 'movies.dart';
 import 'series.dart';
 import 'release_order_timeline.dart';
@@ -66,7 +67,6 @@ import 'tv_controller.dart';
 import 'tv_host.dart';
 import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
-import 'cinematic_discovery_studio.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -5941,7 +5941,7 @@ class _HomeScreenState extends State<HomeScreen>
                   axis: Axis.horizontal,
                 ),
               ),
-            if (library.isEmpty)
+            if (library.isEmpty && homeRecommendations.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -6082,7 +6082,12 @@ List<Widget> _buildHomeSectionSlivers(
       title: section == 'Recommendations' ? 'Recommended for You' : section,
       subtitle: subtitle,
     )),
-    SliverToBoxAdapter(child: MediaHorizontalList(media: items)),
+    SliverToBoxAdapter(
+      child: MediaHorizontalList(
+        media: items,
+        showOwnership: section == 'Recommendations',
+      ),
+    ),
   ];
 }
 
@@ -6676,10 +6681,12 @@ class SectionTitle extends StatelessWidget {
 
 class MediaHorizontalList extends StatelessWidget {
   final List<MediaItem> media;
+  final bool showOwnership;
 
   const MediaHorizontalList({
     super.key,
     required this.media,
+    this.showOwnership = false,
   });
 
   @override
@@ -6689,7 +6696,10 @@ class MediaHorizontalList extends StatelessWidget {
       itemCount: media.length,
       separatorExtent: 12,
       padding: const EdgeInsets.symmetric(horizontal: 48),
-      itemBuilder: (context, index) => MediaCard(media: media[index]),
+      itemBuilder: (context, index) => MediaCard(
+        media: media[index],
+        showOwnership: showOwnership,
+      ),
     );
   }
 }
@@ -6700,10 +6710,12 @@ class MediaHorizontalList extends StatelessWidget {
 
 class MediaCard extends StatelessWidget {
   final MediaItem media;
+  final bool showOwnership;
 
   const MediaCard({
     super.key,
     required this.media,
+    this.showOwnership = false,
   });
 
   @override
@@ -6730,28 +6742,36 @@ class MediaCard extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: media.imageUrl == null
-                    ? Container(
-                        width: double.infinity,
-                        color: Colors.grey.shade900,
-                        child: const Icon(
-                          Icons.movie,
-                          size: 45,
-                        ),
-                      )
-                    : Image.network(
-                        media.imageUrl!,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
-                          return Container(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    media.imageUrl == null
+                        ? Container(
+                            width: double.infinity,
                             color: Colors.grey.shade900,
-                            child: const Icon(
-                              Icons.broken_image,
+                            child: const Icon(Icons.movie, size: 45),
+                          )
+                        : Image.network(
+                            media.imageUrl!,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade900,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image),
                             ),
-                          );
-                        },
+                          ),
+                    if (showOwnership)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: RecommendationOwnershipBadge(
+                          isOwned: AppController.instance.isOwned(media.id),
+                          compact: true,
+                        ),
                       ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 7),

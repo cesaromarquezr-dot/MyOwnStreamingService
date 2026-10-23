@@ -15,6 +15,7 @@ import 'xray_event.dart';
 enum MediaType {
   movie,
   tvShow,
+  album,
 }
 
 class Media {
@@ -206,6 +207,8 @@ class Media {
   bool get isTvShow {
     return type == MediaType.tvShow;
   }
+
+  bool get isAlbum => type == MediaType.album;
 
   bool get hasPhysicalProvenance {
     return physicalReleaseId != null ||
@@ -614,6 +617,13 @@ class Media {
       case 'tv_episode':
       case 'series':
         return MediaType.tvShow;
+
+      case 'album':
+      case 'music_album':
+      case 'music album':
+      case 'musicalbum':
+      case 'soundtrack':
+        return MediaType.album;
 
       case 'movie':
       default:
