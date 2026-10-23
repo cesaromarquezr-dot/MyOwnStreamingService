@@ -1,6 +1,7 @@
-// Pure planning models used by the reliability center.
-// These calculate estimates from inputs; they do not claim to read live host
-// telemetry or execute playback/storage operations.
+/// Pure planning models used by the reliability center.
+/// These calculate estimates from inputs; they do not claim to read live host
+/// telemetry or execute playback/storage operations.
+library;
 
 enum PlaybackPlanKind { directPlay, remux, transcode, unavailable }
 
@@ -83,7 +84,9 @@ class StreamBudgetEstimate {
     if (!averageStreamMbps.isFinite || averageStreamMbps <= 0) {
       throw ArgumentError.value(averageStreamMbps, 'averageStreamMbps');
     }
-    if (!reservedFraction.isFinite || reservedFraction < 0 || reservedFraction >= 1) {
+    if (!reservedFraction.isFinite ||
+        reservedFraction < 0 ||
+        reservedFraction >= 1) {
       throw ArgumentError.value(reservedFraction, 'reservedFraction');
     }
     final usable = sustainedUploadMbps * (1 - reservedFraction);

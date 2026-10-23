@@ -64,12 +64,12 @@ class _MindscapeAiOrchestratorScreenState extends State<MindscapeAiOrchestratorS
           const SizedBox(height: 8),
           RadioGroup<String>(
             groupValue: _roleId,
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _roleId = value);
-              }
+            onChanged: (String? value) {
+              if (value == null) return;
+              setState(() => _roleId = value);
             },
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final role in MindscapeAiBotCatalog.roles)
                   Card(

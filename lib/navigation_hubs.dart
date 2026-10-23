@@ -12,7 +12,6 @@ import 'library_hubs.dart';
 import 'library_release.dart';
 import 'movies.dart';
 import 'music.dart';
-import 'my_tv.dart';
 import 'series.dart';
 import 'social_center.dart';
 import 'localization.dart';
@@ -69,12 +68,6 @@ class LibraryHubScreen extends StatelessWidget {
             'Curated account collections',
             Icons.collections_bookmark_rounded,
             () => _push(context, const CollectionsPanel()),
-          ),
-          'my-tv': _HubEntry(
-            'My TV',
-            'Your television-focused library',
-            Icons.live_tv_rounded,
-            () => _push(context, const MyTvScreen()),
           ),
           'favorites': _HubEntry(
             'Favorites',
@@ -393,7 +386,6 @@ void _push(BuildContext context, Widget page) {
     MusicScreen() => 'music',
     LibraryActorsScreen() => 'actors',
     CollectionsPanel() => 'collections',
-    MyTvScreen() => 'my-tv',
     FavoritesScreen() => 'favorites',
     ComingSoonScreen() => 'coming-soon',
     _ => null,

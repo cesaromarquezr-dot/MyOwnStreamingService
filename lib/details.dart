@@ -19,7 +19,7 @@ import 'widgets/like_toggle_button.dart';
 import 'social_sharing.dart';
 import 'food_delivery.dart';
 import 'details_recommendations.dart';
-import 'actor_connections.dart';
+import 'catalog_entity_details.dart';
 import 'page_customization_button.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
@@ -356,6 +356,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           return const SizedBox.shrink();
         }
         return _buildReactions();
+
+      case 'Cast & Crew':
+        return _buildCastCrew();
 
       case 'Information':
         if (!customization.showInformation) {
@@ -1662,6 +1665,144 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       );
 
   // ===========================================================================
+  // CAST & CREW
+  // ===========================================================================
+
+  List<String> _cleanCreditNames(Iterable<String> names) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final value in names) {
+      final name = value.trim();
+      final key = name.toLowerCase();
+      if (name.isNotEmpty && seen.add(key)) result.add(name);
+    }
+    return result;
+  }
+
+  void _openCatalogEntity(String name, CatalogEntityKind kind) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CatalogEntityDetailsScreen(
+          entityName: name,
+          kind: kind,
+          sourceMedia: media,
+          onOpenMedia: (selectedMedia) {
+            Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => MediaDetailsScreen(media: selectedMedia),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _castCrewNameRow(
+    String label,
+    List<String> names, {
+    CatalogEntityKind entityKind = CatalogEntityKind.person,
+  }) {
+    if (names.isEmpty) return const SizedBox.shrink();
+    final icon = switch (entityKind) {
+      CatalogEntityKind.person => Icons.person_outline_rounded,
+      CatalogEntityKind.company => Icons.business_outlined,
+      CatalogEntityKind.character => Icons.theater_comedy_outlined,
+      CatalogEntityKind.genre => Icons.local_movies_outlined,
+      CatalogEntityKind.tag => Icons.sell_outlined,
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 125,
+            child: UniversalText(
+              label,
+              style: const TextStyle(color: Colors.white54, fontSize: 14),
+            ),
+          ),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 5,
+              children: [
+                for (final name in names)
+                  ActionChip(
+                    avatar: Icon(icon, size: 15),
+                    label: Text(name),
+                    onPressed: () => _openCatalogEntity(name, entityKind),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Renders credits independently from general technical/content information.
+  /// Missing credits are called out honestly; the UI never invents names.
+  Widget _buildCastCrew() {
+    final actors = _cleanCreditNames(media.actors);
+    final characters = _cleanCreditNames(media.characters);
+    final directors = _cleanCreditNames(media.directors);
+    final writers = _cleanCreditNames(media.writers);
+    final music = _cleanCreditNames(media.music);
+    final hasCredits = actors.isNotEmpty || characters.isNotEmpty ||
+        directors.isNotEmpty || writers.isNotEmpty || music.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF151515),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: .06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.groups_2_outlined, size: 21, color: Colors.white70),
+                SizedBox(width: 9),
+                Expanded(
+                  child: UniversalText(
+                    'Cast & Crew',
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+            if (!hasCredits) ...[
+              const SizedBox(height: 10),
+              const UniversalText(
+                'Cast and crew credits are not available for this title yet. Add sourced cast, director, and writer credits through the catalog metadata import to display them here.',
+                style: TextStyle(color: Colors.white60, height: 1.4),
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              if (actors.isNotEmpty)
+                _castCrewNameRow('Cast', actors),
+              if (characters.isNotEmpty)
+                _castCrewNameRow('Characters', characters, entityKind: CatalogEntityKind.character),
+              if (directors.isNotEmpty)
+                _castCrewNameRow('Directors', directors),
+              if (writers.isNotEmpty)
+                _castCrewNameRow('Screenwriters', writers),
+              if (music.isNotEmpty)
+                _castCrewNameRow('Music', music),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
   // INFORMATION
   // ===========================================================================
 
@@ -1692,30 +1833,57 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       rows.add(_infoRow('Seasons', '$count ${count == 1 ? 'Season' : 'Seasons'}'));
     }
 
-    if (media.directors.isNotEmpty) {
-      rows.add(
-        _infoRow(
-          'Directors',
-          media.directors.join(' • '),
-        ),
-      );
+    final linkedGenres = _cleanCreditNames(media.genres);
+    if (linkedGenres.isNotEmpty) {
+      rows.add(_castCrewNameRow(
+        'Genres',
+        linkedGenres,
+        entityKind: CatalogEntityKind.genre,
+      ));
     }
 
-    if (media.actors.isNotEmpty) {
-      final names = media.actors.map((name) => name.trim()).where((name) => name.isNotEmpty).toSet();
-      rows.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(width: 125, child: UniversalText('Actors', style: TextStyle(color: Colors.white54, fontSize: 14))),
-          Expanded(child: Wrap(spacing: 6, runSpacing: 4, children: [
-            for (final actor in names) ActionChip(
-              label: Text(actor),
-              avatar: const Icon(Icons.account_tree_outlined, size: 15),
-              onPressed: () => Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => ActorConnectionScreen(initialPerson: actor))),
-            ),
-          ])),
-        ]),
+    final studios = _cleanCreditNames(media.studios);
+    if (studios.isNotEmpty) {
+      rows.add(_castCrewNameRow(
+        'Production Studios',
+        studios,
+        entityKind: CatalogEntityKind.company,
       ));
+    }
+
+    final companies = _cleanCreditNames(media.companies);
+    if (companies.isNotEmpty) {
+      rows.add(_castCrewNameRow(
+        'Companies',
+        companies,
+        entityKind: CatalogEntityKind.company,
+      ));
+    }
+
+    final linkedTags = _cleanCreditNames(media.tags);
+    if (linkedTags.isNotEmpty) {
+      rows.add(_castCrewNameRow(
+        'Tags',
+        linkedTags,
+        entityKind: CatalogEntityKind.tag,
+      ));
+    }
+
+    // Only display content advisories supplied by the catalog/importer.
+    final contentAdvisories = firstMetadataValue([
+      'contentAdvisories',
+      'content_advisories',
+      'contentWarnings',
+      'content_warnings',
+      'parentalGuidance',
+      'parental_guidance',
+      'maturityReasons',
+      'maturity_reasons',
+      'ratingDescriptors',
+      'rating_descriptors',
+    ]);
+    if (contentAdvisories != null && contentAdvisories.trim().isNotEmpty) {
+      rows.add(_infoRow('Content Advisories', contentAdvisories));
     }
 
     if (customization.showRating &&
@@ -2012,20 +2180,6 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   /// Performs `playMedia` for this feature. Update this documentation when its contract changes.
   void playMedia() {
-    if (media.tags.any((tag) => const <String>{
-          'not-playable',
-          'demo-placeholder',
-          'arm-mock-placeholder',
-        }.contains(tag.toLowerCase()))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: UniversalText(
-            'This is an ARM demo placeholder, not a playable movie or show. Replace it with a real media file.',
-          ),
-        ),
-      );
-      return;
-    }
     setState(() {
       pressedPlay = true;
     });

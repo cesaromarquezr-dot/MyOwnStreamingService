@@ -81,30 +81,31 @@ class MediaItem {
 
   /// Optional authorized title-logo/key-art asset. It is not extracted from a trailer.
   final String? titleLogoUrl;
-
   /// Provenance for the title-logo asset (provider/catalog/rights note).
   final String? titleLogoSource;
-
   /// False by default: only display title-logo artwork when catalog metadata says it is authorized.
   final bool titleLogoAuthorized;
-
   /// Presentation mode: auto, logo, trailer_title_card, movie_title_card, or case_cover.
   final String titleArtworkMode;
-
   /// Optional fallback style key: cinematic, horror, sciFi, fantasy, western, romance, retro, animation.
   final String? titleStyleKey;
-
   /// Optional #RRGGBB or #AARRGGBB accent for the styled-text fallback.
   final String? titleAccentColor;
-
   /// Controls cinematic reveal animation; reduced-motion OS settings still take priority.
   final bool titleRevealAnimation;
 
   /// Original release year for a movie, or the first-air year for a series.
   final int? releaseYear;
 
+  /// Full original release date when supplied by trusted catalog metadata.
+  /// Stored as a date-only value for reliable chronological sorting.
+  final DateTime? releaseDate;
+
   /// Optional edition-specific release year (e.g. a later theatrical re-release).
   final int? editionReleaseYear;
+
+  /// Full release date for the selected edition/version, when known.
+  final DateTime? editionReleaseDate;
 
   /// Display name for a cut/version, e.g. `Encore Edition` or `Director's Cut`.
   final String? editionName;
@@ -120,6 +121,10 @@ class MediaItem {
 
   /// Explicit TV series run years. If absent, season/episode dates are used as fallbacks.
   final int? seriesStartYear;
+
+  /// Exact first-air/premiere date of a series, when catalog metadata provides it.
+  final DateTime? seriesStartDate;
+
   final int? seriesEndYear;
 
   /// True when the series has not concluded; displays `Present` as the end year.
@@ -183,6 +188,17 @@ class MediaItem {
   final String? franchiseType;
   final int? franchiseOrder;
   final List<String> franchiseNames;
+
+  /// Optional global catalog totals supplied by trusted metadata providers.
+  /// These describe the complete franchise, not just the titles the user owns.
+  final int? franchiseTotalTitles;
+  final int? franchiseTotalMovies;
+  final int? franchiseTotalShows;
+
+  /// Optional global catalog totals for each explicitly named cinematic universe.
+  final int? cinematicUniverseTotalTitles;
+  final int? cinematicUniverseTotalMovies;
+  final int? cinematicUniverseTotalShows;
 
   /// Explicit cross-universe membership and continuity relationships.
   final List<Map<String, dynamic>> universeMemberships;
@@ -261,6 +277,12 @@ class MediaItem {
     this.franchiseType,
     this.franchiseOrder,
     List<String>? franchiseNames,
+    this.franchiseTotalTitles,
+    this.franchiseTotalMovies,
+    this.franchiseTotalShows,
+    this.cinematicUniverseTotalTitles,
+    this.cinematicUniverseTotalMovies,
+    this.cinematicUniverseTotalShows,
     List<Map<String, dynamic>>? universeMemberships,
     this.continuityId,
     this.continuityName,
@@ -308,12 +330,15 @@ class MediaItem {
     this.titleAccentColor,
     this.titleRevealAnimation = true,
     this.releaseYear,
+    this.releaseDate,
     this.editionReleaseYear,
+    this.editionReleaseDate,
     this.editionName,
     this.editionType,
     this.canonicalWorkId,
     List<String>? editionFeatures,
     this.seriesStartYear,
+    this.seriesStartDate,
     this.seriesEndYear,
     this.seriesOngoing = false,
     this.seriesStatus,
@@ -336,8 +361,7 @@ class MediaItem {
           primaryGenre,
           _normalizeMediaGenres(genres, primaryGenre),
         ),
-        genreBlendLabelOverride =
-            _normalizeGenreBlendLabel(genreBlendLabelOverride),
+        genreBlendLabelOverride = _normalizeGenreBlendLabel(genreBlendLabelOverride),
         tags = tags ?? <String>[],
         studios = studios ?? <String>[],
         companies = companies ?? <String>[],
@@ -410,49 +434,140 @@ class MediaItem {
         ...Map<String, dynamic>.from(json['metadata'] as Map),
       ...json,
     };
+    // Normalize flexible catalog credit shapes before constructing the model.
+    // Providers may use top-level actors/directors or nested credits.cast/crew.
+    final credits = _creditMap(data['credits']);
+    final rawCast = _firstNonEmptyCreditValue([
+      data['actors'],
+      data['cast'],
+      data['castMembers'],
+      data['cast_members'],
+      data['performers'],
+      data['topCast'],
+      data['top_cast'],
+      credits['cast'],
+      credits['actors'],
+    ]);
+    final rawCrew = _firstNonEmptyCreditValue([
+      data['crew'],
+      credits['crew'],
+    ]);
+    final rawCharacters = _firstNonEmptyCreditValue([
+      data['characters'],
+      data['characterNames'],
+      data['character_names'],
+      credits['characters'],
+    ]);
+    final actorNames = _creditNameList(rawCast);
+    final characterNames = _creditNameList(rawCharacters).isNotEmpty
+        ? _creditNameList(rawCharacters)
+        : _creditCharacterNames(rawCast);
+    final directorNames = _firstCreditNameList([
+      data['directors'],
+      data['director'],
+      credits['directors'],
+      _crewNamesForRole(rawCrew, 'director'),
+    ]);
+    final writerNames = _firstCreditNameList([
+      data['writers'],
+      data['screenwriters'],
+      data['screenWriters'],
+      data['screen_writers'],
+      data['writingCredits'],
+      data['writing_credits'],
+      credits['writers'],
+      credits['writing'],
+      _crewNamesForRole(rawCrew, 'writer'),
+    ]);
+    final musicNames = _firstCreditNameList([
+      data['music'],
+      data['composers'],
+      data['composer'],
+      credits['music'],
+      _crewNamesForRole(rawCrew, 'music'),
+    ]);
+
+    // Different catalog providers use different field names. Normalize their
+    // date values once here so Release Order can sort movies, shows, and albums
+    // by full date instead of guessing from the year or title.
+    final parsedReleaseDate = _dateValue(
+      data['releaseDate'] ??
+          data['release_date'] ??
+          data['originalReleaseDate'] ??
+          data['original_release_date'] ??
+          data['firstReleaseDate'] ??
+          data['first_release_date'] ??
+          data['first-release-date'] ??
+          data['release-date'] ??
+          data['albumReleaseDate'] ??
+          data['album_release_date'] ??
+          data['theatricalReleaseDate'] ??
+          data['theatrical_release_date'] ??
+          data['dateReleased'] ??
+          data['date_released'] ??
+          data['datePublished'] ??
+          data['date_published'] ??
+          data['date'],
+    );
+    final parsedEditionReleaseDate = _dateValue(
+      data['editionReleaseDate'] ??
+          data['edition_release_date'] ??
+          data['reReleaseDate'] ??
+          data['re_release_date'] ??
+          data['physicalReleaseDate'] ??
+          data['physical_release_date'],
+    );
+    final parsedSeriesStartDate = _dateValue(
+      data['seriesStartDate'] ??
+          data['series_start_date'] ??
+          data['firstAirDate'] ??
+          data['first_air_date'] ??
+          data['firstAired'] ??
+          data['first_aired'] ??
+          data['premiereDate'] ??
+          data['premiere_date'],
+    );
     return MediaItem(
       id: data['id']?.toString() ?? '',
       title: data['title']?.toString() ?? '',
       type: data['type']?.toString() ?? 'movie',
       imageUrl: (data['imageUrl'] ?? data['posterUrl'])?.toString(),
       description: data['description']?.toString(),
-      titleLogoUrl:
-          (data['titleLogoUrl'] ?? data['title_logo_url'] ?? data['logoUrl'])
-              ?.toString(),
-      titleLogoSource:
-          (data['titleLogoSource'] ?? data['title_logo_source'])?.toString(),
-      titleLogoAuthorized: _boolValue(
-          data['titleLogoAuthorized'] ?? data['title_logo_authorized']),
-      titleArtworkMode:
-          (data['titleArtworkMode'] ?? data['title_artwork_mode'] ?? 'auto')
-              .toString(),
-      titleStyleKey:
-          (data['titleStyleKey'] ?? data['title_style_key'])?.toString(),
-      titleAccentColor:
-          (data['titleAccentColor'] ?? data['title_accent_color'])?.toString(),
-      titleRevealAnimation: (data.containsKey('titleRevealAnimation') ||
-              data.containsKey('title_reveal_animation'))
-          ? _boolValue(
-              data['titleRevealAnimation'] ?? data['title_reveal_animation'])
+      titleLogoUrl: (data['titleLogoUrl'] ?? data['title_logo_url'] ?? data['logoUrl'])?.toString(),
+      titleLogoSource: (data['titleLogoSource'] ?? data['title_logo_source'])?.toString(),
+      titleLogoAuthorized: _boolValue(data['titleLogoAuthorized'] ?? data['title_logo_authorized']),
+      titleArtworkMode: (data['titleArtworkMode'] ?? data['title_artwork_mode'] ?? 'auto').toString(),
+      titleStyleKey: (data['titleStyleKey'] ?? data['title_style_key'])?.toString(),
+      titleAccentColor: (data['titleAccentColor'] ?? data['title_accent_color'])?.toString(),
+      titleRevealAnimation: (data.containsKey('titleRevealAnimation') || data.containsKey('title_reveal_animation'))
+          ? _boolValue(data['titleRevealAnimation'] ?? data['title_reveal_animation'])
           : true,
       releaseYear: _intValue(
-          data['releaseYear'] ?? data['release_year'] ?? data['year']),
+            data['releaseYear'] ?? data['release_year'] ?? data['year'],
+          ) ??
+          parsedReleaseDate?.year,
+      releaseDate: parsedReleaseDate,
       editionReleaseYear: _intValue(
-        data['editionReleaseYear'] ?? data['edition_release_year'],
-      ),
+            data['editionReleaseYear'] ?? data['edition_release_year'],
+          ) ??
+          parsedEditionReleaseDate?.year,
+      editionReleaseDate: parsedEditionReleaseDate,
       editionName: (data['editionName'] ?? data['edition_name'])?.toString(),
       editionType: (data['editionType'] ?? data['edition_type'])?.toString(),
       canonicalWorkId:
           (data['canonicalWorkId'] ?? data['canonical_work_id'])?.toString(),
       editionFeatures:
           _stringList(data['editionFeatures'] ?? data['edition_features']),
-      seriesStartYear:
-          _intValue(data['seriesStartYear'] ?? data['series_start_year']),
+      seriesStartYear: _intValue(
+            data['seriesStartYear'] ?? data['series_start_year'],
+          ) ??
+          parsedSeriesStartDate?.year,
+      seriesStartDate: parsedSeriesStartDate,
       seriesEndYear:
           _intValue(data['seriesEndYear'] ?? data['series_end_year']),
-      seriesOngoing:
-          _boolValue(data['seriesOngoing'] ?? data['series_ongoing']),
-      seriesStatus: (data['seriesStatus'] ?? data['series_status'])?.toString(),
+      seriesOngoing: _boolValue(data['seriesOngoing'] ?? data['series_ongoing']),
+      seriesStatus:
+          (data['seriesStatus'] ?? data['series_status'])?.toString(),
       rating: data['rating'] is num
           ? (data['rating'] as num).toDouble()
           : double.tryParse(
@@ -509,67 +624,96 @@ class MediaItem {
           ? (data['franchiseOrder'] as num).toInt()
           : int.tryParse(data['franchiseOrder']?.toString() ?? ''),
       franchiseNames: _stringList(data['franchiseNames'] ?? data['franchises']),
+      franchiseTotalTitles: _intValue(
+        data['franchiseTotalTitles'] ??
+            data['franchise_total_titles'] ??
+            data['franchiseCatalogTotal'] ??
+            data['franchise_catalog_total'] ??
+            data['totalFranchiseTitles'] ??
+            data['total_franchise_titles'],
+      ),
+      franchiseTotalMovies: _intValue(
+        data['franchiseTotalMovies'] ??
+            data['franchise_total_movies'] ??
+            data['franchiseCatalogMovies'] ??
+            data['franchise_catalog_movies'] ??
+            data['totalFranchiseMovies'] ??
+            data['total_franchise_movies'],
+      ),
+      franchiseTotalShows: _intValue(
+        data['franchiseTotalShows'] ??
+            data['franchise_total_shows'] ??
+            data['franchiseCatalogShows'] ??
+            data['franchise_catalog_shows'] ??
+            data['totalFranchiseShows'] ??
+            data['total_franchise_shows'],
+      ),
+      cinematicUniverseTotalTitles: _intValue(
+        data['cinematicUniverseTotalTitles'] ??
+            data['cinematic_universe_total_titles'] ??
+            data['universeTotalTitles'] ??
+            data['universe_total_titles'] ??
+            data['cinematicUniverseCatalogTotal'] ??
+            data['cinematic_universe_catalog_total'],
+      ),
+      cinematicUniverseTotalMovies: _intValue(
+        data['cinematicUniverseTotalMovies'] ??
+            data['cinematic_universe_total_movies'] ??
+            data['universeTotalMovies'] ??
+            data['universe_total_movies'] ??
+            data['cinematicUniverseCatalogMovies'] ??
+            data['cinematic_universe_catalog_movies'],
+      ),
+      cinematicUniverseTotalShows: _intValue(
+        data['cinematicUniverseTotalShows'] ??
+            data['cinematic_universe_total_shows'] ??
+            data['universeTotalShows'] ??
+            data['universe_total_shows'] ??
+            data['cinematicUniverseCatalogShows'] ??
+            data['cinematic_universe_catalog_shows'],
+      ),
       universeMemberships:
           (data['universeMemberships'] ?? data['universe_memberships']) is List
-              ? ((data['universeMemberships'] ?? data['universe_memberships'])
-                      as List)
+              ? ((data['universeMemberships'] ?? data['universe_memberships']) as List)
                   .whereType<Map>()
                   .map((row) => Map<String, dynamic>.from(row))
                   .toList()
               : <Map<String, dynamic>>[],
       continuityId: (data['continuityId'] ?? data['continuity_id'])?.toString(),
-      continuityName:
-          (data['continuityName'] ?? data['continuity_name'])?.toString(),
-      cinematicUniverseIds: _stringList(
-          data['cinematicUniverseIds'] ?? data['cinematic_universe_ids']),
-      cinematicUniverseNames: _stringList(
-          data['cinematicUniverseNames'] ?? data['cinematic_universe_names']),
-      cinematicUniverseSaga:
-          (data['cinematicUniverseSaga'] ?? data['cinematic_universe_saga'])
-              ?.toString(),
-      cinematicUniversePhase:
-          (data['cinematicUniversePhase'] ?? data['cinematic_universe_phase'])
-              ?.toString(),
-      cinematicUniverseReleaseOrder: _intValue(
-          data['cinematicUniverseReleaseOrder'] ??
-              data['cinematic_universe_release_order']),
-      cinematicUniverseTimelineOrder: _intValue(
-          data['cinematicUniverseTimelineOrder'] ??
-              data['cinematic_universe_timeline_order']),
-      cinematicUniverseTimelineLabel: (data['cinematicUniverseTimelineLabel'] ??
-              data['cinematic_universe_timeline_label'])
-          ?.toString(),
-      cinematicUniverseCanonStatus: (data['cinematicUniverseCanonStatus'] ??
-              data['cinematic_universe_canon_status'])
-          ?.toString(),
-      cinematicUniverseContinuityId: (data['cinematicUniverseContinuityId'] ??
-              data['cinematic_universe_continuity_id'])
-          ?.toString(),
-      postCreditSceneCount: _intValue(
-          data['postCreditSceneCount'] ?? data['post_credit_scene_count']),
-      narrativePrerequisiteIds: _stringList(data['narrativePrerequisiteIds'] ??
-          data['narrative_prerequisite_ids']),
-      universeMetadataSource:
-          (data['universeMetadataSource'] ?? data['universe_metadata_source'])
-              ?.toString(),
-      universeMetadataVerifiedAt: DateTime.tryParse(
-          (data['universeMetadataVerifiedAt'] ??
-                      data['universe_metadata_verified_at'])
-                  ?.toString() ??
-              ''),
-      actors: _stringList(data['actors']),
-      characters: _stringList(data['characters']),
-      directors: _stringList(data['directors']),
-      writers: _stringList(data['writers']),
-      music: _stringList(data['music']),
+      continuityName: (data['continuityName'] ?? data['continuity_name'])?.toString(),
+      cinematicUniverseIds: _stringList(data['cinematicUniverseIds'] ?? data['cinematic_universe_ids']),
+      cinematicUniverseNames: _stringList(data['cinematicUniverseNames'] ?? data['cinematic_universe_names']),
+      cinematicUniverseSaga: (data['cinematicUniverseSaga'] ?? data['cinematic_universe_saga'])?.toString(),
+      cinematicUniversePhase: (data['cinematicUniversePhase'] ?? data['cinematic_universe_phase'])?.toString(),
+      cinematicUniverseReleaseOrder: _intValue(data['cinematicUniverseReleaseOrder'] ?? data['cinematic_universe_release_order']),
+      cinematicUniverseTimelineOrder: _intValue(data['cinematicUniverseTimelineOrder'] ?? data['cinematic_universe_timeline_order']),
+      cinematicUniverseTimelineLabel: (data['cinematicUniverseTimelineLabel'] ?? data['cinematic_universe_timeline_label'])?.toString(),
+      cinematicUniverseCanonStatus: (data['cinematicUniverseCanonStatus'] ?? data['cinematic_universe_canon_status'])?.toString(),
+      cinematicUniverseContinuityId: (data['cinematicUniverseContinuityId'] ?? data['cinematic_universe_continuity_id'])?.toString(),
+      postCreditSceneCount: _intValue(data['postCreditSceneCount'] ?? data['post_credit_scene_count']),
+      narrativePrerequisiteIds: _stringList(data['narrativePrerequisiteIds'] ?? data['narrative_prerequisite_ids']),
+      universeMetadataSource: (data['universeMetadataSource'] ?? data['universe_metadata_source'])?.toString(),
+      universeMetadataVerifiedAt: DateTime.tryParse((data['universeMetadataVerifiedAt'] ?? data['universe_metadata_verified_at'])?.toString() ?? ''),
+      actors: actorNames,
+      characters: characterNames,
+      directors: directorNames,
+      writers: writerNames,
+      music: musicNames,
       genres: _stringList(data['genres']),
       primaryGenre: (data['primaryGenre'] ?? data['primary_genre'])?.toString(),
-      genreBlendLabelOverride: (data['genreBlendLabelOverride'] ??
-              data['genre_blend_label_override'])
-          ?.toString(),
+      genreBlendLabelOverride: (data['genreBlendLabelOverride'] ?? data['genre_blend_label_override'])?.toString(),
       tags: _stringList(data['tags']),
-      studios: _stringList(data['studios'] ?? data['productionStudios']),
-      companies: _stringList(data['companies'] ?? data['productionCompanies']),
+      studios: _combinedCreditNameList([
+        data['studios'],
+        data['productionStudios'],
+        data['production_studios'],
+      ]),
+      companies: _combinedCreditNameList([
+        data['companies'],
+        data['productionCompanies'],
+        data['production_companies'],
+        data['company'],
+      ]),
       chapters: _stringList(data['chapters']),
       audioTracks: _stringList(data['audioTracks']),
       subtitles: _stringList(data['subtitles']),
@@ -601,6 +745,26 @@ class MediaItem {
     return int.tryParse(value?.toString() ?? '');
   }
 
+  /// Parses the calendar date exactly as the provider wrote it. Release-order
+  /// values are dates, not instants, so an ISO timestamp's timezone must not
+  /// move the item to the previous/next calendar day.
+  static DateTime? _dateValue(dynamic value) {
+    if (value is DateTime) {
+      return DateTime(value.year, value.month, value.day);
+    }
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+
+    final datePrefix =
+        RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(text)?.group(1);
+    // Year-only and year-month fields are intentionally not promoted to a
+    // full date: assigning the first day of a month would invent chronology.
+    if (datePrefix == null) return null;
+    final parsed = DateTime.tryParse(datePrefix);
+    if (parsed == null) return null;
+    return DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
   static bool _boolValue(dynamic value) {
     if (value is bool) return value;
     if (value is num) return value != 0;
@@ -627,44 +791,16 @@ class MediaItem {
   }
 
   static const List<String> _yearMetadataKeys = <String>[
-    'releaseYear',
-    'release_year',
-    'firstAirYear',
-    'first_air_year',
-    'airYear',
-    'air_year',
-    'year',
-    'startYear',
-    'start_year',
-    'endYear',
-    'end_year',
-    'firstAirDate',
-    'first_air_date',
-    'airDate',
-    'air_date',
-    'releaseDate',
-    'release_date',
-    'premiereDate',
-    'premiere_date',
-    'firstAired',
-    'first_aired',
-    'lastAirYear',
-    'last_air_year',
-    'lastAirDate',
-    'last_air_date',
-    'finalAirDate',
-    'final_air_date',
-    'endDate',
-    'end_date',
-    'lastAired',
-    'last_aired',
-    'finaleDate',
-    'finale_date',
-    'firstEpisodeAirDate',
-    'first_episode_air_date',
-    'lastEpisodeAirDate',
-    'last_episode_air_date',
-    'date',
+    'releaseYear', 'release_year', 'firstAirYear', 'first_air_year',
+    'airYear', 'air_year', 'year', 'startYear', 'start_year',
+    'endYear', 'end_year', 'firstAirDate', 'first_air_date',
+    'airDate', 'air_date', 'releaseDate', 'release_date',
+    'premiereDate', 'premiere_date', 'firstAired', 'first_aired',
+    'lastAirYear', 'last_air_year', 'lastAirDate', 'last_air_date',
+    'finalAirDate', 'final_air_date', 'endDate', 'end_date',
+    'lastAired', 'last_aired', 'finaleDate', 'finale_date',
+    'firstEpisodeAirDate', 'first_episode_air_date',
+    'lastEpisodeAirDate', 'last_episode_air_date', 'date',
   ];
 
   static int? _yearFromValue(dynamic raw) {
@@ -679,7 +815,8 @@ class MediaItem {
     if (direct != null) return direct >= 1800 && direct <= 2200 ? direct : null;
     final date = DateTime.tryParse(value);
     if (date != null) return date.year;
-    final match = RegExp(r'\b((?:18|19|20|21|22)\d{2})\b').firstMatch(value);
+    final match = RegExp(r'\b((?:18|19|20|21|22)\d{2})\b')
+        .firstMatch(value);
     final parsed = int.tryParse(match?.group(1) ?? '');
     return parsed != null && parsed >= 1800 && parsed <= 2200 ? parsed : null;
   }
@@ -715,20 +852,12 @@ class MediaItem {
       .replaceAll(RegExp(r'[_-]+'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ');
 
-  bool get isSeriesOngoing =>
-      seriesOngoing ||
-      const <String>{
-        'ongoing',
-        'airing',
-        'returning',
-        'returning series',
+  bool get isSeriesOngoing => seriesOngoing || const <String>{
+        'ongoing', 'airing', 'returning', 'returning series',
       }.contains(_normalizedSeriesStatus);
 
   bool get isSeriesUpcoming => const <String>{
-        'upcoming',
-        'announced',
-        'in development',
-        'coming soon',
+        'upcoming', 'announced', 'in development', 'coming soon',
       }.contains(_normalizedSeriesStatus);
 
   /// Derives a single season's run from the season metadata and episode air dates.
@@ -754,13 +883,12 @@ class MediaItem {
     if (isSeries) {
       final years = _knownSeriesYears;
       if (isSeriesUpcoming) {
-        final comingYear = seriesStartYear ??
-            releaseYear ??
+        final comingYear = seriesStartYear ?? releaseYear ??
             (years.isNotEmpty ? years.first : null);
         return comingYear == null ? 'Coming soon' : 'Coming $comingYear';
       }
-      final start =
-          seriesStartYear ?? (years.isNotEmpty ? years.first : releaseYear);
+      final start = seriesStartYear ??
+          (years.isNotEmpty ? years.first : releaseYear);
       final end = seriesEndYear ?? (years.isNotEmpty ? years.last : null);
       if (isSeriesOngoing) return start == null ? 'Ongoing' : '$start–Present';
       if (start == null) return end?.toString();
@@ -785,9 +913,7 @@ class MediaItem {
   String? get displayEditionLabel {
     final name = editionName?.trim();
     if (name != null && name.isNotEmpty) return name;
-    final kind = (editionType ?? '')
-        .trim()
-        .toLowerCase()
+    final kind = (editionType ?? '').trim().toLowerCase()
         .replaceAll(RegExp(r'[_\s]+'), '-');
     if (kind.isEmpty) return null;
     return switch (kind) {
@@ -817,6 +943,160 @@ class MediaItem {
         .toList();
   }
 
+  static Map<String, dynamic> _creditMap(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  static dynamic _firstNonEmptyCreditValue(List<dynamic> values) {
+    for (final value in values) {
+      if (value is String && value.trim().isNotEmpty) return value;
+      if (value is List && value.isNotEmpty) return value;
+      if (value is Map && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  static List<String> _firstCreditNameList(List<dynamic> values) {
+    for (final value in values) {
+      final names = _creditNameList(value);
+      if (names.isNotEmpty) return names;
+    }
+    return <String>[];
+  }
+
+  /// Combines alternate catalog fields while preserving order and avoiding
+  /// duplicates. Production-company providers commonly return objects instead
+  /// of strings (for example, {"id": 1, "name": "Example Studio"}).
+  static List<String> _combinedCreditNameList(List<dynamic> values) {
+    final seen = <String>{};
+    final names = <String>[];
+    for (final value in values) {
+      for (final rawName in _creditNameList(value)) {
+        final name = rawName.trim();
+        final key = name.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+        if (name.isNotEmpty && seen.add(key)) names.add(name);
+      }
+    }
+    return names;
+  }
+
+  static List<String> _creditNameList(dynamic value) {
+    final names = <String>[];
+    final seen = <String>{};
+
+    void addName(String raw) {
+      final name = raw.trim();
+      final key = name.toLowerCase();
+      if (name.isNotEmpty && seen.add(key)) names.add(name);
+    }
+
+    void visit(dynamic item) {
+      if (item == null) return;
+      if (item is String || item is num) {
+        addName(item.toString());
+        return;
+      }
+      if (item is List) {
+        for (final entry in item) {
+          visit(entry);
+        }
+        return;
+      }
+      if (item is! Map) return;
+
+      final map = Map<String, dynamic>.from(item);
+      for (final key in <String>[
+        'name', 'fullName', 'full_name', 'personName', 'person_name',
+        'displayName', 'display_name', 'creditedName', 'credited_name',
+        'actor', 'artist', 'writer', 'director', 'performer',
+        'person', 'member', 'crewMember', 'crew_member',
+      ]) {
+        final candidate = map[key];
+        if (candidate is String || candidate is num) {
+          addName(candidate.toString());
+          return;
+        }
+        if (candidate is Map) {
+          final nested = _creditNameList(candidate);
+          if (nested.isNotEmpty) {
+            for (final name in nested) {
+              addName(name);
+            }
+            return;
+          }
+        }
+      }
+
+      for (final key in <String>['items', 'results', 'people', 'members', 'cast', 'crew', 'credits']) {
+        if (map[key] is List || map[key] is Map) {
+          visit(map[key]);
+          return;
+        }
+      }
+    }
+
+    visit(value);
+    return names;
+  }
+
+  static List<String> _creditCharacterNames(dynamic value) {
+    final names = <String>[];
+    final seen = <String>{};
+    final rows = value is List ? value : <dynamic>[];
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final map = Map<String, dynamic>.from(row);
+      final raw = map['character'] ?? map['characterName'] ??
+          map['character_name'] ?? map['roleName'] ?? map['role_name'];
+      if (raw is! String && raw is! num) continue;
+      final name = raw.toString().trim();
+      if (name.isNotEmpty && seen.add(name.toLowerCase())) names.add(name);
+    }
+    return names;
+  }
+
+  static List<String> _crewNamesForRole(dynamic value, String kind) {
+    if (value is Map) {
+      final map = Map<String, dynamic>.from(value);
+      final roleKeys = switch (kind) {
+        'director' => <String>['directors', 'director', 'directing'],
+        'writer' => <String>['writers', 'screenwriters', 'screen_writers', 'writing', 'screenplay'],
+        'music' => <String>['composers', 'composer', 'music', 'score', 'soundtrack'],
+        _ => <String>[],
+      };
+      final directNames = _firstCreditNameList(
+        roleKeys.map((key) => map[key]).toList(growable: false),
+      );
+      if (directNames.isNotEmpty) return directNames;
+      value = map['items'] ?? map['results'] ?? map['people'] ??
+          map['members'] ?? map['crew'] ?? map['credits'];
+    }
+    final rows = value is List ? value : <dynamic>[];
+    final matches = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final map = Map<String, dynamic>.from(row);
+      final roleText = <String>[
+        map['job']?.toString() ?? '',
+        map['role']?.toString() ?? '',
+        map['department']?.toString() ?? '',
+        map['known_for_department']?.toString() ?? '',
+      ].join(' ').toLowerCase();
+      final isMatch = switch (kind) {
+        'director' => roleText.contains('director') || roleText.contains('directing'),
+        'writer' => roleText.contains('writer') || roleText.contains('writing') ||
+            roleText.contains('screenplay') || roleText.contains('script') ||
+            roleText.contains('story') || roleText.contains('author'),
+        'music' => roleText.contains('composer') || roleText.contains('music') ||
+            roleText.contains('score') || roleText.contains('songwriter'),
+        _ => false,
+      };
+      if (isMatch) matches.add(map);
+    }
+    return _creditNameList(matches);
+  }
+
   /// Performs `toJson` for this feature. Update this documentation when its contract changes.
   Map<String, dynamic> toJson() {
     return {
@@ -833,12 +1113,17 @@ class MediaItem {
       'titleAccentColor': titleAccentColor,
       'titleRevealAnimation': titleRevealAnimation,
       'releaseYear': releaseYear,
+      'releaseDate': releaseDate?.toIso8601String().substring(0, 10),
       'editionReleaseYear': editionReleaseYear,
+      'editionReleaseDate':
+          editionReleaseDate?.toIso8601String().substring(0, 10),
       'editionName': editionName,
       'editionType': editionType,
       'canonicalWorkId': canonicalWorkId,
       'editionFeatures': editionFeatures,
       'seriesStartYear': seriesStartYear,
+      'seriesStartDate':
+          seriesStartDate?.toIso8601String().substring(0, 10),
       'seriesEndYear': seriesEndYear,
       'seriesOngoing': seriesOngoing,
       'seriesStatus': seriesStatus,
@@ -877,6 +1162,12 @@ class MediaItem {
       'franchiseOrder': franchiseOrder,
       'franchiseNames': franchiseNames,
       'franchises': franchiseNames,
+      'franchiseTotalTitles': franchiseTotalTitles,
+      'franchiseTotalMovies': franchiseTotalMovies,
+      'franchiseTotalShows': franchiseTotalShows,
+      'cinematicUniverseTotalTitles': cinematicUniverseTotalTitles,
+      'cinematicUniverseTotalMovies': cinematicUniverseTotalMovies,
+      'cinematicUniverseTotalShows': cinematicUniverseTotalShows,
       'universeMemberships': universeMemberships,
       'continuityId': continuityId,
       'continuityName': continuityName,
@@ -892,8 +1183,7 @@ class MediaItem {
       'postCreditSceneCount': postCreditSceneCount,
       'narrativePrerequisiteIds': narrativePrerequisiteIds,
       'universeMetadataSource': universeMetadataSource,
-      'universeMetadataVerifiedAt':
-          universeMetadataVerifiedAt?.toIso8601String(),
+      'universeMetadataVerifiedAt': universeMetadataVerifiedAt?.toIso8601String(),
       'actors': actors,
       'characters': characters,
       'directors': directors,
@@ -1818,8 +2108,10 @@ class GroupWatchSession {
 /// Implements the `AppController` class for this feature or UI component.
 /// True for files created by the ARM mock worker, which are text placeholders
 /// rather than real video/audio assets.
-bool isArmMockServerMediaId(String id) =>
-    id.replaceAll('\\', '/').toLowerCase().startsWith('arm_mock/');
+bool isArmMockServerMediaId(String id) => id
+    .replaceAll('\\', '/')
+    .toLowerCase()
+    .startsWith('arm_mock/');
 
 /// Normalizes scanner-derived display titles without inventing catalog metadata.
 String normalizeHomeServerMediaTitle(String raw) {
@@ -2858,8 +3150,9 @@ class AppController extends ChangeNotifier {
 
   String _homeServerStreamUrl(String relativeMediaId) {
     final base = backendApi.baseUrl.replaceFirst(RegExp(r'/+$'), '');
-    return Uri.parse('$base/library/stream').replace(
-        queryParameters: <String, String>{'path': relativeMediaId}).toString();
+    return Uri.parse('$base/library/stream')
+        .replace(queryParameters: <String, String>{'path': relativeMediaId})
+        .toString();
   }
 
   bool _looksLikeServerMediaFileId(String id) => RegExp(
@@ -2884,23 +3177,16 @@ class AppController extends ChangeNotifier {
       if (id.isEmpty || row['type']?.toString().toLowerCase() == 'music') {
         continue;
       }
-      final isMock =
-          isArmMockServerMediaId(id) || row['isDemoArtifact'] == true;
+      final isMock = isArmMockServerMediaId(id) || row['isDemoArtifact'] == true;
       final tags = <String>{
         if (row['tags'] is List)
           ...(row['tags'] as List).map((tag) => tag.toString()),
       };
       row['id'] = id;
-      row['title'] =
-          normalizeHomeServerMediaTitle(row['title']?.toString() ?? '');
-      row['addedSource'] =
-          isMock ? 'arm-mock-placeholder' : 'home-server-scanner';
+      row['title'] = normalizeHomeServerMediaTitle(row['title']?.toString() ?? '');
+      row['addedSource'] = isMock ? 'arm-mock-placeholder' : 'home-server-scanner';
       if (isMock) {
-        tags.addAll(<String>{
-          'arm-mock-placeholder',
-          'demo-placeholder',
-          'not-playable'
-        });
+        tags.addAll(<String>{'arm-mock-placeholder', 'demo-placeholder', 'not-playable'});
         row['playbackUrl'] = null;
         row['description'] =
             'ARM mock placeholder only. The file contains text, not playable video/audio. Replace it with a real media file to enable playback.';
@@ -2970,8 +3256,9 @@ class AppController extends ChangeNotifier {
             ? existing!.imageUrl
             : scanned.imageUrl,
         'playbackUrl': playUrl,
-        'addedSource':
-            keepExistingSource ? existing.addedSource : 'home-server-scanner',
+        'addedSource': keepExistingSource
+            ? existing.addedSource
+            : 'home-server-scanner',
         'tags': mergedTags.toList(growable: false),
       });
     }
@@ -2990,11 +3277,7 @@ class AppController extends ChangeNotifier {
         description:
             'Found ${entry.value.length} ARM mock artifact file(s). These files contain placeholder text, not the actual movie/show or a playable stream.',
         addedSource: 'arm-mock-placeholder',
-        tags: <String>[
-          'arm-mock-placeholder',
-          'demo-placeholder',
-          'not-playable'
-        ],
+        tags: <String>['arm-mock-placeholder', 'demo-placeholder', 'not-playable'],
       );
     }
 
@@ -3006,70 +3289,119 @@ class AppController extends ChangeNotifier {
     return serverMedia.length;
   }
 
+  /// Makes clearly labeled, local-only demo titles available while browsing
+  /// and using Smart Search, even before a home-server scan has completed.
+  /// These entries have no playback URLs and are not uploaded as media files.
+  void ensureDemoPreviewMedia({bool notify = true}) {
+    var changed = false;
+
+    void addOrNormalizePreview(MediaItem item) {
+      final index = library.indexWhere((existing) => existing.id == item.id);
+      if (index < 0) {
+        library.add(item);
+        changed = true;
+        return;
+      }
+
+      final existing = library[index];
+      // Migrate preview entries created by earlier versions, which lacked the
+      // explicit non-playable marker. Do not modify a record from another source.
+      if (existing.addedSource != 'demo-preview') return;
+      final tags = <String>{...existing.tags, ...item.tags};
+      final needsNormalization =
+          existing.playbackUrl != null ||
+          !existing.tags.contains('not-playable') ||
+          !existing.tags.contains('preview-only');
+      if (!needsNormalization) return;
+      library[index] = MediaItem.fromJson(<String, dynamic>{
+        ...existing.toJson(),
+        'playbackUrl': null,
+        'addedSource': 'demo-preview',
+        'tags': tags.toList(growable: false),
+      });
+      changed = true;
+    }
+
+    addOrNormalizePreview(MediaItem(
+      id: 'demo-preview-movie',
+      title: 'The Ember Protocol (Preview Movie)',
+      type: 'movie',
+      description:
+          'A fictional sci-fi action movie used to preview the Home carousel, movie details, and Smart Search. This is demo metadata only; no video file is attached and playback is unavailable.',
+      releaseYear: 2024,
+      rating: 7.8,
+      genres: const ['Science Fiction', 'Action', 'Adventure'],
+      tags: const ['demo-preview', 'not-playable', 'preview-only'],
+      addedSource: 'demo-preview',
+    ));
+
+    addOrNormalizePreview(MediaItem(
+      id: 'demo-preview-tv-show',
+      title: 'The Last Signal (Preview Show)',
+      type: 'tvShow',
+      description:
+          'A fictional sci-fi mystery series used to preview show details, seasons, and episode layouts. No video files are attached.',
+      releaseYear: 2026,
+      rating: 8.1,
+      genres: const ['Science Fiction', 'Mystery'],
+      tags: const ['demo-preview', 'not-playable', 'preview-only'],
+      addedSource: 'demo-preview',
+      seasons: const [
+        {
+          'seasonNumber': 1,
+          'title': 'Season 1',
+          'episodes': [
+            {
+              'episodeNumber': 1,
+              'title': 'The First Pulse',
+              'duration': 42,
+              'description': 'A strange signal interrupts a quiet night.'
+            },
+            {
+              'episodeNumber': 2,
+              'title': 'Dead Air',
+              'duration': 44,
+              'description':
+                  'The team traces the signal to an abandoned relay station.'
+            },
+            {
+              'episodeNumber': 3,
+              'title': 'Echoes',
+              'duration': 46,
+              'description':
+                  'A second transmission reveals a troubling pattern.'
+            },
+          ],
+        },
+      ],
+    ));
+
+    addOrNormalizePreview(MediaItem(
+      id: 'demo-preview-album',
+      title: 'Midnight Signals (Preview Album)',
+      type: 'album',
+      description:
+          'A fictional album used to preview album artwork, metadata, and details layouts. No audio files are attached.',
+      releaseYear: 2025,
+      genres: const ['Electronic', 'Ambient'],
+      tags: const ['demo-preview', 'not-playable', 'preview-only'],
+      addedSource: 'demo-preview',
+    ));
+
+    if (!changed) return;
+    _refreshAutomaticCollections();
+    if (notify) notifyListeners();
+  }
+
   /// Replaces the client library with media discovered on the home server.
   void replaceLibraryFromServer(List<MediaItem> media) {
     library
       ..clear()
       ..addAll(media);
 
-    // Clearly labeled local preview entries let the UI be evaluated without
-    // uploading fake content to Supabase/TrueNAS. They are re-added after each
-    // server refresh, but are never sent to the media server as imported files.
-    if (!library.any((item) => item.id == 'demo-preview-album')) {
-      library.add(MediaItem(
-        id: 'demo-preview-album',
-        title: 'Midnight Signals (Preview Album)',
-        type: 'album',
-        description:
-            'A fictional album used to preview album artwork, metadata, and details layouts. No audio files are attached.',
-        releaseYear: 2025,
-        genres: const ['Electronic', 'Ambient'],
-        tags: const ['demo-preview'],
-        addedSource: 'demo-preview',
-      ));
-    }
-    if (!library.any((item) => item.id == 'demo-preview-tv-show')) {
-      library.add(MediaItem(
-        id: 'demo-preview-tv-show',
-        title: 'The Last Signal (Preview Show)',
-        type: 'tvShow',
-        description:
-            'A fictional sci-fi mystery series used to preview show details, seasons, and episode layouts. No video files are attached.',
-        releaseYear: 2026,
-        rating: 8.1,
-        genres: const ['Science Fiction', 'Mystery'],
-        tags: const ['demo-preview'],
-        addedSource: 'demo-preview',
-        seasons: const [
-          {
-            'seasonNumber': 1,
-            'title': 'Season 1',
-            'episodes': [
-              {
-                'episodeNumber': 1,
-                'title': 'The First Pulse',
-                'duration': 42,
-                'description': 'A strange signal interrupts a quiet night.'
-              },
-              {
-                'episodeNumber': 2,
-                'title': 'Dead Air',
-                'duration': 44,
-                'description':
-                    'The team traces the signal to an abandoned relay station.'
-              },
-              {
-                'episodeNumber': 3,
-                'title': 'Echoes',
-                'duration': 46,
-                'description':
-                    'A second transmission reveals a troubling pattern.'
-              },
-            ],
-          },
-        ],
-      ));
-    }
+    // Clearly labeled local preview entries are kept local and are never
+    // sent to the media server as imported files.
+    ensureDemoPreviewMedia(notify: false);
     _refreshAutomaticCollections();
     final profile = currentProfile;
     if (profile != null) {
@@ -3218,8 +3550,7 @@ class AppController extends ChangeNotifier {
   /// Adds a profile-scoped playback completion event for Wrapped. This is a
   /// compact activity record only: it stores metadata and timestamps, never
   /// media bytes, credentials, or a raw storage path.
-  Future<void> recordWrappedActivity(MediaItem media) =>
-      recordWrappedActivityDetails(
+  Future<void> recordWrappedActivity(MediaItem media) => recordWrappedActivityDetails(
         mediaId: media.id,
         canonicalWorkId: media.canonicalWorkId ?? media.id,
         title: media.title,
@@ -3240,9 +3571,7 @@ class AppController extends ChangeNotifier {
     String? profileIdOverride,
   }) async {
     final profileId = (profileIdOverride ?? currentProfile?.id ?? '').trim();
-    if (profileId.isEmpty || mediaId.trim().isEmpty || title.trim().isEmpty) {
-      return;
-    }
+    if (profileId.isEmpty || mediaId.trim().isEmpty || title.trim().isEmpty) return;
 
     try {
       final prefs = _badgePrefs ?? await SharedPreferences.getInstance();
@@ -3255,8 +3584,8 @@ class AppController extends ChangeNotifier {
           final decoded = jsonDecode(raw);
           if (decoded is List) {
             records.addAll(decoded.whereType<Map>().map(
-                  (entry) => Map<String, dynamic>.from(entry),
-                ));
+              (entry) => Map<String, dynamic>.from(entry),
+            ));
           }
         } catch (_) {
           // Start a fresh bounded journal if an old local cache is malformed.
@@ -6112,6 +6441,7 @@ class DetailsCustomization {
               'Metadata',
               'Ownership',
               'Description',
+              'Cast & Crew',
               'Seasons',
               'Collection Items',
               'Play',
@@ -6187,6 +6517,14 @@ class DetailsCustomizationStore {
   static DetailsCustomization settingsFor(Profile? profile) {
     final key = profile?.id ?? 'default';
     final value = _settings.putIfAbsent(key, () => DetailsCustomization());
+    if (!value.sectionOrder.contains('Cast & Crew')) {
+      final descriptionIndex = value.sectionOrder.indexOf('Description');
+      if (descriptionIndex >= 0) {
+        value.sectionOrder.insert(descriptionIndex + 1, 'Cast & Crew');
+      } else {
+        value.sectionOrder.insert(0, 'Cast & Crew');
+      }
+    }
     if (!value.sectionOrder.contains('Collection Items')) {
       value.sectionOrder.add('Collection Items');
     }

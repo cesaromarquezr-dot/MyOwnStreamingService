@@ -12,8 +12,6 @@ import 'app_core.dart';
 import 'backend_api.dart';
 import 'library_release.dart';
 import 'physical_media_library.dart';
-import 'franchise_universe_browse_hub.dart';
-import 'ai_bot_center.dart';
 
 import 'signup.dart';
 import 'smart_search.dart';
@@ -31,9 +29,14 @@ import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
 import 'home_streaming_discovery.dart';
-import 'home_hero_rotation.dart';
+import 'home_arrow_rail.dart';
+import 'home_franchise_progress.dart';
+import 'playback_diagnostics_center.dart';
+import 'platform_reliability_center.dart';
+import 'connected_command_center.dart';
 import 'movies.dart';
 import 'series.dart';
+import 'release_order_timeline.dart';
 import 'innovation_features.dart';
 import 'supabase/supabase_service.dart';
 import 'responsive.dart';
@@ -50,7 +53,8 @@ import 'production_readiness.dart';
 import 'security_settings.dart';
 import 'navigation_hubs.dart';
 import 'media_universe.dart';
-import 'watch_hub.dart';
+import 'my_tv.dart';
+import 'public_live_tv.dart';
 import 'marketplace_hub.dart';
 import 'social_story_experience.dart';
 import 'app_customization.dart';
@@ -62,6 +66,7 @@ import 'tv_controller.dart';
 import 'tv_host.dart';
 import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
+import 'cinematic_discovery_studio.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -881,7 +886,6 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
                         {'id': 'tv-shows', 'label': 'TV shows'},
                         {'id': 'music', 'label': 'Music'},
                         {'id': 'collections', 'label': 'Collections'},
-                        {'id': 'my-tv', 'label': 'My TV'},
                         {'id': 'favorites', 'label': 'Favorites'},
                         {'id': 'coming-soon', 'label': 'Coming soon'},
                       ])
@@ -2066,8 +2070,11 @@ class HomeCustomizationStore {
             settings.sectionOrder.insert(0, 'Friends & Communities');
           }
           settings.navigationOrder.removeWhere(
-            (item) => item == 'Group Chat' || item == 'Discover' ||
-                item == 'My TV' || item == 'Shop',
+            (item) =>
+                item == 'Group Chat' ||
+                item == 'Discover' ||
+                item == 'My TV' ||
+                item == 'Shop',
           );
           if (!settings.navigationOrder.contains('Surprise Me')) {
             final moreIndex = settings.navigationOrder.indexOf('More');
@@ -2091,8 +2098,11 @@ class HomeCustomizationStore {
     final value =
         _settings.putIfAbsent(_key(profile), () => HomeCustomization());
     value.navigationOrder.removeWhere(
-      (item) => item == 'Group Chat' || item == 'Discover' ||
-          item == 'My TV' || item == 'Shop',
+      (item) =>
+          item == 'Group Chat' ||
+          item == 'Discover' ||
+          item == 'My TV' ||
+          item == 'Shop',
     );
     if (!value.navigationOrder.contains('Surprise Me')) {
       final moreIndex = value.navigationOrder.indexOf('More');
@@ -2121,8 +2131,11 @@ class HomeCustomizationStore {
     final key = _key(profile ?? AppController.instance.currentProfile);
     final copy = value.copy();
     copy.navigationOrder.removeWhere(
-      (item) => item == 'Group Chat' || item == 'Discover' ||
-          item == 'My TV' || item == 'Shop',
+      (item) =>
+          item == 'Group Chat' ||
+          item == 'Discover' ||
+          item == 'My TV' ||
+          item == 'Shop',
     );
     _settings[key] = copy;
     _prefs?.setString('home_customization_$key', jsonEncode(_toJson(copy)));
@@ -4942,17 +4955,11 @@ void _showGlobalMore() {
       },
       onMyTv: () {
         Navigator.of(sheetContext).pop();
-        push(
-            const WatchHubScreen(
-                initialMode: WatchHubMode.myTv, standalone: true),
-            routeName: '/app/watch/my-tv');
+        push(const MyTvScreen(), routeName: '/app/watch/my-tv');
       },
       onPublicLiveTv: () {
         Navigator.of(sheetContext).pop();
-        push(
-            const WatchHubScreen(
-                initialMode: WatchHubMode.liveTv, standalone: true),
-            routeName: '/app/watch/live-tv');
+        push(const PublicLiveTvScreen(), routeName: '/app/watch/live-tv');
       },
       onTvController: () {
         Navigator.of(sheetContext).pop();
@@ -4988,19 +4995,23 @@ void _showGlobalMore() {
       },
       onWrapped: () {
         Navigator.of(sheetContext).pop();
-        push(const MediaWrappedCollectionsScreen(), routeName: '/app/page/wrapped');
+        push(const MediaWrappedCollectionsScreen(),
+            routeName: '/app/page/wrapped');
       },
       onSpecialEvents: () {
         Navigator.of(sheetContext).pop();
-        push(const MyTvSpecialEventsScreen(), routeName: '/app/page/special-events');
+        push(const MyTvSpecialEventsScreen(),
+            routeName: '/app/page/special-events');
       },
       onInterruptionMode: () {
         Navigator.of(sheetContext).pop();
-        push(const RealLifeInterruptionModeScreen(), routeName: '/app/page/interruption-mode');
+        push(const RealLifeInterruptionModeScreen(),
+            routeName: '/app/page/interruption-mode');
       },
       onSecurityBots: () {
         Navigator.of(sheetContext).pop();
-        push(const SecurityBotCenterScreen(), routeName: '/app/page/security-bots');
+        push(const SecurityBotCenterScreen(),
+            routeName: '/app/page/security-bots');
       },
     ),
   );
@@ -5091,7 +5102,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           onMessageProfile: _messageAccountProfile,
         );
       case PrimaryDestination.library:
-        return const WatchHubScreen();
+        return const LibraryHubScreen();
       case PrimaryDestination.friends:
         return FriendsAndCommunitiesScreen(
           initialConversationId: widget.initialConversationId,
@@ -5301,18 +5312,6 @@ class AppShellHeader extends StatefulWidget {
 }
 
 class _AppShellHeaderState extends State<AppShellHeader> {
-  final controller = TextEditingController();
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    widget.onSearch(controller.text.trim());
-  }
-
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 760;
@@ -5334,24 +5333,55 @@ class _AppShellHeaderState extends State<AppShellHeader> {
             const SizedBox(width: 18),
           ],
           Expanded(
-            child: TextField(
-              controller: controller,
-              readOnly: true,
-              showCursor: false,
-              onTap: _submit,
-              onSubmitted: (_) => _submit(),
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: compact
-                    ? 'Search everything…'
-                    : 'Search movies, TV, music, people, communities…',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: IconButton(
-                  tooltip: 'Search',
-                  onPressed: _submit,
-                  icon: const Icon(Icons.arrow_forward_rounded),
+            child: Semantics(
+              button: true,
+              label: 'Open Smart Search',
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () => widget.onSearch(''),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .055),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .12),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          color: Colors.white.withValues(alpha: .72),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            compact
+                                ? 'Search everything…'
+                                : 'Search movies, TV, music, people, communities…',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .65),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 19,
+                          color: Colors.white.withValues(alpha: .55),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                isDense: true,
               ),
             ),
           ),
@@ -5461,28 +5491,51 @@ class _MoreActionsSheet extends StatelessWidget {
             'Account & Server',
             'Manage members, profiles, storage and server',
             [
-              _MoreChoice('Account Members', 'Invite or manage account members', Icons.people_alt_outlined, onMembers),
-              _MoreChoice('Home Server', 'Server status and storage', Icons.dns_rounded, onHomeServer),
+              _MoreChoice('Account Members', 'Invite or manage account members',
+                  Icons.people_alt_outlined, onMembers),
+              _MoreChoice('Home Server', 'Server status and storage',
+                  Icons.dns_rounded, onHomeServer),
             ],
           ),
           _moreCard(Icons.album_rounded, 'Import / Rip',
               'Import media and run the ARM disc-import workflow', onImport),
-          _moreCard(Icons.settings_rounded, 'Settings',
-              'Account, subscription, device, playback and support settings', onSettings),
-          _moreCard(Icons.auto_awesome_rounded, 'My Entertainment Wrapped',
-              'Monthly/yearly recaps and archived Wrapped Collections', onWrapped),
-          _moreCard(Icons.event_available_rounded, 'My TV Special Events',
-              'Stable, randomized theme weeks spread throughout the year', onSpecialEvents),
-          _moreCard(Icons.pause_circle_outline_rounded, 'Interruption Mode',
-              'Pause, save playback position and resume with explicit controls', onInterruptionMode),
-          _moreCard(Icons.health_and_safety_outlined, 'Security & Database Bots',
-              'Run owner-only read-only security and integrity checks', onSecurityBots),
-          _moreCard(Icons.admin_panel_settings_rounded, 'Production Readiness',
-              'Owner-only service health, backups and operations', onProductionReadiness),
+          _moreCard(
+              Icons.settings_rounded,
+              'Settings',
+              'Account, subscription, device, playback and support settings',
+              onSettings),
+          _moreCard(
+              Icons.auto_awesome_rounded,
+              'My Entertainment Wrapped',
+              'Monthly/yearly recaps and archived Wrapped Collections',
+              onWrapped),
+          _moreCard(
+              Icons.event_available_rounded,
+              'My TV Special Events',
+              'Stable, randomized theme weeks spread throughout the year',
+              onSpecialEvents),
+          _moreCard(
+              Icons.pause_circle_outline_rounded,
+              'Interruption Mode',
+              'Pause, save playback position and resume with explicit controls',
+              onInterruptionMode),
+          _moreCard(
+              Icons.health_and_safety_outlined,
+              'Security & Database Bots',
+              'Run owner-only read-only security and integrity checks',
+              onSecurityBots),
+          _moreCard(
+              Icons.admin_panel_settings_rounded,
+              'Production Readiness',
+              'Owner-only service health, backups and operations',
+              onProductionReadiness),
           _moreCard(Icons.security_rounded, 'Security & Privacy',
               'Sessions, MFA and account security', onSecurityPrivacy),
-          _moreCard(Icons.accessibility_new_rounded, 'Accessibility & Offline',
-              'Text scaling, activity privacy and pending sync', onAccessibilityOffline),
+          _moreCard(
+              Icons.accessibility_new_rounded,
+              'Accessibility & Offline',
+              'Text scaling, activity privacy and pending sync',
+              onAccessibilityOffline),
         ],
       ),
     );
@@ -5602,35 +5655,33 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _heroController;
-  Timer? _dailyHeroRefreshTimer;
-  bool _homeServerSyncInProgress = false;
 
   @override
 
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    // Keep Home previewable before a home-server scan completes; Smart Search
+    // can immediately find the explicitly labeled, non-playable demo entries.
+    AppController.instance.ensureDemoPreviewMedia(notify: false);
+    if (AppController.instance.backendApi.isAuthenticated) {
+      unawaited(_syncHomeServerMedia());
+    }
     StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
     unawaited(_loadStoryPlacement());
-    unawaited(_syncHomeServerCatalog(showErrors: false));
     _heroController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
-    _scheduleDailyHeroRefresh();
   }
 
-  /// Rebuild Home at local midnight so the daily hero selection changes even
-  /// when the app remains open overnight.
-  void _scheduleDailyHeroRefresh() {
-    _dailyHeroRefreshTimer?.cancel();
-    final now = DateTime.now();
-    final nextLocalDay = DateTime(now.year, now.month, now.day + 1);
-    _dailyHeroRefreshTimer = Timer(nextLocalDay.difference(now), () {
-      if (!mounted) return;
-      setState(() {});
-      _scheduleDailyHeroRefresh();
-    });
+  Future<void> _syncHomeServerMedia() async {
+    try {
+      await AppController.instance.syncHomeServerLibrary();
+    } catch (_) {
+      // Local preview media stays available even when the server is offline.
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadStoryPlacement() async {
@@ -5647,40 +5698,67 @@ class _HomeScreenState extends State<HomeScreen>
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
-    _dailyHeroRefreshTimer?.cancel();
     _heroController.dispose();
     super.dispose();
   }
 
-  /// Performs `_refresh` for this feature. Update this documentation when its contract changes.
-  Future<void> _syncHomeServerCatalog({required bool showErrors}) async {
-    final controller = AppController.instance;
-    if (!controller.backendApi.isAuthenticated || _homeServerSyncInProgress) {
-      return;
-    }
-    _homeServerSyncInProgress = true;
-    try {
-      await controller.syncHomeServerLibrary();
-    } catch (error) {
-      if (showErrors && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Home library sync failed: ${error.toString().replaceFirst('Exception: ', '')}',
+  void _showHomeExploreMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => _PremiumSheet(
+        title: 'Explore',
+        subtitle:
+            'More ways to discover your movies, shows, music and collections.',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.timeline_rounded),
+              title: const UniversalText('Release Order'),
+              subtitle: const UniversalText(
+                  'Browse movies, shows and albums grouped by release year.'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    settings:
+                        const RouteSettings(name: '/app/page/release-order'),
+                    builder: (_) => const ReleaseOrderTimelineScreen(),
+                  ),
+                );
+              },
             ),
-          ),
-        );
-      }
-    } finally {
-      _homeServerSyncInProgress = false;
-      if (mounted) setState(() {});
-    }
+            ListTile(
+              leading: const Icon(Icons.hub_rounded),
+              title: const UniversalText('Media Universe'),
+              subtitle: const UniversalText(
+                  'Explore titles, connected franchises, people and artwork.'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(name: '/app/media-universe'),
+                    builder: (_) => const MediaUniverseScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
+  /// Performs `_refresh` for this feature. Update this documentation when its contract changes.
   Future<void> _refresh() async {
     final controller = AppController.instance;
     if (controller.backendApi.isAuthenticated) {
-      await _syncHomeServerCatalog(showErrors: true);
       await controller.loadRecommendations();
       await controller.loadGroupWishlist();
       await controller.loadGroupRecommendations();
@@ -5703,13 +5781,17 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
-    final library = controller.library;
+    final library = controller.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
     final settings = widget.previewSettings ??
         HomeCustomizationStore.settingsFor(
             AppController.instance.currentProfile);
     final homeBackground = colorFromName(settings.homeBackgroundColor);
 
-    final watched = controller.watched;
+    final watched = controller.watched
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
     final movies =
         library.where((media) => media.type.toLowerCase() == 'movie').toList();
     final tvShows = library.where((media) {
@@ -5719,37 +5801,27 @@ class _HomeScreenState extends State<HomeScreen>
     // Compute personalized ranking once per Home build rather than once per
     // section, keeping search/discovery overhead bounded on larger libraries.
     final homeRecommendations = SmartSearch.recommendations(library);
-    // Build a daily-stable, date-seeded hero lineup. The ordering and (when the
-    // catalog has more than 15 candidates) the selected titles change each day,
-    // while rebuilding Home during the same day does not reshuffle the banner.
-    // Prefer artwork for the visual hero, then fill any remaining slots with
-    // other accessible movies/shows if the artwork-ready pool is too small.
-    final heroDay = DateTime.now();
-    final homeHeroVisualCandidates = <MediaItem>[
+    // Prefer personalized, recently watched, and then remaining library titles
+    // for the rotating hero. Deduplicate so a title never repeats in one cycle.
+    final homeHeroItems = <MediaItem>[];
+    final homeHeroSeen = <String>{};
+    final homeHeroCandidates = <MediaItem>[
       ...homeRecommendations
           .where((item) => item.imageUrl?.trim().isNotEmpty == true),
       ...watched.where((item) => item.imageUrl?.trim().isNotEmpty == true),
       ...library.where((item) => item.imageUrl?.trim().isNotEmpty == true),
+      ...homeRecommendations,
+      ...watched,
+      ...library,
     ];
-    final homeHeroItems = dailyHeroSelection<MediaItem>(
-      candidates: homeHeroVisualCandidates,
-      keyOf: (item) => item.id,
-      date: heroDay,
-      limit: 15,
-    ).toList();
-    if (homeHeroItems.length < 15) {
-      final selectedHeroIds = homeHeroItems.map((item) => item.id).toSet();
-      final heroFallbackCandidates = <MediaItem>[
-        ...homeRecommendations,
-        ...watched,
-        ...library,
-      ].where((item) => !selectedHeroIds.contains(item.id));
-      homeHeroItems.addAll(dailyHeroSelection<MediaItem>(
-        candidates: heroFallbackCandidates,
-        keyOf: (item) => item.id,
-        date: heroDay,
-        limit: 15 - homeHeroItems.length,
-      ));
+    for (final item in homeHeroCandidates) {
+      if (homeHeroItems.length >= 8) break;
+      if (homeHeroSeen.add(item.id)) homeHeroItems.add(item);
+    }
+    // If the current catalog is sparse, still render titles even if poster art
+    // has not finished importing yet.
+    if (homeHeroItems.isEmpty && library.isNotEmpty) {
+      homeHeroItems.addAll(library.take(8));
     }
 
     return Scaffold(
@@ -5785,6 +5857,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             SliverToBoxAdapter(
               child: HomeBrowseNavigation(
+                onExplore: _showHomeExploreMenu,
                 onMovies: () => Navigator.push(
                     context,
                     MaterialPageRoute<void>(
@@ -5803,34 +5876,25 @@ class _HomeScreenState extends State<HomeScreen>
                       settings: const RouteSettings(name: '/app/page/music'),
                       builder: (_) => const MusicScreen(),
                     )),
-                onPhysicalMedia: () => Navigator.push<void>(
-                  context,
-                  MaterialPageRoute<void>(
-                    settings: const RouteSettings(name: '/app/physical-media'),
-                    builder: (_) => const PhysicalMediaLibraryScreen(),
-                  ),
-                ),
-                onFranchises: () => Navigator.push<void>(
-                  context,
-                  MaterialPageRoute<void>(
-                    settings: const RouteSettings(name: '/app/franchises'),
-                    builder: (_) => const FranchiseUniverseBrowseHubScreen(mode: FranchiseUniverseBrowseMode.franchises),
-                  ),
-                ),
-                onCinematicUniverses: () => Navigator.push<void>(
-                  context,
-                  MaterialPageRoute<void>(
-                    settings: const RouteSettings(name: '/app/cinematic-universes'),
-                    builder: (_) => const FranchiseUniverseBrowseHubScreen(mode: FranchiseUniverseBrowseMode.universes),
-                  ),
-                ),
-                onAiBots: () => Navigator.push<void>(
-                  context,
-                  MaterialPageRoute<void>(
-                    settings: const RouteSettings(name: '/app/ai-bots'),
-                    builder: (_) => const AiBotCenterScreen(),
-                  ),
-                ),
+                onPhysicalMedia: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      settings:
+                          const RouteSettings(name: '/app/physical-media'),
+                      builder: (_) => const PhysicalMediaLibraryScreen(),
+                    )),
+                onLiveTv: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: '/app/watch/live-tv'),
+                      builder: (_) => const PublicLiveTvScreen(),
+                    )),
+                onMyTv: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: '/app/watch/my-tv'),
+                      builder: (_) => const MyTvScreen(),
+                    )),
               ),
             ),
             if (settings.showHero && homeHeroItems.isNotEmpty)
@@ -5857,6 +5921,10 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
+            // Franchise/saga and cinematic-universe progress live near the
+            // top of Home so completion status is visible without opening Explore.
+            const SliverToBoxAdapter(child: HomeFranchiseSagaHub()),
+            const SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf()),
             SliverToBoxAdapter(
               child: AccountProfileActivityStrip(
                 onMessageProfile: widget.onMessageProfile,
@@ -5907,6 +5975,12 @@ class _HomeScreenState extends State<HomeScreen>
                       library: library, watched: watched),
                 ),
                 const SliverToBoxAdapter(child: HomeCollectionShelves()),
+                SliverToBoxAdapter(
+                  child: HomeReasonedRecommendationShelves(
+                    library: library,
+                    watched: watched,
+                  ),
+                ),
               ],
             ],
             if (!settings.sectionOrder.contains('Continue Watching')) ...[
@@ -5916,6 +5990,12 @@ class _HomeScreenState extends State<HomeScreen>
                     library: library, watched: watched),
               ),
               const SliverToBoxAdapter(child: HomeCollectionShelves()),
+              SliverToBoxAdapter(
+                child: HomeReasonedRecommendationShelves(
+                  library: library,
+                  watched: watched,
+                ),
+              ),
             ],
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
@@ -6053,57 +6133,49 @@ class _HomeContinueListeningSectionState
                   title: 'Continue Listening',
                   subtitle: 'Pick up your music where you left off',
                 ),
-                HomeHorizontalArrowRail(
+                HomeArrowRail(
                   height: 176,
                   itemCount: tracks.take(12).length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final track = tracks[index];
-                      final playing = current?.id == track.id &&
-                          MusicPlaybackController.instance.isPlaying;
-                      return SizedBox(
-                        width: 136,
-                        child: Material(
-                          color: Colors.white.withValues(alpha: .045),
-                          borderRadius: BorderRadius.circular(16),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () {
-                              final playback = MusicPlaybackController.instance;
-                              if (playback.currentTrack?.id == track.id &&
-                                  playback.isReady) {
-                                unawaited(playback.toggle());
-                              } else {
-                                unawaited(playback.play(track));
-                              }
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: SizedBox.expand(
-                                        child: track.artworkUrl
-                                                    ?.trim()
-                                                    .isNotEmpty ==
-                                                true
-                                            ? Image.network(
-                                                track.artworkUrl!,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) =>
-                                                    const ColoredBox(
-                                                  color: Color(0xFF252525),
-                                                  child: Center(
-                                                      child: Icon(
-                                                          Icons
-                                                              .music_note_rounded,
-                                                          size: 36)),
-                                                ),
-                                              )
-                                            : const ColoredBox(
+                  separatorExtent: 12,
+                  padding: const EdgeInsets.symmetric(horizontal: 48),
+                  itemBuilder: (context, index) {
+                    final track = tracks[index];
+                    final playing = current?.id == track.id &&
+                        MusicPlaybackController.instance.isPlaying;
+                    return SizedBox(
+                      width: 136,
+                      child: Material(
+                        color: Colors.white.withValues(alpha: .045),
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () {
+                            final playback = MusicPlaybackController.instance;
+                            if (playback.currentTrack?.id == track.id &&
+                                playback.isReady) {
+                              unawaited(playback.toggle());
+                            } else {
+                              unawaited(playback.play(track));
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: SizedBox.expand(
+                                      child: track.artworkUrl
+                                                  ?.trim()
+                                                  .isNotEmpty ==
+                                              true
+                                          ? Image.network(
+                                              track.artworkUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const ColoredBox(
                                                 color: Color(0xFF252525),
                                                 child: Center(
                                                     child: Icon(
@@ -6111,46 +6183,54 @@ class _HomeContinueListeningSectionState
                                                             .music_note_rounded,
                                                         size: 36)),
                                               ),
-                                      ),
+                                            )
+                                          : const ColoredBox(
+                                              color: Color(0xFF252525),
+                                              child: Center(
+                                                  child: Icon(
+                                                      Icons.music_note_rounded,
+                                                      size: 36)),
+                                            ),
                                     ),
                                   ),
-                                  const SizedBox(height: 7),
-                                  Row(
-                                    children: [
-                                      if (playing)
-                                        const Padding(
-                                          padding: EdgeInsets.only(right: 4),
-                                          child: Icon(Icons.graphic_eq_rounded,
-                                              size: 14,
-                                              color: Colors.greenAccent),
-                                        ),
-                                      Expanded(
-                                        child: Text(
-                                          track.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800),
-                                        ),
+                                ),
+                                const SizedBox(height: 7),
+                                Row(
+                                  children: [
+                                    if (playing)
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 4),
+                                        child: Icon(Icons.graphic_eq_rounded,
+                                            size: 14,
+                                            color: Colors.greenAccent),
                                       ),
-                                    ],
-                                  ),
-                                  Text(
-                                    track.artist,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.white60),
-                                  ),
-                                ],
-                              ),
+                                    Expanded(
+                                      child: Text(
+                                        track.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  track.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.white60),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 8),
               ],
             );
@@ -6215,9 +6295,11 @@ class _HomeSeasonalCollections extends StatelessWidget {
                 style: TextStyle(color: Colors.white38),
               )
             else
-              HomeHorizontalArrowRail(
+              SizedBox(
                 height: 90,
-                itemCount:
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount:
                       (matches.length + songs.length).clamp(0, 8).toInt(),
                   separatorBuilder: (_, __) => const SizedBox(width: 9),
                   itemBuilder: (_, index) => Container(
@@ -6237,6 +6319,7 @@ class _HomeSeasonalCollections extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: () => Navigator.push(
@@ -6600,15 +6683,13 @@ class MediaHorizontalList extends StatelessWidget {
   });
 
   @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
-    return HomeHorizontalArrowRail(
+    return HomeArrowRail(
       height: 245,
-      padding: const EdgeInsets.symmetric(horizontal: 48),
       itemCount: media.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (_, index) => MediaCard(media: media[index]),
+      separatorExtent: 12,
+      padding: const EdgeInsets.symmetric(horizontal: 48),
+      itemBuilder: (context, index) => MediaCard(media: media[index]),
     );
   }
 }
@@ -9057,4 +9138,981 @@ class _GroupWatchPreferencesScreenState
       ),
     );
   }
+}
+
+// ============================================================
+// HOME INTELLIGENCE CENTERS
+// ============================================================
+
+/// Persistent entry point to the five platform foundations requested for Home.
+/// This shelf is intentionally visible above the ordinary media rails.
+class HomeMediaIntelligenceToolsShelf extends StatelessWidget {
+  const HomeMediaIntelligenceToolsShelf({super.key});
+
+  void _open(BuildContext context, Widget page, String route) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      settings: RouteSettings(name: route),
+      builder: (_) => page,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tools = <({
+      String title,
+      String subtitle,
+      IconData icon,
+      Color color,
+      Widget page,
+      String route
+    })>[
+      (
+        title: 'Metadata Intelligence',
+        subtitle: 'Audit data gaps and review matches',
+        icon: Icons.manage_search_rounded,
+        color: const Color(0xFF8B7CFF),
+        page: const MetadataIntelligenceCenterScreen(),
+        route: '/app/metadata-intelligence'
+      ),
+      (
+        title: 'Collection Completion',
+        subtitle: 'Owned titles versus catalog totals',
+        icon: Icons.checklist_rounded,
+        color: const Color(0xFF9DE5B0),
+        page: const CollectionCompletionCenterScreen(),
+        route: '/app/collection-completion'
+      ),
+      (
+        title: 'Smart Collections & Planner',
+        subtitle: 'Build collections and marathons',
+        icon: Icons.auto_awesome_mosaic_rounded,
+        color: const Color(0xFFFFD18C),
+        page: const SmartCollectionsWatchPlannerScreen(),
+        route: '/app/smart-collections-planner'
+      ),
+      (
+        title: 'Playback & Server Health',
+        subtitle: 'Catalog readiness and diagnostics',
+        icon: Icons.monitor_heart_rounded,
+        color: const Color(0xFF80D5FF),
+        page: const PlaybackServerHealthCenterScreen(),
+        route: '/app/playback-server-health'
+      ),
+      (
+        title: 'Verified Backup & Recovery',
+        subtitle: 'Backup status and restore readiness',
+        icon: Icons.verified_user_rounded,
+        color: const Color(0xFFFFA6A6),
+        page: const VerifiedBackupRecoveryCenterScreen(),
+        route: '/app/verified-backup-recovery'
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _PremiumSectionHeader(
+            title: 'Library Intelligence & System Tools',
+            subtitle:
+                'Catalog quality, collection progress, smart planning, health, and recovery',
+          ),
+          HomeArrowRail(
+            height: 126,
+            itemCount: tools.length,
+            separatorExtent: 10,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) {
+              final tool = tools[index];
+              return SizedBox(
+                width: 230,
+                child: Material(
+                  color: const Color(0xFF171722),
+                  borderRadius: BorderRadius.circular(17),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => _open(context, tool.page, tool.route),
+                    child: Padding(
+                      padding: const EdgeInsets.all(13),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: tool.color.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: Icon(tool.icon, color: tool.color, size: 23),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(tool.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900)),
+                                const SizedBox(height: 4),
+                                Text(tool.subtitle,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 10,
+                                        height: 1.25,
+                                        color: Colors.white60)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MetadataIntelligenceCenterScreen extends StatefulWidget {
+  const MetadataIntelligenceCenterScreen({super.key});
+
+  @override
+  State<MetadataIntelligenceCenterScreen> createState() =>
+      _MetadataIntelligenceCenterScreenState();
+}
+
+class _MetadataIntelligenceCenterScreenState
+    extends State<MetadataIntelligenceCenterScreen> {
+  String _filter = 'All issues';
+  String _query = '';
+
+  String _normalized(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+  Set<String> _duplicateIds(List<MediaItem> items) {
+    final buckets = <String, List<MediaItem>>{};
+    for (final item in items) {
+      final identity =
+          _normalized(item.canonicalTitle ?? item.originalTitle ?? item.title);
+      final type = item.type.toLowerCase().trim();
+      final year = item.releaseYear ?? item.seriesStartYear;
+      final key = '$identity|$type|${year ?? 'unknown'}';
+      if (identity.isEmpty || item.canonicalWorkId?.trim().isNotEmpty == true) {
+        continue;
+      }
+      buckets.putIfAbsent(key, () => <MediaItem>[]).add(item);
+    }
+    return buckets.values
+        .where((bucket) => bucket.map((item) => item.id).toSet().length > 1)
+        .expand((bucket) => bucket.map((item) => item.id))
+        .toSet();
+  }
+
+  List<String> _issuesFor(MediaItem item, {required bool duplicateCandidate}) {
+    final issues = <String>[];
+    if (item.imageUrl?.trim().isNotEmpty != true) issues.add('Artwork');
+    if (item.description?.trim().isNotEmpty != true) issues.add('Description');
+    if (item.releaseDate == null &&
+        item.releaseYear == null &&
+        item.seriesStartYear == null) {
+      issues.add('Release info');
+    }
+    if (item.actors.isEmpty && item.directors.isEmpty && item.writers.isEmpty) {
+      issues.add('Credits');
+    }
+    if (item.studios.isEmpty && item.companies.isEmpty) issues.add('Companies');
+    if ((item.franchiseName?.trim().isNotEmpty != true) &&
+        item.franchiseNames.isEmpty &&
+        item.cinematicUniverseNames.isEmpty &&
+        item.cinematicUniverseSaga?.trim().isNotEmpty != true) {
+      issues.add('Franchise links');
+    }
+    if (duplicateCandidate) issues.add('Potential duplicate');
+    return issues;
+  }
+
+  void _openTitle(BuildContext context, MediaItem item) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/app/details'),
+      builder: (_) => MediaDetailsScreen(media: item),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: AppController.instance,
+      builder: (context, _) {
+        final controller = AppController.instance;
+        final profile = controller.currentProfile;
+        final items = controller.library
+            .where((item) => item.isAccessibleTo(profile))
+            .toList(growable: false);
+        final duplicates = _duplicateIds(items);
+        final audits = <({MediaItem item, List<String> issues})>[];
+        for (final item in items) {
+          final issues = _issuesFor(item,
+              duplicateCandidate: duplicates.contains(item.id));
+          if (issues.isNotEmpty) audits.add((item: item, issues: issues));
+        }
+        final artworkMissing =
+            audits.where((entry) => entry.issues.contains('Artwork')).length;
+        final releaseMissing = audits
+            .where((entry) => entry.issues.contains('Release info'))
+            .length;
+        final creditsMissing =
+            audits.where((entry) => entry.issues.contains('Credits')).length;
+        final displayed = audits.where((entry) {
+          final matchesFilter =
+              _filter == 'All issues' || entry.issues.contains(_filter);
+          final query = _query.trim().toLowerCase();
+          return matchesFilter &&
+              (query.isEmpty || entry.item.title.toLowerCase().contains(query));
+        }).toList(growable: false);
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF0B0B10),
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF0B0B10),
+            title: const Text('Metadata Intelligence Center'),
+            actions: [
+              IconButton(
+                tooltip: 'Refresh audit',
+                onPressed: () => setState(() {}),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF171722),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(children: [
+                        Icon(Icons.info_outline_rounded,
+                            color: Color(0xFF8B7CFF)),
+                        SizedBox(width: 9),
+                        Expanded(
+                            child: Text('Local catalog audit',
+                                style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900))),
+                      ]),
+                      const SizedBox(height: 7),
+                      Text(
+                          '${items.length} profile-visible titles reviewed. This audit finds metadata gaps and possible duplicates; it does not invent values or automatically merge titles.',
+                          style: const TextStyle(
+                              color: Colors.white60,
+                              height: 1.4,
+                              fontSize: 12)),
+                      const SizedBox(height: 12),
+                      const Text('External metadata provider: Not connected',
+                          style: TextStyle(
+                              color: Color(0xFFFFD18C),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12)),
+                      const SizedBox(height: 4),
+                      const Text(
+                          'Connect a licensed metadata provider in the backend to fetch and verify remote credits, release dates, artwork, studio, and franchise facts.',
+                          style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                              height: 1.35)),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton.icon(
+                          onPressed: () => Navigator.of(context)
+                              .push(MaterialPageRoute<void>(
+                            settings:
+                                const RouteSettings(name: '/app/page/import'),
+                            builder: (_) => const ImportMediaScreen(),
+                          )),
+                          icon: const Icon(Icons.add_to_photos_outlined),
+                          label: const Text('Open Import Media'),
+                        ),
+                      ),
+                    ]),
+              ),
+              const SizedBox(height: 12),
+              Wrap(spacing: 9, runSpacing: 9, children: [
+                _MetadataMetric(
+                    label: 'Titles',
+                    value: '${items.length}',
+                    icon: Icons.video_library_rounded),
+                _MetadataMetric(
+                    label: 'Missing artwork',
+                    value: '$artworkMissing',
+                    icon: Icons.image_not_supported_outlined),
+                _MetadataMetric(
+                    label: 'Missing release info',
+                    value: '$releaseMissing',
+                    icon: Icons.event_busy_outlined),
+                _MetadataMetric(
+                    label: 'Missing credits',
+                    value: '$creditsMissing',
+                    icon: Icons.people_alt_outlined),
+                _MetadataMetric(
+                    label: 'Duplicate candidates',
+                    value: '${duplicates.length}',
+                    icon: Icons.copy_all_rounded),
+              ]),
+              const SizedBox(height: 18),
+              TextField(
+                onChanged: (value) => setState(() => _query = value),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  hintText: 'Filter titles in this audit',
+                  filled: true,
+                  fillColor: const Color(0xFF171722),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  for (final filter in const [
+                    'All issues',
+                    'Artwork',
+                    'Description',
+                    'Release info',
+                    'Credits',
+                    'Companies',
+                    'Franchise links',
+                    'Potential duplicate'
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 7),
+                      child: ChoiceChip(
+                        label: Text(filter),
+                        selected: _filter == filter,
+                        onSelected: (_) => setState(() => _filter = filter),
+                      ),
+                    ),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                  '${displayed.length} title${displayed.length == 1 ? '' : 's'} need review',
+                  style: const TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              if (displayed.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(
+                      child: Text(
+                          'No matching issues in the current local catalog.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white54))),
+                )
+              else
+                for (final entry in displayed)
+                  Card(
+                    color: const Color(0xFF171722),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                            width: 42,
+                            height: 58,
+                            child: entry.item.imageUrl?.trim().isNotEmpty ==
+                                    true
+                                ? Image.network(entry.item.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const ColoredBox(
+                                            color: Color(0xFF252532),
+                                            child: Icon(Icons.movie_outlined)))
+                                : const ColoredBox(
+                                    color: Color(0xFF252532),
+                                    child: Icon(Icons.movie_outlined))),
+                      ),
+                      title: Text(entry.item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Wrap(spacing: 5, runSpacing: 4, children: [
+                          for (final issue in entry.issues)
+                            Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: .07),
+                                    borderRadius: BorderRadius.circular(20)),
+                                child: Text(issue,
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.white70))),
+                        ]),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => _openTitle(context, entry.item),
+                    ),
+                  ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MetadataMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  const _MetadataMetric(
+      {required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(12),
+        constraints: const BoxConstraints(minWidth: 135),
+        decoration: BoxDecoration(
+            color: const Color(0xFF171722),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: Colors.white10)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 20, color: const Color(0xFF8B7CFF)),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(label,
+                style: const TextStyle(fontSize: 10, color: Colors.white54)),
+          ]),
+        ]),
+      );
+}
+
+class CollectionCompletionCenterScreen extends StatelessWidget {
+  const CollectionCompletionCenterScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: AppController.instance,
+        builder: (context, _) {
+          final controller = AppController.instance;
+          final profile = controller.currentProfile;
+          final items = controller.library
+              .where((item) => item.isAccessibleTo(profile))
+              .toList(growable: false);
+          final franchises = HomeFranchiseProgressLogic.franchiseSagaExamples(
+            items,
+            HomeFranchiseProgressLogic.franchiseSagaGroups(items,
+                collections: controller.collections),
+          );
+          final universes =
+              HomeFranchiseProgressLogic.cinematicUniverseExamples(
+            items,
+            HomeFranchiseProgressLogic.cinematicUniverseGroups(items),
+          );
+          return Scaffold(
+            backgroundColor: const Color(0xFF0B0B10),
+            appBar: AppBar(
+                backgroundColor: const Color(0xFF0B0B10),
+                title: const Text('Collection Completion Center')),
+            body: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
+              children: [
+                Text('Profile collection: ${items.length} local catalog titles',
+                    style: const TextStyle(color: Colors.white60)),
+                const SizedBox(height: 15),
+                const Text('Franchises & Sagas',
+                    style:
+                        TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                if (franchises.isEmpty)
+                  const Text(
+                      'Import franchise metadata or use the featured examples below.',
+                      style: TextStyle(color: Colors.white54)),
+                for (final group in franchises)
+                  _CollectionCompletionGroupTile(group: group),
+                const SizedBox(height: 22),
+                const Text('Cinematic Universes',
+                    style:
+                        TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                if (universes.isEmpty)
+                  const Text(
+                      'Import universe memberships or use the featured examples below.',
+                      style: TextStyle(color: Colors.white54)),
+                for (final group in universes)
+                  _CollectionCompletionGroupTile(group: group),
+                const SizedBox(height: 18),
+                const Text(
+                    'Completeness note: exact missing-title names require a complete external catalog. The owned counts above use only titles indexed in this profile.',
+                    style: TextStyle(
+                        color: Colors.white54, fontSize: 11, height: 1.4)),
+              ],
+            ),
+          );
+        },
+      );
+}
+
+class _CollectionCompletionGroupTile extends StatelessWidget {
+  final HomeFranchiseProgressGroup group;
+  const _CollectionCompletionGroupTile({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = group.totalTitles;
+    final percentage = group.completionPercent;
+    String count(int owned, int? all) =>
+        all == null ? '$owned owned' : '$owned / $all';
+    return Card(
+      color: const Color(0xFF171722),
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        leading: Icon(
+            group.type.toLowerCase().contains('universe')
+                ? Icons.auto_awesome_rounded
+                : Icons.account_tree_rounded,
+            color: const Color(0xFF8B7CFF)),
+        title: Text(group.name,
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(total == null
+            ? '${group.ownedTotalTitles} owned titles · total not available'
+            : '${group.ownedTotalTitles} / $total titles · ${percentage ?? 0}%'),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        children: [
+          if (group.completionFraction != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                      value: group.completionFraction,
+                      minHeight: 6,
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF9DE5B0)))),
+            ),
+          Row(children: [
+            Expanded(
+                child: Text(
+                    'Movies: ${count(group.ownedMovies, group.totalMovies)}',
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12))),
+            Expanded(
+                child: Text(
+                    'Shows: ${count(group.ownedShows, group.totalShows)}',
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12)))
+          ]),
+          if (group.exampleNote != null)
+            Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(group.exampleNote!,
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 11, height: 1.35))),
+          const Divider(height: 20, color: Colors.white12),
+          if (group.ownedTitles.isEmpty)
+            const Text(
+                'No matching titles are indexed for this profile yet. Add titles or import franchise/universe relationships to populate this list.',
+                style:
+                    TextStyle(color: Colors.white54, fontSize: 12, height: 1.4))
+          else
+            for (final media in group.ownedTitles)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.movie_outlined, size: 19),
+                title: Text(media.title,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                    '${media.type} · ${media.displayYearLabel ?? 'Year unknown'}'),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => MediaDetailsScreen(media: media))),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class SmartCollectionsWatchPlannerScreen extends StatelessWidget {
+  const SmartCollectionsWatchPlannerScreen({super.key});
+
+  void _open(BuildContext context, Widget page, String route) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        settings: RouteSettings(name: route), builder: (_) => page));
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: AppController.instance,
+        builder: (context, _) {
+          final controller = AppController.instance;
+          final profile = controller.currentProfile;
+          final items = controller.library
+              .where((item) => item.isAccessibleTo(profile))
+              .toList(growable: false);
+          final unwatched = items
+              .where((item) =>
+                  !controller.isWatched(item.id) &&
+                  !isExcludedEntertainmentType(item.type))
+              .toList()
+            ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+          final recent = List<MediaItem>.from(items)
+            ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+          final groups = HomeFranchiseProgressLogic.franchiseSagaExamples(
+            items,
+            HomeFranchiseProgressLogic.franchiseSagaGroups(items,
+                collections: controller.collections),
+          );
+          return Scaffold(
+            backgroundColor: const Color(0xFF0B0B10),
+            appBar: AppBar(
+                backgroundColor: const Color(0xFF0B0B10),
+                title: const Text('Smart Collections & Watch Planner')),
+            body: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
+                children: [
+                  const Text(
+                      'Turn your library into useful collections and a viewing plan.',
+                      style: TextStyle(color: Colors.white60)),
+                  const SizedBox(height: 14),
+                  _SystemActionCard(
+                      icon: Icons.auto_awesome_mosaic_rounded,
+                      title: 'Manage Smart Collections',
+                      subtitle: 'Create and review rule-driven collections.',
+                      onTap: () => _open(
+                          context,
+                          const SmartCollectionsScreen(),
+                          '/app/smart-collections')),
+                  _SystemActionCard(
+                      icon: Icons.movie_filter_rounded,
+                      title: 'Plan a Marathon',
+                      subtitle: 'Build a saga or themed watch session.',
+                      onTap: () => _open(context, const HeyMarathonScreen(),
+                          '/app/marathon-planner')),
+                  _SystemActionCard(
+                      icon: Icons.account_tree_rounded,
+                      title: 'Browse Franchise Navigator',
+                      subtitle: 'Review release order and title relationships.',
+                      onTap: () => _open(
+                          context,
+                          const FranchiseNavigatorScreen(),
+                          '/app/franchise-navigator')),
+                  const SizedBox(height: 16),
+                  Text('Unwatched titles · ${unwatched.length}',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  for (final media in unwatched.take(8))
+                    ListTile(
+                        leading: const Icon(Icons.play_circle_outline_rounded),
+                        title: Text(media.title),
+                        subtitle: Text(
+                            '${media.type} · ${media.displayYearLabel ?? 'Year unknown'}'),
+                        onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    MediaDetailsScreen(media: media)))),
+                  const SizedBox(height: 12),
+                  Text('Recently added · ${recent.length}',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  for (final media in recent.take(6))
+                    ListTile(
+                        leading: const Icon(Icons.new_releases_outlined),
+                        title: Text(media.title),
+                        subtitle: Text(
+                            '${media.type} · ${media.displayYearLabel ?? 'Year unknown'}'),
+                        onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    MediaDetailsScreen(media: media)))),
+                  const SizedBox(height: 12),
+                  Text('Suggested saga marathons · ${groups.length}',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  for (final group in groups.take(6))
+                    ListTile(
+                        leading: const Icon(Icons.local_movies_outlined),
+                        title: Text(group.name),
+                        subtitle: Text(
+                            '${group.ownedTotalTitles} titles available in your local catalog'),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => _open(
+                            context,
+                            const FranchiseNavigatorScreen(),
+                            '/app/franchise-navigator')),
+                ]),
+          );
+        },
+      );
+}
+
+class PlaybackServerHealthCenterScreen extends StatelessWidget {
+  const PlaybackServerHealthCenterScreen({super.key});
+
+  void _open(BuildContext context, Widget page, String route) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        settings: RouteSettings(name: route), builder: (_) => page));
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: AppController.instance,
+        builder: (context, _) {
+          final controller = AppController.instance;
+          final profile = controller.currentProfile;
+          final items = controller.library
+              .where((item) => item.isAccessibleTo(profile))
+              .toList(growable: false);
+          final directStreams = items
+              .where((item) => item.playbackUrl?.trim().isNotEmpty == true)
+              .length;
+          final missingArtwork = items
+              .where((item) => item.imageUrl?.trim().isNotEmpty != true)
+              .length;
+          final missingDescriptions = items
+              .where((item) => item.description?.trim().isNotEmpty != true)
+              .length;
+          final watchedCount = controller.watched
+              .where((item) => item.isAccessibleTo(profile))
+              .length;
+          return Scaffold(
+            backgroundColor: const Color(0xFF0B0B10),
+            appBar: AppBar(
+                backgroundColor: const Color(0xFF0B0B10),
+                title: const Text('Playback & Server Health')),
+            body: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF171722),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white10)),
+                    child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Live host telemetry: Not connected',
+                              style: TextStyle(
+                                  color: Color(0xFFFFD18C),
+                                  fontWeight: FontWeight.w900)),
+                          SizedBox(height: 6),
+                          Text(
+                              'Numbers below are a local catalog readiness snapshot. Disk health, actual stream throughput, transcoder load, remote gateway status, and alert delivery require a host collector or backend diagnostics service.',
+                              style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                  height: 1.4)),
+                        ]),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(spacing: 9, runSpacing: 9, children: [
+                    _MetadataMetric(
+                        label: 'Visible titles',
+                        value: '${items.length}',
+                        icon: Icons.video_library_rounded),
+                    _MetadataMetric(
+                        label: 'Direct stream URLs',
+                        value: '$directStreams',
+                        icon: Icons.play_circle_outline_rounded),
+                    _MetadataMetric(
+                        label: 'Missing artwork',
+                        value: '$missingArtwork',
+                        icon: Icons.image_not_supported_outlined),
+                    _MetadataMetric(
+                        label: 'Missing descriptions',
+                        value: '$missingDescriptions',
+                        icon: Icons.description_outlined),
+                    _MetadataMetric(
+                        label: 'Watched titles',
+                        value: '$watchedCount',
+                        icon: Icons.visibility_outlined),
+                  ]),
+                  const SizedBox(height: 16),
+                  _SystemActionCard(
+                      icon: Icons.health_and_safety_rounded,
+                      title: 'Media Catalog Health',
+                      subtitle:
+                          'Review missing posters, descriptions, and direct stream URLs.',
+                      onTap: () => _open(context, const MediaHealthScreen(),
+                          '/app/media-health')),
+                  _SystemActionCard(
+                      icon: Icons.troubleshoot_rounded,
+                      title: 'Playback Diagnostics',
+                      subtitle:
+                          'Review playback diagnostics and troubleshooting guidance.',
+                      onTap: () => _open(
+                          context,
+                          const PlaybackDiagnosticsCenterScreen(),
+                          '/app/playback-diagnostics')),
+                  _SystemActionCard(
+                      icon: Icons.storage_rounded,
+                      title: 'Server & Storage Reliability',
+                      subtitle:
+                          'Review capacity estimates and service readiness signals.',
+                      onTap: () => _open(
+                          context,
+                          const PlatformReliabilityCenterScreen(),
+                          '/app/platform-reliability')),
+                ]),
+          );
+        },
+      );
+}
+
+class VerifiedBackupRecoveryCenterScreen extends StatelessWidget {
+  const VerifiedBackupRecoveryCenterScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF0B0B10),
+        appBar: AppBar(
+            backgroundColor: const Color(0xFF0B0B10),
+            title: const Text('Verified Backup & Recovery')),
+        body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 30),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(17),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF171722),
+                    borderRadius: BorderRadius.circular(17),
+                    border: Border.all(color: Colors.white10)),
+                child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Backup verification: Unknown',
+                          style: TextStyle(
+                              color: Color(0xFFFFD18C),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 17)),
+                      SizedBox(height: 7),
+                      Text(
+                          'The app can prepare a metadata backup selection, but a successful backup cannot be claimed until a connected server worker writes the backup, validates its manifest/checksum, and completes a restore drill.',
+                          style: TextStyle(
+                              color: Colors.white60,
+                              height: 1.45,
+                              fontSize: 12)),
+                    ]),
+              ),
+              const SizedBox(height: 18),
+              const Text('Recovery readiness checklist',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              const _RecoveryReadinessRow(
+                  title: 'Backup target configured',
+                  detail: 'Not verified from this client'),
+              const _RecoveryReadinessRow(
+                  title: 'Latest backup manifest/checksum validated',
+                  detail: 'Not verified from this client'),
+              const _RecoveryReadinessRow(
+                  title: 'Off-site copy available',
+                  detail: 'Not verified from this client'),
+              const _RecoveryReadinessRow(
+                  title: 'Restore drill completed successfully',
+                  detail: 'Not verified from this client'),
+              const SizedBox(height: 14),
+              _SystemActionCard(
+                  icon: Icons.backup_rounded,
+                  title: 'Open Backup & Recovery',
+                  subtitle:
+                      'Choose metadata, watch history, profiles/settings, and collections for a backup request.',
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          settings:
+                              const RouteSettings(name: '/app/backup-recovery'),
+                          builder: (_) => const BackupScreen()))),
+              _SystemActionCard(
+                  icon: Icons.monitor_heart_rounded,
+                  title: 'Review Server Reliability',
+                  subtitle:
+                      'Plan storage reserve and review server/gateway readiness signals.',
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          settings: const RouteSettings(
+                              name: '/app/platform-reliability'),
+                          builder: (_) =>
+                              const PlatformReliabilityCenterScreen()))),
+            ]),
+      );
+}
+
+class _RecoveryReadinessRow extends StatelessWidget {
+  final String title;
+  final String detail;
+  const _RecoveryReadinessRow({required this.title, required this.detail});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.help_outline_rounded,
+              color: Colors.white38, size: 19),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(detail,
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 11)),
+              ])),
+        ]),
+      );
+}
+
+class _SystemActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _SystemActionCard(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        color: const Color(0xFF171722),
+        margin: const EdgeInsets.only(bottom: 9),
+        child: ListTile(
+          leading: Icon(icon, color: const Color(0xFF8B7CFF)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: Text(subtitle,
+              style: const TextStyle(color: Colors.white60, height: 1.3)),
+          trailing:
+              const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+          onTap: onTap,
+        ),
+      );
 }

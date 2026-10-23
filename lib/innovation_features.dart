@@ -3521,7 +3521,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       ).showSnackBar(
                         const SnackBar(
                           content: UniversalText(
-                            'Backup job queued.',
+                            'Backup request prepared locally. A connected server worker is required to write and verify an actual backup.',
                           ),
                         ),
                       );
@@ -3530,7 +3530,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 Icons.backup,
               ),
               label: const UniversalText(
-                'BACK UP NOW',
+                'PREPARE BACKUP REQUEST',
               ),
             ),
           ),

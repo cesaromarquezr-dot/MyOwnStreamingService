@@ -5,12 +5,17 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
+import 'cinematic_discovery_studio.dart';
 import 'collection_details.dart';
 import 'details.dart';
+import 'home_franchise_progress.dart';
+import 'home_arrow_rail.dart';
+import 'multiverse_hub.dart';
+import 'music.dart';
+import 'profile_content_safety.dart';
 import 'localization.dart';
 import 'player.dart';
 
@@ -80,59 +85,71 @@ MediaCollection? _makeVirtualThemeCollection({
   );
 }
 
-/// A compact streaming-service category row placed directly under the Home app bar.
-/// A compact streaming-style category row placed directly under the Home app bar.
+/// Streaming-style navigation row. Browse destinations occupy one side, while
+/// Live TV and My TV remain on the opposite side. Flutter's Directionality
+/// automatically mirrors the two groups for right-to-left locales.
 class HomeBrowseNavigation extends StatelessWidget {
+  final VoidCallback onExplore;
   final VoidCallback onMovies;
   final VoidCallback onShows;
   final VoidCallback onMusic;
-  final VoidCallback? onPhysicalMedia;
-  final VoidCallback? onFranchises;
-  final VoidCallback? onCinematicUniverses;
-  final VoidCallback? onAiBots;
+  final VoidCallback onPhysicalMedia;
+  final VoidCallback onLiveTv;
+  final VoidCallback onMyTv;
 
   const HomeBrowseNavigation({
     super.key,
+    required this.onExplore,
     required this.onMovies,
     required this.onShows,
     required this.onMusic,
-    this.onPhysicalMedia,
-    this.onFranchises,
-    this.onCinematicUniverses,
-    this.onAiBots,
+    required this.onPhysicalMedia,
+    required this.onLiveTv,
+    required this.onMyTv,
   });
 
   @override
   Widget build(BuildContext context) {
+    final direction = Directionality.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 2),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        height: 48,
         child: Row(
+          textDirection: direction,
           children: [
-            _tab('For You', selected: true, onTap: () {}),
-            const SizedBox(width: 9),
-            _tab('Movies', onTap: onMovies),
-            const SizedBox(width: 9),
-            _tab('Shows', onTap: onShows),
-            const SizedBox(width: 9),
-            _tab('Music', onTap: onMusic),
-            if (onPhysicalMedia != null) ...[
-              const SizedBox(width: 9),
-              _tab('Physical Media', onTap: onPhysicalMedia!),
-            ],
-            if (onFranchises != null) ...[
-              const SizedBox(width: 9),
-              _tab('Franchises', onTap: onFranchises!),
-            ],
-            if (onCinematicUniverses != null) ...[
-              const SizedBox(width: 9),
-              _tab('Cinematic Universes', onTap: onCinematicUniverses!),
-            ],
-            if (onAiBots != null) ...[
-              const SizedBox(width: 9),
-              _tab('AI Bots', onTap: onAiBots!),
-            ],
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  textDirection: direction,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _tab('For Me', selected: true, onTap: () {}),
+                    const SizedBox(width: 7),
+                    _tab('Explore', onTap: onExplore),
+                    const SizedBox(width: 7),
+                    _tab('Movies', onTap: onMovies),
+                    const SizedBox(width: 7),
+                    _tab('Shows', onTap: onShows),
+                    const SizedBox(width: 7),
+                    _tab('Music', onTap: onMusic),
+                    const SizedBox(width: 7),
+                    _tab('Physical Media', onTap: onPhysicalMedia),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              textDirection: direction,
+              children: [
+                _tab('Live TV', onTap: onLiveTv),
+                const SizedBox(width: 6),
+                _tab('My TV', onTap: onMyTv),
+              ],
+            ),
           ],
         ),
       ),
@@ -148,175 +165,16 @@ class HomeBrowseNavigation extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(22),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
           child: Text(
             label,
+            maxLines: 1,
             style: TextStyle(
-              color: selected ? Colors.black : Colors.white.withValues(alpha: .82),
-              fontSize: 13,
+              color:
+                  selected ? Colors.black : Colors.white.withValues(alpha: .82),
+              fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-
-/// Reusable streaming-service content rail with smooth, per-section arrow navigation.
-/// Touch, trackpad, mouse-wheel/shift-wheel, and keyboard focus scrolling remain available.
-class HomeHorizontalArrowRail extends StatefulWidget {
-  final double height;
-  final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
-  final IndexedWidgetBuilder separatorBuilder;
-  final EdgeInsetsGeometry padding;
-  final double scrollFactor;
-
-  const HomeHorizontalArrowRail({
-    super.key,
-    required this.height,
-    required this.itemCount,
-    required this.itemBuilder,
-    required this.separatorBuilder,
-    this.padding = const EdgeInsets.symmetric(horizontal: 46),
-    this.scrollFactor = .78,
-  });
-
-  @override
-  State<HomeHorizontalArrowRail> createState() => _HomeHorizontalArrowRailState();
-}
-
-class _HomeHorizontalArrowRailState extends State<HomeHorizontalArrowRail> {
-  final ScrollController _controller = ScrollController();
-  bool _hasOverflow = false;
-  bool _canScrollBack = false;
-  bool _canScrollForward = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_syncArrowState);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncArrowState());
-  }
-
-  @override
-  void didUpdateWidget(covariant HomeHorizontalArrowRail oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.itemCount != widget.itemCount ||
-        oldWidget.height != widget.height) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _syncArrowState());
-    }
-  }
-
-  void _syncArrowState() {
-    if (!mounted || !_controller.hasClients) return;
-    final position = _controller.position;
-    final hasOverflow = position.maxScrollExtent > 2;
-    final canScrollBack = position.pixels > 2;
-    final canScrollForward = position.pixels < position.maxScrollExtent - 2;
-    if (hasOverflow != _hasOverflow ||
-        canScrollBack != _canScrollBack ||
-        canScrollForward != _canScrollForward) {
-      setState(() {
-        _hasOverflow = hasOverflow;
-        _canScrollBack = canScrollBack;
-        _canScrollForward = canScrollForward;
-      });
-    }
-  }
-
-  Future<void> _scrollByPage(double direction) async {
-    if (!_controller.hasClients) return;
-    final position = _controller.position;
-    final distance = position.viewportDimension * widget.scrollFactor;
-    final target = (position.pixels + distance * direction)
-        .clamp(0.0, position.maxScrollExtent)
-        .toDouble();
-    if ((target - position.pixels).abs() < 1) return;
-    await _controller.animateTo(
-      target,
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeInOutCubic,
-    );
-  }
-
-  Widget _arrow({required bool left, required bool enabled}) {
-    return AnimatedOpacity(
-      opacity: enabled ? 1 : .42,
-      duration: const Duration(milliseconds: 160),
-      child: Material(
-        color: const Color(0xE8141418),
-        shape: const CircleBorder(),
-        elevation: 8,
-        shadowColor: Colors.black54,
-        clipBehavior: Clip.antiAlias,
-        child: IconButton(
-          tooltip: left ? 'Scroll shelf left' : 'Scroll shelf right',
-          onPressed: enabled ? () => _scrollByPage(left ? -1 : 1) : null,
-          constraints: const BoxConstraints.tightFor(width: 46, height: 46),
-          padding: EdgeInsets.zero,
-          icon: Icon(
-            left ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-            size: 32,
-          ),
-          color: Colors.white,
-          disabledColor: Colors.white38,
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_syncArrowState);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: widget.height,
-      child: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.arrowLeft):
-              () => _scrollByPage(-1),
-          const SingleActivator(LogicalKeyboardKey.arrowRight):
-              () => _scrollByPage(1),
-        },
-        child: NotificationListener<ScrollMetricsNotification>(
-          onNotification: (_) {
-            WidgetsBinding.instance
-                .addPostFrameCallback((_) => _syncArrowState());
-            return false;
-          },
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned.fill(
-                child: ListView.separated(
-                  controller: _controller,
-                  padding: widget.padding,
-                  scrollDirection: Axis.horizontal,
-                  itemCount: widget.itemCount,
-                  separatorBuilder: widget.separatorBuilder,
-                  itemBuilder: widget.itemBuilder,
-                ),
-              ),
-              if (_hasOverflow) ...[
-                Positioned(
-                  left: 5,
-                  child: _arrow(left: true, enabled: _canScrollBack),
-                ),
-                Positioned(
-                  right: 5,
-                  child: _arrow(left: false, enabled: _canScrollForward),
-                ),
-              ],
-            ],
           ),
         ),
       ),
@@ -909,7 +767,12 @@ class HomeThemedEpisodesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = _entries(AppController.instance.library);
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final visibleLibrary = controller.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
+    final entries = _entries(visibleLibrary);
     return Padding(
       padding: const EdgeInsets.only(top: 18),
       child: Column(
@@ -927,11 +790,11 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                   style: TextStyle(color: Colors.white54, fontSize: 12)),
             )
           else
-            HomeHorizontalArrowRail(
+            HomeArrowRail(
               height: 210,
-              padding: const EdgeInsets.symmetric(horizontal: 48),
               itemCount: entries.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorExtent: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 48),
               itemBuilder: (context, index) {
                 final entry = entries[index];
                 return _DiscoveryMediaCard(
@@ -1001,11 +864,11 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
                 style: TextStyle(color: Colors.white54, fontSize: 12)),
           )
         else
-          HomeHorizontalArrowRail(
+          HomeArrowRail(
             height: 210,
-            padding: const EdgeInsets.symmetric(horizontal: 48),
             itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorExtent: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
             itemBuilder: (context, index) {
               final media = items[index];
               return _DiscoveryMediaCard(
@@ -1014,7 +877,8 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
                     '${media.displayYearLabel ?? ''} ${media.type}${media.displayEditionLabel == null ? '' : ' • ${media.displayEditionLabel}'}'
                         .trim(),
                 imageUrl: media.imageUrl,
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                onTap: () =>
+                    Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
                 )),
@@ -1026,14 +890,799 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
   }
 }
 
+/// Explainable Home rails seeded from the newest title, recent viewing, and
+/// recent music listening. Recommendations use the local catalog only.
+class HomeReasonedRecommendationShelves extends StatelessWidget {
+  final List<MediaItem> library;
+  final List<MediaItem> watched;
+
+  const HomeReasonedRecommendationShelves({
+    super.key,
+    required this.library,
+    required this.watched,
+  });
+
+  int _mediaSimilarity(MediaItem seed, MediaItem candidate) {
+    final seedGenres = <String>{
+      ...seed.genres.map((value) => value.toLowerCase()),
+      ...seed.tags.map((value) => value.toLowerCase()),
+    };
+    final candidateGenres = <String>{
+      ...candidate.genres.map((value) => value.toLowerCase()),
+      ...candidate.tags.map((value) => value.toLowerCase()),
+    };
+    final commonGenres = seedGenres.intersection(candidateGenres).length;
+    final commonPeople = <String>{
+      ...seed.actors.map((value) => value.toLowerCase()),
+      ...seed.directors.map((value) => value.toLowerCase()),
+    }.intersection(<String>{
+      ...candidate.actors.map((value) => value.toLowerCase()),
+      ...candidate.directors.map((value) => value.toLowerCase()),
+    }).length;
+    final seedFranchise = (seed.franchiseName ?? '').trim().toLowerCase();
+    final candidateFranchise = (candidate.franchiseName ?? '').trim().toLowerCase();
+    return commonGenres * 12 + commonPeople * 18 +
+        (seedFranchise.isNotEmpty && seedFranchise == candidateFranchise ? 45 : 0) +
+        ((seed.type.toLowerCase() == candidate.type.toLowerCase()) ? 3 : 0) +
+        (candidate.rating ?? 0).round();
+  }
+
+  List<MediaItem> _related(MediaItem seed, {Set<String> excludeIds = const <String>{}}) {
+    final matches = library.where((item) =>
+        item.id != seed.id && !excludeIds.contains(item.id) &&
+        !isExcludedEntertainmentType(item.type)).toList();
+    matches.sort((a, b) {
+      final scoreCompare = _mediaSimilarity(seed, b).compareTo(_mediaSimilarity(seed, a));
+      if (scoreCompare != 0) return scoreCompare;
+      final byRating = (b.rating ?? 0).compareTo(a.rating ?? 0);
+      if (byRating != 0) return byRating;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return matches.take(12).toList(growable: false);
+  }
+
+  Widget _mediaShelf(BuildContext context, String title, String subtitle, List<MediaItem> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DiscoverySectionHeader(title: title, subtitle: subtitle),
+        if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: Text(
+              'Add more related titles or import genre, cast, and franchise metadata to grow these recommendations.',
+              style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+            ),
+          )
+        else
+          HomeArrowRail(
+            height: 210,
+            itemCount: items.length,
+            separatorExtent: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) {
+              final media = items[index];
+              return _DiscoveryMediaCard(
+                title: media.title,
+                subtitle: '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
+                imageUrl: media.imageUrl,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/details'),
+                  builder: (_) => MediaDetailsScreen(media: media),
+                )),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildWithTracks(BuildContext context, List<MediaItem> visibleLibrary, List<MediaItem> visibleWatched) {
+    final added = List<MediaItem>.from(visibleLibrary)
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final watchedSeed = visibleWatched.isEmpty ? null : visibleWatched.last;
+    final musicStore = MusicLibraryStore.instance;
+    final profile = AppController.instance.currentProfile;
+    bool trackAllowedForProfile(MusicTrack track) =>
+        (!profileBlocksExplicitMusic(profile) || !track.explicit) &&
+        (!profileBlocksMatureMusic(profile) || !track.matureTheme);
+    final currentTrack = MusicPlaybackController.instance.currentTrack;
+    MusicTrack? listened;
+    if (currentTrack != null &&
+        currentTrack.audioUrl?.trim().isNotEmpty == true &&
+        trackAllowedForProfile(currentTrack)) {
+      listened = currentTrack;
+    } else {
+      final recentlyListened = musicStore.tracks.where((track) =>
+          (musicStore.listenCounts[track.id] ?? 0) > 0 &&
+          track.audioUrl?.trim().isNotEmpty == true &&
+          trackAllowedForProfile(track)).toList()
+        ..sort((a, b) => (musicStore.listenCounts[b.id] ?? 0)
+            .compareTo(musicStore.listenCounts[a.id] ?? 0));
+      if (recentlyListened.isNotEmpty) listened = recentlyListened.first;
+    }
+
+    final watchedIds = visibleWatched.map((item) => item.id).toSet();
+    final children = <Widget>[];
+    if (added.isNotEmpty) {
+      final seed = added.first;
+      children.add(_mediaShelf(
+        context,
+        'Because you added “${seed.title}”',
+        'More titles connected by genre, people, tags, and franchise',
+        _related(seed),
+      ));
+    }
+    if (watchedSeed != null) {
+      children.add(_mediaShelf(
+        context,
+        'Because you watched “${watchedSeed.title}”',
+        'Recommended from your viewing history and related catalog metadata',
+        _related(watchedSeed, excludeIds: watchedIds),
+      ));
+    }
+    if (listened != null) {
+      final track = listened;
+      final genreTags = <String>{
+        ...track.allGenreTags.map((value) => value.toLowerCase()),
+      };
+      final relatedTracks = musicStore.tracks.where((candidate) {
+        if (candidate.id == track.id ||
+            candidate.audioUrl?.trim().isNotEmpty != true ||
+            !trackAllowedForProfile(candidate)) {
+          return false;
+        }
+        final candidateGenres = <String>{
+          ...candidate.allGenreTags.map((value) => value.toLowerCase()),
+        };
+        return candidate.artist.toLowerCase() == track.artist.toLowerCase() ||
+            genreTags.intersection(candidateGenres).isNotEmpty;
+      }).toList()
+        ..sort((a, b) {
+          final sameArtistA = a.artist.toLowerCase() == track.artist.toLowerCase() ? 1 : 0;
+          final sameArtistB = b.artist.toLowerCase() == track.artist.toLowerCase() ? 1 : 0;
+          final byArtist = sameArtistB.compareTo(sameArtistA);
+          if (byArtist != 0) return byArtist;
+          final countCompare = (musicStore.listenCounts[b.id] ?? 0)
+              .compareTo(musicStore.listenCounts[a.id] ?? 0);
+          return countCompare != 0 ? countCompare : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
+      children.add(Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DiscoverySectionHeader(
+            title: 'Because you listened to “${track.title}”',
+            subtitle: 'Songs related by artist and genre',
+          ),
+          if (relatedTracks.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 10),
+              child: Text(
+                'Listen to more songs or import playable tracks to build music recommendations.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            )
+          else
+            HomeArrowRail(
+              height: 176,
+              itemCount: relatedTracks.length,
+              separatorExtent: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              itemBuilder: (context, index) => _HomeReasonedTrackCard(track: relatedTracks[index]),
+            ),
+        ],
+      ));
+    }
+    return Column(children: children);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: AppController.instance,
+      builder: (context, _) {
+        final profile = AppController.instance.currentProfile;
+        if (profile == null) return const SizedBox.shrink();
+        final visibleLibrary = library.where((item) => item.isAccessibleTo(profile)).toList(growable: false);
+        final visibleWatched = watched.where((item) => item.isAccessibleTo(profile)).toList(growable: false);
+        return AnimatedBuilder(
+          animation: MusicLibraryStore.instance,
+          builder: (context, _) => AnimatedBuilder(
+            animation: MusicPlaybackController.instance,
+            builder: (context, __) =>
+                _buildWithTracks(context, visibleLibrary, visibleWatched),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeReasonedTrackCard extends StatelessWidget {
+  final MusicTrack track;
+  const _HomeReasonedTrackCard({required this.track});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 138,
+        child: Material(
+          color: _discoveryPanel,
+          borderRadius: BorderRadius.circular(15),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              if (track.audioUrl?.trim().isNotEmpty != true) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('This track has no playable audio source configured yet.')),
+                );
+                return;
+              }
+              unawaited(MusicPlaybackController.instance.play(track));
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(9),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: SizedBox.expand(
+                      child: track.artworkUrl?.trim().isNotEmpty == true
+                          ? Image.network(track.artworkUrl!, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF252532), child: Icon(Icons.music_note_rounded)))
+                          : const ColoredBox(color: Color(0xFF252532), child: Center(child: Icon(Icons.music_note_rounded, size: 34))),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+              ]),
+            ),
+          ),
+        ),
+      );
+}
+
+/// Compact Home shelves that compare profile-owned titles with complete
+/// franchise/saga or cinematic-universe totals when trusted catalog metadata
+/// provides those totals.
+class HomeFranchiseSagaHub extends StatelessWidget {
+  const HomeFranchiseSagaHub({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppController.instance;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final profile = controller.currentProfile;
+        if (profile == null) return const SizedBox.shrink();
+        final visibleLibrary = controller.library
+            .where((item) => item.isAccessibleTo(profile))
+            .toList(growable: false);
+        final catalogFranchiseGroups = HomeFranchiseProgressLogic.franchiseSagaGroups(
+          visibleLibrary,
+          collections: controller.collections,
+        );
+        final franchiseGroups = HomeFranchiseProgressLogic.franchiseSagaExamples(
+          visibleLibrary,
+          catalogFranchiseGroups,
+        );
+        final catalogUniverseGroups =
+            HomeFranchiseProgressLogic.cinematicUniverseGroups(visibleLibrary);
+        final universeGroups = HomeFranchiseProgressLogic.cinematicUniverseExamples(
+          visibleLibrary,
+          catalogUniverseGroups,
+        );
+        return Padding(
+          padding: const EdgeInsets.only(top: 3, bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _HomeFranchiseProgressShelf(
+                title: 'Franchise & Saga Hub',
+                subtitle: 'Track the movies and shows you own in each saga',
+                emptyMessage:
+                    'No franchise or saga links found yet. Import franchise metadata to start tracking your collection.',
+                groups: franchiseGroups,
+                isUniverse: false,
+                onViewAll: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                      name: '/app/franchise-navigator',
+                    ),
+                    builder: (_) => const FranchiseNavigatorScreen(),
+                  ),
+                ),
+              ),
+              _HomeFranchiseProgressShelf(
+                title: 'Cinematic Universe Hub',
+                subtitle: 'See your collection progress across connected worlds',
+                emptyMessage:
+                    'No cinematic-universe links found yet. Import universe memberships to see your progress.',
+                groups: universeGroups,
+                isUniverse: true,
+                onViewAll: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                      name: '/app/cinematic-universe',
+                    ),
+                    builder: (_) => const CinematicDiscoveryStudioScreen(),
+                  ),
+                ),
+              ),
+              MultiverseHubHomeShelf(
+                library: visibleLibrary,
+                onViewAll: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                      name: '/app/multiverse-hub',
+                    ),
+                    builder: (_) => MultiverseHubScreen(library: visibleLibrary),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeFranchiseProgressShelf extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String emptyMessage;
+  final List<HomeFranchiseProgressGroup> groups;
+  final bool isUniverse;
+  final VoidCallback onViewAll;
+
+  const _HomeFranchiseProgressShelf({
+    required this.title,
+    required this.subtitle,
+    required this.emptyMessage,
+    required this.groups,
+    required this.isUniverse,
+    required this.onViewAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DiscoverySectionHeader(
+          title: title,
+          subtitle: subtitle,
+          trailing: TextButton(
+            onPressed: onViewAll,
+            child: const UniversalText('View all'),
+          ),
+        ),
+        if (groups.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+              decoration: BoxDecoration(
+                color: const Color(0xFF171722),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Text(
+                emptyMessage,
+                style: const TextStyle(
+                  color: Colors.white60,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          )
+        else
+          HomeArrowRail(
+            height: 184,
+            itemCount: groups.length,
+            separatorExtent: 10,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) => _HomeFranchiseProgressCard(
+              group: groups[index],
+              isUniverse: isUniverse,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HomeFranchiseProgressCard extends StatelessWidget {
+  final HomeFranchiseProgressGroup group;
+  final bool isUniverse;
+
+  const _HomeFranchiseProgressCard({
+    required this.group,
+    required this.isUniverse,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = group.totalTitles;
+    final percent = group.completionPercent;
+    return SizedBox(
+      width: 284,
+      child: Material(
+        color: const Color(0xFF171722),
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              settings: RouteSettings(
+                name: isUniverse
+                    ? '/app/cinematic-universe/${group.id}'
+                    : '/app/franchise/${group.id}',
+              ),
+              builder: (_) => _HomeFranchiseProgressDetailsScreen(
+                group: group,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(15, 13, 15, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isUniverse
+                          ? Icons.auto_awesome_rounded
+                          : Icons.account_tree_rounded,
+                      color: _discoveryAccent,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Colors.white54,
+                    ),
+                  ],
+                ),
+                if (group.isFeaturedExample) ...[
+                  const SizedBox(height: 3),
+                  const Text(
+                    'FEATURED EXAMPLE • catalog totals may be refreshed by metadata import',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.w700),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        total == null
+                            ? '${group.ownedTotalTitles} titles owned'
+                            : '${group.ownedTotalTitles} / $total titles',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    if (percent != null)
+                      Text(
+                        '$percent%',
+                        style: const TextStyle(
+                          color: Color(0xFF9DE5B0),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                if (group.completionFraction != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: group.completionFraction,
+                      minHeight: 5,
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF9DE5B0),
+                      ),
+                    ),
+                  )
+                else
+                  const Text(
+                    'Full catalog total not imported',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white38, fontSize: 10),
+                  ),
+                const SizedBox(height: 9),
+                _HomeHubCountRow(
+                  label: 'Movies you own',
+                  owned: group.ownedMovies,
+                  total: group.totalMovies,
+                ),
+                const SizedBox(height: 3),
+                _HomeHubCountRow(
+                  label: 'Shows you own',
+                  owned: group.ownedShows,
+                  total: group.totalShows,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeHubCountRow extends StatelessWidget {
+  final String label;
+  final int owned;
+  final int? total;
+
+  const _HomeHubCountRow({
+    required this.label,
+    required this.owned,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white60, fontSize: 11),
+          ),
+        ),
+        Text(
+          total == null ? '$owned' : '$owned / $total',
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
+  final HomeFranchiseProgressGroup group;
+
+  const _HomeFranchiseProgressDetailsScreen({
+    required this.group,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = group.totalTitles;
+    final percent = group.completionPercent;
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0B10),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0B0B10),
+        title: Text(group.name),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF171722),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  group.type,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  total == null
+                      ? '${group.ownedTotalTitles} titles owned'
+                      : '${group.ownedTotalTitles} / $total titles owned',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (percent != null) ...[
+                  const SizedBox(height: 9),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: group.completionFraction,
+                      minHeight: 6,
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF9DE5B0),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text('$percent% complete',
+                      style: const TextStyle(color: Color(0xFF9DE5B0))),
+                ] else ...[
+                  const SizedBox(height: 5),
+                  const Text(
+                    'The complete catalog total is not available yet. Owned counts below are based on titles indexed for this profile.',
+                    style: TextStyle(color: Colors.white54, height: 1.35),
+                  ),
+                ],
+                if (group.exampleNote != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    group.exampleNote!,
+                    style: const TextStyle(color: Colors.white54, fontSize: 11, height: 1.35),
+                  ),
+                ],
+                const Divider(height: 24, color: Colors.white12),
+                _HomeHubCountRow(
+                  label: 'Movies you own',
+                  owned: group.ownedMovies,
+                  total: group.totalMovies,
+                ),
+                const SizedBox(height: 7),
+                _HomeHubCountRow(
+                  label: 'Shows you own',
+                  owned: group.ownedShows,
+                  total: group.totalShows,
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(2, 24, 2, 10),
+            child: Text(
+              'Titles you own',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+            ),
+          ),
+          if (group.ownedTitles.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'No titles from this group are currently indexed in your profile library. The reference examples below do not count as owned.',
+                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+              ),
+            ),
+          for (final media in group.ownedTitles)
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(vertical: 3),
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: SizedBox(
+                  width: 45,
+                  height: 62,
+                  child: media.imageUrl?.trim().isNotEmpty == true
+                      ? Image.network(
+                          media.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const ColoredBox(
+                            color: Color(0xFF252532),
+                            child: Icon(Icons.movie_outlined),
+                          ),
+                        )
+                      : const ColoredBox(
+                          color: Color(0xFF252532),
+                          child: Icon(Icons.movie_outlined),
+                        ),
+                ),
+              ),
+              title: Text(
+                media.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/details'),
+                  builder: (_) => MediaDetailsScreen(media: media),
+                ),
+              ),
+            ),
+          if (group.exampleTitles.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(2, 22, 2, 4),
+              child: Text('Example catalog titles', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Reference examples only. A check mark means a matching title was found in your profile library; unchecked items are not counted as owned.', style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.35)),
+            ),
+            for (final example in group.exampleTitles)
+              Builder(builder: (context) {
+                final aliases = <String>{
+                  _normalizeHomeCatalogTitle(example.title),
+                  ...example.aliases.map(_normalizeHomeCatalogTitle),
+                };
+                final owned = group.ownedTitles.where((media) {
+                  if (_homeMediaTypeLabel(media.type).toLowerCase() != example.type.toLowerCase()) return false;
+                  final candidates = <String>{
+                    _normalizeHomeCatalogTitle(media.title),
+                    _normalizeHomeCatalogTitle(media.originalTitle ?? ''),
+                    _normalizeHomeCatalogTitle(media.canonicalTitle ?? ''),
+                  }..remove('');
+                  return candidates.any(aliases.contains);
+                }).toList(growable: false);
+                final found = owned.isNotEmpty;
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(found ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: found ? const Color(0xFF9DE5B0) : Colors.white38),
+                  title: Text(example.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: found ? Colors.white : Colors.white70)),
+                  subtitle: Text('${example.type} · ${found ? 'Found in your library' : 'Not matched in your library'}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                  trailing: found ? const Icon(Icons.chevron_right_rounded, color: Colors.white54) : null,
+                  onTap: found ? () => Navigator.of(context).push(MaterialPageRoute<void>(settings: const RouteSettings(name: '/app/details'), builder: (_) => MediaDetailsScreen(media: owned.first))) : null,
+                );
+              }),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _normalizeHomeCatalogTitle(String value) => value
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+    .trim();
+
+String _homeMediaTypeLabel(String type) {
+  final value = type.toLowerCase();
+  if (value.contains('movie') || value.contains('film')) return 'Movie';
+  if (value.contains('tv') ||
+      value.contains('show') ||
+      value.contains('series') ||
+      value.contains('episode')) {
+    return 'TV Show';
+  }
+  return type;
+}
+
 /// Shows collection-level actions plus a horizontal preview of each collection's members.
 class HomeCollectionShelves extends StatelessWidget {
   const HomeCollectionShelves({super.key});
 
   List<MediaItem> _itemsFor(MediaCollection collection) {
-    final library = AppController.instance.library;
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
     final byId = <String, MediaItem>{
-      for (final media in library) media.id: media
+      for (final media in controller.library)
+        if (media.isAccessibleTo(profile)) media.id: media,
     };
     return collection.mediaIds
         .map((id) => byId[id])
@@ -1051,7 +1700,15 @@ class HomeCollectionShelves extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final visibleLibrary = controller.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
     final collections = List<MediaCollection>.from(controller.collections)
+        .where((collection) =>
+            (collection.isShared || collection.createdByProfileId == profile?.id) &&
+            (_itemsFor(collection).isNotEmpty || collection.mediaIds.isEmpty))
+        .toList()
       ..sort((a, b) {
         if (a.isFeatured != b.isFeatured) return a.isFeatured ? -1 : 1;
         return b.createdAt.compareTo(a.createdAt);
@@ -1070,7 +1727,7 @@ class HomeCollectionShelves extends StatelessWidget {
           'spy',
           'superhero'
         ],
-        library: controller.library,
+        library: visibleLibrary,
       );
       if (actionCollection != null) collections.insert(0, actionCollection);
     }
@@ -1094,6 +1751,63 @@ class HomeCollectionShelves extends StatelessWidget {
               child: const UniversalText('All collections'),
             ),
           ),
+          if (visible.isNotEmpty)
+            HomeArrowRail(
+              height: 112,
+              itemCount: visible.length,
+              separatorExtent: 10,
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              itemBuilder: (context, index) {
+                final collection = visible[index];
+                final count = _itemsFor(collection).length;
+                return SizedBox(
+                  width: 236,
+                  child: Material(
+                    color: const Color(0xFF171722),
+                    borderRadius: BorderRadius.circular(15),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => _openCollection(context, collection),
+                      child: Padding(
+                        padding: const EdgeInsets.all(13),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: _discoveryAccent.withValues(alpha: .14),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                collection.isAutomatic
+                                    ? Icons.auto_awesome_mosaic_rounded
+                                    : Icons.collections_bookmark_rounded,
+                                color: _discoveryAccent,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(collection.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                  const SizedBox(height: 4),
+                                  Text('$count titles', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                                  if (collection.isAutomatic) const Text('Auto-curated', style: TextStyle(color: Colors.white38, fontSize: 9)),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           if (visible.isEmpty)
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -1177,11 +1891,11 @@ class _CollectionMemberRail extends StatelessWidget {
         ),
       );
     }
-    return HomeHorizontalArrowRail(
+    return HomeArrowRail(
       height: 184,
-      padding: const EdgeInsets.symmetric(horizontal: 48),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 11),
+      separatorExtent: 11,
+      padding: const EdgeInsets.symmetric(horizontal: 48),
       itemBuilder: (context, index) {
         final item = items[index];
         return _DiscoveryMediaCard(
@@ -1337,23 +2051,29 @@ class SearchDiscoveryLanding extends StatelessWidget {
                 style: TextStyle(color: Colors.white54, fontSize: 12)),
           )
         else
-          HomeHorizontalArrowRail(
+          SizedBox(
             height: 166,
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            itemCount: collectionCards.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final collection = collectionCards[index];
-              final poster = _posterForCollection(collection);
-              return _CollectionSearchCard(
-                collection: collection,
-                imageUrl: poster,
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/app/page/collection-details'),
-                  builder: (_) => CollectionDetailsScreen(collection: collection),
-                )),
-              );
-            },
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              scrollDirection: Axis.horizontal,
+              itemCount: collectionCards.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final collection = collectionCards[index];
+                final poster = _posterForCollection(collection);
+                return _CollectionSearchCard(
+                  collection: collection,
+                  imageUrl: poster,
+                  onTap: () =>
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                    settings: const RouteSettings(
+                        name: '/app/page/collection-details'),
+                    builder: (_) =>
+                        CollectionDetailsScreen(collection: collection),
+                  )),
+                );
+              },
+            ),
           ),
         const SizedBox(height: 22),
       ],

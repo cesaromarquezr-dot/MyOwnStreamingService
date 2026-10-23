@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import 'innovation_features.dart';
 import 'feature_center.dart';
 import 'platform_capability_registry.dart';
+import 'mindscape_ai_team.dart';
+import 'mindscape_ai_orchestrator.dart';
+import 'platform_reliability_center.dart';
 import 'security_bot_center.dart';
+import 'playback_diagnostics_center.dart';
 
 /// A discoverable entry point for major feature modules that previously lived
 /// as separate Dart screens. It links the modules into the primary app flow
@@ -61,6 +65,34 @@ class InnovationHubScreen extends StatelessWidget {
       icon: Icons.map_outlined,
       builder: () => RoadmapFeaturesScreen(),
       stage: 'Roadmap',
+    ),
+    _InnovationEntry(
+      title: 'Playback Diagnostics',
+      subtitle: 'Guided troubleshooting for buffering, failed playback, subtitles, transcoding, and remote access.',
+      icon: Icons.troubleshoot_rounded,
+      builder: () => const PlaybackDiagnosticsCenterScreen(),
+      stage: 'Playback diagnostics',
+    ),
+    _InnovationEntry(
+      title: 'MyOwn Reliability Center',
+      subtitle: 'Performance planning, storage forecasts, recovery workstreams, household safety, and honest system readiness signals.',
+      icon: Icons.monitor_heart_outlined,
+      builder: () => const PlatformReliabilityCenterScreen(),
+      stage: 'Reliability and recovery',
+    ),
+    _InnovationEntry(
+      title: 'Mindscape AI Team',
+      subtitle: 'Steward, Moxie, and Fixer: scoped roles for security, social coordination, maintenance, and authorized media analysis.',
+      icon: Icons.psychology_alt_rounded,
+      builder: () => const MindscapeAiTeamScreen(),
+      stage: 'AI role catalog',
+    ),
+    _InnovationEntry(
+      title: 'Mindscape AI Orchestrator',
+      subtitle: 'Draft, classify, and review tasks for AI roles without executing privileged tools.',
+      icon: Icons.account_tree_outlined,
+      builder: () => const MindscapeAiOrchestratorScreen(),
+      stage: 'AI task proposals',
     ),
     _InnovationEntry(
       title: 'Capability Registry & Master Roadmap',
