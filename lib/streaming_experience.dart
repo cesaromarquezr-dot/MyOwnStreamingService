@@ -16,6 +16,7 @@ import 'localization.dart';
 import 'app_accessibility.dart';
 import 'privacy_preferences.dart';
 import 'playback_interruption_bridge.dart';
+import 'core/services/original_language_defaults.dart';
 
 class StreamingExperiencePreferences {
   static const int automaticResolution = 0;
@@ -31,6 +32,7 @@ class StreamingExperiencePreferences {
   int maxResolution;
   bool autoplayNext;
   bool subtitlesEnabled;
+  bool preferOriginalLanguageTracks;
   double subtitleScale;
   bool audioDescriptions;
   bool highContrast;
@@ -42,6 +44,7 @@ class StreamingExperiencePreferences {
     this.maxResolution = automaticResolution,
     this.autoplayNext = true,
     this.subtitlesEnabled = true,
+    this.preferOriginalLanguageTracks = true,
     this.subtitleScale = 1.0,
     this.audioDescriptions = false,
     this.highContrast = false,
@@ -71,6 +74,7 @@ class StreamingExperiencePreferences {
             supportedResolutionCaps.contains(resolution) ? resolution : 0,
         autoplayNext: map['autoplayNext'] != false,
         subtitlesEnabled: map['subtitlesEnabled'] != false,
+        preferOriginalLanguageTracks: map['preferOriginalLanguageTracks'] != false,
         subtitleScale: scale.clamp(0.75, 2.0).toDouble(),
         audioDescriptions: map['audioDescriptions'] == true,
         highContrast: map['highContrast'] == true,
@@ -93,6 +97,7 @@ class StreamingExperiencePreferences {
         'maxResolution': maxResolution,
         'autoplayNext': autoplayNext,
         'subtitlesEnabled': subtitlesEnabled,
+        'preferOriginalLanguageTracks': preferOriginalLanguageTracks,
         'subtitleScale': subtitleScale.clamp(0.75, 2.0),
         'audioDescriptions': audioDescriptions,
         'highContrast': highContrast,
@@ -357,6 +362,15 @@ class _StreamingExperienceSettingsScreenState
                       title: const UniversalText('Enable subtitles by default'),
                       onChanged: (value) =>
                           _update(() => settings.subtitlesEnabled = value),
+                    ),
+                    SwitchListTile(
+                      value: settings.preferOriginalLanguageTracks,
+                      title: const UniversalText(
+                          'Prefer original-language audio and subtitles'),
+                      subtitle: const UniversalText(
+                          'Defaults to a track matching the title’s original language when that track is available. Examples: Korean for Parasite and Squid Game, Spanish for the listed Mexican animated films, and English for James Bond and Marvel titles. You can still choose another track.'),
+                      onChanged: (value) => _update(
+                          () => settings.preferOriginalLanguageTracks = value),
                     ),
                     ListTile(
                       title: const UniversalText('Subtitle text size'),
@@ -811,6 +825,9 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
     final value = player?.value;
     final duration = value?.duration ?? Duration.zero;
     final position = value?.position ?? Duration.zero;
+    final preferredOriginalLanguage = _preferences.preferOriginalLanguageTracks
+        ? OriginalLanguageDefaults.resolveForMedia(widget.media)
+        : null;
     final maxSeconds =
         duration.inSeconds > 0 ? duration.inSeconds.toDouble() : 1.0;
     final currentSeconds = _sliderPreviewSeconds ??
@@ -962,6 +979,25 @@ class _AdaptiveStreamingPlayerState extends State<AdaptiveStreamingPlayer> {
                 const SizedBox(height: 8),
                 Text(widget.activityLabel ?? 'Playing ${widget.media.title}',
                     style: const TextStyle(color: Colors.white60)),
+                if (preferredOriginalLanguage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.translate_rounded,
+                            size: 17, color: Colors.white60),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Preferred original language: ${OriginalLanguageDefaults.displayName(preferredOriginalLanguage)}. The playback source must support track selection to apply it to an adaptive stream.',
+                            style: const TextStyle(
+                                color: Colors.white54, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (_preferences.dataSaver)
                   const Padding(
                     padding: EdgeInsets.only(top: 8),

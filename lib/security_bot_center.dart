@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'core/services/ai_bot_activity_service.dart';
 import 'app_core.dart';
 
 /// Administrator-facing, on-demand security diagnostics. The screen never
@@ -57,8 +59,33 @@ class _ServerSecurityBotCenterScreenState
 
   Future<void> _runChecks() async {
     setState(() => _running = true);
+    final watch = Stopwatch()..start();
+    final activity = AiBotActivityService.instance;
+    final taskId = activity.startTask(
+      botId: 'security',
+      botName: 'Security Bot',
+      title: 'Run read-only security diagnostics',
+      details: 'Started an explicitly requested, administrator-authorized backend check.',
+    );
+    activity.recordStep(
+      botId: 'security',
+      botName: 'Security Bot',
+      title: 'Calling backend diagnostics',
+      details: 'Requesting the configured security-bot check endpoint; no account or network changes are authorized by this task.',
+      taskId: taskId,
+    );
     try {
       await AppController.instance.backendApi.runSecurityBotChecks();
+      watch.stop();
+      activity.completeTask(
+        botId: 'security',
+        botName: 'Security Bot',
+        taskId: taskId,
+        title: 'Security diagnostics completed',
+        details: 'The backend accepted and completed the on-demand check request. Review the returned report for individual findings.',
+        success: true,
+        durationMs: watch.elapsedMilliseconds,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Read-only security checks completed.')),
@@ -66,6 +93,16 @@ class _ServerSecurityBotCenterScreenState
       }
       await _load(showLoading: false);
     } catch (error) {
+      watch.stop();
+      activity.completeTask(
+        botId: 'security',
+        botName: 'Security Bot',
+        taskId: taskId,
+        title: 'Security diagnostics failed',
+        details: 'The check did not complete: ${error.runtimeType}. Details are shown in the security screen; sensitive error text is not copied into the general activity log.',
+        success: false,
+        durationMs: watch.elapsedMilliseconds,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.toString())),

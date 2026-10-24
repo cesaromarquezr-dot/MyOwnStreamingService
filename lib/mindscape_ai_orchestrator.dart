@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core/services/ai_bot_activity_service.dart';
+
 import 'mindscape_ai_team.dart';
 
 /// Safe, local task-planning UI for the Mindscape team.
@@ -32,10 +34,19 @@ class _MindscapeAiOrchestratorScreenState extends State<MindscapeAiOrchestratorS
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Describe a task before drafting it.')));
       return;
     }
+    final proposalId = _nextId++;
     setState(() {
-      _proposals.insert(0, _TaskProposal(id: _nextId++, role: _selectedRole.name, task: task, risk: _risk));
+      _proposals.insert(0, _TaskProposal(id: proposalId, role: _selectedRole.name, task: task, risk: _risk));
       _taskController.clear();
     });
+    AiBotActivityService.instance.recordEvent(
+      botId: _selectedRole.id,
+      botName: _selectedRole.name,
+      type: 'proposal_created',
+      status: _risk == 'High impact' ? 'waiting_approval' : 'info',
+      title: 'Task proposal drafted for review',
+      details: 'Local proposal #$proposalId created with impact level "$_risk". Objective text is intentionally not copied into the general activity log; no AI worker or external action was run.',
+    );
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Proposal saved locally for review. No action was executed.')));
   }
 
@@ -122,7 +133,17 @@ class _MindscapeAiOrchestratorScreenState extends State<MindscapeAiOrchestratorS
                   Align(alignment: Alignment.centerLeft, child: Text(proposal.task)),
                   const SizedBox(height: 8),
                   const Align(alignment: Alignment.centerLeft, child: Text('No worker execution or persistence is connected in this version.')),
-                  Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => setState(() => _proposals.removeWhere((item) => item.id == proposal.id)), icon: const Icon(Icons.delete_outline), label: const Text('Remove draft'))),
+                  Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () {
+                    setState(() => _proposals.removeWhere((item) => item.id == proposal.id));
+                    AiBotActivityService.instance.recordEvent(
+                      botId: MindscapeAiBotCatalog.roles.firstWhere((role) => role.name == proposal.role).id,
+                      botName: proposal.role,
+                      type: 'proposal_removed',
+                      status: 'info',
+                      title: 'Local task proposal removed',
+                      details: 'Proposal #${proposal.id} was removed from this screen. No worker had executed it.',
+                    );
+                  }, icon: const Icon(Icons.delete_outline), label: const Text('Remove draft'))),
                 ],
               ),
             ),

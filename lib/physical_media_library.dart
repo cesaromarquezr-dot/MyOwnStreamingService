@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
+import 'disc_ingestion_center.dart';
 
 const _physicalAccent = Color(0xFF8B7CFF);
 
@@ -34,6 +35,18 @@ class PhysicalMediaLibraryScreen extends StatelessWidget {
           const Text('Your imported disc collection', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           const Text('Browse imported media by the format recorded in its disc metadata.', style: TextStyle(color: Colors.white60)),
+          const SizedBox(height: 14),
+          Card(
+            color: const Color(0xFF201A31),
+            child: ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0x338B7CFF), child: Icon(Icons.album_rounded, color: _physicalAccent)),
+              title: const Text('Disc Ingestion Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              subtitle: const Text('Monitor MakeMKV ripping jobs, verify completed MKVs, and add reviewed metadata to your library.', style: TextStyle(color: Colors.white70)),
+              isThreeLine: true,
+              trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white60),
+              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const DiscIngestionCenterScreen())),
+            ),
+          ),
           const SizedBox(height: 18),
           Wrap(
             spacing: 8,

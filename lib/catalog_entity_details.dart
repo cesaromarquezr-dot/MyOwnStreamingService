@@ -364,6 +364,13 @@ class CatalogEntityDetailsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       _buildCountSummary(credits),
+                      if (sourceMedia.tags.contains('catalog-example')) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'This profile includes local catalog examples without media files. The listed filmography is limited to currently indexed credits and may not be exhaustive.',
+                          style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                        ),
+                      ],
                     ],
                   ),
                 ),

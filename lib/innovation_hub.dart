@@ -8,6 +8,7 @@ import 'mindscape_ai_orchestrator.dart';
 import 'platform_reliability_center.dart';
 import 'security_bot_center.dart';
 import 'playback_diagnostics_center.dart';
+import 'disc_ingestion_center.dart';
 
 /// A discoverable entry point for major feature modules that previously lived
 /// as separate Dart screens. It links the modules into the primary app flow
@@ -44,6 +45,13 @@ class InnovationHubScreen extends StatelessWidget {
       icon: Icons.rocket_launch_rounded,
       builder: () => UltimatePlatformScreen(),
       stage: 'Platform suite',
+    ),
+    _InnovationEntry(
+      title: 'Disc Ingestion Center',
+      subtitle: 'Monitor MakeMKV jobs, write to NAS storage, validate output, and review metadata before library import.',
+      icon: Icons.album_rounded,
+      builder: () => const DiscIngestionCenterScreen(),
+      stage: 'Disc ingestion',
     ),
     _InnovationEntry(
       title: 'Security Bot Control Center',

@@ -29,6 +29,9 @@ class _SeriesScreenState extends State<SeriesScreen>
   void initState() {
     super.initState();
 
+    // Seed browseable catalog examples when Movies/TV is opened directly.
+    AppController.instance.ensureDemoPreviewMedia(notify: false);
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),

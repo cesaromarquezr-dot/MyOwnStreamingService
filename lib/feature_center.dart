@@ -455,6 +455,9 @@ class _CollectionsPanelState
   void initState() {
     super.initState();
 
+    // Seed local, non-playable metadata examples even when the user enters
+    // Watch > Collections directly without visiting the Home page first.
+    AppController.instance.ensureDemoPreviewMedia(notify: false);
     AppController.instance.seedCollections();
   }
 

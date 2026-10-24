@@ -15,6 +15,8 @@ import 'library_membership_store.dart';
 import './supabase/supabase_service.dart';
 import 'localization.dart';
 import 'genre_system.dart';
+import 'cinematic_seed_examples.dart';
+import 'demo_catalog_metadata.dart';
 import 'core/models/profile_governance.dart';
 import 'core/models/platform_server.dart';
 
@@ -3486,6 +3488,16 @@ class AppController extends ChangeNotifier {
   void ensureDemoPreviewMedia({bool notify = true}) {
     var changed = false;
 
+    List<String> mergeNames(Iterable<String> current, Iterable<String> additions) {
+      final seen = <String>{};
+      final output = <String>[];
+      for (final raw in <String>[...current, ...additions]) {
+        final name = raw.trim();
+        if (name.isNotEmpty && seen.add(name.toLowerCase())) output.add(name);
+      }
+      return output;
+    }
+
     void addOrNormalizePreview(MediaItem item) {
       if (_isHiddenFromCurrentProfile(item.id)) return;
       final index = library.indexWhere((existing) => existing.id == item.id);
@@ -3496,22 +3508,44 @@ class AppController extends ChangeNotifier {
       }
 
       final existing = library[index];
-      // Migrate preview entries created by earlier versions, which lacked the
-      // explicit non-playable marker. Do not modify a record from another source.
+      // Never overwrite imported/user records. Only enrich the local preview
+      // records created by this feature, retaining user-edited fields/artwork.
       if (existing.addedSource != 'demo-preview') return;
-      final tags = <String>{...existing.tags, ...item.tags};
-      final needsNormalization =
-          existing.playbackUrl != null ||
-          !existing.tags.contains('not-playable') ||
-          !existing.tags.contains('preview-only');
-      if (!needsNormalization) return;
-      library[index] = MediaItem.fromJson(<String, dynamic>{
+      final tags = <String>{...existing.tags, ...item.tags, 'not-playable', 'preview-only'};
+      final merged = MediaItem.fromJson(<String, dynamic>{
         ...existing.toJson(),
         'playbackUrl': null,
         'addedSource': 'demo-preview',
         'tags': tags.toList(growable: false),
+        'releaseYear': existing.releaseYear ?? item.releaseYear,
+        'seriesStartYear': existing.seriesStartYear ?? item.seriesStartYear,
+        'description': existing.description?.trim().isNotEmpty == true
+            ? existing.description
+            : item.description,
+        'actors': mergeNames(existing.actors, item.actors),
+        'characters': mergeNames(existing.characters, item.characters),
+        'directors': mergeNames(existing.directors, item.directors),
+        'writers': mergeNames(existing.writers, item.writers),
+        'music': mergeNames(existing.music, item.music),
+        'genres': mergeNames(existing.genres, item.genres),
+        'franchiseId': existing.franchiseId?.trim().isNotEmpty == true ? existing.franchiseId : item.franchiseId,
+        'franchiseName': existing.franchiseName?.trim().isNotEmpty == true ? existing.franchiseName : item.franchiseName,
+        'franchiseType': existing.franchiseType?.trim().isNotEmpty == true ? existing.franchiseType : item.franchiseType,
+        'franchiseOrder': existing.franchiseOrder ?? item.franchiseOrder,
+        'franchiseNames': mergeNames(existing.franchiseNames, item.franchiseNames),
+        'cinematicUniverseIds': mergeNames(existing.cinematicUniverseIds, item.cinematicUniverseIds),
+        'cinematicUniverseNames': mergeNames(existing.cinematicUniverseNames, item.cinematicUniverseNames),
+        'universeMemberships': existing.universeMemberships.isNotEmpty
+            ? existing.universeMemberships
+            : item.universeMemberships,
+        'continuityId': existing.continuityId ?? item.continuityId,
+        'continuityName': existing.continuityName ?? item.continuityName,
+        'universeMetadataSource': existing.universeMetadataSource ?? item.universeMetadataSource,
       });
-      changed = true;
+      if (jsonEncode(merged.toJson()) != jsonEncode(existing.toJson())) {
+        library[index] = merged;
+        changed = true;
+      }
     }
 
     addOrNormalizePreview(MediaItem(
@@ -3543,26 +3577,9 @@ class AppController extends ChangeNotifier {
           'seasonNumber': 1,
           'title': 'Season 1',
           'episodes': [
-            {
-              'episodeNumber': 1,
-              'title': 'The First Pulse',
-              'duration': 42,
-              'description': 'A strange signal interrupts a quiet night.'
-            },
-            {
-              'episodeNumber': 2,
-              'title': 'Dead Air',
-              'duration': 44,
-              'description':
-                  'The team traces the signal to an abandoned relay station.'
-            },
-            {
-              'episodeNumber': 3,
-              'title': 'Echoes',
-              'duration': 46,
-              'description':
-                  'A second transmission reveals a troubling pattern.'
-            },
+            {'episodeNumber': 1, 'title': 'The First Pulse', 'duration': 42, 'description': 'A strange signal interrupts a quiet night.'},
+            {'episodeNumber': 2, 'title': 'Dead Air', 'duration': 44, 'description': 'The team traces the signal to an abandoned relay station.'},
+            {'episodeNumber': 3, 'title': 'Echoes', 'duration': 46, 'description': 'A second transmission reveals a troubling pattern.'},
           ],
         },
       ],
@@ -3579,6 +3596,95 @@ class AppController extends ChangeNotifier {
       tags: const ['demo-preview', 'not-playable', 'preview-only'],
       addedSource: 'demo-preview',
     ));
+
+    // Put the cinematic starter examples into the actual local browse catalog,
+    // not only inside the Intelligence screen. Exact titles are preserved so
+    // configured provider lookup can find the correct work.
+    for (var index = 0; index < CinematicSeedExamples.all.length; index++) {
+      final example = CinematicSeedExamples.all[index];
+      final titleKey = DemoCatalogMetadata.normalizeTitle(example.title);
+      final slug = titleKey.replaceAll(' ', '-');
+      final isMcu = example.universe == CinematicSeedExamples.mcu;
+      final isSpiderNoir = titleKey == 'spider noir';
+      final mcuMovieOrder = CinematicSeedExamples.movies.indexOf(example);
+      final franchise = isMcu
+          ? DemoFranchiseMetadata(
+              id: 'marvel-cinematic-universe',
+              name: CinematicSeedExamples.mcu,
+              type: 'Cinematic Universe',
+              order: mcuMovieOrder >= 0 ? mcuMovieOrder + 1 : null,
+            )
+          : DemoCatalogMetadata.franchiseFor(example.title);
+      final cast = DemoCatalogMetadata.castFor(example.title);
+      final genres = DemoCatalogMetadata.genresFor(
+        example.title,
+        isTv: example.isTv,
+        isMcu: isMcu,
+      );
+      final mediaKindLabel = example.isTv ? 'series' : 'movie';
+      addOrNormalizePreview(MediaItem(
+        id: 'demo-catalog-$slug',
+        title: example.title,
+        type: example.isTv ? 'tvShow' : 'movie',
+        description: 'Catalog example only. This is not an owned video file and has no playable stream. Use it to preview title metadata, $mediaKindLabel details, and actor/crew profiles. TMDB can enrich these sample credits when configured.',
+        releaseYear: example.year,
+        seriesStartYear: example.isTv ? example.year : null,
+        actors: cast,
+        directors: DemoCatalogMetadata.directorsFor(example.title),
+        writers: DemoCatalogMetadata.writersFor(example.title),
+        genres: genres,
+        tags: <String>[
+          'demo-preview', 'preview-only', 'not-playable', 'catalog-example',
+          if (isMcu) ...['action', 'superhero', 'marvel-cinematic-universe'],
+          if (example.universe.toLowerCase().contains('wizarding')) 'wizarding-world',
+          if (example.universe.toLowerCase().contains('pixar')) 'pixar',
+        ],
+        addedSource: 'demo-preview',
+        franchiseId: franchise?.id,
+        franchiseName: franchise?.name,
+        franchiseType: franchise?.type,
+        franchiseOrder: franchise?.order,
+        franchiseNames: franchise == null ? const <String>[] : <String>[franchise.name],
+        cinematicUniverseIds: isMcu ? const ['marvel-cinematic-universe'] : const <String>[],
+        cinematicUniverseNames: isMcu ? const [CinematicSeedExamples.mcu] : <String>[if (isSpiderNoir) CinematicSeedExamples.spiderNoirContinuity],
+        cinematicUniverseSaga: isMcu ? 'Marvel Cinematic Universe examples' : null,
+        cinematicUniverseCanonStatus: isMcu ? 'sample-catalog-metadata' : null,
+        continuityId: isSpiderNoir ? 'spider-noir-separate-continuity' : (isMcu ? 'mcu' : null),
+        continuityName: isSpiderNoir ? 'Spider-Noir separate continuity' : (isMcu ? CinematicSeedExamples.mcu : null),
+        universeMetadataSource: 'local-demo-seed',
+        universeMemberships: isMcu
+            ? const <Map<String, dynamic>>[
+                {'id': 'marvel-cinematic-universe', 'name': 'Marvel Cinematic Universe', 'relationship': 'example-membership', 'source': 'local-demo-seed'}
+              ]
+            : (isSpiderNoir
+                ? const <Map<String, dynamic>>[
+                    {'id': 'spider-noir-separate-continuity', 'name': 'Spider-Noir separate continuity', 'relationship': 'separate-continuity', 'source': 'local-demo-seed'}
+                  ]
+                : const <Map<String, dynamic>>[]),
+      ));
+    }
+
+    const albumExamples = <Map<String, dynamic>>[
+      {'title': '1989', 'artist': 'Taylor Swift', 'year': 2014, 'genres': ['Pop']},
+      {'title': 'Rare', 'artist': 'Selena Gomez', 'year': 2020, 'genres': ['Pop', 'Dance Pop']},
+      {'title': 'YHLQMDLG', 'artist': 'Bad Bunny', 'year': 2020, 'genres': ['Latin', 'Reggaeton', 'Latin Trap']},
+      {'title': 'Colores', 'artist': 'J Balvin', 'year': 2020, 'genres': ['Latin', 'Reggaeton']},
+    ];
+    for (final album in albumExamples) {
+      final title = album['title']! as String;
+      final artist = album['artist']! as String;
+      addOrNormalizePreview(MediaItem(
+        id: 'demo-catalog-album-${DemoCatalogMetadata.normalizeTitle(title).replaceAll(' ', '-')}',
+        title: title,
+        type: 'album',
+        description: 'Music catalog example for $artist. No audio files are attached and playback is unavailable until you import your own audio. Use this item to preview artist/performer credit links.',
+        releaseYear: album['year']! as int,
+        music: <String>[artist],
+        genres: (album['genres']! as List).cast<String>(),
+        tags: const ['demo-preview', 'preview-only', 'not-playable', 'catalog-example', 'music-artist-example'],
+        addedSource: 'demo-preview',
+      ));
+    }
 
     if (!changed) return;
     _refreshAutomaticCollections();
@@ -3678,6 +3784,102 @@ class AppController extends ChangeNotifier {
 
     _autoAssignFranchiseMetadata(media);
     _refreshAutomaticCollections();
+
+    // Best-effort profile-scoped catalog persistence. The cache has an explicit
+    // privacy preference and field allow-list; playback URLs, signed URLs, and
+    // filesystem paths are intentionally excluded. This also keeps disc-import
+    // metadata available after restart when offline metadata is enabled.
+    final profile = currentProfile;
+    if (profile != null) {
+      try {
+        final visibleItems = library
+            .where((item) => item.isAccessibleTo(profile))
+            .toList(growable: false);
+        // Keep the newest catalog entries within the bounded offline snapshot.
+        final start = visibleItems.length > OfflineMetadataCache.maxItems
+            ? visibleItems.length - OfflineMetadataCache.maxItems
+            : 0;
+        await OfflineMetadataCache(profileId: profile.id).save(
+          visibleItems.skip(start).map((item) => item.toJson()),
+        );
+      } catch (_) {
+        // Cache failures must never turn a successful library add into a failure.
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Merge verified provider credits into an existing catalog record.
+  /// This never creates a new library item and never changes playback paths.
+  /// Offline persistence still obeys the profile's existing privacy setting.
+  Future<void> mergeProviderTitleCredits({
+    required String mediaId,
+    List<String> actors = const <String>[],
+    List<String> characters = const <String>[],
+    List<String> directors = const <String>[],
+    List<String> writers = const <String>[],
+    List<String> music = const <String>[],
+  }) async {
+    final index = library.indexWhere((item) => item.id == mediaId);
+    if (index < 0) return;
+
+    List<String> merge(Iterable<String> current, Iterable<String> incoming) {
+      final seen = <String>{};
+      final values = <String>[];
+      for (final raw in <String>[...current, ...incoming]) {
+        final value = raw.trim();
+        if (value.isNotEmpty && seen.add(value.toLowerCase())) values.add(value);
+      }
+      return values;
+    }
+
+    final current = library[index];
+    final mergedActors = merge(current.actors, actors);
+    final mergedCharacters = merge(current.characters, characters);
+    final mergedDirectors = merge(current.directors, directors);
+    final mergedWriters = merge(current.writers, writers);
+    final mergedMusic = merge(current.music, music);
+    bool equal(List<String> a, List<String> b) =>
+        a.length == b.length && List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
+    if (equal(mergedActors, current.actors) &&
+        equal(mergedCharacters, current.characters) &&
+        equal(mergedDirectors, current.directors) &&
+        equal(mergedWriters, current.writers) &&
+        equal(mergedMusic, current.music)) {
+      return;
+    }
+
+    final enriched = MediaItem.fromJson(<String, dynamic>{
+      ...current.toJson(),
+      'actors': mergedActors,
+      'characters': mergedCharacters,
+      'directors': mergedDirectors,
+      'writers': mergedWriters,
+      'music': mergedMusic,
+    });
+    library[index] = enriched;
+    _mergeCatalog(actorsCatalog, mergedActors);
+    _mergeCatalog(directorsCatalog, mergedDirectors);
+    _mergeCatalog(writersCatalog, mergedWriters);
+    _mergeCatalog(musicCatalog, mergedMusic);
+    _refreshAutomaticCollections();
+
+    final profile = currentProfile;
+    if (profile != null) {
+      try {
+        final visibleItems = library
+            .where((item) => item.isAccessibleTo(profile))
+            .toList(growable: false);
+        final start = visibleItems.length > OfflineMetadataCache.maxItems
+            ? visibleItems.length - OfflineMetadataCache.maxItems
+            : 0;
+        await OfflineMetadataCache(profileId: profile.id).save(
+          visibleItems.skip(start).map((item) => item.toJson()),
+        );
+      } catch (_) {
+        // Credits remain available in the active session if offline caching fails.
+      }
+    }
     notifyListeners();
   }
 
@@ -6387,6 +6589,32 @@ class AppController extends ChangeNotifier {
 
     final definitions = <Map<String, dynamic>>[
       {
+        // The same theme that Home previously generated as a virtual card is
+        // now part of the shared collection index, so Watch > Collections sees it.
+        'id': 'action-movies',
+        'name': 'Action Movies Collection',
+        'type': 'Theme',
+        'match': (MediaItem m) {
+          final normalizedType = m.type.toLowerCase();
+          if (_isShowType(normalizedType) ||
+              normalizedType.contains('album') ||
+              normalizedType.contains('track') ||
+              normalizedType.contains('song')) {
+            return false;
+          }
+          final text = <String>[
+            m.title,
+            m.description ?? '',
+            ...m.genres,
+            ...m.tags,
+            ...m.actors,
+            if (m.franchiseName != null) m.franchiseName!,
+          ].join(' ').toLowerCase();
+          return const <String>['action', 'adventure', 'martial arts', 'spy', 'superhero']
+              .any((keyword) => text.contains(keyword));
+        },
+      },
+      {
         'id': 'back-to-the-future',
         'name': 'Back to the Future Trilogy',
         'type': 'Trilogy',
@@ -6405,8 +6633,10 @@ class AppController extends ChangeNotifier {
         'id': 'harry-potter',
         'name': 'Harry Potter Collection',
         'type': 'Saga',
-        'match': (MediaItem m) => RegExp(r'^harry potter')
-            .hasMatch(_normalizeCollectionTitle(m.title)),
+        'match': (MediaItem m) =>
+            m.franchiseId?.trim().isNotEmpty != true &&
+            RegExp(r'^harry potter')
+                .hasMatch(_normalizeCollectionTitle(m.title)),
       },
       {
         'id': 'twilight',

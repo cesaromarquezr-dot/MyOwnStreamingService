@@ -14,6 +14,7 @@ import 'localization.dart';
 import 'streaming_experience.dart';
 import 'innovation_features.dart';
 import 'playback_interruption_bridge.dart';
+import 'core/services/original_language_defaults.dart';
 
 
 class PlayerScreen extends StatefulWidget {
@@ -153,9 +154,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
       profileId: AppController.instance.currentProfile?.id,
     );
     if (!mounted) return;
+
+    // Group Watch selections belong to the participant/session and must not be
+    // overwritten by the local default policy when preferences finish loading.
+    if (groupWatchSessionId != null) {
+      setState(() => _autoplayNextEnabled = preferences.autoplayNext);
+      return;
+    }
+
+    final originalLanguage =
+        OriginalLanguageDefaults.resolveForMedia(widget.media);
+    final audioTracks = widget.media.audioTracks;
+    final subtitleTracks = widget.media.subtitles;
+    final selectedAudio = OriginalLanguageDefaults.bestTrack(
+          audioTracks,
+          targetLanguage: preferences.preferOriginalLanguageTracks
+              ? originalLanguage
+              : null,
+          preferAudioDescription: preferences.audioDescriptions,
+        ) ??
+        '';
+    final selectedSubtitle = !preferences.subtitlesEnabled
+        ? null
+        : OriginalLanguageDefaults.bestTrack(
+            subtitleTracks,
+            targetLanguage: preferences.preferOriginalLanguageTracks
+                ? originalLanguage
+                : null,
+            subtitles: true,
+          );
+
     setState(() {
       _autoplayNextEnabled = preferences.autoplayNext;
       subtitlesEnabled = preferences.subtitlesEnabled;
+      this.selectedAudio = selectedAudio;
+      this.selectedSubtitle = selectedSubtitle;
     });
   }
 
@@ -257,11 +290,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     youtubeController = YoutubePlayerController.fromVideoId(
       videoId: videoId,
       autoPlay: false,
-      params: const YoutubePlayerParams(
+      params: YoutubePlayerParams(
         showControls: true,
         showFullscreenButton: true,
         enableCaption: true,
-        captionLanguage: 'en',
+        captionLanguage:
+            OriginalLanguageDefaults.resolveForMedia(widget.media) ?? 'en',
         color: 'red',
         playsInline: true,
       ),

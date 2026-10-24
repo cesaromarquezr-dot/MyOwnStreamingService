@@ -13,6 +13,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'ai_bot_activity_service.dart';
+
 enum NetworkAutomationMode { automatic, observeOnly, paused }
 
 /// Application-level intent profiles; they do not configure physical network gear.
@@ -77,8 +79,7 @@ class _HostFailureState {
 class SelfDrivingNetworkMonitor extends ChangeNotifier {
   SelfDrivingNetworkMonitor._();
 
-  static final SelfDrivingNetworkMonitor instance =
-      SelfDrivingNetworkMonitor._();
+  static final SelfDrivingNetworkMonitor instance = SelfDrivingNetworkMonitor._();
   static const String _modeKey = 'self_driving_network_mode';
   static const String _intentKey = 'self_driving_network_intent';
   static const int _sampleLimit = 200;
@@ -97,22 +98,19 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
   final Map<String, List<DateTime>> _requestStarts = <String, List<DateTime>>{};
   final Map<String, DateTime> _lastBurstAlerts = <String, DateTime>{};
   final Map<String, int> _firstConnectionLatencyByHost = <String, int>{};
-  final Map<String, _HostFailureState> _hostFailures =
-      <String, _HostFailureState>{};
+  final Map<String, _HostFailureState> _hostFailures = <String, _HostFailureState>{};
   int _requestsObserved = 0;
   int _retryAttempts = 0;
   int _transientFailures = 0;
   int _timeouts = 0;
   double? _latencyBaselineMs;
   bool _initialized = false;
-  late final SelfDrivingHttpClient _httpClient =
-      SelfDrivingHttpClient(monitor: this);
+  late final SelfDrivingHttpClient _httpClient = SelfDrivingHttpClient(monitor: this);
 
   SelfDrivingHttpClient get httpClient => _httpClient;
   NetworkAutomationMode get mode => _mode;
   NetworkIntentProfile get intentProfile => _intentProfile;
-  List<NetworkSecurityEvent> get securityEvents =>
-      List<NetworkSecurityEvent>.unmodifiable(_securityEvents.reversed);
+  List<NetworkSecurityEvent> get securityEvents => List<NetworkSecurityEvent>.unmodifiable(_securityEvents.reversed);
   bool get automaticActionsEnabled => _mode == NetworkAutomationMode.automatic;
   bool get observing => _mode != NetworkAutomationMode.paused;
   int get requestsObserved => _requestsObserved;
@@ -120,15 +118,12 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
   int get transientFailures => _transientFailures;
   int get timeouts => _timeouts;
   double? get latencyBaselineMs => _latencyBaselineMs;
-  List<NetworkRequestSample> get samples =>
-      List<NetworkRequestSample>.unmodifiable(_samples.reversed);
+  List<NetworkRequestSample> get samples => List<NetworkRequestSample>.unmodifiable(_samples.reversed);
   int get detectedBurstHosts => _lastBurstAlerts.keys.where((host) {
         final alertAt = _lastBurstAlerts[host];
-        return alertAt != null &&
-            DateTime.now().toUtc().difference(alertAt).inSeconds < 60;
+        return alertAt != null && DateTime.now().toUtc().difference(alertAt).inSeconds < 60;
       }).length;
-  int get uniqueHostsObserved =>
-      _samples.map((sample) => sample.host).toSet().length;
+  int get uniqueHostsObserved => _samples.map((sample) => sample.host).toSet().length;
   double? get medianLatencyMs {
     final values = _samples
         .where((sample) => sample.networkHealthy)
@@ -140,16 +135,14 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
     if (values.length.isOdd) return values[middle].toDouble();
     return (values[middle - 1] + values[middle]) / 2;
   }
-
   int get slowRequestCount => _samples.reversed
       .take(30)
       .where((sample) => sample.networkHealthy && sample.durationMs >= 3000)
       .length;
-  int? get firstObservedHostConnectionLatencyMs =>
-      _firstConnectionLatencyByHost.isEmpty
-          ? null
-          : _firstConnectionLatencyByHost.values.reduce((a, b) => a + b) ~/
-              _firstConnectionLatencyByHost.length;
+  int? get firstObservedHostConnectionLatencyMs => _firstConnectionLatencyByHost.isEmpty
+      ? null
+      : _firstConnectionLatencyByHost.values.reduce((a, b) => a + b) ~/
+          _firstConnectionLatencyByHost.length;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -206,8 +199,7 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
     if (!observing) return null;
     final host = _hostKey(uri);
     final now = DateTime.now().toUtc();
-    if (_requestStarts.length >= _hostStateLimit &&
-        !_requestStarts.containsKey(host)) {
+    if (_requestStarts.length >= _hostStateLimit && !_requestStarts.containsKey(host)) {
       final oldest = _requestStarts.entries.first.key;
       _requestStarts.remove(oldest);
       _lastBurstAlerts.remove(oldest);
@@ -231,18 +223,14 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
         host: host,
         severity: NetworkEventSeverity.warning,
         title: 'Outbound request burst detected',
-        details:
-            '${starts.length} request attempts to one host in $_requestWindowSeconds seconds.',
+        details: '${starts.length} request attempts to one host in $_requestWindowSeconds seconds.',
         action: automaticActionsEnabled
             ? 'Automatic mode may delay body-less GET/HEAD requests within a short bound; write requests are never delayed by this guard.'
             : 'Recorded for review; no automatic backpressure was applied.',
       ));
     }
-    final safeRead =
-        method.toUpperCase() == 'GET' || method.toUpperCase() == 'HEAD';
-    if (automaticActionsEnabled &&
-        safeRead &&
-        starts.length >= _requestBurstThreshold) {
+    final safeRead = method.toUpperCase() == 'GET' || method.toUpperCase() == 'HEAD';
+    if (automaticActionsEnabled && safeRead && starts.length >= _requestBurstThreshold) {
       final excess = starts.length - _requestBurstThreshold;
       final millis = (250 + (excess ~/ 5) * 100).clamp(250, 1200).toInt();
       return Duration(milliseconds: millis);
@@ -253,6 +241,18 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
   void _addSecurityEvent(NetworkSecurityEvent event) {
     _securityEvents.add(event);
     if (_securityEvents.length > _eventLimit) _securityEvents.removeAt(0);
+    AiBotActivityService.instance.recordEvent(
+      botId: 'self_driving_network',
+      botName: 'Self-Driving Network Bot',
+      type: 'network_signal',
+      status: switch (event.severity) {
+        NetworkEventSeverity.info => 'info',
+        NetworkEventSeverity.warning => 'warning',
+        NetworkEventSeverity.critical => 'critical',
+      },
+      title: event.title,
+      details: '${event.details} Action: ${event.action}',
+    );
   }
 
   /// A local, deterministic diagnostic helper. It does not send the query anywhere.
@@ -261,25 +261,17 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
     final p95 = p95LatencyMs;
     final p50 = medianLatencyMs;
     final failurePercent = (recentFailureRate * 100).round();
-    if (q.contains('security') ||
-        q.contains('attack') ||
-        q.contains('dos') ||
-        q.contains('zero trust') ||
-        q.contains('burst') ||
-        q.contains('threat')) {
-      final lastBurst =
-          securityEvents.where((e) => e.title.contains('burst')).length;
+    if (q.contains('security') || q.contains('attack') || q.contains('dos') ||
+        q.contains('zero trust') || q.contains('burst') || q.contains('threat')) {
+      final lastBurst = securityEvents.where((e) => e.title.contains('burst')).length;
       return 'Local security posture: $lastBurst recorded outbound-burst event(s), '
           '$activeRetrySuppressions host retry suppression(s), and $failurePercent% recent request failures. '
           'Automatic mode may add bounded delay to body-less safe reads during a local request burst. '
           'This client cannot see inbound packet floods, rogue DHCP, Wi-Fi radio events, or server firewall logs; '
           'connect backend/gateway telemetry for those controls.';
     }
-    if (q.contains('latency') ||
-        q.contains('slow') ||
-        q.contains('performance') ||
-        q.contains('buffer') ||
-        q.contains('stream')) {
+    if (q.contains('latency') || q.contains('slow') || q.contains('performance') ||
+        q.contains('buffer') || q.contains('stream')) {
       final p95Text = p95 == null ? 'not available yet' : '${p95.round()} ms';
       final p50Text = p50 == null ? 'not available yet' : '${p50.round()} ms';
       return 'Response-header latency: median $p50Text, P95 $p95Text, $slowRequestCount slow response(s) among the latest 30 samples. '
@@ -287,18 +279,13 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
           '${trendLabel == 'Latency rising' ? 'Consider checking the affected host and backend load.' : 'Continue gathering samples to improve the baseline.'} '
           'These are API response measurements, not Wi-Fi association or media-player buffer metrics.';
     }
-    if (q.contains('traffic') ||
-        q.contains('route') ||
-        q.contains('failover') ||
-        q.contains('congestion') ||
-        q.contains('endpoint')) {
+    if (q.contains('traffic') || q.contains('route') || q.contains('failover') ||
+        q.contains('congestion') || q.contains('endpoint')) {
       return 'Traffic-engineering status: $uniqueHostsObserved host(s) observed so far. '
           'The app currently uses explicitly configured service URLs; automatic rerouting requires multiple administrator-approved endpoints and health/identity compatibility checks. '
           'No untrusted endpoint will be selected automatically.';
     }
-    if (q.contains('predict') ||
-        q.contains('forecast') ||
-        q.contains('failure')) {
+    if (q.contains('predict') || q.contains('forecast') || q.contains('failure')) {
       return 'Predictive signal: $trendLabel; current health is $healthLabel with $failurePercent% recent failures. '
           'Prediction is currently heuristic (rolling median and error rate), not a trained ML model. '
           'A model provider can be added behind a reviewed proposal interface later.';
@@ -335,8 +322,9 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
         .toList(growable: false)
       ..sort();
     if (values.isEmpty) return _defaultTimeoutForIntent;
-    final index =
-        ((values.length * 0.95).ceil() - 1).clamp(0, values.length - 1).toInt();
+    final index = ((values.length * 0.95).ceil() - 1)
+        .clamp(0, values.length - 1)
+        .toInt();
     return _timeoutForLatency(values[index].toDouble());
   }
 
@@ -398,10 +386,7 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
       path: _safePath(uri),
       method: method.toUpperCase(),
       durationMs: durationMs,
-      networkHealthy: !failure &&
-          statusCode != null &&
-          statusCode >= 200 &&
-          statusCode < 500,
+      networkHealthy: !failure && statusCode != null && statusCode >= 200 && statusCode < 500,
       wasRetry: wasRetry,
       statusCode: statusCode,
       timedOut: timedOut,
@@ -410,10 +395,29 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
     _samples.add(sample);
     if (_samples.length > _sampleLimit) _samples.removeAt(0);
 
+    // Only surface notable real request outcomes to the cross-bot timeline;
+    // ordinary successful traffic stays in the bounded network metrics buffer.
+    if (failure || wasRetry || durationMs >= 5000) {
+      AiBotActivityService.instance.recordEvent(
+        botId: 'self_driving_network',
+        botName: 'Self-Driving Network Bot',
+        type: wasRetry ? 'retry_attempt' : (failure ? 'request_failure' : 'slow_response'),
+        status: failure ? 'warning' : (wasRetry ? 'info' : 'warning'),
+        title: wasRetry
+            ? 'Safe request retry observed'
+            : (failure ? 'API request failed' : 'Slow API response'),
+        details: '${method.toUpperCase()} ${_safePath(uri)} on $host; '
+            'duration ${durationMs}ms'
+            '${statusCode == null ? '' : ', HTTP $statusCode'}'
+            '${timedOut ? ', timeout' : ''}.'
+            ' Query strings, headers, and request bodies are omitted.',
+        durationMs: durationMs,
+      );
+    }
+
     final hostState = _failureStateFor(host, now);
     while (hostState.failures.isNotEmpty &&
-        now.difference(hostState.failures.first).inSeconds >
-            _failureWindowSeconds) {
+        now.difference(hostState.failures.first).inSeconds > _failureWindowSeconds) {
       hostState.failures.removeAt(0);
     }
     if (failure) {
@@ -424,16 +428,14 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
         );
         if (hostState.failures.length == 5 &&
             (hostState.lastFailureAlertAt == null ||
-                now.difference(hostState.lastFailureAlertAt!).inSeconds >=
-                    60)) {
+                now.difference(hostState.lastFailureAlertAt!).inSeconds >= 60)) {
           hostState.lastFailureAlertAt = now;
           _addSecurityEvent(NetworkSecurityEvent(
             at: now,
             host: host,
             severity: NetworkEventSeverity.critical,
             title: 'Repeated host failures',
-            details:
-                'Five transient failures were observed inside $_failureWindowSeconds seconds.',
+            details: 'Five transient failures were observed inside $_failureWindowSeconds seconds.',
             action: automaticActionsEnabled
                 ? 'Suppressed automatic retries for $_retrySuppressionSeconds seconds to avoid a retry storm; normal requests are still attempted.'
                 : 'Repeated failures recorded; automatic retries are already disabled in the current mode.',
@@ -443,8 +445,7 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
     } else if (statusCode != null && statusCode >= 200 && statusCode < 500) {
       if (!_firstConnectionLatencyByHost.containsKey(host) &&
           _firstConnectionLatencyByHost.length >= _hostStateLimit) {
-        _firstConnectionLatencyByHost
-            .remove(_firstConnectionLatencyByHost.keys.first);
+        _firstConnectionLatencyByHost.remove(_firstConnectionLatencyByHost.keys.first);
       }
       _firstConnectionLatencyByHost.putIfAbsent(host, () => durationMs);
       hostState.failures.clear();
@@ -481,17 +482,14 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
   int get activeRetrySuppressions {
     final now = DateTime.now();
     return _hostFailures.values
-        .where((state) =>
-            state.suppressRetriesUntil != null &&
-            now.isBefore(state.suppressRetriesUntil!))
+        .where((state) => state.suppressRetriesUntil != null && now.isBefore(state.suppressRetriesUntil!))
         .length;
   }
 
   double get recentFailureRate {
     final recent = _samples.reversed.take(30).toList(growable: false);
     if (recent.isEmpty) return 0;
-    return recent.where((sample) => !sample.networkHealthy).length /
-        recent.length;
+    return recent.where((sample) => !sample.networkHealthy).length / recent.length;
   }
 
   double? get p95LatencyMs {
@@ -501,36 +499,24 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
         .toList(growable: false)
       ..sort();
     if (values.isEmpty) return null;
-    final index =
-        ((values.length * 0.95).ceil() - 1).clamp(0, values.length - 1).toInt();
+    final index = ((values.length * 0.95).ceil() - 1)
+        .clamp(0, values.length - 1)
+        .toInt();
     return values[index].toDouble();
   }
 
   String get healthLabel {
     if (_samples.isEmpty) return 'Learning baseline';
     if (_samples.length >= 5 && recentFailureRate >= 0.25) return 'Critical';
-    if (recentFailureRate >= 0.10 || (p95LatencyMs ?? 0) >= 8000) {
-      return 'Degraded';
-    }
+    if (recentFailureRate >= 0.10 || (p95LatencyMs ?? 0) >= 8000) return 'Degraded';
     return 'Healthy';
   }
 
   String get trendLabel {
-    final recent = _samples
-        .where((sample) => sample.networkHealthy)
-        .toList(growable: false);
+    final recent = _samples.where((sample) => sample.networkHealthy).toList(growable: false);
     if (recent.length < 12) return 'Collecting baseline';
-    final last = recent
-        .skip(recent.length - 6)
-        .map((s) => s.durationMs)
-        .toList()
-      ..sort();
-    final previous = recent
-        .skip(recent.length - 12)
-        .take(6)
-        .map((s) => s.durationMs)
-        .toList()
-      ..sort();
+    final last = recent.skip(recent.length - 6).map((s) => s.durationMs).toList()..sort();
+    final previous = recent.skip(recent.length - 12).take(6).map((s) => s.durationMs).toList()..sort();
     final recentMedian = last[last.length ~/ 2].toDouble();
     final previousMedian = previous[previous.length ~/ 2].toDouble();
     if (previousMedian > 0 && recentMedian >= previousMedian * 1.75) {
@@ -556,14 +542,14 @@ class SelfDrivingNetworkMonitor extends ChangeNotifier {
     notifyListeners();
   }
 
-  static String _hostKey(Uri uri) =>
-      uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+  static String _hostKey(Uri uri) => uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
 
   static String _safePath(Uri uri) {
-    if (uri.path.isEmpty) return '/';
+    if (uri.path.isEmpty) {
+      return '/';
+    }
     final segments = uri.path.split('/');
-    final uuid = RegExp(
-        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final uuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     final longIdentifier = RegExp(r'^[a-zA-Z0-9._~-]{24,}$');
     final numericIdentifier = RegExp(r'^\d{4,}$');
     return segments.map((segment) {
@@ -605,8 +591,7 @@ class SelfDrivingHttpClient extends http.BaseClient {
     final safeReadRequest = safeMethod && canCloneSafely;
     final canRetry = allowSafeReadAutomation &&
         monitor.automaticActionsEnabled &&
-        safeReadRequest &&
-        !monitor.retriesSuppressed(uri);
+        safeReadRequest && !monitor.retriesSuppressed(uri);
     final maxAttempts = canRetry ? 3 : 1;
     final originalRequest = canCloneSafely ? request : null;
     final Duration? policyTimeout = allowSafeReadAutomation &&
@@ -631,14 +616,11 @@ class SelfDrivingHttpClient extends http.BaseClient {
             ? await sendFuture
             : await sendFuture.timeout(policyTimeout);
         stopwatch.stop();
-        final retryableStatus =
-            const <int>{408, 502, 503, 504}.contains(response.statusCode);
+        final retryableStatus = const <int>{408, 502, 503, 504}.contains(response.statusCode);
         final shouldRetry = retryableStatus && attempt + 1 < maxAttempts;
         if (shouldRetry) {
           try {
-            await response.stream
-                .drain<void>()
-                .timeout(const Duration(seconds: 2));
+            await response.stream.drain<void>().timeout(const Duration(seconds: 2));
           } catch (_) {
             // Stop a slow transient response body before making another attempt.
             if (abortCompleter != null && !abortCompleter.isCompleted) {
@@ -653,8 +635,7 @@ class SelfDrivingHttpClient extends http.BaseClient {
             wasRetry: attempt > 0,
             statusCode: response.statusCode,
           );
-          await Future<void>.delayed(
-              Duration(milliseconds: 120 * (attempt + 1)));
+          await Future<void>.delayed(Duration(milliseconds: 120 * (attempt + 1)));
           continue;
         }
         monitor.recordAttempt(
@@ -671,9 +652,7 @@ class SelfDrivingHttpClient extends http.BaseClient {
         final isTimeout = error is TimeoutException;
         final retryableError = isTimeout || error is http.ClientException;
         final shouldRetry = retryableError && attempt + 1 < maxAttempts;
-        if (isTimeout &&
-            abortCompleter != null &&
-            !abortCompleter.isCompleted) {
+        if (isTimeout && abortCompleter != null && !abortCompleter.isCompleted) {
           abortCompleter.complete();
         }
         monitor.recordAttempt(
@@ -689,8 +668,7 @@ class SelfDrivingHttpClient extends http.BaseClient {
         await Future<void>.delayed(Duration(milliseconds: 120 * (attempt + 1)));
       }
     }
-    throw StateError(
-        'Self-driving network exhausted its bounded retry budget.');
+    throw StateError('Self-driving network exhausted its bounded retry budget.');
   }
 
   static http.AbortableRequest _cloneEmptyRequest(

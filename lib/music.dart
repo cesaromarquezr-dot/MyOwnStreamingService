@@ -407,6 +407,98 @@ class MusicLibraryStore extends ChangeNotifier {
         ),
       ]);
     }
+
+    // Local album/artist examples ensure Album and Artist details can be
+    // explored before a real music library is imported. No audio URLs are set.
+    const catalogExampleTracks = <MusicTrack>[
+      MusicTrack(
+          id: 'demo-catalog-track-1989-blank-space',
+          title: 'Blank Space',
+          artist: 'Taylor Swift',
+          album: '1989',
+          duration: Duration(minutes: 3, seconds: 51),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-1989-style',
+          title: 'Style',
+          artist: 'Taylor Swift',
+          album: '1989',
+          duration: Duration(minutes: 3, seconds: 51),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-1989-shake-it-off',
+          title: 'Shake It Off',
+          artist: 'Taylor Swift',
+          album: '1989',
+          duration: Duration(minutes: 3, seconds: 39),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-rare-rare',
+          title: 'Rare',
+          artist: 'Selena Gomez',
+          album: 'Rare',
+          duration: Duration(minutes: 3, seconds: 40),
+          genres: ['Pop', 'Dance Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-rare-lose-you-to-love-me',
+          title: 'Lose You to Love Me',
+          artist: 'Selena Gomez',
+          album: 'Rare',
+          duration: Duration(minutes: 3, seconds: 26),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-rare-look-at-her-now',
+          title: 'Look at Her Now',
+          artist: 'Selena Gomez',
+          album: 'Rare',
+          duration: Duration(minutes: 2, seconds: 55),
+          genres: ['Pop']),
+      MusicTrack(
+          id: 'demo-catalog-track-yhlqmdlg-la-dificil',
+          title: 'La Difícil',
+          artist: 'Bad Bunny',
+          album: 'YHLQMDLG',
+          duration: Duration(minutes: 2, seconds: 43),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-yhlqmdlg-yo-perreo-sola',
+          title: 'Yo Perreo Sola',
+          artist: 'Bad Bunny',
+          album: 'YHLQMDLG',
+          duration: Duration(minutes: 2, seconds: 52),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-yhlqmdlg-safaera',
+          title: 'Safaera',
+          artist: 'Bad Bunny',
+          album: 'YHLQMDLG',
+          duration: Duration(minutes: 4, seconds: 55),
+          genres: ['Latin', 'Reggaeton', 'Latin Trap']),
+      MusicTrack(
+          id: 'demo-catalog-track-colores-amarillo',
+          title: 'Amarillo',
+          artist: 'J Balvin',
+          album: 'Colores',
+          duration: Duration(minutes: 2, seconds: 37),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-colores-azul',
+          title: 'Azul',
+          artist: 'J Balvin',
+          album: 'Colores',
+          duration: Duration(minutes: 3, seconds: 25),
+          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(
+          id: 'demo-catalog-track-colores-rojo',
+          title: 'Rojo',
+          artist: 'J Balvin',
+          album: 'Colores',
+          duration: Duration(minutes: 2, seconds: 30),
+          genres: ['Latin', 'Reggaeton']),
+    ];
+    for (final example in catalogExampleTracks) {
+      if (!tracks.any((track) => track.id == example.id)) tracks.add(example);
+    }
     notifyListeners();
   }
 
@@ -759,7 +851,8 @@ class MusicPlaybackController extends ChangeNotifier {
     if (!controller.value.isCompleted || _advancing) return;
 
     final finishedTrack = currentTrack;
-    if (finishedTrack != null && !_wrappedCompletionRecordedForCurrentPlayback) {
+    if (finishedTrack != null &&
+        !_wrappedCompletionRecordedForCurrentPlayback) {
       _wrappedCompletionRecordedForCurrentPlayback = true;
       unawaited(AppController.instance.recordWrappedActivityDetails(
         mediaId: finishedTrack.id,
@@ -928,6 +1021,9 @@ class _MusicScreenState extends State<MusicScreen> {
   @override
   void initState() {
     super.initState();
+    // Ensure album catalog examples are available even if Music is the first
+    // destination opened after launch (without visiting Home first).
+    AppController.instance.ensureDemoPreviewMedia(notify: false);
     unawaited(library.initializeForProfile(
       AppController.instance.currentProfile?.id,
     ));
@@ -1152,7 +1248,7 @@ class _MusicScreenState extends State<MusicScreen> {
       } else if (section == 'Artists' && settings.showArtists) {
         output.add(_nameSection(
           'Artists',
-          'Singers and bands from your library',
+          'Imported artists plus catalog examples you can explore',
           library.tracks
               .map((t) => t.artist)
               .where((x) => x.trim().isNotEmpty)
@@ -1198,13 +1294,37 @@ class _MusicScreenState extends State<MusicScreen> {
       } else if (section == 'Albums' && settings.showAlbums) {
         output.add(_nameSection(
           'Albums',
-          'Albums you ripped to your home server',
+          'Imported albums plus catalog examples; sample entries have no audio files',
           library.tracks
               .map((t) => t.album)
               .where((x) => x.trim().isNotEmpty)
               .toSet()
               .toList(),
           Icons.album_rounded,
+          onItemTap: (albumTitle) {
+            final match = AppController.instance.library.where((media) =>
+                media.type.toLowerCase().contains('album') &&
+                media.title.trim().toLowerCase() ==
+                    albumTitle.trim().toLowerCase());
+            if (match.isNotEmpty) {
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                settings: const RouteSettings(name: '/app/page/album-details'),
+                builder: (_) => MediaDetailsScreen(media: match.first),
+              ));
+            } else {
+              final artistTrack = library.tracks.firstWhere(
+                (track) =>
+                    track.album.trim().toLowerCase() ==
+                    albumTitle.trim().toLowerCase(),
+                orElse: () => library.tracks.first,
+              );
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                settings: const RouteSettings(name: '/app/page/artist-details'),
+                builder: (_) =>
+                    MusicArtistProfileScreen(artistName: artistTrack.artist),
+              ));
+            }
+          },
         ));
       } else if (section == 'Playlists' && settings.showPlaylists) {
         output.add(SliverToBoxAdapter(child: _playlistSliver()));
@@ -2617,6 +2737,24 @@ class MusicArtistProfileScreen extends StatelessWidget {
         final videos = primary
             .where((t) => (t.musicVideoUrl ?? '').trim().isNotEmpty)
             .toList();
+        bool isCatalogSample(MusicTrack track) =>
+            track.id.startsWith('demo-catalog-track-') ||
+            track.id.startsWith('demo-preview-album-track-');
+        final catalogSampleTracks = primary.where(isCatalogSample).length;
+        final indexedTracks =
+            primary.where((track) => !isCatalogSample(track)).length;
+        final catalogSampleAlbums = <String>{
+          for (final track in primary)
+            if (isCatalogSample(track)) track.album.trim(),
+        }.where((album) => album.isNotEmpty).length;
+        final indexedAlbums = <String>{
+          for (final track in primary)
+            if (!isCatalogSample(track) && track.album.trim().isNotEmpty)
+              track.album.trim(),
+        }.length;
+        final playablePrimary = primary
+            .where((track) => (track.audioUrl ?? '').trim().isNotEmpty)
+            .toList(growable: false);
         final popular = primary.toList()
           ..sort((a, b) => (MusicLibraryStore.instance.listenCounts[b.id] ?? 0)
               .compareTo(MusicLibraryStore.instance.listenCounts[a.id] ?? 0));
@@ -2665,24 +2803,24 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                       ?.copyWith(fontWeight: FontWeight.w800)),
                               const SizedBox(height: 6),
                               Text(
-                                  '${primary.length} owned songs • ${albums.length} owned albums • ${videos.length} local music videos',
+                                  '$indexedTracks indexed tracks • $catalogSampleTracks catalog examples • $indexedAlbums indexed albums • $catalogSampleAlbums sample albums • ${videos.length} music videos',
                                   style:
                                       const TextStyle(color: Colors.white60)),
                               const SizedBox(height: 12),
                               Wrap(spacing: 8, runSpacing: 8, children: [
                                 FilledButton.icon(
-                                    onPressed: primary.isEmpty
+                                    onPressed: playablePrimary.isEmpty
                                         ? null
                                         : () {
                                             MusicLibraryStore.instance
-                                                .setQueue(primary);
+                                                .setQueue(playablePrimary);
                                             unawaited(MusicPlaybackController
                                                 .instance
-                                                .play(primary.first));
+                                                .play(playablePrimary.first));
                                           },
                                     icon: const Icon(Icons.play_arrow_rounded),
                                     label: const UniversalText(
-                                        'Play owned songs')),
+                                        'Play available songs')),
                                 OutlinedButton.icon(
                                     onPressed: () {
                                       final following =
@@ -2727,7 +2865,8 @@ class MusicArtistProfileScreen extends StatelessWidget {
                       Expanded(
                           child: TabBarView(children: [
                         _trackList(context, primary,
-                            emptyMessage: 'No owned songs found.'),
+                            emptyMessage:
+                                'No imported tracks or catalog examples found for this artist.'),
                         _albumList(context, albums),
                         _trackList(context, popular,
                             emptyMessage:
@@ -2848,7 +2987,10 @@ class MusicArtistProfileScreen extends StatelessWidget {
                 if (creditLabel != null) '$creditLabel ${track.artist}',
                 track.album,
                 if (track.featuredArtists.isNotEmpty)
-                  'feat. ${track.featuredArtists.join(', ')}'
+                  'feat. ${track.featuredArtists.join(', ')}',
+                if (track.id.startsWith('demo-catalog-track-') ||
+                    track.id.startsWith('demo-preview-album-track-'))
+                  'Catalog example • no audio file attached'
               ].where((x) => x.trim().isNotEmpty).join(' • ')),
               trailing: showListenCounts
                   ? Wrap(children: [
@@ -2871,9 +3013,16 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                   builder: (_) => MusicArtistProfileScreen(
                                       artistName: track.artist)))),
                       IconButton(
-                          tooltip: 'Add to queue',
+                          tooltip: 'Add playable track to queue',
                           icon: const Icon(Icons.queue_music_rounded),
                           onPressed: () {
+                            if ((track.audioUrl ?? '').trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Catalog example only — import this track to add playable audio.')));
+                              return;
+                            }
                             MusicLibraryStore.instance.addToQueue(track);
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                 content: Text(
@@ -2895,7 +3044,16 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                     'album': track.album
                                   })),
                     ]),
-              onTap: () => MusicPlaybackController.instance.play(track),
+              onTap: () {
+                if ((track.audioUrl ?? '').trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Catalog example only — no audio file is attached. Import your own copy to play it.'),
+                  ));
+                  return;
+                }
+                MusicPlaybackController.instance.play(track);
+              },
             ),
         ]);
   }
@@ -2904,7 +3062,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
       BuildContext context, Map<String, List<MusicTrack>> albums) {
     if (albums.isEmpty) {
       return _empty(
-          'No owned albums found. Albums appear here when tracks from them are indexed on your NAS.');
+          'No imported albums or catalog examples found. Albums appear here when metadata is indexed or a sample is added.');
     }
     final names = albums.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -2913,7 +3071,19 @@ class MusicArtistProfileScreen extends StatelessWidget {
         ListTile(
           leading: _art(albums[name]!.first.artworkUrl),
           title: Text(name),
-          subtitle: Text('${albums[name]!.length} owned tracks'),
+          subtitle: Text(() {
+            final albumTracks = albums[name]!;
+            final sampleCount = albumTracks
+                .where((track) =>
+                    track.id.startsWith('demo-catalog-track-') ||
+                    track.id.startsWith('demo-preview-album-track-'))
+                .length;
+            final indexedCount = albumTracks.length - sampleCount;
+            return <String>[
+              if (indexedCount > 0) '$indexedCount indexed tracks',
+              if (sampleCount > 0) '$sampleCount catalog examples (no audio)',
+            ].join(' • ');
+          }()),
           trailing: IconButton(
               tooltip: 'Share album',
               icon: const Icon(Icons.share_outlined),
@@ -2943,8 +3113,24 @@ class MusicArtistProfileScreen extends StatelessWidget {
                             title: Text(name,
                                 style: const TextStyle(
                                     fontSize: 20, fontWeight: FontWeight.bold)),
-                            subtitle: Text(
-                                '${albums[name]!.length} tracks available locally'),
+                            subtitle: Text(() {
+                              final albumTracks = albums[name]!;
+                              final sampleCount = albumTracks
+                                  .where((track) =>
+                                      track.id
+                                          .startsWith('demo-catalog-track-') ||
+                                      track.id.startsWith(
+                                          'demo-preview-album-track-'))
+                                  .length;
+                              final indexedCount =
+                                  albumTracks.length - sampleCount;
+                              return <String>[
+                                if (indexedCount > 0)
+                                  '$indexedCount indexed tracks',
+                                if (sampleCount > 0)
+                                  '$sampleCount catalog examples without audio',
+                              ].join(' • ');
+                            }()),
                             trailing: IconButton(
                                 tooltip: 'Share album',
                                 icon: const Icon(Icons.share_outlined),
@@ -2983,20 +3169,52 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                                       artistName:
                                                           track.artist)))),
                                   IconButton(
-                                      tooltip: 'Add to queue',
+                                      tooltip: 'Add playable track to queue',
                                       icon:
                                           const Icon(Icons.queue_music_rounded),
-                                      onPressed: () => MusicLibraryStore
-                                          .instance
-                                          .addToQueue(track)),
+                                      onPressed: () {
+                                        if ((track.audioUrl ?? '')
+                                            .trim()
+                                            .isEmpty) {
+                                          ScaffoldMessenger.of(ctx)
+                                              .showSnackBar(const SnackBar(
+                                            content: Text(
+                                                'Catalog example only — import this track to add playable audio.'),
+                                          ));
+                                          return;
+                                        }
+                                        MusicLibraryStore.instance
+                                            .addToQueue(track);
+                                      }),
                                   IconButton(
+                                      tooltip: 'Play track',
                                       icon: const Icon(Icons.play_arrow),
-                                      onPressed: () => MusicPlaybackController
-                                          .instance
-                                          .play(track))
+                                      onPressed: () {
+                                        if ((track.audioUrl ?? '')
+                                            .trim()
+                                            .isEmpty) {
+                                          ScaffoldMessenger.of(ctx)
+                                              .showSnackBar(const SnackBar(
+                                            content: Text(
+                                                'Catalog example only — no audio file is attached.'),
+                                          ));
+                                          return;
+                                        }
+                                        MusicPlaybackController.instance
+                                            .play(track);
+                                      })
                                 ]),
-                                onTap: () => MusicPlaybackController.instance
-                                    .play(track))
+                                onTap: () {
+                                  if ((track.audioUrl ?? '').trim().isEmpty) {
+                                    ScaffoldMessenger.of(ctx)
+                                        .showSnackBar(const SnackBar(
+                                      content: Text(
+                                          'Catalog example only — no audio file is attached.'),
+                                    ));
+                                    return;
+                                  }
+                                  MusicPlaybackController.instance.play(track);
+                                })
                         ]))
                       ])))),
         )
@@ -3236,8 +3454,8 @@ class MusicAiDjScreen extends StatelessWidget {
         var value = (store.listenCounts[track.id] ?? 0) * 4;
         if (likedIds.contains(track.id)) value += 6;
         if (current != null &&
-            track.genres.any((genre) => current.genres
-                .any((active) => active.toLowerCase() == genre.toLowerCase()))) {
+            track.genres.any((genre) => current.genres.any(
+                (active) => active.toLowerCase() == genre.toLowerCase()))) {
           value += 3;
         }
         if (current != null &&

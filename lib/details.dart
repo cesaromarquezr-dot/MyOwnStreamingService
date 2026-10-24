@@ -2,6 +2,8 @@
 // Purpose: Implements the details portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -22,6 +24,9 @@ import 'details_recommendations.dart';
 import 'catalog_entity_details.dart';
 import 'page_customization_button.dart';
 import 'recommendation_ownership.dart';
+import 'streaming_experience.dart';
+import 'core/services/original_language_defaults.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
 
 /// Implements the `MediaDetailsScreen` class for this feature or UI component.
 class MediaDetailsScreen extends StatefulWidget {
@@ -47,8 +52,19 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   String? selectedSubtitle;
 
   int selectedSeasonIndex = 0;
+  CinematicTitleMetadata? _providerTitleMetadata;
+  bool _loadingProviderMetadata = false;
+  String? _providerMetadataError;
 
   MediaItem get media => widget.media;
+
+  bool get _supportsCinematicProviderMetadata {
+    final type = media.type.toLowerCase();
+    return !type.contains('album') &&
+        !type.contains('song') &&
+        !type.contains('track') &&
+        !type.contains('music');
+  }
 
   /// Details customization belongs to the currently selected profile.
   ///
@@ -64,6 +80,85 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    unawaited(_loadDefaultLanguageTracks());
+    if (CinematicTitleMetadataService.isConfigured &&
+        _supportsCinematicProviderMetadata) {
+      unawaited(_loadProviderTitleMetadata());
+    }
+  }
+
+  Future<void> _loadProviderTitleMetadata() async {
+    if (!CinematicTitleMetadataService.isConfigured ||
+        !_supportsCinematicProviderMetadata ||
+        _loadingProviderMetadata) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _loadingProviderMetadata = true;
+        _providerMetadataError = null;
+      });
+    }
+    try {
+      final metadata = await CinematicTitleMetadataService.lookupTitle(
+        title: media.title,
+        isTv: media.isSeries,
+        year: media.releaseYear ?? media.seriesStartYear,
+      );
+      if (!mounted) return;
+      setState(() {
+        _providerTitleMetadata = metadata;
+        _providerMetadataError = metadata == null
+            ? 'No exact TMDB title match found. Existing catalog credits have been kept unchanged.'
+            : null;
+      });
+      if (metadata != null) {
+        unawaited(AppController.instance.mergeProviderTitleCredits(
+          mediaId: media.id,
+          actors: metadata.cast,
+          characters: metadata.characters,
+          directors: metadata.directors,
+          writers: metadata.writers,
+          music: metadata.music,
+        ));
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _providerMetadataError = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _loadingProviderMetadata = false);
+    }
+  }
+
+  Future<void> _loadDefaultLanguageTracks() async {
+    final preferences = await StreamingExperiencePreferences.load(
+      profileId: AppController.instance.currentProfile?.id,
+    );
+    final targetLanguage = OriginalLanguageDefaults.resolveForMedia(media);
+    final audio = OriginalLanguageDefaults.bestTrack(
+          media.audioTracks,
+          targetLanguage: preferences.preferOriginalLanguageTracks
+              ? targetLanguage
+              : null,
+        ) ??
+        'Default';
+    final subtitle = preferences.subtitlesEnabled
+        ? OriginalLanguageDefaults.bestTrack(
+            media.subtitles,
+            targetLanguage: preferences.preferOriginalLanguageTracks
+                ? targetLanguage
+                : null,
+            subtitles: true,
+          )
+        : null;
+    if (!mounted) return;
+    setState(() {
+      selectedAudio = audio;
+      selectedSubtitle = subtitle;
+      subtitlesEnabled = preferences.subtitlesEnabled && subtitle != null;
+    });
   }
 
   @override
@@ -1509,12 +1604,14 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   /// Performs `_buildAudioSubtitles` for this feature. Update this documentation when its contract changes.
   Widget _buildAudioSubtitles() {
+    final originalLanguage = OriginalLanguageDefaults.resolveForMedia(media);
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (media.language != null && media.language!.trim().isNotEmpty ||
+          if (originalLanguage != null ||
+              (media.language != null && media.language!.trim().isNotEmpty) ||
               media.audioTracks.isNotEmpty ||
               media.subtitles.isNotEmpty ||
               media.extras.isNotEmpty)
@@ -1524,6 +1621,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (originalLanguage != null)
+                      Text('Original-language default: ${OriginalLanguageDefaults.displayName(originalLanguage)} (audio and subtitles when available)'),
                     if (media.language != null && media.language!.trim().isNotEmpty)
                       Text('Language: ${media.language}'),
                     if (media.audioTracks.isNotEmpty)
@@ -1687,6 +1786,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     return result;
   }
 
+  List<String> _mergeCreditNames(
+    Iterable<String> catalogNames,
+    Iterable<String> providerNames,
+  ) =>
+      _cleanCreditNames(<String>[...catalogNames, ...providerNames]);
+
   void _openCatalogEntity(String name, CatalogEntityKind kind) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -1753,11 +1858,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   /// Renders credits independently from general technical/content information.
   /// Missing credits are called out honestly; the UI never invents names.
   Widget _buildCastCrew() {
-    final actors = _cleanCreditNames(media.actors);
-    final characters = _cleanCreditNames(media.characters);
-    final directors = _cleanCreditNames(media.directors);
-    final writers = _cleanCreditNames(media.writers);
-    final music = _cleanCreditNames(media.music);
+    final provider = _providerTitleMetadata;
+    final actors = _mergeCreditNames(media.actors, provider?.cast ?? const <String>[]);
+    final characters = _mergeCreditNames(media.characters, provider?.characters ?? const <String>[]);
+    final directors = _mergeCreditNames(media.directors, provider?.directors ?? const <String>[]);
+    final writers = _mergeCreditNames(media.writers, provider?.writers ?? const <String>[]);
+    final music = _mergeCreditNames(media.music, provider?.music ?? const <String>[]);
     final hasCredits = actors.isNotEmpty || characters.isNotEmpty ||
         directors.isNotEmpty || writers.isNotEmpty || music.isNotEmpty;
 
@@ -1774,25 +1880,59 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
-              children: const [
-                Icon(Icons.groups_2_outlined, size: 21, color: Colors.white70),
-                SizedBox(width: 9),
+              children: [
+                const Icon(Icons.groups_2_outlined, size: 21, color: Colors.white70),
+                const SizedBox(width: 9),
                 Expanded(
                   child: UniversalText(
-                    'Cast & Crew',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                    media.type.toLowerCase().contains('album')
+                        ? 'Artists & Album Credits'
+                        : 'Cast & Crew',
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
                   ),
                 ),
+                if (CinematicTitleMetadataService.isConfigured &&
+                    _supportsCinematicProviderMetadata)
+                  IconButton(
+                    tooltip: 'Refresh cast and crew from TMDB',
+                    onPressed: _loadingProviderMetadata ? null : _loadProviderTitleMetadata,
+                    icon: _loadingProviderMetadata
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.sync, color: Colors.white70),
+                  ),
               ],
             ),
+            if (_loadingProviderMetadata) ...[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(minHeight: 2),
+              const SizedBox(height: 6),
+              const UniversalText('Checking the exact title match and loading sourced credits…', style: TextStyle(color: Colors.white60, fontSize: 12)),
+            ],
             if (!hasCredits) ...[
               const SizedBox(height: 10),
-              const UniversalText(
-                'Cast and crew credits are not available for this title yet. Add sourced cast, director, and writer credits through the catalog metadata import to display them here.',
-                style: TextStyle(color: Colors.white60, height: 1.4),
+              UniversalText(
+                media.type.toLowerCase().contains('album')
+                    ? 'Artist and performer credits are not available for this album yet. Add the artist to the album metadata or import a metadata source.'
+                    : (!CinematicTitleMetadataService.isConfigured
+                        ? 'Cast and crew credits are not available in the local catalog. Configure TMDB_API_KEY or import sourced cast, director, and writer metadata to populate this section.'
+                        : (_providerMetadataError ?? 'No sourced cast and crew credits are available for this title yet.')),
+                style: const TextStyle(color: Colors.white60, height: 1.4),
               ),
             ] else ...[
               const SizedBox(height: 12),
+              if (provider == null && media.tags.contains('catalog-example'))
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 9),
+                  child: UniversalText(
+                    'Starter catalog credits for exploring profiles; this is not an exhaustive or provider-verified credits list. Configure TMDB_API_KEY to enrich supported movie/TV titles.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                  ),
+                ),
+              if (provider != null)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: UniversalText('Verified title match from TMDB; credits below are merged with catalog metadata.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                ),
               if (actors.isNotEmpty)
                 _castCrewNameRow('Cast', actors),
               if (characters.isNotEmpty)
@@ -1802,7 +1942,17 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
               if (writers.isNotEmpty)
                 _castCrewNameRow('Screenwriters', writers),
               if (music.isNotEmpty)
-                _castCrewNameRow('Music', music),
+                _castCrewNameRow(
+                  media.type.toLowerCase().contains('album')
+                      ? 'Artists / Performers'
+                      : 'Music',
+                  music,
+                ),
+              if (_providerMetadataError != null && provider == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_providerMetadataError!, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                ),
             ],
           ],
         ),

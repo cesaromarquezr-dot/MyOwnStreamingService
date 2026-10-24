@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'entertainment_extensions.dart';
+import 'ai_operations_center.dart';
+import 'disc_ingestion_center.dart';
+
+import 'security_bot_center.dart';
 import 'mindscape_ai_orchestrator.dart';
 import 'mindscape_ai_team.dart';
 import 'platform_reliability_center.dart';
@@ -33,6 +36,14 @@ class AiBotCenterScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _ToolTile(
+            icon: Icons.monitor_heart_rounded,
+            title: 'Live AI Operations Center',
+            subtitle: 'Inspect each bot’s real activity, task outcomes, errors, and persisted event timeline.',
+            status: 'Instrumented activity · local history',
+            onTap: () => _open(context, const AiOperationsCenterScreen()),
+          ),
+          const SizedBox(height: 16),
           for (final role in MindscapeAiBotCatalog.roles)
             Card(
               child: ListTile(
@@ -52,7 +63,7 @@ class AiBotCenterScreen extends StatelessWidget {
             title: 'Security & Reliability Bots',
             subtitle: 'On-demand backend checks, audit results, and administrator approvals.',
             status: 'On-demand checks',
-            onTap: () => _open(context, const SecurityBotCenterScreen()),
+            onTap: () => _open(context, const ServerSecurityBotCenterScreen()),
           ),
           _ToolTile(
             icon: Icons.account_tree_rounded,
@@ -67,6 +78,13 @@ class AiBotCenterScreen extends StatelessWidget {
             subtitle: 'Adaptive API timeouts, safe retries, rolling latency baseline, and failure-spike detection.',
             status: 'Automatic · reversible application-level actions',
             onTap: () => _open(context, const SelfDrivingNetworkCenterScreen()),
+          ),
+          _ToolTile(
+            icon: Icons.album_rounded,
+            title: 'Disc Ingestion & MakeMKV',
+            subtitle: 'Discover optical drives, monitor ripping progress, validate completed MKVs, and import reviewed metadata.',
+            status: 'Desktop process · user-triggered jobs',
+            onTap: () => _open(context, const DiscIngestionCenterScreen()),
           ),
           _ToolTile(
             icon: Icons.monitor_heart_outlined,

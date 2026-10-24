@@ -22,8 +22,13 @@ class OfflineMetadataCache {
     'rating', 'ratingReason', 'audienceRating', 'audienceReviewCount',
     'addedAt', 'addedSource', 'originalTitle', 'originalLanguage',
     'countryOfOrigin', 'canonicalTitle', 'language', 'franchiseName',
-    'franchiseType', 'franchiseOrder', 'actors', 'directors', 'writers',
+    'franchiseType', 'franchiseOrder', 'actors', 'characters', 'directors', 'writers',
     'music', 'genres', 'tags', 'studios', 'companies', 'seasons',
+    // Physical-disc and edition metadata is catalog data, not a local path.
+    'releaseDate', 'editionReleaseYear', 'editionReleaseDate', 'editionName',
+    'editionType', 'canonicalWorkId', 'editionFeatures', 'discType',
+    'discRegion', 'discCollectionId', 'discCollectionTitle', 'discNumber',
+    'discTitleId', 'discTitle', 'discMarketCountry',
   };
 
   Future<void> save(Iterable<Map<String, dynamic>> media) async {
@@ -94,7 +99,7 @@ class OfflineMetadataCache {
         if (url != null) safe[field] = url;
       } else if (field == 'seasons') {
         safe[field] = _sanitizeSeasons(value);
-      } else if (const {'actors', 'directors', 'writers', 'music', 'genres', 'tags', 'studios', 'companies'}.contains(field)) {
+      } else if (const {'actors', 'characters', 'directors', 'writers', 'music', 'genres', 'tags', 'studios', 'companies', 'editionFeatures'}.contains(field)) {
         if (value is List) safe[field] = value.take(100).map((e) => e.toString()).toList();
       } else if (field == 'description' || field == 'ratingReason') {
         if (value is String) safe[field] = value.length > 4000 ? value.substring(0, 4000) : value;
