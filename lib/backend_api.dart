@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'privacy_preferences.dart';
+import 'core/services/self_driving_network_engine.dart';
 
 part 'backend_api_parts/account.dart';
 part 'backend_api_parts/library.dart';
@@ -49,6 +50,14 @@ class BackendApi {
   final String baseUrl;
 
   String? _token;
+  SelfDrivingHttpClient get _networkClient =>
+      SelfDrivingNetworkMonitor.instance.httpClient;
+
+  /// Shared policy-controlled client for other app-owned HTTP integrations.
+  /// Large media transfers may use a dedicated inner client while still
+  /// reporting through the same monitor.
+  static SelfDrivingHttpClient get sharedNetworkClient =>
+      SelfDrivingNetworkMonitor.instance.httpClient;
   static const _tokenStorageKey = 'backend_session_token';
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
@@ -158,7 +167,7 @@ class BackendApi {
       return false;
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/verify-security'),
       headers: _headers,
       body: jsonEncode({
@@ -187,7 +196,7 @@ class BackendApi {
   Future<Map<String, dynamic>> getSecurityBotsStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/security-bots/status'),
         headers: _headers,
       ),
@@ -198,7 +207,7 @@ class BackendApi {
   Future<Map<String, dynamic>> runSecurityBotChecks() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/security-bots/run'),
         headers: _headers,
       ),
@@ -210,12 +219,25 @@ class BackendApi {
     _requireAuthentication();
     final bounded = limit.clamp(1, 100).toInt();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/security-bots/audit?limit=$bounded'),
         headers: _headers,
       ),
       'Unable to load the security bot audit history.',
     );
+  }
+
+  /// Performs a bounded health probe through the adaptive network client.
+  /// The endpoint is intentionally public and returns no account-specific data.
+  Future<Map<String, dynamic>> checkBackendHealth() async {
+    final endpoint = Uri.parse(
+      '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/health',
+    );
+    final response = await _networkClient.get(
+      endpoint,
+      headers: const {'Accept': 'application/json'},
+    );
+    return _requireSuccess(response, 'Backend health check failed.');
   }
 
   // ==========================================================

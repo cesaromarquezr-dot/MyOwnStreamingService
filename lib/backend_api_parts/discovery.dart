@@ -9,7 +9,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
   Future<Map<String, dynamic>> getPlatformFeatureStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/features/status'),
         headers: _headers,
       ),
@@ -24,7 +24,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/media-intelligence/knowledge')
         .replace(queryParameters: {'mediaWorkId': mediaWorkId});
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load media knowledge.',
     );
     return data['facts'] is List
@@ -41,7 +41,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/media-intelligence/knowledge/stories')
         .replace(queryParameters: {'mediaWorkId': mediaWorkId});
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load media deep dives.',
     );
     return data['stories'] is List
@@ -58,7 +58,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/media-intelligence/seasons')
         .replace(queryParameters: {'seriesId': seriesId});
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load this series seasons.',
     );
     return data['seasons'] is List
@@ -75,7 +75,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/media-intelligence/connections')
         .replace(queryParameters: {'id': mediaId});
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load related productions.',
     );
     return data['connections'] is List
@@ -89,7 +89,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
   Future<List<Map<String, dynamic>>> getMediaWorks() async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.get(Uri.parse('$baseUrl/media-intelligence/works'),
+      await _networkClient.get(Uri.parse('$baseUrl/media-intelligence/works'),
           headers: _headers),
       'Unable to load related production titles.',
     );
@@ -107,7 +107,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/media-intelligence/people').replace(
         queryParameters: query.trim().isEmpty ? null : {'q': query.trim()});
     final data = await _requireSuccess(
-        await http.get(uri, headers: _headers), 'Unable to search people.');
+        await _networkClient.get(uri, headers: _headers), 'Unable to search people.');
     return data['people'] is List
         ? (data['people'] as List)
             .whereType<Map>()
@@ -127,7 +127,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/media-intelligence/characters')
         .replace(queryParameters: {'q': clean});
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to search character credits.',
     );
     return data['characters'] is List
@@ -142,7 +142,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
       {required String id, required String name}) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(Uri.parse('$baseUrl/media-intelligence/person'),
+      await _networkClient.post(Uri.parse('$baseUrl/media-intelligence/person'),
           headers: _headers, body: jsonEncode({'id': id, 'name': name})),
       'Unable to create this person.',
     );
@@ -157,7 +157,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     }
     final uri = Uri.parse('$baseUrl/media-intelligence/people/timeline')
         .replace(queryParameters: query);
-    return _requireSuccess(await http.get(uri, headers: _headers),
+    return _requireSuccess(await _networkClient.get(uri, headers: _headers),
         'Unable to load this career timeline.');
   }
 
@@ -174,7 +174,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(Uri.parse('$baseUrl/media-intelligence/person-credit'),
+      await _networkClient.post(Uri.parse('$baseUrl/media-intelligence/person-credit'),
           headers: _headers,
           body: jsonEncode({
             'personId': personId,
@@ -202,7 +202,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/media-intelligence/season'),
         headers: _headers,
         body: jsonEncode({
@@ -232,7 +232,7 @@ extension BackendApiDiscoveryMethods on BackendApi {
     }
     final uri = Uri.parse('$baseUrl/records').replace(queryParameters: query);
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load application records.',
     );
     return (data['records'] is List)

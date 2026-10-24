@@ -12,7 +12,7 @@ extension BackendApiLibraryMethods on BackendApi {
   ) async {
     _requireAuthentication();
 
-    final response = await http.delete(
+    final response = await _networkClient.delete(
       Uri.parse(
         '$baseUrl/library/media/'
         '${Uri.encodeComponent(relativeMediaId)}',
@@ -38,7 +38,7 @@ extension BackendApiLibraryMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.put(
+    final response = await _networkClient.put(
       Uri.parse(
         '$baseUrl/library/media/'
         '${Uri.encodeComponent(relativeMediaId)}',
@@ -64,7 +64,7 @@ extension BackendApiLibraryMethods on BackendApi {
   Future<Map<String, dynamic>> scanServerLibrary() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/library/server-scan'),
       headers: _headers,
     );
@@ -78,7 +78,7 @@ extension BackendApiLibraryMethods on BackendApi {
   /// Persists a reviewed ARM rip in the home server's indexed library.
   /// The backend verifies that the output file exists inside MEDIA_ROOT.
   Future<List<Map<String, dynamic>>> getScheduledLibraryAdditions() async {
-    final response = await http.get(Uri.parse('$baseUrl/library/releases'),
+    final response = await _networkClient.get(Uri.parse('$baseUrl/library/releases'),
         headers: _headers);
     final data = await _requireSuccess(
         response, 'Unable to load scheduled library additions.');
@@ -94,7 +94,7 @@ extension BackendApiLibraryMethods on BackendApi {
       required String mediaType,
       required DateTime scheduledFor,
       String timeZone = 'UTC'}) async {
-    final response = await http.post(Uri.parse('$baseUrl/library/releases'),
+    final response = await _networkClient.post(Uri.parse('$baseUrl/library/releases'),
         headers: _headers,
         body: jsonEncode({
           'mediaId': mediaId,
@@ -108,20 +108,20 @@ extension BackendApiLibraryMethods on BackendApi {
 
   Future<Map<String, dynamic>> publishScheduledLibraryAddition(
       String id) async {
-    final r = await http.post(
+    final r = await _networkClient.post(
         Uri.parse('$baseUrl/library/releases/$id/publish'),
         headers: _headers);
     return _requireSuccess(r, 'Unable to publish scheduled library addition.');
   }
 
   Future<Map<String, dynamic>> cancelScheduledLibraryAddition(String id) async {
-    final r = await http.post(Uri.parse('$baseUrl/library/releases/$id/cancel'),
+    final r = await _networkClient.post(Uri.parse('$baseUrl/library/releases/$id/cancel'),
         headers: _headers);
     return _requireSuccess(r, 'Unable to cancel scheduled library addition.');
   }
 
   Future<Map<String, dynamic>> getPaymentProviderStatus() async {
-    final r = await http.get(Uri.parse('$baseUrl/payment/providers'),
+    final r = await _networkClient.get(Uri.parse('$baseUrl/payment/providers'),
         headers: _headers);
     return _requireSuccess(r, 'Unable to load payment providers.');
   }
@@ -163,7 +163,7 @@ extension BackendApiLibraryMethods on BackendApi {
   Future<Map<String, dynamic>> getLibraryPrivacy() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/library/privacy'),
       headers: _headers,
     );
@@ -200,7 +200,7 @@ extension BackendApiLibraryMethods on BackendApi {
   Future<Map<String, dynamic>> requestLibraryDeletion() async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/library/deletion-request',
       ),
@@ -224,7 +224,7 @@ extension BackendApiLibraryMethods on BackendApi {
     Map<String, dynamic>? capabilities,
   }) async {
     _requireAuthentication();
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/playback/prepare'),
       headers: _headers,
       body: jsonEncode({
@@ -260,7 +260,7 @@ extension BackendApiLibraryMethods on BackendApi {
   Future<Map<String, dynamic>> getStorage() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/storage'),
       headers: _headers,
     );
@@ -277,7 +277,7 @@ extension BackendApiLibraryMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/storage/request'),
       headers: _headers,
       body: jsonEncode({
@@ -295,7 +295,7 @@ extension BackendApiLibraryMethods on BackendApi {
   Future<Map<String, dynamic>> getStorageNotifications() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/storage/notifications'),
       headers: _headers,
     );
@@ -323,7 +323,7 @@ extension BackendApiLibraryMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/supabase/sync/profile/'
         '${Uri.encodeComponent(profileId)}',
@@ -349,7 +349,7 @@ extension BackendApiLibraryMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/supabase/sync/account'),
       headers: _headers,
       body: jsonEncode(snapshot),

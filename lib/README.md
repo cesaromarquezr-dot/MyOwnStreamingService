@@ -182,3 +182,4 @@ flutter analyze
 flutter run
 
 flutter analyze is the primary static check before considering a source change complete. Analyzer errors should be resolved against the actual declarations in app_core.dart, backend_api.dart, and the relevant model/API files.
+Self-driving network: `core/services/self_driving_network_engine.dart` observes BackendApi request health and applies bounded safe-read retries/timeouts; `self_driving_network_center.dart` exposes its controls and diagnostics. See `docs/SELF_DRIVING_NETWORK.md` for safety boundaries.

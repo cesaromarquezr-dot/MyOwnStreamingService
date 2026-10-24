@@ -766,7 +766,7 @@ class FoodDeliveryApi {
         if (query.trim().isNotEmpty) 'q': query.trim(),
       },
     );
-    final response = await http.get(uri, headers: _headers);
+    final response = await BackendApi.sharedNetworkClient.get(uri, headers: _headers);
     final data = _decode(response);
     final raw = data['restaurants'];
     if (response.statusCode < 200 ||
@@ -782,7 +782,7 @@ class FoodDeliveryApi {
   }
 
   Future<FoodRestaurant> getRestaurant(String restaurantId) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse(
           '$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}'),
       headers: _headers,
@@ -800,7 +800,7 @@ class FoodDeliveryApi {
 
   Future<List<FoodRestaurantReview>> getRestaurantReviews(
       String restaurantId) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse(
           '$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/reviews'),
       headers: _headers,
@@ -826,7 +826,7 @@ class FoodDeliveryApi {
     String title = '',
     String body = '',
   }) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse(
           '$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/reviews'),
       headers: _headers,
@@ -846,7 +846,7 @@ class FoodDeliveryApi {
 
   Future<FoodRestaurant> updateMerchantRestaurantProfile(
       String restaurantId, Map<String, dynamic> payload) async {
-    final response = await http.patch(
+    final response = await BackendApi.sharedNetworkClient.patch(
       Uri.parse(
           '$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/profile'),
       headers: _headers,
@@ -864,7 +864,7 @@ class FoodDeliveryApi {
   }
 
   Future<List<FoodMenuTheme>> getFoodMenuThemes(String restaurantId) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse(
           '$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/themes'),
       headers: _headers,
@@ -885,7 +885,7 @@ class FoodDeliveryApi {
 
   Future<FoodMenuTheme> createFoodMenuTheme(
       String restaurantId, Map<String, dynamic> payload) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse(
           '$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/themes'),
       headers: _headers,
@@ -912,7 +912,7 @@ class FoodDeliveryApi {
         'lon': '$longitude',
       },
     );
-    final response = await http.get(uri, headers: _headers);
+    final response = await BackendApi.sharedNetworkClient.get(uri, headers: _headers);
     final data = _decode(response);
     if (response.statusCode < 200 || response.statusCode >= 300) return null;
     final location = data['location'];
@@ -920,7 +920,7 @@ class FoodDeliveryApi {
   }
 
   Future<List<FoodMenuItem>> getMenu(String restaurantId) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse(
           '$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/menu'),
       headers: _headers,
@@ -942,7 +942,7 @@ class FoodDeliveryApi {
     String countryCode = '*',
     String currencyCode = 'USD',
   }) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse('$baseUrl/food/payment-methods').replace(
         queryParameters: {
           'country': countryCode,
@@ -973,7 +973,7 @@ class FoodDeliveryApi {
       throw ArgumentError(
           'Enter at least three characters for the address or city search.');
     }
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse('$baseUrl/location/address-suggestions').replace(
         queryParameters: {'q': cleanQuery},
       ),
@@ -994,7 +994,7 @@ class FoodDeliveryApi {
   }
 
   Future<List<FoodRestaurant>> getMerchantRestaurants() async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse('$baseUrl/food/merchant/restaurants'),
       headers: _headers,
     );
@@ -1015,7 +1015,7 @@ class FoodDeliveryApi {
 
   Future<FoodRestaurant> createMerchantRestaurant(
       Map<String, dynamic> payload) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse('$baseUrl/food/merchant/restaurants'),
       headers: _headers,
       body: jsonEncode(payload),
@@ -1040,7 +1040,7 @@ class FoodDeliveryApi {
     if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
       throw Exception('Choose an image smaller than 5 MB.');
     }
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse(
           '$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/photo'),
       headers: _headers,
@@ -1065,7 +1065,7 @@ class FoodDeliveryApi {
 
   Future<FoodMenuItem> addMerchantMenuItem(
       String restaurantId, Map<String, dynamic> payload) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse(
           '$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/menu'),
       headers: _headers,
@@ -1084,7 +1084,7 @@ class FoodDeliveryApi {
 
   Future<Map<String, dynamic>> createMerchantCoupon(
       String restaurantId, Map<String, dynamic> payload) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse(
           '$baseUrl/food/merchant/restaurants/${Uri.encodeComponent(restaurantId)}/coupons'),
       headers: _headers,
@@ -1106,7 +1106,7 @@ class FoodDeliveryApi {
     required String code,
     required int subtotalCents,
   }) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse(
               '$baseUrl/food/restaurants/${Uri.encodeComponent(restaurantId)}/coupons/validate')
           .replace(queryParameters: {
@@ -1128,7 +1128,7 @@ class FoodDeliveryApi {
 
   Future<List<Map<String, dynamic>>> getLoyaltyBalances() async {
     final response =
-        await http.get(Uri.parse('$baseUrl/food/loyalty'), headers: _headers);
+        await BackendApi.sharedNetworkClient.get(Uri.parse('$baseUrl/food/loyalty'), headers: _headers);
     final data = _decode(response);
     final raw = data['balances'];
     if (response.statusCode < 200 ||
@@ -1154,7 +1154,7 @@ class FoodDeliveryApi {
     String fulfillmentMethod = 'delivery',
     String couponCode = '',
   }) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse('$baseUrl/food/orders'),
       headers: _headers,
       body: jsonEncode({
@@ -1195,7 +1195,7 @@ class FoodDeliveryApi {
       'profileId': profileId,
       'limit': '${limit.clamp(1, 100)}',
     });
-    final response = await http.get(uri, headers: _headers);
+    final response = await BackendApi.sharedNetworkClient.get(uri, headers: _headers);
     final data = _decode(response);
     final raw = data['orders'];
     if (response.statusCode < 200 ||
@@ -1212,7 +1212,7 @@ class FoodDeliveryApi {
   }
 
   Future<FoodOrderResult> getOrder(String orderId) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse('$baseUrl/food/orders/${Uri.encodeComponent(orderId)}'),
       headers: _headers,
     );
@@ -1228,7 +1228,7 @@ class FoodDeliveryApi {
   }
 
   Future<List<FoodConversation>> getCustomerConversations() async {
-    final response = await http.get(Uri.parse('$baseUrl/food/conversations'),
+    final response = await BackendApi.sharedNetworkClient.get(Uri.parse('$baseUrl/food/conversations'),
         headers: _headers);
     final data = _decode(response);
     final raw = data['conversations'];
@@ -1251,7 +1251,7 @@ class FoodDeliveryApi {
           ? null
           : {'restaurantId': restaurantId.trim()},
     );
-    final response = await http.get(uri, headers: _headers);
+    final response = await BackendApi.sharedNetworkClient.get(uri, headers: _headers);
     final data = _decode(response);
     final raw = data['conversations'];
     if (response.statusCode < 200 ||
@@ -1276,7 +1276,7 @@ class FoodDeliveryApi {
     String? firstMessage,
     String? firstMessageType,
   }) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse('$baseUrl/food/conversations'),
       headers: _headers,
       body: jsonEncode({
@@ -1307,7 +1307,7 @@ class FoodDeliveryApi {
   }
 
   Future<FoodConversation> getFoodConversation(String conversationId) async {
-    final response = await http.get(
+    final response = await BackendApi.sharedNetworkClient.get(
       Uri.parse(
           '$baseUrl/food/conversations/${Uri.encodeComponent(conversationId)}'),
       headers: _headers,
@@ -1329,7 +1329,7 @@ class FoodDeliveryApi {
     String messageType = 'text',
     Map<String, dynamic> metadata = const <String, dynamic>{},
   }) async {
-    final response = await http.post(
+    final response = await BackendApi.sharedNetworkClient.post(
       Uri.parse(
           '$baseUrl/food/conversations/${Uri.encodeComponent(conversationId)}/messages'),
       headers: _headers,

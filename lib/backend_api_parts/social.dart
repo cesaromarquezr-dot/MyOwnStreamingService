@@ -7,7 +7,7 @@ extension BackendApiSocialMethods on BackendApi {
     _requireAuthentication();
     final uri = Uri.parse('$baseUrl/social/home')
         .replace(queryParameters: {'profileId': profileId});
-    return _requireSuccess(await http.get(uri, headers: _headers),
+    return _requireSuccess(await _networkClient.get(uri, headers: _headers),
         'Unable to load friends and communities.');
   }
 
@@ -18,7 +18,7 @@ extension BackendApiSocialMethods on BackendApi {
       queryParameters: {'profileId': profileId},
     );
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load social center.',
     );
   }
@@ -31,7 +31,7 @@ extension BackendApiSocialMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/social/communities/${Uri.encodeComponent(communityId)}')
         .replace(queryParameters: {'profileId': profileId});
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load community details.',
     );
   }
@@ -44,7 +44,7 @@ extension BackendApiSocialMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/social/posts/${Uri.encodeComponent(postId)}')
         .replace(queryParameters: {'profileId': profileId});
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load post details.',
     );
   }
@@ -61,7 +61,7 @@ extension BackendApiSocialMethods on BackendApi {
       'targetProfileId': targetProfileId,
     });
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load this profile.',
     );
   }
@@ -74,7 +74,7 @@ extension BackendApiSocialMethods on BackendApi {
       queryParameters: {'profileId': profileId},
     );
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load followed stores.',
     );
     return (data['following'] as List? ?? const [])
@@ -107,7 +107,7 @@ extension BackendApiSocialMethods on BackendApi {
   }) async {
     _requireAuthentication();
     await _requireSuccess(
-      await http.delete(
+      await _networkClient.delete(
         Uri.parse('$baseUrl/social/following'),
         headers: _headers,
         body: jsonEncode({
@@ -128,7 +128,7 @@ extension BackendApiSocialMethods on BackendApi {
       queryParameters: {'profileId': profileId},
     );
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load profile activity.',
     );
   }
@@ -216,7 +216,7 @@ extension BackendApiSocialMethods on BackendApi {
       if (after != null) 'after': after,
     });
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load conversation.',
     );
   }
@@ -439,7 +439,7 @@ extension BackendApiSocialMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/social/stories/${Uri.encodeComponent(storyId)}/insights')
         .replace(queryParameters: {'profileId': profileId});
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load Story views.',
     );
   }
@@ -506,7 +506,7 @@ extension BackendApiSocialMethods on BackendApi {
       queryParameters: {'profileId': profileId},
     );
     final result = await _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         uri,
         headers: {
           ..._headers,
@@ -531,7 +531,7 @@ extension BackendApiSocialMethods on BackendApi {
   ) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
         Uri.parse('$baseUrl/social/$path'),
         headers: _headers,
         body: jsonEncode(body),
@@ -554,7 +554,7 @@ extension BackendApiSocialMethods on BackendApi {
       },
     );
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load media notes.',
     );
   }
@@ -582,7 +582,7 @@ extension BackendApiSocialMethods on BackendApi {
       String path, Map<String, dynamic> body, String error) async {
     _requireAuthentication();
     return _requireSuccess(
-        await http.post(Uri.parse('$baseUrl/social/$path'),
+        await _networkClient.post(Uri.parse('$baseUrl/social/$path'),
             headers: _headers, body: jsonEncode(body)),
         error);
   }
@@ -608,7 +608,7 @@ extension BackendApiSocialMethods on BackendApi {
       required String action}) async {
     _requireAuthentication();
     return _requireSuccess(
-        await http.patch(
+        await _networkClient.patch(
             Uri.parse(
                 '$baseUrl/social/friend-request/${Uri.encodeComponent(friendshipId)}'),
             headers: _headers,
@@ -626,7 +626,7 @@ extension BackendApiSocialMethods on BackendApi {
       throw ArgumentError('Unsupported guardian review action.');
     }
     return _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
         Uri.parse('$baseUrl/social/guardian-friend-request/${Uri.encodeComponent(friendshipId)}'),
         headers: _headers,
         body: jsonEncode({'profileId': profileId, 'action': action}),
@@ -690,7 +690,7 @@ extension BackendApiSocialMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/records'),
         headers: _headers,
         body: jsonEncode({
@@ -718,7 +718,7 @@ extension BackendApiSocialMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/media-action'),
         headers: _headers,
         body: jsonEncode({
@@ -747,7 +747,7 @@ extension BackendApiSocialMethods on BackendApi {
       },
     );
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to load profile activity.',
     );
     return data['activities'] is List

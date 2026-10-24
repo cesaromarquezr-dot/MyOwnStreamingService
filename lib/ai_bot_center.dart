@@ -4,6 +4,7 @@ import 'entertainment_extensions.dart';
 import 'mindscape_ai_orchestrator.dart';
 import 'mindscape_ai_team.dart';
 import 'platform_reliability_center.dart';
+import 'self_driving_network_center.dart';
 import 'worldwide_access_family_safety.dart';
 
 /// Single discoverable home for the AI roles and connected operational tools.
@@ -59,6 +60,13 @@ class AiBotCenterScreen extends StatelessWidget {
             subtitle: 'Draft and review task proposals for Steward, Moxie, and Fixer.',
             status: 'Proposal UI · no autonomous execution',
             onTap: () => _open(context, const MindscapeAiOrchestratorScreen()),
+          ),
+          _ToolTile(
+            icon: Icons.hub_outlined,
+            title: 'Self-Driving Network',
+            subtitle: 'Adaptive API timeouts, safe retries, rolling latency baseline, and failure-spike detection.',
+            status: 'Automatic · reversible application-level actions',
+            onTap: () => _open(context, const SelfDrivingNetworkCenterScreen()),
           ),
           _ToolTile(
             icon: Icons.monitor_heart_outlined,

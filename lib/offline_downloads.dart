@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
+import 'core/services/self_driving_network_engine.dart';
 
 /// Downloads a single authorized media file for offline playback.
 /// HLS/DASH manifests are deliberately refused; DRM-protected playback requires a licensed, format-aware vendor SDK. This downloader is for unencrypted single-file media that the signed-in user is authorized to save.
@@ -22,7 +23,10 @@ class _OfflineDownloadsScreenState extends State<OfflineDownloadsScreen> {
   static const int _maxFileBytes = 8 * 1024 * 1024 * 1024;
   final _titleController = TextEditingController();
   final _urlController = TextEditingController();
-  final _client = http.Client();
+  final _client = SelfDrivingHttpClient(
+    monitor: SelfDrivingNetworkMonitor.instance,
+    allowSafeReadAutomation: false,
+  );
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
   bool _downloading = false;

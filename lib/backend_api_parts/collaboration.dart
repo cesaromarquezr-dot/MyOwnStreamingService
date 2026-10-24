@@ -6,7 +6,7 @@ extension BackendApiCollaborationMethods on BackendApi {
       {required String queueId}) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/queue/${Uri.encodeComponent(queueId)}'),
         headers: _headers,
       ),
@@ -22,7 +22,7 @@ extension BackendApiCollaborationMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
         Uri.parse(
             '$baseUrl/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
         headers: _headers,
@@ -36,7 +36,7 @@ extension BackendApiCollaborationMethods on BackendApi {
       {required String queueId, required String recordKey}) async {
     _requireAuthentication();
     await _requireSuccess(
-      await http.delete(
+      await _networkClient.delete(
         Uri.parse(
             '$baseUrl/queue/${Uri.encodeComponent(queueId)}/items/${Uri.encodeComponent(recordKey)}'),
         headers: _headers,
@@ -52,7 +52,7 @@ extension BackendApiCollaborationMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/queue'),
         headers: _headers,
         body: jsonEncode({
@@ -75,7 +75,7 @@ extension BackendApiCollaborationMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/queue/${Uri.encodeComponent(queueId)}/items'),
         headers: _headers,
         body: jsonEncode({
@@ -99,7 +99,7 @@ extension BackendApiCollaborationMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/share-card'),
         headers: _headers,
         body: jsonEncode({

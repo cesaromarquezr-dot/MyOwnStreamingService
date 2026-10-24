@@ -9,7 +9,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getSelfHostingStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/self-hosting/status'),
         headers: _headers,
       ),
@@ -25,7 +25,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getOperationsBotStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/operations/bots/status'),
         headers: _headers,
       ),
@@ -36,7 +36,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> runOperationsBotScan() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/operations/bots/run'),
         headers: _headers,
       ),
@@ -51,7 +51,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getProfileGovernanceCapabilities() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/profile-governance/capabilities'),
         headers: _headers,
       ),
@@ -65,7 +65,7 @@ extension BackendApiAdminMethods on BackendApi {
     final clean = profileId.trim();
     if (clean.isEmpty) throw BackendApiException('Profile ID is required.');
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/profile-governance/${Uri.encodeComponent(clean)}'),
         headers: _headers,
       ),
@@ -81,7 +81,7 @@ extension BackendApiAdminMethods on BackendApi {
     final clean = profileId.trim();
     if (clean.isEmpty) throw BackendApiException('Profile ID is required.');
     return _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
         Uri.parse('$baseUrl/profile-governance/${Uri.encodeComponent(clean)}'),
         headers: _headers,
         body: jsonEncode({'governance': governance}),
@@ -95,7 +95,7 @@ extension BackendApiAdminMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
         Uri.parse('$baseUrl/profile-governance/account-policy'),
         headers: _headers,
         body: jsonEncode({
@@ -116,7 +116,7 @@ extension BackendApiAdminMethods on BackendApi {
       throw BackendApiException('Member ID is required.');
     }
     return _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
         Uri.parse(
             '$baseUrl/profile-governance/member/${Uri.encodeComponent(cleanMember)}'),
         headers: _headers,
@@ -132,7 +132,7 @@ extension BackendApiAdminMethods on BackendApi {
     final clean = serverId.trim();
     if (clean.isEmpty) throw BackendApiException('Server ID is required.');
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/server-agent/${Uri.encodeComponent(clean)}/status'),
         headers: _headers,
       ),
@@ -158,7 +158,7 @@ extension BackendApiAdminMethods on BackendApi {
       if (versionId?.trim().isNotEmpty == true) 'versionId': versionId!.trim(),
     };
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/server-agent/playback'),
         headers: _headers,
         body: jsonEncode(body),
@@ -174,7 +174,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getSecurityStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(Uri.parse('$baseUrl/security/status'), headers: _headers),
+      await _networkClient.get(Uri.parse('$baseUrl/security/status'), headers: _headers),
       'Unable to retrieve security status.',
     );
   }
@@ -182,7 +182,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getSecuritySessions() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(Uri.parse('$baseUrl/security/sessions'),
+      await _networkClient.get(Uri.parse('$baseUrl/security/sessions'),
           headers: _headers),
       'Unable to retrieve security sessions.',
     );
@@ -195,7 +195,7 @@ extension BackendApiAdminMethods on BackendApi {
     final cleanId = sessionId.trim();
     if (cleanId.isEmpty) throw BackendApiException('Session ID is required.');
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/security/sessions/revoke'),
         headers: _headers,
         body: jsonEncode({'sessionId': cleanId}),
@@ -212,7 +212,7 @@ extension BackendApiAdminMethods on BackendApi {
     if (currentPassword.isEmpty || newPassword.isEmpty) {
       throw BackendApiException('Current and new passwords are required.');
     }
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/security/password'),
       headers: _headers,
       body: jsonEncode({
@@ -228,7 +228,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> startMfaEnrollment() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(Uri.parse('$baseUrl/security/mfa/enroll'),
+      await _networkClient.post(Uri.parse('$baseUrl/security/mfa/enroll'),
           headers: _headers),
       'Unable to start MFA enrollment.',
     );
@@ -241,7 +241,7 @@ extension BackendApiAdminMethods on BackendApi {
     final cleanCode = code.trim();
     if (cleanCode.isEmpty) throw BackendApiException('MFA code is required.');
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/security/mfa/enroll/verify'),
         headers: _headers,
         body: jsonEncode({'code': cleanCode}),
@@ -253,7 +253,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> disableMfa() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(Uri.parse('$baseUrl/security/mfa/disable'),
+      await _networkClient.post(Uri.parse('$baseUrl/security/mfa/disable'),
           headers: _headers),
       'Unable to disable MFA.',
     );
@@ -268,7 +268,7 @@ extension BackendApiAdminMethods on BackendApi {
     if (cleanEmail.isEmpty || cleanCode.isEmpty) {
       throw BackendApiException('Email and MFA code are required.');
     }
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/mfa/verify'),
       headers: _headers,
       body: jsonEncode({'email': cleanEmail, 'code': cleanCode}),
@@ -291,7 +291,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> getSecurityBotsStatus() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/security-bots/status'),
         headers: _headers,
       ),
@@ -302,7 +302,7 @@ extension BackendApiAdminMethods on BackendApi {
   Future<Map<String, dynamic>> runSecurityBotChecks() async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/security-bots/run'),
         headers: _headers,
       ),
@@ -314,7 +314,7 @@ extension BackendApiAdminMethods on BackendApi {
     _requireAuthentication();
     final bounded = limit.clamp(1, 100);
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/security-bots/audit?limit=$bounded'),
         headers: _headers,
       ),

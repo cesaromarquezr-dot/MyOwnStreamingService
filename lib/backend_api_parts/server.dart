@@ -10,7 +10,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<Map<String, dynamic>> createRemoteAccessCode() async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/remote/access-code'),
       headers: _headers,
     );
@@ -25,7 +25,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<Map<String, dynamic>> getRemoteWorkers() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/remote/workers'),
       headers: _headers,
     );
@@ -43,7 +43,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/remote/jobs'),
       headers: _headers,
       body: jsonEncode({
@@ -66,7 +66,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<Map<String, dynamic>> getArmStatus() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/arm/status'),
       headers: _headers,
     );
@@ -85,7 +85,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<List<dynamic>> getArmDrives() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/arm/drives'),
       headers: _headers,
     );
@@ -110,7 +110,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/arm/scan'),
       headers: _headers,
       body: jsonEncode({
@@ -130,7 +130,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/arm/import'),
       headers: _headers,
       body: jsonEncode({
@@ -150,7 +150,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse(
         '$baseUrl/arm/jobs/${Uri.encodeComponent(jobId)}',
       ),
@@ -169,7 +169,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/arm/jobs/'
         '${Uri.encodeComponent(jobId)}/cancel',
@@ -190,7 +190,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<List<Map<String, dynamic>>> getPhysicalItems() async {
     _requireAuthentication();
     final result = await _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/physical-items'),
         headers: _headers,
       ),
@@ -223,7 +223,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/physical-items'),
         headers: _headers,
         body: jsonEncode({
@@ -255,7 +255,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse(
           '$baseUrl/physical-items/${Uri.encodeComponent(itemId)}/ownership-status',
         ),
@@ -274,7 +274,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<Map<String, dynamic>> getHomeServerStorage() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/server/storage'),
       headers: _headers,
     );
@@ -289,7 +289,7 @@ extension BackendApiServerMethods on BackendApi {
   Future<Map<String, dynamic>> getHomeServerArm() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/server/arm'),
       headers: _headers,
     );
@@ -315,7 +315,7 @@ extension BackendApiServerMethods on BackendApi {
     );
 
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         uri,
         headers: _headers,
       ),
@@ -338,7 +338,7 @@ extension BackendApiServerMethods on BackendApi {
     );
 
     return _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         uri,
         headers: _headers,
       ),
@@ -359,7 +359,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/reviews'),
       headers: _headers,
       body: jsonEncode({
@@ -390,7 +390,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/reviews/publish'),
         headers: _headers,
         body: jsonEncode({
@@ -411,7 +411,7 @@ extension BackendApiServerMethods on BackendApi {
     _requireAuthentication();
     final uri = Uri.parse('$baseUrl/reviews/publications')
         .replace(queryParameters: {'reviewId': reviewId});
-    return _requireSuccess(await http.get(uri, headers: _headers),
+    return _requireSuccess(await _networkClient.get(uri, headers: _headers),
         'Unable to load review publications.');
   }
 
@@ -424,7 +424,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/reviews/interactions'),
         headers: _headers,
         body: jsonEncode({
@@ -469,7 +469,7 @@ extension BackendApiServerMethods on BackendApi {
       'refresh': refresh.toString(),
     };
     final uri = Uri.parse('$baseUrl/ratings').replace(queryParameters: query);
-    return _requireSuccess(await http.get(uri, headers: _headers),
+    return _requireSuccess(await _networkClient.get(uri, headers: _headers),
         'Unable to load media ratings.');
   }
 
@@ -481,7 +481,7 @@ extension BackendApiServerMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/ratings/user'),
         headers: _headers,
         body: jsonEncode(
@@ -511,7 +511,7 @@ extension BackendApiServerMethods on BackendApi {
       },
     );
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to retrieve postal codes.',
     );
   }
@@ -525,7 +525,7 @@ extension BackendApiServerMethods on BackendApi {
       queryParameters: {'q': cleanQuery},
     );
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to search addresses.',
     );
     return data['suggestions'] is List
@@ -547,7 +547,7 @@ extension BackendApiServerMethods on BackendApi {
       },
     );
     final data = await _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to determine the current location.',
     );
     final location = data['location'];

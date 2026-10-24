@@ -8,7 +8,7 @@ extension BackendApiAccountMethods on BackendApi {
 
   /// Loads the current legal policies from the backend.
   Future<Map<String, dynamic>> getLegalPolicies() async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/legal/policies'),
       headers: _headers,
     );
@@ -27,7 +27,7 @@ extension BackendApiAccountMethods on BackendApi {
 
   /// Loads the authenticated account's legal acceptance state.
   Future<Map<String, dynamic>> getLegalAcceptance() async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/legal/account-acceptance'),
       headers: _headers,
     );
@@ -50,7 +50,7 @@ extension BackendApiAccountMethods on BackendApi {
 
   /// Loads the current server-cost-based subscription pricing used by signup.
   Future<Map<String, dynamic>> getPlatformPricing() async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/platform/pricing'),
       headers: const {
         'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ extension BackendApiAccountMethods on BackendApi {
 
     clearToken();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/signup'),
       headers: _headers,
       body: jsonEncode({
@@ -157,7 +157,7 @@ extension BackendApiAccountMethods on BackendApi {
     required String email,
     required String password,
   }) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: _headers,
       body: jsonEncode({
@@ -196,7 +196,7 @@ extension BackendApiAccountMethods on BackendApi {
   /// Loads the currently authenticated account without asking for the password again.
   Future<Map<String, dynamic>> getCurrentAccount() async {
     _requireAuthentication();
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/auth/me'),
       headers: _headers,
     );
@@ -212,7 +212,7 @@ extension BackendApiAccountMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/invitations'),
       headers: _headers,
       body: jsonEncode({
@@ -234,7 +234,7 @@ extension BackendApiAccountMethods on BackendApi {
     required String username,
     String role = 'member',
   }) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/members/add'),
       headers: _headers,
       body: jsonEncode({
@@ -250,7 +250,7 @@ extension BackendApiAccountMethods on BackendApi {
   Future<List<Map<String, dynamic>>> getAccountMembers() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/auth/members'),
       headers: _headers,
     );
@@ -283,7 +283,7 @@ extension BackendApiAccountMethods on BackendApi {
     required String email,
     String? password,
   }) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/invitations/accept'),
       headers: _headers,
       body: jsonEncode({
@@ -302,7 +302,7 @@ extension BackendApiAccountMethods on BackendApi {
   /// Retrieves the security question for an existing account without
   /// returning any password or security-answer material.
   Future<String> getPasswordRecoveryQuestion({required String email}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/password-recovery/question'),
       headers: _headers,
       body: jsonEncode({'email': email.trim()}),
@@ -330,7 +330,7 @@ extension BackendApiAccountMethods on BackendApi {
     required String securityAnswer,
     required String newPassword,
   }) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/auth/password-recovery/reset'),
       headers: _headers,
       body: jsonEncode({
@@ -357,7 +357,7 @@ extension BackendApiAccountMethods on BackendApi {
       );
     }
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/auth/me'),
       headers: _headers,
     );
@@ -381,7 +381,7 @@ extension BackendApiAccountMethods on BackendApi {
     }
 
     try {
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/auth/logout'),
         headers: _headers,
       );
@@ -402,7 +402,7 @@ extension BackendApiAccountMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/group/chat'),
       headers: _headers,
       body: jsonEncode({
@@ -422,7 +422,7 @@ extension BackendApiAccountMethods on BackendApi {
   Future<Map<String, dynamic>> getGroupChatRooms() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/group/chat'),
       headers: _headers,
     );
@@ -439,7 +439,7 @@ extension BackendApiAccountMethods on BackendApi {
   ) async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse(
         '$baseUrl/group/chat/'
         '${Uri.encodeComponent(roomId)}/messages',
@@ -462,7 +462,7 @@ extension BackendApiAccountMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/chat/'
         '${Uri.encodeComponent(roomId)}/messages',
@@ -511,7 +511,7 @@ extension BackendApiAccountMethods on BackendApi {
       },
     );
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       uri,
       headers: const {
         'Content-Type': 'application/json',
@@ -555,7 +555,7 @@ extension BackendApiAccountMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/payment/checkout/verify/'
         '${Uri.encodeComponent(paymentId)}',
@@ -602,7 +602,7 @@ extension BackendApiAccountMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/payment/create'),
       headers: _headers,
       body: jsonEncode({
@@ -632,7 +632,7 @@ extension BackendApiAccountMethods on BackendApi {
       );
     }
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse(
         '$baseUrl/payment/status/'
         '${Uri.encodeComponent(paymentId)}',
@@ -669,7 +669,7 @@ extension BackendApiAccountMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/payment/verify/'
         '${Uri.encodeComponent(paymentId)}',
@@ -702,7 +702,7 @@ extension BackendApiAccountMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/payment/cancel/'
         '${Uri.encodeComponent(paymentId)}',
@@ -728,7 +728,7 @@ extension BackendApiAccountMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/profiles'),
       headers: _headers,
       body: jsonEncode({
@@ -750,7 +750,7 @@ extension BackendApiAccountMethods on BackendApi {
   ) async {
     _requireAuthentication();
 
-    final response = await http.delete(
+    final response = await _networkClient.delete(
       Uri.parse(
         '$baseUrl/profiles/${Uri.encodeComponent(profileId)}',
       ),
@@ -771,7 +771,7 @@ extension BackendApiAccountMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.put(
+    final response = await _networkClient.put(
       Uri.parse('$baseUrl/auth/me'),
       headers: _headers,
       body: jsonEncode({
@@ -796,7 +796,7 @@ extension BackendApiAccountMethods on BackendApi {
   }) async {
     _requireAuthentication();
 
-    final response = await http.put(
+    final response = await _networkClient.put(
       Uri.parse(
         '$baseUrl/profiles/${Uri.encodeComponent(profileId)}',
       ),
@@ -818,7 +818,7 @@ extension BackendApiAccountMethods on BackendApi {
   Future<Map<String, dynamic>> deleteAccount() async {
     _requireAuthentication();
 
-    final response = await http.delete(
+    final response = await _networkClient.delete(
       Uri.parse('$baseUrl/auth/account'),
       headers: _headers,
     );

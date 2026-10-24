@@ -7,7 +7,7 @@ extension BackendApiDeviceMethods on BackendApi {
   // ==========================================================
 
   Future<Map<String, dynamic>> getServerContext() async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/platform-servers/context'),
       headers: _headers,
     );
@@ -15,7 +15,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> claimServer({required String serverId, required String displayName}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/platform-servers/claim'),
       headers: _headers,
       body: jsonEncode({'serverId': serverId, 'displayName': displayName}),
@@ -24,7 +24,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> renameServer({required String displayName}) async {
-    final response = await http.patch(
+    final response = await _networkClient.patch(
       Uri.parse('$baseUrl/platform-servers/name'),
       headers: _headers,
       body: jsonEncode({'displayName': displayName}),
@@ -37,7 +37,7 @@ extension BackendApiDeviceMethods on BackendApi {
   // ==========================================================
 
   Future<List<Map<String, dynamic>>> getTvPairings() async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/tv-control/pairings'),
       headers: _headers,
     );
@@ -59,7 +59,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> createTvPairingCode({required String tvDeviceId, required String tvDeviceName}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/tv-control/pairing-code'),
       headers: _headers,
       body: jsonEncode({'tvDeviceId': tvDeviceId, 'tvDeviceName': tvDeviceName}),
@@ -68,7 +68,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> pairTv({required String code, required String phoneDeviceId, required String profileId}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/tv-control/pair'),
       headers: _headers,
       body: jsonEncode({'code': code, 'phoneDeviceId': phoneDeviceId, 'profileId': profileId}),
@@ -77,7 +77,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> getTvState(String tvDeviceId) async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/tv-control/state/${Uri.encodeComponent(tvDeviceId)}'),
       headers: _headers,
     );
@@ -86,7 +86,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<void> publishTvState({required String tvDeviceId, required Map<String, dynamic> state}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/tv-control/state'),
       headers: _headers,
       body: jsonEncode({'tvDeviceId': tvDeviceId, 'state': state}),
@@ -95,7 +95,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<void> sendTvCommand({required String tvDeviceId, required String profileId, required Map<String, dynamic> command}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/tv-control/command'),
       headers: _headers,
       body: jsonEncode({'tvDeviceId': tvDeviceId, 'profileId': profileId, 'command': command}),
@@ -104,7 +104,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<List<Map<String, dynamic>>> pollTvCommands(String tvDeviceId) async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/tv-control/commands/${Uri.encodeComponent(tvDeviceId)}'),
       headers: _headers,
     );
@@ -119,7 +119,7 @@ extension BackendApiDeviceMethods on BackendApi {
   // ==========================================================
 
   Future<Map<String, dynamic>> getTvChannelCapabilities() async {
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/tv-channels/capabilities'),
       headers: _headers,
     );
@@ -130,7 +130,7 @@ extension BackendApiDeviceMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/tv-channels/definitions').replace(
       queryParameters: {'kids': kidsProfile.toString()},
     );
-    final response = await http.get(uri, headers: _headers);
+    final response = await _networkClient.get(uri, headers: _headers);
     final data = await _requireSuccess(response, 'Unable to load TV channel definitions.');
     return data['channels'] is List
         ? (data['channels'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList(growable: false)
@@ -141,12 +141,12 @@ extension BackendApiDeviceMethods on BackendApi {
     final uri = Uri.parse('$baseUrl/tv-channels/seasonal-policy').replace(
       queryParameters: {'kids': kidsProfile.toString()},
     );
-    final response = await http.get(uri, headers: _headers);
+    final response = await _networkClient.get(uri, headers: _headers);
     return _requireSuccess(response, 'Unable to load TV seasonal policy.');
   }
 
   Future<Map<String, dynamic>> classifyTvContent(Map<String, dynamic> media) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/tv-channels/classify'),
       headers: _headers,
       body: jsonEncode(media),
@@ -159,7 +159,7 @@ extension BackendApiDeviceMethods on BackendApi {
   // ==========================================================
 
   Future<Map<String, dynamic>> registerMediaDevice({required String profileId, required String deviceId, required String name, required String type}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/media-intelligence/device'),
       headers: _headers,
       body: jsonEncode({'profileId': profileId, 'id': deviceId, 'name': name, 'type': type}),
@@ -168,7 +168,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> createPlaybackSession({required String profileId, required String deviceId, String? mediaId, String state = 'idle', double positionSeconds = 0}) async {
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/media-intelligence/session'),
       headers: _headers,
       body: jsonEncode({
@@ -183,7 +183,7 @@ extension BackendApiDeviceMethods on BackendApi {
   }
 
   Future<Map<String, dynamic>> updatePlaybackSession({required String sessionId, String? mediaId, String? state, double? positionSeconds}) async {
-    final response = await http.put(
+    final response = await _networkClient.put(
       Uri.parse('$baseUrl/media-intelligence/session'),
       headers: _headers,
       body: jsonEncode({

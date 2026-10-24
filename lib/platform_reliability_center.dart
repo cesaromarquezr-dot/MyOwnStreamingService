@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'mindscape_ai_orchestrator.dart';
 import 'mindscape_ai_team.dart';
 import 'platform_reliability_models.dart';
+import 'self_driving_network_center.dart';
 import 'worldwide_access_family_safety.dart';
 
 /// Reliability overview and planning tools. Host metrics deliberately start as
@@ -116,6 +117,19 @@ class _PlatformReliabilityCenterScreenState
           Text('System signals', style: theme.textTheme.titleLarge),
           const SizedBox(height: 8),
           for (final signal in _signals) _SignalTile(signal: signal),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.hub_outlined)),
+              title: const Text('Self-Driving Network'),
+              subtitle: const Text('Learn API latency, detect degradation, adapt timeouts, retry safe requests, and suppress retry storms.'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              isThreeLine: true,
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const SelfDrivingNetworkCenterScreen()),
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           Text('Remote stream capacity planner', style: theme.textTheme.titleLarge),
           const SizedBox(height: 6),

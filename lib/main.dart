@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'backend_api.dart';
+import 'core/services/self_driving_network_engine.dart';
 import 'library_release.dart';
 import 'physical_media_library.dart';
 import 'media_health_screen.dart';
@@ -70,6 +71,7 @@ import 'innovation_hub.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SelfDrivingNetworkMonitor.instance.initialize();
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await PageContentCustomizationStore.initialize();

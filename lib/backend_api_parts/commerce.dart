@@ -18,7 +18,7 @@ extension BackendApiCommerceMethods on BackendApi {
       },
     );
     return _requireSuccess(
-      await http.get(uri, headers: _headers),
+      await _networkClient.get(uri, headers: _headers),
       'Unable to search shop entities.',
     );
   }
@@ -28,7 +28,7 @@ extension BackendApiCommerceMethods on BackendApi {
   ) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/shop/entities/sync'),
         headers: _headers,
         body: jsonEncode({'entities': entities}),

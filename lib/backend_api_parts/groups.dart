@@ -33,7 +33,7 @@ extension BackendApiGroupMethods on BackendApi {
       queryParameters: queryParameters,
     );
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       uri,
       headers: _headers,
     );
@@ -113,7 +113,7 @@ extension BackendApiGroupMethods on BackendApi {
       body['votingDurationHours'] = votingDurationHours;
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/group/recommendations'),
       headers: _headers,
       body: jsonEncode(body),
@@ -129,7 +129,7 @@ extension BackendApiGroupMethods on BackendApi {
   Future<Map<String, dynamic>> getGroupRecommendations() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/group/recommendations'),
       headers: _headers,
     );
@@ -152,7 +152,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse(
         '$baseUrl/group/recommendations/'
         '${Uri.encodeComponent(recommendationId)}',
@@ -194,7 +194,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/recommendations/'
         '${Uri.encodeComponent(recommendationId)}/vote',
@@ -224,7 +224,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/recommendations/'
         '${Uri.encodeComponent(recommendationId)}/close',
@@ -250,7 +250,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.delete(
+    final response = await _networkClient.delete(
       Uri.parse(
         '$baseUrl/group/recommendations/'
         '${Uri.encodeComponent(recommendationId)}',
@@ -272,7 +272,7 @@ extension BackendApiGroupMethods on BackendApi {
   Future<Map<String, dynamic>> getGroupWishlist() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/group/wishlist'),
       headers: _headers,
     );
@@ -295,7 +295,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.delete(
+    final response = await _networkClient.delete(
       Uri.parse(
         '$baseUrl/group/wishlist/'
         '${Uri.encodeComponent(mediaId)}',
@@ -328,7 +328,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/wishlist/'
         '${Uri.encodeComponent(mediaId)}/acquire',
@@ -418,7 +418,7 @@ extension BackendApiGroupMethods on BackendApi {
       body['invitationDurationHours'] = invitationDurationHours;
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse('$baseUrl/group/watch'),
       headers: _headers,
       body: jsonEncode(body),
@@ -434,7 +434,7 @@ extension BackendApiGroupMethods on BackendApi {
   Future<Map<String, dynamic>> getGroupWatchSessions() async {
     _requireAuthentication();
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse('$baseUrl/group/watch'),
       headers: _headers,
     );
@@ -459,7 +459,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.get(
+    final response = await _networkClient.get(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}',
@@ -495,7 +495,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/accept',
@@ -534,7 +534,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/decline',
@@ -575,7 +575,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/audio',
@@ -618,7 +618,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/subtitles',
@@ -659,7 +659,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/start',
@@ -698,7 +698,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/play',
@@ -745,7 +745,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/pause',
@@ -785,7 +785,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/resume',
@@ -836,7 +836,7 @@ extension BackendApiGroupMethods on BackendApi {
 
     final int positionMilliseconds = position.inMilliseconds;
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/position',
@@ -876,7 +876,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.post(
+    final response = await _networkClient.post(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}/end',
@@ -915,7 +915,7 @@ extension BackendApiGroupMethods on BackendApi {
       );
     }
 
-    final response = await http.delete(
+    final response = await _networkClient.delete(
       Uri.parse(
         '$baseUrl/group/watch/'
         '${Uri.encodeComponent(cleanSessionId)}',

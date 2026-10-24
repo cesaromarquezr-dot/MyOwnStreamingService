@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'backend_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -302,7 +302,7 @@ class _PublicLiveTvScreenState extends State<PublicLiveTvScreen> {
       _loadError = null;
     });
     try {
-      final response = await http.get(
+      final response = await BackendApi.sharedNetworkClient.get(
         Uri.parse(_playlistUrl),
         headers: const <String, String>{'Accept': 'audio/x-mpegurl, application/vnd.apple.mpegurl, */*'},
       ).timeout(const Duration(seconds: 25));

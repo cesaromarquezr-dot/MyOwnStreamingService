@@ -5,7 +5,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   Future<List<Map<String, dynamic>>> getPaymentMethodCatalog() async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/payment-methods'),
         headers: _headers,
       ),
@@ -28,7 +28,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/payment-methods/seller'),
         headers: _headers,
         body: jsonEncode({
@@ -46,7 +46,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   Future<List<Map<String, dynamic>>> getSellerPayoutDestinations() async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.get(
+      await _networkClient.get(
         Uri.parse('$baseUrl/seller/payout-destinations'),
         headers: _headers,
       ),
@@ -70,7 +70,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   }) async {
     _requireAuthentication();
     return _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/seller/payout-destinations'),
         headers: _headers,
         body: jsonEncode({
@@ -89,7 +89,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   Future<void> deleteSellerPayoutDestination(String id) async {
     _requireAuthentication();
     await _requireSuccess(
-      await http.delete(
+      await _networkClient.delete(
         Uri.parse('$baseUrl/seller/payout-destinations')
             .replace(queryParameters: {'id': id}),
         headers: _headers,
@@ -101,7 +101,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   Future<List<Map<String, dynamic>>> getShopLiveEvents() async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.get(Uri.parse('$baseUrl/shop/live-events'), headers: _headers),
+      await _networkClient.get(Uri.parse('$baseUrl/shop/live-events'), headers: _headers),
       'Unable to load live shopping events.',
     );
     return (data['events'] is List)
@@ -125,7 +125,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   }) async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.post(Uri.parse('$baseUrl/shop/live-events'),
+      await _networkClient.post(Uri.parse('$baseUrl/shop/live-events'),
           headers: _headers,
           body: jsonEncode({
             'storeId': storeId,
@@ -154,7 +154,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   }) async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.patch(
+      await _networkClient.patch(
           Uri.parse(
               '$baseUrl/shop/live-events/${Uri.encodeComponent(eventId)}'),
           headers: _headers,
@@ -178,7 +178,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
       required String text}) async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.post(
+      await _networkClient.post(
           Uri.parse(
               '$baseUrl/shop/live-events/${Uri.encodeComponent(eventId)}/questions'),
           headers: _headers,
@@ -194,7 +194,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
       required int optionIndex}) async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.post(
+      await _networkClient.post(
           Uri.parse(
               '$baseUrl/shop/live-events/${Uri.encodeComponent(eventId)}/vote'),
           headers: _headers,
@@ -212,7 +212,7 @@ extension BackendApiCommercePlatformMethods on BackendApi {
   }) async {
     _requireAuthentication();
     final data = await _requireSuccess(
-      await http.post(
+      await _networkClient.post(
         Uri.parse('$baseUrl/payment-methods/filter'),
         headers: _headers,
         body: jsonEncode({
