@@ -44,3 +44,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Machine-local build config, ephemeral Flutter plugin links, and local TLS material.
+/android/local.properties
+**/flutter/ephemeral/
+/Backend/certs/
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Flutter/ephemeral/
+/macos/Flutter/ephemeral/

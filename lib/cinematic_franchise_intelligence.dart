@@ -4,12 +4,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'core/config/app_env.dart';
+
 import 'cinematic_seed_examples.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 
 /// Live metadata discovery. No per-movie filmography is maintained in code:
 /// upcoming titles are discovered from TMDB production-company metadata.
-/// Configure with --dart-define=TMDB_API_KEY=your_key.
+/// Configure TMDB_API_KEY in the project-root .env file (or use --dart-define).
 class CinematicFranchiseIntelligenceScreen extends StatefulWidget {
   const CinematicFranchiseIntelligenceScreen({super.key});
 
@@ -20,7 +22,7 @@ class CinematicFranchiseIntelligenceScreen extends StatefulWidget {
 
 class _CinematicFranchiseIntelligenceScreenState
     extends State<CinematicFranchiseIntelligenceScreen> {
-  static const String _apiKey = String.fromEnvironment('TMDB_API_KEY');
+  static String get _apiKey => AppEnv.tmdbApiKey;
   static const String _base = 'https://api.themoviedb.org/3';
   // Company identifiers are discovery rules, not movie/show title lists.
   static const Map<String, int> _studios = <String, int>{
@@ -69,7 +71,7 @@ class _CinematicFranchiseIntelligenceScreenState
 
   Future<void> _refresh() async {
     if (_apiKey.isEmpty) {
-      setState(() => _error = 'TMDB_API_KEY is not configured. Add your own TMDB API key using --dart-define=TMDB_API_KEY=your_key, then rebuild.');
+      setState(() => _error = 'TMDB_API_KEY is not configured. Add it to the project-root .env file and restart the app.');
       return;
     }
     setState(() { _loading = true; _error = null; });
@@ -256,7 +258,7 @@ class _CinematicFranchiseIntelligenceScreenState
           const Text('Find upcoming movies and shows from live provider metadata, group overlapping studio results, and avoid maintaining a hard-coded filmography. It refreshes when opened and every 12 hours while this screen remains open, after the provider publishes release and studio metadata.'),
           const SizedBox(height: 8),
           Text(_lastRefresh == null ? 'Last refresh: not yet refreshed' : 'Last refresh: ${_lastRefresh!.toLocal()}'),
-          if (_apiKey.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Setup required: configure TMDB_API_KEY at build time. The app intentionally does not embed a shared secret.', style: TextStyle(color: Colors.orangeAccent))),
+          if (_apiKey.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Setup required: set TMDB_API_KEY in the local .env file. Use a backend proxy for credentials that must remain secret.', style: TextStyle(color: Colors.orangeAccent))),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
           const SizedBox(height: 8),
           FilledButton.icon(onPressed: _loading ? null : _refresh, icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync), label: Text(_loading ? 'Refreshing provider data…' : 'Refresh now')),

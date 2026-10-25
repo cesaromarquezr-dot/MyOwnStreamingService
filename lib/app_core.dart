@@ -968,17 +968,23 @@ class MediaItem {
         .replaceAll(RegExp(r'[_\s]+'), '-');
     if (kind.isEmpty) return null;
     return switch (kind) {
-      'theatrical' || 'theatrical-edition' => 'Theatrical Edition',
-      'extended' || 'extended-edition' || 'extended-cut' => 'Extended Edition',
-      'director-cut' || 'directors-cut' || 'director-s-cut' => "Director's Cut",
+      'theatrical' || 'theatrical-edition' || 'theatrical-cut' => 'Theatrical Version',
+      'extended' || 'extended-edition' || 'extended-cut' => 'Extended Version',
+      'director-cut' || 'directors-cut' || 'director-s-cut' || 'directors-edition' => "Director's Cut",
+      'editor-cut' || 'editors-cut' || 'editor-s-cut' || 'editor-cut-edition' => "Editor's Cut",
+      'unrated' || 'unrated-edition' || 'unrated-cut' => 'Unrated Version',
+      'theatrical-rerelease' || 'theatrical-re-release' => 'Theatrical Re-release',
       'rerelease' || 're-release' || 're-release-edition' => 'Re-release',
       'encore' || 'encore-edition' => 'Encore Edition',
+      'imax' || 'imax-edition' || 'imax-version' => 'IMAX Version',
+      'roadshow' || 'roadshow-version' || 'roadshow-edition' => 'Roadshow Version',
+      'tv-cut' || 'television-cut' || 'broadcast-cut' => 'TV Cut',
+      'international-cut' || 'international-version' => 'International Version',
+      'final-cut' => 'Final Cut',
       'special-edition' => 'Special Edition',
       'collector-edition' || 'collectors-edition' => "Collector's Edition",
       'remastered' || 'remastered-edition' => 'Remastered Edition',
-      'alternate-cut' => 'Alternate Cut',
-      'international-version' => 'International Version',
-      'final-cut' => 'Final Cut',
+      'alternate-cut' || 'alternate-version' => 'Alternate Cut',
       _ => kind.replaceAll('-', ' '),
     };
   }
@@ -3809,11 +3815,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Merge verified provider credits into an existing catalog record.
-  /// This never creates a new library item and never changes playback paths.
-  /// Offline persistence still obeys the profile's existing privacy setting.
+  /// Merge verified provider credits and fill missing poster artwork on an
+  /// existing catalog record. Existing user/catalog artwork is never replaced.
+  /// This never creates a new library item or changes playback paths. Offline
+  /// persistence still obeys the profile's existing privacy setting.
   Future<void> mergeProviderTitleCredits({
     required String mediaId,
+    String? posterUrl,
     List<String> actors = const <String>[],
     List<String> characters = const <String>[],
     List<String> directors = const <String>[],
@@ -3839,9 +3847,15 @@ class AppController extends ChangeNotifier {
     final mergedDirectors = merge(current.directors, directors);
     final mergedWriters = merge(current.writers, writers);
     final mergedMusic = merge(current.music, music);
+    final currentPoster = current.imageUrl?.trim() ?? '';
+    final incomingPoster = posterUrl?.trim() ?? '';
+    // Keep any existing poster selection; use TMDB only when the catalog has
+    // no image at all. A catalog may intentionally use custom/title-card art.
+    final shouldFillPoster = currentPoster.isEmpty && incomingPoster.isNotEmpty;
     bool equal(List<String> a, List<String> b) =>
         a.length == b.length && List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
-    if (equal(mergedActors, current.actors) &&
+    if (!shouldFillPoster &&
+        equal(mergedActors, current.actors) &&
         equal(mergedCharacters, current.characters) &&
         equal(mergedDirectors, current.directors) &&
         equal(mergedWriters, current.writers) &&
@@ -3851,6 +3865,7 @@ class AppController extends ChangeNotifier {
 
     final enriched = MediaItem.fromJson(<String, dynamic>{
       ...current.toJson(),
+      if (shouldFillPoster) 'imageUrl': incomingPoster,
       'actors': mergedActors,
       'characters': mergedCharacters,
       'directors': mergedDirectors,

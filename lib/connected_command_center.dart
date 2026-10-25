@@ -10,6 +10,7 @@ import 'details.dart';
 import 'watch_party_lobby.dart';
 import 'platform_operations_center.dart';
 import 'cinematic_discovery_studio.dart';
+import 'three_phase_discovery_hub.dart';
 
 const _accent = Color(0xFF8B7CFF);
 
@@ -26,6 +27,7 @@ class ConnectedCommandCenterScreen extends StatelessWidget {
         Text(profile == null ? 'Your entertainment, connected' : 'Personalized for ${profile.name}', style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 16),
         _FeatureTile(icon: Icons.search_rounded, title: 'Hey Universal Search', subtitle: 'Search your media library by title, person, genre or soundtrack.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UniversalSearchHubScreen()))),
+        _FeatureTile(icon: Icons.hub_rounded, title: 'Three-Phase Discovery', subtitle: 'Compare shared cast across titles, explore person connections, get history-based recommendations and review library metadata health.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ThreePhaseDiscoveryHubScreen()))),
         _FeatureTile(icon: Icons.auto_awesome_rounded, title: 'My Cinematic Universe', subtitle: 'Mood Mixer, hybrid genres, Smart Double Features, franchises, calendar, vault and Media Wrapped.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CinematicDiscoveryStudioScreen()))),
         _FeatureTile(icon: Icons.gamepad_rounded, title: 'Hey Remote', subtitle: 'Playback controls and connected-device shortcuts.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HeyRemoteScreen()))),
         _FeatureTile(icon: Icons.event_rounded, title: 'Hey Movie Night', subtitle: 'Build a movie-night shortlist and save your plan.', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MovieNightScreen()))),

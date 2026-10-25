@@ -1,3 +1,4 @@
+
 name: my_own_streaming_service
 description: A new Flutter application.
 
@@ -14,7 +15,7 @@ dependencies:
 
   flutter_localizations:
     sdk: flutter
-    
+
   cupertino_icons: ^1.0.2
   font_awesome_flutter: ^11.0.0
   cached_network_image: ^3.3.1
@@ -30,17 +31,22 @@ dependencies:
   youtube_player_flutter: ^10.0.1
   video_player: ^2.10.1
   flutter_secure_storage: ^11.2.0
+
   # Offline worldwide country/state/city data for store and checkout addresses.
   countrify: ^2.5.0
   geolocator: ^14.1.1
   country_picker: ^2.0.28
   record: ^7.1.1
+
   # Push-to-talk speech recognition and spoken replies for Hey Media.
   speech_to_text: ^7.4.0
   flutter_tts: ^4.2.5
   path_provider: ^2.1.6
   share_plus: ^13.3.1
   pro_video_editor: ^2.21.0
+
+  # Load environment configuration.
+  flutter_dotenv: ^6.0.1
 
 dev_dependencies:
   flutter_test:
@@ -49,3 +55,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Load the local environment file at runtime.
+  assets:
+    - .env

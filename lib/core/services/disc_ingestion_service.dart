@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app_core.dart';
 import 'original_language_defaults.dart';
-import 'cinematic_title_metadata_service.dart';
 
 enum DiscRipStatus { running, succeeded, failed, cancelled }
 
@@ -429,36 +428,13 @@ class DiscIngestionService extends ChangeNotifier {
     required String mediaKind,
     required String discType,
     int? releaseYear,
-    int? seriesStartYear,
-    int? seriesEndYear,
-    int? seasonNumber,
-    int? episodeNumber,
-    String? episodeTitle,
-    String? artistName,
     String? artworkUrl,
     String? discTitle,
-    void Function(String message)? onProgress,
   }) async {
-    void report(String message) {
-      onProgress?.call(message);
-      final normalized = _normalizePath(filePath);
-      final job = _jobs.firstWhereOrNull((item) =>
-          item.outputFiles.any((path) => _normalizePath(path) == normalized));
-      if (job != null) {
-        _addEvent(job, message);
-        unawaited(_persist());
-        notifyListeners();
-      }
-    }
-
-    report('Importing MKV…');
     final validation = await validateMkv(filePath);
     if (!validation.passed) throw StateError(validation.error ?? 'MKV validation failed.');
-    report('Imported MKV ✓ · ${validation.sizeBytes} bytes; Matroska header verified.');
     final cleanTitle = title.trim();
     if (cleanTitle.isEmpty) throw ArgumentError('Enter a title before importing.');
-    report('Importing original title…');
-    report('Received title: $cleanTitle');
     if (!const {'movie', 'tv', 'music'}.contains(mediaKind)) {
       throw ArgumentError('Unsupported library type.');
     }
@@ -470,67 +446,6 @@ class DiscIngestionService extends ChangeNotifier {
       final uri = Uri.tryParse(cleanArtwork);
       if (uri == null || !uri.hasAuthority || uri.scheme.toLowerCase() != 'https' || uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
         throw ArgumentError('Artwork URL must be a stable HTTPS URL without credentials, query strings, or fragments.');
-      }
-    }
-    report('Importing artwork…');
-    report(cleanArtwork.isNotEmpty
-        ? 'Artwork ✓ · supplied artwork URL recorded.'
-        : 'Artwork not supplied; artwork lookup can be completed during metadata enrichment.');
-    report('Receiving audio/subtitles…');
-    final trackInfo = await inspectMkvTracks(filePath);
-    final audioTracks = (trackInfo?['audio'] as List<String>?) ?? <String>[];
-    final subtitleTracks = (trackInfo?['subtitles'] as List<String>?) ?? <String>[];
-    if (trackInfo == null) {
-      report('Audio/subtitle track details unavailable: install ffprobe or review the MakeMKV track scan.');
-    } else {
-      report('Received ${audioTracks.length} audio and ${subtitleTracks.length} subtitle option(s).');
-      final languages = <String>{
-        ...audioTracks.map(_languageFromTrackLabel),
-        ...subtitleTracks.map(_languageFromTrackLabel),
-      }..removeWhere((language) => language.isEmpty || language == 'und');
-      report(languages.isEmpty
-          ? 'Track languages: provider/file tags did not specify languages.'
-          : 'Track languages received: ${languages.join(', ')}.');
-    }
-    report('Importing cast and crew…');
-    if (mediaKind == 'music') {
-      report((artistName ?? '').trim().isEmpty
-          ? 'Artist/singer credits not supplied; music metadata lookup is still needed.'
-          : 'Received artist/band: ${artistName!.trim()}. Additional singer, songwriter, and producer credits require a music metadata provider.');
-    } else if (!CinematicTitleMetadataService.isConfigured) {
-      report('Cast and crew not fetched: configure TMDB_API_KEY to retrieve sourced actors, screenwriters, directors, and composers.');
-    } else {
-      report('Looking up an exact title match for sourced cast and crew…');
-    }
-    if (mediaKind == 'tv') {
-      if (seasonNumber != null && episodeNumber != null) {
-        report('Receiving episode $episodeNumber, season $seasonNumber${(episodeTitle ?? '').trim().isEmpty ? '' : ', "${episodeTitle!.trim()}"'} of $cleanTitle.');
-      }
-      report('Disc episode list: MakeMKV title scan is the source of detected disc titles; verify episode names/order against catalog metadata.');
-      if (seriesStartYear != null) {
-        report(seriesEndYear == null
-            ? 'Release year: $seriesStartYear–Present/unknown end year.'
-            : 'Release years: $seriesStartYear–$seriesEndYear.');
-      }
-    }
-    if (mediaKind == 'music') {
-      report('Now importing album: $cleanTitle.');
-      if ((artistName ?? '').trim().isNotEmpty) report('Artist/Band: ${artistName!.trim()}.');
-      if (releaseYear != null) report('Album year: $releaseYear.');
-      final duration = trackInfo?['durationSeconds'];
-      final trackTitle = trackInfo?['trackTitle']?.toString();
-      final trackNumber = trackInfo?['trackNumber']?.toString();
-      final trackArtist = trackInfo?['trackArtist']?.toString();
-      final albumTitle = trackInfo?['albumTitle']?.toString();
-      final trackYear = trackInfo?['trackYear']?.toString();
-      if (trackNumber != null && trackNumber.isNotEmpty) report('Track $trackNumber${trackTitle == null ? '' : ': $trackTitle'}');
-      if (trackTitle != null && trackTitle.isNotEmpty && (trackNumber == null || trackNumber.isEmpty)) report('Track title: $trackTitle.');
-      if (trackArtist != null && trackArtist.isNotEmpty) report('Track artist: $trackArtist.');
-      if (albumTitle != null && albumTitle.isNotEmpty) report('Embedded album title: $albumTitle.');
-      if (trackYear != null && trackYear.isNotEmpty) report('Embedded track year: $trackYear.');
-      if (duration is num) report('Track length: ${_formatTrackDuration(duration.toDouble())}.');
-      if (trackTitle == null && trackNumber == null && duration == null) {
-        report('Track metadata unavailable; one imported file is not assumed to represent a complete album. Audio CD ripping requires a dedicated CD-ripping workflow.');
       }
     }
     final normalizedPath = _normalizePath(filePath);
@@ -546,29 +461,7 @@ class DiscIngestionService extends ChangeNotifier {
       type: mediaKind,
       imageUrl: cleanArtwork.isEmpty ? null : cleanArtwork,
       description: 'Imported through the Disc Ingestion Center. Review the metadata and connect this item to a configured media-server playback gateway.',
-      releaseYear: releaseYear ?? seriesStartYear,
-      seriesStartYear: mediaKind == 'tv' ? seriesStartYear : null,
-      seriesEndYear: mediaKind == 'tv' ? seriesEndYear : null,
-      seasons: mediaKind == 'tv' && seasonNumber != null && episodeNumber != null
-          ? <Map<String, dynamic>>[
-              <String, dynamic>{
-                'seasonNumber': seasonNumber,
-                'episodes': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'episodeNumber': episodeNumber,
-                    'title': (episodeTitle ?? '').trim().isEmpty ? cleanTitle : episodeTitle!.trim(),
-                    'releaseYear': releaseYear,
-                    'discType': discType,
-                  },
-                ],
-              },
-            ]
-          : const <Map<String, dynamic>>[],
-      music: mediaKind == 'music' && (artistName ?? '').trim().isNotEmpty
-          ? <String>[artistName!.trim()]
-          : const <String>[],
-      audioTracks: audioTracks,
-      subtitles: subtitleTracks,
+      releaseYear: releaseYear,
       discType: discType,
       discTitle: (discTitle ?? '').trim().isEmpty ? null : discTitle!.trim(),
       addedAt: DateTime.now(),
@@ -576,55 +469,7 @@ class DiscIngestionService extends ChangeNotifier {
       addedByProfileName: profile?.name,
       addedSource: 'disc_ingestion_center',
     );
-    report('Saving metadata · DiscType: $discType…');
     await AppController.instance.addToLibrary(media);
-    if (mediaKind == 'movie' || mediaKind == 'tv') {
-      if (CinematicTitleMetadataService.isConfigured) {
-        try {
-          final metadata = await CinematicTitleMetadataService.lookupTitle(
-            title: cleanTitle,
-            isTv: mediaKind == 'tv',
-            year: releaseYear ?? seriesStartYear,
-          );
-          if (metadata == null) {
-            report('No exact TMDB title match found; no external credits were added.');
-          } else {
-            final catalog = AppController.instance.library;
-            final existingActors = catalog.expand((item) => item.actors).map((name) => name.toLowerCase()).toSet();
-            final existingDirectors = catalog.expand((item) => item.directors).map((name) => name.toLowerCase()).toSet();
-            final existingWriters = catalog.expand((item) => item.writers).map((name) => name.toLowerCase()).toSet();
-            final existingMusic = catalog.expand((item) => item.music).map((name) => name.toLowerCase()).toSet();
-            report('Received ${metadata.cast.length} actor/cast credit(s).');
-            report('Received ${metadata.writers.length} screenwriter/writer credit(s).');
-            report('Received ${metadata.directors.length} director credit(s).');
-            report('Received ${metadata.music.length} composer/music credit(s).');
-            for (final name in metadata.cast.where((name) => !existingActors.contains(name.toLowerCase()))) {
-              report('New actor found: $name.');
-            }
-            for (final name in metadata.writers.where((name) => !existingWriters.contains(name.toLowerCase()))) {
-              report('New screenwriter found: $name.');
-            }
-            for (final name in metadata.directors.where((name) => !existingDirectors.contains(name.toLowerCase()))) {
-              report('New director found: $name.');
-            }
-            for (final name in metadata.music.where((name) => !existingMusic.contains(name.toLowerCase()))) {
-              report('New composer/music credit found: $name.');
-            }
-            await AppController.instance.mergeProviderTitleCredits(
-              mediaId: media.id,
-              actors: metadata.cast,
-              characters: metadata.characters,
-              directors: metadata.directors,
-              writers: metadata.writers,
-              music: metadata.music,
-            );
-          }
-        } catch (error) {
-          report('Cast/crew lookup failed; imported media is saved and can be enriched later: $error');
-        }
-      }
-    }
-    report('Imported "$cleanTitle" to the library ✓.');
     final job = _jobs.firstWhereOrNull((item) => item.outputFiles.contains(filePath));
     if (job != null && !job.importedFiles.contains(filePath)) {
       job.importedFiles.add(filePath);
@@ -633,76 +478,6 @@ class DiscIngestionService extends ChangeNotifier {
     }
     notifyListeners();
     return media;
-  }
-
-  /// Best-effort technical stream inspection. Requires ffprobe on PATH; no
-  /// language/count is fabricated when it is unavailable.
-  Future<Map<String, dynamic>?> inspectMkvTracks(String filePath) async {
-    if (!supportsLocalProcess) return null;
-    try {
-      final result = await Process.run(
-        'ffprobe',
-        <String>[
-          '-v', 'error', '-show_entries',
-          'stream=codec_type:stream_tags=language,title:format=duration:format_tags=title,artist,album,track,date,year',
-          '-of', 'json', filePath,
-        ],
-        runInShell: false,
-      );
-      if (result.exitCode != 0 || result.stdout is! String) return null;
-      final decoded = jsonDecode(result.stdout as String);
-      if (decoded is! Map) return null;
-      final streams = decoded['streams'];
-      if (streams is! List) return null;
-      final audio = <String>[];
-      final subtitles = <String>[];
-      for (final raw in streams.whereType<Map>()) {
-        final type = raw['codec_type']?.toString();
-        final tags = raw['tags'] is Map ? Map<String, dynamic>.from(raw['tags'] as Map) : <String, dynamic>{};
-        final language = (tags['language'] ?? 'und').toString().trim();
-        final label = (tags['title'] ?? language).toString().trim();
-        if (type == 'audio') audio.add(label.isEmpty ? language : label);
-        if (type == 'subtitle') subtitles.add(label.isEmpty ? language : label);
-      }
-      final format = decoded['format'] is Map ? decoded['format'] as Map : const {};
-      final duration = double.tryParse(format['duration']?.toString() ?? '');
-      final tags = format['tags'] is Map ? Map<String, dynamic>.from(format['tags'] as Map) : <String, dynamic>{};
-      return <String, dynamic>{
-        'audio': audio,
-        'subtitles': subtitles,
-        if (duration != null) 'durationSeconds': duration,
-        if ((tags['title'] ?? '').toString().trim().isNotEmpty) 'trackTitle': tags['title'].toString().trim(),
-        if ((tags['artist'] ?? '').toString().trim().isNotEmpty) 'trackArtist': tags['artist'].toString().trim(),
-        if ((tags['album'] ?? '').toString().trim().isNotEmpty) 'albumTitle': tags['album'].toString().trim(),
-        if ((tags['track'] ?? '').toString().trim().isNotEmpty) 'trackNumber': tags['track'].toString().trim(),
-        if ((tags['date'] ?? tags['year'] ?? '').toString().trim().isNotEmpty) 'trackYear': (tags['date'] ?? tags['year']).toString().trim(),
-      };
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _languageFromTrackLabel(String label) {
-    final value = label.trim().toLowerCase();
-    if (value.isEmpty) return '';
-    final aliases = <String, String>{
-      'eng': 'English', 'en': 'English', 'english': 'English',
-      'spa': 'Spanish', 'es': 'Spanish', 'spanish': 'Spanish',
-      'fre': 'French', 'fra': 'French', 'fr': 'French', 'french': 'French',
-      'deu': 'German', 'ger': 'German', 'de': 'German',
-      'ita': 'Italian', 'it': 'Italian', 'jpn': 'Japanese', 'ja': 'Japanese',
-      'kor': 'Korean', 'ko': 'Korean', 'por': 'Portuguese', 'pt': 'Portuguese',
-      'und': 'und',
-    };
-    final first = value.split(RegExp(r'[ _-]')).first;
-    return aliases[first] ?? (value.length <= 3 ? value : '');
-  }
-
-  String _formatTrackDuration(double seconds) {
-    final total = seconds.round();
-    final minutes = total ~/ 60;
-    final remainder = total % 60;
-    return '$minutes:${remainder.toString().padLeft(2, '0')}';
   }
 
   Future<void> refreshJobOutputs(String jobId) async {

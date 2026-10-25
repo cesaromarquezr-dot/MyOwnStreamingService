@@ -19,6 +19,7 @@ import 'profile_content_safety.dart';
 import 'localization.dart';
 import 'player.dart';
 import 'recommendation_ownership.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
 
 const Color _discoveryAccent = Color(0xFF8B7CFF);
 const Color _discoveryPanel = Color(0xFF171722);
@@ -207,12 +208,17 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   VideoPlayerController? _previewController;
   bool _previewMuted = true;
   String? _previewUrl;
+  final Map<String, String> _tmdbOverviewsByMediaId = <String, String>{};
+  final Set<String> _overviewLookupStarted = <String>{};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.items.isNotEmpty) _loadPreview(widget.items.first);
+    if (widget.items.isNotEmpty) {
+      _loadPreview(widget.items.first);
+      unawaited(_loadOverview(widget.items.first));
+    }
     _scheduleNext();
   }
 
@@ -221,6 +227,49 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     super.didUpdateWidget(oldWidget);
     if (_index >= widget.items.length) _index = 0;
     if (oldWidget.items.length != widget.items.length) _scheduleNext();
+    if (widget.items.isNotEmpty) {
+      unawaited(_loadOverview(widget.items[_index]));
+    }
+  }
+
+  bool _isMovieOrShow(MediaItem media) {
+    if (media.isSeries) return true;
+    final type = media.type.trim().toLowerCase();
+    // Music and album types use their own catalog description instead of TMDB.
+    if (type.contains('album') ||
+        type.contains('music') ||
+        type == 'track' ||
+        type == 'artist' ||
+        type == 'audio') {
+      return false;
+    }
+    return type == 'movie' ||
+        type == 'film' ||
+        type == 'feature' ||
+        type == 'feature film' ||
+        type.contains('movie') ||
+        type.contains('film');
+  }
+
+  Future<void> _loadOverview(MediaItem media) async {
+    if (!_isMovieOrShow(media) ||
+        !CinematicTitleMetadataService.isConfigured ||
+        !_overviewLookupStarted.add(media.id)) {
+      return;
+    }
+    try {
+      final overview = (await CinematicTitleMetadataService.lookupOverview(
+                title: media.title,
+                isTv: media.isSeries,
+                year: media.releaseYear,
+              ))
+              ?.trim() ??
+          '';
+      if (!mounted || overview.isEmpty) return;
+      setState(() => _tmdbOverviewsByMediaId[media.id] = overview);
+    } catch (_) {
+      // Metadata lookups are best-effort; keep the local catalog overview.
+    }
   }
 
   @override
@@ -345,6 +394,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                 onPageChanged: (value) {
                   setState(() => _index = value);
                   _loadPreview(widget.items[value]);
+                  unawaited(_loadOverview(widget.items[value]));
                   _scheduleNext();
                 },
                 itemBuilder: (context, index) =>
@@ -423,7 +473,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   }
 
   Widget _buildHeroPage(MediaItem media) {
-    final description = media.description?.trim();
+    final tmdbOverview = _tmdbOverviewsByMediaId[media.id]?.trim();
+    // Movie/show heroes prefer TMDB's actual overview. Albums and titles without
+    // an exact TMDB match fall back to the overview/description in the catalog.
+    final description = tmdbOverview?.isNotEmpty == true
+        ? tmdbOverview
+        : media.description?.trim();
     final heroMetadata = <String>[];
     final yearLabel = media.displayYearLabel;
     if (yearLabel != null && yearLabel.isNotEmpty) heroMetadata.add(yearLabel);
@@ -456,12 +511,27 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               child: VideoPlayer(_previewController!),
             ),
           )
-        else if (media.imageUrl?.trim().isNotEmpty == true)
-          Image.network(
-            media.imageUrl!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _heroFallback(media),
-          )
+        else if (media.imageUrl?.trim().isNotEmpty == true) ...[
+          // A dark cover fills the banner behind the main artwork, avoiding
+          // blank margins without sacrificing the full original poster/image.
+          Positioned.fill(
+            child: Image.network(
+              media.imageUrl!,
+              fit: BoxFit.cover,
+              color: Colors.black.withValues(alpha: .48),
+              colorBlendMode: BlendMode.darken,
+              errorBuilder: (_, __, ___) => _heroFallback(media),
+            ),
+          ),
+          Positioned.fill(
+            child: Image.network(
+              media.imageUrl!,
+              fit: BoxFit.contain,
+              alignment: Alignment.centerRight,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ),
+        ]
         else
           _heroFallback(media),
         DecoratedBox(
@@ -559,13 +629,23 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                 ],
                 if (description != null && description.isNotEmpty) ...[
                   const SizedBox(height: 8),
+                  const Text(
+                    'OVERVIEW',
+                    style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),
                     child: Text(description,
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white70, fontSize: 12, height: 1.35)),
+                            color: Colors.white70, fontSize: 12.5, height: 1.4)),
                   ),
                 ],
                 const SizedBox(height: 14),
@@ -937,6 +1017,59 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// Home-page shelves driven by people credited in the user's viewing history.
+/// Uses only locally known credits and available catalog items; no credit is inferred.
+class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
+  final List<MediaItem> library;
+  final List<MediaItem> watched;
+
+  const HomeBecauseYouWatchedPeopleShelves({super.key, required this.library, required this.watched});
+
+  String _norm(String value) => value.trim().toLowerCase();
+
+  @override
+  Widget build(BuildContext context) {
+    if (watched.isEmpty) return const SizedBox.shrink();
+    final controller = AppController.instance;
+    final catalog = <String, MediaItem>{};
+    for (final item in <MediaItem>[...library, ...controller.recommendations, ...controller.watched, ...controller.liked]) {
+      if (item.id.isNotEmpty && item.isAccessibleTo(controller.currentProfile) && !isExcludedEntertainmentType(item.type)) {
+        catalog.putIfAbsent(item.id, () => item);
+      }
+    }
+    final viewed = <MediaItem>[];
+    final seen = <String>{};
+    for (final item in watched.reversed) {
+      if (seen.add(item.id)) viewed.add(item);
+    }
+    final shelves = <({MediaItem seed, String person, List<MediaItem> items})>[];
+    final shelfKeys = <String>{};
+    for (final seed in viewed) {
+      final people = <String>{...seed.actors, ...seed.directors, ...seed.writers};
+      for (final person in people) {
+        final normalizedPerson = _norm(person);
+        if (normalizedPerson.isEmpty || !shelfKeys.add('${seed.id}:$normalizedPerson')) continue;
+        final matches = catalog.values.where((candidate) => candidate.id != seed.id && !watched.any((w) => w.id == candidate.id) && <String>{...candidate.actors, ...candidate.directors, ...candidate.writers}.any((credit) => _norm(credit) == normalizedPerson)).toList();
+        if (matches.isEmpty) continue;
+        matches.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        shelves.add((seed: seed, person: person, items: matches.take(12).toList()));
+        if (shelves.length >= 6) break;
+      }
+      if (shelves.length >= 6) break;
+    }
+    if (shelves.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (final shelf in shelves) ...[
+        _DiscoverySectionHeader(title: 'Because you watched ${shelf.seed.title} featuring ${shelf.person}', subtitle: 'More movies and shows with this actor, director, or screenwriter'),
+        HomeArrowRail(height: 210, itemCount: shelf.items.length, separatorExtent: 12, padding: const EdgeInsets.symmetric(horizontal: 48), itemBuilder: (context, index) {
+          final media = shelf.items[index];
+          return _DiscoveryMediaCard(title: media.title, subtitle: '${media.displayYearLabel ?? ''} ${media.type}'.trim(), imageUrl: media.imageUrl, isOwned: controller.isOwned(media.id), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(settings: const RouteSettings(name: '/app/details'), builder: (_) => MediaDetailsScreen(media: media))));
+        }),
+      ],
+    ]);
   }
 }
 

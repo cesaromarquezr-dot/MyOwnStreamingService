@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'privacy_preferences.dart';
+import 'core/config/app_env.dart';
 import 'core/services/self_driving_network_engine.dart';
 
 part 'backend_api_parts/account.dart';
@@ -61,13 +62,13 @@ class BackendApi {
   static const _tokenStorageKey = 'backend_session_token';
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  BackendApi({
-    this.baseUrl = const String.fromEnvironment(
-      'BACKEND_API_URL',
-      defaultValue: 'https://127.0.0.1:8080/api/v1',
-    ),
-  }) {
+  BackendApi({String? baseUrl}) : baseUrl = _resolveBaseUrl(baseUrl) {
     assertSecureEndpoint();
+  }
+
+  static String _resolveBaseUrl(String? supplied) {
+    final explicit = supplied?.trim() ?? '';
+    return explicit.isNotEmpty ? explicit : AppEnv.backendApiUrl;
   }
 
   String? get token => _token;

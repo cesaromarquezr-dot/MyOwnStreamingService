@@ -149,16 +149,16 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
     return Scaffold(
       appBar: AppBar(title: const UniversalText('People Connections')),
       body: ListView(padding: const EdgeInsets.all(18), children: [
-        const UniversalText('Find the shortest connection between actors, singers, directors, writers, and credited music contributors through works in your library.', style: TextStyle(color: Colors.white70, height: 1.35)),
+        const UniversalText('Find a cross-media path between actors, directors, writers, singers, bands, and credited music contributors. Connections can pass through movies, TV shows, soundtrack credits, songs, featured artists, groups, and collaborations when those relationships are present in your indexed metadata.', style: TextStyle(color: Colors.white70, height: 1.35)),
         const SizedBox(height: 16),
         TextField(
           controller: _fromController,
           decoration: InputDecoration(
             labelText: 'Starting person',
-            hintText: 'e.g. Zendaya',
+            hintText: 'e.g. Florence Pugh',
             prefixIcon: const Icon(Icons.person_search_rounded),
             helperText: allPeople.isEmpty
-                ? 'Import cast and music credits to build the graph.'
+                ? 'Import cast, soundtrack, artist, and collaboration credits to build the graph.'
                 : 'Indexed people: ${allPeople.length}',
           ),
         ),
@@ -167,12 +167,12 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
           controller: _toController,
           decoration: const InputDecoration(
             labelText: 'Destination person',
-            hintText: 'e.g. Robin Williams',
+            hintText: 'e.g. Bruno Mars',
             prefixIcon: Icon(Icons.person_outline_rounded),
           ),
         ),
         const SizedBox(height: 14),
-        FilledButton.icon(onPressed: _findPath, icon: const Icon(Icons.account_tree_rounded), label: const UniversalText('Find connection')),
+        FilledButton.icon(onPressed: _findPath, icon: const Icon(Icons.account_tree_rounded), label: const UniversalText('Find cross-media connection')),
         if (_searched && _error != null) ...[
           const SizedBox(height: 16),
           Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(_error!))),
@@ -191,7 +191,7 @@ class _ActorConnectionScreenState extends State<ActorConnectionScreen> {
             ],
           ]))),
         ],
-        if (allPeople.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: UniversalText('Import cast and crew credits to build the connection graph.', style: TextStyle(color: Colors.white54))),
+        if (allPeople.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: UniversalText('Import cast, soundtrack, artist, group-membership, and collaboration metadata to build richer cross-media paths.', style: TextStyle(color: Colors.white54))),
       ]),
     );
   }

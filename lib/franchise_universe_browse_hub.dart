@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'cinematic_universe_franchise_explorer.dart';
 import 'cinematic_franchise_intelligence.dart';
+import 'franchise_story_graph.dart';
 
 /// Franchise and cinematic-universe browse pages backed by verified catalog metadata.
 /// New titles are discovered through the intelligence/provider flow, rather than
@@ -41,6 +42,18 @@ class FranchiseUniverseBrowseHubScreen extends StatelessWidget {
                 ? 'Browse franchise groups derived from catalog metadata. Use live intelligence to discover future titles without maintaining a movie-by-movie list.'
                 : 'Explore universe groups derived from metadata, and use live discovery to keep upcoming titles current. Studio overlap alone is not treated as proof of shared continuity.',
             icon: isFranchise ? Icons.movie_filter_rounded : Icons.hub_rounded,
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.account_tree_rounded),
+              title: const Text('Connections Graph & Timeline'),
+              subtitle: const Text('Search a character, choose a continuity, and explore story connections or release/story order.'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                builder: (_) => const FranchiseStoryGraphScreen(),
+              )),
+            ),
           ),
           const SizedBox(height: 10),
           Card(

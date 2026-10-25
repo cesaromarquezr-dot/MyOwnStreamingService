@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_core.dart';
 import 'food_delivery.dart';
+import 'external_marketplace.dart';
 import 'shop.dart';
 
 enum MarketplaceMode { all, shop, food }
@@ -172,6 +173,16 @@ class _MarketplaceHubScreenState extends State<MarketplaceHubScreen> {
                 onTap: () => _setMode(MarketplaceMode.food),
               )),
             ]),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.public_rounded, size: 30),
+                title: const Text('External Food & Marketplace', style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: const Text('Search Mercado Libre listings and open Amazon, eBay, Uber Eats and Rappi. Partner APIs can be enabled when credentials and approvals are available.'),
+                trailing: const Icon(Icons.arrow_forward_rounded),
+                onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => const ExternalMarketplaceScreen())),
+              ),
+            ),
             const SizedBox(height: 12),
             Card(
               child: ListTile(

@@ -89,3 +89,16 @@ See [`docs/PRODUCTION_READINESS_AND_RELIABILITY.md`](docs/PRODUCTION_READINESS_A
 The Home page and More menu include Entertainment Studio: profile-scoped calendar and journal records, scene bookmarks, collector-edition notes, household watchlist votes, subtitle correction drafts, fan theories, safe layout-preset JSON export/import, Cinema Room preference presets, recommendation feedback, catalog metadata audits, and a metadata-derived Movie Knowledge Graph. Records are stored locally first; optional authenticated Supabase sync for Studio records requires `Backend/database/entertainment_studio_records.sql` (also mirrored in `lib/supabase/migrations/`). Sharing with other signed-in accounts requires a separate membership/ACL design.
 
 My TV has quick-create channel templates that reuse the existing profile-aware guide and eligibility filtering. The Server Storage dashboard now reads actual authenticated server category/filesystem data instead of hard-coded zero values; host-level SMART/ZFS/UPS/CPU/temperature and transcoder monitoring still requires a privileged server-side collector. See `docs/ENTERTAINMENT_STUDIO_EXPANSION.md` for scope and deployment limits.
+
+
+## Disc ingestion / MakeMKV
+
+See [DISC_INGESTION_MAKEMKV_NAS_GUIDE.md](DISC_INGESTION_MAKEMKV_NAS_GUIDE.md) for desktop setup, optical-drive discovery, NAS output, job tracking, validation limitations, and library import. Local MakeMKV execution is user-triggered; firmware flashing is not automated or bundled.
+
+## All-in-One Platform Roadmap
+
+The selected project direction is to build toward the complete all-in-one platform in verified phases. See [`docs/ALL_IN_ONE_PLATFORM_ROADMAP.md`](docs/ALL_IN_ONE_PLATFORM_ROADMAP.md) for the audited foundations, delivery phases, and completion rules, and [`docs/ALL_IN_ONE_RELEASE_CHECKLIST.md`](docs/ALL_IN_ONE_RELEASE_CHECKLIST.md) for release verification. A Flutter GitHub Actions workflow now runs dependency resolution, analysis, and tests on pushes and pull requests; it must pass on the actual repository before a release can be called verified.
+
+## Actor connection paths
+
+The Connections Graph includes a shortest-path actor-to-actor finder based on shared movie/TV cast credits. See [`docs/ACTOR_CONNECTION_PATHS.md`](docs/ACTOR_CONNECTION_PATHS.md) for coverage and behavior notes.

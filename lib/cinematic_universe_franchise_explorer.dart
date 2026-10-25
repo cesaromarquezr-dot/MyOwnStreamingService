@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'localization.dart';
+import 'franchise_story_graph.dart';
 
 /// A grouping backed only by metadata explicitly attached to catalog works.
 /// Missing metadata is intentionally not inferred from actor overlap or title text.
@@ -370,6 +371,35 @@ class UniverseFranchiseDetailsScreen extends StatelessWidget {
             Text(group.kind, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Text('${group.works.length} connected title${group.works.length == 1 ? '' : 's'}', style: const TextStyle(color: Colors.white60)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                    builder: (_) => FranchiseStoryGraphScreen(
+                      initialGroupName: group.name,
+                      initialItems: group.works,
+                      initialView: 'Graph',
+                    ),
+                  )),
+                  icon: const Icon(Icons.account_tree_rounded),
+                  label: const Text('Full connections graph'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                    builder: (_) => FranchiseStoryGraphScreen(
+                      initialGroupName: group.name,
+                      initialItems: group.works,
+                      initialView: 'Timeline',
+                    ),
+                  )),
+                  icon: const Icon(Icons.timeline_rounded),
+                  label: const Text('Timeline'),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             for (final item in group.works)
               Card(

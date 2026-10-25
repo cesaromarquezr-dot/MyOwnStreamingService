@@ -411,90 +411,18 @@ class MusicLibraryStore extends ChangeNotifier {
     // Local album/artist examples ensure Album and Artist details can be
     // explored before a real music library is imported. No audio URLs are set.
     const catalogExampleTracks = <MusicTrack>[
-      MusicTrack(
-          id: 'demo-catalog-track-1989-blank-space',
-          title: 'Blank Space',
-          artist: 'Taylor Swift',
-          album: '1989',
-          duration: Duration(minutes: 3, seconds: 51),
-          genres: ['Pop']),
-      MusicTrack(
-          id: 'demo-catalog-track-1989-style',
-          title: 'Style',
-          artist: 'Taylor Swift',
-          album: '1989',
-          duration: Duration(minutes: 3, seconds: 51),
-          genres: ['Pop']),
-      MusicTrack(
-          id: 'demo-catalog-track-1989-shake-it-off',
-          title: 'Shake It Off',
-          artist: 'Taylor Swift',
-          album: '1989',
-          duration: Duration(minutes: 3, seconds: 39),
-          genres: ['Pop']),
-      MusicTrack(
-          id: 'demo-catalog-track-rare-rare',
-          title: 'Rare',
-          artist: 'Selena Gomez',
-          album: 'Rare',
-          duration: Duration(minutes: 3, seconds: 40),
-          genres: ['Pop', 'Dance Pop']),
-      MusicTrack(
-          id: 'demo-catalog-track-rare-lose-you-to-love-me',
-          title: 'Lose You to Love Me',
-          artist: 'Selena Gomez',
-          album: 'Rare',
-          duration: Duration(minutes: 3, seconds: 26),
-          genres: ['Pop']),
-      MusicTrack(
-          id: 'demo-catalog-track-rare-look-at-her-now',
-          title: 'Look at Her Now',
-          artist: 'Selena Gomez',
-          album: 'Rare',
-          duration: Duration(minutes: 2, seconds: 55),
-          genres: ['Pop']),
-      MusicTrack(
-          id: 'demo-catalog-track-yhlqmdlg-la-dificil',
-          title: 'La Difícil',
-          artist: 'Bad Bunny',
-          album: 'YHLQMDLG',
-          duration: Duration(minutes: 2, seconds: 43),
-          genres: ['Latin', 'Reggaeton']),
-      MusicTrack(
-          id: 'demo-catalog-track-yhlqmdlg-yo-perreo-sola',
-          title: 'Yo Perreo Sola',
-          artist: 'Bad Bunny',
-          album: 'YHLQMDLG',
-          duration: Duration(minutes: 2, seconds: 52),
-          genres: ['Latin', 'Reggaeton']),
-      MusicTrack(
-          id: 'demo-catalog-track-yhlqmdlg-safaera',
-          title: 'Safaera',
-          artist: 'Bad Bunny',
-          album: 'YHLQMDLG',
-          duration: Duration(minutes: 4, seconds: 55),
-          genres: ['Latin', 'Reggaeton', 'Latin Trap']),
-      MusicTrack(
-          id: 'demo-catalog-track-colores-amarillo',
-          title: 'Amarillo',
-          artist: 'J Balvin',
-          album: 'Colores',
-          duration: Duration(minutes: 2, seconds: 37),
-          genres: ['Latin', 'Reggaeton']),
-      MusicTrack(
-          id: 'demo-catalog-track-colores-azul',
-          title: 'Azul',
-          artist: 'J Balvin',
-          album: 'Colores',
-          duration: Duration(minutes: 3, seconds: 25),
-          genres: ['Latin', 'Reggaeton']),
-      MusicTrack(
-          id: 'demo-catalog-track-colores-rojo',
-          title: 'Rojo',
-          artist: 'J Balvin',
-          album: 'Colores',
-          duration: Duration(minutes: 2, seconds: 30),
-          genres: ['Latin', 'Reggaeton']),
+      MusicTrack(id: 'demo-catalog-track-1989-blank-space', title: 'Blank Space', artist: 'Taylor Swift', album: '1989', duration: Duration(minutes: 3, seconds: 51), genres: ['Pop']),
+      MusicTrack(id: 'demo-catalog-track-1989-style', title: 'Style', artist: 'Taylor Swift', album: '1989', duration: Duration(minutes: 3, seconds: 51), genres: ['Pop']),
+      MusicTrack(id: 'demo-catalog-track-1989-shake-it-off', title: 'Shake It Off', artist: 'Taylor Swift', album: '1989', duration: Duration(minutes: 3, seconds: 39), genres: ['Pop']),
+      MusicTrack(id: 'demo-catalog-track-rare-rare', title: 'Rare', artist: 'Selena Gomez', album: 'Rare', duration: Duration(minutes: 3, seconds: 40), genres: ['Pop', 'Dance Pop']),
+      MusicTrack(id: 'demo-catalog-track-rare-lose-you-to-love-me', title: 'Lose You to Love Me', artist: 'Selena Gomez', album: 'Rare', duration: Duration(minutes: 3, seconds: 26), genres: ['Pop']),
+      MusicTrack(id: 'demo-catalog-track-rare-look-at-her-now', title: 'Look at Her Now', artist: 'Selena Gomez', album: 'Rare', duration: Duration(minutes: 2, seconds: 55), genres: ['Pop']),
+      MusicTrack(id: 'demo-catalog-track-yhlqmdlg-la-dificil', title: 'La Difícil', artist: 'Bad Bunny', album: 'YHLQMDLG', duration: Duration(minutes: 2, seconds: 43), genres: ['Latin', 'Reggaeton']),
+      MusicTrack(id: 'demo-catalog-track-yhlqmdlg-yo-perreo-sola', title: 'Yo Perreo Sola', artist: 'Bad Bunny', album: 'YHLQMDLG', duration: Duration(minutes: 2, seconds: 52), genres: ['Latin', 'Reggaeton']),
+      MusicTrack(id: 'demo-catalog-track-yhlqmdlg-safaera', title: 'Safaera', artist: 'Bad Bunny', album: 'YHLQMDLG', duration: Duration(minutes: 4, seconds: 55), genres: ['Latin', 'Reggaeton', 'Latin Trap']),
+      MusicTrack(id: 'demo-catalog-track-colores-amarillo', title: 'Amarillo', artist: 'J Balvin', album: 'Colores', duration: Duration(minutes: 2, seconds: 37), genres: ['Latin', 'Reggaeton']),
+      MusicTrack(id: 'demo-catalog-track-colores-azul', title: 'Azul', artist: 'J Balvin', album: 'Colores', duration: Duration(minutes: 3, seconds: 25), genres: ['Latin', 'Reggaeton']),
+      MusicTrack(id: 'demo-catalog-track-colores-rojo', title: 'Rojo', artist: 'J Balvin', album: 'Colores', duration: Duration(minutes: 2, seconds: 30), genres: ['Latin', 'Reggaeton']),
     ];
     for (final example in catalogExampleTracks) {
       if (!tracks.any((track) => track.id == example.id)) tracks.add(example);
@@ -851,8 +779,7 @@ class MusicPlaybackController extends ChangeNotifier {
     if (!controller.value.isCompleted || _advancing) return;
 
     final finishedTrack = currentTrack;
-    if (finishedTrack != null &&
-        !_wrappedCompletionRecordedForCurrentPlayback) {
+    if (finishedTrack != null && !_wrappedCompletionRecordedForCurrentPlayback) {
       _wrappedCompletionRecordedForCurrentPlayback = true;
       unawaited(AppController.instance.recordWrappedActivityDetails(
         mediaId: finishedTrack.id,
@@ -1304,8 +1231,7 @@ class _MusicScreenState extends State<MusicScreen> {
           onItemTap: (albumTitle) {
             final match = AppController.instance.library.where((media) =>
                 media.type.toLowerCase().contains('album') &&
-                media.title.trim().toLowerCase() ==
-                    albumTitle.trim().toLowerCase());
+                media.title.trim().toLowerCase() == albumTitle.trim().toLowerCase());
             if (match.isNotEmpty) {
               Navigator.of(context).push(MaterialPageRoute<void>(
                 settings: const RouteSettings(name: '/app/page/album-details'),
@@ -1313,15 +1239,12 @@ class _MusicScreenState extends State<MusicScreen> {
               ));
             } else {
               final artistTrack = library.tracks.firstWhere(
-                (track) =>
-                    track.album.trim().toLowerCase() ==
-                    albumTitle.trim().toLowerCase(),
+                (track) => track.album.trim().toLowerCase() == albumTitle.trim().toLowerCase(),
                 orElse: () => library.tracks.first,
               );
               Navigator.of(context).push(MaterialPageRoute<void>(
                 settings: const RouteSettings(name: '/app/page/artist-details'),
-                builder: (_) =>
-                    MusicArtistProfileScreen(artistName: artistTrack.artist),
+                builder: (_) => MusicArtistProfileScreen(artistName: artistTrack.artist),
               ));
             }
           },
@@ -2741,16 +2664,14 @@ class MusicArtistProfileScreen extends StatelessWidget {
             track.id.startsWith('demo-catalog-track-') ||
             track.id.startsWith('demo-preview-album-track-');
         final catalogSampleTracks = primary.where(isCatalogSample).length;
-        final indexedTracks =
-            primary.where((track) => !isCatalogSample(track)).length;
+        final indexedTracks = primary.where((track) => !isCatalogSample(track)).length;
         final catalogSampleAlbums = <String>{
           for (final track in primary)
             if (isCatalogSample(track)) track.album.trim(),
         }.where((album) => album.isNotEmpty).length;
         final indexedAlbums = <String>{
           for (final track in primary)
-            if (!isCatalogSample(track) && track.album.trim().isNotEmpty)
-              track.album.trim(),
+            if (!isCatalogSample(track) && track.album.trim().isNotEmpty) track.album.trim(),
         }.length;
         final playablePrimary = primary
             .where((track) => (track.audioUrl ?? '').trim().isNotEmpty)
@@ -2865,8 +2786,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
                       Expanded(
                           child: TabBarView(children: [
                         _trackList(context, primary,
-                            emptyMessage:
-                                'No imported tracks or catalog examples found for this artist.'),
+                            emptyMessage: 'No imported tracks or catalog examples found for this artist.'),
                         _albumList(context, albums),
                         _trackList(context, popular,
                             emptyMessage:
@@ -3019,8 +2939,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
                             if ((track.audioUrl ?? '').trim().isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content: Text(
-                                          'Catalog example only — import this track to add playable audio.')));
+                                      content: Text('Catalog example only — import this track to add playable audio.')));
                               return;
                             }
                             MusicLibraryStore.instance.addToQueue(track);
@@ -3047,8 +2966,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
               onTap: () {
                 if ((track.audioUrl ?? '').trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text(
-                        'Catalog example only — no audio file is attached. Import your own copy to play it.'),
+                    content: Text('Catalog example only — no audio file is attached. Import your own copy to play it.'),
                   ));
                   return;
                 }
@@ -3073,11 +2991,9 @@ class MusicArtistProfileScreen extends StatelessWidget {
           title: Text(name),
           subtitle: Text(() {
             final albumTracks = albums[name]!;
-            final sampleCount = albumTracks
-                .where((track) =>
-                    track.id.startsWith('demo-catalog-track-') ||
-                    track.id.startsWith('demo-preview-album-track-'))
-                .length;
+            final sampleCount = albumTracks.where((track) =>
+                track.id.startsWith('demo-catalog-track-') ||
+                track.id.startsWith('demo-preview-album-track-')).length;
             final indexedCount = albumTracks.length - sampleCount;
             return <String>[
               if (indexedCount > 0) '$indexedCount indexed tracks',
@@ -3115,20 +3031,13 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                     fontSize: 20, fontWeight: FontWeight.bold)),
                             subtitle: Text(() {
                               final albumTracks = albums[name]!;
-                              final sampleCount = albumTracks
-                                  .where((track) =>
-                                      track.id
-                                          .startsWith('demo-catalog-track-') ||
-                                      track.id.startsWith(
-                                          'demo-preview-album-track-'))
-                                  .length;
-                              final indexedCount =
-                                  albumTracks.length - sampleCount;
+                              final sampleCount = albumTracks.where((track) =>
+                                  track.id.startsWith('demo-catalog-track-') ||
+                                  track.id.startsWith('demo-preview-album-track-')).length;
+                              final indexedCount = albumTracks.length - sampleCount;
                               return <String>[
-                                if (indexedCount > 0)
-                                  '$indexedCount indexed tracks',
-                                if (sampleCount > 0)
-                                  '$sampleCount catalog examples without audio',
+                                if (indexedCount > 0) '$indexedCount indexed tracks',
+                                if (sampleCount > 0) '$sampleCount catalog examples without audio',
                               ].join(' • ');
                             }()),
                             trailing: IconButton(
@@ -3170,46 +3079,33 @@ class MusicArtistProfileScreen extends StatelessWidget {
                                                           track.artist)))),
                                   IconButton(
                                       tooltip: 'Add playable track to queue',
-                                      icon:
-                                          const Icon(Icons.queue_music_rounded),
+                                      icon: const Icon(Icons.queue_music_rounded),
                                       onPressed: () {
-                                        if ((track.audioUrl ?? '')
-                                            .trim()
-                                            .isEmpty) {
-                                          ScaffoldMessenger.of(ctx)
-                                              .showSnackBar(const SnackBar(
-                                            content: Text(
-                                                'Catalog example only — import this track to add playable audio.'),
+                                        if ((track.audioUrl ?? '').trim().isEmpty) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                                            content: Text('Catalog example only — import this track to add playable audio.'),
                                           ));
                                           return;
                                         }
-                                        MusicLibraryStore.instance
-                                            .addToQueue(track);
+                                        MusicLibraryStore.instance.addToQueue(track);
                                       }),
                                   IconButton(
                                       tooltip: 'Play track',
                                       icon: const Icon(Icons.play_arrow),
                                       onPressed: () {
-                                        if ((track.audioUrl ?? '')
-                                            .trim()
-                                            .isEmpty) {
-                                          ScaffoldMessenger.of(ctx)
-                                              .showSnackBar(const SnackBar(
-                                            content: Text(
-                                                'Catalog example only — no audio file is attached.'),
+                                        if ((track.audioUrl ?? '').trim().isEmpty) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                                            content: Text('Catalog example only — no audio file is attached.'),
                                           ));
                                           return;
                                         }
-                                        MusicPlaybackController.instance
-                                            .play(track);
+                                        MusicPlaybackController.instance.play(track);
                                       })
                                 ]),
                                 onTap: () {
                                   if ((track.audioUrl ?? '').trim().isEmpty) {
-                                    ScaffoldMessenger.of(ctx)
-                                        .showSnackBar(const SnackBar(
-                                      content: Text(
-                                          'Catalog example only — no audio file is attached.'),
+                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                                      content: Text('Catalog example only — no audio file is attached.'),
                                     ));
                                     return;
                                   }
@@ -3454,8 +3350,8 @@ class MusicAiDjScreen extends StatelessWidget {
         var value = (store.listenCounts[track.id] ?? 0) * 4;
         if (likedIds.contains(track.id)) value += 6;
         if (current != null &&
-            track.genres.any((genre) => current.genres.any(
-                (active) => active.toLowerCase() == genre.toLowerCase()))) {
+            track.genres.any((genre) => current.genres
+                .any((active) => active.toLowerCase() == genre.toLowerCase()))) {
           value += 3;
         }
         if (current != null &&

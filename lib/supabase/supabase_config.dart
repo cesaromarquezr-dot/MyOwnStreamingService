@@ -1,34 +1,19 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/config/app_env.dart';
 /// Optional Supabase configuration.
 ///
-/// Pass values with:
-/// --dart-define=SUPABASE_URL=https://your-project.supabase.co
-/// --dart-define=SUPABASE_PUBLISHABLE_KEY=...
+/// Primary configuration is the project-root .env file:
+/// SUPABASE_URL=https://your-project.supabase.co
+/// SUPABASE_PUBLISHABLE_KEY=...
 ///
-/// Legacy SUPABASE_ANON_KEY is accepted as a fallback during migration.
+/// Existing --dart-define settings and legacy SUPABASE_ANON_KEY remain supported.
 class SupabaseConfig {
-  /// Supabase project URL.
-  ///
-  /// Example:
-  /// https://your-project.supabase.co
-  ///
-  /// Do not include `/rest/v1/`.
-  static const url = String.fromEnvironment(
-    'SUPABASE_URL',
-    defaultValue: '',
-  );
+  /// Project URL loaded from .env, with dart-define as a fallback.
+  static String get url => AppEnv.supabaseUrl;
 
-  /// Supabase publishable key.
-  ///
-  /// Falls back to the legacy SUPABASE_ANON_KEY environment variable
-  /// during migration.
-  static const publishableKey = String.fromEnvironment(
-    'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: String.fromEnvironment(
-      'SUPABASE_ANON_KEY',
-      defaultValue: '',
-    ),
-  );
+  /// Client publishable/anon key. Never use a service-role key in Flutter.
+  static String get publishableKey => AppEnv.supabasePublishableKey;
 
   /// Whether the required Supabase configuration is available.
   static bool get isConfigured =>

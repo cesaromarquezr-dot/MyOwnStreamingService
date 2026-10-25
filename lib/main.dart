@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
@@ -31,6 +32,7 @@ import 'home_server.dart';
 import 'home_widgets.dart';
 import 'home_streaming_discovery.dart';
 import 'cinematic_discovery_studio.dart';
+import 'channel_center.dart';
 import 'home_arrow_rail.dart';
 import 'recommendation_ownership.dart';
 import 'home_franchise_progress.dart';
@@ -70,7 +72,14 @@ import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
 
 Future<void> main() async {
+  await dotenv.load(fileName: '.env');
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: '.env', isOptional: true);
+  } catch (error) {
+    // Configuration is optional. Do not log environment values or credentials.
+    debugPrint('Optional .env configuration could not be loaded: $error');
+  }
   await SelfDrivingNetworkMonitor.instance.initialize();
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
@@ -5926,6 +5935,7 @@ class _HomeScreenState extends State<HomeScreen>
             // Franchise/saga and cinematic-universe progress live near the
             // top of Home so completion status is visible without opening Explore.
             const SliverToBoxAdapter(child: HomeFranchiseSagaHub()),
+            const SliverToBoxAdapter(child: HomeChannelsSection()),
             const SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf()),
             SliverToBoxAdapter(
               child: AccountProfileActivityStrip(
@@ -5983,6 +5993,12 @@ class _HomeScreenState extends State<HomeScreen>
                     watched: watched,
                   ),
                 ),
+                SliverToBoxAdapter(
+                  child: HomeBecauseYouWatchedPeopleShelves(
+                    library: library,
+                    watched: watched,
+                  ),
+                ),
               ],
             ],
             if (!settings.sectionOrder.contains('Continue Watching')) ...[
@@ -5994,6 +6010,12 @@ class _HomeScreenState extends State<HomeScreen>
               const SliverToBoxAdapter(child: HomeCollectionShelves()),
               SliverToBoxAdapter(
                 child: HomeReasonedRecommendationShelves(
+                  library: library,
+                  watched: watched,
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: HomeBecauseYouWatchedPeopleShelves(
                   library: library,
                   watched: watched,
                 ),

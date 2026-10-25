@@ -22,6 +22,19 @@ class DetailsRecommendationsSection extends StatelessWidget {
       .where((value) => value.isNotEmpty)
       .toSet();
 
+  bool _sameWorkAsSource(MediaItem candidate) {
+    final normalize = RecommendationOwnershipMatcher.normalizeTitle;
+    if (normalize(source.title) != normalize(candidate.title) ||
+        normalize(source.title).isEmpty ||
+        source.isSeries != candidate.isSeries) {
+      return false;
+    }
+    final sourceYear = source.releaseYear ?? source.seriesStartYear;
+    final candidateYear = candidate.releaseYear ?? candidate.seriesStartYear;
+    return sourceYear == null || candidateYear == null ||
+        sourceYear == candidateYear;
+  }
+
   int _score(MediaItem candidate) {
     var score = 0;
     if (source.franchiseId != null &&
@@ -69,7 +82,12 @@ class DetailsRecommendationsSection extends StatelessWidget {
       if (item.id == source.id ||
           item.id.trim().isEmpty ||
           !item.isAccessibleTo(controller.currentProfile) ||
-          isExcludedEntertainmentType(item.type)) {
+          isExcludedEntertainmentType(item.type) ||
+          RecommendationOwnershipMatcher.isMediaOwned(
+            media: item,
+            controller: controller,
+          ) ||
+          _sameWorkAsSource(item)) {
         continue;
       }
       byId.putIfAbsent(item.id, () => item);
