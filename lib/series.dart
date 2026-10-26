@@ -2,8 +2,6 @@
 // Purpose: Implements the series portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -14,7 +12,7 @@ import 'page_customization_button.dart';
 import 'international_catalog_shelf.dart';
 import 'media_metadata_catalog_screen.dart';
 import 'catalog_poster_image.dart';
-import 'browse_page_hero_settings.dart';
+import 'library_view_modes.dart';
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -29,8 +27,10 @@ class _SeriesScreenState extends State<SeriesScreen>
 
   String _searchQuery = '';
   String _sortMode = 'Default';
-  int _heroIndex = 0;
-  Timer? _heroTimer;
+  LibraryViewMode _viewMode = LibraryViewPreferenceStore.get(
+    'shows',
+    fallback: LibraryViewMode.grid,
+  );
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -39,9 +39,6 @@ class _SeriesScreenState extends State<SeriesScreen>
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
-    BrowsePageHeroPreferenceStore.revision
-        .addListener(_onHeroPreferenceChanged);
-    _syncHeroTimer();
 
     _animationController = AnimationController(
       vsync: this,
@@ -51,37 +48,9 @@ class _SeriesScreenState extends State<SeriesScreen>
     _animationController.forward();
   }
 
-  void _onHeroPreferenceChanged() {
-    if (!mounted) return;
-    _syncHeroTimer();
-    setState(() {});
-  }
-
-  void _syncHeroTimer() {
-    _heroTimer?.cancel();
-    final preference = BrowsePageHeroPreferenceStore.settingsFor(
-      pageId: 'series',
-      profileId: AppController.instance.currentProfile?.id,
-    );
-    _heroIndex = 0;
-    if (!preference.showHero) return;
-    _heroTimer = Timer.periodic(
-      const Duration(
-        seconds: BrowsePageHeroPreference.autoSlideIntervalSeconds,
-      ),
-      (_) {
-        if (!mounted) return;
-        setState(() => _heroIndex++);
-      },
-    );
-  }
-
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
-    BrowsePageHeroPreferenceStore.revision
-        .removeListener(_onHeroPreferenceChanged);
-    _heroTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -324,19 +293,25 @@ class _SeriesScreenState extends State<SeriesScreen>
         .where((show) => show.tags.contains('international-catalog'))
         .toList(growable: false);
 
-    final heroPreference = BrowsePageHeroPreferenceStore.settingsFor(
-      pageId: 'series',
-      profileId: AppController.instance.currentProfile?.id,
-    );
-    final featuredShow = shows.isNotEmpty
-        ? shows[_heroIndex % shows.length]
-        : null;
-    final heroVisible = heroPreference.showHero &&
-        _searchQuery.trim().isEmpty &&
-        featuredShow != null;
-    final remainingShows = heroVisible
-        ? shows.where((show) => show.id != featuredShow.id).toList()
-        : List<MediaItem>.from(shows);
+    final useFeaturedGrid = _viewMode == LibraryViewMode.grid &&
+        _searchQuery.trim().isEmpty;
+    final featuredShow = useFeaturedGrid && shows.isNotEmpty ? shows.first : null;
+    final remainingShows = useFeaturedGrid && shows.length > 1
+        ? shows.sublist(1)
+        : (useFeaturedGrid ? <MediaItem>[] : shows);
+    final viewEntries = remainingShows.map((show) => LibraryViewEntry(
+      title: show.title,
+      subtitle: [
+        if (show.seriesStartYear != null || show.releaseYear != null)
+          (show.seriesStartYear ?? show.releaseYear).toString(),
+        if (show.genres.isNotEmpty) show.genres.take(2).join(' · '),
+        show.type,
+      ].where((part) => part.trim().isNotEmpty).join(' · '),
+      year: show.seriesStartYear ?? show.releaseYear,
+      artworkBuilder: (context, fit) => CatalogPosterImage(media: show, fit: fit),
+      fallbackIcon: Icons.live_tv_outlined,
+      onTap: () => _openShow(show),
+    )).toList(growable: false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
@@ -390,32 +365,29 @@ class _SeriesScreenState extends State<SeriesScreen>
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(),
                     slivers: [
-                      if (_searchQuery.trim().isEmpty && internationalShows.isNotEmpty)
+                      if (_searchQuery.trim().isEmpty && _viewMode == LibraryViewMode.grid && internationalShows.isNotEmpty)
                         SliverToBoxAdapter(
                           child: InternationalCatalogShelf(
                             title: 'International Shows',
                             items: internationalShows,
                           ),
                         ),
-                      if (heroVisible)
+                      if (featuredShow != null)
                         SliverToBoxAdapter(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 450),
-                            child: KeyedSubtree(
-                              key: ValueKey<String>(
-                                'show-hero-${featuredShow.id}',
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-                                child: _FeaturedShow(
-                                  show: featuredShow,
-                                  onTap: () => _openShow(featuredShow),
-                                ),
-                              ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              18,
+                              18,
+                              18,
+                              28,
+                            ),
+                            child: _FeaturedShow(
+                              show: featuredShow,
+                              onTap: () => _openShow(featuredShow),
                             ),
                           ),
                         ),
-                      if (shows.any((show) => show.tvIntros.isNotEmpty))
+                      if (_viewMode == LibraryViewMode.grid && _searchQuery.trim().isEmpty && shows.any((show) => show.tvIntros.isNotEmpty))
                         SliverToBoxAdapter(
                           child: _TvIntrosSection(
                             shows: shows.where((show) => show.tvIntros.isNotEmpty).toList(),
@@ -468,6 +440,17 @@ class _SeriesScreenState extends State<SeriesScreen>
                           ),
                         ),
                       ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          child: LibraryViewModePicker(
+                            scope: 'shows',
+                            value: _viewMode,
+                            onChanged: (mode) => setState(() => _viewMode = mode),
+                            compact: true,
+                          ),
+                        ),
+                      ),
                       if (remainingShows.isEmpty &&
                           _searchQuery.trim().isNotEmpty)
                         const SliverToBoxAdapter(
@@ -477,6 +460,14 @@ class _SeriesScreenState extends State<SeriesScreen>
                               vertical: 70,
                             ),
                             child: _NoSearchResults(),
+                          ),
+                        )
+                      else if (_viewMode != LibraryViewMode.grid)
+                        SliverToBoxAdapter(
+                          child: LibraryCollectionView(
+                            entries: viewEntries,
+                            mode: _viewMode,
+                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
                           ),
                         )
                       else

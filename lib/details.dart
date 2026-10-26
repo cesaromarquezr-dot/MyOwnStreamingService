@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
+import 'cinematic_title.dart';
 import 'artwork_gallery_screen.dart';
 import 'artwork_selection_store.dart';
 import 'reviews.dart';
@@ -1903,15 +1904,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   Widget _buildTitle() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
-      child: Text(
-        media.title,
+      child: CinematicTitle(
+        media: media,
+        placement: CinematicTitlePlacement.detail,
         textAlign: _textAlignment(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 32,
-          fontWeight: FontWeight.w900,
-          height: 1.05,
-        ),
+        maxWidth: 680,
+        height: MediaQuery.sizeOf(context).width < 600 ? 76 : 96,
       ),
     );
   }

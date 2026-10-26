@@ -9,6 +9,9 @@ class CinematicTitleMetadataService {
 
   static const String imageBaseUrl = 'https://image.tmdb.org/t/p';
 
+  // Per-process cache keeps hero/detail rebuilds from repeatedly searching TMDB.
+  static final Map<String, Future<String?>> _titleLogoCache = <String, Future<String?>>{};
+
   /// TMDB requests are available when the app has an authenticated backend
   /// session; API credentials live only in Backend/.env.
   static bool get isConfigured => AppController.instance.isBackendAuthenticated;
@@ -21,6 +24,97 @@ class CinematicTitleMetadataService {
       return cleaned;
     }
     return '$imageBaseUrl/$size/${cleaned.startsWith('/') ? cleaned.substring(1) : cleaned}';
+  }
+
+
+  /// Discovers a TMDB title logo for a movie or series without replacing the
+  /// title in the catalog. Results are cached for this app process. The caller
+  /// must have explicit artwork authorization before displaying this asset.
+  static Future<String?> lookupTitleLogo({
+    required String title,
+    required bool isTv,
+    int? year,
+  }) {
+    final cleanTitle = title.trim();
+    if (cleanTitle.isEmpty || !isConfigured) return Future<String?>.value(null);
+    final cacheKey = '${isTv ? 'tv' : 'movie'}|${_normalize(cleanTitle)}|${year ?? ''}';
+    return _titleLogoCache.putIfAbsent(cacheKey, () async {
+      try {
+        final searchPath = isTv ? '/search/tv' : '/search/movie';
+        var search = await _get(searchPath, <String, String>{
+          'query': cleanTitle,
+          'include_adult': 'false',
+          'page': '1',
+          'language': 'en-US',
+          if (year != null) (isTv ? 'first_air_date_year' : 'year'): '$year',
+        });
+        var match = _findExactMatch(search['results'], cleanTitle, isTv);
+        if (match == null && year != null) {
+          search = await _get(searchPath, <String, String>{
+            'query': cleanTitle,
+            'include_adult': 'false',
+            'page': '1',
+            'language': 'en-US',
+          });
+          match = _findExactMatch(search['results'], cleanTitle, isTv);
+        }
+        final providerId = _toInt(match?['id']);
+        if (providerId == null) return null;
+        final originalLanguage = _cleanNullable(match?['original_language']);
+        final imagePayload = await _get(
+          isTv ? '/tv/$providerId/images' : '/movie/$providerId/images',
+          <String, String>{
+            'include_image_language': <String?>[
+              originalLanguage,
+              'en',
+              'null',
+            ].whereType<String>().where((value) => value.isNotEmpty).toSet().join(','),
+            'language': 'en-US',
+          },
+        );
+        final logoPath = selectBestLogoPath(
+          imagePayload['logos'],
+          originalLanguage: originalLanguage,
+        );
+        return imageUrl(logoPath, size: 'original');
+      } catch (_) {
+        // Artwork is optional; keep the regular styled-text title available.
+        return null;
+      }
+    });
+  }
+
+  /// Selects the most useful logo while preferring the work's original
+  /// language, then language-neutral artwork, then English. Exposed separately
+  /// so the ranking can be unit tested without network calls.
+  static String? selectBestLogoPath(
+    dynamic rawLogos, {
+    String? originalLanguage,
+  }) {
+    final logos = _listOfMaps(rawLogos).where((row) {
+      final path = row['file_path']?.toString().trim() ?? '';
+      return path.isNotEmpty && path.startsWith('/');
+    }).toList();
+    if (logos.isEmpty) return null;
+    final preferredLanguage = (originalLanguage ?? '').trim().toLowerCase();
+    int languageRank(Map<String, dynamic> row) {
+      final lang = (row['iso_639_1'] ?? '').toString().trim().toLowerCase();
+      if (preferredLanguage.isNotEmpty && lang == preferredLanguage) return 0;
+      if (lang.isEmpty || lang == 'null') return 1;
+      if (lang == 'en') return 2;
+      return 3;
+    }
+    logos.sort((a, b) {
+      final languageDifference = languageRank(a).compareTo(languageRank(b));
+      if (languageDifference != 0) return languageDifference;
+      final aVotes = _toInt(a['vote_count']) ?? 0;
+      final bVotes = _toInt(b['vote_count']) ?? 0;
+      if (aVotes != bVotes) return bVotes.compareTo(aVotes);
+      final aWidth = _toInt(a['width']) ?? 0;
+      final bWidth = _toInt(b['width']) ?? 0;
+      return bWidth.compareTo(aWidth);
+    });
+    return logos.first['file_path']?.toString();
   }
 
   /// Lightweight overview lookup for Home hero banners. Unlike [lookupTitle],
@@ -109,6 +203,12 @@ class CinematicTitleMetadataService {
     final credits = _asMap(details['credits']);
     final castRows = _listOfMaps(credits['cast']);
     final crewRows = _listOfMaps(credits['crew']);
+    // Keep the complete sourced cast credit (character and portrait included)
+    // for X-Ray. The simpler name/character lists remain for existing callers.
+    final castCredits = castRows
+        .map(CinematicCastCredit.fromJson)
+        .where((credit) => credit.name.isNotEmpty)
+        .toList(growable: false);
 
     final cast = <String>[];
     final characters = <String>[];
@@ -160,6 +260,12 @@ class CinematicTitleMetadataService {
     final imagePayload = _asMap(details['images']);
     final externalIds = _asMap(details['external_ids']);
 
+    final logoRows = _listOfMaps(imagePayload['logos']);
+    final rankedLogoPaths = <String?>[
+      selectBestLogoPath(logoRows, originalLanguage: details['original_language']?.toString()),
+      ...logoRows.map((row) => row['file_path']?.toString()),
+    ];
+    final logoPaths = _uniqueStrings(rankedLogoPaths);
     final posterPaths = _uniqueStrings(<String?>[
       details['poster_path']?.toString(),
       ..._listOfMaps(imagePayload['posters'])
@@ -234,10 +340,12 @@ class CinematicTitleMetadataService {
       keywords: keywords,
       posterPaths: posterPaths,
       backdropPaths: backdropPaths,
+      logoPaths: logoPaths,
       videos: videos,
       reviews: reviews,
       cast: cast,
       characters: characters,
+      castCredits: castCredits,
       directors: directors,
       writers: writers,
       music: music,
@@ -611,10 +719,12 @@ class CinematicTitleMetadata {
     required this.keywords,
     required this.posterPaths,
     required this.backdropPaths,
+    required this.logoPaths,
     required this.videos,
     required this.reviews,
     required this.cast,
     required this.characters,
+    required this.castCredits,
     required this.directors,
     required this.writers,
     required this.music,
@@ -643,10 +753,14 @@ class CinematicTitleMetadata {
   final List<String> keywords;
   final List<String> posterPaths;
   final List<String> backdropPaths;
+  /// TMDB transparent title-logo image paths, with the best language match first.
+  final List<String> logoPaths;
   final List<CinematicTitleVideo> videos;
   final List<CinematicTitleReview> reviews;
   final List<String> cast;
   final List<String> characters;
+  /// Sourced cast credits with roles and portrait paths, suitable for X-Ray.
+  final List<CinematicCastCredit> castCredits;
   final List<String> directors;
   final List<String> writers;
   final List<String> music;
@@ -656,6 +770,43 @@ class CinematicTitleMetadata {
         backdropPath,
         size: 'w780',
       );
+
+  String? get logoUrl => logoPaths.isEmpty
+      ? null
+      : CinematicTitleMetadataService.imageUrl(logoPaths.first, size: 'original');
+}
+
+/// A verified cast credit returned by TMDB for one exact movie or TV title.
+class CinematicCastCredit {
+  const CinematicCastCredit({
+    required this.personId,
+    required this.name,
+    required this.character,
+    required this.profilePath,
+    required this.order,
+  });
+
+  final int? personId;
+  final String name;
+  final String character;
+  final String? profilePath;
+  final int order;
+
+  factory CinematicCastCredit.fromJson(Map<String, dynamic> row) {
+    final personIdValue = row['id'];
+    final orderValue = row['order'];
+    return CinematicCastCredit(
+      personId: personIdValue is int
+          ? personIdValue
+          : int.tryParse(personIdValue?.toString() ?? ''),
+      name: row['name']?.toString().trim() ?? '',
+      character: row['character']?.toString().trim() ?? '',
+      profilePath: row['profile_path']?.toString(),
+      order: orderValue is int
+          ? orderValue
+          : int.tryParse(orderValue?.toString() ?? '') ?? 9999,
+    );
+  }
 }
 
 /// A TMDB-powered movie or television recommendation.
@@ -750,8 +901,12 @@ class CinematicTitleVideo {
 
   String? get url {
     final normalizedSite = site.toLowerCase();
-    if (normalizedSite == 'youtube') return 'https://www.youtube.com/watch?v=$key';
-    if (normalizedSite == 'vimeo') return 'https://vimeo.com/$key';
+    if (normalizedSite == 'youtube') {
+      return 'https://www.youtube.com/watch?v=$key';
+    }
+    if (normalizedSite == 'vimeo') {
+      return 'https://vimeo.com/$key';
+    }
     return null;
   }
 
@@ -788,20 +943,36 @@ class CinematicTitleReview {
   final String? url;
 
   factory CinematicTitleReview.fromJson(Map<String, dynamic> json) {
-    final authorDetails = json['author_details'] is Map
-        ? Map<String, dynamic>.from(json['author_details'] as Map)
-        : <String, dynamic>{};
-    final authorName = (authorDetails['name'] ?? json['author'] ??
-            authorDetails['username'] ?? 'TMDB user')
-        .toString()
-        .trim();
+    // Keep the decoded JSON dynamic values separate from their parsed form.
+    // Some API responses omit author_details or send it as null/non-map data.
+    final rawAuthorDetails = json['author_details'];
+    final Map<String, dynamic> authorDetails = <String, dynamic>{};
+    if (rawAuthorDetails is Map) {
+      for (final entry in rawAuthorDetails.entries) {
+        authorDetails[entry.key.toString()] = entry.value;
+      }
+    }
+
+    var authorName = 'TMDB user';
+    for (final candidate in <dynamic>[
+      authorDetails['name'],
+      json['author'],
+      authorDetails['username'],
+    ]) {
+      final value = candidate?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        authorName = value;
+        break;
+      }
+    }
+
     final rawRating = authorDetails['rating'];
     final rating = rawRating is num
         ? rawRating.toDouble()
         : double.tryParse(rawRating?.toString() ?? '');
     return CinematicTitleReview(
       id: _reviewText(json['id']),
-      author: authorName.isEmpty ? 'TMDB user' : authorName,
+      author: authorName,
       content: json['content']?.toString() ?? '',
       rating: rating,
       createdAt: _reviewText(json['created_at']),

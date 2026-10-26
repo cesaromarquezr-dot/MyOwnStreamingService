@@ -94,6 +94,15 @@ class MediaItem {
   final String? titleStyleKey;
   /// Optional #RRGGBB or #AARRGGBB accent for the styled-text fallback.
   final String? titleAccentColor;
+  /// Optional persisted per-title typography overrides from external_media_catalog.
+  final String? titleFontFamily;
+  final String? titleFontFallbackFamily;
+  final double? titleFontSize;
+  final int? titleFontWeight;
+  final double? titleFontLetterSpacing;
+  final String? titleFontColor;
+  final String? titleFontShadowColor;
+  final double? titleFontShadowBlur;
   /// Controls cinematic reveal animation; reduced-motion OS settings still take priority.
   final bool titleRevealAnimation;
 
@@ -341,6 +350,14 @@ class MediaItem {
     this.titleArtworkMode = 'auto',
     this.titleStyleKey,
     this.titleAccentColor,
+    this.titleFontFamily,
+    this.titleFontFallbackFamily,
+    this.titleFontSize,
+    this.titleFontWeight,
+    this.titleFontLetterSpacing,
+    this.titleFontColor,
+    this.titleFontShadowColor,
+    this.titleFontShadowBlur,
     this.titleRevealAnimation = true,
     this.heroTitleArtworkMode = 'inherit',
     this.detailTitleArtworkMode = 'inherit',
@@ -560,6 +577,14 @@ class MediaItem {
       titleArtworkMode: (data['titleArtworkMode'] ?? data['title_artwork_mode'] ?? 'auto').toString(),
       titleStyleKey: (data['titleStyleKey'] ?? data['title_style_key'])?.toString(),
       titleAccentColor: (data['titleAccentColor'] ?? data['title_accent_color'])?.toString(),
+      titleFontFamily: (data['titleFontFamily'] ?? data['title_font_family'])?.toString(),
+      titleFontFallbackFamily: (data['titleFontFallbackFamily'] ?? data['title_font_fallback_family'])?.toString(),
+      titleFontSize: _doubleValue(data['titleFontSize'] ?? data['title_font_size']),
+      titleFontWeight: _intValue(data['titleFontWeight'] ?? data['title_font_weight']),
+      titleFontLetterSpacing: _doubleValue(data['titleFontLetterSpacing'] ?? data['title_font_letter_spacing']),
+      titleFontColor: (data['titleFontColor'] ?? data['title_font_color'])?.toString(),
+      titleFontShadowColor: (data['titleFontShadowColor'] ?? data['title_font_shadow_color'])?.toString(),
+      titleFontShadowBlur: _doubleValue(data['titleFontShadowBlur'] ?? data['title_font_shadow_blur']),
       titleRevealAnimation: (data.containsKey('titleRevealAnimation') || data.containsKey('title_reveal_animation'))
           ? _boolValue(data['titleRevealAnimation'] ?? data['title_reveal_animation'])
           : true,
@@ -789,6 +814,12 @@ class MediaItem {
               .toList()
           : <Map<String, dynamic>>[],
     );
+  }
+
+  static double? _doubleValue(dynamic value) {
+    if (value is num) return value.toDouble();
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : double.tryParse(text);
   }
 
   static int? _intValue(dynamic value) {
@@ -1168,6 +1199,14 @@ class MediaItem {
       'titleArtworkMode': titleArtworkMode,
       'titleStyleKey': titleStyleKey,
       'titleAccentColor': titleAccentColor,
+      'titleFontFamily': titleFontFamily,
+      'titleFontFallbackFamily': titleFontFallbackFamily,
+      'titleFontSize': titleFontSize,
+      'titleFontWeight': titleFontWeight,
+      'titleFontLetterSpacing': titleFontLetterSpacing,
+      'titleFontColor': titleFontColor,
+      'titleFontShadowColor': titleFontShadowColor,
+      'titleFontShadowBlur': titleFontShadowBlur,
       'titleRevealAnimation': titleRevealAnimation,
       'heroTitleArtworkMode': heroTitleArtworkMode,
       'detailTitleArtworkMode': detailTitleArtworkMode,

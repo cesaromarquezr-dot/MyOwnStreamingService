@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_core.dart';
+import 'cinematic_title_fonts.dart';
+import 'library_view_modes.dart';
 
 class MusicCatalogScreen extends StatefulWidget {
   const MusicCatalogScreen({super.key, this.initialQuery = ''});
@@ -339,7 +341,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
                 )
               : _placeholderArt(),
         ),
-        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: (isSpotifyAlbum || isMbAlbum) ? 'album' : kind, baseFontSize: 15, color: Colors.white)),
         subtitle: Text(subtitleParts.join(' · '), maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.3)),
         trailing: SizedBox(
           width: (isMbArtist || externalUrl.isNotEmpty || isMbAlbum) ? 100 : 24,
@@ -438,7 +440,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           backgroundColor: const Color(0xFF1B1B1B),
-          title: Text(albumTitle),
+          title: Text(albumTitle, style: CinematicTitleFonts.captionStyleForTitle(albumTitle, type: 'album', baseFontSize: 18)),
           content: SizedBox(
             width: 340,
             child: images.isEmpty
@@ -532,7 +534,7 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
                         ? Image.network(imageUrl, width: 58, height: 58, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _smallPlaceholder())
                         : _smallPlaceholder(),
                   ),
-                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  title: Text(title, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 15, color: Colors.white)),
                   subtitle: Text('$primaryType${year.isNotEmpty ? ' · $year' : ''} · MusicBrainz', style: const TextStyle(color: Colors.white60, fontSize: 12)),
                   trailing: IconButton(
                     tooltip: 'View cover artwork',
@@ -547,7 +549,7 @@ class _MusicDiscographyScreenState extends State<MusicDiscographyScreen> {
                           context: context,
                           builder: (dialogContext) => AlertDialog(
                             backgroundColor: const Color(0xFF1B1B1B),
-                            title: Text(title),
+                            title: Text(title, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 18)),
                             content: images.isEmpty
                                 ? const Text('No cover art is available for this release group.')
                                 : SizedBox(width: 320, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: images.map((image) {
@@ -604,10 +606,15 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
   final List<Map<String, dynamic>> _additionalAlbums = <Map<String, dynamic>>[];
   bool _loadingMore = false;
   String? _loadMoreError;
+  late LibraryViewMode _albumsViewMode;
 
   @override
   void initState() {
     super.initState();
+    _albumsViewMode = LibraryViewPreferenceStore.get(
+      'spotify-discography:${widget.spotifyId}',
+      fallback: LibraryViewMode.list,
+    );
     _future = _loadInitial();
   }
 
@@ -712,8 +719,37 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
                 const SizedBox(height: 24),
                 Text('Albums, singles & appearances${total > 0 ? ' ($total)' : ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
+                LibraryViewModePicker(
+                  scope: 'spotify-discography:${widget.spotifyId}',
+                  value: _albumsViewMode,
+                  onChanged: (mode) => setState(() => _albumsViewMode = mode),
+                  compact: true,
+                ),
                 if (albums.isEmpty) const Text('No releases were returned for this artist.', style: TextStyle(color: Colors.white60)),
-                for (final album in albums) _albumTile(context, album),
+                if (_albumsViewMode == LibraryViewMode.list)
+                  for (final album in albums) _albumTile(context, album)
+                else
+                  LibraryCollectionView(
+                    entries: albums.map((album) {
+                      final title = album['title']?.toString() ?? 'Untitled album';
+                      final id = album['id']?.toString() ?? '';
+                      final imageUrl = album['imageUrl']?.toString() ?? '';
+                      final artistName = album['artist']?.toString() ?? widget.artistName;
+                      final date = album['releaseDate']?.toString() ?? '';
+                      final type = album['albumType']?.toString() ?? 'album';
+                      final releaseYear = date.length >= 4 ? int.tryParse(date.substring(0, 4)) : null;
+                      return LibraryViewEntry(
+                        title: title,
+                        subtitle: '$type${date.isEmpty ? '' : ' · $date'} · $artistName',
+                        year: releaseYear,
+                        imageUrl: imageUrl,
+                        fallbackIcon: Icons.album_outlined,
+                        onTap: id.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(albumTitle: title, spotifyId: id))),
+                      );
+                    }).toList(growable: false),
+                    mode: _albumsViewMode,
+                    padding: EdgeInsets.zero,
+                  ),
                 if (_loadMoreError != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_loadMoreError!, style: const TextStyle(color: Colors.orangeAccent))),
                 if (albums.length < total) Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -749,7 +785,7 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
               ? Image.network(imageUrl, width: 56, height: 56, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.album_outlined))
               : const Icon(Icons.album_outlined),
         ),
-        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 15, color: Colors.white)),
         subtitle: Text('$type${date.isEmpty ? '' : ' · $date'}${artist.isEmpty ? '' : ' · $artist'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
         trailing: const Icon(Icons.chevron_right_rounded),
       ),
@@ -767,6 +803,268 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
   }
 }
 
+/// Opens an owned/local album using the same rich metadata view as New Albums.
+/// It first looks for an exact title match in the authenticated music catalog,
+/// but always keeps the locally-owned track list available as an offline fallback.
+class OwnedAlbumDetailsScreen extends StatefulWidget {
+  const OwnedAlbumDetailsScreen({
+    super.key,
+    this.media,
+    required this.albumTitle,
+    this.artistName = '',
+    this.artworkUrl,
+    required this.localTracks,
+  });
+
+  final MediaItem? media;
+  final String albumTitle;
+  final String artistName;
+  final String? artworkUrl;
+  final List<Map<String, dynamic>> localTracks;
+
+  @override
+  State<OwnedAlbumDetailsScreen> createState() => _OwnedAlbumDetailsScreenState();
+}
+
+class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
+  late final Future<String?> _spotifyAlbumId = _resolveSpotifyAlbumId();
+
+  static String _normalize(String value) => value.toLowerCase().trim().replaceAll(
+        RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+        '',
+      );
+
+  Future<String?> _resolveSpotifyAlbumId() async {
+    if (!AppController.instance.isBackendAuthenticated) return null;
+    final title = widget.albumTitle.trim();
+    if (title.isEmpty) return null;
+    try {
+      final payload = await AppController.instance.backendApi.searchMusicCatalog(
+        title,
+        type: 'album',
+        limit: 10,
+      );
+      final spotify = payload['spotify'] is Map
+          ? Map<String, dynamic>.from(payload['spotify'] as Map)
+          : <String, dynamic>{};
+      final raw = spotify['albums'];
+      if (raw is! List) return null;
+      final wantedTitle = _normalize(title);
+      final wantedArtists = <String>{
+        ...?widget.media?.music.map(_normalize),
+        if (widget.artistName.trim().isNotEmpty) _normalize(widget.artistName),
+        ...widget.localTracks
+            .map((row) => _normalize(row['artist']?.toString() ?? ''))
+            .where((name) => name.isNotEmpty),
+      }..removeWhere((name) => name.isEmpty);
+      final matches = raw
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .where((value) => _normalize(value['title']?.toString() ?? '') == wantedTitle)
+          .toList();
+      if (matches.isEmpty) return null;
+      matches.sort((a, b) {
+        int score(Map<String, dynamic> row) {
+          final artists = _normalize(row['artist']?.toString() ?? '');
+          final artistMatch = wantedArtists.isEmpty ||
+              (artists.isNotEmpty && wantedArtists.any((artist) => artists.contains(artist) || artist.contains(artists)));
+          final candidateDate = row['releaseDate']?.toString() ?? '';
+          final wantedYear = widget.media?.releaseYear;
+          final yearMatch = wantedYear == null ||
+              (candidateDate.length >= 4 && candidateDate.startsWith(wantedYear.toString()));
+          return (artistMatch ? 0 : 4) + (yearMatch ? 0 : 1);
+        }
+        return score(a).compareTo(score(b));
+      });
+      final selected = matches.first;
+      final selectedArtist = _normalize(selected['artist']?.toString() ?? '');
+      if (wantedArtists.isNotEmpty &&
+          (selectedArtist.isEmpty ||
+              !wantedArtists.any((artist) => selectedArtist.contains(artist) || artist.contains(selectedArtist)))) {
+        return null;
+      }
+      final id = selected['id']?.toString() ?? '';
+      return RegExp(r'^[A-Za-z0-9]{22}$').hasMatch(id) ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+        future: _spotifyAlbumId,
+        builder: (context, snapshot) {
+          final media = widget.media;
+          final artistName = widget.artistName.isNotEmpty
+              ? widget.artistName
+              : (media?.music.join(', ') ?? '');
+          final artwork = (widget.artworkUrl?.trim().isNotEmpty == true)
+              ? widget.artworkUrl!.trim()
+              : (media?.imageUrl ?? '');
+          if (snapshot.connectionState == ConnectionState.done &&
+              snapshot.data?.isNotEmpty == true) {
+            return SpotifyAlbumDetailsScreen(
+              albumTitle: widget.albumTitle,
+              spotifyId: snapshot.data!,
+              isOwned: true,
+              localMedia: media,
+              localArtistName: artistName,
+              localTracks: widget.localTracks,
+            );
+          }
+          // Never make the local library details disappear while the catalog
+          // request is pending or unavailable; a power/network outage should
+          // not prevent viewing the album and tracks already owned locally.
+          return _OwnedAlbumLocalDetailsScreen(
+            media: media,
+            albumTitle: widget.albumTitle,
+            artistName: artistName,
+            artworkUrl: artwork,
+            localTracks: widget.localTracks,
+            lookupPending: snapshot.connectionState != ConnectionState.done,
+          );
+        },
+      );
+}
+
+class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
+  const _OwnedAlbumLocalDetailsScreen({
+    required this.media,
+    required this.albumTitle,
+    required this.artistName,
+    required this.artworkUrl,
+    required this.localTracks,
+    this.lookupPending = false,
+  });
+
+  final MediaItem? media;
+  final String albumTitle;
+  final String artistName;
+  final String artworkUrl;
+  final List<Map<String, dynamic>> localTracks;
+  final bool lookupPending;
+
+  String _durationLabel(dynamic value) {
+    final milliseconds = int.tryParse(value?.toString() ?? '') ?? 0;
+    if (milliseconds <= 0) return 'Runtime unavailable';
+    final seconds = milliseconds ~/ 1000;
+    final minutes = seconds ~/ 60;
+    return '$minutes:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final artists = <String>{
+      ...?media?.music,
+      if (artistName.trim().isNotEmpty) artistName.trim(),
+      ...localTracks.map((row) => row['artist']?.toString().trim() ?? '').where((v) => v.isNotEmpty),
+    }.toList(growable: false);
+    final companies = <String>{
+      ...?media?.studios,
+      ...?media?.companies,
+    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
+    final dateLabel = media?.releaseDate?.toIso8601String().split('T').first ??
+        media?.releaseYear?.toString();
+    final shownArtwork = artworkUrl.trim().isNotEmpty ? artworkUrl.trim() : '';
+    return Scaffold(
+      backgroundColor: const Color(0xFF101010),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF101010),
+        title: Text(albumTitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: CinematicTitleFonts.captionStyleForTitle(albumTitle, type: 'album', baseFontSize: 18)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          Center(
+            child: Container(
+              width: 240,
+              height: 240,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: .04), borderRadius: BorderRadius.circular(10)),
+              child: shownArtwork.startsWith('https://')
+                  ? Image.network(shownArtwork, width: 240, height: 240, fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.album_outlined, size: 70))
+                  : const Icon(Icons.album_outlined, size: 70),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(albumTitle, textAlign: TextAlign.center,
+              style: CinematicTitleFonts.captionStyleForTitle(albumTitle, type: 'album', baseFontSize: 25, color: Colors.white)),
+          if (artists.isNotEmpty) Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(artists.join(', '), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+          ),
+          if (dateLabel != null || localTracks.isNotEmpty) Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text([
+              if (dateLabel != null && dateLabel.isNotEmpty) dateLabel,
+              '${localTracks.length} track${localTracks.length == 1 ? '' : 's'}',
+            ].join(' · '), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
+          ),
+          const SizedBox(height: 10),
+          const Center(child: Chip(avatar: Icon(Icons.library_music_rounded, size: 16), label: Text('In your library'))),
+          if (lookupPending) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(minHeight: 2),
+            const SizedBox(height: 5),
+            const Text('Looking for additional album credits and release metadata…', textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white38, fontSize: 11)),
+          ],
+          if (media?.description?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 18),
+            const Text('Album details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            Text(media!.description!, style: const TextStyle(color: Colors.white70, height: 1.45)),
+          ],
+          if (artists.isNotEmpty || companies.isNotEmpty || (media?.genres.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 20),
+            const Text('Album credits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            if (artists.isNotEmpty) _localCreditRow('Artist / performer(s)', artists.join(', ')),
+            if (companies.isNotEmpty) _localCreditRow('Label / company', companies.join(', ')),
+            if (media?.genres.isNotEmpty == true) _localCreditRow('Genres', media!.genres.join(', ')),
+          ],
+          const SizedBox(height: 18),
+          const Text('Track list', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          if (localTracks.isEmpty)
+            const Text('No locally indexed tracks were found for this album yet. Connect the music catalog to enrich this view with provider track metadata.',
+                style: TextStyle(color: Colors.white60, height: 1.4))
+          else
+            for (var index = 0; index < localTracks.length; index++)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: SizedBox(width: 28, child: Center(child: Text(
+                  (localTracks[index]['trackNumber'] ?? (index + 1)).toString(),
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ))),
+                title: Text(localTracks[index]['title']?.toString() ?? 'Track', maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text([
+                  if ((localTracks[index]['artist']?.toString() ?? '').trim().isNotEmpty)
+                    localTracks[index]['artist'].toString(),
+                  _durationLabel(localTracks[index]['durationMs']),
+                ].join(' · '), style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              ),
+          const SizedBox(height: 12),
+          const Text('Track names and runtimes above come from files indexed in your local library. Additional credits and official release details appear when the music catalog has an exact album match.',
+              style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+        ],
+      ),
+    );
+  }
+
+  Widget _localCreditRow(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 7),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 155, child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12))),
+          Expanded(child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4))),
+        ]),
+      );
+}
+
 /// Spotify album details and actual track listing. Artwork is displayed at its
 /// source aspect ratio (contain) and is linked to the Spotify source.
 class SpotifyAlbumDetailsScreen extends StatefulWidget {
@@ -774,10 +1072,18 @@ class SpotifyAlbumDetailsScreen extends StatefulWidget {
     super.key,
     required this.albumTitle,
     required this.spotifyId,
+    this.isOwned = false,
+    this.localMedia,
+    this.localArtistName = '',
+    this.localTracks = const <Map<String, dynamic>>[],
   });
 
   final String albumTitle;
   final String spotifyId;
+  final bool isOwned;
+  final MediaItem? localMedia;
+  final String localArtistName;
+  final List<Map<String, dynamic>> localTracks;
 
   @override
   State<SpotifyAlbumDetailsScreen> createState() => _SpotifyAlbumDetailsScreenState();
@@ -799,26 +1105,63 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: const Color(0xFF101010),
-        appBar: AppBar(backgroundColor: const Color(0xFF101010), title: Text(widget.albumTitle, maxLines: 1, overflow: TextOverflow.ellipsis)),
+        appBar: AppBar(backgroundColor: const Color(0xFF101010), title: Text(widget.albumTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(widget.albumTitle, type: 'album', baseFontSize: 18))),
         body: FutureBuilder<Map<String, dynamic>>(
           future: _future,
           builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+            if (snapshot.connectionState != ConnectionState.done) {
+              if (widget.isOwned && (widget.localMedia != null || widget.localTracks.isNotEmpty)) {
+                return _OwnedAlbumLocalDetailsScreen(
+                  media: widget.localMedia,
+                  albumTitle: widget.localMedia?.title ?? widget.albumTitle,
+                  artistName: widget.localMedia?.music.join(', ') ?? widget.localArtistName,
+                  artworkUrl: (widget.localMedia?.imageUrl?.trim().isNotEmpty == true)
+                      ? widget.localMedia!.imageUrl!
+                      : (widget.localTracks.isNotEmpty ? widget.localTracks.first['artworkUrl']?.toString() ?? '' : ''),
+                  localTracks: widget.localTracks,
+                  lookupPending: true,
+                );
+              }
+              return const Center(child: CircularProgressIndicator());
+            }
             if (snapshot.hasError || snapshot.data == null) {
+              if (widget.isOwned && (widget.localMedia != null || widget.localTracks.isNotEmpty)) {
+                return _OwnedAlbumLocalDetailsScreen(
+                  media: widget.localMedia,
+                  albumTitle: widget.localMedia?.title ?? widget.albumTitle,
+                  artistName: widget.localMedia?.music.join(', ') ?? widget.localArtistName,
+                  artworkUrl: (widget.localMedia?.imageUrl?.trim().isNotEmpty == true)
+                      ? widget.localMedia!.imageUrl!
+                      : (widget.localTracks.isNotEmpty ? widget.localTracks.first['artworkUrl']?.toString() ?? '' : ''),
+                  localTracks: widget.localTracks,
+                );
+              }
               return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Could not load this album. ${snapshot.error ?? ''}', textAlign: TextAlign.center)));
             }
             final album = snapshot.data!;
-            final imageUrl = album['imageUrl']?.toString() ?? '';
-            final title = album['title']?.toString() ?? widget.albumTitle;
-            final artist = album['artist']?.toString() ?? '';
-            final date = album['releaseDate']?.toString() ?? '';
-            final type = album['albumType']?.toString() ?? 'Album';
-            final totalTracks = album['totalTracks']?.toString() ?? '0';
-            final tracks = album['tracks'] is List
+            final providerTracks = album['tracks'] is List
                 ? (album['tracks'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
                 : <Map<String, dynamic>>[];
+            final tracks = providerTracks.isNotEmpty ? providerTracks : widget.localTracks;
+            final imageUrl = [album['imageUrl']?.toString() ?? '', widget.localMedia?.imageUrl ?? '',
+              if (widget.localTracks.isNotEmpty) widget.localTracks.first['artworkUrl']?.toString() ?? ''].firstWhere((v) => v.startsWith('https://'), orElse: () => '');
+            final title = widget.isOwned
+                ? (widget.localMedia?.title ?? widget.albumTitle)
+                : (widget.localMedia?.title ?? album['title']?.toString() ?? widget.albumTitle);
+            final localArtists = widget.localMedia?.music ?? const <String>[];
+            final artist = (album['artist']?.toString() ?? '').trim().isNotEmpty
+                ? album['artist'].toString()
+                : (localArtists.isNotEmpty ? localArtists.join(', ') : widget.localTracks.map((v) => v['artist']?.toString() ?? '').where((v) => v.isNotEmpty).toSet().join(', '));
+            final date = (album['releaseDate']?.toString() ?? '').isNotEmpty
+                ? album['releaseDate'].toString()
+                : (widget.localMedia?.releaseDate?.toIso8601String().split('T').first ?? widget.localMedia?.releaseYear?.toString() ?? '');
+            final type = album['albumType']?.toString() ?? 'Album';
+            final parsedTrackCount = int.tryParse(album['totalTracks']?.toString() ?? '') ?? 0;
+            final totalTracks = (parsedTrackCount > 0 ? parsedTrackCount : tracks.length).toString();
             final spotifyUrl = album['spotifyUrl']?.toString() ?? '';
-            final label = album['label']?.toString().trim() ?? '';
+            final label = (album['label']?.toString().trim() ?? '').isNotEmpty
+                ? album['label'].toString().trim()
+                : <String>{...?widget.localMedia?.studios, ...?widget.localMedia?.companies}.where((v) => v.trim().isNotEmpty).join(', ');
             final producers = album['producers'] is List
                 ? (album['producers'] as List).map((v) => v.toString()).where((v) => v.trim().isNotEmpty).toList()
                 : <String>[];
@@ -827,7 +1170,7 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                 : <String>[];
             final albumArtists = _maps(album['artists']);
             final copyrights = _maps(album['copyrights']);
-            final hasOwnedCopy = _hasOwnedAlbum(title, artist);
+            final hasOwnedCopy = widget.isOwned || _hasOwnedAlbum(title, artist);
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
@@ -841,7 +1184,7 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                       : const Icon(Icons.album_outlined, size: 70),
                 )),
                 const SizedBox(height: 16),
-                Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                Text(title, textAlign: TextAlign.center, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 25, color: Colors.white)),
                 if (albumArtists.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -869,10 +1212,12 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                   )
                 else
                   _whereToBuySection(title, artist),
-                if (label.isNotEmpty || producers.isNotEmpty || composers.isNotEmpty || copyrights.isNotEmpty) ...[
+                if (label.isNotEmpty || producers.isNotEmpty || composers.isNotEmpty || copyrights.isNotEmpty || localArtists.isNotEmpty || artist.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   const Text('Album credits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
+                  if (localArtists.isNotEmpty) _creditRow('Artist / performer(s)', localArtists.join(', '))
+                  else if (artist.isNotEmpty) _creditRow('Artist / performer(s)', artist),
                   if (label.isNotEmpty) _creditRow('Record label / music company', label),
                   if (producers.isNotEmpty) _creditRow('Producer(s)', producers.join(', ')),
                   if (composers.isNotEmpty) _creditRow('Composer(s) / writers', composers.join(', ')),
@@ -889,7 +1234,14 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                 if (tracks.isEmpty) const Text('Spotify did not return track rows for this album.', style: TextStyle(color: Colors.white60)),
                 for (var index = 0; index < tracks.length; index++) _trackTile(index, tracks[index]),
                 const SizedBox(height: 14),
-                const Text('Album cover and track metadata provided by Spotify. Artwork is displayed without cropping; use the Spotify link for the source.', style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+                Text(
+                  providerTracks.isNotEmpty
+                      ? 'Album artwork and track metadata provided by Spotify. Artwork is displayed without cropping; use the Spotify link for the source.'
+                      : widget.localTracks.isNotEmpty
+                          ? 'The track list and runtimes are from files indexed in your local library. Album credits and release data are from the connected catalog where available.'
+                          : 'Spotify returned album details but no track rows. Track names and runtimes are unavailable until the metadata provider supplies them or your files are indexed.',
+                  style: const TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+                ),
               ],
             );
           },
@@ -1006,7 +1358,15 @@ Future<void> _openSpotifyUrl(String value) async {
 /// Album artwork rail for Home. It prefers Spotify's regional new releases and
 /// falls back to recent-year album search when the endpoint is unavailable.
 class SpotifyHomeAlbumsShelf extends StatefulWidget {
-  const SpotifyHomeAlbumsShelf({super.key});
+  const SpotifyHomeAlbumsShelf({
+    super.key,
+    this.isOwnedAlbum,
+    this.localTracksForAlbum,
+  });
+
+  /// Optional lookup supplied by the app's indexed music library.
+  final bool Function(String albumTitle, String artistName)? isOwnedAlbum;
+  final List<Map<String, dynamic>> Function(String albumTitle, String artistName)? localTracksForAlbum;
 
   @override
   State<SpotifyHomeAlbumsShelf> createState() => _SpotifyHomeAlbumsShelfState();
@@ -1201,16 +1561,24 @@ class _SpotifyHomeAlbumsShelfState extends State<SpotifyHomeAlbumsShelf> {
               final artist = album['artist']?.toString() ?? '';
               final image = album['imageUrl']?.toString() ?? '';
               final date = album['releaseDate']?.toString() ?? '';
+              final isOwned = widget.isOwnedAlbum?.call(title, artist) ?? false;
+              final localTracks = widget.localTracksForAlbum?.call(title, artist) ?? const <Map<String, dynamic>>[];
               return SizedBox(width: 142, child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: id.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(albumTitle: title, spotifyId: id))),
+                onTap: id.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(
+                  albumTitle: title,
+                  spotifyId: id,
+                  isOwned: isOwned,
+                  localArtistName: artist,
+                  localTracks: localTracks,
+                ))),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(
                     width: 142, height: 142,
                     child: Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.white10, child: const Icon(Icons.album_outlined, size: 36))),
                   )),
                   const SizedBox(height: 7),
-                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 12, color: Colors.white)),
                   Text([if (artist.isNotEmpty) artist, if (date.length >= 4) date.substring(0, 4)].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.white54)),
                 ]),
               ));

@@ -9,6 +9,7 @@ import 'collection_details.dart';
 import 'details.dart';
 import 'localization.dart';
 import 'page_customization_button.dart';
+import 'library_view_modes.dart';
 
 /// Main feature/discovery center for advanced streaming-service features.
 class FeatureCenterScreen extends StatefulWidget {
@@ -450,10 +451,18 @@ class CollectionsPanel extends StatefulWidget {
 class _CollectionsPanelState
     extends State<CollectionsPanel> {
   String _searchQuery = '';
+  late LibraryViewMode _collectionViewMode;
 
   @override
   void initState() {
     super.initState();
+    final defaultLayout = AppController.instance.currentCollectionPreferences.layout;
+    _collectionViewMode = LibraryViewPreferenceStore.get(
+      'collections-library',
+      fallback: defaultLayout.toLowerCase() == 'list'
+          ? LibraryViewMode.list
+          : LibraryViewMode.grid,
+    );
 
     // Seed local, non-playable metadata examples even when the user enters
     // Watch > Collections directly without visiting the Home page first.
@@ -592,7 +601,14 @@ class _CollectionsPanelState
                 custom.length,
                 liked.length,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              LibraryViewModePicker(
+                scope: 'collections-library',
+                value: _collectionViewMode,
+                onChanged: (mode) => setState(() => _collectionViewMode = mode),
+                compact: true,
+              ),
+              const SizedBox(height: 12),
               if (all.isEmpty)
                 _EmptyFeatureCard(
                   icon: Icons.collections_bookmark_outlined,
@@ -851,24 +867,69 @@ class _CollectionsPanelState
   ) {
     final controller = AppController.instance;
 
-    final prefs =
-        controller.currentCollectionPreferences;
-
-    String layout = 'Grid';
-
-    try {
-      layout = prefs.layout.toString();
-    } catch (_) {}
-
-    if (layout == 'List') {
-      return Column(
-        children: collections
-            .map(
-              (collection) => _collectionCard(
-                collection,
+    if (_collectionViewMode != LibraryViewMode.grid) {
+      final entries = collections.map((raw) {
+        final collection = raw as MediaCollection;
+        final members = controller.library
+            .where((media) => collection.mediaIds.contains(media.id))
+            .toList(growable: false);
+        final customPoster = collection.customPosterUrl?.trim() ?? '';
+        String? imageUrl = customPoster.isNotEmpty ? customPoster : null;
+        if (imageUrl == null) {
+          for (final item in members) {
+            final candidate = item.imageUrl?.trim() ?? '';
+            if (candidate.isNotEmpty) {
+              imageUrl = candidate;
+              break;
+            }
+          }
+        }
+        final editable = collection.canCurrentProfileEdit();
+        return LibraryViewEntry(
+          title: collection.name,
+          subtitle: '${members.length} title${members.length == 1 ? '' : 's'} · ${collection.isAutomatic ? 'Automatic' : 'Custom'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
+          year: collection.createdAt.year,
+          imageUrl: imageUrl,
+          fallbackIcon: collection.isAutomatic
+              ? Icons.auto_awesome_motion_outlined
+              : Icons.collections_bookmark_outlined,
+          onTap: () => _openCollection(context, collection),
+          trailing: Wrap(
+            spacing: 0,
+            children: [
+              IconButton(
+                tooltip: collection.isLikedByCurrentProfile ? tr('Unlike collection') : tr('Like collection'),
+                onPressed: () => controller.toggleCollectionLike(collection.id),
+                icon: Icon(collection.isLikedByCurrentProfile ? Icons.favorite_rounded : Icons.favorite_border_rounded),
               ),
-            )
-            .toList(),
+              PopupMenuButton<String>(
+                tooltip: tr('Collection actions'),
+                onSelected: (action) {
+                  if (action == 'add') {
+                    _showAddToCollection(context, collection);
+                  } else {
+                    _collectionAction(context, collection, action);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'play', child: UniversalText('Play')),
+                  const PopupMenuItem(value: 'browse', child: UniversalText('Browse titles')),
+                  if (!collection.isAutomatic && collection.canCurrentProfileAdd())
+                    const PopupMenuItem(value: 'add', child: UniversalText('Add title')),
+                  if (collection.isShared && editable && !collection.isAutomatic)
+                    const PopupMenuItem(value: 'contributors', child: UniversalText('Manage contributors')),
+                  if (!collection.isOfficial && editable)
+                    const PopupMenuItem(value: 'delete', child: UniversalText('Delete')),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(growable: false);
+      return LibraryCollectionView(
+        entries: entries,
+        mode: _collectionViewMode,
+        padding: EdgeInsets.zero,
       );
     }
 

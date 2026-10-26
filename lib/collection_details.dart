@@ -12,6 +12,8 @@ import 'localization.dart';
 import 'media_actions.dart';
 import 'social_sharing.dart';
 import 'food_delivery.dart';
+import 'catalog_poster_image.dart';
+import 'library_view_modes.dart';
 
 /// Full-screen collection details view.
 ///
@@ -34,6 +36,18 @@ class CollectionDetailsScreen extends StatefulWidget {
 /// Implements the `_CollectionDetailsScreenState` class for this feature or UI component.
 class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
   int _selectedItem = 0;
+  late LibraryViewMode _collectionViewMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _collectionViewMode = LibraryViewPreferenceStore.get(
+      'collection:${widget.collection.id}',
+      fallback: preferences.itemLayout == 'List'
+          ? LibraryViewMode.list
+          : LibraryViewMode.grid,
+    );
+  }
 
   /// Prefer the current controller copy of the collection.
   ///
@@ -117,6 +131,12 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
 
     if (oldWidget.collection.id != widget.collection.id) {
       _selectedItem = 0;
+      _collectionViewMode = LibraryViewPreferenceStore.get(
+        'collection:${widget.collection.id}',
+        fallback: preferences.itemLayout == 'List'
+            ? LibraryViewMode.list
+            : LibraryViewMode.grid,
+      );
     }
   }
 
@@ -538,52 +558,79 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
       ),
     );
 
-    if (preferences.itemLayout == 'List') {
+    final picker = Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: LibraryViewModePicker(
+        scope: 'collection:${collection.id}',
+        value: _collectionViewMode,
+        onChanged: (mode) => setState(() => _collectionViewMode = mode),
+        compact: true,
+      ),
+    );
+
+    if (_collectionViewMode == LibraryViewMode.list) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             title,
-            for (var i = 0; i < media.length; i++)
-              _itemListCard(
-                media[i],
-                i,
-              ),
+            picker,
+            for (var i = 0; i < media.length; i++) _itemListCard(media[i], i),
           ],
         ),
       );
     }
 
-    final width = MediaQuery.sizeOf(context).width;
+    if (_collectionViewMode == LibraryViewMode.grid) {
+      final width = MediaQuery.sizeOf(context).width;
+      final columns = width >= 1000 ? 4 : width >= 650 ? 3 : 2;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            title,
+            picker,
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: media.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                childAspectRatio: .62,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 14,
+              ),
+              itemBuilder: (_, i) => _itemGridCard(media[i], i),
+            ),
+          ],
+        ),
+      );
+    }
 
-    final columns = width >= 1000
-        ? 4
-        : width >= 650
-            ? 3
-            : 2;
+    final entries = media.map((item) => LibraryViewEntry(
+      title: item.title,
+      subtitle: '${item.releaseYear ?? ''} · ${item.type}',
+      year: item.releaseYear,
+      artworkBuilder: (context, fit) => CatalogPosterImage(media: item, fit: fit),
+      fallbackIcon: Icons.movie_outlined,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => MediaDetailsScreen(media: item),
+      )),
+    )).toList(growable: false);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           title,
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: media.length,
-            gridDelegate:
-                SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              childAspectRatio: .62,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 14,
-            ),
-            itemBuilder: (_, i) {
-              return _itemGridCard(
-                media[i],
-                i,
-              );
-            },
+          picker,
+          LibraryCollectionView(
+            entries: entries,
+            mode: _collectionViewMode,
+            padding: EdgeInsets.zero,
           ),
         ],
       ),

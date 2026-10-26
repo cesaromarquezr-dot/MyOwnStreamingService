@@ -2,8 +2,6 @@
 // Purpose: Implements the movies portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -14,7 +12,7 @@ import 'page_customization_button.dart';
 import 'international_catalog_shelf.dart';
 import 'media_metadata_catalog_screen.dart';
 import 'catalog_poster_image.dart';
-import 'browse_page_hero_settings.dart';
+import 'library_view_modes.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -28,8 +26,10 @@ class _MoviesScreenState extends State<MoviesScreen>
   late final AnimationController _pageController;
   String _searchQuery = '';
   String _sortMode = 'Default';
-  int _heroIndex = 0;
-  Timer? _heroTimer;
+  LibraryViewMode _viewMode = LibraryViewPreferenceStore.get(
+    'movies',
+    fallback: LibraryViewMode.grid,
+  );
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -38,9 +38,6 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
-    BrowsePageHeroPreferenceStore.revision
-        .addListener(_onHeroPreferenceChanged);
-    _syncHeroTimer();
 
     _pageController = AnimationController(
       vsync: this,
@@ -54,37 +51,9 @@ class _MoviesScreenState extends State<MoviesScreen>
     });
   }
 
-  void _onHeroPreferenceChanged() {
-    if (!mounted) return;
-    _syncHeroTimer();
-    setState(() {});
-  }
-
-  void _syncHeroTimer() {
-    _heroTimer?.cancel();
-    final preference = BrowsePageHeroPreferenceStore.settingsFor(
-      pageId: 'movies',
-      profileId: AppController.instance.currentProfile?.id,
-    );
-    _heroIndex = 0;
-    if (!preference.showHero) return;
-    _heroTimer = Timer.periodic(
-      const Duration(
-        seconds: BrowsePageHeroPreference.autoSlideIntervalSeconds,
-      ),
-      (_) {
-        if (!mounted) return;
-        setState(() => _heroIndex++);
-      },
-    );
-  }
-
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
-    BrowsePageHeroPreferenceStore.revision
-        .removeListener(_onHeroPreferenceChanged);
-    _heroTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -154,13 +123,19 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     _sortMedia(filteredMovies);
 
-    final heroPreference = BrowsePageHeroPreferenceStore.settingsFor(
-      pageId: 'movies',
-      profileId: AppController.instance.currentProfile?.id,
-    );
-    final featuredMovie = filteredMovies.isNotEmpty
-        ? filteredMovies[_heroIndex % filteredMovies.length]
-        : null;
+    final featuredMovie = filteredMovies.isNotEmpty ? filteredMovies.first : null;
+    final viewEntries = filteredMovies.map((movie) => LibraryViewEntry(
+      title: movie.title,
+      subtitle: [
+        if (movie.releaseYear != null) movie.releaseYear.toString(),
+        if (movie.genres.isNotEmpty) movie.genres.take(2).join(' · '),
+        movie.type,
+      ].where((part) => part.trim().isNotEmpty).join(' · '),
+      year: movie.releaseYear,
+      artworkBuilder: (context, fit) => CatalogPosterImage(media: movie, fit: fit),
+      fallbackIcon: Icons.movie_outlined,
+      onTap: () => _openDetails(context, movie),
+    )).toList(growable: false);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -177,7 +152,7 @@ class _MoviesScreenState extends State<MoviesScreen>
                   child: _buildTopBar(context, movies.length),
                 ),
 
-                if (_searchQuery.trim().isEmpty && internationalMovies.isNotEmpty)
+                if (_searchQuery.trim().isEmpty && _viewMode == LibraryViewMode.grid && internationalMovies.isNotEmpty)
                   SliverToBoxAdapter(
                     child: InternationalCatalogShelf(
                       title: 'International Movies',
@@ -202,17 +177,12 @@ class _MoviesScreenState extends State<MoviesScreen>
                   )
                 else ...[
                   if (_searchQuery.trim().isEmpty &&
-                      heroPreference.showHero &&
+                      _viewMode == LibraryViewMode.grid &&
                       featuredMovie != null)
                     SliverToBoxAdapter(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 450),
-                        child: KeyedSubtree(
-                          key: ValueKey<String>(
-                            'movie-hero-${featuredMovie.id}',
-                          ),
-                          child: _buildFeaturedMovie(context, featuredMovie),
-                        ),
+                      child: _buildFeaturedMovie(
+                        context,
+                        featuredMovie,
                       ),
                     ),
 
@@ -225,7 +195,27 @@ class _MoviesScreenState extends State<MoviesScreen>
                       ),
                     ),
 
-                  SliverPadding(
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: LibraryViewModePicker(
+                        scope: 'movies',
+                        value: _viewMode,
+                        onChanged: (mode) => setState(() => _viewMode = mode),
+                        compact: true,
+                      ),
+                    ),
+                  ),
+
+                  if (_viewMode != LibraryViewMode.grid)
+                    SliverToBoxAdapter(
+                      child: LibraryCollectionView(
+                        entries: viewEntries,
+                        mode: _viewMode,
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 42),
+                      ),
+                    )
+                  else SliverPadding(
                     padding: const EdgeInsets.fromLTRB(
                       20,
                       4,

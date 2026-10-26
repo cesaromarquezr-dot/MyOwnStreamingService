@@ -1,7 +1,7 @@
 // FILE: `lib/xray.dart`.
 // Purpose: Provides an X-Ray-style cast and production overlay for playback.
-// Actor identity/photo services can be connected later without changing the
-// player contract; the screen is driven by imported media metadata today.
+// Uses exact title metadata and person portraits where configured; the player
+// contract stays independent of provider credentials and scene-level curation.
 
 import 'dart:convert';
 
@@ -13,6 +13,8 @@ import 'backend_api.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'media_text_localizer.dart';
+import 'core/services/cinematic_person_metadata_service.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
 
 /// X-Ray screen showing cast, directors, music and other context for a title.
 class XRayScreen extends StatefulWidget {
@@ -50,6 +52,9 @@ class _XRayScreenState extends State<XRayScreen> {
     'Connections',
   };
   List<Map<String, dynamic>> _privateNotes = <Map<String, dynamic>>[];
+  List<_CastEntry> _providerCast = <_CastEntry>[];
+  bool _loadingProviderCast = false;
+  bool? _showFullCast;
 
   MediaItem get media => widget.media;
   ValueListenable<Duration> get playbackPosition => widget.playbackPosition;
@@ -66,6 +71,45 @@ class _XRayScreenState extends State<XRayScreen> {
   void initState() {
     super.initState();
     _loadPersonalSettings();
+    _loadProviderCast();
+  }
+
+  Future<void> _loadProviderCast() async {
+    if (!CinematicTitleMetadataService.isConfigured ||
+        media.title.trim().isEmpty ||
+        media.type.toLowerCase().contains('album') ||
+        media.type.toLowerCase().contains('music')) {
+      return;
+    }
+    if (mounted) setState(() => _loadingProviderCast = true);
+    try {
+      final metadata = await CinematicTitleMetadataService.lookupTitle(
+        title: media.title,
+        isTv: media.isSeries,
+        year: media.releaseYear ?? media.seriesStartYear,
+      );
+      if (!mounted || metadata == null) return;
+      final entries = metadata.castCredits
+          .map((credit) => _CastEntry(
+                actor: credit.name,
+                character:
+                    credit.character.trim().toLowerCase() == 'featured cast'
+                        ? ''
+                        : credit.character,
+                photoUrl: CinematicPersonMetadataService.imageUrl(
+                  credit.profilePath,
+                  size: 'w185',
+                ),
+                personId: credit.personId,
+              ))
+          .where((entry) => entry.actor.trim().isNotEmpty)
+          .toList(growable: false);
+      setState(() => _providerCast = entries);
+    } catch (_) {
+      // The imported catalog remains usable when provider metadata is offline.
+    } finally {
+      if (mounted) setState(() => _loadingProviderCast = false);
+    }
   }
 
   Future<void> _loadPersonalSettings() async {
@@ -351,7 +395,7 @@ class _XRayScreenState extends State<XRayScreen> {
         media.directors.where((e) => e.trim().isNotEmpty).toList();
     final writers = media.writers.where((e) => e.trim().isNotEmpty).toList();
 
-    final castEntries = actors.map(_parseCastEntry).toList();
+    final castEntries = _fullCastEntries(actors);
 
     return Scaffold(
       appBar: AppBar(
@@ -396,11 +440,15 @@ class _XRayScreenState extends State<XRayScreen> {
         valueListenable: playbackPosition,
         builder: (context, currentPosition, _) {
           final event = _activeEvent(currentPosition);
+          final scenePeople = event == null
+              ? const <_CastEntry>[]
+              : _eventPeople(event);
+          final useFullCast = _showFullCast ?? (event == null);
           final people = _spoilerLevel == SpoilerProtectionLevel.noSpoilers
               ? const <_CastEntry>[]
-              : event == null
+              : useFullCast
                   ? castEntries
-                  : _eventPeople(event);
+                  : scenePeople;
           return ListView(
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 36),
             children: [
@@ -412,16 +460,60 @@ class _XRayScreenState extends State<XRayScreen> {
                 const SizedBox(height: 18),
               ],
               _notesSection(currentPosition),
+              if (_spoilerLevel != SpoilerProtectionLevel.noSpoilers &&
+                  (_visibleSections.contains('People') ||
+                      _visibleSections.contains('Characters'))) ...[
+                SegmentedButton<bool>(
+                  segments: const <ButtonSegment<bool>>[
+                    ButtonSegment<bool>(
+                      value: false,
+                      icon: Icon(Icons.movie_filter_outlined),
+                      label: Text('In this scene'),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      icon: Icon(Icons.groups_2_outlined),
+                      label: Text('Full cast'),
+                    ),
+                  ],
+                  selected: <bool>{useFullCast},
+                  onSelectionChanged: (selection) => setState(
+                    () => _showFullCast = selection.first,
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               if (people.isNotEmpty &&
                   (_visibleSections.contains('People') ||
                       _visibleSections.contains('Characters'))) ...[
-                _heading(event == null ? 'CAST' : 'ON SCREEN',
+                _heading(
+                    event == null || useFullCast ? 'FULL CAST' : 'IN THIS SCENE',
                     Icons.people_alt_outlined),
                 const SizedBox(height: 10),
                 for (final cast in people)
                   _castTile(context, cast,
                       showActor: _visibleSections.contains('People'),
                       showCharacter: _visibleSections.contains('Characters')),
+              ] else if (!useFullCast &&
+                  _spoilerLevel != SpoilerProtectionLevel.noSpoilers &&
+                  (_visibleSections.contains('People') ||
+                      _visibleSections.contains('Characters'))) ...[
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'No scene-specific cast is available at this timestamp yet. Choose Full cast to browse the verified title credits.',
+                      style: TextStyle(color: Colors.white60, height: 1.4),
+                    ),
+                  ),
+                ),
+              ] else if (_loadingProviderCast &&
+                  (_visibleSections.contains('People') ||
+                      _visibleSections.contains('Characters'))) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
               ],
               if (event != null &&
                   _spoilerLevel != SpoilerProtectionLevel.noSpoilers) ...[
@@ -612,26 +704,48 @@ class _XRayScreenState extends State<XRayScreen> {
     if (rawPeople is! List) return const <_CastEntry>[];
     return rawPeople
         .map((person) {
-          if (person is! Map) return _parseCastEntry(person.toString());
+          if (person is! Map) {
+            return _enrichCastEntry(_parseCastEntry(person.toString()));
+          }
           final data = Map<String, dynamic>.from(person);
-          return _CastEntry(
-            actor: (data['actor'] ??
-                    data['actorName'] ??
-                    data['name'] ??
-                    'Unknown')
-                .toString(),
-            character: (data['character'] ??
-                    data['characterName'] ??
-                    data['role'] ??
-                    'Featured cast')
-                .toString(),
+          final actor = (data['actor'] ??
+                  data['actorName'] ??
+                  data['name'] ??
+                  'Unknown')
+              .toString()
+              .trim();
+          final rawRole = (data['character'] ??
+                  data['characterName'] ??
+                  data['role'] ??
+                  '')
+              .toString()
+              .trim();
+          final role = rawRole.toLowerCase() == 'featured cast' ? '' : rawRole;
+          final explicitPhoto = (data['photoUrl'] ??
+                  data['imageUrl'] ??
+                  data['profileImageUrl'] ??
+                  data['profileImage'] ??
+                  data['portraitUrl'] ??
+                  data['profile_path'] ??
+                  data['profilePath'])
+              ?.toString()
+              .trim();
+          return _enrichCastEntry(_CastEntry(
+            actor: actor,
+            character: role,
+            photoUrl: explicitPhoto == null || explicitPhoto.isEmpty
+                ? null
+                : explicitPhoto.startsWith('http')
+                    ? explicitPhoto
+                    : CinematicPersonMetadataService.imageUrl(explicitPhoto,
+                        size: 'w185'),
             biography: (data['biography'] ?? data['bio'])?.toString(),
             characterBiography:
                 (data['characterBiography'] ?? data['characterBio'])
                     ?.toString(),
             filmography: _eventStrings(data['filmography']),
             relatedCharacters: _eventStrings(data['relatedCharacters']),
-          );
+          ));
         })
         .where((entry) => entry.actor.trim().isNotEmpty)
         .toList();
@@ -786,10 +900,63 @@ class _XRayScreenState extends State<XRayScreen> {
         : '$minutes:$seconds';
   }
 
+  List<_CastEntry> _fullCastEntries(List<String> actorNames) {
+    if (_providerCast.isNotEmpty) return _providerCast;
+    final characters = media.characters;
+    final canPairByPosition = characters.length == actorNames.length;
+    return actorNames.asMap().entries.map((entry) {
+      final parsed = _parseCastEntry(entry.value);
+      if (parsed.character.isNotEmpty || !canPairByPosition) {
+        return _enrichCastEntry(parsed);
+      }
+      final role = characters[entry.key].trim();
+      return _enrichCastEntry(_CastEntry(
+        actor: parsed.actor,
+        character: role,
+        photoUrl: parsed.photoUrl,
+      ));
+    }).toList(growable: false);
+  }
+
+  _CastEntry _enrichCastEntry(_CastEntry entry) {
+    final actorKey = _normalizePersonName(entry.actor);
+    if (actorKey.isEmpty) return entry;
+    _CastEntry? providerMatch;
+    for (final candidate in _providerCast) {
+      if (_normalizePersonName(candidate.actor) == actorKey) {
+        providerMatch = candidate;
+        break;
+      }
+    }
+    if (providerMatch == null) return entry;
+    final entryRole = entry.character.trim();
+    final role = entryRole.isNotEmpty &&
+            entryRole.toLowerCase() != 'featured cast'
+        ? entryRole
+        : providerMatch.character;
+    return _CastEntry(
+      actor: entry.actor,
+      character: role,
+      photoUrl: (entry.photoUrl?.trim().isNotEmpty ?? false)
+          ? entry.photoUrl
+          : providerMatch.photoUrl,
+      personId: entry.personId ?? providerMatch.personId,
+      biography: entry.biography,
+      characterBiography: entry.characterBiography,
+      filmography: entry.filmography,
+      relatedCharacters: entry.relatedCharacters,
+    );
+  }
+
+  String _normalizePersonName(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s\-_,.:;!?()\[\]{}\\/]+'), '');
+
   _CastEntry _parseCastEntry(String raw) {
     final normalized = raw.trim();
     if (normalized.isEmpty) {
-      return const _CastEntry(actor: 'Unknown', character: 'Featured cast');
+      return const _CastEntry(actor: 'Unknown', character: '');
     }
 
     final patterns = [
@@ -807,12 +974,17 @@ class _XRayScreenState extends State<XRayScreen> {
             actor.isNotEmpty &&
             character != null &&
             character.isNotEmpty) {
-          return _CastEntry(actor: actor, character: character);
+          return _CastEntry(
+            actor: actor,
+            character: character.toLowerCase() == 'featured cast'
+                ? ''
+                : character,
+          );
         }
       }
     }
 
-    return _CastEntry(actor: normalized, character: 'Featured cast');
+    return _CastEntry(actor: normalized, character: '');
   }
 
   Widget _castTile(BuildContext context, _CastEntry cast,
@@ -827,6 +999,7 @@ class _XRayScreenState extends State<XRayScreen> {
           MaterialPageRoute(
             builder: (_) => ActorBiographyScreen(
               actorName: cast.actor,
+              actorPhotoUrl: cast.photoUrl,
               characterName: cast.character,
               biography: cast.biography,
               characterBiography: cast.characterBiography,
@@ -841,15 +1014,10 @@ class _XRayScreenState extends State<XRayScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
+              _XRayPersonAvatar(
+                name: cast.actor,
+                photoUrl: cast.photoUrl,
                 radius: 28,
-                child: Text(
-                  (showActor ? cast.actor : cast.character).isNotEmpty
-                      ? (showActor ? cast.actor : cast.character)[0]
-                          .toUpperCase()
-                      : '•',
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -865,7 +1033,7 @@ class _XRayScreenState extends State<XRayScreen> {
                         ),
                       ),
                     const SizedBox(height: 4),
-                    if (showCharacter)
+                    if (showCharacter && cast.character.trim().isNotEmpty)
                       Text('as ${cast.character}',
                           style: const TextStyle(
                               color: Colors.white70,
@@ -897,7 +1065,7 @@ class _XRayScreenState extends State<XRayScreen> {
                           ? Icons.person_remove_alt_1
                           : Icons.person_add_alt_1),
                     ),
-                  if (showCharacter && cast.character != 'Featured cast')
+                  if (showCharacter && cast.character.trim().isNotEmpty)
                     IconButton(
                       tooltip: _followedEntities.contains(characterKey)
                           ? 'Unfollow character'
@@ -1055,6 +1223,7 @@ class _XRayScreenState extends State<XRayScreen> {
 /// Displays a person-focused X-Ray card for an actor.
 class ActorBiographyScreen extends StatelessWidget {
   final String actorName;
+  final String? actorPhotoUrl;
   final String? characterName;
   final String? biography;
   final String? characterBiography;
@@ -1065,6 +1234,7 @@ class ActorBiographyScreen extends StatelessWidget {
   const ActorBiographyScreen({
     super.key,
     required this.actorName,
+    this.actorPhotoUrl,
     this.characterName,
     this.biography,
     this.characterBiography,
@@ -1075,8 +1245,10 @@ class ActorBiographyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = actorName.trim().isEmpty ? '?' : actorName.trim()[0];
-    final character = (characterName ?? 'Featured cast').trim();
+    final rawCharacter = (characterName ?? '').trim();
+    final character = rawCharacter.toLowerCase() == 'featured cast'
+        ? ''
+        : rawCharacter;
     final activeProfile = AppController.instance.currentProfile;
     final libraryAppearances = AppController.instance.library.where((item) {
       if (!item.isAccessibleTo(activeProfile)) return false;
@@ -1097,15 +1269,10 @@ class ActorBiographyScreen extends StatelessWidget {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
+                _XRayPersonAvatar(
+                  name: actorName,
+                  photoUrl: actorPhotoUrl,
                   radius: 64,
-                  child: Text(
-                    initial.toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -1189,9 +1356,78 @@ class ActorBiographyScreen extends StatelessWidget {
   }
 }
 
+class _XRayPersonAvatar extends StatelessWidget {
+  const _XRayPersonAvatar({
+    required this.name,
+    required this.radius,
+    this.photoUrl,
+  });
+
+  final String name;
+  final double radius;
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final directUrl = photoUrl?.trim() ?? '';
+    final Future<CinematicPersonSummary?>? lookup = directUrl.isNotEmpty
+        ? null
+        : CinematicPersonMetadataService.lookupPersonSummary(name);
+    return FutureBuilder<CinematicPersonSummary?>(
+      future: lookup,
+      builder: (context, snapshot) {
+        final url = directUrl.isNotEmpty
+            ? directUrl
+            : CinematicPersonMetadataService.imageUrl(
+                snapshot.data?.profilePath,
+                size: 'w185',
+              );
+        final size = radius * 2;
+        return ClipOval(
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: url == null || url.isEmpty
+                ? Container(
+                    color: Colors.white.withValues(alpha: .08),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.person_outline_rounded,
+                        size: radius * .95, color: Colors.white60),
+                  )
+                : Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.white.withValues(alpha: .08),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.person_outline_rounded,
+                          size: radius * .95, color: Colors.white60),
+                    ),
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: Colors.white.withValues(alpha: .08),
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: radius * .55,
+                          height: radius * .55,
+                          child: const CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _CastEntry {
   final String actor;
   final String character;
+  final String? photoUrl;
+  final int? personId;
   final String? biography;
   final String? characterBiography;
   final List<String> filmography;
@@ -1200,6 +1436,8 @@ class _CastEntry {
   const _CastEntry({
     required this.actor,
     required this.character,
+    this.photoUrl,
+    this.personId,
     this.biography,
     this.characterBiography,
     this.filmography = const <String>[],

@@ -3,6 +3,7 @@
 // and the feature roadmap. Keep these related screens together to reduce
 // top-level lib/ file fragmentation without removing their functionality.
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +25,7 @@ import 'reviews.dart';
 import 'home_server.dart';
 import 'storage_dashboard.dart';
 import 'cinematic_discovery_studio.dart';
+import 'core/services/automatic_backup_service.dart';
 
 // Consolidated from lib/platform_expansion.dart.
 // Profile-scoped settings introduced by the platform expansion pass.
@@ -43,7 +45,7 @@ class PlatformPreferenceStore {
       AppController.instance.currentProfile?.id ?? 'default';
 
   static String _key(String name, String setting) =>
-    'platform_${_profileKey(name)}_${name}_$setting';
+      'platform_${_profileKey(name)}_${name}_$setting';
 
   static bool getBool(String name, String setting, {bool fallback = true}) {
     return _prefs?.getBool(_key(name, setting)) ?? fallback;
@@ -469,6 +471,7 @@ class PlatformExpansionScreen extends StatelessWidget {
   ];
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -484,19 +487,22 @@ class PlatformExpansionScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const UniversalText('NEXT PLATFORM LAYER',
+                  const UniversalText(
+                    'NEXT PLATFORM LAYER',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.2,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const UniversalText('Profile-scoped controls for security, playback, TV, '
+                  const UniversalText(
+                    'Profile-scoped controls for security, playback, TV, '
                     'notifications, backup, discovery, collections, '
                     'privacy, kids safety and performance.',
                   ),
                   const SizedBox(height: 12),
-                  UniversalText('Active profile: '
+                  UniversalText(
+                    'Active profile: '
                     '${AppController.instance.currentProfile?.name ?? 'Default'}',
                     style: const TextStyle(color: Colors.white60),
                   ),
@@ -532,7 +538,8 @@ class PlatformExpansionScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.file_present_rounded),
               title: const UniversalText('Backup Manifest Preview'),
-              subtitle: const UniversalText('Preview the profile-scoped settings that will be backed up.',
+              subtitle: const UniversalText(
+                'Preview the profile-scoped settings that will be backed up.',
               ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => _showBackupPreview(context),
@@ -569,7 +576,8 @@ class PlatformExpansionScreen extends StatelessWidget {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: UniversalText('Backup manifest copied to clipboard.'),
+                    content:
+                        UniversalText('Backup manifest copied to clipboard.'),
                   ),
                 );
               }
@@ -600,6 +608,7 @@ class _PlatformCategoryScreenState extends State<_PlatformCategoryScreen> {
   late Map<String, bool> values;
 
   @override
+
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
@@ -624,6 +633,7 @@ class _PlatformCategoryScreenState extends State<_PlatformCategoryScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -688,7 +698,6 @@ class _PreferenceSpec {
   });
 }
 
-
 // Consolidated from lib/expanded_platform.dart.
 /// Delivery state for capabilities tracked by the expanded-platform roadmap.
 enum CapabilityStage { foundation, existing, planned }
@@ -719,65 +728,478 @@ class ExpandedPlatformCatalog {
   ExpandedPlatformCatalog._();
 
   static const capabilities = <PlatformCapability>[
-    PlatformCapability(id: 'hey_media_agents', title: 'Hey Media Agent Skills', description: 'Permission-aware orchestration across discovery, playback, library, social and commerce.', category: 'Hey Media AI', stage: CapabilityStage.foundation, icon: Icons.auto_awesome),
-    PlatformCapability(id: 'scene_navigation', title: 'Smart Scene Navigation', description: 'Searchable scenes, chapter jumps, bookmarks and spoiler-aware results.', category: 'Media', stage: CapabilityStage.planned, icon: Icons.movie_filter),
-    PlatformCapability(id: 'multi_room', title: 'Multi-Room Entertainment', description: 'Authorized device discovery, room preferences and playback handoff.', category: 'Devices', stage: CapabilityStage.planned, icon: Icons.speaker_group),
-    PlatformCapability(id: 'connection_graph', title: 'Entertainment Connection Graph', description: 'Connect titles, cast, crew, artists, soundtracks and related products.', category: 'Discovery', stage: CapabilityStage.foundation, icon: Icons.hub),
-    PlatformCapability(id: 'watch_activities', title: 'Trivia and Watch-Along Activities', description: 'Optional quizzes, polls and spoiler-aware party activities.', category: 'Social', stage: CapabilityStage.planned, icon: Icons.quiz),
-    PlatformCapability(id: 'activity_timeline', title: 'Personal Entertainment Timeline', description: 'Private, editable activity history with export and visibility controls.', category: 'Profiles', stage: CapabilityStage.foundation, icon: Icons.timeline),
-    PlatformCapability(id: 'achievements', title: 'Digital Collectibles and Achievements', description: 'Cosmetic milestones and transparent community achievements.', category: 'Profiles', stage: CapabilityStage.planned, icon: Icons.workspace_premium),
-    PlatformCapability(id: 'structured_reviews', title: 'Structured Reviews', description: 'Category ratings, spoiler labels, abuse reporting and verified-purchase signals.', category: 'Community', stage: CapabilityStage.foundation, icon: Icons.rate_review),
-    PlatformCapability(id: 'library_health', title: 'Library Health Assistant', description: 'Detect duplicate imports, missing episodes, metadata mismatches and unavailable files.', category: 'Personal Library', stage: CapabilityStage.foundation, icon: Icons.health_and_safety),
-    PlatformCapability(id: 'language_accessibility', title: 'Language and Accessibility Matching', description: 'Per-profile language, caption, subtitle, audio-description and text preferences.', category: 'Accessibility', stage: CapabilityStage.foundation, icon: Icons.closed_caption),
-    PlatformCapability(id: 'restaurant_confidence', title: 'Restaurant Confidence Tools', description: 'Ingredient and allergen details with staff confirmation for uncertain requests.', category: 'Food Delivery', stage: CapabilityStage.existing, icon: Icons.restaurant),
-    PlatformCapability(id: 'smart_wishlists', title: 'Smart Wishlists and Price Alerts', description: 'Saved products, restock alerts and trustworthy price-change notifications.', category: 'Commerce', stage: CapabilityStage.planned, icon: Icons.favorite),
-    PlatformCapability(id: 'order_center', title: 'Order and Receipt Center', description: 'Food and marketplace receipts, status, support, cancellations and refunds.', category: 'Commerce', stage: CapabilityStage.foundation, icon: Icons.receipt_long),
-    PlatformCapability(id: 'creator_collaboration', title: 'Creator Collaboration Workspace', description: 'Shared drafts, assigned reviews, assets, revision history and publishing schedules.', category: 'Creators', stage: CapabilityStage.planned, icon: Icons.groups),
-    PlatformCapability(id: 'playback_diagnostics', title: 'Playback Diagnostics', description: 'Explain buffering, codec, network and media-availability problems.', category: 'Reliability', stage: CapabilityStage.foundation, icon: Icons.network_check),
-    PlatformCapability(id: 'privacy_devices', title: 'Privacy and Connected Device Center', description: 'Review sessions, authorized devices, permissions, AI memory and account activity.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.shield),
-    PlatformCapability(id: 'integrations', title: 'Integration Platform', description: 'Scoped, revocable integrations with documented APIs and rate limits.', category: 'Platform', stage: CapabilityStage.planned, icon: Icons.extension),
-    PlatformCapability(id: 'feature_flags', title: 'Feature Flags and Staged Rollouts', description: 'Enable capabilities for internal testing or selected cohorts before general release.', category: 'Operations', stage: CapabilityStage.foundation, icon: Icons.flag),
-    PlatformCapability(id: 'notifications', title: 'Unified Notification Engine', description: 'One preference center for social, orders, media jobs and reminders.', category: 'Platform', stage: CapabilityStage.foundation, icon: Icons.notifications),
-    PlatformCapability(id: 'audit_trail', title: 'Security Audit Trail', description: 'Record sensitive operations without unnecessary personal-data collection.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.fact_check),
-    PlatformCapability(id: 'metadata_reconciliation', title: 'Metadata Reconciliation', description: 'Merge disc, local-file and provider metadata while preserving provenance.', category: 'Media', stage: CapabilityStage.foundation, icon: Icons.merge_type),
-    PlatformCapability(id: 'graceful_degradation', title: 'Graceful Degradation', description: 'Keep unrelated features usable when an external service or NAS is unavailable.', category: 'Reliability', stage: CapabilityStage.foundation, icon: Icons.offline_bolt),
-    PlatformCapability(id: 'hey_discover', title: 'Hey Discover Universal Search', description: 'Search movies, TV, music, creators, products, restaurants and events with natural-language filters.', category: 'Discovery', stage: CapabilityStage.foundation, icon: Icons.search),
-    PlatformCapability(id: 'universal_media_vault', title: 'Universal Media Vault', description: 'Unify owned media availability, editions, track metadata, import history and secure TrueNAS streaming.', category: 'Personal Library', stage: CapabilityStage.existing, icon: Icons.video_library),
-    PlatformCapability(id: 'collector_collection', title: 'Collector Collection Manager', description: 'Catalog physical discs and editions, condition, purchase details, duplicates and exportable inventory.', category: 'Personal Library', stage: CapabilityStage.planned, icon: Icons.collections_bookmark),
-    PlatformCapability(id: 'advanced_player', title: 'Advanced Player Toolkit', description: 'Track selection, subtitle sync, chapters, playback speed, skip controls and cross-device resume.', category: 'Media', stage: CapabilityStage.existing, icon: Icons.play_circle),
-    PlatformCapability(id: 'watch_parties', title: 'Watch Parties 2.0', description: 'Synchronized viewing, host controls, invitations, chat, reactions and scheduled rooms.', category: 'Social', stage: CapabilityStage.existing, icon: Icons.groups),
-    PlatformCapability(id: 'hey_marathon', title: 'Hey Marathon Planner', description: 'Build viewing schedules and optional themed meal and merchandise plans.', category: 'Discovery', stage: CapabilityStage.existing, icon: Icons.event_available),
-    PlatformCapability(id: 'creator_studio', title: 'Creator Studio', description: 'Manage uploads, drafts, captions, thumbnails, publishing, analytics and eligible monetization.', category: 'Creators', stage: CapabilityStage.planned, icon: Icons.video_library),
-    PlatformCapability(id: 'home_theater', title: 'Hey Home Theater', description: 'Coordinate compatible TVs, speakers and supported smart-home routines with explicit permissions.', category: 'Devices', stage: CapabilityStage.planned, icon: Icons.home),
-    PlatformCapability(id: 'offline_travel', title: 'Offline and Travel Mode', description: 'Queue eligible downloads, manage device storage and reconcile progress after reconnecting.', category: 'Media', stage: CapabilityStage.planned, icon: Icons.download_for_offline),
-    PlatformCapability(id: 'family_household', title: 'Family and Household Hub', description: 'Individual profiles, parent-approved purchases, age controls and shared household lists.', category: 'Profiles', stage: CapabilityStage.foundation, icon: Icons.family_restroom),
-    PlatformCapability(id: 'events_experiences', title: 'Events and Experiences', description: 'Discover screenings, concerts and fan events with RSVP, accessibility details and ticket links.', category: 'Community', stage: CapabilityStage.planned, icon: Icons.event),
-    PlatformCapability(id: 'gifting', title: 'Gifting and Shared Purchases', description: 'Gift eligible plans, merchandise and restaurant vouchers with group contributions and redemption tracking.', category: 'Commerce', stage: CapabilityStage.planned, icon: Icons.card_giftcard),
-    PlatformCapability(id: 'activity_insights', title: 'Personal Activity and Insights', description: 'User-controlled watching, listening, collection, and community recaps with data export.', category: 'Profiles', stage: CapabilityStage.foundation, icon: Icons.insights),
-    PlatformCapability(id: 'subscription_companion', title: 'Subscription and Spending Companion', description: 'Track authorized subscription details, renewals, spending summaries and optional budget alerts.', category: 'Commerce', stage: CapabilityStage.planned, icon: Icons.account_balance_wallet),
-    PlatformCapability(id: 'seller_operations', title: 'Seller and Restaurant Operations', description: 'Manage menus, inventory, hours, order preparation, customer messages, promotions and refunds.', category: 'Commerce', stage: CapabilityStage.existing, icon: Icons.storefront),
-    PlatformCapability(id: 'media_ops_control_plane', title: 'Media Operations Control Plane', description: 'Monitor import, metadata, thumbnail and transcode jobs with retries, failures and server health.', category: 'Operations', stage: CapabilityStage.foundation, icon: Icons.monitor_heart),
-    PlatformCapability(id: 'music_studio', title: 'Music Studio', description: 'Artist pages, albums, playlists, lyrics and credits, connected to soundtracks and media titles.', category: 'Music', stage: CapabilityStage.existing, icon: Icons.music_note),
-    PlatformCapability(id: 'membership_rewards', title: 'Unified Membership and Rewards', description: 'Transparent points and eligible benefits across platform plans, Shop purchases and food orders.', category: 'Commerce', stage: CapabilityStage.planned, icon: Icons.loyalty),
-    PlatformCapability(id: 'trivia_activities', title: 'Fandom Trivia and Watch-Along Activities', description: 'Optional trivia, polls and predictions with spoiler-aware timing and accessibility settings.', category: 'Social', stage: CapabilityStage.planned, icon: Icons.quiz),
-    PlatformCapability(id: 'privacy_ai_memory', title: 'Hey Media Memory Controls', description: 'Review, edit, disable and delete explicitly saved assistant preferences and memories.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.psychology),
-    PlatformCapability(id: 'proactive_assistant', title: 'Hey Media Proactive Assistant', description: 'Permission-based suggestions for resumes, library fixes, events and watch-party preparation; always dismissible.', category: 'Hey Media AI', stage: CapabilityStage.planned, icon: Icons.lightbulb_outline),
-    PlatformCapability(id: 'interactive_entertainment', title: 'Interactive Entertainment', description: 'Support provider-authorized branching stories, polls and interactive playback without changing ordinary video playback.', category: 'Media', stage: CapabilityStage.planned, icon: Icons.account_tree),
-    PlatformCapability(id: 'franchise_timeline', title: 'Franchise and Universe Timeline', description: 'Organize connected titles by release, story chronology or recommended order with spoiler-aware warnings.', category: 'Discovery', stage: CapabilityStage.foundation, icon: Icons.timeline),
-    PlatformCapability(id: 'custom_media_spaces', title: 'Custom Media Spaces', description: 'Create themed, shareable personal spaces with artwork, filters, curated media and explicit visibility.', category: 'Personal Library', stage: CapabilityStage.foundation, icon: Icons.dashboard_customize),
-    PlatformCapability(id: 'nas_storage_intelligence', title: 'NAS Storage Intelligence', description: 'Track storage capacity, integrity checks, backup verification and health alerts without destructive automatic cleanup.', category: 'Operations', stage: CapabilityStage.planned, icon: Icons.storage),
-    PlatformCapability(id: 'accessibility_companion', title: 'Accessibility Companion', description: 'Provide accessible navigation, high contrast, screen-reader semantics, reduced motion and compatible audio description controls.', category: 'Accessibility', stage: CapabilityStage.foundation, icon: Icons.accessibility_new),
-    PlatformCapability(id: 'group_decisions', title: 'Group Decision Assistant', description: 'Help a group choose media using volunteered preferences without exposing private watch histories.', category: 'Social', stage: CapabilityStage.planned, icon: Icons.how_to_vote),
-    PlatformCapability(id: 'media_provenance', title: 'Media Provenance and Version History', description: 'Track metadata sources, import history, confidence and reversible corrections without overwriting media binaries.', category: 'Media', stage: CapabilityStage.foundation, icon: Icons.history),
-    PlatformCapability(id: 'marketplace_trust', title: 'Marketplace Trust Center', description: 'Support seller verification, transparent fees, dispute workflows, returns and listing authenticity signals.', category: 'Commerce', stage: CapabilityStage.planned, icon: Icons.verified_user),
-    PlatformCapability(id: 'premieres_live_events', title: 'Premieres and Live Community Events', description: 'Schedule approved creator premieres, moderated live chat and Q&A with operational safeguards.', category: 'Creators', stage: CapabilityStage.planned, icon: Icons.live_tv),
-    PlatformCapability(id: 'developer_integration_hub', title: 'Developer and Integration Hub', description: 'Manage documented APIs, scoped credentials, rate limits, test environments and revocable integrations.', category: 'Platform', stage: CapabilityStage.planned, icon: Icons.api),
-    PlatformCapability(id: 'self_service_recovery', title: 'Self-Service Recovery Center', description: 'Help users diagnose playback and import failures, safely retry tasks and review service status.', category: 'Reliability', stage: CapabilityStage.planned, icon: Icons.build_circle),
-    PlatformCapability(id: 'edition_intelligence', title: 'Collector Edition Intelligence', description: 'Track theatrical, extended, remastered and regional editions, disc formats, track layouts and extras without merging distinct cuts.', category: 'Personal Library', stage: CapabilityStage.foundation, icon: Icons.collections_bookmark),
-    PlatformCapability(id: 'explainable_recommendations', title: 'Explainable Recommendations', description: 'Let users see and tune why media is recommended, with explicit feedback and privacy-preserving preference signals.', category: 'Discovery', stage: CapabilityStage.foundation, icon: Icons.auto_awesome),
-    PlatformCapability(id: 'secure_media_gateway', title: 'Secure Media Access Gateway', description: 'Authorize private TrueNAS playback through a server-side gateway or short-lived scoped access; never expose NAS credentials to clients.', category: 'Security', stage: CapabilityStage.foundation, icon: Icons.vpn_key),
-    PlatformCapability(id: 'unified_commerce_orchestration', title: 'Unified Commerce Orchestration', description: 'Share checkout, receipts, notifications, support, refund records and fraud controls while preserving dedicated restaurant and delivery workflows.', category: 'Commerce', stage: CapabilityStage.foundation, icon: Icons.shopping_cart_checkout),
-    PlatformCapability(id: 'release_readiness', title: 'Release Readiness and Recovery', description: 'Gate releases on automated tests, migration checks, backups, observability, rollback plans and documented incident procedures.', category: 'Operations', stage: CapabilityStage.foundation, icon: Icons.check_circle),
+    PlatformCapability(
+        id: 'hey_media_agents',
+        title: 'Hey Media Agent Skills',
+        description:
+            'Permission-aware orchestration across discovery, playback, library, social and commerce.',
+        category: 'Hey Media AI',
+        stage: CapabilityStage.foundation,
+        icon: Icons.auto_awesome),
+    PlatformCapability(
+        id: 'scene_navigation',
+        title: 'Smart Scene Navigation',
+        description:
+            'Searchable scenes, chapter jumps, bookmarks and spoiler-aware results.',
+        category: 'Media',
+        stage: CapabilityStage.planned,
+        icon: Icons.movie_filter),
+    PlatformCapability(
+        id: 'multi_room',
+        title: 'Multi-Room Entertainment',
+        description:
+            'Authorized device discovery, room preferences and playback handoff.',
+        category: 'Devices',
+        stage: CapabilityStage.planned,
+        icon: Icons.speaker_group),
+    PlatformCapability(
+        id: 'connection_graph',
+        title: 'Entertainment Connection Graph',
+        description:
+            'Connect titles, cast, crew, artists, soundtracks and related products.',
+        category: 'Discovery',
+        stage: CapabilityStage.foundation,
+        icon: Icons.hub),
+    PlatformCapability(
+        id: 'watch_activities',
+        title: 'Trivia and Watch-Along Activities',
+        description:
+            'Optional quizzes, polls and spoiler-aware party activities.',
+        category: 'Social',
+        stage: CapabilityStage.planned,
+        icon: Icons.quiz),
+    PlatformCapability(
+        id: 'activity_timeline',
+        title: 'Personal Entertainment Timeline',
+        description:
+            'Private, editable activity history with export and visibility controls.',
+        category: 'Profiles',
+        stage: CapabilityStage.foundation,
+        icon: Icons.timeline),
+    PlatformCapability(
+        id: 'achievements',
+        title: 'Digital Collectibles and Achievements',
+        description:
+            'Cosmetic milestones and transparent community achievements.',
+        category: 'Profiles',
+        stage: CapabilityStage.planned,
+        icon: Icons.workspace_premium),
+    PlatformCapability(
+        id: 'structured_reviews',
+        title: 'Structured Reviews',
+        description:
+            'Category ratings, spoiler labels, abuse reporting and verified-purchase signals.',
+        category: 'Community',
+        stage: CapabilityStage.foundation,
+        icon: Icons.rate_review),
+    PlatformCapability(
+        id: 'library_health',
+        title: 'Library Health Assistant',
+        description:
+            'Detect duplicate imports, missing episodes, metadata mismatches and unavailable files.',
+        category: 'Personal Library',
+        stage: CapabilityStage.foundation,
+        icon: Icons.health_and_safety),
+    PlatformCapability(
+        id: 'language_accessibility',
+        title: 'Language and Accessibility Matching',
+        description:
+            'Per-profile language, caption, subtitle, audio-description and text preferences.',
+        category: 'Accessibility',
+        stage: CapabilityStage.foundation,
+        icon: Icons.closed_caption),
+    PlatformCapability(
+        id: 'restaurant_confidence',
+        title: 'Restaurant Confidence Tools',
+        description:
+            'Ingredient and allergen details with staff confirmation for uncertain requests.',
+        category: 'Food Delivery',
+        stage: CapabilityStage.existing,
+        icon: Icons.restaurant),
+    PlatformCapability(
+        id: 'smart_wishlists',
+        title: 'Smart Wishlists and Price Alerts',
+        description:
+            'Saved products, restock alerts and trustworthy price-change notifications.',
+        category: 'Commerce',
+        stage: CapabilityStage.planned,
+        icon: Icons.favorite),
+    PlatformCapability(
+        id: 'order_center',
+        title: 'Order and Receipt Center',
+        description:
+            'Food and marketplace receipts, status, support, cancellations and refunds.',
+        category: 'Commerce',
+        stage: CapabilityStage.foundation,
+        icon: Icons.receipt_long),
+    PlatformCapability(
+        id: 'creator_collaboration',
+        title: 'Creator Collaboration Workspace',
+        description:
+            'Shared drafts, assigned reviews, assets, revision history and publishing schedules.',
+        category: 'Creators',
+        stage: CapabilityStage.planned,
+        icon: Icons.groups),
+    PlatformCapability(
+        id: 'playback_diagnostics',
+        title: 'Playback Diagnostics',
+        description:
+            'Explain buffering, codec, network and media-availability problems.',
+        category: 'Reliability',
+        stage: CapabilityStage.foundation,
+        icon: Icons.network_check),
+    PlatformCapability(
+        id: 'privacy_devices',
+        title: 'Privacy and Connected Device Center',
+        description:
+            'Review sessions, authorized devices, permissions, AI memory and account activity.',
+        category: 'Security',
+        stage: CapabilityStage.foundation,
+        icon: Icons.shield),
+    PlatformCapability(
+        id: 'integrations',
+        title: 'Integration Platform',
+        description:
+            'Scoped, revocable integrations with documented APIs and rate limits.',
+        category: 'Platform',
+        stage: CapabilityStage.planned,
+        icon: Icons.extension),
+    PlatformCapability(
+        id: 'feature_flags',
+        title: 'Feature Flags and Staged Rollouts',
+        description:
+            'Enable capabilities for internal testing or selected cohorts before general release.',
+        category: 'Operations',
+        stage: CapabilityStage.foundation,
+        icon: Icons.flag),
+    PlatformCapability(
+        id: 'notifications',
+        title: 'Unified Notification Engine',
+        description:
+            'One preference center for social, orders, media jobs and reminders.',
+        category: 'Platform',
+        stage: CapabilityStage.foundation,
+        icon: Icons.notifications),
+    PlatformCapability(
+        id: 'audit_trail',
+        title: 'Security Audit Trail',
+        description:
+            'Record sensitive operations without unnecessary personal-data collection.',
+        category: 'Security',
+        stage: CapabilityStage.foundation,
+        icon: Icons.fact_check),
+    PlatformCapability(
+        id: 'metadata_reconciliation',
+        title: 'Metadata Reconciliation',
+        description:
+            'Merge disc, local-file and provider metadata while preserving provenance.',
+        category: 'Media',
+        stage: CapabilityStage.foundation,
+        icon: Icons.merge_type),
+    PlatformCapability(
+        id: 'graceful_degradation',
+        title: 'Graceful Degradation',
+        description:
+            'Keep unrelated features usable when an external service or NAS is unavailable.',
+        category: 'Reliability',
+        stage: CapabilityStage.foundation,
+        icon: Icons.offline_bolt),
+    PlatformCapability(
+        id: 'hey_discover',
+        title: 'Hey Discover Universal Search',
+        description:
+            'Search movies, TV, music, creators, products, restaurants and events with natural-language filters.',
+        category: 'Discovery',
+        stage: CapabilityStage.foundation,
+        icon: Icons.search),
+    PlatformCapability(
+        id: 'universal_media_vault',
+        title: 'Universal Media Vault',
+        description:
+            'Unify owned media availability, editions, track metadata, import history and secure TrueNAS streaming.',
+        category: 'Personal Library',
+        stage: CapabilityStage.existing,
+        icon: Icons.video_library),
+    PlatformCapability(
+        id: 'collector_collection',
+        title: 'Collector Collection Manager',
+        description:
+            'Catalog physical discs and editions, condition, purchase details, duplicates and exportable inventory.',
+        category: 'Personal Library',
+        stage: CapabilityStage.planned,
+        icon: Icons.collections_bookmark),
+    PlatformCapability(
+        id: 'advanced_player',
+        title: 'Advanced Player Toolkit',
+        description:
+            'Track selection, subtitle sync, chapters, playback speed, skip controls and cross-device resume.',
+        category: 'Media',
+        stage: CapabilityStage.existing,
+        icon: Icons.play_circle),
+    PlatformCapability(
+        id: 'watch_parties',
+        title: 'Watch Parties 2.0',
+        description:
+            'Synchronized viewing, host controls, invitations, chat, reactions and scheduled rooms.',
+        category: 'Social',
+        stage: CapabilityStage.existing,
+        icon: Icons.groups),
+    PlatformCapability(
+        id: 'hey_marathon',
+        title: 'Hey Marathon Planner',
+        description:
+            'Build viewing schedules and optional themed meal and merchandise plans.',
+        category: 'Discovery',
+        stage: CapabilityStage.existing,
+        icon: Icons.event_available),
+    PlatformCapability(
+        id: 'creator_studio',
+        title: 'Creator Studio',
+        description:
+            'Manage uploads, drafts, captions, thumbnails, publishing, analytics and eligible monetization.',
+        category: 'Creators',
+        stage: CapabilityStage.planned,
+        icon: Icons.video_library),
+    PlatformCapability(
+        id: 'home_theater',
+        title: 'Hey Home Theater',
+        description:
+            'Coordinate compatible TVs, speakers and supported smart-home routines with explicit permissions.',
+        category: 'Devices',
+        stage: CapabilityStage.planned,
+        icon: Icons.home),
+    PlatformCapability(
+        id: 'offline_travel',
+        title: 'Offline and Travel Mode',
+        description:
+            'Queue eligible downloads, manage device storage and reconcile progress after reconnecting.',
+        category: 'Media',
+        stage: CapabilityStage.planned,
+        icon: Icons.download_for_offline),
+    PlatformCapability(
+        id: 'family_household',
+        title: 'Family and Household Hub',
+        description:
+            'Individual profiles, parent-approved purchases, age controls and shared household lists.',
+        category: 'Profiles',
+        stage: CapabilityStage.foundation,
+        icon: Icons.family_restroom),
+    PlatformCapability(
+        id: 'events_experiences',
+        title: 'Events and Experiences',
+        description:
+            'Discover screenings, concerts and fan events with RSVP, accessibility details and ticket links.',
+        category: 'Community',
+        stage: CapabilityStage.planned,
+        icon: Icons.event),
+    PlatformCapability(
+        id: 'gifting',
+        title: 'Gifting and Shared Purchases',
+        description:
+            'Gift eligible plans, merchandise and restaurant vouchers with group contributions and redemption tracking.',
+        category: 'Commerce',
+        stage: CapabilityStage.planned,
+        icon: Icons.card_giftcard),
+    PlatformCapability(
+        id: 'activity_insights',
+        title: 'Personal Activity and Insights',
+        description:
+            'User-controlled watching, listening, collection, and community recaps with data export.',
+        category: 'Profiles',
+        stage: CapabilityStage.foundation,
+        icon: Icons.insights),
+    PlatformCapability(
+        id: 'subscription_companion',
+        title: 'Subscription and Spending Companion',
+        description:
+            'Track authorized subscription details, renewals, spending summaries and optional budget alerts.',
+        category: 'Commerce',
+        stage: CapabilityStage.planned,
+        icon: Icons.account_balance_wallet),
+    PlatformCapability(
+        id: 'seller_operations',
+        title: 'Seller and Restaurant Operations',
+        description:
+            'Manage menus, inventory, hours, order preparation, customer messages, promotions and refunds.',
+        category: 'Commerce',
+        stage: CapabilityStage.existing,
+        icon: Icons.storefront),
+    PlatformCapability(
+        id: 'media_ops_control_plane',
+        title: 'Media Operations Control Plane',
+        description:
+            'Monitor import, metadata, thumbnail and transcode jobs with retries, failures and server health.',
+        category: 'Operations',
+        stage: CapabilityStage.foundation,
+        icon: Icons.monitor_heart),
+    PlatformCapability(
+        id: 'music_studio',
+        title: 'Music Studio',
+        description:
+            'Artist pages, albums, playlists, lyrics and credits, connected to soundtracks and media titles.',
+        category: 'Music',
+        stage: CapabilityStage.existing,
+        icon: Icons.music_note),
+    PlatformCapability(
+        id: 'membership_rewards',
+        title: 'Unified Membership and Rewards',
+        description:
+            'Transparent points and eligible benefits across platform plans, Shop purchases and food orders.',
+        category: 'Commerce',
+        stage: CapabilityStage.planned,
+        icon: Icons.loyalty),
+    PlatformCapability(
+        id: 'trivia_activities',
+        title: 'Fandom Trivia and Watch-Along Activities',
+        description:
+            'Optional trivia, polls and predictions with spoiler-aware timing and accessibility settings.',
+        category: 'Social',
+        stage: CapabilityStage.planned,
+        icon: Icons.quiz),
+    PlatformCapability(
+        id: 'privacy_ai_memory',
+        title: 'Hey Media Memory Controls',
+        description:
+            'Review, edit, disable and delete explicitly saved assistant preferences and memories.',
+        category: 'Security',
+        stage: CapabilityStage.foundation,
+        icon: Icons.psychology),
+    PlatformCapability(
+        id: 'proactive_assistant',
+        title: 'Hey Media Proactive Assistant',
+        description:
+            'Permission-based suggestions for resumes, library fixes, events and watch-party preparation; always dismissible.',
+        category: 'Hey Media AI',
+        stage: CapabilityStage.planned,
+        icon: Icons.lightbulb_outline),
+    PlatformCapability(
+        id: 'interactive_entertainment',
+        title: 'Interactive Entertainment',
+        description:
+            'Support provider-authorized branching stories, polls and interactive playback without changing ordinary video playback.',
+        category: 'Media',
+        stage: CapabilityStage.planned,
+        icon: Icons.account_tree),
+    PlatformCapability(
+        id: 'franchise_timeline',
+        title: 'Franchise and Universe Timeline',
+        description:
+            'Organize connected titles by release, story chronology or recommended order with spoiler-aware warnings.',
+        category: 'Discovery',
+        stage: CapabilityStage.foundation,
+        icon: Icons.timeline),
+    PlatformCapability(
+        id: 'custom_media_spaces',
+        title: 'Custom Media Spaces',
+        description:
+            'Create themed, shareable personal spaces with artwork, filters, curated media and explicit visibility.',
+        category: 'Personal Library',
+        stage: CapabilityStage.foundation,
+        icon: Icons.dashboard_customize),
+    PlatformCapability(
+        id: 'nas_storage_intelligence',
+        title: 'NAS Storage Intelligence',
+        description:
+            'Track storage capacity, integrity checks, backup verification and health alerts without destructive automatic cleanup.',
+        category: 'Operations',
+        stage: CapabilityStage.planned,
+        icon: Icons.storage),
+    PlatformCapability(
+        id: 'accessibility_companion',
+        title: 'Accessibility Companion',
+        description:
+            'Provide accessible navigation, high contrast, screen-reader semantics, reduced motion and compatible audio description controls.',
+        category: 'Accessibility',
+        stage: CapabilityStage.foundation,
+        icon: Icons.accessibility_new),
+    PlatformCapability(
+        id: 'group_decisions',
+        title: 'Group Decision Assistant',
+        description:
+            'Help a group choose media using volunteered preferences without exposing private watch histories.',
+        category: 'Social',
+        stage: CapabilityStage.planned,
+        icon: Icons.how_to_vote),
+    PlatformCapability(
+        id: 'media_provenance',
+        title: 'Media Provenance and Version History',
+        description:
+            'Track metadata sources, import history, confidence and reversible corrections without overwriting media binaries.',
+        category: 'Media',
+        stage: CapabilityStage.foundation,
+        icon: Icons.history),
+    PlatformCapability(
+        id: 'marketplace_trust',
+        title: 'Marketplace Trust Center',
+        description:
+            'Support seller verification, transparent fees, dispute workflows, returns and listing authenticity signals.',
+        category: 'Commerce',
+        stage: CapabilityStage.planned,
+        icon: Icons.verified_user),
+    PlatformCapability(
+        id: 'premieres_live_events',
+        title: 'Premieres and Live Community Events',
+        description:
+            'Schedule approved creator premieres, moderated live chat and Q&A with operational safeguards.',
+        category: 'Creators',
+        stage: CapabilityStage.planned,
+        icon: Icons.live_tv),
+    PlatformCapability(
+        id: 'developer_integration_hub',
+        title: 'Developer and Integration Hub',
+        description:
+            'Manage documented APIs, scoped credentials, rate limits, test environments and revocable integrations.',
+        category: 'Platform',
+        stage: CapabilityStage.planned,
+        icon: Icons.api),
+    PlatformCapability(
+        id: 'self_service_recovery',
+        title: 'Self-Service Recovery Center',
+        description:
+            'Help users diagnose playback and import failures, safely retry tasks and review service status.',
+        category: 'Reliability',
+        stage: CapabilityStage.planned,
+        icon: Icons.build_circle),
+    PlatformCapability(
+        id: 'edition_intelligence',
+        title: 'Collector Edition Intelligence',
+        description:
+            'Track theatrical, extended, remastered and regional editions, disc formats, track layouts and extras without merging distinct cuts.',
+        category: 'Personal Library',
+        stage: CapabilityStage.foundation,
+        icon: Icons.collections_bookmark),
+    PlatformCapability(
+        id: 'explainable_recommendations',
+        title: 'Explainable Recommendations',
+        description:
+            'Let users see and tune why media is recommended, with explicit feedback and privacy-preserving preference signals.',
+        category: 'Discovery',
+        stage: CapabilityStage.foundation,
+        icon: Icons.auto_awesome),
+    PlatformCapability(
+        id: 'secure_media_gateway',
+        title: 'Secure Media Access Gateway',
+        description:
+            'Authorize private TrueNAS playback through a server-side gateway or short-lived scoped access; never expose NAS credentials to clients.',
+        category: 'Security',
+        stage: CapabilityStage.foundation,
+        icon: Icons.vpn_key),
+    PlatformCapability(
+        id: 'unified_commerce_orchestration',
+        title: 'Unified Commerce Orchestration',
+        description:
+            'Share checkout, receipts, notifications, support, refund records and fraud controls while preserving dedicated restaurant and delivery workflows.',
+        category: 'Commerce',
+        stage: CapabilityStage.foundation,
+        icon: Icons.shopping_cart_checkout),
+    PlatformCapability(
+        id: 'release_readiness',
+        title: 'Release Readiness and Recovery',
+        description:
+            'Gate releases on automated tests, migration checks, backups, observability, rollback plans and documented incident procedures.',
+        category: 'Operations',
+        stage: CapabilityStage.foundation,
+        icon: Icons.check_circle),
   ];
 
   static List<PlatformCapability> inCategory(String category) =>
@@ -869,8 +1291,10 @@ class ExpandedPlatformRepository {
         .select('id,media_key,position_ms,label,note,created_at')
         .eq('media_key', mediaKey)
         .order('position_ms');
-    return rows.map((row) => MediaSceneBookmark.fromJson(
-        Map<String, dynamic>.from(row))).toList();
+    return rows
+        .map((row) =>
+            MediaSceneBookmark.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<MediaSceneBookmark?> addSceneBookmark({
@@ -882,13 +1306,17 @@ class ExpandedPlatformRepository {
     final client = SupabaseConfig.client;
     if (client == null || client.auth.currentUser == null) return null;
     if (mediaKey.trim().isEmpty || positionMs < 0) {
-      throw ArgumentError('A media key and non-negative position are required.');
+      throw ArgumentError(
+          'A media key and non-negative position are required.');
     }
     final row = await client
         .from('user_media_scene_bookmarks')
         .insert(MediaSceneBookmark(
-          id: '', mediaKey: mediaKey.trim(), positionMs: positionMs,
-          label: label, note: note,
+          id: '',
+          mediaKey: mediaKey.trim(),
+          positionMs: positionMs,
+          label: label,
+          note: note,
         ).toInsertJson())
         .select('id,media_key,position_ms,label,note,created_at')
         .single();
@@ -902,8 +1330,10 @@ class ExpandedPlatformRepository {
         .from('hey_media_memory_entries')
         .select('id,memory_key,memory_value,created_at,updated_at')
         .order('updated_at', ascending: false);
-    return rows.map((row) => HeyMediaMemoryEntry.fromJson(
-        Map<String, dynamic>.from(row))).toList();
+    return rows
+        .map((row) =>
+            HeyMediaMemoryEntry.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<void> saveAssistantMemory({
@@ -935,7 +1365,6 @@ class ExpandedPlatformRepository {
     await client.from('hey_media_memory_entries').delete().eq('id', id);
   }
 
-
   Future<List<HeyMediaSuggestion>> assistantSuggestions() async {
     final client = SupabaseConfig.client;
     if (client == null || client.auth.currentUser == null) return const [];
@@ -944,28 +1373,36 @@ class ExpandedPlatformRepository {
         .select('id,suggestion_type,title,body,status,expires_at')
         .eq('status', 'pending')
         .order('created_at', ascending: false);
-    return rows.map((row) => HeyMediaSuggestion.fromJson(
-        Map<String, dynamic>.from(row))).toList();
+    return rows
+        .map((row) =>
+            HeyMediaSuggestion.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<void> dismissAssistantSuggestion(String id) async {
     final client = SupabaseConfig.client;
     if (client == null || client.auth.currentUser == null) return;
     if (id.trim().isEmpty) throw ArgumentError('Suggestion id is required.');
-    await client.from('user_hey_media_suggestions').update({
-      'status': 'dismissed',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', id).eq('status', 'pending');
+    await client
+        .from('user_hey_media_suggestions')
+        .update({
+          'status': 'dismissed',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id)
+        .eq('status', 'pending');
   }
 
   Future<List<UserMediaSpace>> mediaSpaces() async {
     final client = SupabaseConfig.client;
     if (client == null || client.auth.currentUser == null) return const [];
-    final rows = await client.from('user_media_spaces')
+    final rows = await client
+        .from('user_media_spaces')
         .select('id,title,description,visibility,created_at')
         .order('created_at', ascending: false);
-    return rows.map((row) => UserMediaSpace.fromJson(
-        Map<String, dynamic>.from(row))).toList();
+    return rows
+        .map((row) => UserMediaSpace.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<UserMediaSpace?> createMediaSpace({
@@ -984,22 +1421,32 @@ class ExpandedPlatformRepository {
     if (!const {'private', 'friends', 'public'}.contains(visibility)) {
       throw ArgumentError('Unsupported media space visibility.');
     }
-    final row = await client.from('user_media_spaces').insert(
-      UserMediaSpace(id: '', title: normalizedTitle, description: description,
-        visibility: visibility).toInsertJson(),
-    ).select('id,title,description,visibility,created_at').single();
+    final row = await client
+        .from('user_media_spaces')
+        .insert(
+          UserMediaSpace(
+                  id: '',
+                  title: normalizedTitle,
+                  description: description,
+                  visibility: visibility)
+              .toInsertJson(),
+        )
+        .select('id,title,description,visibility,created_at')
+        .single();
     return UserMediaSpace.fromJson(Map<String, dynamic>.from(row));
   }
-
 
   Future<List<CollectorEdition>> collectorEditions() async {
     final client = SupabaseConfig.client;
     if (client == null || client.auth.currentUser == null) return const [];
-    final rows = await client.from('user_media_collector_editions')
-        .select('id,media_key,edition_title,disc_format,region_code,edition_details,condition_label,acquired_at,created_at')
+    final rows = await client
+        .from('user_media_collector_editions')
+        .select(
+            'id,media_key,edition_title,disc_format,region_code,edition_details,condition_label,acquired_at,created_at')
         .order('created_at', ascending: false);
-    return rows.map((row) => CollectorEdition.fromJson(
-        Map<String, dynamic>.from(row))).toList();
+    return rows
+        .map((row) => CollectorEdition.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   Future<CollectorEdition?> saveCollectorEdition({
@@ -1021,18 +1468,24 @@ class ExpandedPlatformRepository {
     if (editionTitle.trim().isEmpty || editionTitle.trim().length > 200) {
       throw ArgumentError('Edition title must be 1–200 characters.');
     }
-    final row = await client.from('user_media_collector_editions').insert({
-      'media_key': mediaKey.trim(),
-      'edition_title': editionTitle.trim(),
-      if (discFormat != null && discFormat.trim().isNotEmpty)
-        'disc_format': discFormat.trim(),
-      if (regionCode != null && regionCode.trim().isNotEmpty)
-        'region_code': regionCode.trim(),
-      if (conditionLabel != null && conditionLabel.trim().isNotEmpty)
-        'condition_label': conditionLabel.trim(),
-      if (acquiredAt != null) 'acquired_at': acquiredAt.toUtc().toIso8601String(),
-      'edition_details': editionDetails,
-    }).select('id,media_key,edition_title,disc_format,region_code,edition_details,condition_label,acquired_at,created_at').single();
+    final row = await client
+        .from('user_media_collector_editions')
+        .insert({
+          'media_key': mediaKey.trim(),
+          'edition_title': editionTitle.trim(),
+          if (discFormat != null && discFormat.trim().isNotEmpty)
+            'disc_format': discFormat.trim(),
+          if (regionCode != null && regionCode.trim().isNotEmpty)
+            'region_code': regionCode.trim(),
+          if (conditionLabel != null && conditionLabel.trim().isNotEmpty)
+            'condition_label': conditionLabel.trim(),
+          if (acquiredAt != null)
+            'acquired_at': acquiredAt.toUtc().toIso8601String(),
+          'edition_details': editionDetails,
+        })
+        .select(
+            'id,media_key,edition_title,disc_format,region_code,edition_details,condition_label,acquired_at,created_at')
+        .single();
     return CollectorEdition.fromJson(Map<String, dynamic>.from(row));
   }
 
@@ -1046,7 +1499,13 @@ class ExpandedPlatformRepository {
     if (client == null || client.auth.currentUser == null) {
       throw StateError('Sign in before saving recommendation feedback.');
     }
-    const allowedSignals = {'like', 'dislike', 'not_interested', 'already_seen', 'not_for_me'};
+    const allowedSignals = {
+      'like',
+      'dislike',
+      'not_interested',
+      'already_seen',
+      'not_for_me'
+    };
     if (mediaKey.trim().isEmpty || mediaKey.trim().length > 500) {
       throw ArgumentError('A valid media key is required.');
     }
@@ -1056,15 +1515,14 @@ class ExpandedPlatformRepository {
     await client.from('user_recommendation_feedback').insert({
       'media_key': mediaKey.trim(),
       'signal': signal,
-      if (recommendationSource != null && recommendationSource.trim().isNotEmpty)
+      if (recommendationSource != null &&
+          recommendationSource.trim().isNotEmpty)
         'recommendation_source': recommendationSource.trim(),
       if (explanation != null && explanation.trim().isNotEmpty)
         'explanation': explanation.trim(),
     });
   }
-
 }
-
 
 @immutable
 class HeyMediaSuggestion {
@@ -1188,7 +1646,8 @@ class CollectorEdition {
   final DateTime? acquiredAt;
   final DateTime? createdAt;
 
-  factory CollectorEdition.fromJson(Map<String, dynamic> json) => CollectorEdition(
+  factory CollectorEdition.fromJson(Map<String, dynamic> json) =>
+      CollectorEdition(
         id: json['id'] as String,
         mediaKey: json['media_key'] as String,
         editionTitle: json['edition_title'] as String,
@@ -1226,7 +1685,8 @@ class RecommendationFeedback {
   Map<String, dynamic> toInsertJson() => {
         'media_key': mediaKey.trim(),
         'signal': signal,
-        if (recommendationSource != null && recommendationSource!.trim().isNotEmpty)
+        if (recommendationSource != null &&
+            recommendationSource!.trim().isNotEmpty)
           'recommendation_source': recommendationSource!.trim(),
         if (explanation != null && explanation!.trim().isNotEmpty)
           'explanation': explanation!.trim(),
@@ -1251,7 +1711,8 @@ class _ExpandedPlatformScreenState extends State<ExpandedPlatformScreen> {
         CapabilityStage.planned => 'Needs implementation',
       };
 
-  Color _stageColor(BuildContext context, CapabilityStage stage) => switch (stage) {
+  Color _stageColor(BuildContext context, CapabilityStage stage) =>
+      switch (stage) {
         CapabilityStage.existing => Colors.green,
         CapabilityStage.foundation => Theme.of(context).colorScheme.primary,
         CapabilityStage.planned => Theme.of(context).colorScheme.outline,
@@ -1259,7 +1720,10 @@ class _ExpandedPlatformScreenState extends State<ExpandedPlatformScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ['All', ...(ExpandedPlatformCatalog.categories.toList()..sort())];
+    final categories = [
+      'All',
+      ...(ExpandedPlatformCatalog.categories.toList()..sort())
+    ];
     final items = selectedCategory == 'All'
         ? ExpandedPlatformCatalog.capabilities
         : ExpandedPlatformCatalog.inCategory(selectedCategory);
@@ -1279,14 +1743,17 @@ class _ExpandedPlatformScreenState extends State<ExpandedPlatformScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              children: categories.map((category) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ChoiceChip(
-                  label: Text(category),
-                  selected: selectedCategory == category,
-                  onSelected: (_) => setState(() => selectedCategory = category),
-                ),
-              )).toList(),
+              children: categories
+                  .map((category) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: ChoiceChip(
+                          label: Text(category),
+                          selected: selectedCategory == category,
+                          onSelected: (_) =>
+                              setState(() => selectedCategory = category),
+                        ),
+                      ))
+                  .toList(),
             ),
           ),
           Expanded(
@@ -1301,7 +1768,8 @@ class _ExpandedPlatformScreenState extends State<ExpandedPlatformScreen> {
                   child: ListTile(
                     isThreeLine: true,
                     leading: CircleAvatar(child: Icon(item.icon)),
-                    title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    title: Text(item.title,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Column(
@@ -1310,7 +1778,9 @@ class _ExpandedPlatformScreenState extends State<ExpandedPlatformScreen> {
                           Text(item.description),
                           const SizedBox(height: 6),
                           Wrap(spacing: 6, runSpacing: 4, children: [
-                            Chip(label: Text(item.category), visualDensity: VisualDensity.compact),
+                            Chip(
+                                label: Text(item.category),
+                                visualDensity: VisualDensity.compact),
                             Chip(
                               label: Text(_stageLabel(item.stage)),
                               labelStyle: TextStyle(color: color, fontSize: 12),
@@ -1331,14 +1801,12 @@ class _ExpandedPlatformScreenState extends State<ExpandedPlatformScreen> {
   }
 }
 
-
 // Consolidated from lib/ultimate_features.dart.
 class UltimateFeaturesScreen extends StatefulWidget {
   const UltimateFeaturesScreen({super.key});
 
   @override
-  State<UltimateFeaturesScreen> createState() =>
-      _UltimateFeaturesScreenState();
+  State<UltimateFeaturesScreen> createState() => _UltimateFeaturesScreenState();
 }
 
 class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
@@ -1370,15 +1838,12 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
 
   int get musicTracks => MusicLibraryStore.instance.tracks.length;
 
-  int get musicPlaylists =>
-      MusicLibraryStore.instance.playlists.length;
+  int get musicPlaylists => MusicLibraryStore.instance.playlists.length;
 
   double get watchedPercentage {
     if (controller.library.isEmpty) return 0;
 
-    return (watched / controller.library.length)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    return (watched / controller.library.length).clamp(0.0, 1.0).toDouble();
   }
 
   /// Performs `_push` for this feature. Update this documentation when its contract changes.
@@ -1514,20 +1979,19 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
     final matching = query.isEmpty
         ? <MediaItem>[]
         : controller.library
-              .where(
-                (media) => media.title.toLowerCase().contains(
-                  query.toLowerCase(),
-                ),
-              )
-              .toList();
+            .where(
+              (media) => media.title.toLowerCase().contains(
+                    query.toLowerCase(),
+                  ),
+            )
+            .toList();
 
     final MediaItem pick;
 
     if (matching.isNotEmpty) {
       pick = matching[random.nextInt(matching.length)];
     } else {
-      pick = controller.library[
-          random.nextInt(controller.library.length)];
+      pick = controller.library[random.nextInt(controller.library.length)];
     }
 
     _snack(
@@ -1547,8 +2011,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
     }
 
     final random = math.Random();
-    final pick = controller.library[
-        random.nextInt(controller.library.length)];
+    final pick = controller.library[random.nextInt(controller.library.length)];
 
     _snack(
       'Tonight’s pick: ${pick.title}',
@@ -1568,15 +2031,12 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
 
     final random = math.Random();
 
-    final a = controller.library[
-        random.nextInt(controller.library.length)];
+    final a = controller.library[random.nextInt(controller.library.length)];
 
-    MediaItem b = controller.library[
-        random.nextInt(controller.library.length)];
+    MediaItem b = controller.library[random.nextInt(controller.library.length)];
 
     while (b.id == a.id) {
-      b = controller.library[
-          random.nextInt(controller.library.length)];
+      b = controller.library[random.nextInt(controller.library.length)];
     }
 
     await showDialog<void>(
@@ -1742,9 +2202,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
     final next = result.trim();
 
     setState(() {
-      channel = next.isEmpty
-          ? 'My Streaming Channel'
-          : next;
+      channel = next.isEmpty ? 'My Streaming Channel' : next;
     });
 
     _snack(
@@ -1765,6 +2223,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -2314,9 +2773,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                     label,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -2353,10 +2810,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withValues(alpha: 0.14),
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.14),
               Theme.of(context)
                   .colorScheme
                   .surfaceContainerHighest
@@ -2411,9 +2865,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
-
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -2434,15 +2886,11 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                     account == null
                         ? Icons.person_off_outlined
                         : Icons.person_outline_rounded,
-                    account == null
-                        ? 'Signed out'
-                        : 'Account connected',
+                    account == null ? 'Signed out' : 'Account connected',
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
-
               Row(
                 children: [
                   Expanded(
@@ -2511,9 +2959,7 @@ class _UltimateFeaturesScreenState extends State<UltimateFeaturesScreen> {
                 Icon(
                   icon,
                   size: 19,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -2646,6 +3092,7 @@ class OwnerDashboardScreen extends StatelessWidget {
   const OwnerDashboardScreen({super.key});
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
@@ -2654,10 +3101,9 @@ class OwnerDashboardScreen extends StatelessWidget {
     final double storageProgress =
         account == null || account.storageLimitBytes <= 0
             ? 0.0
-            : (account.storageUsedBytes /
-                      account.storageLimitBytes)
-                  .clamp(0.0, 1.0)
-                  .toDouble();
+            : (account.storageUsedBytes / account.storageLimitBytes)
+                .clamp(0.0, 1.0)
+                .toDouble();
 
     return Scaffold(
       appBar: AppBar(
@@ -2670,8 +3116,7 @@ class OwnerDashboardScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const UniversalText(
                     'Account control center',
@@ -2682,9 +3127,7 @@ class OwnerDashboardScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    account == null
-                        ? 'No account loaded'
-                        : account.email,
+                    account == null ? 'No account loaded' : account.email,
                   ),
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
@@ -2806,6 +3249,7 @@ class SecurityCenterScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2819,8 +3263,7 @@ class SecurityCenterScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(18),
               child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.security_outlined,
@@ -2899,6 +3342,7 @@ class StatisticsScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final controller = AppController.instance;
@@ -2925,9 +3369,7 @@ class StatisticsScreen extends StatelessWidget {
 
     final movieCount = controller.library
         .where(
-          (media) => media.type
-              .toLowerCase()
-              .contains('movie'),
+          (media) => media.type.toLowerCase().contains('movie'),
         )
         .length;
 
@@ -3007,8 +3449,7 @@ class StatisticsScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(
                     Icons.person_outline_rounded,
@@ -3044,8 +3485,7 @@ class StatisticsScreen extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const UniversalText(
               'Library snapshot',
@@ -3146,6 +3586,7 @@ class MovieMapScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3233,6 +3674,7 @@ class ChannelScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final list = [...library];
@@ -3288,6 +3730,7 @@ class NotificationCenterScreen extends StatelessWidget {
   });
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3303,8 +3746,7 @@ class NotificationCenterScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(18),
               child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.notifications_active_outlined,
@@ -3373,171 +3815,328 @@ class NotificationCenterScreen extends StatelessWidget {
 // -----------------------------------------------------------------------------
 
 class BackupScreen extends StatefulWidget {
-  const BackupScreen({
-    super.key,
-  });
+  const BackupScreen({super.key});
 
   @override
-  State<BackupScreen> createState() =>
-      _BackupScreenState();
+  State<BackupScreen> createState() => _BackupScreenState();
 }
 
 class _BackupScreenState extends State<BackupScreen> {
-  bool metadata = true;
-  bool history = true;
-  bool profiles = true;
-  bool collections = true;
+  final AutomaticBackupService _backupService = AutomaticBackupService.instance;
+  List<AutomaticBackupRecord> _backups = const [];
+  bool _busy = false;
 
   @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    final selectedCount = [
-      metadata,
-      history,
-      profiles,
-      collections,
-    ].where((selected) => selected).length;
+  void initState() {
+    super.initState();
+    _backupService.status.addListener(_handleBackupStatusChanged);
+    unawaited(_reloadBackups());
+  }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const UniversalText(
-          'Backup & Recovery',
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(18),
-              child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.backup_outlined,
-                    size: 28,
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: UniversalText(
-                      'Backups protect your library metadata and account configuration. Actual media backups depend on the server storage you connect.',
-                    ),
-                  ),
-                ],
+  void _handleBackupStatusChanged() {
+    if (mounted) unawaited(_reloadBackups());
+  }
+
+  @override
+  void dispose() {
+    _backupService.status.removeListener(_handleBackupStatusChanged);
+    super.dispose();
+  }
+
+  Future<void> _reloadBackups() async {
+    try {
+      final records = await _backupService.listBackups();
+      if (mounted) setState(() => _backups = records);
+    } catch (error) {
+      if (mounted) _showMessage('Could not load local backups: $error');
+    }
+  }
+
+  Future<void> _createBackup() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _backupService.backupNow();
+      await _reloadBackups();
+      if (mounted) _showMessage('Local backup created and checksum-verified.');
+    } catch (error) {
+      if (mounted) _showMessage('Backup failed: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restoreBackup(AutomaticBackupRecord record) async {
+    final approved = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const UniversalText('Restore this backup?'),
+            content: UniversalText(
+              'This replaces the app preferences and customizations saved in '
+              'this snapshot. More recent local preference changes may be '
+              'overwritten. Passwords and tokens are not included. After '
+              'restoring, restart MyOwnStreamingService so every screen reloads.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const UniversalText('Cancel'),
               ),
-            ),
-          ),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const UniversalText('Restore backup'),
               ),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: UniversalText(
-                      'Backup selection',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Chip(
-                    label: UniversalText(
-                      '$selectedCount of 4 selected',
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ],
           ),
-          SwitchListTile(
-            title: const UniversalText(
-              'Library metadata',
-            ),
-            subtitle: const UniversalText(
-              'Titles, identifiers and media metadata.',
-            ),
-            value: metadata,
-            onChanged: (value) {
-              setState(() {
-                metadata = value;
-              });
-            },
-          ),
-          SwitchListTile(
-            title: const UniversalText(
-              'Watch history',
-            ),
-            subtitle: const UniversalText(
-              'Watched titles and account activity history.',
-            ),
-            value: history,
-            onChanged: (value) {
-              setState(() {
-                history = value;
-              });
-            },
-          ),
-          SwitchListTile(
-            title: const UniversalText(
-              'Profiles & settings',
-            ),
-            subtitle: const UniversalText(
-              'Profiles and account configuration.',
-            ),
-            value: profiles,
-            onChanged: (value) {
-              setState(() {
-                profiles = value;
-              });
-            },
-          ),
-          SwitchListTile(
-            title: const UniversalText(
-              'Collections & achievements',
-            ),
-            subtitle: const UniversalText(
-              'Collections and feature activity.',
-            ),
-            value: collections,
-            onChanged: (value) {
-              setState(() {
-                collections = value;
-              });
-            },
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 52,
-            child: FilledButton.icon(
-              onPressed: selectedCount == 0
-                  ? null
-                  : () {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(
-                        const SnackBar(
-                          content: UniversalText(
-                            'Backup request prepared locally. A connected server worker is required to write and verify an actual backup.',
-                          ),
-                        ),
-                      );
-                    },
-              icon: const Icon(
-                Icons.backup,
-              ),
-              label: const UniversalText(
-                'PREPARE BACKUP REQUEST',
-              ),
-            ),
-          ),
-        ],
-      ),
+        ) ??
+        false;
+    if (!approved || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await _backupService.restoreBackup(record.filePath);
+      await _reloadBackups();
+      if (mounted) {
+        _showMessage(
+          'Backup restored. Restart the app to refresh all open screens.',
+        );
+      }
+    } catch (error) {
+      if (mounted) _showMessage('Restore failed: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: UniversalText(message)),
     );
   }
+
+  String _formatTimestamp(DateTime value) {
+    final date = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}-${two(date.month)}-${two(date.day)} '
+        '${two(date.hour)}:${two(date.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _backupService.status,
+      builder: (context, _) {
+        final backupStatus = _backupService.status.value;
+        return Scaffold(
+          appBar: AppBar(
+            title: const UniversalText('Automatic Backup & Recovery'),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        backupStatus.enabled
+                            ? Icons.shield_outlined
+                            : Icons.pause_circle_outline,
+                        size: 30,
+                        color: backupStatus.enabled
+                            ? Colors.greenAccent
+                            : Theme.of(context).colorScheme.secondary,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const UniversalText(
+                              'Automatic local backups',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const UniversalText(
+                              'A verified checkpoint is written every 12 minutes '
+                              'while the app is running. Saved preference changes '
+                              'are also detected about every 45 seconds, and the '
+                              'app attempts a checkpoint when it is paused.',
+                            ),
+                            const SizedBox(height: 8),
+                            UniversalText(
+                              backupStatus.message,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: backupStatus.message
+                                        .startsWith('Backup failed')
+                                    ? Colors.orangeAccent
+                                    : Theme.of(context).colorScheme.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                title: const UniversalText('Enable automatic backups'),
+                subtitle: const UniversalText(
+                  'Keep the latest recovery point and retain up to 60 interval snapshots.',
+                ),
+                value: backupStatus.enabled,
+                onChanged: _busy
+                    ? null
+                    : (enabled) async {
+                        await _backupService.setEnabled(enabled);
+                        await _reloadBackups();
+                      },
+              ),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const UniversalText(
+                        'Backup status',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 10),
+                      _BackupDetailRow(
+                        label: 'Last checkpoint',
+                        value: backupStatus.lastBackupAt == null
+                            ? 'Not available yet'
+                            : _formatTimestamp(backupStatus.lastBackupAt!),
+                      ),
+                      _BackupDetailRow(
+                        label: 'Saved restore points',
+                        value: '${_backups.length}',
+                      ),
+                      if (backupStatus.directoryPath != null)
+                        _BackupDetailRow(
+                          label: 'Local backup folder',
+                          value: backupStatus.directoryPath!,
+                        ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _busy ? null : _createBackup,
+                          icon: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.backup_rounded),
+                          label: UniversalText(
+                            _busy ? 'PLEASE WAIT…' : 'BACK UP NOW',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(4, 16, 4, 8),
+                child: UniversalText(
+                  'Recovery points',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                ),
+              ),
+              if (_backups.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: UniversalText(
+                      'No valid backup snapshots yet. Choose Back Up Now to create the first recovery point.',
+                    ),
+                  ),
+                )
+              else
+                ..._backups.map((record) => Card(
+                      child: ListTile(
+                        leading: Icon(
+                          record.isLatest
+                              ? Icons.history_toggle_off_rounded
+                              : Icons.restore_rounded,
+                        ),
+                        title: Text(
+                          "${record.isLatest ? 'Latest recovery point' : 'Recovery point'} • ${_formatTimestamp(record.createdAt)}",
+                        ),
+                        subtitle: Text(
+                          '${record.preferenceCount} saved settings • ${record.reason.replaceAll('_', ' ')}',
+                        ),
+                        trailing: TextButton(
+                          onPressed:
+                              _busy ? null : () => _restoreBackup(record),
+                          child: const UniversalText('Restore'),
+                        ),
+                      ),
+                    )),
+              const SizedBox(height: 12),
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: UniversalText(
+                    'What this protects: local app preferences and customizations, '
+                    'including saved artwork selections, Home hero choices, details-page '
+                    'layout settings and other supported preferences. Credentials and '
+                    'tokens are excluded for safety. This does not copy video/music files '
+                    'or back up remote Supabase/Jellyfin database records. Configure a '
+                    'separate server/off-site backup for those, and keep this app data on '
+                    'a device or drive independent from the media server when possible.',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BackupDetailRow extends StatelessWidget {
+  const _BackupDetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 132,
+              child: UniversalText(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SelectableText(
+                value,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 // -----------------------------------------------------------------------------
@@ -3567,7 +4166,6 @@ String _size(int bytes) {
 
   return '$bytes B';
 }
-
 
 // Consolidated from lib/ultimate_platform.dart.
 class UltimatePlatformStore {
@@ -3610,11 +4208,19 @@ class UltimatePlatformScreen extends StatefulWidget {
 class _UltimatePlatformScreenState extends State<UltimatePlatformScreen> {
   int tab = 0;
   final tabs = const [
-    'AI', 'Player', 'Family', 'Social', 'Library', 'Cloud', 'Security',
-    'Devices', 'Studio',
+    'AI',
+    'Player',
+    'Family',
+    'Social',
+    'Library',
+    'Cloud',
+    'Security',
+    'Devices',
+    'Studio',
   ];
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3695,6 +4301,7 @@ class _AiPanelState extends State<_AiPanel> {
   final q = TextEditingController();
 
   @override
+
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     q.dispose();
@@ -3702,6 +4309,7 @@ class _AiPanelState extends State<_AiPanel> {
   }
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final items = AppController.instance.library;
@@ -3730,20 +4338,21 @@ class _AiPanelState extends State<_AiPanel> {
         const SizedBox(height: 18),
         _title('Natural-language discovery'),
         ...matches.take(10).map(
-          (m) => ListTile(
-            leading: const Icon(Icons.movie_outlined),
-            title: Text(m.title),
-            subtitle: Text(m.genres.take(3).join(' • ')),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: m)),
+              (m) => ListTile(
+                leading: const Icon(Icons.movie_outlined),
+                title: Text(m.title),
+                subtitle: Text(m.genres.take(3).join(' • ')),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => MediaDetailsScreen(media: m)),
+                ),
+              ),
             ),
-          ),
-        ),
-        _switch('Taste learning',
-            'Learn from likes, dislikes and completion.', 'tasteLearning'),
-        _switch('AI concierge',
-            'Enable conversational recommendation mode.', 'aiConcierge'),
+        _switch('Taste learning', 'Learn from likes, dislikes and completion.',
+            'tasteLearning'),
+        _switch('AI concierge', 'Enable conversational recommendation mode.',
+            'aiConcierge'),
       ],
     );
   }
@@ -3753,6 +4362,7 @@ class _PlayerPanel extends StatelessWidget {
   const _PlayerPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
@@ -3767,11 +4377,10 @@ class _PlayerPanel extends StatelessWidget {
         _switch('Skip recap', 'Skip detected recaps.', 'skipRecap'),
         _switch('Automatic credits',
             'Detect credits and offer the next episode.', 'autoCredits'),
-        _switch('Picture in picture',
-            'Enable supported PiP playback.', 'pip'),
+        _switch('Picture in picture', 'Enable supported PiP playback.', 'pip'),
         _switch('Data saver', 'Prefer lower bandwidth.', 'dataSaver'),
-        _switch('Wi-Fi only downloads',
-            'Restrict downloads to Wi-Fi.', 'wifiOnly'),
+        _switch(
+            'Wi-Fi only downloads', 'Restrict downloads to Wi-Fi.', 'wifiOnly'),
       ],
     );
   }
@@ -3781,6 +4390,7 @@ class _FamilyPanel extends StatelessWidget {
   const _FamilyPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
@@ -3788,12 +4398,12 @@ class _FamilyPanel extends StatelessWidget {
       children: [
         _hero(Icons.family_restroom, 'Family Center',
             'Profiles, kids controls, screen time and protected content.'),
-        _switch('Kids Mode',
-            'Restrict discovery to age-appropriate content.', 'kidsMode'),
-        _switch('Screen-time limits',
-            'Prepare per-profile viewing schedules.', 'screenTime'),
-        _switch('PIN protection',
-            'Protect profiles and restricted content.', 'twoFactor'),
+        _switch('Kids Mode', 'Restrict discovery to age-appropriate content.',
+            'kidsMode'),
+        _switch('Screen-time limits', 'Prepare per-profile viewing schedules.',
+            'screenTime'),
+        _switch('PIN protection', 'Protect profiles and restricted content.',
+            'twoFactor'),
         _switch('Family watchlists',
             'Share selected lists with household profiles.', 'watchParty'),
       ],
@@ -3805,6 +4415,7 @@ class _SocialPanel extends StatelessWidget {
   const _SocialPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
@@ -3812,13 +4423,13 @@ class _SocialPanel extends StatelessWidget {
       children: [
         _hero(Icons.groups, 'Social & Watch Together',
             'Friends, synchronized parties, shared queues and reactions.'),
-        _switch('Watch parties',
-            'Enable synchronized group sessions.', 'watchParty'),
+        _switch('Watch parties', 'Enable synchronized group sessions.',
+            'watchParty'),
         _switch('Friends', 'Enable friend/activity features.', 'friends'),
-        _switch('Shared queues',
-            'Build a common playback queue.', 'watchParty'),
-        _switch('Live reactions',
-            'Emoji reactions during group playback.', 'friends'),
+        _switch(
+            'Shared queues', 'Build a common playback queue.', 'watchParty'),
+        _switch('Live reactions', 'Emoji reactions during group playback.',
+            'friends'),
       ],
     );
   }
@@ -3828,6 +4439,7 @@ class _LibraryPanel extends StatelessWidget {
   const _LibraryPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final a = AppController.instance;
@@ -3838,10 +4450,10 @@ class _LibraryPanel extends StatelessWidget {
             'Automatic scanning, metadata matching, artwork, versions and technical analysis.'),
         _switch('Library scanner',
             'Monitor configured sources for new content.', 'libraryScanner'),
-        _switch('Automatic metadata',
-            'Enrich cast, genres and artwork.', 'autoMetadata'),
-        _switch('Multiple versions',
-            'Keep 4K, HD and alternate cuts together.', 'multiVersion'),
+        _switch('Automatic metadata', 'Enrich cast, genres and artwork.',
+            'autoMetadata'),
+        _switch('Multiple versions', 'Keep 4K, HD and alternate cuts together.',
+            'multiVersion'),
         _metric('Library', '${a.library.length} titles'),
         _metric('Genres', '${a.genresCatalog.length}'),
         _metric('Actors', '${a.actorsCatalog.length}'),
@@ -3854,6 +4466,7 @@ class _CloudPanel extends StatelessWidget {
   const _CloudPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final a = AppController.instance;
@@ -3862,9 +4475,12 @@ class _CloudPanel extends StatelessWidget {
       children: [
         _hero(Icons.cloud_sync, 'Cloud Platform',
             'Synchronization, backups, sessions and cross-device state.'),
-        _switch('Cloud sync',
-            'Synchronize profiles, progress, lists and preferences.', 'cloudSync'),
-        _metric('Backend', a.isBackendAuthenticated ? 'Authenticated' : 'Local mode'),
+        _switch(
+            'Cloud sync',
+            'Synchronize profiles, progress, lists and preferences.',
+            'cloudSync'),
+        _metric('Backend',
+            a.isBackendAuthenticated ? 'Authenticated' : 'Local mode'),
         _metric('Session', a.backendToken == null ? 'Local' : 'Token active'),
       ],
     );
@@ -3875,6 +4491,7 @@ class _SecurityPanel extends StatelessWidget {
   const _SecurityPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     return ListView(
@@ -3886,14 +4503,15 @@ class _SecurityPanel extends StatelessWidget {
             'Protect account sign-ins with a second factor.', 'twoFactor'),
         _switch('Security notifications',
             'Notify about important account events.', 'notifications'),
-        _switch('Privacy analytics',
-            'Allow anonymous product analytics.', 'privacyAnalytics'),
+        _switch('Privacy analytics', 'Allow anonymous product analytics.',
+            'privacyAnalytics'),
         ListTile(
           leading: const Icon(Icons.logout),
           title: const UniversalText('Sign out other devices'),
           onTap: () => ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: UniversalText('Remote session control is connected to the platform layer.')),
+                content: UniversalText(
+                    'Remote session control is connected to the platform layer.')),
           ),
         ),
         ListTile(
@@ -3910,11 +4528,19 @@ class _DevicesPanel extends StatelessWidget {
   const _DevicesPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     const devices = [
-      'Android', 'iOS', 'Windows', 'macOS', 'Linux', 'Web',
-      'Android TV / Google TV', 'Apple TV', 'Fire TV',
+      'Android',
+      'iOS',
+      'Windows',
+      'macOS',
+      'Linux',
+      'Web',
+      'Android TV / Google TV',
+      'Apple TV',
+      'Fire TV',
     ];
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3936,13 +4562,19 @@ class _StudioPanel extends StatelessWidget {
   const _StudioPanel();
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final a = AppController.instance;
     const tools = [
-      'Catalog Manager', 'User & Profile Manager', 'Subscription Manager',
-      'Import & Metadata Manager', 'Recommendation Lab',
-      'Analytics & Viewing Reports', 'Remote Server Manager', 'Audit Log',
+      'Catalog Manager',
+      'User & Profile Manager',
+      'Subscription Manager',
+      'Import & Metadata Manager',
+      'Recommendation Lab',
+      'Analytics & Viewing Reports',
+      'Remote Server Manager',
+      'Audit Log',
     ];
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3959,7 +4591,9 @@ class _StudioPanel extends StatelessWidget {
             title: Text(x),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: UniversalText('$x is available from the platform control layer.')),
+              SnackBar(
+                  content: UniversalText(
+                      '$x is available from the platform control layer.')),
             ),
           ),
       ],
@@ -3984,7 +4618,8 @@ Widget _hero(IconData icon, String title, String subtitle) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.w900)),
               const SizedBox(height: 6),
               Text(subtitle,
                   style: const TextStyle(color: Colors.white70, height: 1.4)),
@@ -4017,7 +4652,8 @@ Widget _metric(String title, String value) {
   return Card(
     child: ListTile(
       title: Text(title),
-      trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+      trailing:
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
     ),
   );
 }
@@ -4027,7 +4663,8 @@ void _confirmClear(BuildContext context) {
     context: context,
     builder: (_) => AlertDialog(
       title: const UniversalText('Clear local activity?'),
-      content: const UniversalText('This removes local-only activity from the current app session.'),
+      content: const UniversalText(
+          'This removes local-only activity from the current app session.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
@@ -4047,143 +4684,770 @@ void _confirmClear(BuildContext context) {
   );
 }
 
-
 // Consolidated from lib/roadmap_features.dart.
 /// Implements the `RoadmapFeaturesScreen` class for this feature or UI component.
 class RoadmapFeaturesScreen extends StatelessWidget {
   const RoadmapFeaturesScreen({super.key});
 
   @override
+
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final features = <_RoadmapFeature>[
-      _RoadmapFeature(1, 'Recommendation Voting', Icons.how_to_vote_rounded, 'Every normal profile can vote on every recommendation.', (_) => const RecommendationCompetitionScreen()),
-      _RoadmapFeature(2, 'ListTile Layout Fix', Icons.view_list_rounded, 'Use constrained, scroll-safe list layouts across feature surfaces.', (_) => const RoadmapListLayoutScreen()),
-      _RoadmapFeature(3, 'All Profiles Can Vote', Icons.groups_rounded, 'Recommendation eligibility includes every profile on the account.', (_) => const RecommendationCompetitionScreen()),
-      _RoadmapFeature(4, 'One Vote Per Profile', Icons.rule_rounded, 'Duplicate votes are rejected and the current vote is shown.', (_) => const RecommendationCompetitionScreen()),
-      _RoadmapFeature(5, 'Wishlist Behavior', Icons.favorite_border_rounded, 'Approved recommendations flow into the shared wishlist.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(6, 'Per-Profile Navigation', Icons.navigation_rounded, 'Navigation order and placement are profile-specific.', (_) => const CustomizeHomeScreen()),
-      _RoadmapFeature(7, 'Home Screen Builder', Icons.dashboard_customize_rounded, 'Reorder and show or hide Home sections.', (_) => const CustomizeHomeScreen()),
-      _RoadmapFeature(8, 'Details Screen Builder', Icons.article_outlined, 'Per-profile Details section visibility and ordering.', (_) => const CustomizeHomeScreen()),
-      _RoadmapFeature(9, 'Themes & Accent Colors', Icons.palette_outlined, 'Personal visual preferences for each profile.', (_) => const CustomizeHomeScreen()),
-      _RoadmapFeature(10, 'Layout Presets', Icons.grid_view_rounded, 'Poster/card sizes and compact or spacious presentation.', (_) => const CustomizeHomeScreen()),
-      _RoadmapFeature(11, 'Drag-and-Drop UI Builder', Icons.open_with_rounded, 'Reorder Home widgets and dashboard elements.', (_) => const HomeWidgetsScreen()),
-      _RoadmapFeature(12, 'Smart Recommendations', Icons.auto_awesome_rounded, 'Use watch behavior, metadata and profile signals.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(13, 'Smart Collections', Icons.auto_awesome_mosaic_rounded, 'Dynamic collections based on live library rules.', (_) => const SmartCollectionsScreen()),
-      _RoadmapFeature(14, 'Advanced Search', Icons.manage_search_rounded, 'Search title, actor, director, genre, tags, year and watched state.', (_) => const AdvancedLibrarySearchScreen()),
-      _RoadmapFeature(144, 'My Cinematic Universe', Icons.auto_awesome_rounded, 'Discover by mood, hybrid genres, pairings, franchise timelines, calendar reminders, vault and viewing recap.', (_) => const CinematicDiscoveryStudioScreen()),
-      _RoadmapFeature(15, 'Actor & Franchise Pages', Icons.theaters_rounded, 'Explore catalog actors and related titles.', (_) => const ActorFranchiseRoadmapScreen()),
-      _RoadmapFeature(16, 'Trailer Theater', Icons.movie_filter_rounded, 'Browse imported trailers as a dedicated theater.', (_) => const TrailerTheaterScreen()),
-      _RoadmapFeature(17, 'Music Mode', Icons.music_note_rounded, 'Browse soundtrack and music metadata from your library.', (_) => const MusicModeScreen()),
-      _RoadmapFeature(18, 'Recommendation Competition', Icons.emoji_events_rounded, 'Rank recommendations and identify the weekly winner.', (_) => const RecommendationCompetitionScreen()),
-      _RoadmapFeature(19, 'Achievements', Icons.workspace_premium_rounded, 'Watching, voting and collection milestones.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(20, 'Personal Statistics', Icons.insights_rounded, 'Watching totals, genres, streaks and recaps.', (_) => const StatisticsScreen()),
-      _RoadmapFeature(21, 'Reactions', Icons.favorite_rounded, 'Love, funny, scary, emotional and mind-blowing reactions.', (_) => const ReactionGuideScreen()),
-      _RoadmapFeature(22, 'Watch Together 2.0', Icons.groups_rounded, 'Synchronized group watching, chat and host controls.', (_) => const GroupWatchRoadmapScreen()),
-      _RoadmapFeature(23, 'Activity Center', Icons.notifications_active_outlined, 'Watching, recommendations, imports and party activity.', (_) => const UltimateFeaturesScreen()),
-      _RoadmapFeature(24, 'ARM Disc Intelligence', Icons.album_rounded, 'Detect, extract, identify, enrich, review and approve discs.', (_) => const UltimateFeaturesScreen()),
-      _RoadmapFeature(25, 'ARM Metadata', Icons.fact_check_outlined, 'Catalog resolution, codecs, audio, subtitles, chapters and extras.', (_) => const UltimateFeaturesScreen()),
-      _RoadmapFeature(26, 'Poster & Trailer Fallbacks', Icons.image_search_rounded, 'Manual URLs remain available when a disc lacks artwork or trailer data.', (_) => const UltimateFeaturesScreen()),
-      _RoadmapFeature(27, 'Audio / Subtitle / Chapters / Extras', Icons.closed_caption_rounded, 'Expose imported disc metadata throughout Details.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(28, 'Manual Library Approval', Icons.verified_outlined, 'ARM stops at Review and requires Add to Library.', (_) => const UltimateFeaturesScreen()),
-      _RoadmapFeature(29, 'Real Email', Icons.email_outlined, 'Account email flows are ready for real provider integration.', (_) => const SecurityCenterScreen()),
-      _RoadmapFeature(30, 'Verification', Icons.mark_email_read_outlined, 'Verification and security challenge surfaces.', (_) => const SecurityCenterScreen()),
-      _RoadmapFeature(31, 'Suspicious Login Protection', Icons.gpp_maybe_rounded, 'Security-question challenge before access is granted.', (_) => const SecurityCenterScreen()),
-      _RoadmapFeature(32, 'Device Management', Icons.devices_rounded, 'Trusted devices, pairing and device access controls.', (_) => const DeviceCenterScreen()),
-      _RoadmapFeature(33, 'Remote Access', Icons.public_rounded, 'Trusted remote computers and remote imports.', (_) => const RemoteAccessScreen()),
-      _RoadmapFeature(34, 'Backup & Restore', Icons.backup_rounded, 'Backup and recovery controls for account and library state.', (_) => const BackupScreen()),
-      _RoadmapFeature(51, 'ARM Canonical Title Resolution', Icons.language_rounded, 'Resolve localized disc titles to the canonical/original movie while preserving disc title, market and raw ARM region.', (_) => const UltimateFeaturesScreen()),
-      _RoadmapFeature(52, 'Recommendation Feedback', Icons.feedback_outlined, 'Improve recommendations from explicit feedback.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(53, 'Recommendation Diversity', Icons.shuffle_rounded, 'Prevent recommendation feeds from becoming repetitive.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(54, 'Similar Titles', Icons.compare_arrows_rounded, 'Find titles similar to the current selection.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(55, 'Because You Watched', Icons.history_toggle_off_rounded, 'Generate recommendations from recent viewing.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(56, 'Continue Watching Intelligence', Icons.play_circle_outline_rounded, 'Prioritize unfinished titles and episodes intelligently.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(57, 'Franchise Progress', Icons.linear_scale_rounded, 'Show progress through franchise collections.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(58, 'Collection Completion', Icons.check_circle_outline_rounded, 'Track which franchise collections are complete.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(59, 'Collaborative Collections', Icons.group_work_rounded, 'Allow permitted profiles to contribute to shared collections.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(60, 'Collection Permissions', Icons.admin_panel_settings_outlined, 'Control who can view, add, remove or edit collections.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(61, 'Collection Posters', Icons.image_outlined, 'Build collection artwork from member posters.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(62, 'Collection Favorites', Icons.favorite_border_rounded, 'Like collections and surface favorites quickly.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(63, 'Collection Manual Ordering', Icons.reorder_rounded, 'Manually arrange titles inside a collection.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(64, 'Collection Release Order', Icons.sort_rounded, 'Automatically sort a collection by release order.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(65, 'Version Preference', Icons.movie_outlined, 'Prefer theatrical, extended, preferred or highest-quality versions.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(66, 'Auto Play Queue', Icons.queue_play_next_rounded, 'Build a playback queue from collection order.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(67, 'Credits Auto Advance', Icons.skip_next_rounded, 'Advance to the next eligible title around end credits.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(68, 'Episode Auto Advance', Icons.next_plan_rounded, 'Automatically continue to the next episode.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(69, 'Episode Progress', Icons.format_list_numbered_rounded, 'Track watched and partially watched episodes.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(70, 'Season Progress', Icons.playlist_play_rounded, 'Display completion progress for every season.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(71, 'Episode Ratings', Icons.star_border_rounded, 'Rate individual episodes independently.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(72, 'Watch-State Overrides', Icons.published_with_changes_rounded, 'Manually mark movies or episodes watched/unwatched.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(73, 'Duplicate Detection', Icons.content_copy_rounded, 'Detect duplicate library entries before approval.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(74, 'Metadata Conflict Review', Icons.difference_rounded, 'Compare conflicting metadata before saving.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(75, 'Metadata Locking', Icons.lock_outline_rounded, 'Protect manually corrected metadata from automatic replacement.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(76, 'Artwork Selection', Icons.photo_library_outlined, 'Choose among available posters and backdrops.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(77, 'Trailer Selection', Icons.ondemand_video_rounded, 'Choose the preferred trailer when multiple are available.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(78, 'Genre Management', Icons.category_outlined, 'Normalize and manage library genres.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(79, 'Tag Management', Icons.sell_outlined, 'Create and manage custom library tags.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(80, 'Actor Credits', Icons.person_search_rounded, 'Browse every library title associated with an actor.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(81, 'Director Credits', Icons.movie_creation_outlined, 'Browse every library title associated with a director.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(82, 'Writer Credits', Icons.edit_note_rounded, 'Browse every library title associated with a writer.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(83, 'Franchise Discovery', Icons.account_tree_rounded, 'Discover franchise relationships from imported metadata.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(84, 'Disc Title Review', Icons.fact_check_rounded, 'Review every detected ARM title before library approval.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(85, 'Disc Title Classification', Icons.label_important_outline_rounded, 'Classify films, extras, episodes and alternate cuts.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(86, 'Disc Confidence Scores', Icons.verified_user_outlined, 'Show ARM metadata confidence during review.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(87, 'Disc Collection Linking', Icons.link_rounded, 'Link separate library titles to their physical disc.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(88, 'Multi-Title Disc Import', Icons.library_add_rounded, 'Import multiple distinct movies from one physical disc.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(89, 'Import Approval Queue', Icons.playlist_add_check_rounded, 'Review pending imports before they enter the library.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(90, 'Import Rejection', Icons.block_outlined, 'Reject incorrect or unwanted ARM results.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(91, 'Import Job History', Icons.history_rounded, 'Review previous ARM scan and import jobs.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(92, 'Import Cancellation', Icons.cancel_outlined, 'Cancel eligible ARM jobs safely.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(93, 'Audio Track Browser', Icons.graphic_eq_rounded, 'Inspect imported audio tracks.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(94, 'Subtitle Browser', Icons.subtitles_outlined, 'Inspect available subtitle tracks.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(95, 'Chapter Browser', Icons.menu_book_rounded, 'Browse imported chapters.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(96, 'Extras Browser', Icons.video_library_outlined, 'Browse extras and bonus content separately.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(97, 'Kids Profile Mode', Icons.child_care_rounded, 'Create a simplified profile experience for children.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(98, 'Content Age Filters', Icons.filter_alt_outlined, 'Filter content by configurable age ratings.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(99, 'Profile PIN', Icons.pin_outlined, 'Protect selected profile actions with a PIN.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(100, 'Kids Safe Collections', Icons.family_restroom_rounded, 'Restrict collections available to child profiles.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(101, 'Account Security Center', Icons.security_rounded, 'Profile-scoped 2FA, suspicious-login alerts, new-device approval and session controls.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(102, 'Playback Experience Controls', Icons.play_circle_fill_rounded, 'Profile-scoped resume, autoplay, preload, picture-in-picture and track preferences.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(103, 'TV Experience Controls', Icons.tv_rounded, 'Series-first autoplay, preserved intros, specials and unfinished-season behavior.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(104, 'Notification Controls', Icons.notifications_active_rounded, 'Per-profile alerts for episodes, recommendations and security events.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(105, 'Backup & Migration Controls', Icons.backup_rounded, 'Profile-scoped backup manifest coverage for settings, watch state, collections and layouts.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(106, 'Library Intelligence Controls', Icons.auto_awesome_rounded, 'Tune smart recommendations, diversity, explanations and franchise progress.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(107, 'Search & Discovery Controls', Icons.manage_search_rounded, 'Enable natural-language, localized-title, actor and crew discovery.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(108, 'Collection Studio Controls', Icons.collections_bookmark_rounded, 'Configure collection autoplay, release order, quality preference and credit advance.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(110, 'Privacy & Profile Controls', Icons.privacy_tip_rounded, 'Control activity, reactions, watch-history sharing and profile PIN protection.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(111, 'Kids Safety Controls', Icons.child_care_rounded, 'Kids mode, age filters, safe collections and mature-content PIN protection.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(112, 'Performance Controls', Icons.speed_rounded, 'Tune animations, artwork preloading, reduced motion and fast Home mode.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(113, 'Legacy Movie Safety Review', Icons.history_edu_rounded, 'Apply extra kids-safety review to older movies whose historical ratings may not reflect modern parental expectations.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(114, 'Nudity Safety Detection', Icons.visibility_off_rounded, 'Flag nudity and partial nudity independently of the official age rating.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(115, 'Sexual Content Detection', Icons.no_adult_content_rounded, 'Flag sexual content, sexualized imagery and suggestive material for child profiles.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(116, 'Violence & Gore Safety', Icons.warning_amber_rounded, 'Apply additional violence and gore safeguards beyond the official rating.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(117, 'Profanity Safety', Icons.record_voice_over_rounded, 'Use profanity metadata as an independent kids-safety signal.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(118, 'Substance Use Safety', Icons.smoke_free_rounded, 'Flag alcohol, drugs and smoking independently of the official rating.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(119, 'Disturbing Content Safety', Icons.warning_rounded, 'Flag horror, frightening scenes and disturbing imagery for child profiles.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(120, 'Suggestive Themes Safety', Icons.forum_rounded, 'Flag mature jokes, suggestive dialogue and adult themes.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(121, 'Parent Content Warnings', Icons.info_outline_rounded, 'Show detected content categories to a parent before playback.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(122, 'Incomplete Metadata Protection', Icons.help_outline_rounded, 'Require parent review when content-safety metadata is missing or uncertain.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(123, 'Disc Rating Comparison', Icons.album_rounded, 'Compare the physical DVD/Blu-ray packaging rating with current catalog metadata.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(124, 'Parent Approval Queue', Icons.approval_rounded, 'Hold flagged child-profile titles for explicit parent approval.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(125, 'Per-Title Kids Overrides', Icons.rule_rounded, 'Allow a parent to approve or block individual titles regardless of general rules.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(126, 'Multi-Signal Kids Safety', Icons.shield_rounded, 'Combine age rating, content descriptors, legacy status, metadata confidence and parent rules instead of relying on a single rating.', (_) => const PlatformExpansionScreen()),
-      _RoadmapFeature(131, 'Global Language & Localization', Icons.translate_rounded, 'Global language selector with native language names, profile persistence, RTL support and localized metadata preferences.', (_) => const FeatureCenterScreen()),
-      _RoadmapFeature(127, 'Music Home', Icons.music_note_rounded, 'Dedicated Music home with artists, bands, albums and songs.', (_) => const MusicScreen()),
-      _RoadmapFeature(128, 'Custom Music Playlists', Icons.queue_music_rounded, 'Create, delete and curate profile playlists.', (_) => const MusicScreen()),
-      _RoadmapFeature(129, 'Background Music Player', Icons.headphones_rounded, 'Keep music playing while browsing and resume it after movie/TV playback.', (_) => const MusicScreen()),
-      _RoadmapFeature(130, 'Music Visual Customization', Icons.palette_outlined, 'Customize music home and navigation colors, glow and item styling.', (_) => const MusicScreen()),
-      _RoadmapFeature(132, 'Soundtrack Universe', Icons.album_rounded, 'Connect movies, shows, albums and songs into soundtrack experiences.', (_) => const MusicScreen()),
-      _RoadmapFeature(133, 'Music Statistics', Icons.bar_chart_rounded, 'Track music songs, playlists and listening alongside movie/TV statistics.', (_) => const StatisticsScreen()),
-      _RoadmapFeature(134, 'Music Achievements & Badges', Icons.emoji_events_rounded, 'Badges such as Cultured, Swiftie and Album Collector.', (_) => const AchievementsScreen()),
-      _RoadmapFeature(135, 'Profile Reviews', Icons.rate_review_outlined, 'Rate titles from 0-10 with a custom review label and text.', (_) => const ReviewsHubScreen()),
-      _RoadmapFeature(136, 'Global Privacy-Safe Reviews', Icons.public_rounded, 'Publish reviews under the active profile’s unique username without exposing email or account identity.', (_) => const ReviewsHubScreen()),
-      _RoadmapFeature(137, 'Official vs Viewer Ratings', Icons.star_half_rounded, 'Show provider/critic rating separately from the community 10-point rating.', (_) => const ReviewsHubScreen()),
-      _RoadmapFeature(138, 'Review Translation Toggle', Icons.translate_rounded, 'Offer a translation-enabled global review view without exposing private identity.', (_) => const ReviewsHubScreen()),
-      _RoadmapFeature(139, 'Home Server Dashboard', Icons.dns_rounded, 'Monitor the home server, media root and ARM connection.', (_) => const HomeServerScreen()),
-      _RoadmapFeature(140, 'ARM Media Scanner', Icons.disc_full_rounded, 'Scan completed ARM media and synchronize discovered files into Flutter.', (_) => const HomeServerScreen()),
-      _RoadmapFeature(141, 'Server Storage Dashboard', Icons.storage_rounded, 'Display Movies, Series, Music and available storage with hover details.', (_) => const StorageDashboardScreen()),
-      _RoadmapFeature(142, 'Custom Storage Visualization', Icons.color_lens_rounded, 'Customize storage category colors and progress visualization.', (_) => const StorageDashboardScreen()),
-      _RoadmapFeature(143, 'Expanded Platform Capability Center', Icons.hub_rounded, 'Browse new AI, discovery, social, commerce, privacy, reliability and operations capabilities.', (_) => const ExpandedPlatformScreen()),
+      _RoadmapFeature(
+          1,
+          'Recommendation Voting',
+          Icons.how_to_vote_rounded,
+          'Every normal profile can vote on every recommendation.',
+          (_) => const RecommendationCompetitionScreen()),
+      _RoadmapFeature(
+          2,
+          'ListTile Layout Fix',
+          Icons.view_list_rounded,
+          'Use constrained, scroll-safe list layouts across feature surfaces.',
+          (_) => const RoadmapListLayoutScreen()),
+      _RoadmapFeature(
+          3,
+          'All Profiles Can Vote',
+          Icons.groups_rounded,
+          'Recommendation eligibility includes every profile on the account.',
+          (_) => const RecommendationCompetitionScreen()),
+      _RoadmapFeature(
+          4,
+          'One Vote Per Profile',
+          Icons.rule_rounded,
+          'Duplicate votes are rejected and the current vote is shown.',
+          (_) => const RecommendationCompetitionScreen()),
+      _RoadmapFeature(
+          5,
+          'Wishlist Behavior',
+          Icons.favorite_border_rounded,
+          'Approved recommendations flow into the shared wishlist.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          6,
+          'Per-Profile Navigation',
+          Icons.navigation_rounded,
+          'Navigation order and placement are profile-specific.',
+          (_) => const CustomizeHomeScreen()),
+      _RoadmapFeature(
+          7,
+          'Home Screen Builder',
+          Icons.dashboard_customize_rounded,
+          'Reorder and show or hide Home sections.',
+          (_) => const CustomizeHomeScreen()),
+      _RoadmapFeature(
+          8,
+          'Details Screen Builder',
+          Icons.article_outlined,
+          'Per-profile Details section visibility and ordering.',
+          (_) => const CustomizeHomeScreen()),
+      _RoadmapFeature(
+          9,
+          'Themes & Accent Colors',
+          Icons.palette_outlined,
+          'Personal visual preferences for each profile.',
+          (_) => const CustomizeHomeScreen()),
+      _RoadmapFeature(
+          10,
+          'Layout Presets',
+          Icons.grid_view_rounded,
+          'Poster/card sizes and compact or spacious presentation.',
+          (_) => const CustomizeHomeScreen()),
+      _RoadmapFeature(
+          11,
+          'Drag-and-Drop UI Builder',
+          Icons.open_with_rounded,
+          'Reorder Home widgets and dashboard elements.',
+          (_) => const HomeWidgetsScreen()),
+      _RoadmapFeature(
+          12,
+          'Smart Recommendations',
+          Icons.auto_awesome_rounded,
+          'Use watch behavior, metadata and profile signals.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          13,
+          'Smart Collections',
+          Icons.auto_awesome_mosaic_rounded,
+          'Dynamic collections based on live library rules.',
+          (_) => const SmartCollectionsScreen()),
+      _RoadmapFeature(
+          14,
+          'Advanced Search',
+          Icons.manage_search_rounded,
+          'Search title, actor, director, genre, tags, year and watched state.',
+          (_) => const AdvancedLibrarySearchScreen()),
+      _RoadmapFeature(
+          144,
+          'My Cinematic Universe',
+          Icons.auto_awesome_rounded,
+          'Discover by mood, hybrid genres, pairings, franchise timelines, calendar reminders, vault and viewing recap.',
+          (_) => const CinematicDiscoveryStudioScreen()),
+      _RoadmapFeature(
+          15,
+          'Actor & Franchise Pages',
+          Icons.theaters_rounded,
+          'Explore catalog actors and related titles.',
+          (_) => const ActorFranchiseRoadmapScreen()),
+      _RoadmapFeature(
+          16,
+          'Trailer Theater',
+          Icons.movie_filter_rounded,
+          'Browse imported trailers as a dedicated theater.',
+          (_) => const TrailerTheaterScreen()),
+      _RoadmapFeature(
+          17,
+          'Music Mode',
+          Icons.music_note_rounded,
+          'Browse soundtrack and music metadata from your library.',
+          (_) => const MusicModeScreen()),
+      _RoadmapFeature(
+          18,
+          'Recommendation Competition',
+          Icons.emoji_events_rounded,
+          'Rank recommendations and identify the weekly winner.',
+          (_) => const RecommendationCompetitionScreen()),
+      _RoadmapFeature(
+          19,
+          'Achievements',
+          Icons.workspace_premium_rounded,
+          'Watching, voting and collection milestones.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          20,
+          'Personal Statistics',
+          Icons.insights_rounded,
+          'Watching totals, genres, streaks and recaps.',
+          (_) => const StatisticsScreen()),
+      _RoadmapFeature(
+          21,
+          'Reactions',
+          Icons.favorite_rounded,
+          'Love, funny, scary, emotional and mind-blowing reactions.',
+          (_) => const ReactionGuideScreen()),
+      _RoadmapFeature(
+          22,
+          'Watch Together 2.0',
+          Icons.groups_rounded,
+          'Synchronized group watching, chat and host controls.',
+          (_) => const GroupWatchRoadmapScreen()),
+      _RoadmapFeature(
+          23,
+          'Activity Center',
+          Icons.notifications_active_outlined,
+          'Watching, recommendations, imports and party activity.',
+          (_) => const UltimateFeaturesScreen()),
+      _RoadmapFeature(
+          24,
+          'ARM Disc Intelligence',
+          Icons.album_rounded,
+          'Detect, extract, identify, enrich, review and approve discs.',
+          (_) => const UltimateFeaturesScreen()),
+      _RoadmapFeature(
+          25,
+          'ARM Metadata',
+          Icons.fact_check_outlined,
+          'Catalog resolution, codecs, audio, subtitles, chapters and extras.',
+          (_) => const UltimateFeaturesScreen()),
+      _RoadmapFeature(
+          26,
+          'Poster & Trailer Fallbacks',
+          Icons.image_search_rounded,
+          'Manual URLs remain available when a disc lacks artwork or trailer data.',
+          (_) => const UltimateFeaturesScreen()),
+      _RoadmapFeature(
+          27,
+          'Audio / Subtitle / Chapters / Extras',
+          Icons.closed_caption_rounded,
+          'Expose imported disc metadata throughout Details.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          28,
+          'Manual Library Approval',
+          Icons.verified_outlined,
+          'ARM stops at Review and requires Add to Library.',
+          (_) => const UltimateFeaturesScreen()),
+      _RoadmapFeature(
+          29,
+          'Real Email',
+          Icons.email_outlined,
+          'Account email flows are ready for real provider integration.',
+          (_) => const SecurityCenterScreen()),
+      _RoadmapFeature(
+          30,
+          'Verification',
+          Icons.mark_email_read_outlined,
+          'Verification and security challenge surfaces.',
+          (_) => const SecurityCenterScreen()),
+      _RoadmapFeature(
+          31,
+          'Suspicious Login Protection',
+          Icons.gpp_maybe_rounded,
+          'Security-question challenge before access is granted.',
+          (_) => const SecurityCenterScreen()),
+      _RoadmapFeature(
+          32,
+          'Device Management',
+          Icons.devices_rounded,
+          'Trusted devices, pairing and device access controls.',
+          (_) => const DeviceCenterScreen()),
+      _RoadmapFeature(
+          33,
+          'Remote Access',
+          Icons.public_rounded,
+          'Trusted remote computers and remote imports.',
+          (_) => const RemoteAccessScreen()),
+      _RoadmapFeature(
+          34,
+          'Backup & Restore',
+          Icons.backup_rounded,
+          'Backup and recovery controls for account and library state.',
+          (_) => const BackupScreen()),
+      _RoadmapFeature(
+          51,
+          'ARM Canonical Title Resolution',
+          Icons.language_rounded,
+          'Resolve localized disc titles to the canonical/original movie while preserving disc title, market and raw ARM region.',
+          (_) => const UltimateFeaturesScreen()),
+      _RoadmapFeature(
+          52,
+          'Recommendation Feedback',
+          Icons.feedback_outlined,
+          'Improve recommendations from explicit feedback.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          53,
+          'Recommendation Diversity',
+          Icons.shuffle_rounded,
+          'Prevent recommendation feeds from becoming repetitive.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          54,
+          'Similar Titles',
+          Icons.compare_arrows_rounded,
+          'Find titles similar to the current selection.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          55,
+          'Because You Watched',
+          Icons.history_toggle_off_rounded,
+          'Generate recommendations from recent viewing.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          56,
+          'Continue Watching Intelligence',
+          Icons.play_circle_outline_rounded,
+          'Prioritize unfinished titles and episodes intelligently.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          57,
+          'Franchise Progress',
+          Icons.linear_scale_rounded,
+          'Show progress through franchise collections.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          58,
+          'Collection Completion',
+          Icons.check_circle_outline_rounded,
+          'Track which franchise collections are complete.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          59,
+          'Collaborative Collections',
+          Icons.group_work_rounded,
+          'Allow permitted profiles to contribute to shared collections.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          60,
+          'Collection Permissions',
+          Icons.admin_panel_settings_outlined,
+          'Control who can view, add, remove or edit collections.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          61,
+          'Collection Posters',
+          Icons.image_outlined,
+          'Build collection artwork from member posters.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          62,
+          'Collection Favorites',
+          Icons.favorite_border_rounded,
+          'Like collections and surface favorites quickly.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          63,
+          'Collection Manual Ordering',
+          Icons.reorder_rounded,
+          'Manually arrange titles inside a collection.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          64,
+          'Collection Release Order',
+          Icons.sort_rounded,
+          'Automatically sort a collection by release order.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          65,
+          'Version Preference',
+          Icons.movie_outlined,
+          'Prefer theatrical, extended, preferred or highest-quality versions.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          66,
+          'Auto Play Queue',
+          Icons.queue_play_next_rounded,
+          'Build a playback queue from collection order.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          67,
+          'Credits Auto Advance',
+          Icons.skip_next_rounded,
+          'Advance to the next eligible title around end credits.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          68,
+          'Episode Auto Advance',
+          Icons.next_plan_rounded,
+          'Automatically continue to the next episode.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          69,
+          'Episode Progress',
+          Icons.format_list_numbered_rounded,
+          'Track watched and partially watched episodes.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          70,
+          'Season Progress',
+          Icons.playlist_play_rounded,
+          'Display completion progress for every season.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          71,
+          'Episode Ratings',
+          Icons.star_border_rounded,
+          'Rate individual episodes independently.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          72,
+          'Watch-State Overrides',
+          Icons.published_with_changes_rounded,
+          'Manually mark movies or episodes watched/unwatched.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          73,
+          'Duplicate Detection',
+          Icons.content_copy_rounded,
+          'Detect duplicate library entries before approval.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          74,
+          'Metadata Conflict Review',
+          Icons.difference_rounded,
+          'Compare conflicting metadata before saving.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          75,
+          'Metadata Locking',
+          Icons.lock_outline_rounded,
+          'Protect manually corrected metadata from automatic replacement.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          76,
+          'Artwork Selection',
+          Icons.photo_library_outlined,
+          'Choose among available posters and backdrops.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          77,
+          'Trailer Selection',
+          Icons.ondemand_video_rounded,
+          'Choose the preferred trailer when multiple are available.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          78,
+          'Genre Management',
+          Icons.category_outlined,
+          'Normalize and manage library genres.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          79,
+          'Tag Management',
+          Icons.sell_outlined,
+          'Create and manage custom library tags.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          80,
+          'Actor Credits',
+          Icons.person_search_rounded,
+          'Browse every library title associated with an actor.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          81,
+          'Director Credits',
+          Icons.movie_creation_outlined,
+          'Browse every library title associated with a director.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          82,
+          'Writer Credits',
+          Icons.edit_note_rounded,
+          'Browse every library title associated with a writer.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          83,
+          'Franchise Discovery',
+          Icons.account_tree_rounded,
+          'Discover franchise relationships from imported metadata.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          84,
+          'Disc Title Review',
+          Icons.fact_check_rounded,
+          'Review every detected ARM title before library approval.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          85,
+          'Disc Title Classification',
+          Icons.label_important_outline_rounded,
+          'Classify films, extras, episodes and alternate cuts.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          86,
+          'Disc Confidence Scores',
+          Icons.verified_user_outlined,
+          'Show ARM metadata confidence during review.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          87,
+          'Disc Collection Linking',
+          Icons.link_rounded,
+          'Link separate library titles to their physical disc.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          88,
+          'Multi-Title Disc Import',
+          Icons.library_add_rounded,
+          'Import multiple distinct movies from one physical disc.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          89,
+          'Import Approval Queue',
+          Icons.playlist_add_check_rounded,
+          'Review pending imports before they enter the library.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          90,
+          'Import Rejection',
+          Icons.block_outlined,
+          'Reject incorrect or unwanted ARM results.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          91,
+          'Import Job History',
+          Icons.history_rounded,
+          'Review previous ARM scan and import jobs.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          92,
+          'Import Cancellation',
+          Icons.cancel_outlined,
+          'Cancel eligible ARM jobs safely.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(93, 'Audio Track Browser', Icons.graphic_eq_rounded,
+          'Inspect imported audio tracks.', (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          94,
+          'Subtitle Browser',
+          Icons.subtitles_outlined,
+          'Inspect available subtitle tracks.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(95, 'Chapter Browser', Icons.menu_book_rounded,
+          'Browse imported chapters.', (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          96,
+          'Extras Browser',
+          Icons.video_library_outlined,
+          'Browse extras and bonus content separately.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          97,
+          'Kids Profile Mode',
+          Icons.child_care_rounded,
+          'Create a simplified profile experience for children.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          98,
+          'Content Age Filters',
+          Icons.filter_alt_outlined,
+          'Filter content by configurable age ratings.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          99,
+          'Profile PIN',
+          Icons.pin_outlined,
+          'Protect selected profile actions with a PIN.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          100,
+          'Kids Safe Collections',
+          Icons.family_restroom_rounded,
+          'Restrict collections available to child profiles.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          101,
+          'Account Security Center',
+          Icons.security_rounded,
+          'Profile-scoped 2FA, suspicious-login alerts, new-device approval and session controls.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          102,
+          'Playback Experience Controls',
+          Icons.play_circle_fill_rounded,
+          'Profile-scoped resume, autoplay, preload, picture-in-picture and track preferences.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          103,
+          'TV Experience Controls',
+          Icons.tv_rounded,
+          'Series-first autoplay, preserved intros, specials and unfinished-season behavior.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          104,
+          'Notification Controls',
+          Icons.notifications_active_rounded,
+          'Per-profile alerts for episodes, recommendations and security events.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          105,
+          'Backup & Migration Controls',
+          Icons.backup_rounded,
+          'Profile-scoped backup manifest coverage for settings, watch state, collections and layouts.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          106,
+          'Library Intelligence Controls',
+          Icons.auto_awesome_rounded,
+          'Tune smart recommendations, diversity, explanations and franchise progress.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          107,
+          'Search & Discovery Controls',
+          Icons.manage_search_rounded,
+          'Enable natural-language, localized-title, actor and crew discovery.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          108,
+          'Collection Studio Controls',
+          Icons.collections_bookmark_rounded,
+          'Configure collection autoplay, release order, quality preference and credit advance.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          110,
+          'Privacy & Profile Controls',
+          Icons.privacy_tip_rounded,
+          'Control activity, reactions, watch-history sharing and profile PIN protection.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          111,
+          'Kids Safety Controls',
+          Icons.child_care_rounded,
+          'Kids mode, age filters, safe collections and mature-content PIN protection.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          112,
+          'Performance Controls',
+          Icons.speed_rounded,
+          'Tune animations, artwork preloading, reduced motion and fast Home mode.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          113,
+          'Legacy Movie Safety Review',
+          Icons.history_edu_rounded,
+          'Apply extra kids-safety review to older movies whose historical ratings may not reflect modern parental expectations.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          114,
+          'Nudity Safety Detection',
+          Icons.visibility_off_rounded,
+          'Flag nudity and partial nudity independently of the official age rating.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          115,
+          'Sexual Content Detection',
+          Icons.no_adult_content_rounded,
+          'Flag sexual content, sexualized imagery and suggestive material for child profiles.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          116,
+          'Violence & Gore Safety',
+          Icons.warning_amber_rounded,
+          'Apply additional violence and gore safeguards beyond the official rating.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          117,
+          'Profanity Safety',
+          Icons.record_voice_over_rounded,
+          'Use profanity metadata as an independent kids-safety signal.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          118,
+          'Substance Use Safety',
+          Icons.smoke_free_rounded,
+          'Flag alcohol, drugs and smoking independently of the official rating.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          119,
+          'Disturbing Content Safety',
+          Icons.warning_rounded,
+          'Flag horror, frightening scenes and disturbing imagery for child profiles.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          120,
+          'Suggestive Themes Safety',
+          Icons.forum_rounded,
+          'Flag mature jokes, suggestive dialogue and adult themes.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          121,
+          'Parent Content Warnings',
+          Icons.info_outline_rounded,
+          'Show detected content categories to a parent before playback.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          122,
+          'Incomplete Metadata Protection',
+          Icons.help_outline_rounded,
+          'Require parent review when content-safety metadata is missing or uncertain.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          123,
+          'Disc Rating Comparison',
+          Icons.album_rounded,
+          'Compare the physical DVD/Blu-ray packaging rating with current catalog metadata.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          124,
+          'Parent Approval Queue',
+          Icons.approval_rounded,
+          'Hold flagged child-profile titles for explicit parent approval.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          125,
+          'Per-Title Kids Overrides',
+          Icons.rule_rounded,
+          'Allow a parent to approve or block individual titles regardless of general rules.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          126,
+          'Multi-Signal Kids Safety',
+          Icons.shield_rounded,
+          'Combine age rating, content descriptors, legacy status, metadata confidence and parent rules instead of relying on a single rating.',
+          (_) => const PlatformExpansionScreen()),
+      _RoadmapFeature(
+          131,
+          'Global Language & Localization',
+          Icons.translate_rounded,
+          'Global language selector with native language names, profile persistence, RTL support and localized metadata preferences.',
+          (_) => const FeatureCenterScreen()),
+      _RoadmapFeature(
+          127,
+          'Music Home',
+          Icons.music_note_rounded,
+          'Dedicated Music home with artists, bands, albums and songs.',
+          (_) => const MusicScreen()),
+      _RoadmapFeature(
+          128,
+          'Custom Music Playlists',
+          Icons.queue_music_rounded,
+          'Create, delete and curate profile playlists.',
+          (_) => const MusicScreen()),
+      _RoadmapFeature(
+          129,
+          'Background Music Player',
+          Icons.headphones_rounded,
+          'Keep music playing while browsing and resume it after movie/TV playback.',
+          (_) => const MusicScreen()),
+      _RoadmapFeature(
+          130,
+          'Music Visual Customization',
+          Icons.palette_outlined,
+          'Customize music home and navigation colors, glow and item styling.',
+          (_) => const MusicScreen()),
+      _RoadmapFeature(
+          132,
+          'Soundtrack Universe',
+          Icons.album_rounded,
+          'Connect movies, shows, albums and songs into soundtrack experiences.',
+          (_) => const MusicScreen()),
+      _RoadmapFeature(
+          133,
+          'Music Statistics',
+          Icons.bar_chart_rounded,
+          'Track music songs, playlists and listening alongside movie/TV statistics.',
+          (_) => const StatisticsScreen()),
+      _RoadmapFeature(
+          134,
+          'Music Achievements & Badges',
+          Icons.emoji_events_rounded,
+          'Badges such as Cultured, Swiftie and Album Collector.',
+          (_) => const AchievementsScreen()),
+      _RoadmapFeature(
+          135,
+          'Profile Reviews',
+          Icons.rate_review_outlined,
+          'Rate titles from 0-10 with a custom review label and text.',
+          (_) => const ReviewsHubScreen()),
+      _RoadmapFeature(
+          136,
+          'Global Privacy-Safe Reviews',
+          Icons.public_rounded,
+          'Publish reviews under the active profile’s unique username without exposing email or account identity.',
+          (_) => const ReviewsHubScreen()),
+      _RoadmapFeature(
+          137,
+          'Official vs Viewer Ratings',
+          Icons.star_half_rounded,
+          'Show provider/critic rating separately from the community 10-point rating.',
+          (_) => const ReviewsHubScreen()),
+      _RoadmapFeature(
+          138,
+          'Review Translation Toggle',
+          Icons.translate_rounded,
+          'Offer a translation-enabled global review view without exposing private identity.',
+          (_) => const ReviewsHubScreen()),
+      _RoadmapFeature(
+          139,
+          'Home Server Dashboard',
+          Icons.dns_rounded,
+          'Monitor the home server, media root and ARM connection.',
+          (_) => const HomeServerScreen()),
+      _RoadmapFeature(
+          140,
+          'ARM Media Scanner',
+          Icons.disc_full_rounded,
+          'Scan completed ARM media and synchronize discovered files into Flutter.',
+          (_) => const HomeServerScreen()),
+      _RoadmapFeature(
+          141,
+          'Server Storage Dashboard',
+          Icons.storage_rounded,
+          'Display Movies, Series, Music and available storage with hover details.',
+          (_) => const StorageDashboardScreen()),
+      _RoadmapFeature(
+          142,
+          'Custom Storage Visualization',
+          Icons.color_lens_rounded,
+          'Customize storage category colors and progress visualization.',
+          (_) => const StorageDashboardScreen()),
+      _RoadmapFeature(
+          143,
+          'Expanded Platform Capability Center',
+          Icons.hub_rounded,
+          'Browse new AI, discovery, social, commerce, privacy, reliability and operations capabilities.',
+          (_) => const ExpandedPlatformScreen()),
     ];
 
     return Scaffold(
@@ -4194,28 +5458,31 @@ class RoadmapFeaturesScreen extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(16, 10, 16, 6),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: UniversalText('Platform features and controls',
+              child: UniversalText(
+                'Platform features and controls',
                 style: TextStyle(color: Colors.white54),
               ),
             ),
           ),
           Expanded(
             child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        itemCount: features.length,
-        itemBuilder: (context, index) {
-          final f = features[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: ListTile(
-              leading: CircleAvatar(child: UniversalText('${f.number}')),
-              title: Text(f.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Text(f.description),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => f.builder(context))),
-            ),
-          );
-        },
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              itemCount: features.length,
+              itemBuilder: (context, index) {
+                final f = features[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: CircleAvatar(child: UniversalText('${f.number}')),
+                    title: Text(f.title,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text(f.description),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => f.builder(context))),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -4231,7 +5498,8 @@ class _RoadmapFeature {
   final IconData icon;
   final String description;
   final Widget Function(BuildContext) builder;
-  _RoadmapFeature(this.number, this.title, this.icon, this.description, this.builder);
+  _RoadmapFeature(
+      this.number, this.title, this.icon, this.description, this.builder);
 }
 
 List<MediaItem> _library() => AppController.instance.library;
@@ -4239,109 +5507,443 @@ List<MediaItem> _library() => AppController.instance.library;
 /// Implements the `AskMyLibraryScreen` class for this feature or UI component.
 class AskMyLibraryScreen extends StatefulWidget {
   const AskMyLibraryScreen({super.key});
-  @override State<AskMyLibraryScreen> createState() => _AskMyLibraryScreenState();
+  @override
+  State<AskMyLibraryScreen> createState() => _AskMyLibraryScreenState();
 }
+
 /// Implements the `_AskMyLibraryScreenState` class for this feature or UI component.
 class _AskMyLibraryScreenState extends State<AskMyLibraryScreen> {
   final query = TextEditingController();
   List<MediaItem> results = <MediaItem>[];
-  String explanation = 'Ask about titles, actors, genres, years, watched state or your next watch.';
+  String explanation =
+      'Ask about titles, actors, genres, years, watched state or your next watch.';
 
   /// Performs `ask` for this feature. Update this documentation when its contract changes.
   void ask() {
     final q = query.text.trim().toLowerCase();
     var filtered = List<MediaItem>.from(_library());
-    if (q.contains('unwatched')) filtered = filtered.where((m) => !AppController.instance.isWatched(m.id)).toList();
-    if (q.contains('watched')) filtered = filtered.where((m) => AppController.instance.isWatched(m.id)).toList();
-    if (q.contains('movie')) filtered = filtered.where((m) => m.type == 'movie').toList();
-    if (q.contains('show') || q.contains('series') || q.contains('tv')) filtered = filtered.where((m) => m.type != 'movie').toList();
+    if (q.contains('unwatched')) {
+      filtered = filtered
+          .where((m) => !AppController.instance.isWatched(m.id))
+          .toList();
+    }
+    if (q.contains('watched')) {
+      filtered = filtered
+          .where((m) => AppController.instance.isWatched(m.id))
+          .toList();
+    }
+    if (q.contains('movie')) {
+      filtered = filtered.where((m) => m.type == 'movie').toList();
+    }
+    if (q.contains('show') || q.contains('series') || q.contains('tv')) {
+      filtered = filtered.where((m) => m.type != 'movie').toList();
+    }
     final year = RegExp(r'\b(19|20)\d{2}\b').firstMatch(q)?.group(0);
-    if (year != null) filtered = filtered.where((m) => m.releaseYear == int.tryParse(year)).toList();
-    for (final genre in const ['action','comedy','drama','horror','romance','thriller','animation','sci-fi']) {
-      if (q.contains(genre)) filtered = filtered.where((m) => m.genres.any((g) => g.toLowerCase().contains(genre))).toList();
+    if (year != null) {
+      filtered =
+          filtered.where((m) => m.releaseYear == int.tryParse(year)).toList();
+    }
+    for (final genre in const [
+      'action',
+      'comedy',
+      'drama',
+      'horror',
+      'romance',
+      'thriller',
+      'animation',
+      'sci-fi'
+    ]) {
+      if (q.contains(genre)) {
+        filtered = filtered
+            .where((m) => m.genres.any((g) => g.toLowerCase().contains(genre)))
+            .toList();
+      }
     }
     setState(() {
       results = filtered;
-      explanation = results.isEmpty ? 'No matching titles were found in this profile library.' : 'Found ${results.length} matching title${results.length == 1 ? '' : 's'} from your library metadata.';
+      explanation = results.isEmpty
+          ? 'No matching titles were found in this profile library.'
+          : 'Found ${results.length} matching title${results.length == 1 ? '' : 's'} from your library metadata.';
     });
   }
-  @override void dispose() { query.dispose(); super.dispose(); }
-  @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const UniversalText('Ask My Library')),
-    body: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        TextField(controller: query, onSubmitted: (_) => ask(), decoration: InputDecoration(hintText: tr('e.g. unwatched action movies from the 2000s'), suffixIcon: IconButton(onPressed: ask, icon: const Icon(Icons.search)))),
-        const SizedBox(height: 12),
-        Align(alignment: Alignment.centerLeft, child: Text(explanation, style: const TextStyle(color: Colors.white70))),
-        const SizedBox(height: 12),
-        Expanded(child: ListView.builder(itemCount: results.length, itemBuilder: (_, i) {
-          final m = results[i];
-          return Card(child: ListTile(title: Text(m.title), subtitle: UniversalText('${m.releaseYear ?? ''} • ${m.type}'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: m)))));
-        })),
-      ]),
-    ),
-  );
+
+  @override
+  void dispose() {
+    query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const UniversalText('Ask My Library')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            TextField(
+                controller: query,
+                onSubmitted: (_) => ask(),
+                decoration: InputDecoration(
+                    hintText: tr('e.g. unwatched action movies from the 2000s'),
+                    suffixIcon: IconButton(
+                        onPressed: ask, icon: const Icon(Icons.search)))),
+            const SizedBox(height: 12),
+            Align(
+                alignment: Alignment.centerLeft,
+                child: Text(explanation,
+                    style: const TextStyle(color: Colors.white70))),
+            const SizedBox(height: 12),
+            Expanded(
+                child: ListView.builder(
+                    itemCount: results.length,
+                    itemBuilder: (_, i) {
+                      final m = results[i];
+                      return Card(
+                          child: ListTile(
+                              title: Text(m.title),
+                              subtitle: UniversalText(
+                                  '${m.releaseYear ?? ''} • ${m.type}'),
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          MediaDetailsScreen(media: m)))));
+                    })),
+          ]),
+        ),
+      );
 }
 
 /// Implements the `SmartCollectionsScreen` class for this feature or UI component.
-class SmartCollectionsScreen extends StatefulWidget { const SmartCollectionsScreen({super.key}); @override State<SmartCollectionsScreen> createState() => _SmartCollectionsScreenState(); }
+class SmartCollectionsScreen extends StatefulWidget {
+  const SmartCollectionsScreen({super.key});
+  @override
+  State<SmartCollectionsScreen> createState() => _SmartCollectionsScreenState();
+}
+
 class _SmartCollectionsScreenState extends State<SmartCollectionsScreen> {
   String rule = 'Unwatched';
-  List<MediaItem> get items { final l = _library(); switch (rule) { case 'Watched': return l.where((m) => AppController.instance.isWatched(m.id)).toList(); case 'Movies': return l.where((m) => m.type == 'movie').toList(); case 'TV Shows': return l.where((m) => m.type != 'movie').toList(); case 'Liked': return l.where((m) => AppController.instance.liked.any((x) => x.id == m.id)).toList(); default: return l.where((m) => !AppController.instance.isWatched(m.id)).toList(); } }
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Smart Collections')), body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [DropdownButtonFormField<String>(initialValue: rule, items: const ['Unwatched','Watched','Movies','TV Shows','Liked'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(), onChanged: (v) => setState(() => rule = v!)), const SizedBox(height: 12), Align(alignment: Alignment.centerLeft, child: UniversalText('${items.length} titles match this live rule')), const SizedBox(height: 12), Expanded(child: ListView(children: items.map((m) => ListTile(leading: const Icon(Icons.movie_outlined), title: Text(m.title), subtitle: UniversalText('${m.releaseYear ?? ''} • ${m.type}'))).toList()))])));
+  List<MediaItem> get items {
+    final l = _library();
+    switch (rule) {
+      case 'Watched':
+        return l.where((m) => AppController.instance.isWatched(m.id)).toList();
+      case 'Movies':
+        return l.where((m) => m.type == 'movie').toList();
+      case 'TV Shows':
+        return l.where((m) => m.type != 'movie').toList();
+      case 'Liked':
+        return l
+            .where((m) => AppController.instance.liked.any((x) => x.id == m.id))
+            .toList();
+      default:
+        return l.where((m) => !AppController.instance.isWatched(m.id)).toList();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const UniversalText('Smart Collections')),
+      body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            DropdownButtonFormField<String>(
+                initialValue: rule,
+                items: const [
+                  'Unwatched',
+                  'Watched',
+                  'Movies',
+                  'TV Shows',
+                  'Liked'
+                ]
+                    .map((x) => DropdownMenuItem(value: x, child: Text(x)))
+                    .toList(),
+                onChanged: (v) => setState(() => rule = v!)),
+            const SizedBox(height: 12),
+            Align(
+                alignment: Alignment.centerLeft,
+                child: UniversalText(
+                    '${items.length} titles match this live rule')),
+            const SizedBox(height: 12),
+            Expanded(
+                child: ListView(
+                    children: items
+                        .map((m) => ListTile(
+                            leading: const Icon(Icons.movie_outlined),
+                            title: Text(m.title),
+                            subtitle: UniversalText(
+                                '${m.releaseYear ?? ''} • ${m.type}')))
+                        .toList()))
+          ])));
 }
 
 /// Implements the `RecommendationCompetitionScreen` class for this feature or UI component.
 class RecommendationCompetitionScreen extends StatelessWidget {
   const RecommendationCompetitionScreen({super.key});
-  @override Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     final recs = [...AppController.instance.groupRecommendations];
     recs.sort((a, b) => _yes(b).compareTo(_yes(a)));
-    return Scaffold(appBar: AppBar(title: const UniversalText('Recommendation Competition')), body: ListView(padding: const EdgeInsets.all(16), children: [
-      if (recs.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(24), child: UniversalText('No active recommendations yet.'))),
-      ...recs.asMap().entries.map((entry) { final r = entry.value; return Card(child: ListTile(leading: CircleAvatar(child: UniversalText('${entry.key + 1}')), title: Text(r['title']?.toString() ?? 'Untitled'), subtitle: UniversalText('YES ${r['yesVotes'] ?? 0} • NO ${r['noVotes'] ?? 0}'), trailing: entry.key == 0 ? const Icon(Icons.emoji_events_rounded) : null)); }),
-    ]));
+    return Scaffold(
+        appBar:
+            AppBar(title: const UniversalText('Recommendation Competition')),
+        body: ListView(padding: const EdgeInsets.all(16), children: [
+          if (recs.isEmpty)
+            const Card(
+                child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: UniversalText('No active recommendations yet.'))),
+          ...recs.asMap().entries.map((entry) {
+            final r = entry.value;
+            return Card(
+                child: ListTile(
+                    leading:
+                        CircleAvatar(child: UniversalText('${entry.key + 1}')),
+                    title: Text(r['title']?.toString() ?? 'Untitled'),
+                    subtitle: UniversalText(
+                        'YES ${r['yesVotes'] ?? 0} • NO ${r['noVotes'] ?? 0}'),
+                    trailing: entry.key == 0
+                        ? const Icon(Icons.emoji_events_rounded)
+                        : null));
+          }),
+        ]));
   }
-  static int _yes(Map<String, dynamic> r) => int.tryParse(r['yesVotes']?.toString() ?? '0') ?? 0;
+
+  static int _yes(Map<String, dynamic> r) =>
+      int.tryParse(r['yesVotes']?.toString() ?? '0') ?? 0;
 }
 
 /// Implements the `WatchHistoryTimelineScreen` class for this feature or UI component.
 class WatchHistoryTimelineScreen extends StatelessWidget {
   const WatchHistoryTimelineScreen({super.key});
-  @override Widget build(BuildContext context) { final watched = AppController.instance.watched; return Scaffold(appBar: AppBar(title: const UniversalText('Watch History')), body: watched.isEmpty ? const Center(child: UniversalText('Nothing watched yet.')) : ListView.separated(padding: const EdgeInsets.all(16), itemCount: watched.length, separatorBuilder: (_, __) => const Divider(), itemBuilder: (_, i) { final m = watched[watched.length - 1 - i]; return ListTile(leading: CircleAvatar(child: UniversalText('${i + 1}')), title: Text(m.title), subtitle: UniversalText('${m.releaseYear ?? ''} • Watched by ${AppController.instance.currentProfile?.name ?? 'profile'}')); })); }
+  @override
+  Widget build(BuildContext context) {
+    final watched = AppController.instance.watched;
+    return Scaffold(
+        appBar: AppBar(title: const UniversalText('Watch History')),
+        body: watched.isEmpty
+            ? const Center(child: UniversalText('Nothing watched yet.'))
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: watched.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (_, i) {
+                  final m = watched[watched.length - 1 - i];
+                  return ListTile(
+                      leading: CircleAvatar(child: UniversalText('${i + 1}')),
+                      title: Text(m.title),
+                      subtitle: UniversalText(
+                          '${m.releaseYear ?? ''} • Watched by ${AppController.instance.currentProfile?.name ?? 'profile'}'));
+                }));
+  }
 }
 
 /// Implements the `MusicModeScreen` class for this feature or UI component.
 class MusicModeScreen extends StatelessWidget {
   const MusicModeScreen({super.key});
-  @override Widget build(BuildContext context) { final grouped = <String, List<String>>{}; for (final m in _library()) { for (final item in m.music) { grouped.putIfAbsent(m.title, () => <String>[]).add(item); } } return Scaffold(appBar: AppBar(title: const UniversalText('Music Mode')), body: grouped.isEmpty ? const Center(child: UniversalText('No music metadata has been imported yet.')) : ListView(padding: const EdgeInsets.all(16), children: grouped.entries.expand((e) => [Padding(padding: const EdgeInsets.only(top: 10, bottom: 4), child: Text(e.key, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))), ...e.value.map((x) => ListTile(leading: const Icon(Icons.music_note_rounded), title: Text(x)))]).toList())); }
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <String, List<String>>{};
+    for (final m in _library()) {
+      for (final item in m.music) {
+        grouped.putIfAbsent(m.title, () => <String>[]).add(item);
+      }
+    }
+    return Scaffold(
+        appBar: AppBar(title: const UniversalText('Music Mode')),
+        body: grouped.isEmpty
+            ? const Center(
+                child:
+                    UniversalText('No music metadata has been imported yet.'))
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: grouped.entries
+                    .expand((e) => [
+                          Padding(
+                              padding:
+                                  const EdgeInsets.only(top: 10, bottom: 4),
+                              child: Text(e.key,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900))),
+                          ...e.value.map((x) => ListTile(
+                              leading: const Icon(Icons.music_note_rounded),
+                              title: Text(x)))
+                        ])
+                    .toList()));
+  }
 }
 
 /// Implements the `TrailerTheaterScreen` class for this feature or UI component.
 class TrailerTheaterScreen extends StatelessWidget {
   const TrailerTheaterScreen({super.key});
-  @override Widget build(BuildContext context) { final media = _library().where((m) => (m.trailerUrl ?? '').trim().isNotEmpty).toList(); return Scaffold(appBar: AppBar(title: const UniversalText('Trailer Theater')), body: media.isEmpty ? const Center(child: UniversalText('No trailers are available.')) : GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .75), itemCount: media.length, itemBuilder: (_, i) { final m = media[i]; return Card(child: InkWell(onTap: () async { final uri = Uri.tryParse(m.trailerUrl!); if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication); }, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: m.imageUrl == null ? const Center(child: Icon(Icons.movie_rounded, size: 48)) : Image.network(m.imageUrl!, fit: BoxFit.cover, width: double.infinity, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.movie_rounded, size: 48)))), Padding(padding: const EdgeInsets.all(10), child: Text(m.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))),]))); })); }
+  @override
+  Widget build(BuildContext context) {
+    final media = _library()
+        .where((m) => (m.trailerUrl ?? '').trim().isNotEmpty)
+        .toList();
+    return Scaffold(
+        appBar: AppBar(title: const UniversalText('Trailer Theater')),
+        body: media.isEmpty
+            ? const Center(child: UniversalText('No trailers are available.'))
+            : GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: .75),
+                itemCount: media.length,
+                itemBuilder: (_, i) {
+                  final m = media[i];
+                  return Card(
+                      child: InkWell(
+                          onTap: () async {
+                            final uri = Uri.tryParse(m.trailerUrl!);
+                            if (uri != null) {
+                              await launchUrl(uri,
+                                  mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                    child: m.imageUrl == null
+                                        ? const Center(
+                                            child: Icon(Icons.movie_rounded,
+                                                size: 48))
+                                        : Image.network(m.imageUrl!,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Center(
+                                                    child: Icon(
+                                                        Icons.movie_rounded,
+                                                        size: 48)))),
+                                Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: Text(m.title,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800))),
+                              ])));
+                }));
+  }
 }
 
 /// Implements the `HomeWidgetsScreen` class for this feature or UI component.
-class HomeWidgetsScreen extends StatefulWidget { const HomeWidgetsScreen({super.key}); @override State<HomeWidgetsScreen> createState() => _HomeWidgetsScreenState(); }
-class _HomeWidgetsScreenState extends State<HomeWidgetsScreen> { final widgets = <String>['Continue Watching','Wishlist','Watch Streak','Recommendations','Recently Added','Storage']; @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Home Widgets')), body: ReorderableListView.builder(padding: const EdgeInsets.all(16), itemCount: widgets.length, onReorderItem: (a, b) => setState(() { final item = widgets.removeAt(a); widgets.insert(b, item); }), itemBuilder: (_, i) => Card(key: ValueKey(widgets[i]), child: ListTile(leading: const Icon(Icons.drag_handle_rounded), title: Text(widgets[i]), trailing: const Icon(Icons.widgets_rounded))))); }
+class HomeWidgetsScreen extends StatefulWidget {
+  const HomeWidgetsScreen({super.key});
+  @override
+  State<HomeWidgetsScreen> createState() => _HomeWidgetsScreenState();
+}
 
-class ProfileRelationshipsScreen extends StatefulWidget { const ProfileRelationshipsScreen({super.key}); @override State<ProfileRelationshipsScreen> createState() => _ProfileRelationshipsScreenState(); }
+class _HomeWidgetsScreenState extends State<HomeWidgetsScreen> {
+  final widgets = <String>[
+    'Continue Watching',
+    'Wishlist',
+    'Watch Streak',
+    'Recommendations',
+    'Recently Added',
+    'Storage'
+  ];
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const UniversalText('Home Widgets')),
+      body: ReorderableListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: widgets.length,
+          onReorderItem: (a, b) => setState(() {
+                final item = widgets.removeAt(a);
+                widgets.insert(b, item);
+              }),
+          itemBuilder: (_, i) => Card(
+              key: ValueKey(widgets[i]),
+              child: ListTile(
+                  leading: const Icon(Icons.drag_handle_rounded),
+                  title: Text(widgets[i]),
+                  trailing: const Icon(Icons.widgets_rounded)))));
+}
+
+class ProfileRelationshipsScreen extends StatefulWidget {
+  const ProfileRelationshipsScreen({super.key});
+  @override
+  State<ProfileRelationshipsScreen> createState() =>
+      _ProfileRelationshipsScreenState();
+}
+
 /// Implements the `_ProfileRelationshipsScreenState` class for this feature or UI component.
-class _ProfileRelationshipsScreenState extends State<ProfileRelationshipsScreen> { final permissions = <String, bool>{'Watch': true, 'Recommend': true, 'Vote': true, 'Wishlist': true, 'Customize UI': true}; @override Widget build(BuildContext context) { final profiles = AppController.instance.currentAccount?.profiles ?? <Profile>[]; return Scaffold(appBar: AppBar(title: const UniversalText('Profile Relationships')), body: ListView(padding: const EdgeInsets.all(16), children: profiles.map((p) => Card(child: ExpansionTile(title: Text(p.name), subtitle: const UniversalText('Optional permissions'), children: permissions.keys.map((k) => SwitchListTile(title: Text(k), value: permissions[k]!, onChanged: (v) => setState(() => permissions[k] = v))).toList()))).toList())); } }
+class _ProfileRelationshipsScreenState
+    extends State<ProfileRelationshipsScreen> {
+  final permissions = <String, bool>{
+    'Watch': true,
+    'Recommend': true,
+    'Vote': true,
+    'Wishlist': true,
+    'Customize UI': true
+  };
+  @override
+  Widget build(BuildContext context) {
+    final profiles =
+        AppController.instance.currentAccount?.profiles ?? <Profile>[];
+    return Scaffold(
+        appBar: AppBar(title: const UniversalText('Profile Relationships')),
+        body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: profiles
+                .map((p) => Card(
+                    child: ExpansionTile(
+                        title: Text(p.name),
+                        subtitle: const UniversalText('Optional permissions'),
+                        children: permissions.keys
+                            .map((k) => SwitchListTile(
+                                title: Text(k),
+                                value: permissions[k]!,
+                                onChanged: (v) =>
+                                    setState(() => permissions[k] = v)))
+                            .toList())))
+                .toList()));
+  }
+}
 
-class ReactionGuideScreen extends StatelessWidget { const ReactionGuideScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Reactions')), body: ListView(padding: const EdgeInsets.all(16), children: const [ListTile(leading: UniversalText('❤️', style: TextStyle(fontSize: 26)), title: UniversalText('Love it')), ListTile(leading: UniversalText('🔥', style: TextStyle(fontSize: 26)), title: UniversalText('Amazing')), ListTile(leading: UniversalText('😂', style: TextStyle(fontSize: 26)), title: UniversalText('Funny')), ListTile(leading: UniversalText('😱', style: TextStyle(fontSize: 26)), title: UniversalText('Scary')), ListTile(leading: UniversalText('😭', style: TextStyle(fontSize: 26)), title: UniversalText('Emotional')), ListTile(leading: UniversalText('🤯', style: TextStyle(fontSize: 26)), title: UniversalText('Mind-blowing'))])); }
+class ReactionGuideScreen extends StatelessWidget {
+  const ReactionGuideScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const UniversalText('Reactions')),
+      body: ListView(padding: const EdgeInsets.all(16), children: const [
+        ListTile(
+            leading: UniversalText('❤️', style: TextStyle(fontSize: 26)),
+            title: UniversalText('Love it')),
+        ListTile(
+            leading: UniversalText('🔥', style: TextStyle(fontSize: 26)),
+            title: UniversalText('Amazing')),
+        ListTile(
+            leading: UniversalText('😂', style: TextStyle(fontSize: 26)),
+            title: UniversalText('Funny')),
+        ListTile(
+            leading: UniversalText('😱', style: TextStyle(fontSize: 26)),
+            title: UniversalText('Scary')),
+        ListTile(
+            leading: UniversalText('😭', style: TextStyle(fontSize: 26)),
+            title: UniversalText('Emotional')),
+        ListTile(
+            leading: UniversalText('🤯', style: TextStyle(fontSize: 26)),
+            title: UniversalText('Mind-blowing'))
+      ]));
+}
 
 /// Implements the `AdvancedLibrarySearchScreen` class for this feature or UI component.
 class AdvancedLibrarySearchScreen extends StatefulWidget {
   const AdvancedLibrarySearchScreen({super.key});
   @override
-  State<AdvancedLibrarySearchScreen> createState() => _AdvancedLibrarySearchScreenState();
+  State<AdvancedLibrarySearchScreen> createState() =>
+      _AdvancedLibrarySearchScreenState();
 }
 
-class _AdvancedLibrarySearchScreenState extends State<AdvancedLibrarySearchScreen> {
+class _AdvancedLibrarySearchScreenState
+    extends State<AdvancedLibrarySearchScreen> {
   final TextEditingController q = TextEditingController();
   String type = 'All';
   String mood = 'Any mood';
@@ -4368,14 +5970,18 @@ class _AdvancedLibrarySearchScreenState extends State<AdvancedLibrarySearchScree
         final textMatch = term.isEmpty ||
             mentionedGenres.isNotEmpty ||
             m.title.toLowerCase().contains(term) ||
-            GenreSystem.searchTerms(m.genres).any((x) => x.toLowerCase().contains(term)) ||
+            GenreSystem.searchTerms(m.genres)
+                .any((x) => x.toLowerCase().contains(term)) ||
             m.tags.any((x) => x.toLowerCase().contains(term)) ||
             m.actors.any((x) => x.toLowerCase().contains(term)) ||
             m.directors.any((x) => x.toLowerCase().contains(term));
         return textMatch &&
             (filters.isEmpty || genreMatch) &&
             moodMatch &&
-            (type == 'All' || (type == 'Movies' ? m.type.toLowerCase() == 'movie' : m.type.toLowerCase() != 'movie')) &&
+            (type == 'All' ||
+                (type == 'Movies'
+                    ? m.type.toLowerCase() == 'movie'
+                    : m.type.toLowerCase() != 'movie')) &&
             (!unwatched || !AppController.instance.isWatched(m.id));
       }).toList();
     });
@@ -4389,130 +5995,215 @@ class _AdvancedLibrarySearchScreenState extends State<AdvancedLibrarySearchScree
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const UniversalText('Advanced Search')),
-    body: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        TextField(
-          controller: q,
-          onSubmitted: (_) => search(),
-          decoration: InputDecoration(
-            labelText: tr('Title, actor, director, genre or tag'),
-            hintText: 'Try “horror comedy” or “romantic thriller”',
-            prefixIcon: const Icon(Icons.search_rounded),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Genre combinations', style: Theme.of(context).textTheme.titleSmall),
-        ),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: 88,
-          child: SingleChildScrollView(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 2,
-              children: GenreSystem.canonicalGenres.map((genre) => FilterChip(
-                label: Text(genre),
-                selected: selectedGenres.contains(genre),
-                onSelected: (selected) {
-                  setState(() {
-                    if (selected) {
-                      selectedGenres.add(genre);
-                    } else {
-                      selectedGenres.remove(genre);
-                    }
-                  });
-                  search();
-                },
-              )).toList(),
+        appBar: AppBar(title: const UniversalText('Advanced Search')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            TextField(
+              controller: q,
+              onSubmitted: (_) => search(),
+              decoration: InputDecoration(
+                labelText: tr('Title, actor, director, genre or tag'),
+                hintText: 'Try “horror comedy” or “romantic thriller”',
+                prefixIcon: const Icon(Icons.search_rounded),
+              ),
             ),
-          ),
-        ),
-        Row(children: [
-          Expanded(child: DropdownButton<String>(
-            value: type,
-            isExpanded: true,
-            items: const ['All','Movies','TV Shows'].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
-            onChanged: (v) { if (v != null) { setState(() => type = v); search(); } },
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: DropdownButton<String>(
-            value: mood,
-            isExpanded: true,
-            items: <String>['Any mood', ...GenreSystem.moodGenreHints.keys]
-                .map((x) => DropdownMenuItem(value: x, child: Text(x == 'Any mood' ? x : x[0].toUpperCase() + x.substring(1))))
-                .toList(),
-            onChanged: (v) { if (v != null) { setState(() => mood = v); search(); } },
-          )),
-          IconButton(onPressed: search, icon: const Icon(Icons.search)),
-        ]),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 4,
-          children: [
-            const UniversalText('Match all selected genres'),
-            Switch(value: matchAllGenres, onChanged: (v) { setState(() => matchAllGenres = v); search(); }),
-            const UniversalText('Unwatched only'),
-            Switch(value: unwatched, onChanged: (v) { setState(() => unwatched = v); search(); }),
-          ],
-        ),
-        if (selectedGenres.isNotEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Combination: ${GenreSystem.displayLabel(selectedGenres)}',
-              style: Theme.of(context).textTheme.bodySmall,
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Genre combinations',
+                  style: Theme.of(context).textTheme.titleSmall),
             ),
-          ),
-        Expanded(
-          child: results.isEmpty
-              ? const Center(child: UniversalText('Search your library or choose genres to find a combination.'))
-              : ListView.separated(
-                  itemCount: results.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final media = results[i];
-                    final genreLabel = GenreSystem.displayLabel(media.genres);
-                    return ListTile(
-                      leading: const Icon(Icons.movie_filter_rounded),
-                      title: Text(media.title),
-                      subtitle: Text('${media.releaseYear ?? ''} • ${media.type} • $genreLabel'),
-                    );
-                  },
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 88,
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: GenreSystem.canonicalGenres
+                      .map((genre) => FilterChip(
+                            label: Text(genre),
+                            selected: selectedGenres.contains(genre),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  selectedGenres.add(genre);
+                                } else {
+                                  selectedGenres.remove(genre);
+                                }
+                              });
+                              search();
+                            },
+                          ))
+                      .toList(),
                 ),
+              ),
+            ),
+            Row(children: [
+              Expanded(
+                  child: DropdownButton<String>(
+                value: type,
+                isExpanded: true,
+                items: const ['All', 'Movies', 'TV Shows']
+                    .map((x) => DropdownMenuItem(value: x, child: Text(x)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() => type = v);
+                    search();
+                  }
+                },
+              )),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: DropdownButton<String>(
+                value: mood,
+                isExpanded: true,
+                items: <String>['Any mood', ...GenreSystem.moodGenreHints.keys]
+                    .map((x) => DropdownMenuItem(
+                        value: x,
+                        child: Text(x == 'Any mood'
+                            ? x
+                            : x[0].toUpperCase() + x.substring(1))))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() => mood = v);
+                    search();
+                  }
+                },
+              )),
+              IconButton(onPressed: search, icon: const Icon(Icons.search)),
+            ]),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                const UniversalText('Match all selected genres'),
+                Switch(
+                    value: matchAllGenres,
+                    onChanged: (v) {
+                      setState(() => matchAllGenres = v);
+                      search();
+                    }),
+                const UniversalText('Unwatched only'),
+                Switch(
+                    value: unwatched,
+                    onChanged: (v) {
+                      setState(() => unwatched = v);
+                      search();
+                    }),
+              ],
+            ),
+            if (selectedGenres.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Combination: ${GenreSystem.displayLabel(selectedGenres)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            Expanded(
+              child: results.isEmpty
+                  ? const Center(
+                      child: UniversalText(
+                          'Search your library or choose genres to find a combination.'))
+                  : ListView.separated(
+                      itemCount: results.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final media = results[i];
+                        final genreLabel =
+                            GenreSystem.displayLabel(media.genres);
+                        return ListTile(
+                          leading: const Icon(Icons.movie_filter_rounded),
+                          title: Text(media.title),
+                          subtitle: Text(
+                              '${media.releaseYear ?? ''} • ${media.type} • $genreLabel'),
+                        );
+                      },
+                    ),
+            ),
+          ]),
         ),
-      ]),
-    ),
-  );
+      );
 }
 
-class ActorFranchiseRoadmapScreen extends StatelessWidget { const ActorFranchiseRoadmapScreen({super.key}); @override Widget build(BuildContext context) { final actors = _library().expand((m) => m.actors).toSet().toList(); return Scaffold(appBar: AppBar(title: const UniversalText('Actors & Franchises')), body: ListView(padding: const EdgeInsets.all(16), children: [const UniversalText('Actors in your library', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 8), ...actors.map((a) => ListTile(leading: const Icon(Icons.person_outline_rounded), title: Text(a)))])); } }
+class ActorFranchiseRoadmapScreen extends StatelessWidget {
+  const ActorFranchiseRoadmapScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final actors = _library().expand((m) => m.actors).toSet().toList();
+    return Scaffold(
+        appBar: AppBar(title: const UniversalText('Actors & Franchises')),
+        body: ListView(padding: const EdgeInsets.all(16), children: [
+          const UniversalText('Actors in your library',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          ...actors.map((a) => ListTile(
+              leading: const Icon(Icons.person_outline_rounded),
+              title: Text(a)))
+        ]));
+  }
+}
 
 /// Implements the `GroupWatchRoadmapScreen` class for this feature or UI component.
-class GroupWatchRoadmapScreen extends StatelessWidget { const GroupWatchRoadmapScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Watch Together 2.0')), body: const Center(child: UniversalText('Use Group Watch from the Home screen to start a synchronized party.'))); }
+class GroupWatchRoadmapScreen extends StatelessWidget {
+  const GroupWatchRoadmapScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const UniversalText('Watch Together 2.0')),
+      body: const Center(
+          child: UniversalText(
+              'Use Group Watch from the Home screen to start a synchronized party.')));
+}
 
 class RoadmapListLayoutScreen extends StatelessWidget {
   const RoadmapListLayoutScreen({super.key});
-  @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const UniversalText('List Layouts')),
-    body: ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: 8,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => Card(
-        child: ListTile(
-          dense: i.isEven,
-          leading: CircleAvatar(child: UniversalText('${i + 1}')),
-          title: Text(i.isEven ? 'Compact ListTile' : 'Spacious ListTile'),
-          subtitle: const UniversalText('Constrained inside a scrolling ListView to prevent overflow.'),
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const UniversalText('List Layouts')),
+        body: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: 8,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (_, i) => Card(
+            child: ListTile(
+              dense: i.isEven,
+              leading: CircleAvatar(child: UniversalText('${i + 1}')),
+              title: Text(i.isEven ? 'Compact ListTile' : 'Spacious ListTile'),
+              subtitle: const UniversalText(
+                  'Constrained inside a scrolling ListView to prevent overflow.'),
+            ),
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 /// Implements the `ArchitectureScreen` class for this feature or UI component.
-class ArchitectureScreen extends StatelessWidget { const ArchitectureScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const UniversalText('Architecture')), body: ListView(padding: const EdgeInsets.all(20), children: const [UniversalText('Account-scoped data', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), UniversalText('Library, subscription and shared media belong to the account.', style: TextStyle(color: Colors.white70)), SizedBox(height: 20), UniversalText('Profile-scoped experience', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), UniversalText('Navigation, Home layout, Details layout, recommendations, history, wishlist and preferences belong to the selected profile.', style: TextStyle(color: Colors.white70)), SizedBox(height: 20), UniversalText('Persistence boundary', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), UniversalText('The local stores are isolated behind profile IDs so a Supabase repository can replace them without redesigning the UI.', style: TextStyle(color: Colors.white70))])); }
+class ArchitectureScreen extends StatelessWidget {
+  const ArchitectureScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const UniversalText('Architecture')),
+      body: ListView(padding: const EdgeInsets.all(20), children: const [
+        UniversalText('Account-scoped data',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        UniversalText(
+            'Library, subscription and shared media belong to the account.',
+            style: TextStyle(color: Colors.white70)),
+        SizedBox(height: 20),
+        UniversalText('Profile-scoped experience',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        UniversalText(
+            'Navigation, Home layout, Details layout, recommendations, history, wishlist and preferences belong to the selected profile.',
+            style: TextStyle(color: Colors.white70)),
+        SizedBox(height: 20),
+        UniversalText('Persistence boundary',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        UniversalText(
+            'The local stores are isolated behind profile IDs so a Supabase repository can replace them without redesigning the UI.',
+            style: TextStyle(color: Colors.white70))
+      ]));
+}

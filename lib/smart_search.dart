@@ -8,6 +8,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
+import 'cinematic_title_fonts.dart';
 import 'privacy_preferences.dart';
 import 'profile_content_safety.dart';
 import 'details.dart';
@@ -63,6 +64,11 @@ class SmartSearch {
       if (_isExcludedContentType(media.type)) continue;
       final title = media.title.toLowerCase();
       final normalizedTitle = _normalize(title);
+      // Match title spelling variants such as Spider-Man, Spider Man,
+      // SpiderMan and SPIDER-MAN as the same title. This compact key is
+      // used only for title matching; display titles remain untouched.
+      final compactQuery = _compactTitleKey(normalizedQuery);
+      final compactTitle = _compactTitleKey(normalizedTitle);
 
       final description = (media.description ?? '').toLowerCase();
 
@@ -76,9 +82,11 @@ class SmartSearch {
 
       var score = 0;
 
-      final matchesExactTitle = normalizedTitle == normalizedQuery;
+      final matchesExactTitle = normalizedTitle == normalizedQuery ||
+          (compactQuery.isNotEmpty && compactTitle == compactQuery);
 
-      final matchesTitle = normalizedTitle.contains(normalizedQuery);
+      final matchesTitle = normalizedTitle.contains(normalizedQuery) ||
+          (compactQuery.isNotEmpty && compactTitle.contains(compactQuery));
 
       final matchesDescription =
           normalizedDescription.contains(normalizedQuery);
@@ -381,6 +389,12 @@ class SmartSearch {
         .replaceAll(RegExp(r'[_\-]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
   }
+
+  /// Creates a punctuation/spacing-insensitive key for title searches.
+  /// For example, `Spider-Man`, `Spider Man`, and `SpiderMan` all become
+  /// `spiderman`. This key is never used as a display title.
+  static String _compactTitleKey(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
   static bool _isMovie(String type) {
     final normalized = _normalize(type);
@@ -1448,11 +1462,10 @@ class _SearchResultCardState extends State<_SearchResultCard> {
                               media.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: CinematicTitleFonts.captionStyle(
+                                media,
+                                baseFontSize: 17,
                                 color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.2,
                               ),
                             ),
                             const SizedBox(height: 9),

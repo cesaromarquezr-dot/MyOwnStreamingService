@@ -8,6 +8,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'app_core.dart';
+import 'cinematic_title_fonts.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
 
 enum CinematicTitlePlacement { hero, detail }
 
@@ -125,11 +127,30 @@ class CinematicTitle extends StatelessWidget {
   bool get _isTitleCardMode =>
       _mode == 'trailer_title_card' || _mode == 'movie_title_card';
 
-  bool get _canUseDedicatedAsset =>
-      _artworkAuthorized &&
-      _mode != 'text' &&
-      _mode != 'case_cover' &&
-      _artworkUrl != null;
+  bool get _canDiscoverAutomaticLogo {
+    if (!_artworkAuthorized ||
+        _artworkUrl != null ||
+        (_mode != 'auto' && _mode != 'logo')) {
+      return false;
+    }
+    final kind = media.type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final isTv = kind == 'tv' ||
+        kind == 'tvshow' ||
+        kind == 'series' ||
+        kind == 'television' ||
+        kind == 'tvseries';
+    final isMovie = kind == 'movie' || kind == 'film' || kind == 'featurefilm';
+    return (isTv || isMovie) && CinematicTitleMetadataService.isConfigured;
+  }
+
+  bool get _isTvMedia {
+    final kind = media.type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return kind == 'tv' ||
+        kind == 'tvshow' ||
+        kind == 'series' ||
+        kind == 'television' ||
+        kind == 'tvseries';
+  }
 
   bool get _canUseCaseCover =>
       _mode == 'case_cover' &&
@@ -138,6 +159,24 @@ class CinematicTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!_canDiscoverAutomaticLogo) return _buildResolved(context, null);
+    final future = CinematicTitleMetadataService.lookupTitleLogo(
+      title: media.title,
+      isTv: _isTvMedia,
+      year: media.releaseYear ?? media.seriesStartYear,
+    );
+    return FutureBuilder<String?>(
+      future: future,
+      builder: (context, snapshot) => _buildResolved(context, snapshot.data),
+    );
+  }
+
+  Widget _buildResolved(BuildContext context, String? detectedLogoUrl) {
+    final effectiveArtworkUrl = _artworkUrl ?? _safeImageUrl(detectedLogoUrl);
+    final canUseDetectedOrSavedLogo = _artworkAuthorized &&
+        _mode != 'text' &&
+        _mode != 'case_cover' &&
+        effectiveArtworkUrl != null;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     final shouldAnimate =
         (animate ?? media.titleRevealAnimation) && !reduceMotion;
@@ -149,7 +188,7 @@ class CinematicTitle extends StatelessWidget {
         maxWidth ?? (placement == CinematicTitlePlacement.hero ? 720.0 : 680.0);
     // Title-card frames contain more visual information than a transparent
     // logo, so provide a larger landscape viewing area without cropping them.
-    final contentHeight = _canUseDedicatedAsset && _isTitleCardMode
+    final contentHeight = canUseDetectedOrSavedLogo && _isTitleCardMode
         ? math
             .max(baseHeight,
                 placement == CinematicTitlePlacement.hero ? 190.0 : 150.0)
@@ -161,8 +200,8 @@ class CinematicTitle extends StatelessWidget {
     if (_canUseCaseCover) {
       content = _caseCoverAndText(context, contentHeight);
       visualKey = '${media.id}:case-cover:${media.imageUrl}:${placement.name}';
-    } else if (_canUseDedicatedAsset) {
-      final url = _artworkUrl!;
+    } else if (canUseDetectedOrSavedLogo) {
+      final url = effectiveArtworkUrl;
       content = Image.network(
         url,
         fit: BoxFit.contain,
@@ -170,7 +209,7 @@ class CinematicTitle extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _fallback(context),
       );
-      visualKey = '${media.id}:$_mode:$url';
+      visualKey = '${media.id}:$_mode:$url:${placement.name}';
     } else {
       content = _fallback(context);
       visualKey = '${media.id}:text:${media.title}:${placement.name}:$_mode';
@@ -253,9 +292,33 @@ class CinematicTitle extends StatelessWidget {
     final hero = placement == CinematicTitlePlacement.hero;
     final baseSize =
         hero ? (width < 600 ? 31.0 : 45.0) : (width < 600 ? 30.0 : 38.0);
-    final style = _styleFor(media);
-    final customColor = _parseColor(media.titleAccentColor);
+    final style = CinematicTitleFonts.resolveMedia(media);
+    final customColor = _parseColor(media.titleFontColor) ??
+        _parseColor(media.titleAccentColor);
     final color = customColor ?? style.color;
+    final lengthScale = media.title.runes.length > 30
+        ? .76
+        : media.title.runes.length > 24
+            ? .84
+            : media.title.runes.length > 18
+                ? .92
+                : 1.0;
+    final family = (media.titleFontFamily?.trim().isNotEmpty == true
+        ? media.titleFontFamily!.trim()
+        : style.fontFamily.trim());
+    final fallbackFamily =
+        (media.titleFontFallbackFamily?.trim().isNotEmpty == true
+            ? media.titleFontFallbackFamily!.trim()
+            : style.fallbackFamily);
+    final fontWeight = _weightFromValue(media.titleFontWeight) ?? style.weight;
+    final letterSpacing = media.titleFontLetterSpacing ?? style.letterSpacing;
+    final fontSize = media.titleFontSize != null && media.titleFontSize! > 0
+        ? baseSize * (media.titleFontSize! / 42.0).clamp(.6, 1.35)
+        : baseSize * style.sizeScale;
+    final customShadowColor = _parseColor(media.titleFontShadowColor);
+    final shadowBlur = (media.titleFontShadowBlur ?? (style.glow ? 22.0 : 18.0))
+        .clamp(0.0, 80.0)
+        .toDouble();
     return Align(
       alignment: _alignment,
       child: Text(
@@ -265,20 +328,44 @@ class CinematicTitle extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: color,
-          fontSize: baseSize,
-          fontWeight: style.weight,
+          fontFamily: family.isEmpty ? null : family,
+          fontFamilyFallback: <String>[
+            fallbackFamily,
+            if (fallbackFamily != 'sans-serif') 'sans-serif',
+          ],
+          fontSize: (fontSize * lengthScale)
+              .clamp(hero ? 21.0 : 20.0, baseSize * 1.18)
+              .toDouble(),
+          fontWeight: fontWeight,
           fontStyle: style.italic ? FontStyle.italic : FontStyle.normal,
-          letterSpacing: style.letterSpacing,
+          letterSpacing: letterSpacing,
           height: .99,
           shadows: <Shadow>[
-            const Shadow(
-                color: Colors.black87, blurRadius: 18, offset: Offset(0, 3)),
-            if (style.glow)
-              Shadow(color: color.withValues(alpha: .5), blurRadius: 22),
+            Shadow(
+              color: customShadowColor ?? Colors.black87,
+              blurRadius: shadowBlur,
+              offset: const Offset(0, 3),
+            ),
+            if (customShadowColor == null && style.glow)
+              Shadow(
+                  color: color.withValues(alpha: .5), blurRadius: shadowBlur),
           ],
         ),
       ),
     );
+  }
+
+  static FontWeight? _weightFromValue(int? value) {
+    if (value == null) return null;
+    if (value <= 100) return FontWeight.w100;
+    if (value <= 200) return FontWeight.w200;
+    if (value <= 300) return FontWeight.w300;
+    if (value <= 400) return FontWeight.w400;
+    if (value <= 500) return FontWeight.w500;
+    if (value <= 600) return FontWeight.w600;
+    if (value <= 700) return FontWeight.w700;
+    if (value <= 800) return FontWeight.w800;
+    return FontWeight.w900;
   }
 
   static Color? _parseColor(String? raw) {
@@ -298,72 +385,4 @@ class CinematicTitle extends StatelessWidget {
       return null;
     }
   }
-
-  static _CinematicStyle _styleFor(MediaItem media) {
-    var key =
-        (media.titleStyleKey ?? '').trim().toLowerCase().replaceAll('-', '');
-    if (key.isEmpty) {
-      final genres = <String>[...media.genres, ...media.tags]
-          .map((value) => value.toLowerCase())
-          .join(' ');
-      if (genres.contains('horror')) {
-        key = 'horror';
-      } else if (genres.contains('science fiction') ||
-          genres.contains('sci-fi') ||
-          genres.contains('scifi')) {
-        key = 'scifi';
-      } else if (genres.contains('western')) {
-        key = 'western';
-      } else if (genres.contains('romance') || genres.contains('romantic')) {
-        key = 'romance';
-      } else if (genres.contains('fantasy')) {
-        key = 'fantasy';
-      } else if (genres.contains('animation') || genres.contains('animated')) {
-        key = 'animation';
-      } else if (genres.contains('thriller')) {
-        key = 'thriller';
-      } else if (genres.contains('comedy')) {
-        key = 'comedy';
-      }
-    }
-
-    return switch (key) {
-      'horror' => const _CinematicStyle(
-          Color(0xFFE6535D), FontWeight.w900, 1.4, false, true),
-      'scifi' => const _CinematicStyle(
-          Color(0xFF8CE8FF), FontWeight.w800, 1.8, false, true),
-      'western' => const _CinematicStyle(
-          Color(0xFFF0D08A), FontWeight.w900, .5, false, false),
-      'romance' || 'elegant' => const _CinematicStyle(
-          Color(0xFFF7DDEB), FontWeight.w700, .3, true, false),
-      'fantasy' => const _CinematicStyle(
-          Color(0xFFD4BCFF), FontWeight.w800, .6, false, true),
-      'retro' => const _CinematicStyle(
-          Color(0xFFFFC36A), FontWeight.w900, 2.0, false, true),
-      'animation' => const _CinematicStyle(
-          Color(0xFFFFE27A), FontWeight.w900, -.3, false, true),
-      'thriller' => const _CinematicStyle(
-          Color(0xFFF0F0F0), FontWeight.w900, 1.25, false, false),
-      'comedy' => const _CinematicStyle(
-          Color(0xFFFFE17E), FontWeight.w900, -.2, false, false),
-      _ =>
-        const _CinematicStyle(Colors.white, FontWeight.w900, .1, false, false),
-    };
-  }
-}
-
-class _CinematicStyle {
-  final Color color;
-  final FontWeight weight;
-  final double letterSpacing;
-  final bool italic;
-  final bool glow;
-
-  const _CinematicStyle(
-    this.color,
-    this.weight,
-    this.letterSpacing,
-    this.italic,
-    this.glow,
-  );
 }

@@ -10,6 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
+import 'cinematic_title_fonts.dart';
 import 'backend_api.dart';
 import 'core/services/self_driving_network_engine.dart';
 import 'library_release.dart';
@@ -37,7 +38,6 @@ import 'channel_center.dart';
 import 'home_arrow_rail.dart';
 import 'recommendation_ownership.dart';
 import 'catalog_poster_image.dart';
-import 'browse_page_hero_settings.dart';
 import 'music_catalog_screen.dart';
 import 'home_franchise_progress.dart';
 import 'playback_diagnostics_center.dart';
@@ -74,6 +74,9 @@ import 'tv_controller.dart';
 import 'tv_host.dart';
 import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
+import 'streaming_upgrade_center.dart';
+import 'jellyfin_plugins_hub.dart';
+import 'core/services/automatic_backup_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,7 +90,6 @@ Future<void> main() async {
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await PageContentCustomizationStore.initialize();
-  await BrowsePageHeroPreferenceStore.initialize();
   await AppSectionCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
   await MusicPageCustomizationStore.initialize();
@@ -95,6 +97,10 @@ Future<void> main() async {
   await PlatformPreferenceStore.initialize();
   await ShopCatalog.instance.initialize();
   await StoryPlacementStore.load(AppController.instance.currentProfile);
+  // Keep local app settings/customizations recoverable if the connected media
+  // server goes offline. The backup service handles its own failures so it
+  // never blocks the app from starting.
+  await AutomaticBackupService.instance.initialize();
   runApp(const MyStreamingService());
 }
 
@@ -730,7 +736,6 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   late _PageAppearance draft;
   late PageContentCustomization contentDraft;
   late AppSectionCustomization sectionDraft;
-  late BrowsePageHeroPreference heroDraft;
 
   static const _colors = <String, int>{
     'Red': 0xFFE53935,
@@ -748,10 +753,6 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
     sectionDraft = AppSectionCustomizationStore.settingsFor(
         AppController.instance.currentProfile);
-    heroDraft = BrowsePageHeroPreferenceStore.settingsFor(
-      pageId: widget.pageId,
-      profileId: AppController.instance.currentProfile?.id,
-    );
     StoryPlacementStore.load(AppController.instance.currentProfile);
   }
 
@@ -1227,57 +1228,6 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          if (widget.pageId == 'movies' || widget.pageId == 'series') ...[
-            const SizedBox(height: 20),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const UniversalText(
-                      'Hero banner',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const UniversalText(
-                      'Choose whether this browse page starts with an automatically rotating featured title.',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 8),
-                    RadioGroup<bool>(
-                      groupValue: heroDraft.showHero,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() =>
-                              heroDraft = heroDraft.copyWith(showHero: value));
-                        }
-                      },
-                      child: const Column(
-                        children: [
-                          RadioListTile<bool>(
-                            contentPadding: EdgeInsets.zero,
-                            value: true,
-                            title: UniversalText('Hero banner with auto-slider'),
-                            subtitle: UniversalText('Automatically changes every 5 seconds'),
-                          ),
-                          RadioListTile<bool>(
-                            contentPadding: EdgeInsets.zero,
-                            value: false,
-                            title: UniversalText('No hero banner'),
-                            subtitle: UniversalText('Show the catalog without a featured banner'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: 20),
           DropdownButtonFormField<int>(
             initialValue: _colors.values.contains(draft.accentColor)
@@ -1398,13 +1348,6 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             onPressed: () async {
               final navigator = Navigator.of(context);
               await _PageAppearanceStore.save(widget.pageId, draft);
-              if (widget.pageId == 'movies' || widget.pageId == 'series') {
-                await BrowsePageHeroPreferenceStore.apply(
-                  pageId: widget.pageId,
-                  preference: heroDraft,
-                  profileId: AppController.instance.currentProfile?.id,
-                );
-              }
               await PageContentCustomizationStore.apply(
                 widget.pageId,
                 contentDraft,
@@ -2105,7 +2048,8 @@ class HomeCustomization {
     List<String>? sectionOrder,
     List<String>? navigationOrder,
     List<String>? hiddenSections,
-  })  : sectionOrder = sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
+  })  : sectionOrder =
+            sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
         hiddenSections = hiddenSections ?? <String>[],
         navigationOrder = navigationOrder ??
             [
@@ -2144,19 +2088,30 @@ class HomeCustomization {
       hiddenSections.add(section);
     }
     switch (section) {
-      case 'Hero Banner': showHero = visible;
-      case 'Continue Watching': showContinueWatching = visible;
-      case 'Recently Watched': showRecentlyWatched = visible;
-      case 'Movies': showMovies = visible;
-      case 'TV Shows': showTvShows = visible;
-      case 'New Additions': showNewAdditions = visible;
-      case 'All Library': showAllLibrary = visible;
-      case 'Library Recommendations': showRecommendations = visible;
+      case 'Hero Banner':
+        showHero = visible;
+      case 'Continue Watching':
+        showContinueWatching = visible;
+      case 'Recently Watched':
+        showRecentlyWatched = visible;
+      case 'Movies':
+        showMovies = visible;
+      case 'TV Shows':
+        showTvShows = visible;
+      case 'New Additions':
+        showNewAdditions = visible;
+      case 'All Library':
+        showAllLibrary = visible;
+      case 'Library Recommendations':
+        showRecommendations = visible;
       case 'Storage Progress':
         storageBarPosition = visible ? 'Bottom' : 'Hidden';
-      case 'Friends & Communities': showFriendsCommunity = visible;
-      case 'Music & Film': showMusic = visible;
-      case 'Seasonal Collections': showSeasonalCollections = visible;
+      case 'Friends & Communities':
+        showFriendsCommunity = visible;
+      case 'Music & Film':
+        showMusic = visible;
+      case 'Seasonal Collections':
+        showSeasonalCollections = visible;
     }
   }
 
@@ -3815,7 +3770,8 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     for (final section in draft.sectionOrder) {
       if (!draft.isSectionVisible(section)) continue;
       if (section == 'Friends Stories' &&
-          storyPlacement != 'home' && storyPlacement != 'both') {
+          storyPlacement != 'home' &&
+          storyPlacement != 'both') {
         continue;
       }
 
@@ -3873,45 +3829,59 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             isTvShow: false,
           ));
         case 'International Movies':
-          sections.add(_homePreviewMediaSection(
-            'INTERNATIONAL MOVIES', 'Original titles from around the world',
-            Icons.public_rounded, isTvShow: false));
+          sections.add(_homePreviewMediaSection('INTERNATIONAL MOVIES',
+              'Original titles from around the world', Icons.public_rounded,
+              isTvShow: false));
         case 'International Shows':
-          sections.add(_homePreviewMediaSection(
-            'INTERNATIONAL SHOWS', 'Original titles from around the world',
-            Icons.public_rounded, isTvShow: true));
+          sections.add(_homePreviewMediaSection('INTERNATIONAL SHOWS',
+              'Original titles from around the world', Icons.public_rounded,
+              isTvShow: true));
         case 'New Albums':
           sections.add(_homePreviewBar('NEW ALBUMS', Icons.album_rounded));
         case 'Recommendations & Mood':
-          sections.add(_homePreviewBar('RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
+          sections.add(_homePreviewBar(
+              'RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
         case 'Franchise Progress':
-          sections.add(_homePreviewBar('FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
+          sections.add(_homePreviewBar(
+              'FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
         case 'Channels':
           sections.add(_homePreviewBar('CHANNELS', Icons.live_tv_rounded));
         case 'Account Activity':
-          sections.add(_homePreviewBar('ACCOUNT ACTIVITY', Icons.people_alt_rounded));
+          sections.add(
+              _homePreviewBar('ACCOUNT ACTIVITY', Icons.people_alt_rounded));
         case 'Friends Stories':
-          sections.add(_homePreviewBar('FRIENDS STORIES', Icons.auto_stories_rounded));
+          sections.add(
+              _homePreviewBar('FRIENDS STORIES', Icons.auto_stories_rounded));
         case 'Storage Progress':
-          sections.add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
+          sections
+              .add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
         case 'Themed Episodes':
-          sections.add(_homePreviewBar('THEMED EPISODES', Icons.theater_comedy_rounded));
+          sections.add(
+              _homePreviewBar('THEMED EPISODES', Icons.theater_comedy_rounded));
         case 'You Might Also Like':
-          sections.add(_homePreviewBar('YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
+          sections.add(_homePreviewBar(
+              'YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
         case 'Collections':
-          sections.add(_homePreviewBar('COLLECTIONS', Icons.collections_bookmark_outlined));
+          sections.add(_homePreviewBar(
+              'COLLECTIONS', Icons.collections_bookmark_outlined));
         case 'Because You Watched':
-          sections.add(_homePreviewBar('BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
+          sections.add(_homePreviewBar(
+              'BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
         case 'People & Cast Recommendations':
-          sections.add(_homePreviewBar('PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
+          sections.add(_homePreviewBar(
+              'PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
         case 'Friends & Communities':
-          sections.add(_homePreviewBar('FRIENDS & COMMUNITIES', Icons.groups_rounded));
+          sections.add(
+              _homePreviewBar('FRIENDS & COMMUNITIES', Icons.groups_rounded));
         case 'Media Intelligence Tools':
-          sections.add(_homePreviewBar('MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
+          sections.add(_homePreviewBar(
+              'MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
         case 'Music & Film':
-          sections.add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
+          sections
+              .add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
         case 'Seasonal Collections':
-          sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
+          sections.add(_homePreviewBar(
+              'SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
     }
 
@@ -5109,6 +5079,16 @@ void _showGlobalMore() {
           routeName: '/app/page/home-server',
         );
       },
+      onStreamingUpgrades: () {
+        Navigator.of(sheetContext).pop();
+        push(const StreamingUpgradeCenterScreen(),
+            routeName: '/app/page/streaming-upgrades');
+      },
+      onJellyfinPlugins: () {
+        Navigator.of(sheetContext).pop();
+        push(const JellyfinPluginsHubScreen(),
+            routeName: '/app/page/jellyfin-plugins');
+      },
       onImport: () {
         Navigator.of(sheetContext).pop();
         push(const ImportMediaScreen(), routeName: '/app/page/import');
@@ -5612,6 +5592,8 @@ class _MoreActionsSheet extends StatelessWidget {
   final VoidCallback onPerfectStreaming;
   final VoidCallback onDevices;
   final VoidCallback onHomeServer;
+  final VoidCallback onStreamingUpgrades;
+  final VoidCallback onJellyfinPlugins;
   final VoidCallback onImport;
   final VoidCallback onMembers;
   final VoidCallback onShop;
@@ -5638,6 +5620,8 @@ class _MoreActionsSheet extends StatelessWidget {
     required this.onPerfectStreaming,
     required this.onDevices,
     required this.onHomeServer,
+    required this.onStreamingUpgrades,
+    required this.onJellyfinPlugins,
     required this.onImport,
     required this.onMembers,
     required this.onShop,
@@ -5684,6 +5668,16 @@ class _MoreActionsSheet extends StatelessWidget {
                   Icons.dns_rounded, onHomeServer),
             ],
           ),
+          _moreCard(
+              Icons.auto_awesome_rounded,
+              'Streaming Upgrade Center',
+              'Watchlist, Jellyfin, search, profiles and media shortcuts',
+              onStreamingUpgrades),
+          _moreCard(
+              Icons.extension_rounded,
+              'Jellyfin Plugins',
+              'Browse plugin catalog, copy repository URLs and follow installation guides',
+              onJellyfinPlugins),
           _moreCard(Icons.album_rounded, 'Import / Rip',
               'Import media and run the ARM disc-import workflow', onImport),
           _moreCard(
@@ -6146,6 +6140,48 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
+String _normalizeOwnedAlbumLookup(String value) =>
+    value.toLowerCase().trim().replaceAll(
+          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+          '',
+        );
+
+List<Map<String, dynamic>> _localTracksForHomeAlbum(
+    String title, String artist) {
+  final wantedTitle = _normalizeOwnedAlbumLookup(title);
+  final wantedArtist = _normalizeOwnedAlbumLookup(artist);
+  if (wantedTitle.isEmpty) return <Map<String, dynamic>>[];
+  final titleMatches = MusicLibraryStore.instance.tracks
+      .where((track) => _normalizeOwnedAlbumLookup(track.album) == wantedTitle)
+      .toList(growable: false);
+  if (titleMatches.isEmpty) return <Map<String, dynamic>>[];
+  final artistMatches = wantedArtist.isEmpty
+      ? titleMatches
+      : titleMatches.where((track) {
+          final candidateArtist = _normalizeOwnedAlbumLookup(track.artist);
+          return candidateArtist.isNotEmpty &&
+              (candidateArtist == wantedArtist ||
+                  candidateArtist.contains(wantedArtist) ||
+                  wantedArtist.contains(candidateArtist));
+        }).toList(growable: false);
+  // Don't mark a same-title release by a different artist as owned.
+  final selected = wantedArtist.isEmpty ? titleMatches : artistMatches;
+  return [
+    for (var index = 0; index < selected.length; index++)
+      <String, dynamic>{
+        'title': selected[index].title,
+        'artist': selected[index].artist,
+        'durationMs': selected[index].duration.inMilliseconds,
+        'trackNumber': index + 1,
+        'artworkUrl': selected[index].artworkUrl ?? '',
+        'audioUrl': selected[index].audioUrl ?? '',
+      },
+  ];
+}
+
+bool _isAlbumInLocalMusicLibrary(String title, String artist) =>
+    _localTracksForHomeAlbum(title, artist).isNotEmpty;
+
 List<Widget> _buildHomeSectionSlivers(
   BuildContext context,
   String section,
@@ -6207,11 +6243,14 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Channels':
       return const <Widget>[SliverToBoxAdapter(child: HomeChannelsSection())];
     case 'Media Intelligence Tools':
-      return const <Widget>[SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())];
+      return const <Widget>[
+        SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())
+      ];
     case 'Account Activity':
       return <Widget>[
         SliverToBoxAdapter(
-          child: AccountProfileActivityStrip(onMessageProfile: onMessageProfile),
+          child:
+              AccountProfileActivityStrip(onMessageProfile: onMessageProfile),
         ),
       ];
     case 'Friends Stories':
@@ -6242,7 +6281,8 @@ List<Widget> _buildHomeSectionSlivers(
             subtitle: 'Original display titles from around the world',
           ),
         ),
-        SliverToBoxAdapter(child: MediaHorizontalList(media: internationalMovies)),
+        SliverToBoxAdapter(
+            child: MediaHorizontalList(media: internationalMovies)),
       ];
     case 'International Shows':
       if (internationalShows.isEmpty) return const <Widget>[];
@@ -6253,10 +6293,18 @@ List<Widget> _buildHomeSectionSlivers(
             subtitle: 'Original display titles from around the world',
           ),
         ),
-        SliverToBoxAdapter(child: MediaHorizontalList(media: internationalShows)),
+        SliverToBoxAdapter(
+            child: MediaHorizontalList(media: internationalShows)),
       ];
     case 'New Albums':
-      return const <Widget>[SliverToBoxAdapter(child: SpotifyHomeAlbumsShelf())];
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: SpotifyHomeAlbumsShelf(
+            isOwnedAlbum: _isAlbumInLocalMusicLibrary,
+            localTracksForAlbum: _localTracksForHomeAlbum,
+          ),
+        ),
+      ];
     case 'Continue Watching':
       return _homeMediaRail(section, watched, 'Pick up where you left off');
     case 'Recently Watched':
@@ -6272,9 +6320,12 @@ List<Widget> _buildHomeSectionSlivers(
     case 'All Library':
       return _homeMediaRail(section, library, 'Everything in your library');
     case 'Library Recommendations':
-      return _homeMediaRail(section, recommendations, 'Picked for your profile');
+      return _homeMediaRail(
+          section, recommendations, 'Picked for your profile');
     case 'Themed Episodes':
-      return const <Widget>[SliverToBoxAdapter(child: HomeThemedEpisodesSection())];
+      return const <Widget>[
+        SliverToBoxAdapter(child: HomeThemedEpisodesSection())
+      ];
     case 'You Might Also Like':
       return <Widget>[
         SliverToBoxAdapter(
@@ -6286,13 +6337,15 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Because You Watched':
       return <Widget>[
         SliverToBoxAdapter(
-          child: HomeReasonedRecommendationShelves(library: library, watched: watched),
+          child: HomeReasonedRecommendationShelves(
+              library: library, watched: watched),
         ),
       ];
     case 'People & Cast Recommendations':
       return <Widget>[
         SliverToBoxAdapter(
-          child: HomeBecauseYouWatchedPeopleShelves(library: library, watched: watched),
+          child: HomeBecauseYouWatchedPeopleShelves(
+              library: library, watched: watched),
         ),
       ];
     case 'Friends & Communities':
@@ -6323,7 +6376,8 @@ List<Widget> _homeMediaRail(
   return <Widget>[
     SliverToBoxAdapter(
       child: _PremiumSectionHeader(
-        title: title == 'Library Recommendations' ? 'Recommended for You' : title,
+        title:
+            title == 'Library Recommendations' ? 'Recommended for You' : title,
         subtitle: subtitle,
       ),
     ),
@@ -6338,30 +6392,40 @@ List<Widget> _homeMediaRail(
 
 String _homeSectionDescription(String section) => switch (section) {
       'Hero Banner' => 'Featured movie/show artwork near the top of Home.',
-      'Recommendations & Mood' => 'TMDB recommendations and mood-based discovery.',
-      'Franchise Progress' => 'Saga timelines and franchise completion progress.',
-      'Channels' => 'Channel shortcuts, including live TV and curated channels.',
-      'Account Activity' => 'Activity and presence from other account profiles.',
+      'Recommendations & Mood' =>
+        'TMDB recommendations and mood-based discovery.',
+      'Franchise Progress' =>
+        'Saga timelines and franchise completion progress.',
+      'Channels' =>
+        'Channel shortcuts, including live TV and curated channels.',
+      'Account Activity' =>
+        'Activity and presence from other account profiles.',
       'Friends Stories' => 'Stories shared by friends on the Home page.',
       'Storage Progress' => 'Local/server storage progress bar.',
       'Continue Watching' => 'Resume movies and episodes you started.',
       'Themed Episodes' => 'Seasonal and themed episode recommendations.',
       'You Might Also Like' => 'Suggestions based on your viewing history.',
       'Collections' => 'Curated, automatic, and personal collection shelves.',
-      'Because You Watched' => 'Explainable recommendations related to recent viewing.',
-      'People & Cast Recommendations' => 'More titles connected by known cast and creators.',
-      'Library Recommendations' => 'Recommendations already available in your catalog.',
+      'Because You Watched' =>
+        'Explainable recommendations related to recent viewing.',
+      'People & Cast Recommendations' =>
+        'More titles connected by known cast and creators.',
+      'Library Recommendations' =>
+        'Recommendations already available in your catalog.',
       'Friends & Communities' => 'Friend feed, suggestions, and communities.',
       'Recently Watched' => 'Titles you watched most recently.',
       'Movies' => 'Your movie collection.',
       'TV Shows' => 'Your TV collection.',
       'New Additions' => 'Recently imported movies and shows.',
       'All Library' => 'Every title in your library in one shelf.',
-      'International Movies' => 'International titles using their original display names.',
-      'International Shows' => 'International series using their original display names.',
+      'International Movies' =>
+        'International titles using their original display names.',
+      'International Shows' =>
+        'International series using their original display names.',
       'New Albums' => 'New album covers from Spotify.',
       'Music & Film' => 'Resume locally playable music.',
-      'Seasonal Collections' => 'Calendar-based collections for the current season.',
+      'Seasonal Collections' =>
+        'Calendar-based collections for the current season.',
       'Media Intelligence Tools' => 'Discovery, insight, and media tools.',
       _ => 'Show or hide this section on Home.',
     };
@@ -7003,7 +7067,8 @@ class MediaCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: () {
           final normalizedType = media.type.trim().toLowerCase();
-          final isAlbum = normalizedType.contains('album') || normalizedType == 'soundtrack';
+          final isAlbum = normalizedType.contains('album') ||
+              normalizedType == 'soundtrack';
           Navigator.push(
             context,
             MaterialPageRoute<void>(
@@ -7056,8 +7121,10 @@ class MediaCard extends StatelessWidget {
               media.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
+              style: CinematicTitleFonts.captionStyle(
+                media,
+                baseFontSize: 13.2,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             if (media.displayYearLabel != null)
@@ -7098,17 +7165,19 @@ class _CatalogAlbumDetailsEntryScreenState
     extends State<CatalogAlbumDetailsEntryScreen> {
   late final Future<String?> _spotifyAlbumId = _resolveAlbumId();
 
-  static String _normalize(String value) => value.toLowerCase().trim().replaceAll(
-        RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-        '',
-      );
+  static String _normalize(String value) =>
+      value.toLowerCase().trim().replaceAll(
+            RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+            '',
+          );
 
   Future<String?> _resolveAlbumId() async {
     if (!AppController.instance.isBackendAuthenticated) return null;
     final title = widget.media.title.trim();
     if (title.isEmpty) return null;
     try {
-      final payload = await AppController.instance.backendApi.searchMusicCatalog(
+      final payload =
+          await AppController.instance.backendApi.searchMusicCatalog(
         title,
         type: 'album',
         limit: 10,
@@ -7126,7 +7195,8 @@ class _CatalogAlbumDetailsEntryScreenState
       final matches = raw
           .whereType<Map>()
           .map((value) => Map<String, dynamic>.from(value))
-          .where((value) => _normalize(value['title']?.toString() ?? '') == wantedTitle)
+          .where((value) =>
+              _normalize(value['title']?.toString() ?? '') == wantedTitle)
           .toList();
       if (matches.isEmpty) return null;
       matches.sort((a, b) {
@@ -7140,6 +7210,7 @@ class _CatalogAlbumDetailsEntryScreenState
                   release.startsWith(widget.media.releaseYear.toString()));
           return (hasArtist ? 0 : 2) + (yearMatch ? 0 : 1);
         }
+
         return score(a).compareTo(score(b));
       });
       final selected = matches.first;
@@ -7157,29 +7228,73 @@ class _CatalogAlbumDetailsEntryScreenState
     }
   }
 
-  @override
-  Widget build(BuildContext context) => FutureBuilder<String?>(
-        future: _spotifyAlbumId,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return Scaffold(
-              backgroundColor: const Color(0xFF101010),
-              appBar: AppBar(title: Text(widget.media.title)),
-              body: const Center(child: CircularProgressIndicator()),
-            );
-          }
-          final id = snapshot.data;
-          if (id != null && id.isNotEmpty) {
-            return SpotifyAlbumDetailsScreen(
-              albumTitle: widget.media.title,
-              spotifyId: id,
-            );
-          }
-          return MediaDetailsScreen(media: widget.media);
+  List<Map<String, dynamic>> _localTracksForAlbum() {
+    final title = _normalize(widget.media.title);
+    final artistNames =
+        widget.media.music.map(_normalize).where((v) => v.isNotEmpty).toSet();
+    var local = MusicLibraryStore.instance.tracks
+        .where((track) => _normalize(track.album) == title)
+        .toList(growable: false);
+    if (artistNames.isNotEmpty) {
+      final artistMatches = local
+          .where((track) => artistNames.any((artist) =>
+              _normalize(track.artist).contains(artist) ||
+              artist.contains(_normalize(track.artist))))
+          .toList();
+      if (artistMatches.isNotEmpty) local = artistMatches;
+    }
+    return [
+      for (var index = 0; index < local.length; index++)
+        <String, dynamic>{
+          'title': local[index].title,
+          'artist': local[index].artist,
+          'durationMs': local[index].duration.inMilliseconds,
+          'trackNumber': index + 1,
+          'artworkUrl': local[index].artworkUrl ?? '',
+          'audioUrl': local[index].audioUrl ?? '',
         },
-      );
-}
+    ];
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final owned = AppController.instance.isOwned(widget.media.id);
+    final localTracks = _localTracksForAlbum();
+    if (owned) {
+      return OwnedAlbumDetailsScreen(
+        media: widget.media,
+        albumTitle: widget.media.title,
+        artistName: widget.media.music.join(', '),
+        artworkUrl: widget.media.imageUrl,
+        localTracks: localTracks,
+      );
+    }
+    return FutureBuilder<String?>(
+      future: _spotifyAlbumId,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Scaffold(
+            backgroundColor: const Color(0xFF101010),
+            appBar: AppBar(title: Text(widget.media.title)),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        final id = snapshot.data;
+        if (id != null && id.isNotEmpty) {
+          return SpotifyAlbumDetailsScreen(
+            albumTitle: widget.media.title,
+            spotifyId: id,
+            isOwned: false,
+            localMedia: widget.media,
+            localArtistName: widget.media.music.join(', '),
+            localTracks: localTracks,
+          );
+        }
+        return MediaDetailsScreen(media: widget.media);
+      },
+    );
+  }
+}
 
 // ============================================================
 // ACTORS
@@ -8468,7 +8583,8 @@ class TrailersScreen extends StatelessWidget {
                 return Card(
                     child: ListTile(
                         leading: const Icon(Icons.play_circle_fill_rounded),
-                        title: LocalizedMediaText(media.title, preserveOriginal: true,
+                        title: LocalizedMediaText(media.title,
+                            preserveOriginal: true,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w800)),
                         subtitle: Text(media.type),
@@ -9336,7 +9452,8 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
                   left: 18,
                   right: 18,
                   bottom: 18,
-                  child: LocalizedMediaText(widget.media.title, preserveOriginal: true,
+                  child: LocalizedMediaText(widget.media.title,
+                      preserveOriginal: true,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -9463,7 +9580,8 @@ class _GroupWatchPreferencesScreenState
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    LocalizedMediaText(widget.media.title, preserveOriginal: true,
+                    LocalizedMediaText(widget.media.title,
+                        preserveOriginal: true,
                         style: const TextStyle(
                             fontSize: 19, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
@@ -10404,14 +10522,14 @@ class VerifiedBackupRecoveryCenterScreen extends StatelessWidget {
                 child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Backup verification: Unknown',
+                      Text('Local settings backup: automatic',
                           style: TextStyle(
-                              color: Color(0xFFFFD18C),
+                              color: Color(0xFF91E6B3),
                               fontWeight: FontWeight.w900,
                               fontSize: 17)),
                       SizedBox(height: 7),
                       Text(
-                          'The app can prepare a metadata backup selection, but a successful backup cannot be claimed until a connected server worker writes the backup, validates its manifest/checksum, and completes a restore drill.',
+                          'The app now checkpoints local preferences and customization state every 12 minutes, updates the latest recovery point when changes are detected, and validates snapshots with a checksum. Server/database and off-site backup readiness remains unverified until a separate server-side backup target is configured and a restore drill succeeds.',
                           style: TextStyle(
                               color: Colors.white60,
                               height: 1.45,
@@ -10423,8 +10541,9 @@ class VerifiedBackupRecoveryCenterScreen extends StatelessWidget {
                   style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
               const SizedBox(height: 8),
               const _RecoveryReadinessRow(
-                  title: 'Backup target configured',
-                  detail: 'Not verified from this client'),
+                  title: 'Server/off-site backup target configured',
+                  detail:
+                      'Not verified; separate from local settings snapshots'),
               const _RecoveryReadinessRow(
                   title: 'Latest backup manifest/checksum validated',
                   detail: 'Not verified from this client'),

@@ -3,14 +3,17 @@
 
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
+import 'cinematic_title.dart';
 import 'artwork_selection_store.dart';
 import 'cinematic_discovery_studio.dart';
 import 'collection_details.dart';
+import 'library_view_modes.dart';
 import 'details.dart';
 import 'home_franchise_progress.dart';
 import 'home_arrow_rail.dart';
@@ -537,10 +540,30 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       children: [
         if (selectedBackdropUrl != null)
           Positioned.fill(
-            child: Image.network(
-              selectedBackdropUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _heroFallback(media),
+            // Keep the entire user-selected backdrop visible. A cover-fit,
+            // softly blurred copy fills the extra space around wide/tall
+            // images, while the foreground image preserves its full aspect
+            // ratio instead of cropping or looking excessively zoomed in.
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Image.network(
+                    selectedBackdropUrl,
+                    fit: BoxFit.cover,
+                    color: Colors.black.withValues(alpha: .38),
+                    colorBlendMode: BlendMode.darken,
+                    errorBuilder: (_, __, ___) => _heroFallback(media),
+                  ),
+                ),
+                Image.network(
+                  selectedBackdropUrl,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  errorBuilder: (_, __, ___) => _heroFallback(media),
+                ),
+              ],
             ),
           )
         else if (_previewController != null &&
@@ -642,18 +665,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                           letterSpacing: 1.1)),
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  media.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: MediaQuery.sizeOf(context).width < 600 ? 30 : 42,
-                    height: 1.02,
-                    fontWeight: FontWeight.w900,
-                    shadows: const [
-                      Shadow(color: Colors.black54, blurRadius: 18)
-                    ],
-                  ),
+                CinematicTitle(
+                  media: media,
+                  placement: CinematicTitlePlacement.hero,
+                  textAlign: TextAlign.start,
+                  maxWidth: 720,
+                  height: MediaQuery.sizeOf(context).width < 600 ? 76 : 96,
                 ),
                 if (heroMetadata.isNotEmpty) ...[
                   const SizedBox(height: 9),
@@ -1823,7 +1840,7 @@ class _HomeHubCountRow extends StatelessWidget {
   }
 }
 
-class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
+class _HomeFranchiseProgressDetailsScreen extends StatefulWidget {
   final HomeFranchiseProgressGroup group;
 
   const _HomeFranchiseProgressDetailsScreen({
@@ -1831,7 +1848,58 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
   });
 
   @override
+  State<_HomeFranchiseProgressDetailsScreen> createState() =>
+      _HomeFranchiseProgressDetailsScreenState();
+}
+
+class _HomeFranchiseProgressDetailsScreenState
+    extends State<_HomeFranchiseProgressDetailsScreen> {
+  late LibraryViewMode _selectedView;
+
+  String get _viewScope => 'franchise-detail:${widget.group.id}';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedView = LibraryViewPreferenceStore.get(
+      _viewScope,
+      fallback: LibraryViewMode.list,
+    );
+  }
+
+  void _selectView(LibraryViewMode mode) {
+    LibraryViewPreferenceStore.set(_viewScope, mode);
+    setState(() => _selectedView = mode);
+  }
+
+  void _openMedia(MediaItem media) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/details'),
+        builder: (_) => MediaDetailsScreen(media: media),
+      ),
+    );
+  }
+
+  List<LibraryViewEntry> _ownedTitleEntries() => widget.group.ownedTitles
+      .map(
+        (media) => LibraryViewEntry(
+          title: media.title,
+          subtitle:
+              '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
+          year: media.releaseYear,
+          imageUrl: media.imageUrl,
+          fallbackIcon: _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
+              ? Icons.tv_rounded
+              : Icons.movie_outlined,
+          onTap: () => _openMedia(media),
+        ),
+      )
+      .toList(growable: false);
+
+  @override
   Widget build(BuildContext context) {
+    final group = widget.group;
     final total = group.totalTitles;
     final percent = group.completionPercent;
     return Scaffold(
@@ -1919,55 +1987,32 @@ class _HomeFranchiseProgressDetailsScreen extends StatelessWidget {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(2, 12, 2, 2),
+            child: Text(
+              'Choose a view',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+          ),
+          LibraryViewModePicker(
+            scope: _viewScope,
+            value: _selectedView,
+            onChanged: _selectView,
+          ),
           if (group.ownedTitles.isEmpty)
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
-                'No titles from this group are currently indexed in your profile library. The reference examples below do not count as owned.',
-                style: TextStyle(
-                    color: Colors.white54, fontSize: 12, height: 1.35),
+                'No titles from this group are currently indexed in your profile library. Reference examples below do not count as owned.',
+                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
               ),
-            ),
-          for (final media in group.ownedTitles)
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(vertical: 3),
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
-                child: SizedBox(
-                  width: 45,
-                  height: 62,
-                  child: media.imageUrl?.trim().isNotEmpty == true
-                      ? Image.network(
-                          media.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const ColoredBox(
-                            color: Color(0xFF252532),
-                            child: Icon(Icons.movie_outlined),
-                          ),
-                        )
-                      : const ColoredBox(
-                          color: Color(0xFF252532),
-                          child: Icon(Icons.movie_outlined),
-                        ),
-                ),
-              ),
-              title: Text(
-                media.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(
-                '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/app/details'),
-                  builder: (_) => MediaDetailsScreen(media: media),
-                ),
-              ),
+            )
+          else
+            LibraryCollectionView(
+              entries: _ownedTitleEntries(),
+              mode: _selectedView,
+              padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
+              emptyMessage: 'No titles are available in this collection.',
             ),
           if (group.exampleTitles.isNotEmpty) ...[
             const Padding(
@@ -2489,8 +2534,20 @@ class SearchDiscoveryLanding extends StatelessWidget {
   }
 }
 
-class DiscoveryAllCollectionsScreen extends StatelessWidget {
+class DiscoveryAllCollectionsScreen extends StatefulWidget {
   const DiscoveryAllCollectionsScreen({super.key});
+
+  @override
+  State<DiscoveryAllCollectionsScreen> createState() =>
+      _DiscoveryAllCollectionsScreenState();
+}
+
+class _DiscoveryAllCollectionsScreenState
+    extends State<DiscoveryAllCollectionsScreen> {
+  LibraryViewMode _viewMode = LibraryViewPreferenceStore.get(
+    'all-collections',
+    fallback: LibraryViewMode.list,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -2510,27 +2567,69 @@ class DiscoveryAllCollectionsScreen extends StatelessWidget {
                       'No collections found yet. Add a collection to start organizing movies and shows.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white60))))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: collections.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final collection = collections[index];
-                final items = _itemsFor(collection);
-                return _CollectionListTile(
-                  collection: collection,
-                  itemCount: items.length,
-                  onTap: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                    settings: const RouteSettings(
-                        name: '/app/page/collection-details'),
-                    builder: (_) =>
-                        CollectionDetailsScreen(collection: collection),
-                  )),
-                  onShuffle: () =>
-                      _startRandomFromCollection(context, collection),
-                );
-              },
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: LibraryViewModePicker(
+                    scope: 'all-collections',
+                    value: _viewMode,
+                    onChanged: (mode) => setState(() => _viewMode = mode),
+                    compact: true,
+                  ),
+                ),
+                Expanded(
+                  child: _viewMode == LibraryViewMode.list
+                      ? ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: collections.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final collection = collections[index];
+                            final items = _itemsFor(collection);
+                            return _CollectionListTile(
+                              collection: collection,
+                              itemCount: items.length,
+                              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                                settings: const RouteSettings(name: '/app/page/collection-details'),
+                                builder: (_) => CollectionDetailsScreen(collection: collection),
+                              )),
+                              onShuffle: () => _startRandomFromCollection(context, collection),
+                            );
+                          },
+                        )
+                      : SingleChildScrollView(
+                          child: LibraryCollectionView(
+                            entries: collections.map((collection) {
+                              final members = _itemsFor(collection);
+                              final posterCandidates = members
+                                  .where((item) => item.imageUrl?.trim().isNotEmpty == true)
+                                  .toList(growable: false);
+                              final customPoster = collection.customPosterUrl?.trim() ?? '';
+                              final imageUrl = customPoster.isNotEmpty
+                                  ? customPoster
+                                  : (posterCandidates.isEmpty ? null : posterCandidates.first.imageUrl);
+                              return LibraryViewEntry(
+                                title: collection.name,
+                                subtitle: '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim() }'}',
+                                imageUrl: imageUrl,
+                                fallbackIcon: Icons.collections_bookmark_outlined,
+                                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                                  settings: const RouteSettings(name: '/app/page/collection-details'),
+                                  builder: (_) => CollectionDetailsScreen(collection: collection),
+                                )),
+                                trailing: IconButton(
+                                  tooltip: 'Play a random item',
+                                  onPressed: () => _startRandomFromCollection(context, collection),
+                                  icon: const Icon(Icons.shuffle_rounded),
+                                ),
+                              );
+                            }).toList(growable: false),
+                            mode: _viewMode,
+                          ),
+                        ),
+                ),
+              ],
             ),
     );
   }

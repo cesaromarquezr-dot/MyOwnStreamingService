@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_core.dart';
+import '../cinematic_title_fonts.dart';
 import '../details.dart';
 
 /// A horizontally scrolling shelf of media cards.
@@ -74,7 +75,11 @@ class MediaCard extends StatelessWidget {
               media.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: CinematicTitleFonts.captionStyle(
+                media,
+                baseFontSize: 13.2,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
             if (media.releaseYear != null)
               Text(

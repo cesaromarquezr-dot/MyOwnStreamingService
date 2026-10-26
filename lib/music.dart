@@ -23,6 +23,7 @@ import 'media_actions.dart';
 import 'navidrome_setup.dart';
 import 'social_sharing.dart';
 import 'music_catalog_screen.dart';
+import 'library_view_modes.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -944,6 +945,10 @@ class MusicScreen extends StatefulWidget {
 
 class _MusicScreenState extends State<MusicScreen> {
   final library = MusicLibraryStore.instance;
+  LibraryViewMode _albumViewMode = LibraryViewPreferenceStore.get(
+    'music-albums',
+    fallback: LibraryViewMode.grid,
+  );
   final playback = MusicPlaybackController.instance;
 
   @override
@@ -1226,36 +1231,7 @@ class _MusicScreenState extends State<MusicScreen> {
           },
         ));
       } else if (section == 'Albums' && settings.showAlbums) {
-        output.add(_nameSection(
-          'Albums',
-          'Imported albums plus catalog examples; sample entries have no audio files',
-          library.tracks
-              .map((t) => t.album)
-              .where((x) => x.trim().isNotEmpty)
-              .toSet()
-              .toList(),
-          Icons.album_rounded,
-          onItemTap: (albumTitle) {
-            final match = AppController.instance.library.where((media) =>
-                media.type.toLowerCase().contains('album') &&
-                media.title.trim().toLowerCase() == albumTitle.trim().toLowerCase());
-            if (match.isNotEmpty) {
-              Navigator.of(context).push(MaterialPageRoute<void>(
-                settings: const RouteSettings(name: '/app/page/album-details'),
-                builder: (_) => MediaDetailsScreen(media: match.first),
-              ));
-            } else {
-              final artistTrack = library.tracks.firstWhere(
-                (track) => track.album.trim().toLowerCase() == albumTitle.trim().toLowerCase(),
-                orElse: () => library.tracks.first,
-              );
-              Navigator.of(context).push(MaterialPageRoute<void>(
-                settings: const RouteSettings(name: '/app/page/artist-details'),
-                builder: (_) => MusicArtistProfileScreen(artistName: artistTrack.artist),
-              ));
-            }
-          },
-        ));
+        output.add(_albumsSection());
       } else if (section == 'Playlists' && settings.showPlaylists) {
         output.add(SliverToBoxAdapter(child: _playlistSliver()));
       } else if (section == 'Soundtrack Universe' &&
@@ -1770,6 +1746,122 @@ class _MusicScreenState extends State<MusicScreen> {
         ],
       ),
     );
+  }
+
+  Widget _albumsSection() {
+    final albumTracks = <String, MusicTrack>{};
+    for (final track in library.tracks) {
+      final title = track.album.trim();
+      if (title.isNotEmpty) {
+        albumTracks.putIfAbsent(title.toLowerCase(), () => track);
+      }
+    }
+    final albumTitles = albumTracks.keys
+        .map((key) => albumTracks[key]!.album.trim())
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final entries = albumTitles.map((albumTitle) {
+      final track = albumTracks[albumTitle.toLowerCase()]!;
+      final tracksOnAlbum = library.tracks
+          .where((item) => item.album.trim().toLowerCase() == albumTitle.toLowerCase())
+          .length;
+      return LibraryViewEntry(
+        title: albumTitle,
+        subtitle: '${track.artist} · $tracksOnAlbum track${tracksOnAlbum == 1 ? '' : 's'}',
+        fallbackIcon: Icons.album_rounded,
+        artworkBuilder: (context, fit) {
+          final url = track.artworkUrl?.trim() ?? '';
+          if (url.isEmpty) {
+            return Container(
+              color: Colors.white10,
+              alignment: Alignment.center,
+              child: const Icon(Icons.album_rounded, color: Colors.white38, size: 32),
+            );
+          }
+          return Image.network(
+            url,
+            fit: fit,
+            errorBuilder: (_, __, ___) => Container(
+              color: Colors.white10,
+              alignment: Alignment.center,
+              child: const Icon(Icons.album_rounded, color: Colors.white38),
+            ),
+          );
+        },
+        onTap: () => _openLibraryAlbum(albumTitle, track),
+      );
+    }).toList(growable: false);
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Albums', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            const Text(
+              'Imported albums plus catalog examples; sample entries may not include audio files',
+              style: TextStyle(color: Colors.white54),
+            ),
+            LibraryViewModePicker(
+              scope: 'music-albums',
+              value: _albumViewMode,
+              onChanged: (mode) => setState(() => _albumViewMode = mode),
+              compact: true,
+            ),
+            LibraryCollectionView(
+              entries: entries,
+              mode: _albumViewMode,
+              padding: EdgeInsets.zero,
+              emptyMessage: 'No albums in your music library yet.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openLibraryAlbum(String albumTitle, MusicTrack sourceTrack) {
+    String normalize(String value) => value.toLowerCase().trim().replaceAll(
+          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+          '',
+        );
+    final normalizedTitle = normalize(albumTitle);
+    final titleMatches = MusicLibraryStore.instance.tracks
+        .where((track) => normalize(track.album) == normalizedTitle)
+        .toList(growable: false);
+    final normalizedArtist = normalize(sourceTrack.artist);
+    final artistMatches = titleMatches
+        .where((track) => normalize(track.artist) == normalizedArtist)
+        .toList(growable: false);
+    final albumTracks = artistMatches.isNotEmpty ? artistMatches : titleMatches;
+    final match = AppController.instance.library.where((media) =>
+        media.type.toLowerCase().contains('album') &&
+        normalize(media.title) == normalizedTitle).toList();
+    MediaItem? media = match.isEmpty ? null : match.first;
+    final localTracks = [
+      for (var index = 0; index < albumTracks.length; index++)
+        <String, dynamic>{
+          'title': albumTracks[index].title,
+          'artist': albumTracks[index].artist,
+          'durationMs': albumTracks[index].duration.inMilliseconds,
+          'trackNumber': index + 1,
+          'artworkUrl': albumTracks[index].artworkUrl ?? '',
+          'audioUrl': albumTracks[index].audioUrl ?? '',
+        },
+    ];
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/app/page/album-details'),
+      builder: (_) => OwnedAlbumDetailsScreen(
+        media: media,
+        albumTitle: albumTitle,
+        artistName: sourceTrack.artist,
+        artworkUrl: sourceTrack.artworkUrl,
+        localTracks: localTracks,
+      ),
+    ));
   }
 
   Widget _nameSection(

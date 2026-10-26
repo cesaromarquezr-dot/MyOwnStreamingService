@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'genre_system.dart';
+import 'library_view_modes.dart';
 import 'media_night_features.dart';
 import 'media_feature_preferences.dart';
 import 'smart_search.dart';
@@ -826,12 +827,77 @@ class _FranchiseNavigatorScreenState extends State<FranchiseNavigatorScreen> {
                                     '${entry.value.length} connected title${entry.value.length == 1 ? '' : 's'}',
                                     style:
                                         const TextStyle(color: Colors.white60)),
-                                children: entry.value
-                                    .map((item) => _MediaResultTile(
-                                        item: item,
-                                        subtitle:
-                                            '${item.releaseYear ?? 'Year unknown'} • ${GenreSystem.displayLabel(item.genres)}'))
-                                    .toList(),
+                                children: [
+                                  StatefulBuilder(
+                                    builder: (context, setGroupState) {
+                                      final viewScope =
+                                          'franchise-navigator:${entry.key}';
+                                      final selectedView =
+                                          LibraryViewPreferenceStore.get(
+                                        viewScope,
+                                        fallback: LibraryViewMode.list,
+                                      );
+                                      final viewEntries = entry.value
+                                          .map(
+                                            (item) => LibraryViewEntry(
+                                              title: item.title,
+                                              subtitle:
+                                                  '${item.releaseYear ?? 'Year unknown'} • ${GenreSystem.displayLabel(item.genres)}',
+                                              year: item.releaseYear,
+                                              imageUrl: item.imageUrl,
+                                              fallbackIcon: item.type
+                                                      .toLowerCase()
+                                                      .contains('show')
+                                                  ? Icons.tv_rounded
+                                                  : Icons.movie_outlined,
+                                              onTap: () => Navigator.push(
+                                                context,
+                                                MaterialPageRoute<void>(
+                                                  builder: (_) =>
+                                                      MediaDetailsScreen(
+                                                    media: item,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(growable: false);
+                                      return Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            16, 0, 16, 14),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Padding(
+                                              padding: EdgeInsets.only(
+                                                  top: 4, bottom: 2),
+                                              child: Text(
+                                                'Choose a view',
+                                                style: TextStyle(
+                                                  color: Colors.white70,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                            LibraryViewModePicker(
+                                              scope: viewScope,
+                                              value: selectedView,
+                                              compact: true,
+                                              onChanged: (_) =>
+                                                  setGroupState(() {}),
+                                            ),
+                                            LibraryCollectionView(
+                                              entries: viewEntries,
+                                              mode: selectedView,
+                                              padding: EdgeInsets.zero,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
                               )))
                           .toList())),
         ]));
