@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'app_core.dart';
 import 'actor_connections.dart';
 import 'core/services/cinematic_person_metadata_service.dart';
+import 'media_metadata_catalog_screen.dart';
 
 /// Kinds of catalog entities that can have a browsable profile.
 enum CatalogEntityKind { person, company, character, genre, tag }
@@ -520,15 +521,30 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
 
   String _normalizeTitle(String value) => value
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]'), '');
+      .trim()
+      // Preserve non-Latin scripts so Korean/Japanese/Chinese titles don't
+      // normalize to the same empty value.
+      .replaceAll(RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"), '');
 
   MediaItem? _matchingLocalWork(CinematicPersonCredit credit) {
     final category = credit.mediaType == 'tv' ? 'TV Shows' : 'Movies';
     for (final item in widget.localWorks) {
-      if (catalogMediaCategory(item) == category &&
-          _normalizeTitle(item.title) == _normalizeTitle(credit.title)) {
-        return item;
+      if (catalogMediaCategory(item) != category ||
+          _normalizeTitle(item.title) != _normalizeTitle(credit.title)) {
+        continue;
       }
+      // When both years are known, don't route a remake/sequel-like title to
+      // a different local work just because its title text matches.
+      final localYear = item.releaseDate?.year ??
+          item.seriesStartDate?.year ??
+          item.releaseYear ??
+          item.seriesStartYear;
+      if (credit.releaseYear != null &&
+          localYear != null &&
+          credit.releaseYear != localYear) {
+        continue;
+      }
+      return item;
     }
     return null;
   }
@@ -569,7 +585,24 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
       margin: const EdgeInsets.only(bottom: 7),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: localWork == null ? null : () => widget.onOpenMedia(localWork),
+        onTap: () {
+          if (localWork != null) {
+            widget.onOpenMedia(localWork);
+            return;
+          }
+          // Provider filmography entries are often not yet in the user's local
+          // library. They must remain selectable and open their own in-app
+          // details page using the exact TMDB ID and media type.
+          Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => TmdbMetadataDetailsScreen(
+                id: credit.id,
+                type: credit.mediaType,
+                initialTitle: credit.title,
+              ),
+            ),
+          );
+        },
         child: Padding(
           padding: const EdgeInsets.all(9),
           child: Row(
@@ -601,10 +634,7 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
                   ],
                 ),
               ),
-              if (localWork != null)
-                const Icon(Icons.chevron_right_rounded, color: Colors.white54)
-              else
-                const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white54),
             ],
           ),
         ),
@@ -623,7 +653,7 @@ class _ProviderPersonFilmographyState extends State<_ProviderPersonFilmography> 
           border: Border.all(color: Colors.white.withValues(alpha: .06)),
         ),
         child: const Text(
-          'To show real people photos, biographies, and the full sourced filmography, configure TMDB_API_KEY and rebuild the app. Local catalog credits remain available below.',
+          'To show provider-sourced people photos, biographies, and filmography, sign in and configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env. Local catalog credits remain available below.',
           style: TextStyle(color: Colors.white60, height: 1.4),
         ),
       );

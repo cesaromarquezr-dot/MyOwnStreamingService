@@ -53,3 +53,11 @@ app.*.map.json
 /ios/Flutter/flutter_export_environment.sh
 /ios/Flutter/ephemeral/
 /macos/Flutter/ephemeral/
+
+# Local environment files (keep API credentials out of source control).
+/.env
+/.env.*
+!/.env.example
+/Backend/.env
+/Backend/.env.*
+!/Backend/.env.example

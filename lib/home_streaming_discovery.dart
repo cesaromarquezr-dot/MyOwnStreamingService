@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import 'app_core.dart';
+import 'artwork_selection_store.dart';
 import 'cinematic_discovery_studio.dart';
 import 'collection_details.dart';
 import 'details.dart';
@@ -210,11 +211,14 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   String? _previewUrl;
   final Map<String, String> _tmdbOverviewsByMediaId = <String, String>{};
   final Set<String> _overviewLookupStarted = <String>{};
+  final Map<String, String> _selectedBackdropPaths = <String, String>{};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ArtworkSelectionStore.revision.addListener(_onArtworkSelectionsChanged);
+    unawaited(_refreshSelectedBackdrops());
     if (widget.items.isNotEmpty) {
       _loadPreview(widget.items.first);
       unawaited(_loadOverview(widget.items.first));
@@ -227,8 +231,34 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     super.didUpdateWidget(oldWidget);
     if (_index >= widget.items.length) _index = 0;
     if (oldWidget.items.length != widget.items.length) _scheduleNext();
+    unawaited(_refreshSelectedBackdrops());
     if (widget.items.isNotEmpty) {
       unawaited(_loadOverview(widget.items[_index]));
+    }
+  }
+
+  void _onArtworkSelectionsChanged() {
+    unawaited(_refreshSelectedBackdrops());
+  }
+
+  Future<void> _refreshSelectedBackdrops() async {
+    final profileId = AppController.instance.currentProfile?.id ?? 'guest';
+    final next = <String, String>{};
+    for (final item in widget.items) {
+      final path = await ArtworkSelectionStore.readBackdropPath(
+        profileId: profileId,
+        mediaId: item.id,
+      );
+      if (path != null && path.isNotEmpty) next[item.id] = path;
+    }
+    if (!mounted) return;
+    if (next.length != _selectedBackdropPaths.length ||
+        next.entries.any((entry) => _selectedBackdropPaths[entry.key] != entry.value)) {
+      setState(() {
+        _selectedBackdropPaths
+          ..clear()
+          ..addAll(next);
+      });
     }
   }
 
@@ -367,6 +397,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ArtworkSelectionStore.revision.removeListener(_onArtworkSelectionsChanged);
     _advanceTimer?.cancel();
     _previewController?.dispose();
     _pageController.dispose();
@@ -473,6 +504,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   }
 
   Widget _buildHeroPage(MediaItem media) {
+    final selectedBackdropUrl = CinematicTitleMetadataService.imageUrl(
+      _selectedBackdropPaths[media.id],
+      size: 'w1280',
+    );
     final tmdbOverview = _tmdbOverviewsByMediaId[media.id]?.trim();
     // Movie/show heroes prefer TMDB's actual overview. Albums and titles without
     // an exact TMDB match fall back to the overview/description in the catalog.
@@ -500,7 +535,15 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (_previewController != null &&
+        if (selectedBackdropUrl != null)
+          Positioned.fill(
+            child: Image.network(
+              selectedBackdropUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _heroFallback(media),
+            ),
+          )
+        else if (_previewController != null &&
             _previewUrl == media.trailerUrl?.trim() &&
             _previewController!.value.isInitialized)
           FittedBox(

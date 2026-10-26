@@ -2,6 +2,8 @@
 // Purpose: Implements the movies portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -9,6 +11,10 @@ import 'details.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
 import 'page_customization_button.dart';
+import 'international_catalog_shelf.dart';
+import 'media_metadata_catalog_screen.dart';
+import 'catalog_poster_image.dart';
+import 'browse_page_hero_settings.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -22,6 +28,8 @@ class _MoviesScreenState extends State<MoviesScreen>
   late final AnimationController _pageController;
   String _searchQuery = '';
   String _sortMode = 'Default';
+  int _heroIndex = 0;
+  Timer? _heroTimer;
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -30,6 +38,9 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
+    BrowsePageHeroPreferenceStore.revision
+        .addListener(_onHeroPreferenceChanged);
+    _syncHeroTimer();
 
     _pageController = AnimationController(
       vsync: this,
@@ -43,9 +54,37 @@ class _MoviesScreenState extends State<MoviesScreen>
     });
   }
 
+  void _onHeroPreferenceChanged() {
+    if (!mounted) return;
+    _syncHeroTimer();
+    setState(() {});
+  }
+
+  void _syncHeroTimer() {
+    _heroTimer?.cancel();
+    final preference = BrowsePageHeroPreferenceStore.settingsFor(
+      pageId: 'movies',
+      profileId: AppController.instance.currentProfile?.id,
+    );
+    _heroIndex = 0;
+    if (!preference.showHero) return;
+    _heroTimer = Timer.periodic(
+      const Duration(
+        seconds: BrowsePageHeroPreference.autoSlideIntervalSeconds,
+      ),
+      (_) {
+        if (!mounted) return;
+        setState(() => _heroIndex++);
+      },
+    );
+  }
+
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    BrowsePageHeroPreferenceStore.revision
+        .removeListener(_onHeroPreferenceChanged);
+    _heroTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -98,11 +137,12 @@ class _MoviesScreenState extends State<MoviesScreen>
   Widget build(BuildContext context) {
     final library = AppController.instance.library;
 
-    final movies = library
-        .where(
-          (media) => media.type.toLowerCase() == 'movie',
-        )
-        .toList();
+    final movies = internationalCatalogFirst(library.where(
+      (media) => media.type.toLowerCase() == 'movie',
+    ));
+    final internationalMovies = movies
+        .where((media) => media.tags.contains('international-catalog'))
+        .toList(growable: false);
 
     final filteredMovies = _searchQuery.trim().isEmpty
         ? List<MediaItem>.from(movies)
@@ -114,8 +154,13 @@ class _MoviesScreenState extends State<MoviesScreen>
 
     _sortMedia(filteredMovies);
 
-    final featuredMovie =
-        filteredMovies.isNotEmpty ? filteredMovies.first : null;
+    final heroPreference = BrowsePageHeroPreferenceStore.settingsFor(
+      pageId: 'movies',
+      profileId: AppController.instance.currentProfile?.id,
+    );
+    final featuredMovie = filteredMovies.isNotEmpty
+        ? filteredMovies[_heroIndex % filteredMovies.length]
+        : null;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -131,6 +176,14 @@ class _MoviesScreenState extends State<MoviesScreen>
                 SliverToBoxAdapter(
                   child: _buildTopBar(context, movies.length),
                 ),
+
+                if (_searchQuery.trim().isEmpty && internationalMovies.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: InternationalCatalogShelf(
+                      title: 'International Movies',
+                      items: internationalMovies,
+                    ),
+                  ),
 
                 if (_searchQuery.trim().isNotEmpty)
                   SliverToBoxAdapter(
@@ -149,11 +202,17 @@ class _MoviesScreenState extends State<MoviesScreen>
                   )
                 else ...[
                   if (_searchQuery.trim().isEmpty &&
+                      heroPreference.showHero &&
                       featuredMovie != null)
                     SliverToBoxAdapter(
-                      child: _buildFeaturedMovie(
-                        context,
-                        featuredMovie,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 450),
+                        child: KeyedSubtree(
+                          key: ValueKey<String>(
+                            'movie-hero-${featuredMovie.id}',
+                          ),
+                          child: _buildFeaturedMovie(context, featuredMovie),
+                        ),
                       ),
                     ),
 
@@ -228,6 +287,10 @@ class _MoviesScreenState extends State<MoviesScreen>
         items.sort((a, b) => (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0));
         break;
       default:
+        final prioritized = internationalCatalogFirst(items);
+        items
+          ..clear()
+          ..addAll(prioritized);
         break;
     }
   }
@@ -334,6 +397,15 @@ class _MoviesScreenState extends State<MoviesScreen>
                 const SizedBox(height: 5),
                 Align(alignment: Alignment.centerLeft, child: _sortDropdown()),
               ],
+            ),
+          ),
+
+          _GlassIconButton(
+            icon: Icons.cloud_sync_rounded,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MediaMetadataCatalogScreen(initialType: 'movie'),
+              ),
             ),
           ),
 
@@ -545,8 +617,6 @@ class _MoviesScreenState extends State<MoviesScreen>
     BuildContext context,
     MediaItem movie,
   ) {
-    final imageUrl = (movie.imageUrl ?? '').trim();
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         20,
@@ -597,16 +667,12 @@ class _MoviesScreenState extends State<MoviesScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (imageUrl.isNotEmpty)
-                  Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) {
-                      return const _FeaturedFallback();
-                    },
-                  )
-                else
-                  const _FeaturedFallback(),
+                CatalogPosterImage(
+                  media: movie,
+                  fit: BoxFit.cover,
+                  placeholder: const _FeaturedFallback(),
+                  errorPlaceholder: const _FeaturedFallback(),
+                ),
 
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -933,8 +999,6 @@ class _MovieCardState extends State<_MovieCard> {
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final movie = widget.movie;
-    final imageUrl = (movie.imageUrl ?? '').trim();
-    final hasImage = imageUrl.isNotEmpty;
 
     return AnimatedBuilder(
       animation: widget.animation,
@@ -1041,23 +1105,12 @@ class _MovieCardState extends State<_MovieCard> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (hasImage)
-                          Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            filterQuality:
-                                FilterQuality.medium,
-                            errorBuilder:
-                                (_, __, ___) {
-                              return _ArtworkFallback(
-                                title: movie.title,
-                              );
-                            },
-                          )
-                        else
-                          _ArtworkFallback(
-                            title: movie.title,
-                          ),
+                        CatalogPosterImage(
+                          media: movie,
+                          fit: BoxFit.cover,
+                          placeholder: _ArtworkFallback(title: movie.title),
+                          errorPlaceholder: _ArtworkFallback(title: movie.title),
+                        ),
 
                         // Artwork gradient.
                         Positioned(

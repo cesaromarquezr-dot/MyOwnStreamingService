@@ -242,6 +242,190 @@ class BackendApi {
   }
 
   // ==========================================================
+  // MUSIC CATALOG (Spotify + MusicBrainz + Cover Art Archive)
+  // ==========================================================
+
+  /// Returns provider setup status without exposing any credentials.
+  Future<Map<String, dynamic>> getMusicCatalogStatus() async {
+    _requireAuthentication();
+    final response = await _networkClient.get(
+      Uri.parse('$baseUrl/music-catalog/status'),
+      headers: _headers,
+    );
+    return _requireSuccess(
+      response,
+      'Unable to check music catalog providers.',
+    );
+  }
+
+  /// Searches external music metadata. Spotify credentials stay on the backend.
+  Future<Map<String, dynamic>> searchMusicCatalog(
+    String query, {
+    String type = 'all',
+    int limit = 10,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/search').replace(
+      queryParameters: <String, String>{
+        'q': query.trim(),
+        'type': type,
+        'limit': '${limit.clamp(1, 10)}',
+      },
+    );
+    final response = await _networkClient.get(endpoint, headers: _headers);
+    return _requireSuccess(
+      response,
+      'Unable to search the music catalog.',
+    );
+  }
+
+  /// Lists an artist's MusicBrainz release groups (album-level discography).
+  Future<Map<String, dynamic>> getMusicDiscography(
+    String artistMbid, {
+    int limit = 100,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/discography').replace(
+      queryParameters: <String, String>{
+        'mbid': artistMbid.trim(),
+        'limit': '${limit.clamp(1, 100)}',
+      },
+    );
+    final response = await _networkClient.get(endpoint, headers: _headers);
+    return _requireSuccess(
+      response,
+      'Unable to load this artist discography.',
+    );
+  }
+
+  /// Loads the Cover Art Archive listing for a MusicBrainz release or group.
+  Future<Map<String, dynamic>> getMusicCoverArt(
+    String mbid, {
+    String entity = 'release-group',
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/cover-art').replace(
+      queryParameters: <String, String>{
+        'mbid': mbid.trim(),
+        'entity': entity,
+      },
+    );
+    final response = await _networkClient.get(endpoint, headers: _headers);
+    return _requireSuccess(
+      response,
+      'Unable to load album artwork.',
+    );
+  }
+
+  /// Loads the detailed Spotify artist profile and optional exact-match TMDB biography.
+  Future<Map<String, dynamic>> getSpotifyArtist(String spotifyId) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/artist').replace(
+      queryParameters: <String, String>{'spotifyId': spotifyId.trim()},
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load the Spotify artist profile.',
+    );
+  }
+
+  /// Loads a page of album/single releases for a Spotify artist.
+  Future<Map<String, dynamic>> getSpotifyArtistAlbums(
+    String spotifyId, {
+    int limit = 10,
+    int offset = 0,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/artist-albums').replace(
+      queryParameters: <String, String>{
+        'spotifyId': spotifyId.trim(),
+        'limit': '${limit.clamp(1, 10)}',
+        'offset': '${offset.clamp(0, 10000)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load the artist discography.',
+    );
+  }
+
+  /// Loads Spotify's regional new-release albums for a Home artwork shelf.
+  Future<Map<String, dynamic>> getSpotifyFeaturedAlbums({
+    int limit = 10,
+    int offset = 0,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/featured-albums').replace(
+      queryParameters: <String, String>{
+        'limit': '${limit.clamp(1, 20)}',
+        'offset': '${offset.clamp(0, 1000)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load featured albums.',
+    );
+  }
+
+  /// Loads album details, full supported track listing, and cover-art URLs from Spotify.
+  Future<Map<String, dynamic>> getSpotifyAlbum(String spotifyId) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/album').replace(
+      queryParameters: <String, String>{'spotifyId': spotifyId.trim()},
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load the Spotify album and track list.',
+    );
+  }
+
+  // ==========================================================
+  // TMDB MEDIA METADATA (movies, TV, actors, crew and biographies)
+  // ==========================================================
+
+  /// Returns provider configuration status without exposing TMDB credentials.
+  Future<Map<String, dynamic>> getMediaMetadataStatus() async {
+    _requireAuthentication();
+    final response = await _networkClient.get(
+      Uri.parse('$baseUrl/media-metadata/status'),
+      headers: _headers,
+    );
+    return _requireSuccess(response, 'Unable to check TMDB metadata configuration.');
+  }
+
+  /// Makes a bounded request through the authenticated backend's allow-listed
+  /// TMDB proxy. TMDB keys/tokens are never sent from this Flutter client.
+  Future<Map<String, dynamic>> getTmdbMetadata(
+    String path, [
+    Map<String, String> query = const <String, String>{},
+  ]) async {
+    _requireAuthentication();
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty || normalizedPath.length > 180) {
+      throw BackendApiException('A valid TMDB resource path is required.');
+    }
+    final parameters = <String, String>{'path': normalizedPath, ...query};
+    final endpoint = Uri.parse('$baseUrl/media-metadata/tmdb')
+        .replace(queryParameters: parameters);
+    final response = await _networkClient.get(endpoint, headers: _headers);
+    return _requireSuccess(response, 'Unable to load TMDB metadata.');
+  }
+
+  /// Gets optional IMDb / Rotten Tomatoes / Metascore results from the backend.
+  /// The OMDb key is only stored by the backend and is never sent by Flutter.
+  Future<Map<String, dynamic>> getExternalMediaRatings(String imdbId) async {
+    _requireAuthentication();
+    final cleaned = imdbId.trim();
+    if (!RegExp(r'^tt[0-9]{5,12}$').hasMatch(cleaned)) {
+      throw BackendApiException('A valid IMDb title ID is required.');
+    }
+    final endpoint = Uri.parse('$baseUrl/media-metadata/omdb-ratings')
+        .replace(queryParameters: <String, String>{'imdb_id': cleaned});
+    final response = await _networkClient.get(endpoint, headers: _headers);
+    return _requireSuccess(response, 'Unable to load external media ratings.');
+  }
+
+  // ==========================================================
   // RESPONSE DECODING
   // ==========================================================
 

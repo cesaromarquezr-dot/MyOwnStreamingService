@@ -17,7 +17,9 @@ class RecommendationOwnershipMatcher {
   static String normalizeTitle(String value) => value
       .trim()
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]'), '');
+      // Remove only common separators; preserve Korean, Japanese, Chinese,
+      // Arabic and other original-script letters for exact identity matching.
+      .replaceAll(RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"), '');
 
   static int? _yearOf(MediaItem item) =>
       item.releaseYear ?? (item.isSeries ? item.seriesStartYear : null);
@@ -26,10 +28,51 @@ class RecommendationOwnershipMatcher {
     required String title,
     required bool isTv,
     required MediaItem item,
-  }) =>
-      normalizeTitle(title) == normalizeTitle(item.title) &&
-      normalizeTitle(title).isNotEmpty &&
-      isTv == item.isSeries;
+  }) {
+    final normalized = normalizeTitle(title);
+    if (normalized.isEmpty || isTv != item.isSeries) return false;
+    final itemTitles = <String>{
+      normalizeTitle(item.title),
+      normalizeTitle(item.originalTitle ?? ''),
+      normalizeTitle(item.canonicalTitle ?? ''),
+    }..remove('');
+    return itemTitles.contains(normalized);
+  }
+
+  /// Finds a catalog record for a TMDB result, preferring an owned record and
+  /// then a same-title local/catalog record. If found, normal details can show
+  /// the local item or its Where to Buy section instead of a separate provider page.
+  static MediaItem? findMediaForTitle({
+    required String title,
+    List<String> alternateTitles = const <String>[],
+    required bool isTv,
+    int? year,
+    required AppController controller,
+  }) {
+    final titles = <String>{
+      normalizeTitle(title),
+      ...alternateTitles.map(normalizeTitle),
+    }..remove('');
+    if (titles.isEmpty) return null;
+    final profile = controller.currentProfile;
+    var candidates = controller.library.where((item) =>
+        (profile == null || item.isAccessibleTo(profile)) &&
+        item.isSeries == isTv &&
+        <String>{
+          normalizeTitle(item.title),
+          normalizeTitle(item.originalTitle ?? ''),
+          normalizeTitle(item.canonicalTitle ?? ''),
+        }.intersection(titles).isNotEmpty).toList(growable: false);
+    if (candidates.isEmpty) return null;
+    if (year != null) {
+      final exactYear = candidates.where((item) => _yearOf(item) == year).toList();
+      if (exactYear.isNotEmpty) candidates = exactYear;
+    }
+    for (final candidate in candidates) {
+      if (controller.isOwned(candidate.id)) return candidate;
+    }
+    return candidates.first;
+  }
 
   static List<MediaItem> _ownedLibrary(AppController controller) =>
       controller.library

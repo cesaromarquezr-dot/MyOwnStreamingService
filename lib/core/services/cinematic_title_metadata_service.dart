@@ -1,8 +1,4 @@
-import 'dart:convert';
-
-import 'package:http/http.dart' as http;
-
-import '../config/app_env.dart';
+import '../../app_core.dart';
 
 /// Live title metadata and credits from TMDB.
 ///
@@ -11,10 +7,11 @@ import '../config/app_env.dart';
 class CinematicTitleMetadataService {
   CinematicTitleMetadataService._();
 
-  static String get _apiKey => AppEnv.tmdbApiKey;
-  static const String _baseUrl = 'https://api.themoviedb.org/3';
   static const String imageBaseUrl = 'https://image.tmdb.org/t/p';
-  static bool get isConfigured => _apiKey.trim().isNotEmpty;
+
+  /// TMDB requests are available when the app has an authenticated backend
+  /// session; API credentials live only in Backend/.env.
+  static bool get isConfigured => AppController.instance.isBackendAuthenticated;
 
   /// Turns a TMDB image path into a publicly loadable image URL.
   static String? imageUrl(String? path, {String size = 'w500'}) {
@@ -104,8 +101,8 @@ class CinematicTitleMetadataService {
     if (id == null) return null;
     final detailsPath = isTv ? '/tv/$id' : '/movie/$id';
     final details = await _get(detailsPath, <String, String>{
-      'append_to_response': 'credits,videos,keywords,reviews,images',
-      'include_image_language': 'en,null',
+      'append_to_response': 'credits,videos,keywords,reviews,images,external_ids',
+      'include_image_language': 'ar,bg,bn,cs,da,de,el,en,es,et,fa,fi,fr,he,hi,hr,hu,id,it,ja,ka,kk,ko,lt,lv,ml,mr,ms,nb,nl,pl,pt,ro,ru,sk,sl,sr,sv,ta,te,th,tr,uk,vi,zh,null',
       'language': 'en-US',
     });
 
@@ -148,9 +145,12 @@ class CinematicTitleMetadataService {
       }
     }
 
+    // Display metadata should prefer the work's original-language title.
+    // The app's own MediaItem.title remains authoritative in the UI; this
+    // provider title is used for metadata/test output, not to rename a record.
     final actualTitle = (isTv
-            ? details['name'] ?? details['original_name']
-            : details['title'] ?? details['original_title'])
+            ? details['original_name'] ?? details['name']
+            : details['original_title'] ?? details['title'])
         ?.toString()
         .trim();
     final releaseDate = (isTv
@@ -158,6 +158,7 @@ class CinematicTitleMetadataService {
             : details['release_date'])
         ?.toString();
     final imagePayload = _asMap(details['images']);
+    final externalIds = _asMap(details['external_ids']);
 
     final posterPaths = _uniqueStrings(<String?>[
       details['poster_path']?.toString(),
@@ -210,6 +211,7 @@ class CinematicTitleMetadataService {
 
     return CinematicTitleMetadata(
       providerId: id,
+      imdbId: _cleanNullable(externalIds['imdb_id']),
       title: actualTitle?.isNotEmpty == true ? actualTitle! : cleanTitle,
       isTv: isTv,
       overview: details['overview']?.toString() ?? '',
@@ -239,6 +241,39 @@ class CinematicTitleMetadataService {
       directors: directors,
       writers: writers,
       music: music,
+    );
+  }
+
+  /// Returns one page of TMDB community reviews. The review screen pages through
+  /// every result reported by TMDB instead of silently truncating the response
+  /// to the first five review cards.
+  /// Compatibility API used by ReviewsHubScreen for paginated provider reviews.
+  static Future<CinematicTitleReviewPage> lookupReviewsPage({
+    required int providerId,
+    required bool isTv,
+    int page = 1,
+  }) async {
+    if (!isConfigured || providerId <= 0 || page < 1) {
+      return const CinematicTitleReviewPage(
+        page: 1,
+        totalPages: 0,
+        totalResults: 0,
+        reviews: <CinematicTitleReview>[],
+      );
+    }
+    final path = isTv
+        ? '/tv/$providerId/reviews'
+        : '/movie/$providerId/reviews';
+    final payload = await _get(path, <String, String>{'page': '$page'});
+    final reviews = _listOfMaps(payload['results'])
+        .map(CinematicTitleReview.fromJson)
+        .where((review) => review.content.trim().isNotEmpty)
+        .toList(growable: false);
+    return CinematicTitleReviewPage(
+      page: _toInt(payload['page']) ?? page,
+      totalPages: _positiveIntOrNull(payload['total_pages']) ?? 0,
+      totalResults: _positiveIntOrNull(payload['total_results']) ?? reviews.length,
+      reviews: List<CinematicTitleReview>.unmodifiable(reviews),
     );
   }
 
@@ -294,13 +329,25 @@ class CinematicTitleMetadataService {
     final discoverIsTv = mood.forceMovie ? false : sourceIsTv;
     final genreId = discoverIsTv ? mood.tvGenreId : mood.movieGenreId;
     final path = discoverIsTv ? '/discover/tv' : '/discover/movie';
-    final payload = await _get(path, <String, String>{
+    final query = <String, String>{
       'page': '1',
       'include_adult': 'false',
-      'sort_by': 'popularity.desc',
+      'sort_by': mood.key == 'current'
+          ? (discoverIsTv ? 'first_air_date.desc' : 'primary_release_date.desc')
+          : 'popularity.desc',
       'vote_count.gte': '10',
-      'with_genres': genreId.toString(),
-    });
+    };
+    if (genreId > 0) query['with_genres'] = genreId.toString();
+    if (mood.key == 'current') {
+      final today = DateTime.now();
+      final cutoff = today.subtract(const Duration(days: 730));
+      String dateString(DateTime value) =>
+          '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+      final datePrefix = discoverIsTv ? 'first_air_date' : 'primary_release_date';
+      query['$datePrefix.gte'] = dateString(cutoff);
+      query['$datePrefix.lte'] = dateString(today);
+    }
+    final payload = await _get(path, query);
 
     final seenIds = <int>{};
     if (discoverIsTv == sourceIsTv) seenIds.add(sourceProviderId);
@@ -356,9 +403,14 @@ class CinematicTitleMetadataService {
     return null;
   }
 
+  /// Normalize punctuation/spacing without discarding non-Latin letters.
+  /// The previous ASCII-only expression normalized every Hangul/Japanese/
+  /// Chinese title to an empty string, which could falsely match the first
+  /// unrelated TMDB result for Korean and other original-script queries.
   static String _normalize(String value) => value
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]'), '');
+      .trim()
+      .replaceAll(RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"), '');
 
   static Map<String, dynamic> _asMap(dynamic value) {
     if (value is Map) return Map<String, dynamic>.from(value);
@@ -419,23 +471,11 @@ class CinematicTitleMetadataService {
   static Future<Map<String, dynamic>> _get(
     String path, [
     Map<String, String>? query,
-  ]) async {
-    final params = <String, String>{
-      'api_key': _apiKey,
-      'language': 'en-US',
-      ...?query,
-    };
-    final response = await http
-        .get(Uri.parse('$_baseUrl$path').replace(queryParameters: params))
-        .timeout(const Duration(seconds: 20));
-    if (response.statusCode != 200) {
-      throw Exception('TMDB returned HTTP ${response.statusCode}.');
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const FormatException('TMDB returned an unexpected response.');
-    }
-    return Map<String, dynamic>.from(decoded);
+  ]) {
+    return AppController.instance.backendApi.getTmdbMetadata(
+      path,
+      <String, String>{'language': 'en-US', ...?query},
+    );
   }
 }
 
@@ -508,6 +548,30 @@ class CinematicRecommendationMood {
       key: 'family-friendly', label: 'family-friendly', movieGenreId: 10751, tvGenreId: 10762,
     ),
     CinematicRecommendationMood(
+      key: 'kid-friendly', label: 'kid-friendly', movieGenreId: 10751, tvGenreId: 10762,
+    ),
+    CinematicRecommendationMood(
+      key: 'thrilling', label: 'thrilling', movieGenreId: 53, tvGenreId: 9648,
+    ),
+    CinematicRecommendationMood(
+      key: 'current', label: 'current', movieGenreId: 0, tvGenreId: 0,
+    ),
+    CinematicRecommendationMood(
+      key: 'unscripted', label: 'unscripted', movieGenreId: 99, tvGenreId: 10764,
+    ),
+    CinematicRecommendationMood(
+      key: 'imaginative', label: 'imaginative', movieGenreId: 14, tvGenreId: 10765,
+    ),
+    CinematicRecommendationMood(
+      key: 'scandalous', label: 'scandalous', movieGenreId: 18, tvGenreId: 10764,
+    ),
+    CinematicRecommendationMood(
+      key: 'candid', label: 'candid', movieGenreId: 99, tvGenreId: 10764,
+    ),
+    CinematicRecommendationMood(
+      key: 'politically-charged', label: 'politically charged', movieGenreId: 99, tvGenreId: 10768,
+    ),
+    CinematicRecommendationMood(
       key: 'heroic', label: 'heroic', movieGenreId: 12, tvGenreId: 10759,
     ),
     CinematicRecommendationMood(
@@ -526,6 +590,7 @@ class CinematicRecommendationMood {
 class CinematicTitleMetadata {
   const CinematicTitleMetadata({
     required this.providerId,
+    this.imdbId,
     required this.title,
     required this.isTv,
     required this.overview,
@@ -556,6 +621,8 @@ class CinematicTitleMetadata {
   });
 
   final int providerId;
+  /// IMDb title identifier used for optional OMDb rating lookup.
+  final String? imdbId;
   final String title;
   final bool isTv;
   final String overview;
@@ -704,6 +771,7 @@ class CinematicTitleVideo {
 
 class CinematicTitleReview {
   const CinematicTitleReview({
+    this.id,
     required this.author,
     required this.content,
     required this.rating,
@@ -711,6 +779,8 @@ class CinematicTitleReview {
     required this.url,
   });
 
+  /// Stable TMDB review id; a caller may fall back to author/date/content.
+  final String? id;
   final String author;
   final String content;
   final double? rating;
@@ -730,6 +800,7 @@ class CinematicTitleReview {
         ? rawRating.toDouble()
         : double.tryParse(rawRating?.toString() ?? '');
     return CinematicTitleReview(
+      id: _reviewText(json['id']),
       author: authorName.isEmpty ? 'TMDB user' : authorName,
       content: json['content']?.toString() ?? '',
       rating: rating,
@@ -737,6 +808,22 @@ class CinematicTitleReview {
       url: _reviewText(json['url']),
     );
   }
+}
+
+class CinematicTitleReviewPage {
+  const CinematicTitleReviewPage({
+    required this.page,
+    required this.totalPages,
+    required this.totalResults,
+    required this.reviews,
+  });
+
+  final int page;
+  final int totalPages;
+  final int totalResults;
+  final List<CinematicTitleReview> reviews;
+
+  bool get hasMore => page < totalPages;
 }
 
 String? _reviewText(dynamic value) {

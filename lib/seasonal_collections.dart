@@ -132,7 +132,7 @@ class SeasonalCollectionsScreen extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.movie_outlined),
-              title: LocalizedMediaText(item.title),
+              title: LocalizedMediaText(item.title, preserveOriginal: true),
               subtitle: Text(item.type),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),

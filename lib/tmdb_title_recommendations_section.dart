@@ -41,7 +41,7 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
           Text.rich(
             TextSpan(
               children: [
-                const TextSpan(text: 'If you liked '),
+                const TextSpan(text: 'Because you watched '),
                 TextSpan(
                   text: sourceTitle,
                   style: const TextStyle(
@@ -49,7 +49,7 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const TextSpan(text: ', you might also like...'),
+                const TextSpan(text: ', you might like...'),
               ],
             ),
             style: const TextStyle(
@@ -61,7 +61,7 @@ class TMDBTitleRecommendationsSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Recommendations from TMDB',
+            'Personalized movie and TV discovery',
             style: TextStyle(color: Colors.white60, fontSize: 12),
           ),
           const SizedBox(height: 12),

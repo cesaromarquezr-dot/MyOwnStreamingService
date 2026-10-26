@@ -2221,6 +2221,16 @@ class GroupWatchSession {
   }
 }
 
+/// Keep the curated international catalog visible before the rest of a long
+/// local library while preserving the original order inside each group.
+List<MediaItem> internationalCatalogFirst(Iterable<MediaItem> items) {
+  final values = items.toList(growable: false);
+  return <MediaItem>[
+    ...values.where((item) => item.tags.contains('international-catalog')),
+    ...values.where((item) => !item.tags.contains('international-catalog')),
+  ];
+}
+
 /// Implements the `AppController` class for this feature or UI component.
 /// True for files created by the ARM mock worker, which are text placeholders
 /// rather than real video/audio assets.
@@ -3525,6 +3535,12 @@ class AppController extends ChangeNotifier {
         'tags': tags.toList(growable: false),
         'releaseYear': existing.releaseYear ?? item.releaseYear,
         'seriesStartYear': existing.seriesStartYear ?? item.seriesStartYear,
+        'originalTitle': existing.originalTitle?.trim().isNotEmpty == true
+            ? existing.originalTitle
+            : item.originalTitle,
+        'countryOfOrigin': existing.countryOfOrigin?.trim().isNotEmpty == true
+            ? existing.countryOfOrigin
+            : item.countryOfOrigin,
         'description': existing.description?.trim().isNotEmpty == true
             ? existing.description
             : item.description,
@@ -3609,8 +3625,14 @@ class AppController extends ChangeNotifier {
     for (var index = 0; index < CinematicSeedExamples.all.length; index++) {
       final example = CinematicSeedExamples.all[index];
       final titleKey = DemoCatalogMetadata.normalizeTitle(example.title);
-      final slug = titleKey.replaceAll(' ', '-');
+      // Non-Latin original titles can normalize to an empty ASCII key. Give
+      // each such entry a stable unique ID without changing its display title.
+      final slug = titleKey.isEmpty
+          ? 'international-${example.year ?? 'unknown'}-$index'
+          : titleKey.replaceAll(' ', '-');
       final isMcu = example.universe == CinematicSeedExamples.mcu;
+      final isInternational =
+          CinematicSeedExamples.isInternationalExample(example);
       final isSpiderNoir = titleKey == 'spider noir';
       final mcuMovieOrder = CinematicSeedExamples.movies.indexOf(example);
       final franchise = isMcu
@@ -3632,15 +3654,20 @@ class AppController extends ChangeNotifier {
         id: 'demo-catalog-$slug',
         title: example.title,
         type: example.isTv ? 'tvShow' : 'movie',
-        description: 'Catalog example only. This is not an owned video file and has no playable stream. Use it to preview title metadata, $mediaKindLabel details, and actor/crew profiles. TMDB can enrich these sample credits when configured.',
+        description: isInternational
+            ? 'International catalog preview from ${example.universe}. The display title is intentionally preserved exactly as curated. This is metadata only and has no playable stream.'
+            : 'Catalog example only. This is not an owned video file and has no playable stream. Use it to preview title metadata, $mediaKindLabel details, and actor/crew profiles. TMDB can enrich these sample credits when configured.',
         releaseYear: example.year,
         seriesStartYear: example.isTv ? example.year : null,
+        originalTitle: isInternational ? example.title : null,
+        countryOfOrigin: isInternational ? example.universe : null,
         actors: cast,
         directors: DemoCatalogMetadata.directorsFor(example.title),
         writers: DemoCatalogMetadata.writersFor(example.title),
         genres: genres,
         tags: <String>[
           'demo-preview', 'preview-only', 'not-playable', 'catalog-example',
+          if (isInternational) 'international-catalog',
           if (isMcu) ...['action', 'superhero', 'marvel-cinematic-universe'],
           if (example.universe.toLowerCase().contains('wizarding')) 'wizarding-world',
           if (example.universe.toLowerCase().contains('pixar')) 'pixar',

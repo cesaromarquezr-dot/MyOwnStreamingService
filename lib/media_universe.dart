@@ -122,7 +122,7 @@ class _MediaUniverseCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         child: ListTile(
           leading: _Artwork(imageUrl: item.imageUrl),
-          title: LocalizedMediaText(item.title),
+          title: LocalizedMediaText(item.title, preserveOriginal: true),
           subtitle: Text(
               '${item.type}${item.releaseYear == null ? '' : ' • ${item.releaseYear}'}'),
           trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
@@ -336,7 +336,7 @@ class _MediaArtworkScreenState extends State<MediaArtworkScreen> {
           ...library.map((media) => Card(
                   child: ListTile(
                 leading: _Artwork(imageUrl: media.imageUrl),
-                title: LocalizedMediaText(media.title),
+                title: LocalizedMediaText(media.title, preserveOriginal: true),
                 subtitle: Text(media.discType == null
                     ? 'Library artwork'
                     : 'Disc artwork candidate'),
@@ -437,13 +437,14 @@ class MediaPassportItemScreen extends StatelessWidget {
   const MediaPassportItemScreen({super.key, required this.item});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: LocalizedMediaText(item.title)),
+        appBar: AppBar(title: LocalizedMediaText(item.title, preserveOriginal: true)),
         body: ListView(
           padding: const EdgeInsets.all(18),
           children: [
             Center(child: _Artwork(imageUrl: item.imageUrl, size: 220)),
             const SizedBox(height: 16),
             LocalizedMediaText(item.title,
+                preserveOriginal: true,
                 style:
                     const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
             Text(item.type),

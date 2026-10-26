@@ -4119,7 +4119,7 @@ class _SocialConversationScreenState extends State<SocialConversationScreen> {
             for (final media in library)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(context, media),
-                child: LocalizedMediaText(media.title),
+                child: LocalizedMediaText(media.title, preserveOriginal: true),
               ),
           ],
         ),

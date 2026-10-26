@@ -22,6 +22,7 @@ import 'shop.dart';
 import 'media_actions.dart';
 import 'navidrome_setup.dart';
 import 'social_sharing.dart';
+import 'music_catalog_screen.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -993,6 +994,11 @@ class _MusicScreenState extends State<MusicScreen> {
                         tooltip: 'Search music',
                       ),
                     IconButton(
+                      onPressed: _openMusicCatalog,
+                      icon: const Icon(Icons.library_music_rounded),
+                      tooltip: 'Search Spotify, MusicBrainz, and cover art',
+                    ),
+                    IconButton(
                       onPressed: _openDiscover,
                       icon: const Icon(Icons.explore_rounded),
                       tooltip: 'Discover music',
@@ -1013,6 +1019,7 @@ class _MusicScreenState extends State<MusicScreen> {
                 ),
                 if (settings.showPlayer && playback.currentTrack != null)
                   SliverToBoxAdapter(child: _buildPlayer(settings)),
+                SliverToBoxAdapter(child: _musicCatalogEntrySection()),
                 ..._homeSlivers(settings),
               ],
             ),
@@ -1466,6 +1473,56 @@ class _MusicScreenState extends State<MusicScreen> {
     Navigator.push(context,
         MaterialPageRoute(builder: (_) => const MusicDiscoverScreen()));
   }
+
+  void _openMusicCatalog() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/page/music-catalog'),
+        builder: (_) => const MusicCatalogScreen(),
+      ),
+    );
+  }
+
+  Widget _musicCatalogEntrySection() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Material(
+          color: Colors.white.withValues(alpha: .055),
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: _openMusicCatalog,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: .18),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.library_music_rounded, color: Colors.lightGreenAccent),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Music Catalog', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                        SizedBox(height: 4),
+                        Text('Search Spotify, explore MusicBrainz discographies, and find album artwork', style: TextStyle(color: Colors.white60, height: 1.3, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 
   Widget _systemPlaylistSection() {
     const names = [

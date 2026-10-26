@@ -66,6 +66,8 @@ import 'routes/home_server_routes.dart';
 import 'routes/legal_routes.dart';
 import 'routes/library_release_routes.dart';
 import 'routes/library_routes.dart';
+import 'routes/music_catalog_routes.dart';
+import 'routes/media_metadata_routes.dart';
 import 'routes/live_shopping_routes.dart';
 import 'routes/location_routes.dart';
 import 'routes/media_intelligence_routes.dart';
@@ -100,6 +102,8 @@ import 'services/home_server_service.dart';
 import 'services/library_release_service.dart';
 import 'services/media_analyzer_service.dart';
 import 'services/media_intelligence_service.dart';
+import 'services/music_catalog_service.dart';
+import 'services/media_metadata_service.dart';
 import 'services/media_server_agent_service.dart';
 import 'services/mock_payment_processor.dart';
 import 'services/payment_method_service.dart';
@@ -327,6 +331,33 @@ Future<void> main() async {
   );
 
   // ------------------------------------------------------------
+  // MUSIC METADATA CATALOG (Spotify + MusicBrainz + Cover Art Archive)
+  // ------------------------------------------------------------
+
+  final musicCatalogRoutes = MusicCatalogRoutes(
+    authentication: authentication,
+    service: MusicCatalogService(
+      spotifyClientId: AppConfig.spotifyClientId,
+      spotifyClientSecret: AppConfig.spotifyClientSecret,
+      userAgent: AppConfig.musicMetadataUserAgent,
+      tmdbApiKey: AppConfig.tmdbApiKey,
+      tmdbApiToken: AppConfig.tmdbApiToken,
+    ),
+  );
+
+  // ------------------------------------------------------------
+  // SERVER-SIDE TMDB METADATA PROXY
+  // ------------------------------------------------------------
+
+  final mediaMetadataRoutes = MediaMetadataRoutes(
+    authentication: authentication,
+    service: MediaMetadataService(
+      tmdbApiKey: AppConfig.tmdbApiKey,
+      tmdbApiToken: AppConfig.tmdbApiToken,
+    ),
+  );
+
+  // ------------------------------------------------------------
   // SHOP ROUTES
   // ------------------------------------------------------------
 
@@ -527,6 +558,8 @@ Future<void> main() async {
       authRoutes,
       recommendationsRoutes,
       searchRoutes,
+      musicCatalogRoutes,
+      mediaMetadataRoutes,
       ratingRoutes,
       shopRoutes,
       liveShoppingRoutes,
@@ -579,6 +612,8 @@ Future<void> _handleRequest(
   AuthRoutes authRoutes,
   RecommendationsRoutes recommendationsRoutes,
   SearchRoutes searchRoutes,
+  MusicCatalogRoutes musicCatalogRoutes,
+  MediaMetadataRoutes mediaMetadataRoutes,
   RatingRoutes ratingRoutes,
   ShopRoutes shopRoutes,
   LiveShoppingRoutes liveShoppingRoutes,
@@ -864,6 +899,26 @@ Future<void> _handleRequest(
         request,
       );
 
+      responseStarted = true;
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // MUSIC METADATA CATALOG
+    // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/music-catalog')) {
+      await musicCatalogRoutes.handle(request);
+      responseStarted = true;
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // MOVIE / TV / PERSON METADATA (TMDB)
+    // ----------------------------------------------------------
+
+    if (path.startsWith('/api/v1/media-metadata')) {
+      await mediaMetadataRoutes.handle(request);
       responseStarted = true;
       return;
     }

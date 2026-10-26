@@ -144,7 +144,7 @@ class _PersonMediaScreen extends StatelessWidget {
                 return Card(
                   child: ListTile(
                     leading: media.imageUrl == null ? const Icon(Icons.movie_rounded) : Image.network(media.imageUrl!, width: 52, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_rounded)),
-                    title: LocalizedMediaText(media.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    title: LocalizedMediaText(media.title, preserveOriginal: true, style: const TextStyle(fontWeight: FontWeight.w800)),
                     subtitle: UniversalText('${media.type}${media.releaseYear == null ? '' : ' • ${media.releaseYear}'}'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: media))),
@@ -417,7 +417,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             for (final media in filteredMovies)
               Card(child: ListTile(
                 leading: const Icon(Icons.movie_outlined),
-                title: LocalizedMediaText(media.title),
+                title: LocalizedMediaText(media.title, preserveOriginal: true),
                 subtitle: Text(media.type),
                 trailing: LikeToggleButton(
                   liked: controller.isLiked(media.id),
@@ -444,7 +444,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             for (final media in filteredShows)
               Card(child: ListTile(
                 leading: const Icon(Icons.tv_outlined),
-                title: LocalizedMediaText(media.title),
+                title: LocalizedMediaText(media.title, preserveOriginal: true),
                 subtitle: Text(media.type),
                 trailing: LikeToggleButton(
                   liked: controller.isLiked(media.id),

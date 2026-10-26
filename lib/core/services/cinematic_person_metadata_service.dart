@@ -1,23 +1,17 @@
-import 'dart:convert';
-
-import 'package:http/http.dart' as http;
-
-import '../config/app_env.dart';
+import '../../app_core.dart';
 
 /// TMDB-backed person identities, portraits, biographies, and combined credits.
-/// Configure TMDB_API_KEY in the project-root .env file, or use --dart-define as a fallback.
+/// TMDB credentials stay in Backend/.env; requests are proxied by the authenticated backend.
 class CinematicPersonMetadataService {
   CinematicPersonMetadataService._();
 
-  static String get _apiKey => AppEnv.tmdbApiKey;
-  static const String _baseUrl = 'https://api.themoviedb.org/3';
   static const String _imageBaseUrl = 'https://image.tmdb.org/t/p';
   static final Map<String, Future<CinematicPersonSummary?>> _summaryCache =
       <String, Future<CinematicPersonSummary?>>{};
   static final Map<String, Future<CinematicPersonMetadata?>> _profileCache =
       <String, Future<CinematicPersonMetadata?>>{};
 
-  static bool get isConfigured => _apiKey.trim().isNotEmpty;
+  static bool get isConfigured => AppController.instance.isBackendAuthenticated;
 
   static String? imageUrl(String? imagePath, {String size = 'w342'}) {
     final path = imagePath?.trim() ?? '';
@@ -180,28 +174,17 @@ class CinematicPersonMetadataService {
   static Future<Map<String, dynamic>> _get(
     String path, [
     Map<String, String>? query,
-  ]) async {
-    final params = <String, String>{
-      'api_key': _apiKey,
-      'language': 'en-US',
-      ...?query,
-    };
-    final response = await http
-        .get(Uri.parse('$_baseUrl$path').replace(queryParameters: params))
-        .timeout(const Duration(seconds: 18));
-    if (response.statusCode != 200) {
-      throw Exception('TMDB returned HTTP ${response.statusCode}.');
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const FormatException('TMDB returned an unexpected response.');
-    }
-    return Map<String, dynamic>.from(decoded);
+  ]) {
+    return AppController.instance.backendApi.getTmdbMetadata(
+      path,
+      <String, String>{'language': 'en-US', ...?query},
+    );
   }
 
   static String _normalize(String value) => value
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]'), '');
+      .trim()
+      .replaceAll(RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"), '');
 
   static int? _asInt(dynamic value) {
     if (value is int) return value;

@@ -149,6 +149,8 @@ class LocalizedMediaText extends StatefulWidget {
   final int? maxLines;
   final TextOverflow? overflow;
   final TextAlign? textAlign;
+  /// When true, render the supplied display title verbatim and never translate it.
+  final bool preserveOriginal;
 
   const LocalizedMediaText(
     this.original, {
@@ -158,6 +160,7 @@ class LocalizedMediaText extends StatefulWidget {
     this.maxLines,
     this.overflow,
     this.textAlign,
+    this.preserveOriginal = false,
   });
 
   @override
@@ -179,7 +182,8 @@ class _LocalizedMediaTextState extends State<LocalizedMediaText> {
   void didUpdateWidget(covariant LocalizedMediaText oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.original != widget.original ||
-        oldWidget.sourceLanguage != widget.sourceLanguage) {
+        oldWidget.sourceLanguage != widget.sourceLanguage ||
+        oldWidget.preserveOriginal != widget.preserveOriginal) {
       _refresh();
     }
   }
@@ -192,11 +196,13 @@ class _LocalizedMediaTextState extends State<LocalizedMediaText> {
 
   void _refresh() {
     _language = LanguageController.instance.current.code;
-    _translation = MediaTextLocalizer.instance.translate(
-      widget.original,
-      sourceLanguage: widget.sourceLanguage,
-      targetLanguage: _language,
-    );
+    _translation = widget.preserveOriginal
+        ? Future<String>.value(widget.original)
+        : MediaTextLocalizer.instance.translate(
+            widget.original,
+            sourceLanguage: widget.sourceLanguage,
+            targetLanguage: _language,
+          );
   }
 
   @override

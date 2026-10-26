@@ -24,6 +24,17 @@ class CinematicSeedExamples {
   static const String spiderNoirContinuity =
       'Spider-Man / Marvel — separate continuity';
 
+  /// Countries used by the explicitly curated international browse examples.
+  /// These labels are also used to prioritize the entries in regular browse UI.
+  static const Set<String> internationalCatalogCountries = <String>{
+    'Mexico', 'South Korea', 'Spain', 'India', 'Japan', 'Brazil', 'Portugal',
+    'Turkey', 'France', 'China', 'Germany', 'Argentina', 'Thailand',
+    'Indonesia', 'Philippines', 'Iran', 'Egypt', 'South Africa',
+  };
+
+  static bool isInternationalExample(CinematicSeedExample example) =>
+      internationalCatalogCountries.contains(example.universe);
+
   static const List<CinematicSeedExample> movies = <CinematicSeedExample>[
     CinematicSeedExample(title: 'Iron Man', isTv: false, universe: mcu, year: 2008),
     CinematicSeedExample(title: 'The Incredible Hulk', isTv: false, universe: mcu, year: 2008),
@@ -73,6 +84,45 @@ class CinematicSeedExamples {
   /// Extra catalog examples used by the regular Movies and TV browsing
   /// destinations. These are not considered a complete filmography.
   static const List<CinematicSeedExample> additionalMovies = <CinematicSeedExample>[
+    // International catalog examples are seeded into the normal browse catalog
+    // so they appear on Home, Movies/Films, and title search—not only in tests.
+    // Keep display titles in their intended original/localized form; never
+    // silently translate these labels into English.
+    CinematicSeedExample(title: 'Una película de huevos', isTv: false, universe: 'Mexico', year: 2006),
+    CinematicSeedExample(title: 'Candidato Honesto', isTv: false, universe: 'Mexico', year: 2024),
+    CinematicSeedExample(title: 'La leyenda de la Nahuala', isTv: false, universe: 'Mexico', year: 2007),
+    CinematicSeedExample(title: '기생충', isTv: false, universe: 'South Korea', year: 2019),
+    CinematicSeedExample(title: '부산행', isTv: false, universe: 'South Korea', year: 2016),
+    CinematicSeedExample(title: 'El Chavo del Ocho', isTv: true, universe: 'Mexico', year: 1973),
+    CinematicSeedExample(title: 'Una familia de diez', isTv: true, universe: 'Mexico', year: 2007),
+    CinematicSeedExample(title: 'La familia P. Luche', isTv: true, universe: 'Mexico', year: 2002),
+    CinematicSeedExample(title: 'Élite', isTv: true, universe: 'Spain', year: 2018),
+    CinematicSeedExample(title: 'Dangal', isTv: false, universe: 'India', year: 2016),
+    CinematicSeedExample(title: '3 Idiots', isTv: false, universe: 'India', year: 2009),
+    CinematicSeedExample(title: 'RRR', isTv: false, universe: 'India', year: 2022),
+    CinematicSeedExample(title: 'The Family Man', isTv: true, universe: 'India', year: 2019),
+    CinematicSeedExample(title: 'Your Name', isTv: false, universe: 'Japan', year: 2016),
+    CinematicSeedExample(title: 'Spirited Away', isTv: false, universe: 'Japan', year: 2001),
+    CinematicSeedExample(title: 'Attack on Titan', isTv: true, universe: 'Japan', year: 2013),
+    CinematicSeedExample(title: 'City of God', isTv: false, universe: 'Brazil', year: 2002),
+    CinematicSeedExample(title: '3%', isTv: true, universe: 'Brazil', year: 2016),
+    CinematicSeedExample(title: 'Glória', isTv: true, universe: 'Portugal', year: 2021),
+    CinematicSeedExample(title: 'Miracle in Cell No. 7', isTv: false, universe: 'Turkey', year: 2019),
+    CinematicSeedExample(title: 'Ethos', isTv: true, universe: 'Turkey', year: 2020),
+    CinematicSeedExample(title: 'Amélie', isTv: false, universe: 'France', year: 2001),
+    CinematicSeedExample(title: 'Lupin', isTv: true, universe: 'France', year: 2021),
+    CinematicSeedExample(title: 'Wolf Warrior 2', isTv: false, universe: 'China', year: 2017),
+    CinematicSeedExample(title: 'The Wandering Earth', isTv: false, universe: 'China', year: 2019),
+    CinematicSeedExample(title: 'Dark', isTv: true, universe: 'Germany', year: 2017),
+    CinematicSeedExample(title: 'La casa de papel', isTv: true, universe: 'Spain', year: 2017),
+    CinematicSeedExample(title: 'Relatos salvajes', isTv: false, universe: 'Argentina', year: 2014),
+    CinematicSeedExample(title: 'Bad Genius', isTv: false, universe: 'Thailand', year: 2017),
+    CinematicSeedExample(title: 'The Raid', isTv: false, universe: 'Indonesia', year: 2011),
+    CinematicSeedExample(title: 'Hello, Love, Goodbye', isTv: false, universe: 'Philippines', year: 2019),
+    CinematicSeedExample(title: 'Trese', isTv: true, universe: 'Philippines', year: 2021),
+    CinematicSeedExample(title: 'A Separation', isTv: false, universe: 'Iran', year: 2011),
+    CinematicSeedExample(title: 'Finding Ola', isTv: true, universe: 'Egypt', year: 2022),
+    CinematicSeedExample(title: 'Blood & Water', isTv: true, universe: 'South Africa', year: 2020),
     CinematicSeedExample(title: 'How to Train Your Dragon', isTv: false, universe: 'How to Train Your Dragon', year: 2010),
     CinematicSeedExample(title: "Harry Potter and the Sorcerer's Stone", isTv: false, universe: 'Wizarding World', year: 2001),
     CinematicSeedExample(title: 'Harry Potter and the Chamber of Secrets', isTv: false, universe: 'Wizarding World', year: 2002),
@@ -87,6 +137,7 @@ class CinematicSeedExamples {
   ];
 
   static const List<CinematicSeedExample> additionalShows = <CinematicSeedExample>[
+    CinematicSeedExample(title: '오징어 게임', isTv: true, universe: 'South Korea', year: 2021),
     CinematicSeedExample(title: 'Wizards of Waverly Place', isTv: true, universe: 'Disney Channel', year: 2007),
     CinematicSeedExample(title: "That's So Random!", isTv: true, universe: 'Disney Channel', year: 2011),
     CinematicSeedExample(title: 'The Suite Life of Zack & Cody', isTv: true, universe: 'Disney Channel', year: 2005),

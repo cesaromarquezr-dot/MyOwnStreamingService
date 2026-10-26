@@ -594,7 +594,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                   ...media.take(12).map(
                         (item) => CheckboxListTile(
                           value: downloads.contains(item.id),
-                          title: LocalizedMediaText(item.title),
+                          title: LocalizedMediaText(item.title, preserveOriginal: true),
                           subtitle: Text(
                             _mediaTypeLabel(item),
                           ),

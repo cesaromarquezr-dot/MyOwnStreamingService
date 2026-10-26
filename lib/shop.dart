@@ -1853,7 +1853,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     for (final media in mediaMatches)
                       Card(
                         child: ListTile(
-                          title: LocalizedMediaText(media.title),
+                          title: LocalizedMediaText(media.title, preserveOriginal: true),
                           subtitle: Text(media.franchiseName == null
                               ? media.type
                               : '${media.type} • ${media.franchiseName}'),

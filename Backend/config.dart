@@ -9,7 +9,11 @@ import 'dart:io';
 
 class AppConfig {
 
-/// Backend-only token for The Movie Database API.
+/// Backend-only TMDB v3 API key. Keep this in Backend/.env, not Flutter assets.
+static String get tmdbApiKey =>
+    Platform.environment['TMDB_API_KEY']?.trim() ?? '';
+
+/// Backend-only TMDB Read Access Token (preferred when configured).
 static String get tmdbApiToken =>
     Platform.environment['TMDB_API_TOKEN']?.trim() ?? '';
 
@@ -20,6 +24,9 @@ static String get omdbApiKey =>
 
 static String get lastFmApiKey => Platform.environment['LASTFM_API_KEY']?.trim() ?? '';
 static String get musicMetadataUserAgent => Platform.environment['MUSIC_METADATA_USER_AGENT']?.trim() ?? 'StreamingService/1.0 (self-hosted)';
+/// Spotify Web API client credentials. These values are backend-only.
+static String get spotifyClientId => Platform.environment['SPOTIFY_CLIENT_ID']?.trim() ?? '';
+static String get spotifyClientSecret => Platform.environment['SPOTIFY_CLIENT_SECRET']?.trim() ?? '';
 static String get paypalClientId => Platform.environment['PAYPAL_CLIENT_ID']?.trim() ?? '';
 static String get paypalClientSecret => Platform.environment['PAYPAL_CLIENT_SECRET']?.trim() ?? '';
 static String get paypalBaseUrl => Platform.environment['PAYPAL_BASE_URL']?.trim() ?? 'https://api-m.sandbox.paypal.com';

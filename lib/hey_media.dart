@@ -877,7 +877,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                     for (final entry in plan)
                       ListTile(
                         leading: CircleAvatar(child: Text('${entry.dayNumber}')),
-                        title: LocalizedMediaText(entry.media.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        title: LocalizedMediaText(entry.media.title, preserveOriginal: true, style: const TextStyle(fontWeight: FontWeight.w700)),
                         subtitle: Text([
                           if (entry.calendarDate != null) _formatDate(entry.calendarDate!),
                           if (entry.media.releaseYear != null) '${entry.media.releaseYear}',
@@ -940,7 +940,7 @@ class _HeyMediaScreenState extends State<HeyMediaScreen> {
                     errorBuilder: (_, __, ___) => const Icon(Icons.play_circle_outline_rounded),
                   ),
                 ),
-          title: LocalizedMediaText(media.title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: LocalizedMediaText(media.title, preserveOriginal: true, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text([
             media.type,
             if (media.releaseYear != null) '${media.releaseYear}',

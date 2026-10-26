@@ -10,6 +10,7 @@ import 'localization.dart';
 import 'media_text_localizer.dart';
 import 'movies.dart';
 import 'series.dart';
+import 'international_catalog_shelf.dart';
 
 /// Unified movie/TV experience. Individual playback and metadata still open
 /// through the existing Details and player systems.
@@ -24,14 +25,20 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
   int tab = 0;
 
   @override
+  void initState() {
+    super.initState();
+    AppController.instance.ensureDemoPreviewMedia(notify: false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final library = AppController.instance.library;
-    final movies = library
+    final library = internationalCatalogFirst(AppController.instance.library);
+    final movies = internationalCatalogFirst(library
         .where((m) => m.type.toLowerCase().contains('movie') || m.type.toLowerCase().contains('film'))
-        .toList();
-    final shows = library
+        .toList());
+    final shows = internationalCatalogFirst(library
         .where((m) => m.type.toLowerCase().contains('show') || m.type.toLowerCase().contains('series'))
-        .toList();
+        .toList());
     final trailers = library.where((m) => m.trailerUrl != null && m.trailerUrl!.isNotEmpty).toList();
 
     return Scaffold(
@@ -42,6 +49,16 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         children: [
           _hero(context, library),
+          if (tab != 2 && movies.any((item) => item.tags.contains('international-catalog')))
+            InternationalCatalogShelf(
+              title: 'International Movies',
+              items: movies.where((item) => item.tags.contains('international-catalog')).toList(growable: false),
+            ),
+          if (tab != 1 && shows.any((item) => item.tags.contains('international-catalog')))
+            InternationalCatalogShelf(
+              title: 'International Shows',
+              items: shows.where((item) => item.tags.contains('international-catalog')).toList(growable: false),
+            ),
           if (library.any((m) => m.imageUrl != null && m.imageUrl!.trim().isNotEmpty)) ...[
             const SizedBox(height: 18),
             _FilmArtworkShowcase(items: library.where((m) => m.imageUrl != null && m.imageUrl!.trim().isNotEmpty).toList()),
@@ -104,15 +121,34 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
           const SizedBox(height: 10),
           const UniversalText('Your Film Universe', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          UniversalText(featured == null ? 'Your screen stays dark until your library has artwork. Movies, shows and trailers live together here.' : '${featured.title}  •  Movies, shows and stories from your library', style: const TextStyle(color: Colors.white70, height: 1.4)),
+          if (featured == null)
+            const UniversalText(
+              'Your screen stays dark until your library has artwork. Movies, shows and trailers live together here.',
+              style: TextStyle(color: Colors.white70, height: 1.4),
+            )
+          else ...[
+            Text(
+              featured.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const UniversalText(
+              'Movies, shows and stories from your library',
+              style: TextStyle(color: Colors.white70, height: 1.4),
+            ),
+          ],
         ])),
       ]),
     );
   }
 
   List<Widget> _sections(BuildContext context, List<MediaItem> items) {
-    final movies = items.where((m) => m.type.toLowerCase().contains('movie') || m.type.toLowerCase().contains('film')).take(12).toList();
-    final shows = items.where((m) => m.type.toLowerCase().contains('show') || m.type.toLowerCase().contains('series')).take(12).toList();
+    // Do not truncate these lists: international examples can live beyond the
+    // first dozen entries, and the Film screen must show every catalog title.
+    final movies = items.where((m) => m.type.toLowerCase().contains('movie') || m.type.toLowerCase().contains('film')).toList();
+    final shows = items.where((m) => m.type.toLowerCase().contains('show') || m.type.toLowerCase().contains('series')).toList();
     final recent = List<MediaItem>.from(items)..sort((a, b) => b.addedAt.compareTo(a.addedAt));
     return [
       if (movies.isNotEmpty) _mediaSection(context, 'Movies', movies, Icons.movie_outlined),
@@ -126,7 +162,7 @@ class _FilmExperienceScreenState extends State<FilmExperienceScreen> {
         const SizedBox(height: 8),
         ...items.map((item) => Card(child: ListTile(
           leading: item.imageUrl == null ? const Icon(Icons.movie_outlined) : Image.network(item.imageUrl!, width: 48, height: 68, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_outlined)),
-          title: LocalizedMediaText(item.title),
+          title: LocalizedMediaText(item.title, preserveOriginal: true),
           subtitle: Text('${item.type}${item.displayYearLabel == null ? '' : ' • ${item.displayYearLabel}'}${item.displayEditionLabel == null ? '' : ' • ${item.displayEditionLabel}'}'),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item))),
@@ -169,7 +205,7 @@ class _FilmItemListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: Text(title)),
-        body: ListView(padding: const EdgeInsets.all(16), children: items.map((item) => Card(child: ListTile(title: LocalizedMediaText(item.title), subtitle: Text(item.type), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)))))).toList()),
+        body: ListView(padding: const EdgeInsets.all(16), children: items.map((item) => Card(child: ListTile(title: LocalizedMediaText(item.title, preserveOriginal: true), subtitle: Text(item.type), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MediaDetailsScreen(media: item)))))).toList()),
       );
 }
 

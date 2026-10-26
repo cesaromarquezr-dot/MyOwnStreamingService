@@ -1,17 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
-import 'core/config/app_env.dart';
+import 'app_core.dart';
 
 import 'cinematic_seed_examples.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 
 /// Live metadata discovery. No per-movie filmography is maintained in code:
 /// upcoming titles are discovered from TMDB production-company metadata.
-/// Configure TMDB_API_KEY in the project-root .env file (or use --dart-define).
+/// TMDB metadata is retrieved through the authenticated backend; credentials are server-only.
 class CinematicFranchiseIntelligenceScreen extends StatefulWidget {
   const CinematicFranchiseIntelligenceScreen({super.key});
 
@@ -22,8 +19,7 @@ class CinematicFranchiseIntelligenceScreen extends StatefulWidget {
 
 class _CinematicFranchiseIntelligenceScreenState
     extends State<CinematicFranchiseIntelligenceScreen> {
-  static String get _apiKey => AppEnv.tmdbApiKey;
-  static const String _base = 'https://api.themoviedb.org/3';
+  static bool get _backendAvailable => AppController.instance.isBackendAuthenticated;
   // Company identifiers are discovery rules, not movie/show title lists.
   static const Map<String, int> _studios = <String, int>{
     'Marvel Studios': 420,
@@ -46,7 +42,7 @@ class _CinematicFranchiseIntelligenceScreenState
   @override
   void initState() {
     super.initState();
-    if (_apiKey.isNotEmpty) {
+    if (_backendAvailable) {
       _refresh();
       // Refresh periodically while this screen is open; reopening also refreshes.
       _autoRefreshTimer = Timer.periodic(const Duration(hours: 12), (_) => _refresh());
@@ -59,19 +55,16 @@ class _CinematicFranchiseIntelligenceScreenState
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> _get(String path, [Map<String, String>? query]) async {
-    final params = <String, String>{'api_key': _apiKey, 'language': 'en-US', ...?query};
-    final response = await http.get(Uri.parse('$_base$path').replace(queryParameters: params))
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200) {
-      throw Exception('TMDB returned HTTP ${response.statusCode}. Check the API key and provider access.');
-    }
-    return jsonDecode(response.body) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> _get(String path, [Map<String, String>? query]) {
+    return AppController.instance.backendApi.getTmdbMetadata(
+      path,
+      <String, String>{'language': 'en-US', ...?query},
+    );
   }
 
   Future<void> _refresh() async {
-    if (_apiKey.isEmpty) {
-      setState(() => _error = 'TMDB_API_KEY is not configured. Add it to the project-root .env file and restart the app.');
+    if (!_backendAvailable) {
+      setState(() => _error = 'Sign in to the MyOwnStreamingService backend to load live TMDB metadata. Configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env.');
       return;
     }
     setState(() { _loading = true; _error = null; });
@@ -148,7 +141,7 @@ class _CinematicFranchiseIntelligenceScreenState
           width: 520,
           child: !CinematicTitleMetadataService.isConfigured
               ? const Text(
-                  'This title is also seeded into the local catalog as a non-playable example with sample cast/crew credits. Configure TMDB_API_KEY to enrich the record with provider-sourced metadata and artwork.',
+                  'This title is also seeded into the local catalog as a non-playable example with sample cast/crew credits. Sign in and configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env to enrich the record with provider-sourced metadata and artwork.',
                 )
               : FutureBuilder<CinematicTitleMetadata?>(
                   future: lookup,
@@ -258,7 +251,7 @@ class _CinematicFranchiseIntelligenceScreenState
           const Text('Find upcoming movies and shows from live provider metadata, group overlapping studio results, and avoid maintaining a hard-coded filmography. It refreshes when opened and every 12 hours while this screen remains open, after the provider publishes release and studio metadata.'),
           const SizedBox(height: 8),
           Text(_lastRefresh == null ? 'Last refresh: not yet refreshed' : 'Last refresh: ${_lastRefresh!.toLocal()}'),
-          if (_apiKey.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Setup required: set TMDB_API_KEY in the local .env file. Use a backend proxy for credentials that must remain secret.', style: TextStyle(color: Colors.orangeAccent))),
+          if (!_backendAvailable) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Sign in to the backend. Configure TMDB_API_KEY or TMDB_API_TOKEN in Backend/.env.', style: TextStyle(color: Colors.orangeAccent))),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
           const SizedBox(height: 8),
           FilledButton.icon(onPressed: _loading ? null : _refresh, icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync), label: Text(_loading ? 'Refreshing provider data…' : 'Refresh now')),
@@ -292,7 +285,7 @@ class _CinematicFranchiseIntelligenceScreenState
           examples: CinematicSeedExamples.additionalShows,
         ),
         if (_loading && _titles.isEmpty) const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())),
-        if (!_loading && _apiKey.isNotEmpty && _titles.isEmpty && _error == null) const Padding(padding: EdgeInsets.all(20), child: Text('No upcoming titles found for the configured studio rules.')),
+        if (!_loading && _backendAvailable && _titles.isEmpty && _error == null) const Padding(padding: EdgeInsets.all(20), child: Text('No upcoming titles found for the configured studio rules.')),
         for (final title in _titles) Card(child: ListTile(
           leading: title.posterPath == null ? const Icon(Icons.movie_outlined, size: 38) : Image.network('https://image.tmdb.org/t/p/w185${title.posterPath}', width: 54, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie_outlined)),
           title: Text(title.title),

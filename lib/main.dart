@@ -31,10 +31,14 @@ import 'music.dart';
 import 'home_server.dart';
 import 'home_widgets.dart';
 import 'home_streaming_discovery.dart';
+import 'home_cinematic_recommendations.dart';
 import 'cinematic_discovery_studio.dart';
 import 'channel_center.dart';
 import 'home_arrow_rail.dart';
 import 'recommendation_ownership.dart';
+import 'catalog_poster_image.dart';
+import 'browse_page_hero_settings.dart';
+import 'music_catalog_screen.dart';
 import 'home_franchise_progress.dart';
 import 'playback_diagnostics_center.dart';
 import 'platform_reliability_center.dart';
@@ -72,7 +76,6 @@ import 'entertainment_extensions.dart';
 import 'innovation_hub.dart';
 
 Future<void> main() async {
-  await dotenv.load(fileName: '.env');
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await dotenv.load(fileName: '.env', isOptional: true);
@@ -84,6 +87,7 @@ Future<void> main() async {
   await SupabaseService.instance.initialize();
   await HomeCustomizationStore.initialize();
   await PageContentCustomizationStore.initialize();
+  await BrowsePageHeroPreferenceStore.initialize();
   await AppSectionCustomizationStore.initialize();
   await DetailsCustomizationStore.initialize();
   await MusicPageCustomizationStore.initialize();
@@ -726,6 +730,7 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
   late _PageAppearance draft;
   late PageContentCustomization contentDraft;
   late AppSectionCustomization sectionDraft;
+  late BrowsePageHeroPreference heroDraft;
 
   static const _colors = <String, int>{
     'Red': 0xFFE53935,
@@ -743,6 +748,10 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
     contentDraft = PageContentCustomizationStore.settingsFor(widget.pageId);
     sectionDraft = AppSectionCustomizationStore.settingsFor(
         AppController.instance.currentProfile);
+    heroDraft = BrowsePageHeroPreferenceStore.settingsFor(
+      pageId: widget.pageId,
+      profileId: AppController.instance.currentProfile?.id,
+    );
     StoryPlacementStore.load(AppController.instance.currentProfile);
   }
 
@@ -1218,6 +1227,57 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             ),
             const SizedBox(height: 12),
           ],
+          if (widget.pageId == 'movies' || widget.pageId == 'series') ...[
+            const SizedBox(height: 20),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const UniversalText(
+                      'Hero banner',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const UniversalText(
+                      'Choose whether this browse page starts with an automatically rotating featured title.',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 8),
+                    RadioGroup<bool>(
+                      groupValue: heroDraft.showHero,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() =>
+                              heroDraft = heroDraft.copyWith(showHero: value));
+                        }
+                      },
+                      child: const Column(
+                        children: [
+                          RadioListTile<bool>(
+                            contentPadding: EdgeInsets.zero,
+                            value: true,
+                            title: UniversalText('Hero banner with auto-slider'),
+                            subtitle: UniversalText('Automatically changes every 5 seconds'),
+                          ),
+                          RadioListTile<bool>(
+                            contentPadding: EdgeInsets.zero,
+                            value: false,
+                            title: UniversalText('No hero banner'),
+                            subtitle: UniversalText('Show the catalog without a featured banner'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           DropdownButtonFormField<int>(
             initialValue: _colors.values.contains(draft.accentColor)
@@ -1338,6 +1398,13 @@ class _PageCustomizationScreenState extends State<_PageCustomizationScreen> {
             onPressed: () async {
               final navigator = Navigator.of(context);
               await _PageAppearanceStore.save(widget.pageId, draft);
+              if (widget.pageId == 'movies' || widget.pageId == 'series') {
+                await BrowsePageHeroPreferenceStore.apply(
+                  pageId: widget.pageId,
+                  preference: heroDraft,
+                  profileId: AppController.instance.currentProfile?.id,
+                );
+              }
               await PageContentCustomizationStore.apply(
                 widget.pageId,
                 contentDraft,
@@ -1940,6 +2007,44 @@ const Map<String, Color> namedColors = {
 
 Color colorFromName(String name) => namedColors[name] ?? Colors.black;
 
+const List<String> _defaultHomeSectionOrder = <String>[
+  'Hero Banner',
+  'International Movies',
+  'International Shows',
+  'New Albums',
+  'Recommendations & Mood',
+  'Franchise Progress',
+  'Channels',
+  'Account Activity',
+  'Friends Stories',
+  'Storage Progress',
+  'Continue Watching',
+  'Themed Episodes',
+  'You Might Also Like',
+  'Collections',
+  'Because You Watched',
+  'People & Cast Recommendations',
+  'Library Recommendations',
+  'Friends & Communities',
+  'Recently Watched',
+  'Movies',
+  'TV Shows',
+  'New Additions',
+  'All Library',
+  'Music & Film',
+  'Seasonal Collections',
+  'Media Intelligence Tools',
+];
+
+const Map<String, String> _legacyHomeSectionAliases = <String, String>{
+  'Recommended': 'Library Recommendations',
+  'Recommendations': 'Library Recommendations',
+  'Recently Added': 'New Additions',
+  'Friends & Community': 'Friends & Communities',
+  'Music': 'Music & Film',
+  'Popular': 'Library Recommendations',
+};
+
 /// Implements the `HomeCustomization` class for this feature or UI component.
 class HomeCustomization {
   bool showHero;
@@ -1969,6 +2074,7 @@ class HomeCustomization {
   double navbarRadius;
   List<String> sectionOrder;
   List<String> navigationOrder;
+  List<String> hiddenSections;
 
   HomeCustomization({
     this.showHero = true,
@@ -1998,19 +2104,9 @@ class HomeCustomization {
     this.navbarRadius = 24,
     List<String>? sectionOrder,
     List<String>? navigationOrder,
-  })  : sectionOrder = sectionOrder ??
-            [
-              'Recommendations',
-              'Continue Watching',
-              'Friends & Communities',
-              'Recently Watched',
-              'Movies',
-              'TV Shows',
-              'New Additions',
-              'All Library',
-              'Music & Film',
-              'Seasonal Collections',
-            ],
+    List<String>? hiddenSections,
+  })  : sectionOrder = sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
+        hiddenSections = hiddenSections ?? <String>[],
         navigationOrder = navigationOrder ??
             [
               'Profile',
@@ -2021,6 +2117,48 @@ class HomeCustomization {
               'Film',
               'Collections',
             ];
+
+  bool isSectionVisible(String section) {
+    if (hiddenSections.contains(section)) return false;
+    return switch (section) {
+      'Hero Banner' => showHero,
+      'Continue Watching' => showContinueWatching,
+      'Recently Watched' => showRecentlyWatched,
+      'Movies' => showMovies,
+      'TV Shows' => showTvShows,
+      'New Additions' => showNewAdditions,
+      'All Library' => showAllLibrary,
+      'Library Recommendations' => showRecommendations,
+      'Storage Progress' => storageBarPosition != 'Hidden',
+      'Friends & Communities' => showFriendsCommunity,
+      'Music & Film' => showMusic,
+      'Seasonal Collections' => showSeasonalCollections,
+      _ => true,
+    };
+  }
+
+  void setSectionVisible(String section, bool visible) {
+    if (visible) {
+      hiddenSections.remove(section);
+    } else if (!hiddenSections.contains(section)) {
+      hiddenSections.add(section);
+    }
+    switch (section) {
+      case 'Hero Banner': showHero = visible;
+      case 'Continue Watching': showContinueWatching = visible;
+      case 'Recently Watched': showRecentlyWatched = visible;
+      case 'Movies': showMovies = visible;
+      case 'TV Shows': showTvShows = visible;
+      case 'New Additions': showNewAdditions = visible;
+      case 'All Library': showAllLibrary = visible;
+      case 'Library Recommendations': showRecommendations = visible;
+      case 'Storage Progress':
+        storageBarPosition = visible ? 'Bottom' : 'Hidden';
+      case 'Friends & Communities': showFriendsCommunity = visible;
+      case 'Music & Film': showMusic = visible;
+      case 'Seasonal Collections': showSeasonalCollections = visible;
+    }
+  }
 
   HomeCustomization copy() => HomeCustomization(
         showHero: showHero,
@@ -2050,6 +2188,7 @@ class HomeCustomization {
         navbarRadius: navbarRadius,
         sectionOrder: List<String>.from(sectionOrder),
         navigationOrder: List<String>.from(navigationOrder),
+        hiddenSections: List<String>.from(hiddenSections),
       );
 }
 
@@ -2060,6 +2199,7 @@ class HomeCustomizationStore {
   static final Map<String, HomeCustomization> _settings =
       <String, HomeCustomization>{};
   static final Set<String> _configuredProfiles = <String>{};
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
   static SharedPreferences? _prefs;
 
   static Future<void> initialize() async {
@@ -2150,6 +2290,7 @@ class HomeCustomizationStore {
     );
     _settings[key] = copy;
     _prefs?.setString('home_customization_$key', jsonEncode(_toJson(copy)));
+    revision.value++;
   }
 
   static Future<void> markSetupCompleted([Profile? profile]) async {
@@ -2180,6 +2321,47 @@ class HomeCustomizationStore {
     }
     _settings.clear();
     _configuredProfiles.clear();
+    revision.value++;
+  }
+
+  static List<String> _normalizeSectionOrder(dynamic raw) {
+    if (raw is! List) return List<String>.from(_defaultHomeSectionOrder);
+    final supported = _defaultHomeSectionOrder.toSet();
+    final result = <String>[];
+    for (final value in raw) {
+      final oldName = value.toString();
+      final name = _legacyHomeSectionAliases[oldName] ?? oldName;
+      if (supported.contains(name) && !result.contains(name)) result.add(name);
+    }
+    // Keep the hero first for older saved profiles that never stored it as a
+    // section. Insert newly introduced sections by their canonical position
+    // relative to existing sections, while preserving the user's saved order
+    // among all sections they had already customized.
+    if (!result.contains('Hero Banner')) result.insert(0, 'Hero Banner');
+    for (final name in _defaultHomeSectionOrder) {
+      if (result.contains(name)) continue;
+      final rank = _defaultHomeSectionOrder.indexOf(name);
+      var insertAt = result.length;
+      for (var index = 0; index < result.length; index++) {
+        final existingRank = _defaultHomeSectionOrder.indexOf(result[index]);
+        if (existingRank > rank) {
+          insertAt = index;
+          break;
+        }
+      }
+      result.insert(insertAt, name);
+    }
+    return result;
+  }
+
+  static List<String> _normalizeHiddenSections(dynamic raw) {
+    if (raw is! List) return <String>[];
+    final supported = _defaultHomeSectionOrder.toSet();
+    return raw
+        .map((value) => value.toString())
+        .where(supported.contains)
+        .toSet()
+        .toList();
   }
 
   static Map<String, dynamic> _toJson(HomeCustomization v) => {
@@ -2210,6 +2392,7 @@ class HomeCustomizationStore {
         'navbarRadius': v.navbarRadius,
         'sectionOrder': v.sectionOrder,
         'navigationOrder': v.navigationOrder,
+        'hiddenSections': v.hiddenSections,
       };
 
   static String _colorNameFromStored(dynamic value, String fallback) {
@@ -2271,26 +2454,8 @@ class HomeCustomizationStore {
         navbarStyle: m['navbarStyle']?.toString() ?? 'Solid',
         navbarOpacity: (m['navbarOpacity'] as num?)?.toDouble() ?? 0.95,
         navbarRadius: (m['navbarRadius'] as num?)?.toDouble() ?? 24,
-        sectionOrder: m['sectionOrder'] is List
-            ? List<String>.from(m['sectionOrder'] as List)
-                .where((item) => <String>{
-                      'Continue Watching',
-                      'Recently Added',
-                      'Recommended',
-                      'Popular',
-                      'Movies',
-                      'TV Shows',
-                      'Music',
-                      'Collections',
-                      'Friends & Community',
-                      'Seasonal Collections',
-                      'Recently Watched',
-                      'New Additions',
-                      'All Library',
-                      'Music & Film',
-                    }.contains(item))
-                .toList()
-            : null,
+        sectionOrder: _normalizeSectionOrder(m['sectionOrder']),
+        hiddenSections: _normalizeHiddenSections(m['hiddenSections']),
         navigationOrder: m['navigationOrder'] is List
             ? List<String>.from(m['navigationOrder'] as List)
                 .where((item) => <String>{
@@ -2946,12 +3111,13 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.collections_bookmark_outlined),
           title: UniversalText('Collections'),
-          subtitle:
-              UniversalText('Collections is available from the Library hub.'),
+          subtitle: UniversalText(
+            'Configure the Collections shelf under Home section visibility.',
+          ),
         ),
         const SizedBox(height: 24),
         const UniversalText(
-          'SECTIONS',
+          'HOME SECTIONS',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -2960,59 +3126,36 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        _toggle(
-          'Hero banner',
-          'Show the featured title at the top.',
-          draft.showHero,
-          (v) => setState(() => draft.showHero = v),
+        const UniversalText(
+          'HOME SECTION VISIBILITY',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+            color: Colors.white54,
+          ),
         ),
-        _toggle(
-          'Continue Watching',
-          'Resume movies and episodes you started.',
-          draft.showContinueWatching,
-          (v) => setState(() => draft.showContinueWatching = v),
-        ),
-        _toggle(
-          'Recently Watched',
-          'Show titles you watched most recently.',
-          draft.showRecentlyWatched,
-          (v) => setState(() => draft.showRecentlyWatched = v),
-        ),
-        _toggle(
-          'Movies',
-          'Show your movie collection.',
-          draft.showMovies,
-          (v) => setState(() => draft.showMovies = v),
-        ),
-        _toggle(
-          'Friends & Communities',
-          'Show your friend feed, suggestions, and communities.',
-          draft.showFriendsCommunity,
-          (v) => setState(() => draft.showFriendsCommunity = v),
-        ),
-        _toggle(
-          'TV Shows',
-          'Show your TV collection.',
-          draft.showTvShows,
-          (v) => setState(() => draft.showTvShows = v),
-        ),
-        _toggle(
-          'New Additions',
-          'Show the newest titles in your library.',
-          draft.showNewAdditions,
-          (v) => setState(() => draft.showNewAdditions = v),
-        ),
-        _toggle(
-          'All Library',
-          'Show everything in one section.',
-          draft.showAllLibrary,
-          (v) => setState(() => draft.showAllLibrary = v),
-        ),
-        _toggle(
-            'Seasonal Collections',
-            'Show the calendar-based collection for the current month.',
-            draft.showSeasonalCollections,
-            (v) => setState(() => draft.showSeasonalCollections = v)),
+        const SizedBox(height: 10),
+        for (final section in draft.sectionOrder)
+          _toggle(
+            section,
+            _homeSectionDescription(section),
+            section == 'Friends Stories'
+                ? (storyPlacement == 'home' || storyPlacement == 'both')
+                : draft.isSectionVisible(section),
+            (visible) => setState(() {
+              draft.setSectionVisible(section, visible);
+              if (section == 'Friends Stories') {
+                if (visible) {
+                  if (storyPlacement == 'none') storyPlacement = 'home';
+                  if (storyPlacement == 'friends') storyPlacement = 'both';
+                } else {
+                  if (storyPlacement == 'both') storyPlacement = 'friends';
+                  if (storyPlacement == 'home') storyPlacement = 'none';
+                }
+              }
+            }),
+          ),
         const SizedBox(height: 24),
         const UniversalText(
           'FRIENDS STORIES',
@@ -3034,7 +3177,11 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             'Friends only',
             'Home + Friends'
           ],
-          onChanged: (value) => setState(() => storyPlacement = value),
+          onChanged: (value) => setState(() {
+            storyPlacement = value;
+            final showOnHome = value == 'home' || value == 'both';
+            draft.setSectionVisible('Friends Stories', showOnHome);
+          }),
         ),
         const SizedBox(height: 24),
         _sectionOrder(
@@ -3661,26 +3808,20 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     final background = colorFromName(draft.homeBackgroundColor);
     final sections = <Widget>[];
 
-    if (draft.showHero) {
-      sections.add(_homePreviewHero());
-    }
+    // Browse shortcuts stay pinned as navigation; content sections below use
+    // the exact visibility and ordering that will be applied to the Home page.
     sections.add(_homePreviewMediaEntryButtons());
 
     for (final section in draft.sectionOrder) {
-      final enabled = switch (section) {
-        'Continue Watching' => draft.showContinueWatching,
-        'Recently Watched' => draft.showRecentlyWatched,
-        'Movies' => draft.showMovies,
-        'TV Shows' => draft.showTvShows,
-        'New Additions' => draft.showNewAdditions,
-        'All Library' => draft.showAllLibrary,
-        'Recommendations' => draft.showRecommendations,
-        'Music & Film' => draft.showMusic || draft.showFilm,
-        _ => false,
-      };
-      if (!enabled) continue;
+      if (!draft.isSectionVisible(section)) continue;
+      if (section == 'Friends Stories' &&
+          storyPlacement != 'home' && storyPlacement != 'both') {
+        continue;
+      }
 
       switch (section) {
+        case 'Hero Banner':
+          sections.add(_homePreviewHero());
         case 'Movies':
           sections.add(_homePreviewMediaSection(
             'MOVIES',
@@ -3724,18 +3865,53 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             Icons.video_library_outlined,
             isTvShow: true,
           ));
-        case 'Recommendations':
+        case 'Library Recommendations':
           sections.add(_homePreviewMediaSection(
-            'RECOMMENDATIONS',
+            'LIBRARY RECOMMENDATIONS',
             'Recommended for this profile',
             Icons.auto_awesome_outlined,
             isTvShow: false,
           ));
+        case 'International Movies':
+          sections.add(_homePreviewMediaSection(
+            'INTERNATIONAL MOVIES', 'Original titles from around the world',
+            Icons.public_rounded, isTvShow: false));
+        case 'International Shows':
+          sections.add(_homePreviewMediaSection(
+            'INTERNATIONAL SHOWS', 'Original titles from around the world',
+            Icons.public_rounded, isTvShow: true));
+        case 'New Albums':
+          sections.add(_homePreviewBar('NEW ALBUMS', Icons.album_rounded));
+        case 'Recommendations & Mood':
+          sections.add(_homePreviewBar('RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
+        case 'Franchise Progress':
+          sections.add(_homePreviewBar('FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
+        case 'Channels':
+          sections.add(_homePreviewBar('CHANNELS', Icons.live_tv_rounded));
+        case 'Account Activity':
+          sections.add(_homePreviewBar('ACCOUNT ACTIVITY', Icons.people_alt_rounded));
+        case 'Friends Stories':
+          sections.add(_homePreviewBar('FRIENDS STORIES', Icons.auto_stories_rounded));
+        case 'Storage Progress':
+          sections.add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
+        case 'Themed Episodes':
+          sections.add(_homePreviewBar('THEMED EPISODES', Icons.theater_comedy_rounded));
+        case 'You Might Also Like':
+          sections.add(_homePreviewBar('YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
+        case 'Collections':
+          sections.add(_homePreviewBar('COLLECTIONS', Icons.collections_bookmark_outlined));
+        case 'Because You Watched':
+          sections.add(_homePreviewBar('BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
+        case 'People & Cast Recommendations':
+          sections.add(_homePreviewBar('PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
+        case 'Friends & Communities':
+          sections.add(_homePreviewBar('FRIENDS & COMMUNITIES', Icons.groups_rounded));
+        case 'Media Intelligence Tools':
+          sections.add(_homePreviewBar('MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
         case 'Music & Film':
-          break;
+          sections.add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
         case 'Seasonal Collections':
-          sections.add(_homePreviewBar(
-              'SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
+          sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
     }
 
@@ -5679,6 +5855,7 @@ class _HomeScreenState extends State<HomeScreen>
       unawaited(_syncHomeServerMedia());
     }
     StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
+    HomeCustomizationStore.revision.addListener(_onHomeCustomizationChanged);
     unawaited(_loadStoryPlacement());
     _heroController = AnimationController(
       vsync: this,
@@ -5704,11 +5881,16 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) setState(() {});
   }
 
+  void _onHomeCustomizationChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
 
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
+    HomeCustomizationStore.revision.removeListener(_onHomeCustomizationChanged);
     _heroController.dispose();
     super.dispose();
   }
@@ -5803,12 +5985,19 @@ class _HomeScreenState extends State<HomeScreen>
     final watched = controller.watched
         .where((media) => media.isAccessibleTo(profile))
         .toList(growable: false);
-    final movies =
-        library.where((media) => media.type.toLowerCase() == 'movie').toList();
-    final tvShows = library.where((media) {
+    final movies = internationalCatalogFirst(
+      library.where((media) => media.type.toLowerCase() == 'movie'),
+    );
+    final tvShows = internationalCatalogFirst(library.where((media) {
       final type = media.type.toLowerCase();
       return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
-    }).toList();
+    }));
+    final internationalMovies = movies
+        .where((media) => media.tags.contains('international-catalog'))
+        .toList(growable: false);
+    final internationalShows = tvShows
+        .where((media) => media.tags.contains('international-catalog'))
+        .toList(growable: false);
     // Compute personalized ranking once per Home build rather than once per
     // section, keeping search/discovery overhead bounded on larger libraries.
     final homeRecommendations = SmartSearch.recommendations(library);
@@ -5908,51 +6097,6 @@ class _HomeScreenState extends State<HomeScreen>
                     )),
               ),
             ),
-            if (settings.showHero && homeHeroItems.isNotEmpty)
-              SliverToBoxAdapter(
-                child: FadeTransition(
-                  opacity: CurvedAnimation(
-                      parent: _heroController, curve: Curves.easeOut),
-                  child: HomeHeroCarousel(
-                    items: homeHeroItems,
-                    onOpen: (media) => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        settings: RouteSettings(
-                          name: media.playbackUrl?.trim().isNotEmpty == true
-                              ? '/app/player'
-                              : '/app/details',
-                        ),
-                        builder: (_) =>
-                            media.playbackUrl?.trim().isNotEmpty == true
-                                ? PlayerScreen(media: media)
-                                : MediaDetailsScreen(media: media),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            // Franchise/saga and cinematic-universe progress live near the
-            // top of Home so completion status is visible without opening Explore.
-            const SliverToBoxAdapter(child: HomeFranchiseSagaHub()),
-            const SliverToBoxAdapter(child: HomeChannelsSection()),
-            const SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf()),
-            SliverToBoxAdapter(
-              child: AccountProfileActivityStrip(
-                onMessageProfile: widget.onMessageProfile,
-              ),
-            ),
-            if (StoryPlacementStore.showsOnHome(profile))
-              SliverToBoxAdapter(
-                child: FriendsStoriesStrip(profileId: profile.id),
-              ),
-            if (settings.storageBarPosition != 'Hidden')
-              SliverToBoxAdapter(
-                child: HomeStorageProgressBar(
-                  thickness: settings.storageBarThickness,
-                  axis: Axis.horizontal,
-                ),
-              ),
             if (library.isEmpty && homeRecommendations.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -5977,50 +6121,23 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
-            for (final section in settings.sectionOrder) ...[
-              ..._buildHomeSectionSlivers(section, settings, watched, movies,
-                  tvShows, library, homeRecommendations),
-              if (section == 'Continue Watching') ...[
-                const SliverToBoxAdapter(child: HomeThemedEpisodesSection()),
-                SliverToBoxAdapter(
-                  child: HomeYouMayAlsoLikeSection(
-                      library: library, watched: watched),
-                ),
-                const SliverToBoxAdapter(child: HomeCollectionShelves()),
-                SliverToBoxAdapter(
-                  child: HomeReasonedRecommendationShelves(
-                    library: library,
-                    watched: watched,
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: HomeBecauseYouWatchedPeopleShelves(
-                    library: library,
-                    watched: watched,
-                  ),
-                ),
-              ],
-            ],
-            if (!settings.sectionOrder.contains('Continue Watching')) ...[
-              const SliverToBoxAdapter(child: HomeThemedEpisodesSection()),
-              SliverToBoxAdapter(
-                child: HomeYouMayAlsoLikeSection(
-                    library: library, watched: watched),
+            for (final section in settings.sectionOrder)
+              ..._buildHomeSectionSlivers(
+                context,
+                section,
+                settings,
+                watched,
+                movies,
+                tvShows,
+                library,
+                homeRecommendations,
+                homeHeroItems: homeHeroItems,
+                heroController: _heroController,
+                internationalMovies: internationalMovies,
+                internationalShows: internationalShows,
+                profile: profile,
+                onMessageProfile: widget.onMessageProfile,
               ),
-              const SliverToBoxAdapter(child: HomeCollectionShelves()),
-              SliverToBoxAdapter(
-                child: HomeReasonedRecommendationShelves(
-                  library: library,
-                  watched: watched,
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: HomeBecauseYouWatchedPeopleShelves(
-                  library: library,
-                  watched: watched,
-                ),
-              ),
-            ],
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
@@ -6030,90 +6147,224 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 List<Widget> _buildHomeSectionSlivers(
+  BuildContext context,
   String section,
   HomeCustomization settings,
   List<MediaItem> watched,
   List<MediaItem> movies,
   List<MediaItem> tvShows,
   List<MediaItem> library,
-  List<MediaItem> recommendations,
-) {
-  List<MediaItem> items;
-  String subtitle;
-  bool enabled;
+  List<MediaItem> recommendations, {
+  required List<MediaItem> homeHeroItems,
+  required AnimationController heroController,
+  required List<MediaItem> internationalMovies,
+  required List<MediaItem> internationalShows,
+  required Profile? profile,
+  required ValueChanged<String>? onMessageProfile,
+}) {
+  if (!settings.isSectionVisible(section)) return const <Widget>[];
+
   switch (section) {
-    case 'Friends & Communities':
-      return settings.showFriendsCommunity
-          ? [
+    case 'Hero Banner':
+      if (homeHeroItems.isEmpty) return const <Widget>[];
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: FadeTransition(
+            opacity: CurvedAnimation(
+              parent: heroController,
+              curve: Curves.easeOut,
+            ),
+            child: HomeHeroCarousel(
+              items: homeHeroItems,
+              onOpen: (media) => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: RouteSettings(
+                    name: media.playbackUrl?.trim().isNotEmpty == true
+                        ? '/app/player'
+                        : '/app/details',
+                  ),
+                  builder: (_) => media.playbackUrl?.trim().isNotEmpty == true
+                      ? PlayerScreen(media: media)
+                      : MediaDetailsScreen(media: media),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ];
+    case 'Recommendations & Mood':
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: HomeCinematicRecommendationsSection(
+            watched: watched,
+            library: library,
+          ),
+        ),
+      ];
+    case 'Franchise Progress':
+      return const <Widget>[SliverToBoxAdapter(child: HomeFranchiseSagaHub())];
+    case 'Channels':
+      return const <Widget>[SliverToBoxAdapter(child: HomeChannelsSection())];
+    case 'Media Intelligence Tools':
+      return const <Widget>[SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())];
+    case 'Account Activity':
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: AccountProfileActivityStrip(onMessageProfile: onMessageProfile),
+        ),
+      ];
+    case 'Friends Stories':
+      return profile != null && StoryPlacementStore.showsOnHome(profile)
+          ? <Widget>[
               SliverToBoxAdapter(
-                child: SocialHomeSection(
-                  key: ValueKey(AppController.instance.currentProfile?.id),
+                child: FriendsStoriesStrip(profileId: profile.id),
+              ),
+            ]
+          : const <Widget>[];
+    case 'Storage Progress':
+      return settings.storageBarPosition != 'Hidden'
+          ? <Widget>[
+              SliverToBoxAdapter(
+                child: HomeStorageProgressBar(
+                  thickness: settings.storageBarThickness,
+                  axis: Axis.horizontal,
                 ),
               ),
             ]
-          : const [];
+          : const <Widget>[];
+    case 'International Movies':
+      if (internationalMovies.isEmpty) return const <Widget>[];
+      return <Widget>[
+        const SliverToBoxAdapter(
+          child: _PremiumSectionHeader(
+            title: 'International Movies',
+            subtitle: 'Original display titles from around the world',
+          ),
+        ),
+        SliverToBoxAdapter(child: MediaHorizontalList(media: internationalMovies)),
+      ];
+    case 'International Shows':
+      if (internationalShows.isEmpty) return const <Widget>[];
+      return <Widget>[
+        const SliverToBoxAdapter(
+          child: _PremiumSectionHeader(
+            title: 'International Shows',
+            subtitle: 'Original display titles from around the world',
+          ),
+        ),
+        SliverToBoxAdapter(child: MediaHorizontalList(media: internationalShows)),
+      ];
+    case 'New Albums':
+      return const <Widget>[SliverToBoxAdapter(child: SpotifyHomeAlbumsShelf())];
     case 'Continue Watching':
-      items = watched;
-      subtitle = 'Pick up where you left off';
-      enabled = settings.showContinueWatching;
-      break;
+      return _homeMediaRail(section, watched, 'Pick up where you left off');
     case 'Recently Watched':
-      items = watched;
-      subtitle = 'What you watched recently';
-      enabled = settings.showRecentlyWatched;
-      break;
+      return _homeMediaRail(section, watched, 'What you watched recently');
     case 'Movies':
-      items = movies;
-      subtitle = 'From your collection';
-      enabled = settings.showMovies;
-      break;
+      return _homeMediaRail(section, movies, 'From your collection');
     case 'TV Shows':
-      items = tvShows;
-      subtitle = 'Your series collection';
-      enabled = settings.showTvShows;
-      break;
+      return _homeMediaRail(section, tvShows, 'Your series collection');
     case 'New Additions':
-      items = List<MediaItem>.from(library)
+      final items = List<MediaItem>.from(library)
         ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-      subtitle = 'Recently added to your library';
-      enabled = settings.showNewAdditions;
-      break;
+      return _homeMediaRail(section, items, 'Recently added to your library');
     case 'All Library':
-      items = library;
-      subtitle = 'Everything in your library';
-      enabled = settings.showAllLibrary;
-      break;
-    case 'Recommendations':
-      items = recommendations;
-      subtitle = 'Picked for your profile';
-      enabled = settings.showRecommendations;
-      break;
+      return _homeMediaRail(section, library, 'Everything in your library');
+    case 'Library Recommendations':
+      return _homeMediaRail(section, recommendations, 'Picked for your profile');
+    case 'Themed Episodes':
+      return const <Widget>[SliverToBoxAdapter(child: HomeThemedEpisodesSection())];
+    case 'You Might Also Like':
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: HomeYouMayAlsoLikeSection(library: library, watched: watched),
+        ),
+      ];
+    case 'Collections':
+      return const <Widget>[SliverToBoxAdapter(child: HomeCollectionShelves())];
+    case 'Because You Watched':
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: HomeReasonedRecommendationShelves(library: library, watched: watched),
+        ),
+      ];
+    case 'People & Cast Recommendations':
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: HomeBecauseYouWatchedPeopleShelves(library: library, watched: watched),
+        ),
+      ];
+    case 'Friends & Communities':
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: SocialHomeSection(
+            key: ValueKey(AppController.instance.currentProfile?.id),
+          ),
+        ),
+      ];
     case 'Music & Film':
       return settings.showMusic
-          ? [SliverToBoxAdapter(child: _HomeContinueListeningSection())]
-          : const [];
+          ? <Widget>[SliverToBoxAdapter(child: _HomeContinueListeningSection())]
+          : const <Widget>[];
     case 'Seasonal Collections':
-      return settings.showSeasonalCollections
-          ? [SliverToBoxAdapter(child: _HomeSeasonalCollections())]
-          : const [];
+      return <Widget>[SliverToBoxAdapter(child: _HomeSeasonalCollections())];
     default:
-      return const [];
+      return const <Widget>[];
   }
-  if (!enabled || items.isEmpty) return const [];
-  return [
+}
+
+List<Widget> _homeMediaRail(
+  String title,
+  List<MediaItem> items,
+  String subtitle,
+) {
+  if (items.isEmpty) return const <Widget>[];
+  return <Widget>[
     SliverToBoxAdapter(
-        child: _PremiumSectionHeader(
-      title: section == 'Recommendations' ? 'Recommended for You' : section,
-      subtitle: subtitle,
-    )),
+      child: _PremiumSectionHeader(
+        title: title == 'Library Recommendations' ? 'Recommended for You' : title,
+        subtitle: subtitle,
+      ),
+    ),
     SliverToBoxAdapter(
       child: MediaHorizontalList(
         media: items,
-        showOwnership: section == 'Recommendations',
+        showOwnership: title == 'Library Recommendations',
       ),
     ),
   ];
 }
+
+String _homeSectionDescription(String section) => switch (section) {
+      'Hero Banner' => 'Featured movie/show artwork near the top of Home.',
+      'Recommendations & Mood' => 'TMDB recommendations and mood-based discovery.',
+      'Franchise Progress' => 'Saga timelines and franchise completion progress.',
+      'Channels' => 'Channel shortcuts, including live TV and curated channels.',
+      'Account Activity' => 'Activity and presence from other account profiles.',
+      'Friends Stories' => 'Stories shared by friends on the Home page.',
+      'Storage Progress' => 'Local/server storage progress bar.',
+      'Continue Watching' => 'Resume movies and episodes you started.',
+      'Themed Episodes' => 'Seasonal and themed episode recommendations.',
+      'You Might Also Like' => 'Suggestions based on your viewing history.',
+      'Collections' => 'Curated, automatic, and personal collection shelves.',
+      'Because You Watched' => 'Explainable recommendations related to recent viewing.',
+      'People & Cast Recommendations' => 'More titles connected by known cast and creators.',
+      'Library Recommendations' => 'Recommendations already available in your catalog.',
+      'Friends & Communities' => 'Friend feed, suggestions, and communities.',
+      'Recently Watched' => 'Titles you watched most recently.',
+      'Movies' => 'Your movie collection.',
+      'TV Shows' => 'Your TV collection.',
+      'New Additions' => 'Recently imported movies and shows.',
+      'All Library' => 'Every title in your library in one shelf.',
+      'International Movies' => 'International titles using their original display names.',
+      'International Shows' => 'International series using their original display names.',
+      'New Albums' => 'New album covers from Spotify.',
+      'Music & Film' => 'Resume locally playable music.',
+      'Seasonal Collections' => 'Calendar-based collections for the current season.',
+      'Media Intelligence Tools' => 'Discovery, insight, and media tools.',
+      _ => 'Show or hide this section on Home.',
+    };
 
 /// Personalized Home rail for tracks the active profile can resume or replay.
 /// Only tracks with a server-provided audio URL are offered for direct playback.
@@ -6751,12 +7002,14 @@ class MediaCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () {
+          final normalizedType = media.type.trim().toLowerCase();
+          final isAlbum = normalizedType.contains('album') || normalizedType == 'soundtrack';
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => MediaDetailsScreen(
-                media: media,
-              ),
+            MaterialPageRoute<void>(
+              builder: (_) => isAlbum
+                  ? CatalogAlbumDetailsEntryScreen(media: media)
+                  : MediaDetailsScreen(media: media),
             ),
           );
         },
@@ -6769,22 +7022,22 @@ class MediaCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    media.imageUrl == null
-                        ? Container(
-                            width: double.infinity,
-                            color: Colors.grey.shade900,
-                            child: const Icon(Icons.movie, size: 45),
-                          )
-                        : Image.network(
-                            media.imageUrl!,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey.shade900,
-                              alignment: Alignment.center,
-                              child: const Icon(Icons.broken_image),
-                            ),
-                          ),
+                    CatalogPosterImage(
+                      media: media,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: Container(
+                        color: Colors.grey.shade900,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.movie, size: 45),
+                      ),
+                      errorPlaceholder: Container(
+                        color: Colors.grey.shade900,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    ),
                     if (showOwnership)
                       Positioned(
                         top: 6,
@@ -6827,6 +7080,106 @@ class MediaCard extends StatelessWidget {
     );
   }
 }
+
+/// Resolves a local album catalogue card to provider album metadata when
+/// an exact title/artist match exists. The original local title is never
+/// rewritten. On a miss, keep the app's normal details screen available.
+class CatalogAlbumDetailsEntryScreen extends StatefulWidget {
+  const CatalogAlbumDetailsEntryScreen({super.key, required this.media});
+
+  final MediaItem media;
+
+  @override
+  State<CatalogAlbumDetailsEntryScreen> createState() =>
+      _CatalogAlbumDetailsEntryScreenState();
+}
+
+class _CatalogAlbumDetailsEntryScreenState
+    extends State<CatalogAlbumDetailsEntryScreen> {
+  late final Future<String?> _spotifyAlbumId = _resolveAlbumId();
+
+  static String _normalize(String value) => value.toLowerCase().trim().replaceAll(
+        RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+        '',
+      );
+
+  Future<String?> _resolveAlbumId() async {
+    if (!AppController.instance.isBackendAuthenticated) return null;
+    final title = widget.media.title.trim();
+    if (title.isEmpty) return null;
+    try {
+      final payload = await AppController.instance.backendApi.searchMusicCatalog(
+        title,
+        type: 'album',
+        limit: 10,
+      );
+      final spotify = payload['spotify'] is Map
+          ? Map<String, dynamic>.from(payload['spotify'] as Map)
+          : <String, dynamic>{};
+      final raw = spotify['albums'];
+      if (raw is! List) return null;
+      final wantedTitle = _normalize(title);
+      final wantedArtists = widget.media.music
+          .map(_normalize)
+          .where((value) => value.isNotEmpty)
+          .toSet();
+      final matches = raw
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .where((value) => _normalize(value['title']?.toString() ?? '') == wantedTitle)
+          .toList();
+      if (matches.isEmpty) return null;
+      matches.sort((a, b) {
+        int score(Map<String, dynamic> row) {
+          final artist = _normalize(row['artist']?.toString() ?? '');
+          final hasArtist = wantedArtists.isEmpty ||
+              wantedArtists.any((value) => artist.contains(value));
+          final release = row['releaseDate']?.toString() ?? '';
+          final yearMatch = widget.media.releaseYear == null ||
+              (release.length >= 4 &&
+                  release.startsWith(widget.media.releaseYear.toString()));
+          return (hasArtist ? 0 : 2) + (yearMatch ? 0 : 1);
+        }
+        return score(a).compareTo(score(b));
+      });
+      final selected = matches.first;
+      // When the local record names artists, don't route to a different
+      // same-title album if none of the provider results match those artists.
+      final selectedArtist = _normalize(selected['artist']?.toString() ?? '');
+      if (wantedArtists.isNotEmpty &&
+          !wantedArtists.any((value) => selectedArtist.contains(value))) {
+        return null;
+      }
+      final id = selected['id']?.toString() ?? '';
+      return RegExp(r'^[A-Za-z0-9]{22}$').hasMatch(id) ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+        future: _spotifyAlbumId,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Scaffold(
+              backgroundColor: const Color(0xFF101010),
+              appBar: AppBar(title: Text(widget.media.title)),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
+          final id = snapshot.data;
+          if (id != null && id.isNotEmpty) {
+            return SpotifyAlbumDetailsScreen(
+              albumTitle: widget.media.title,
+              spotifyId: id,
+            );
+          }
+          return MediaDetailsScreen(media: widget.media);
+        },
+      );
+}
+
 
 // ============================================================
 // ACTORS
@@ -8115,7 +8468,7 @@ class TrailersScreen extends StatelessWidget {
                 return Card(
                     child: ListTile(
                         leading: const Icon(Icons.play_circle_fill_rounded),
-                        title: LocalizedMediaText(media.title,
+                        title: LocalizedMediaText(media.title, preserveOriginal: true,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w800)),
                         subtitle: Text(media.type),
@@ -8983,7 +9336,7 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
                   left: 18,
                   right: 18,
                   bottom: 18,
-                  child: LocalizedMediaText(widget.media.title,
+                  child: LocalizedMediaText(widget.media.title, preserveOriginal: true,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -9110,7 +9463,7 @@ class _GroupWatchPreferencesScreenState
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    LocalizedMediaText(widget.media.title,
+                    LocalizedMediaText(widget.media.title, preserveOriginal: true,
                         style: const TextStyle(
                             fontSize: 19, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),

@@ -1148,7 +1148,8 @@ class _GroupWatchScreenState extends State<GroupWatchScreen>
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 10),
-                        UniversalText('${host?.profileName ?? 'Someone'} invited you to watch ${widget.media.title}.',
+                        Text(
+                          '${host?.profileName ?? 'Someone'} invited you to watch ${widget.media.title}.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.grey.shade400,

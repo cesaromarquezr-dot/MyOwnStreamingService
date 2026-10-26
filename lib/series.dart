@@ -2,6 +2,8 @@
 // Purpose: Implements the series portion of the streaming service.
 // This file is part of the documented Flutter/home-server architecture.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
@@ -9,6 +11,10 @@ import 'details.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
 import 'page_customization_button.dart';
+import 'international_catalog_shelf.dart';
+import 'media_metadata_catalog_screen.dart';
+import 'catalog_poster_image.dart';
+import 'browse_page_hero_settings.dart';
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -23,6 +29,8 @@ class _SeriesScreenState extends State<SeriesScreen>
 
   String _searchQuery = '';
   String _sortMode = 'Default';
+  int _heroIndex = 0;
+  Timer? _heroTimer;
 
   @override
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
@@ -31,6 +39,9 @@ class _SeriesScreenState extends State<SeriesScreen>
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
+    BrowsePageHeroPreferenceStore.revision
+        .addListener(_onHeroPreferenceChanged);
+    _syncHeroTimer();
 
     _animationController = AnimationController(
       vsync: this,
@@ -40,9 +51,37 @@ class _SeriesScreenState extends State<SeriesScreen>
     _animationController.forward();
   }
 
+  void _onHeroPreferenceChanged() {
+    if (!mounted) return;
+    _syncHeroTimer();
+    setState(() {});
+  }
+
+  void _syncHeroTimer() {
+    _heroTimer?.cancel();
+    final preference = BrowsePageHeroPreferenceStore.settingsFor(
+      pageId: 'series',
+      profileId: AppController.instance.currentProfile?.id,
+    );
+    _heroIndex = 0;
+    if (!preference.showHero) return;
+    _heroTimer = Timer.periodic(
+      const Duration(
+        seconds: BrowsePageHeroPreference.autoSlideIntervalSeconds,
+      ),
+      (_) {
+        if (!mounted) return;
+        setState(() => _heroIndex++);
+      },
+    );
+  }
+
   @override
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
+    BrowsePageHeroPreferenceStore.revision
+        .removeListener(_onHeroPreferenceChanged);
+    _heroTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -86,6 +125,10 @@ class _SeriesScreenState extends State<SeriesScreen>
         items.sort((a, b) => (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0));
         break;
       default:
+        final prioritized = internationalCatalogFirst(items);
+        items
+          ..clear()
+          ..addAll(prioritized);
         break;
     }
   }
@@ -277,12 +320,23 @@ class _SeriesScreenState extends State<SeriesScreen>
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
     final shows = _getShows();
+    final internationalShows = shows
+        .where((show) => show.tags.contains('international-catalog'))
+        .toList(growable: false);
 
-    final featuredShow = shows.isNotEmpty ? shows.first : null;
-
-    final remainingShows = shows.length > 1
-        ? shows.sublist(1)
-        : <MediaItem>[];
+    final heroPreference = BrowsePageHeroPreferenceStore.settingsFor(
+      pageId: 'series',
+      profileId: AppController.instance.currentProfile?.id,
+    );
+    final featuredShow = shows.isNotEmpty
+        ? shows[_heroIndex % shows.length]
+        : null;
+    final heroVisible = heroPreference.showHero &&
+        _searchQuery.trim().isEmpty &&
+        featuredShow != null;
+    final remainingShows = heroVisible
+        ? shows.where((show) => show.id != featuredShow.id).toList()
+        : List<MediaItem>.from(shows);
 
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
@@ -308,6 +362,15 @@ class _SeriesScreenState extends State<SeriesScreen>
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Search TMDB movies, shows, and people',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MediaMetadataCatalogScreen(initialType: 'tv'),
+              ),
+            ),
+            icon: const Icon(Icons.cloud_sync_rounded),
+          ),
           const PageCustomizeButton(pageId: 'series'),
           Padding(
             padding: const EdgeInsets.only(right: 14),
@@ -327,18 +390,28 @@ class _SeriesScreenState extends State<SeriesScreen>
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(),
                     slivers: [
-                      if (featuredShow != null)
+                      if (_searchQuery.trim().isEmpty && internationalShows.isNotEmpty)
                         SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              18,
-                              18,
-                              18,
-                              28,
-                            ),
-                            child: _FeaturedShow(
-                              show: featuredShow,
-                              onTap: () => _openShow(featuredShow),
+                          child: InternationalCatalogShelf(
+                            title: 'International Shows',
+                            items: internationalShows,
+                          ),
+                        ),
+                      if (heroVisible)
+                        SliverToBoxAdapter(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 450),
+                            child: KeyedSubtree(
+                              key: ValueKey<String>(
+                                'show-hero-${featuredShow.id}',
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+                                child: _FeaturedShow(
+                                  show: featuredShow,
+                                  onTap: () => _openShow(featuredShow),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -577,7 +650,7 @@ class _TvIntrosSection extends StatelessWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      UniversalText(
+                                      Text(
                                         show.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -694,9 +767,7 @@ class _FeaturedShowState extends State<_FeaturedShow> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _ShowImage(
-                    imageUrl: show.imageUrl ?? '',
-                  ),
+                  _ShowImage(media: show),
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -927,9 +998,7 @@ class _ShowCardState extends State<_ShowCard> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: _ShowImage(
-                      imageUrl: show.imageUrl ?? '',
-                    ),
+                    child: _ShowImage(media: show),
                   ),
                   Positioned.fill(
                     child: AnimatedContainer(
@@ -1098,56 +1167,19 @@ class _ShowCardState extends State<_ShowCard> {
 }
 
 class _ShowImage extends StatelessWidget {
-  final String imageUrl;
+  final MediaItem media;
 
-  const _ShowImage({
-    required this.imageUrl,
-  });
+  const _ShowImage({required this.media});
 
   @override
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    if (imageUrl.trim().isEmpty) {
-      return const _PosterPlaceholder();
-    }
-
-    return Image.network(
-      imageUrl,
-      width: double.infinity,
-      height: double.infinity,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, __, ___) {
-        return const _PosterPlaceholder();
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            const _PosterPlaceholder(),
-            Center(
-              child: SizedBox(
-                width: 25,
-                height: 25,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                  color: Colors.white70,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context) => CatalogPosterImage(
+        media: media,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        placeholder: const _PosterPlaceholder(),
+        errorPlaceholder: const _PosterPlaceholder(),
+      );
 }
 
 class _PosterPlaceholder extends StatelessWidget {

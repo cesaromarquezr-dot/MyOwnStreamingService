@@ -1,14 +1,8 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Central access to Flutter-side configuration.
-///
-/// Priority:
-/// 1. Values from the local .env file.
-/// 2. Values passed using --dart-define.
-/// 3. Safe defaults, where available.
-///
-/// IMPORTANT: Flutter client configuration is extractable from a compiled app.
-/// Never put server-only credentials in this file or the client .env file.
+/// Values in the local .env file override --dart-define values.
+/// Never put server-only credentials in this client config: Flutter assets are extractable.
 class AppEnv {
   AppEnv._();
 
@@ -25,28 +19,19 @@ class AppEnv {
     return '';
   }
 
-  /// TMDB API key.
-  static String get tmdbApiKey => _firstNonEmpty([
-        _fileValue('TMDB_API_KEY'),
-        const String.fromEnvironment('TMDB_API_KEY'),
-      ]);
-
-  /// Supabase project API URL.
-  static String get supabaseUrl => _firstNonEmpty([
+  static String get supabaseUrl => _firstNonEmpty(<String>[
         _fileValue('SUPABASE_URL'),
         const String.fromEnvironment('SUPABASE_URL'),
       ]);
 
-  /// Supabase publishable key or legacy anon key.
-  static String get supabasePublishableKey => _firstNonEmpty([
+  static String get supabasePublishableKey => _firstNonEmpty(<String>[
         _fileValue('SUPABASE_PUBLISHABLE_KEY'),
         _fileValue('SUPABASE_ANON_KEY'),
         const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
         const String.fromEnvironment('SUPABASE_ANON_KEY'),
       ]);
 
-  /// MyOwnStreamingService backend base URL.
-  static String get backendApiUrl => _firstNonEmpty([
+  static String get backendApiUrl => _firstNonEmpty(<String>[
         _fileValue('BACKEND_API_URL'),
         const String.fromEnvironment('BACKEND_API_URL'),
         'https://127.0.0.1:8080/api/v1',

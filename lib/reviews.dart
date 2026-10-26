@@ -1,8 +1,12 @@
-// Media review UI: private profile reviews plus privacy-safe global reviews.
+// Media review UI: provider reviews, external rating scores, profile reviews and community reviews.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'app_core.dart';
 import 'localization.dart';
 import 'backend_api.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
 
 class MediaReviewEntry {
   final String username;
@@ -25,8 +29,9 @@ class MediaReviewEntry {
 /// Review hub used from a media details page or the More menu.
 class ReviewsHubScreen extends StatefulWidget {
   final MediaItem? media;
+  final CinematicTitleMetadata? initialMetadata;
 
-  const ReviewsHubScreen({super.key, this.media});
+  const ReviewsHubScreen({super.key, this.media, this.initialMetadata});
 
   @override
   State<ReviewsHubScreen> createState() => _ReviewsHubScreenState();
@@ -44,6 +49,17 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
   final TextEditingController videoUrl = TextEditingController();
 
   final List<MediaReviewEntry> local = <MediaReviewEntry>[];
+  CinematicTitleMetadata? _titleMetadata;
+  Map<String, dynamic>? _externalRatings;
+  bool _loadingProviderData = false;
+  bool _loadingProviderReviews = false;
+  bool _loadingMoreProviderReviews = false;
+  String? _providerError;
+  final List<CinematicTitleReview> _providerReviews = <CinematicTitleReview>[];
+  int _providerReviewPage = 0;
+  int _providerReviewTotalPages = 0;
+  int _providerReviewTotalResults = 0;
+
   final List<MediaReviewEntry> global = <MediaReviewEntry>[
     const MediaReviewEntry(
       username: 'noobmaster69',
@@ -59,6 +75,109 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _titleMetadata = widget.initialMetadata;
+    if (widget.media != null && CinematicTitleMetadataService.isConfigured) {
+      unawaited(_loadProviderTitleData());
+    }
+  }
+
+  Future<void> _loadProviderTitleData() async {
+    final media = widget.media;
+    if (media == null || !CinematicTitleMetadataService.isConfigured) return;
+    setState(() {
+      _loadingProviderData = true;
+      _providerError = null;
+    });
+    try {
+      final metadata = _titleMetadata ?? await CinematicTitleMetadataService.lookupTitle(
+        title: media.title,
+        isTv: media.isSeries,
+        year: media.releaseYear ?? media.seriesStartYear,
+      );
+      if (!mounted) return;
+      setState(() => _titleMetadata = metadata);
+      if (metadata == null) {
+        setState(() => _providerError = 'No matching TMDB title was found for this item.');
+        return;
+      }
+      await _loadProviderReviewPage(1);
+      final imdbId = metadata.imdbId?.trim() ?? '';
+      if (imdbId.isNotEmpty) {
+        try {
+          final ratings = await AppController.instance.backendApi.getExternalMediaRatings(imdbId);
+          if (mounted) setState(() => _externalRatings = ratings);
+        } catch (_) {
+          // External ratings are optional; TMDB ratings and reviews remain available.
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _providerError = error.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingProviderData = false);
+    }
+  }
+
+  Future<void> _loadProviderReviewPage(int page) async {
+    final metadata = _titleMetadata;
+    if (metadata == null || page < 1 || (page > 1 && _loadingMoreProviderReviews)) return;
+    if (page == 1) {
+      setState(() => _loadingProviderReviews = true);
+    } else {
+      setState(() => _loadingMoreProviderReviews = true);
+    }
+    try {
+      final result = await CinematicTitleMetadataService.lookupReviewsPage(
+        providerId: metadata.providerId,
+        isTv: metadata.isTv,
+        page: page,
+      );
+      if (!mounted) return;
+      setState(() {
+        final existing = _providerReviews.map((review) => review.id ?? '${review.author}|${review.createdAt}|${review.content.hashCode}').toSet();
+        for (final review in result.reviews) {
+          final key = review.id ?? '${review.author}|${review.createdAt}|${review.content.hashCode}';
+          if (existing.add(key)) _providerReviews.add(review);
+        }
+        _providerReviewPage = result.page;
+        _providerReviewTotalPages = result.totalPages;
+        _providerReviewTotalResults = result.totalResults;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _providerError = error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingProviderReviews = false;
+          _loadingMoreProviderReviews = false;
+        });
+      }
+    }
+  }
+
+  String _externalRating(String source) {
+    final ratings = _externalRatings?['ratings'];
+    if (ratings is List) {
+      for (final entry in ratings.whereType<Map>()) {
+        if ((entry['source']?.toString() ?? '').toLowerCase() == source.toLowerCase()) {
+          final value = entry['value']?.toString().trim() ?? '';
+          if (value.isNotEmpty && value != 'N/A') return value;
+        }
+      }
+    }
+    return 'Not available';
+  }
+
+  Future<void> _openRatingUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme) return;
+    try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch (_) {}
+  }
+
   /// Builds the review editor, account reviews and global privacy-safe feed.
   @override
   Widget build(BuildContext context) {
@@ -68,7 +187,10 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
-          if (widget.media != null) _ratingSummary(widget.media!),
+          if (widget.media != null) ...[
+            _ratingSummary(widget.media!),
+            _providerReviewsSection(),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -223,37 +345,198 @@ class _ReviewsHubScreenState extends State<ReviewsHubScreen> {
         ? null
         : local.map((entry) => entry.score).reduce((a, b) => a + b) /
             local.length;
+    final metadata = _titleMetadata;
+    final imdbId = metadata?.imdbId?.trim() ?? '';
+    final imdbRating = (_externalRatings?['imdbRating']?.toString() ?? '').trim();
+    final metascore = (_externalRatings?['metascore']?.toString() ?? '').trim();
+    final scoreItems = <({String label, String value, VoidCallback? onTap})>[
+      (
+        label: 'TMDB',
+        value: metadata?.voteAverage != null && metadata!.voteAverage! > 0
+            ? '${metadata.voteAverage!.toStringAsFixed(1)}/10 (${metadata.voteCount ?? 0} votes)'
+            : 'Not available',
+        onTap: null,
+      ),
+      (
+        label: 'IMDb',
+        value: imdbRating.isNotEmpty && imdbRating != 'N/A'
+            ? '$imdbRating/10${(_externalRatings?['imdbVotes']?.toString().trim().isNotEmpty ?? false) ? ' · ${_externalRatings!['imdbVotes']} votes' : ''}'
+            : 'Not available',
+        onTap: imdbId.isEmpty ? null : () => _openRatingUrl('https://www.imdb.com/title/$imdbId/'),
+      ),
+      (
+        label: 'Rotten Tomatoes',
+        value: _externalRating('Rotten Tomatoes'),
+        onTap: () => _openRatingUrl('https://www.rottentomatoes.com/search?search=${Uri.encodeQueryComponent(media.title)}'),
+      ),
+      (
+        label: 'Metascore',
+        value: metascore.isNotEmpty && metascore != 'N/A' ? '$metascore/100' : 'Not available',
+        onTap: null,
+      ),
+      (
+        label: 'My profile reviews',
+        value: viewerRating == null ? 'No reviews' : '${viewerRating.toStringAsFixed(1)}/10',
+        onTap: null,
+      ),
+    ];
     return Card(
+      margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const UniversalText('Official / critic rating',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
-                  Text(media.rating == null
-                      ? 'Not available'
-                      : '${media.rating}/10${media.ratingReason == null ? '' : ' • ${media.ratingReason}'}'),
-                ],
-              ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Scores & ratings', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: scoreItems.map((item) => Container(
+                constraints: const BoxConstraints(minWidth: 130, maxWidth: 210),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF202027),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: InkWell(
+                  onTap: item.onTap,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.label, style: const TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      Text(item.value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
+                      if (item.onTap != null) const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text('Open source', style: TextStyle(fontSize: 10, color: Colors.white54)),
+                      ),
+                    ],
+                  ),
+                ),
+              )).toList(),
             ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const UniversalText('Viewer rating',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
-                  Text(viewerRating == null
-                      ? 'No reviews'
-                      : '${viewerRating.toStringAsFixed(1)}/10'),
-                ],
+            if (metadata?.imdbId != null && metadata!.imdbId!.isNotEmpty &&
+                _externalRatings?['configured'] == false) ...[
+              const SizedBox(height: 10),
+              const Text(
+                'TMDB scores are available now. To show imported IMDb, Rotten Tomatoes, and Metascore ratings when available, add OMDB_API_KEY to Backend/.env and restart the backend.',
+                style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.4),
               ),
-            ),
+            ],
+            if (_loadingProviderData) ...[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(minHeight: 2),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _providerReviewsSection() {
+    final metadata = _titleMetadata;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 18),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Expanded(
+                child: Text('Reviews for this title', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              ),
+              if (_providerReviewTotalResults > 0)
+                Text('$_providerReviewTotalResults', style: const TextStyle(color: Colors.white60, fontWeight: FontWeight.w800)),
+              IconButton(
+                tooltip: 'Refresh title reviews',
+                onPressed: _loadingProviderData ? null : _loadProviderTitleData,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            const Text('Public reviews supplied by TMDB. Load additional pages to browse the complete set returned by the provider.', style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4)),
+            if (_providerError != null) ...[
+              const SizedBox(height: 8),
+              Text(_providerError!, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12)),
+            ],
+            if (_loadingProviderReviews && _providerReviews.isEmpty) ...[
+              const SizedBox(height: 14),
+              const Center(child: CircularProgressIndicator()),
+            ] else if (metadata == null && !_loadingProviderData) ...[
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text('Provider reviews cannot be loaded until a TMDB title match is available.', style: TextStyle(color: Colors.white54)),
+              ),
+            ] else if (_providerReviews.isEmpty) ...[
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text('No public reviews are currently listed by TMDB for this title.', style: TextStyle(color: Colors.white54)),
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              ..._providerReviews.map(_providerReviewCard),
+              if (_providerReviewPage < _providerReviewTotalPages) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _loadingMoreProviderReviews
+                        ? null
+                        : () => _loadProviderReviewPage(_providerReviewPage + 1),
+                    icon: _loadingMoreProviderReviews
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.expand_more_rounded),
+                    label: Text(_loadingMoreProviderReviews
+                        ? 'Loading reviews…'
+                        : 'Load more reviews (${_providerReviews.length} of $_providerReviewTotalResults)'),
+                  ),
+                ),
+              ],
+              if (_providerReviewTotalPages > 0 && _providerReviewPage >= _providerReviewTotalPages)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('All ${_providerReviews.length} available TMDB reviews are loaded.', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _providerReviewCard(CinematicTitleReview review) {
+    final meta = <String>[
+      if (review.rating != null) 'Rating ${review.rating!.toStringAsFixed(1)}/10',
+      if (review.createdAt != null) review.createdAt!.split('T').first,
+    ].join(' · ');
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 12),
+        title: Text(review.author, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          meta.isEmpty ? 'Public review' : meta,
+          style: const TextStyle(color: Colors.white54, fontSize: 11),
+        ),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SelectableText(review.content, style: const TextStyle(color: Colors.white70, height: 1.45)),
+          ),
+          if (review.url != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _openRatingUrl(review.url!),
+                icon: const Icon(Icons.open_in_new, size: 15),
+                label: const Text('Open original review'),
+              ),
+            ),
+        ],
       ),
     );
   }

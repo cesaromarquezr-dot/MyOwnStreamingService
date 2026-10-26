@@ -1151,7 +1151,7 @@ class ActorBiographyScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.movie_outlined),
               title: const UniversalText('Featured in'),
-              subtitle: LocalizedMediaText(media.title),
+              subtitle: LocalizedMediaText(media.title, preserveOriginal: true),
             ),
           ),
         ],

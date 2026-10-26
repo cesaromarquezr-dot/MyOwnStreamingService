@@ -681,7 +681,9 @@ class SelfDrivingHttpClient extends http.BaseClient {
       abortTrigger: abortTrigger,
     )
       ..headers.addAll(source.headers)
-      ..contentLength = 0
+      // http.Request calculates contentLength from bodyBytes; its setter
+      // intentionally throws for non-streaming requests. This cloned request
+      // has an empty body, so its computed content length is already zero.
       ..followRedirects = source.followRedirects
       ..maxRedirects = source.maxRedirects
       ..persistentConnection = source.persistentConnection;
