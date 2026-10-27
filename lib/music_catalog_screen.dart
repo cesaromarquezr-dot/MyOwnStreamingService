@@ -8,9 +8,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'music_video_search_screen.dart';
+
 import 'app_core.dart';
 import 'cinematic_title_fonts.dart';
 import 'library_view_modes.dart';
+
+/// Returns true for media records that belong to the music album experience.
+/// This is shared by navigation entry points so an album never opens the
+/// movie/TV details layout just because it was selected from a generic shelf.
+bool isMusicAlbumType(String rawType) {
+  final type = rawType.trim().toLowerCase();
+  return type.contains('album') || type == 'soundtrack';
+}
 
 class MusicCatalogScreen extends StatefulWidget {
   const MusicCatalogScreen({super.key, this.initialQuery = ''});
@@ -124,6 +134,9 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     final coverArt = _providerStatus?['coverArtArchive'] is Map
         ? Map<String, dynamic>.from(_providerStatus!['coverArtArchive'] as Map)
         : <String, dynamic>{};
+    final youtubeVideos = _providerStatus?['youtubeMusicVideos'] is Map
+        ? Map<String, dynamic>.from(_providerStatus!['youtubeMusicVideos'] as Map)
+        : <String, dynamic>{};
 
     return Scaffold(
       backgroundColor: const Color(0xFF101010),
@@ -146,7 +159,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
           const Text(
-            'Search artists, albums, discographies, and recordings from external music catalogs.',
+            'Search artists, albums, discographies, and recordings. Spotify track results can also find matching YouTube music videos.',
             style: TextStyle(color: Colors.white70, height: 1.4),
           ),
           const SizedBox(height: 12),
@@ -195,6 +208,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
                 _providerChip('Spotify', spotify['configured'] == true),
                 _providerChip('MusicBrainz', musicBrainz['configured'] == true),
                 _providerChip('Cover Art Archive', coverArt['configured'] == true),
+                _providerChip('YouTube Videos', youtubeVideos['configured'] == true),
               ],
             ),
           if (!authenticated) ...[
@@ -214,7 +228,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
           if (_result != null) ..._resultSections(_result!),
           const SizedBox(height: 22),
           const Text(
-            'Spotify metadata, artist images, and album art link back to Spotify. Spotify does not provide artist biographies through this API; an exact-match TMDB person biography is shown only when available. These results do not grant music-streaming rights or create playable local tracks.',
+            'Spotify supplies song/artist metadata but does not provide music-video URLs or artist biographies through this API. An exact-match TMDB biography may be shown when available. Use the music-video action on a Spotify track to find embeddable YouTube matches. Configure YOUTUBE_API_KEY in Backend/.env to show matching videos here; without it, you can still open a YouTube search. Catalog results do not grant music-streaming rights or create playable local audio tracks.',
             style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
           ),
         ],
@@ -322,6 +336,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
     final isMbAlbum = source == 'MusicBrainz' && (kind == 'album' || item.containsKey('coverArtApiUrl')) && id.isNotEmpty;
     final isSpotifyArtist = source == 'Spotify' && kind == 'artist' && id.isNotEmpty;
     final isSpotifyAlbum = source == 'Spotify' && kind == 'album' && id.isNotEmpty;
+    final isSpotifyTrack = source == 'Spotify' && kind == 'track' && id.isNotEmpty;
     final externalUrl = (item['spotifyUrl'] ?? '').toString();
 
     return Container(
@@ -344,7 +359,7 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
         title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: (isSpotifyAlbum || isMbAlbum) ? 'album' : kind, baseFontSize: 15, color: Colors.white)),
         subtitle: Text(subtitleParts.join(' · '), maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.3)),
         trailing: SizedBox(
-          width: (isMbArtist || externalUrl.isNotEmpty || isMbAlbum) ? 100 : 24,
+          width: isSpotifyTrack ? (externalUrl.isNotEmpty ? 96 : 48) : (isMbArtist || externalUrl.isNotEmpty || isMbAlbum) ? 100 : 24,
           child: Row(mainAxisAlignment: MainAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
             if (isSpotifyArtist)
               IconButton(
@@ -359,6 +374,13 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
                 tooltip: 'View album and track list',
                 onPressed: () => _openSpotifyAlbum(title, id),
                 icon: const Icon(Icons.queue_music_rounded),
+              ),
+            if (isSpotifyTrack)
+              IconButton(
+                padding: EdgeInsets.zero,
+                tooltip: 'Find this song’s music video',
+                onPressed: () => _openMusicVideoSearch(title, artist),
+                icon: const Icon(Icons.music_video_rounded),
               ),
             if (isMbArtist)
               IconButton(
@@ -403,6 +425,12 @@ class _MusicCatalogScreenState extends State<MusicCatalogScreen> {
         alignment: Alignment.center,
         child: const Icon(Icons.album_outlined, color: Colors.white54),
       );
+
+  void _openMusicVideoSearch(String title, String artist) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => MusicVideoSearchScreen(title: title, artist: artist),
+    ));
+  }
 
   void _openSpotifyArtist(String title, String spotifyId) {
     Navigator.of(context).push(MaterialPageRoute<void>(
@@ -803,9 +831,9 @@ class _SpotifyArtistDetailsScreenState extends State<SpotifyArtistDetailsScreen>
   }
 }
 
-/// Opens an owned/local album using the same rich metadata view as New Albums.
-/// It first looks for an exact title match in the authenticated music catalog,
-/// but always keeps the locally-owned track list available as an offline fallback.
+/// Shared music album page entry used by owned albums and generic album cards.
+/// It looks for an exact title/artist match in the authenticated catalog, while
+/// keeping any local track listing available as an offline fallback.
 class OwnedAlbumDetailsScreen extends StatefulWidget {
   const OwnedAlbumDetailsScreen({
     super.key,
@@ -814,6 +842,8 @@ class OwnedAlbumDetailsScreen extends StatefulWidget {
     this.artistName = '',
     this.artworkUrl,
     required this.localTracks,
+    this.isOwned = true,
+    this.resolveSpotifyMetadata = true,
   });
 
   final MediaItem? media;
@@ -821,6 +851,11 @@ class OwnedAlbumDetailsScreen extends StatefulWidget {
   final String artistName;
   final String? artworkUrl;
   final List<Map<String, dynamic>> localTracks;
+  /// Whether this copy is already owned. Defaults to true for compatibility
+  /// with existing callers that explicitly open their library album.
+  final bool isOwned;
+  /// Set false if the caller has already attempted the same catalog lookup.
+  final bool resolveSpotifyMetadata;
 
   @override
   State<OwnedAlbumDetailsScreen> createState() => _OwnedAlbumDetailsScreenState();
@@ -835,7 +870,10 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
       );
 
   Future<String?> _resolveSpotifyAlbumId() async {
-    if (!AppController.instance.isBackendAuthenticated) return null;
+    if (!widget.resolveSpotifyMetadata ||
+        !AppController.instance.isBackendAuthenticated) {
+      return null;
+    }
     final title = widget.albumTitle.trim();
     if (title.isEmpty) return null;
     try {
@@ -906,7 +944,7 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
             return SpotifyAlbumDetailsScreen(
               albumTitle: widget.albumTitle,
               spotifyId: snapshot.data!,
-              isOwned: true,
+              isOwned: widget.isOwned,
               localMedia: media,
               localArtistName: artistName,
               localTracks: widget.localTracks,
@@ -921,6 +959,7 @@ class _OwnedAlbumDetailsScreenState extends State<OwnedAlbumDetailsScreen> {
             artistName: artistName,
             artworkUrl: artwork,
             localTracks: widget.localTracks,
+            isOwned: widget.isOwned,
             lookupPending: snapshot.connectionState != ConnectionState.done,
           );
         },
@@ -934,6 +973,7 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
     required this.artistName,
     required this.artworkUrl,
     required this.localTracks,
+    this.isOwned = true,
     this.lookupPending = false,
   });
 
@@ -942,6 +982,7 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
   final String artistName;
   final String artworkUrl;
   final List<Map<String, dynamic>> localTracks;
+  final bool isOwned;
   final bool lookupPending;
 
   String _durationLabel(dynamic value) {
@@ -1002,8 +1043,10 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
               '${localTracks.length} track${localTracks.length == 1 ? '' : 's'}',
             ].join(' · '), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
           ),
-          const SizedBox(height: 10),
-          const Center(child: Chip(avatar: Icon(Icons.library_music_rounded, size: 16), label: Text('In your library'))),
+          if (isOwned) ...[
+            const SizedBox(height: 10),
+            const Center(child: Chip(avatar: Icon(Icons.library_music_rounded, size: 16), label: Text('In your library'))),
+          ],
           if (lookupPending) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(minHeight: 2),
@@ -1063,6 +1106,39 @@ class _OwnedAlbumLocalDetailsScreen extends StatelessWidget {
           Expanded(child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4))),
         ]),
       );
+}
+
+/// Entry point for the Music app's album page. All generic media cards may
+/// safely route album records here: catalog metadata is used when available,
+/// and the music-specific local fallback is used when the catalog is offline
+/// or has no exact match. It never falls back to Movie/TV Details.
+class MusicAlbumPageScreen extends StatelessWidget {
+  const MusicAlbumPageScreen({
+    super.key,
+    required this.media,
+    this.isOwned,
+    this.localTracks = const <Map<String, dynamic>>[],
+    this.resolveSpotifyMetadata = true,
+  });
+
+  final MediaItem media;
+  final bool? isOwned;
+  final List<Map<String, dynamic>> localTracks;
+  final bool resolveSpotifyMetadata;
+
+  @override
+  Widget build(BuildContext context) {
+    final owned = isOwned ?? AppController.instance.isOwned(media.id);
+    return OwnedAlbumDetailsScreen(
+      media: media,
+      albumTitle: media.title,
+      artistName: media.music.join(', '),
+      artworkUrl: media.imageUrl,
+      localTracks: localTracks,
+      isOwned: owned,
+      resolveSpotifyMetadata: resolveSpotifyMetadata,
+    );
+  }
 }
 
 /// Spotify album details and actual track listing. Artwork is displayed at its
@@ -1170,6 +1246,10 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                 : <String>[];
             final albumArtists = _maps(album['artists']);
             final copyrights = _maps(album['copyrights']);
+            final musicBrainzReleaseCredits = _maps(album['musicBrainzReleaseCredits']);
+            final musicBrainzReleaseDetails = album['musicBrainzReleaseDetails'] is Map
+                ? Map<String, dynamic>.from(album['musicBrainzReleaseDetails'] as Map)
+                : <String, dynamic>{};
             final hasOwnedCopy = widget.isOwned || _hasOwnedAlbum(title, artist);
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -1212,7 +1292,7 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                   )
                 else
                   _whereToBuySection(title, artist),
-                if (label.isNotEmpty || producers.isNotEmpty || composers.isNotEmpty || copyrights.isNotEmpty || localArtists.isNotEmpty || artist.isNotEmpty) ...[
+                if (label.isNotEmpty || producers.isNotEmpty || composers.isNotEmpty || copyrights.isNotEmpty || localArtists.isNotEmpty || artist.isNotEmpty || musicBrainzReleaseCredits.isNotEmpty || musicBrainzReleaseDetails.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   const Text('Album credits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
@@ -1222,10 +1302,31 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
                   if (producers.isNotEmpty) _creditRow('Producer(s)', producers.join(', ')),
                   if (composers.isNotEmpty) _creditRow('Composer(s) / writers', composers.join(', ')),
                   if (copyrights.isNotEmpty) _creditRow('Copyright', copyrights.map((v) => '${v['type'] ?? 'Copyright'}: ${v['text'] ?? ''}'.trim()).where((v) => v.isNotEmpty).join(' · ')),
+                  MusicBrainzCreditRows(
+                    rows: musicBrainzReleaseCredits
+                        .where((row) => !_isCommonCreditAlreadyShown(row['role']?.toString() ?? ''))
+                        .toList(),
+                  ),
                   if ((album['musicBrainzReleaseUrl']?.toString() ?? '').startsWith('https://'))
-                    Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => _openSpotifyUrl(album['musicBrainzReleaseUrl'].toString()), icon: const Icon(Icons.open_in_new_rounded, size: 15), label: const Text('View credits source on MusicBrainz'))),
+                    Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => _openSpotifyUrl(album['musicBrainzReleaseUrl'].toString()), icon: const Icon(Icons.open_in_new_rounded, size: 15), label: const Text('Open full release credits on MusicBrainz'))),
                   if ((album['creditNote']?.toString() ?? '').trim().isNotEmpty)
                     Text(album['creditNote'].toString(), style: const TextStyle(color: Colors.white38, fontSize: 11, height: 1.4)),
+                ],
+                if (musicBrainzReleaseDetails.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  const Text('Release edition details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  if ((musicBrainzReleaseDetails['date']?.toString() ?? '').isNotEmpty) _creditRow('MusicBrainz release date', musicBrainzReleaseDetails['date'].toString()),
+                  if ((musicBrainzReleaseDetails['releaseGroupFirstDate']?.toString() ?? '').isNotEmpty) _creditRow('First release date', musicBrainzReleaseDetails['releaseGroupFirstDate'].toString()),
+                  if ((musicBrainzReleaseDetails['country']?.toString() ?? '').isNotEmpty) _creditRow('Release country', musicBrainzReleaseDetails['country'].toString()),
+                  if ((musicBrainzReleaseDetails['status']?.toString() ?? '').isNotEmpty) _creditRow('Release status', musicBrainzReleaseDetails['status'].toString()),
+                  if ((musicBrainzReleaseDetails['primaryType']?.toString() ?? '').isNotEmpty) _creditRow('Release group type', [musicBrainzReleaseDetails['primaryType'], if (musicBrainzReleaseDetails['secondaryTypes'] is List) ...(musicBrainzReleaseDetails['secondaryTypes'] as List)].map((v) => v.toString()).join(' · ')),
+                  if ((musicBrainzReleaseDetails['format'] is List) && (musicBrainzReleaseDetails['format'] as List).isNotEmpty) _creditRow('Format', (musicBrainzReleaseDetails['format'] as List).map((v) => v.toString()).join(', ')),
+                  if ((musicBrainzReleaseDetails['packaging']?.toString() ?? '').isNotEmpty) _creditRow('Packaging', musicBrainzReleaseDetails['packaging'].toString()),
+                  if ((musicBrainzReleaseDetails['barcode']?.toString() ?? '').isNotEmpty) _creditRow('Barcode', musicBrainzReleaseDetails['barcode'].toString()),
+                  if ((musicBrainzReleaseDetails['catalogNumbers'] is List) && (musicBrainzReleaseDetails['catalogNumbers'] as List).isNotEmpty) _creditRow('Catalog number(s)', (musicBrainzReleaseDetails['catalogNumbers'] as List).map((v) => v.toString()).join(', ')),
+                  if ((musicBrainzReleaseDetails['mediumCount']?.toString() ?? '').isNotEmpty && (musicBrainzReleaseDetails['trackCount']?.toString() ?? '') != '0') _creditRow('Media / track count', '${musicBrainzReleaseDetails['mediumCount']} medium(s) · ${musicBrainzReleaseDetails['trackCount']} tracks'),
+                  if ((musicBrainzReleaseDetails['disambiguation']?.toString() ?? '').isNotEmpty) _creditRow('Release edition', musicBrainzReleaseDetails['disambiguation'].toString()),
                 ],
                 const SizedBox(height: 18),
                 const Text('Track list', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
@@ -1305,6 +1406,14 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
     );
   }
 
+  bool _isCommonCreditAlreadyShown(String role) {
+    final normalized = role.toLowerCase();
+    return normalized.contains('producer') ||
+        normalized.contains('composer') ||
+        normalized.contains('writer') ||
+        normalized.contains('lyricist');
+  }
+
   Widget _creditRow(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1325,6 +1434,11 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
     final previewUrl = track['previewUrl']?.toString() ?? '';
     final composers = track['composers'] is List ? (track['composers'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).join(', ') : '';
     final producers = track['producers'] is List ? (track['producers'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).join(', ') : '';
+    final credits = track['musicBrainzCredits'] is List
+        ? (track['musicBrainzCredits'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
+        : <Map<String, dynamic>>[];
+    final isrcs = track['isrcs'] is List ? (track['isrcs'] as List).map((v) => v.toString()).where((v) => v.isNotEmpty).toList() : <String>[];
+    final recordingMbid = track['musicBrainzRecordingMbid']?.toString() ?? '';
     final subtitle = <String>[
       if (artist.isNotEmpty) artist,
       if (discNo > 1) 'Disc $discNo',
@@ -1332,19 +1446,100 @@ class _SpotifyAlbumDetailsScreenState extends State<SpotifyAlbumDetailsScreen> {
       if (durationMs > 0) '$mins:${secs.toString().padLeft(2, '0')}',
       if (composers.isNotEmpty) 'Composer: $composers',
       if (producers.isNotEmpty) 'Producer: $producers',
+      if (credits.isNotEmpty) '${credits.length} credit roles',
     ].join(' · ');
     final playUrl = previewUrl.startsWith('https://') ? previewUrl : spotifyUrl;
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: SizedBox(width: 28, child: Center(child: Text(trackNo, style: const TextStyle(color: Colors.white54, fontSize: 11)))),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+    final leading = SizedBox(width: 28, child: Center(child: Text(trackNo, style: const TextStyle(color: Colors.white54, fontSize: 11))));
+    if (credits.isEmpty && isrcs.isEmpty && recordingMbid.isEmpty) {
+      return ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: leading,
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        trailing: IconButton(
+          tooltip: previewUrl.startsWith('https://') ? 'Open preview' : 'Play in Spotify',
+          icon: const Icon(Icons.play_arrow_rounded),
+          onPressed: playUrl.startsWith('https://') ? () => _openSpotifyUrl(playUrl) : null,
+        ),
+      );
+    }
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(left: 36, right: 8, bottom: 10),
+      leading: leading,
+      title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
       subtitle: Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-      trailing: IconButton(
-        tooltip: previewUrl.startsWith('https://') ? 'Open preview' : 'Play in Spotify',
-        icon: const Icon(Icons.play_arrow_rounded),
-        onPressed: playUrl.startsWith('https://') ? () => _openSpotifyUrl(playUrl) : null,
-      ),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          tooltip: previewUrl.startsWith('https://') ? 'Open preview' : 'Play in Spotify',
+          icon: const Icon(Icons.play_arrow_rounded),
+          onPressed: playUrl.startsWith('https://') ? () => _openSpotifyUrl(playUrl) : null,
+        ),
+        const Icon(Icons.expand_more_rounded, color: Colors.white54),
+      ]),
+      children: [
+        if (credits.isNotEmpty)
+          for (final row in credits)
+            _creditRow(
+              row['role']?.toString() ?? 'Credit',
+              row['people'] is List ? (row['people'] as List).map((v) => v.toString()).join(', ') : '',
+            ),
+        if (isrcs.isNotEmpty) _creditRow('ISRC', isrcs.join(', ')),
+        if (recordingMbid.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _openSpotifyUrl('https://musicbrainz.org/recording/$recordingMbid'),
+              icon: const Icon(Icons.open_in_new_rounded, size: 14),
+              label: const Text('View recording credits on MusicBrainz'),
+            ),
+          ),
+      ],
+    );
+  }
+
+}
+
+/// Displays release-level MusicBrainz relationships as role/person rows.
+/// Kept independent of the album screen so credit rendering can be tested with
+/// fixtures and reused by owned-album views.
+class MusicBrainzCreditRows extends StatelessWidget {
+  const MusicBrainzCreditRows({super.key, required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleRows = rows.where((row) {
+      final role = (row['role']?.toString() ?? '').trim();
+      final people = row['people'];
+      return role.isNotEmpty && people is List && people.isNotEmpty;
+    }).toList();
+    if (visibleRows.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final row in visibleRows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 155,
+                  child: Text(row['role'].toString(), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                ),
+                Expanded(
+                  child: Text(
+                    (row['people'] as List).map((value) => value.toString()).where((value) => value.trim().isNotEmpty).join(', '),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

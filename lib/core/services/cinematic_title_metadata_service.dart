@@ -118,9 +118,25 @@ class CinematicTitleMetadataService {
   }
 
   /// Lightweight overview lookup for Home hero banners. Unlike [lookupTitle],
-  /// this requests only search results and basic title details instead of also
-  /// loading credits, images, videos, keywords, and reviews.
+  /// this requests only search results and basic title details (plus video
+  /// references) instead of loading credits, artwork galleries, keywords, and reviews.
   static Future<String?> lookupOverview({
+    required String title,
+    required bool isTv,
+    int? year,
+  }) async {
+    final metadata = await lookupHomeMetadata(
+      title: title,
+      isTv: isTv,
+      year: year,
+    );
+    return metadata?['overview']?.toString();
+  }
+
+  /// Lightweight exact-match metadata for the large Home hero. The title
+  /// detail endpoint already carries overview, season summaries, and series
+  /// run dates, avoiding a heavier cast/images/reviews lookup on Home.
+  static Future<Map<String, dynamic>?> lookupHomeMetadata({
     required String title,
     required bool isTv,
     int? year,
@@ -138,8 +154,8 @@ class CinematicTitleMetadataService {
     });
     var match = _findExactMatch(search['results'], cleanTitle, isTv);
 
-    // A catalog year can be missing or stale. Retry without it while still
-    // requiring an exact normalized title match to prevent mismatched synopses.
+    // Catalog years can be stale; retry without the year but keep exact-title
+    // matching so the hero never inherits details from a similarly named work.
     if (match == null && year != null) {
       search = await _get(searchPath, <String, String>{
         'query': cleanTitle,
@@ -152,8 +168,194 @@ class CinematicTitleMetadataService {
     final id = _toInt(match?['id']);
     if (id == null) return null;
 
-    final details = await _get(isTv ? '/tv/$id' : '/movie/$id');
-    return _cleanNullable(details['overview']);
+    final details = await _get(
+      isTv ? '/tv/$id' : '/movie/$id',
+      <String, String>{
+        'append_to_response': 'videos',
+        'language': 'en-US',
+      },
+    );
+    final startDate = _cleanNullable(
+      details[isTv ? 'first_air_date' : 'release_date']?.toString(),
+    );
+    final lastAirDate = isTv
+        ? _cleanNullable(details['last_air_date']?.toString())
+        : null;
+    final status = _cleanNullable(details['status']?.toString());
+    final normalizedStatus = status?.toLowerCase() ?? '';
+    final ongoing = isTv && <String>{
+      'returning series',
+      'in production',
+      'planned',
+      'pilot',
+    }.contains(normalizedStatus);
+    final startYear = _yearFromDate(startDate);
+    final endYear = _yearFromDate(lastAirDate);
+    final normalizedSeasons = isTv
+        ? normalizeTvSeasons(details['seasons'])
+        : <Map<String, dynamic>>[];
+    final countedSeasons = normalizedSeasons.where((season) {
+      final seasonNumber = _toInt(season['seasonNumber'] ?? season['number']);
+      return seasonNumber != null && seasonNumber > 0;
+    }).length;
+
+    final videoPayload = _asMap(details['videos']);
+    final previewVideos = _listOfMaps(videoPayload['results'])
+        .map(CinematicTitleVideo.fromJson)
+        .where((video) =>
+            video.site.toLowerCase() == 'youtube' &&
+            RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(video.key.trim()) &&
+            <String>{'trailer', 'teaser', 'clip', 'featurette'}
+                .contains(video.type.toLowerCase()))
+        .toList()
+      ..sort((a, b) {
+        if (a.official != b.official) return a.official ? -1 : 1;
+        final typeCompare =
+            _videoTypePriority(a.type).compareTo(_videoTypePriority(b.type));
+        if (typeCompare != 0) return typeCompare;
+        return (b.publishedAt ?? '').compareTo(a.publishedAt ?? '');
+      });
+    final previewUrl = previewVideos.isEmpty ? null : previewVideos.first.url;
+
+    String? runYears;
+    if (isTv && startYear != null) {
+      if (ongoing) {
+        runYears = '$startYear–Present';
+      } else if (endYear != null && endYear > startYear) {
+        runYears = '$startYear–$endYear';
+      } else {
+        runYears = '$startYear';
+      }
+    } else if (!isTv) {
+      runYears = startYear?.toString();
+    }
+
+    return <String, dynamic>{
+      'overview': _cleanNullable(details['overview']?.toString()),
+      'seasonCount': countedSeasons,
+      'seasons': normalizedSeasons,
+      'seriesStartYear': startYear,
+      'seriesEndYear': ongoing ? null : endYear,
+      'seriesOngoing': ongoing,
+      'seriesStatus': status,
+      'yearLabel': runYears,
+      'previewUrl': previewUrl,
+    };
+  }
+
+  static int? _yearFromDate(String? date) {
+    if (date == null || date.length < 4) return null;
+    return int.tryParse(date.substring(0, 4));
+  }
+
+  /// Normalizes TMDB TV season summaries into the shape used by Details.
+  /// Season summaries come from GET /tv/{series_id}; episode descriptions,
+  /// runtimes and stills are fetched lazily for the selected season.
+  static List<Map<String, dynamic>> normalizeTvSeasons(dynamic rawSeasons) {
+    final seasons = <Map<String, dynamic>>[];
+    for (final row in _listOfMaps(rawSeasons)) {
+      final number = _toInt(
+        row['season_number'] ?? row['seasonNumber'] ?? row['number'],
+      );
+      if (number == null || number < 0) continue;
+      final name = _cleanNullable(row['name'] ?? row['title']) ??
+          (number == 0 ? 'Specials' : 'Season $number');
+      final airDate = _cleanNullable(row['air_date'] ?? row['airDate']);
+      final overview = _cleanNullable(row['overview'] ?? row['description']);
+      seasons.add(<String, dynamic>{
+        'id': row['id']?.toString(),
+        'seasonNumber': number,
+        'season_number': number,
+        'number': number,
+        'name': name,
+        'title': name,
+        'airDate': airDate,
+        'air_date': airDate,
+        'episodeCount': _toInt(row['episode_count'] ?? row['episodeCount']) ?? 0,
+        'overview': overview,
+        'description': overview,
+        'posterUrl': imageUrl(
+          row['poster_path']?.toString() ?? row['posterUrl']?.toString(),
+          size: 'w342',
+        ),
+        'metadataSource': 'TMDB',
+        'episodes': <Map<String, dynamic>>[],
+      });
+    }
+    seasons.sort((a, b) =>
+        (_toInt(a['seasonNumber']) ?? 0).compareTo(_toInt(b['seasonNumber']) ?? 0));
+    return seasons;
+  }
+
+  /// Fetches detailed episode credits for one season through the authenticated
+  /// backend proxy. It never contacts TMDB directly from the Flutter client.
+  static Future<List<Map<String, dynamic>>> lookupTvSeasonEpisodes({
+    required int providerId,
+    required int seasonNumber,
+  }) async {
+    if (!isConfigured || providerId <= 0 || seasonNumber < 0) {
+      return <Map<String, dynamic>>[];
+    }
+    final payload = await _get('/tv/$providerId/season/$seasonNumber');
+    return normalizeTvSeasonEpisodes(payload, seasonNumber: seasonNumber);
+  }
+
+  /// Pure mapping helper kept separate so episode numbering, descriptions,
+  /// runtimes, and image URLs can be regression-tested without network access.
+  static List<Map<String, dynamic>> normalizeTvSeasonEpisodes(
+    Map<String, dynamic> payload, {
+    required int seasonNumber,
+  }) {
+    final normalized = <Map<String, dynamic>>[];
+    for (final row in _listOfMaps(payload['episodes'])) {
+      final title = _cleanNullable(row['name'] ?? row['title']);
+      final episodeNumber = _toInt(
+        row['episode_number'] ?? row['episodeNumber'] ?? row['number'],
+      );
+      if (title == null || title.isEmpty || episodeNumber == null) continue;
+      final airDate = _cleanNullable(row['air_date'] ?? row['airDate']);
+      final runtime = _positiveIntOrNull(
+        row['runtime'] ?? row['runtimeMinutes'] ?? row['duration'],
+      );
+      final id = _toInt(row['id']);
+      final seasonId = row['season_id'] ?? row['seasonId'];
+      final overview = _cleanNullable(row['overview'] ?? row['description']);
+      normalized.add(<String, dynamic>{
+        'id': id?.toString() ?? 'tmdb-season-$seasonNumber-episode-$episodeNumber',
+        'providerEpisodeId': id,
+        'seasonNumber': _toInt(row['season_number'] ?? row['seasonNumber']) ?? seasonNumber,
+        'season': _toInt(row['season_number'] ?? row['seasonNumber']) ?? seasonNumber,
+        'episodeNumber': episodeNumber,
+        'episode_number': episodeNumber,
+        'number': episodeNumber,
+        'episodeCode': 'S${seasonNumber.toString().padLeft(2, '0')}E${episodeNumber.toString().padLeft(2, '0')}',
+        'title': title,
+        'name': title,
+        'description': overview,
+        'overview': overview,
+        'airDate': airDate,
+        'air_date': airDate,
+        'releaseYear': airDate != null && airDate.length >= 4
+            ? int.tryParse(airDate.substring(0, 4))
+            : null,
+        'runtime': runtime,
+        'runtimeMinutes': runtime,
+        'duration': runtime,
+        'imageUrl': imageUrl(
+          row['still_path']?.toString() ?? row['imageUrl']?.toString(),
+          size: 'w300',
+        ),
+        'rating': _doubleOrNull(row['vote_average'] ?? row['rating']),
+        'voteCount': _toInt(row['vote_count'] ?? row['voteCount']) ?? 0,
+        'productionCode': _cleanNullable(row['production_code'] ?? row['productionCode']),
+        'seasonId': seasonId?.toString(),
+        'metadataSource': 'TMDB',
+        'metadataOnly': true,
+      });
+    }
+    normalized.sort((a, b) =>
+        (_toInt(a['episodeNumber']) ?? 0).compareTo(_toInt(b['episodeNumber']) ?? 0));
+    return normalized;
   }
 
   static Future<CinematicTitleMetadata?> lookupTitle({
@@ -314,6 +516,9 @@ class CinematicTitleMetadataService {
     final runtime = isTv
         ? _firstPositiveInt(details['episode_run_time'])
         : _positiveIntOrNull(details['runtime']);
+    final tvSeasons = isTv
+        ? normalizeTvSeasons(details['seasons'])
+        : <Map<String, dynamic>>[];
 
     return CinematicTitleMetadata(
       providerId: id,
@@ -346,6 +551,11 @@ class CinematicTitleMetadataService {
       cast: cast,
       characters: characters,
       castCredits: castCredits,
+      crewCredits: crewRows
+          .map(CinematicCrewCredit.fromJson)
+          .where((credit) => credit.name.isNotEmpty)
+          .toList(growable: false),
+      seasons: tvSeasons,
       directors: directors,
       writers: writers,
       music: music,
@@ -725,6 +935,8 @@ class CinematicTitleMetadata {
     required this.cast,
     required this.characters,
     required this.castCredits,
+    required this.crewCredits,
+    required this.seasons,
     required this.directors,
     required this.writers,
     required this.music,
@@ -761,6 +973,10 @@ class CinematicTitleMetadata {
   final List<String> characters;
   /// Sourced cast credits with roles and portrait paths, suitable for X-Ray.
   final List<CinematicCastCredit> castCredits;
+  /// Sourced production credits, including producers and screenwriters.
+  final List<CinematicCrewCredit> crewCredits;
+  /// Season summaries from TMDB; per-season episode lists are fetched lazily.
+  final List<Map<String, dynamic>> seasons;
   final List<String> directors;
   final List<String> writers;
   final List<String> music;
@@ -805,6 +1021,35 @@ class CinematicCastCredit {
       order: orderValue is int
           ? orderValue
           : int.tryParse(orderValue?.toString() ?? '') ?? 9999,
+    );
+  }
+}
+
+/// A sourced director, screenwriter, producer or other crew credit for X-Ray.
+class CinematicCrewCredit {
+  const CinematicCrewCredit({
+    required this.personId,
+    required this.name,
+    required this.job,
+    required this.department,
+    required this.profilePath,
+  });
+
+  final int? personId;
+  final String name;
+  final String job;
+  final String department;
+  final String? profilePath;
+
+  factory CinematicCrewCredit.fromJson(Map<String, dynamic> row) {
+    final rawId = row['id'];
+    final job = row['job']?.toString().trim() ?? '';
+    return CinematicCrewCredit(
+      personId: rawId is int ? rawId : int.tryParse(rawId?.toString() ?? ''),
+      name: row['name']?.toString().trim() ?? '',
+      job: job.isEmpty ? (row['known_for_department']?.toString().trim() ?? 'Crew') : job,
+      department: row['department']?.toString().trim() ?? '',
+      profilePath: row['profile_path']?.toString(),
     );
   }
 }

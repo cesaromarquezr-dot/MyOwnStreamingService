@@ -6282,7 +6282,9 @@ List<Widget> _buildHomeSectionSlivers(
           ),
         ),
         SliverToBoxAdapter(
-            child: MediaHorizontalList(media: internationalMovies)),
+          child: MediaHorizontalList(
+              media: internationalMovies, enableHomePreview: true),
+        ),
       ];
     case 'International Shows':
       if (internationalShows.isEmpty) return const <Widget>[];
@@ -6294,7 +6296,9 @@ List<Widget> _buildHomeSectionSlivers(
           ),
         ),
         SliverToBoxAdapter(
-            child: MediaHorizontalList(media: internationalShows)),
+          child: MediaHorizontalList(
+              media: internationalShows, enableHomePreview: true),
+        ),
       ];
     case 'New Albums':
       return <Widget>[
@@ -6385,6 +6389,7 @@ List<Widget> _homeMediaRail(
       child: MediaHorizontalList(
         media: items,
         showOwnership: title == 'Library Recommendations',
+        enableHomePreview: true,
       ),
     ),
   ];
@@ -6486,92 +6491,19 @@ class _HomeContinueListeningSectionState
                     final track = tracks[index];
                     final playing = current?.id == track.id &&
                         MusicPlaybackController.instance.isPlaying;
-                    return SizedBox(
-                      width: 136,
-                      child: Material(
-                        color: Colors.white.withValues(alpha: .045),
-                        borderRadius: BorderRadius.circular(16),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () {
-                            final playback = MusicPlaybackController.instance;
-                            if (playback.currentTrack?.id == track.id &&
-                                playback.isReady) {
-                              unawaited(playback.toggle());
-                            } else {
-                              unawaited(playback.play(track));
-                            }
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: SizedBox.expand(
-                                      child: track.artworkUrl
-                                                  ?.trim()
-                                                  .isNotEmpty ==
-                                              true
-                                          ? Image.network(
-                                              track.artworkUrl!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  const ColoredBox(
-                                                color: Color(0xFF252525),
-                                                child: Center(
-                                                    child: Icon(
-                                                        Icons
-                                                            .music_note_rounded,
-                                                        size: 36)),
-                                              ),
-                                            )
-                                          : const ColoredBox(
-                                              color: Color(0xFF252525),
-                                              child: Center(
-                                                  child: Icon(
-                                                      Icons.music_note_rounded,
-                                                      size: 36)),
-                                            ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 7),
-                                Row(
-                                  children: [
-                                    if (playing)
-                                      const Padding(
-                                        padding: EdgeInsets.only(right: 4),
-                                        child: Icon(Icons.graphic_eq_rounded,
-                                            size: 14,
-                                            color: Colors.greenAccent),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        track.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Text(
-                                  track.artist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 11, color: Colors.white60),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                    return _HomeMusicPreviewCard(
+                      key: ValueKey<String>(track.id),
+                      track: track,
+                      playing: playing,
+                      onTap: () {
+                        final playback = MusicPlaybackController.instance;
+                        if (playback.currentTrack?.id == track.id &&
+                            playback.isReady) {
+                          unawaited(playback.toggle());
+                        } else {
+                          unawaited(playback.play(track));
+                        }
+                      },
                     );
                   },
                 ),
@@ -6581,6 +6513,145 @@ class _HomeContinueListeningSectionState
           },
         );
       },
+    );
+  }
+}
+
+class _HomeMusicPreviewCard extends StatefulWidget {
+  const _HomeMusicPreviewCard({
+    super.key,
+    required this.track,
+    required this.playing,
+    required this.onTap,
+  });
+
+  final MusicTrack track;
+  final bool playing;
+  final VoidCallback onTap;
+
+  @override
+  State<_HomeMusicPreviewCard> createState() => _HomeMusicPreviewCardState();
+}
+
+class _HomeMusicPreviewCardState extends State<_HomeMusicPreviewCard> {
+  bool _hovering = false;
+
+  String get _previewId => 'home-song-${widget.track.id}';
+
+  MediaItem get _previewMedia => MediaItem(
+        id: _previewId,
+        title: widget.track.title,
+        type: 'song',
+        imageUrl: widget.track.artworkUrl,
+        description: '${widget.track.artist} • ${widget.track.album}',
+        trailerUrl: widget.track.musicVideoUrl,
+        music: <String>[widget.track.artist, ...widget.track.featuredArtists],
+        genres: widget.track.allGenreTags,
+      );
+
+  void _enter() {
+    if (!_hovering && mounted) setState(() => _hovering = true);
+    HomeHoverPreviewStore.show(_previewMedia);
+  }
+
+  void _exit() {
+    if (_hovering && mounted) setState(() => _hovering = false);
+    HomeHoverPreviewStore.clear(_previewId);
+  }
+
+  @override
+  void dispose() {
+    if (_hovering) HomeHoverPreviewStore.clear(_previewId);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final track = widget.track;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => _enter(),
+      onExit: (_) => _exit(),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        width: _hovering ? 164 : 136,
+        child: Material(
+          color: _hovering
+              ? Colors.white.withValues(alpha: .09)
+              : Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox.expand(
+                        child: track.artworkUrl?.trim().isNotEmpty == true
+                            ? Image.network(
+                                track.artworkUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const ColoredBox(
+                                  color: Color(0xFF252525),
+                                  child: Center(
+                                    child: Icon(Icons.music_note_rounded,
+                                        size: 36),
+                                  ),
+                                ),
+                              )
+                            : const ColoredBox(
+                                color: Color(0xFF252525),
+                                child: Center(
+                                  child:
+                                      Icon(Icons.music_note_rounded, size: 36),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Row(
+                    children: [
+                      if (widget.playing)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(
+                            Icons.graphic_eq_rounded,
+                            size: 14,
+                            color: Colors.greenAccent,
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    track.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Colors.white60),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -7021,11 +7092,13 @@ class SectionTitle extends StatelessWidget {
 class MediaHorizontalList extends StatelessWidget {
   final List<MediaItem> media;
   final bool showOwnership;
+  final bool enableHomePreview;
 
   const MediaHorizontalList({
     super.key,
     required this.media,
     this.showOwnership = false,
+    this.enableHomePreview = false,
   });
 
   @override
@@ -7038,6 +7111,7 @@ class MediaHorizontalList extends StatelessWidget {
       itemBuilder: (context, index) => MediaCard(
         media: media[index],
         showOwnership: showOwnership,
+        enableHomePreview: enableHomePreview,
       ),
     );
   }
@@ -7047,101 +7121,195 @@ class MediaHorizontalList extends StatelessWidget {
 // MEDIA CARD
 // ============================================================
 
-class MediaCard extends StatelessWidget {
+class MediaCard extends StatefulWidget {
   final MediaItem media;
   final bool showOwnership;
+  final bool enableHomePreview;
 
   const MediaCard({
     super.key,
     required this.media,
     this.showOwnership = false,
+    this.enableHomePreview = false,
   });
 
   @override
+  State<MediaCard> createState() => _MediaCardState();
+}
 
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
+class _MediaCardState extends State<MediaCard> {
+  bool _hovering = false;
+
+  @override
+  void dispose() {
+    if (_hovering && widget.enableHomePreview) {
+      HomeHoverPreviewStore.clear(widget.media.id);
+    }
+    super.dispose();
+  }
+
+  void _setHovering(bool value) {
+    if (_hovering != value && mounted) setState(() => _hovering = value);
+    if (!widget.enableHomePreview) return;
+    if (value) {
+      HomeHoverPreviewStore.show(widget.media);
+    } else {
+      HomeHoverPreviewStore.clear(widget.media.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 145,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () {
-          final normalizedType = media.type.trim().toLowerCase();
-          final isAlbum = normalizedType.contains('album') ||
-              normalizedType == 'soundtrack';
-          Navigator.push(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => isAlbum
-                  ? CatalogAlbumDetailsEntryScreen(media: media)
-                  : MediaDetailsScreen(media: media),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CatalogPosterImage(
-                      media: media,
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: Container(
-                        color: Colors.grey.shade900,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.movie, size: 45),
-                      ),
-                      errorPlaceholder: Container(
-                        color: Colors.grey.shade900,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image),
-                      ),
-                    ),
-                    if (showOwnership)
-                      Positioned(
-                        top: 6,
-                        left: 6,
-                        child: RecommendationOwnershipBadge(
-                          isOwned: AppController.instance.isOwned(media.id),
-                          compact: true,
+    final media = widget.media;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => _setHovering(true),
+      onExit: (_) => _setHovering(false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        width: _hovering && widget.enableHomePreview ? 180 : 145,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: _hovering && widget.enableHomePreview
+              ? [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: .55),
+                      blurRadius: 26,
+                      offset: const Offset(0, 8))
+                ]
+              : const [],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            if (widget.enableHomePreview) HomeHoverPreviewStore.clear(media.id);
+            final normalizedType = media.type.trim().toLowerCase();
+            final isAlbum = normalizedType.contains('album') ||
+                normalizedType == 'soundtrack';
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => isAlbum
+                    ? CatalogAlbumDetailsEntryScreen(media: media)
+                    : MediaDetailsScreen(media: media),
+              ),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AnimatedScale(
+                        scale:
+                            _hovering && widget.enableHomePreview ? 1.045 : 1,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        child: CatalogPosterImage(
+                          media: media,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          placeholder: Container(
+                            color: Colors.grey.shade900,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.movie, size: 45),
+                          ),
+                          errorPlaceholder: Container(
+                            color: Colors.grey.shade900,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.broken_image),
+                          ),
                         ),
                       ),
-                  ],
+                      if (_hovering && widget.enableHomePreview)
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: .05),
+                                  Colors.black.withValues(alpha: .84)
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_hovering && widget.enableHomePreview)
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: const BoxDecoration(
+                                color: Colors.white, shape: BoxShape.circle),
+                            child: const Icon(Icons.play_arrow_rounded,
+                                color: Colors.black, size: 30),
+                          ),
+                        ),
+                      if (_hovering && widget.enableHomePreview)
+                        Positioned(
+                          left: 10,
+                          right: 10,
+                          bottom: 10,
+                          child: Text(
+                            media.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: CinematicTitleFonts.captionStyle(
+                              media,
+                              baseFontSize: 15,
+                              color: Colors.white,
+                            ).copyWith(
+                                fontWeight: FontWeight.w900,
+                                shadows: const [
+                                  Shadow(color: Colors.black87, blurRadius: 12)
+                                ]),
+                          ),
+                        ),
+                      if (widget.showOwnership)
+                        Positioned(
+                          top: 6,
+                          left: 6,
+                          child: RecommendationOwnershipBadge(
+                            isOwned: AppController.instance.isOwned(media.id),
+                            compact: true,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              media.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: CinematicTitleFonts.captionStyle(
-                media,
-                baseFontSize: 13.2,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            if (media.displayYearLabel != null)
+              const SizedBox(height: 7),
               Text(
-                [
-                  media.displayYearLabel!,
-                  if (media.displayEditionLabel != null)
-                    media.displayEditionLabel!,
-                ].join(' • '),
+                media.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 12,
+                style: CinematicTitleFonts.captionStyle(
+                  media,
+                  baseFontSize: 13.2,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-          ],
+              if (media.displayYearLabel != null)
+                Text(
+                  [
+                    media.displayYearLabel!,
+                    if (media.displayEditionLabel != null)
+                      media.displayEditionLabel!
+                  ].join(' • '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -7290,7 +7458,15 @@ class _CatalogAlbumDetailsEntryScreenState
             localTracks: localTracks,
           );
         }
-        return MediaDetailsScreen(media: widget.media);
+        return MusicAlbumPageScreen(
+          media: widget.media,
+          isOwned: owned,
+          localTracks: localTracks,
+          // This entry screen has already attempted an exact title/artist
+          // lookup; keep the local Music album page available without issuing
+          // a duplicate request when no provider ID was found.
+          resolveSpotifyMetadata: false,
+        );
       },
     );
   }

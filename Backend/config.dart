@@ -27,6 +27,8 @@ static String get musicMetadataUserAgent => Platform.environment['MUSIC_METADATA
 /// Spotify Web API client credentials. These values are backend-only.
 static String get spotifyClientId => Platform.environment['SPOTIFY_CLIENT_ID']?.trim() ?? '';
 static String get spotifyClientSecret => Platform.environment['SPOTIFY_CLIENT_SECRET']?.trim() ?? '';
+/// Backend-only YouTube Data API key for music-video discovery.
+static String get youtubeApiKey => Platform.environment['YOUTUBE_API_KEY']?.trim() ?? '';
 static String get paypalClientId => Platform.environment['PAYPAL_CLIENT_ID']?.trim() ?? '';
 static String get paypalClientSecret => Platform.environment['PAYPAL_CLIENT_SECRET']?.trim() ?? '';
 static String get paypalBaseUrl => Platform.environment['PAYPAL_BASE_URL']?.trim() ?? 'https://api-m.sandbox.paypal.com';

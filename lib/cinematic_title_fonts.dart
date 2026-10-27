@@ -420,6 +420,29 @@ class CinematicTitleFonts {
       italic: false, glow: false, sizeScale: 1.0,
       aliases: <String>['Happy Gilmore', 'Happy Gilmore 2'],
     ),
+    CinematicTitleFontProfile(
+      key: 'wish', fontName: 'Luminous animated display',
+      fontFamily: 'Trebuchet MS', fallbackFamily: 'sans-serif',
+      color: Color(0xFF9DEBFF), weight: FontWeight.w800, letterSpacing: .8,
+      italic: false, glow: true, sizeScale: 1.12,
+      aliases: <String>['Wish', 'Disney Wish'],
+    ),
+    CinematicTitleFontProfile(
+      key: 'altered-carbon', fontName: 'Cyberpunk condensed display',
+      fontFamily: 'Arial Narrow', fallbackFamily: 'sans-serif-condensed',
+      color: Color(0xFFFF343D), weight: FontWeight.w900, letterSpacing: 2.1,
+      italic: false, glow: true, sizeScale: 1.14,
+      aliases: <String>['Altered Carbon'],
+    ),
+    CinematicTitleFontProfile(
+      key: 'a-good-girls-guide-to-murder', fontName: 'Modern investigative display',
+      fontFamily: 'Montserrat', fallbackFamily: 'sans-serif',
+      color: Color(0xFFF7F0E7), weight: FontWeight.w900, letterSpacing: 1.1,
+      italic: false, glow: false, sizeScale: .88,
+      aliases: <String>[
+        "A Good Girl's Guide to Murder", 'A Good Girls Guide to Murder',
+      ],
+    ),
   ];
 
   static const CinematicTitleFontProfile _default =

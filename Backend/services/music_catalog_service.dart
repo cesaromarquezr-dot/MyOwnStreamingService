@@ -20,6 +20,7 @@ class MusicCatalogService {
   MusicCatalogService({
     required this.spotifyClientId,
     required this.spotifyClientSecret,
+    required this.youtubeApiKey,
     required this.userAgent,
     required this.tmdbApiKey,
     required this.tmdbApiToken,
@@ -30,6 +31,7 @@ class MusicCatalogService {
 
   final String spotifyClientId;
   final String spotifyClientSecret;
+  final String youtubeApiKey;
   final String userAgent;
   final String tmdbApiKey;
   final String tmdbApiToken;
@@ -51,6 +53,8 @@ class MusicCatalogService {
   bool get tmdbConfigured =>
       tmdbApiToken.trim().isNotEmpty || tmdbApiKey.trim().isNotEmpty;
 
+  bool get youtubeVideosConfigured => youtubeApiKey.trim().isNotEmpty;
+
   Map<String, dynamic> providerStatus() => <String, dynamic>{
         'spotify': <String, dynamic>{
           'configured': spotifyConfigured,
@@ -69,6 +73,11 @@ class MusicCatalogService {
           'configured': true,
           'purpose': 'Community-sourced album/release artwork',
           'apiKeyRequired': false,
+        },
+        'youtubeMusicVideos': <String, dynamic>{
+          'configured': youtubeVideosConfigured,
+          'purpose': 'Search embeddable music-video matches for a song and artist',
+          'apiKeyRequired': true,
         },
       };
 
@@ -174,6 +183,100 @@ class MusicCatalogService {
       'spotify': spotify,
       'musicBrainz': musicBrainz,
       'warnings': warnings,
+    };
+  }
+
+  /// Searches YouTube for embeddable music-video matches for a song.
+  /// Spotify remains the source for track metadata; YouTube is the video source.
+  /// When no YouTube key is configured, the UI can still open the query on YouTube.
+  Future<Map<String, dynamic>> searchMusicVideos({
+    required String query,
+    int limit = 6,
+  }) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) {
+      throw const FormatException('A music-video search query is required.');
+    }
+    if (cleanQuery.length > 180 || cleanQuery.contains('\u0000')) {
+      throw const FormatException('Music-video search query must be between 1 and 180 characters.');
+    }
+
+    final searchUrl = Uri.https('www.youtube.com', '/results', <String, String>{
+      'search_query': cleanQuery,
+    }).toString();
+    if (!youtubeVideosConfigured) {
+      return <String, dynamic>{
+        'success': true,
+        'configured': false,
+        'source': 'YouTube',
+        'query': cleanQuery,
+        'items': <Map<String, dynamic>>[],
+        'count': 0,
+        'searchUrl': searchUrl,
+        'message': 'Add YOUTUBE_API_KEY to Backend/.env to show video results inside MyOwnStreamingService. You can still search YouTube directly.',
+      };
+    }
+
+    final boundedLimit = limit.clamp(1, 10).toInt();
+    final uri = Uri.https('www.googleapis.com', '/youtube/v3/search', <String, String>{
+      'part': 'snippet',
+      'type': 'video',
+      'videoEmbeddable': 'true',
+      'safeSearch': 'moderate',
+      'maxResults': '$boundedLimit',
+      'q': cleanQuery,
+      'key': youtubeApiKey.trim(),
+    });
+    final payload = await _getJson(uri);
+    final rawItems = payload['items'];
+    final items = rawItems is List
+        ? rawItems.whereType<Map>().map((raw) {
+            final item = Map<String, dynamic>.from(raw);
+            final idPayload = item['id'] is Map
+                ? Map<String, dynamic>.from(item['id'] as Map)
+                : <String, dynamic>{};
+            final snippet = item['snippet'] is Map
+                ? Map<String, dynamic>.from(item['snippet'] as Map)
+                : <String, dynamic>{};
+            final videoId = idPayload['videoId']?.toString() ?? '';
+            final thumbnails = snippet['thumbnails'] is Map
+                ? Map<String, dynamic>.from(snippet['thumbnails'] as Map)
+                : <String, dynamic>{};
+            String thumbnailFor(String key) {
+              final value = thumbnails[key];
+              if (value is Map) return _secureImageUrl(value['url']?.toString());
+              return '';
+            }
+            final thumbnail = <String>[
+              thumbnailFor('high'),
+              thumbnailFor('medium'),
+              thumbnailFor('default'),
+            ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+            if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)) return null;
+            return <String, dynamic>{
+              'id': videoId,
+              'videoId': videoId,
+              'title': snippet['title']?.toString() ?? 'Untitled video',
+              'description': snippet['description']?.toString() ?? '',
+              'channelTitle': snippet['channelTitle']?.toString() ?? '',
+              'publishedAt': snippet['publishedAt']?.toString() ?? '',
+              'thumbnailUrl': thumbnail,
+              'watchUrl': 'https://www.youtube.com/watch?v=$videoId',
+              'embedUrl': 'https://www.youtube.com/embed/$videoId',
+              'source': 'YouTube',
+            };
+          }).whereType<Map<String, dynamic>>().toList(growable: false)
+        : <Map<String, dynamic>>[];
+
+    return <String, dynamic>{
+      'success': true,
+      'configured': true,
+      'source': 'YouTube',
+      'query': cleanQuery,
+      'items': items,
+      'count': items.length,
+      'searchUrl': searchUrl,
+      'message': items.isEmpty ? 'YouTube returned no embeddable video matches for this query.' : '',
     };
   }
 
@@ -428,11 +531,14 @@ class MusicCatalogService {
       'producers': musicBrainzCredits['producers'] ?? <String>[],
       'musicBrainzReleaseGroupMbid': musicBrainzCredits['releaseGroupMbid'] ?? '',
       'musicBrainzReleaseUrl': musicBrainzCredits['releaseUrl'] ?? '',
-      'creditNote': musicBrainzCredits['creditNote'] ?? 'Producer/composer credits are not supplied by Spotify and no exact MusicBrainz credits were found for this album.',
+      'musicBrainzReleaseCredits': musicBrainzCredits['releaseCredits'] ?? <Map<String, dynamic>>[],
+      'musicBrainzReleaseDetails': musicBrainzCredits['releaseDetails'] ?? <String, dynamic>{},
+      'musicBrainzTrackCreditCount': musicBrainzCredits['trackCreditCount'] ?? 0,
+      'creditNote': musicBrainzCredits['creditNote'] ?? 'MusicBrainz release credits are unavailable for this album match.',
       'tracks': tracks,
       'trackCountReturned': tracks.length,
       'trackWarning': trackWarning,
-      'attribution': 'Album and track metadata/artwork provided by Spotify; composer and producer credits, when found, are from MusicBrainz. Open the album in Spotify for the original source.',
+      'attribution': 'Album and track metadata/artwork are provided by Spotify. Release edition details and role-by-role credits are from MusicBrainz when an exact release match is available.',
     };
   }
 
@@ -449,6 +555,47 @@ class MusicCatalogService {
         .toLowerCase()
         .trim()
         .replaceAll(RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"), '');
+
+    String displayRole(String rawType, List<String> attributes) {
+      final type = rawType.toLowerCase().trim().replaceAll('-', ' ');
+      const fixedRoles = <String, String>{
+        'mix': 'Mixer',
+        'mastering': 'Mastering engineer',
+        'recording': 'Recording engineer',
+        'phonographic copyright': 'Phonographic copyright (℗) by',
+        'copyright': 'Copyright (©) by',
+        'license': 'Licensed to',
+        'licensed to': 'Licensed to',
+        'distribute': 'Distributed by',
+        'distributed by': 'Distributed by',
+        'producer': 'Producer',
+        'executive producer': 'Executive producer',
+        'assistant producer': 'Assistant producer',
+        'composer': 'Composer',
+        'lyricist': 'Lyricist',
+        'writer': 'Writer',
+        'engineer': 'Engineer',
+        'performer': 'Performer',
+        'vocal': 'Vocals',
+        'instrument': 'Instrument',
+        'remixer': 'Remixer',
+        'arranger': 'Arranger',
+        'conductor': 'Conductor',
+        'orchestrator': 'Orchestrator',
+        'miscellaneous support': 'Miscellaneous support',
+        'mastering engineer': 'Mastering engineer',
+        'recording engineer': 'Recording engineer',
+      };
+      final qualifiers = attributes
+          .where((value) => const <String>{'assistant', 'associate', 'additional', 'co', 'executive', 'remix'}.contains(value.toLowerCase().trim()))
+          .map((value) => value.toLowerCase().trim())
+          .toList();
+      final base = fixedRoles[type] ?? (type.isEmpty ? 'Credit' : type[0].toUpperCase() + type.substring(1));
+      if (qualifiers.isEmpty) return base;
+      final prefix = qualifiers.map((value) => value == 'co' ? 'Co-' : value[0].toUpperCase() + value.substring(1)).join(' ');
+      return '$prefix $base';
+    }
+
     final wantedTitle = normalize(albumTitle);
     if (wantedTitle.isEmpty) return <String, dynamic>{};
     final firstArtist = artistNames.split(',').first.trim();
@@ -458,7 +605,7 @@ class MusicCatalogService {
     final search = await _musicBrainzGet(Uri.https(
       'musicbrainz.org',
       '/ws/2/release-group/',
-      <String, String>{'query': query, 'fmt': 'json', 'limit': '5'},
+      <String, String>{'query': query, 'fmt': 'json', 'limit': '10'},
     ));
     final rawGroups = search['release-groups'];
     if (rawGroups is! List) return <String, dynamic>{};
@@ -467,7 +614,18 @@ class MusicCatalogService {
         .where((v) => normalize(v['title']?.toString() ?? '') == wantedTitle)
         .toList();
     if (groups.isEmpty) return <String, dynamic>{};
-    final group = groups.first;
+
+    // Prefer the exact credited artist when several release groups share a title.
+    final normalizedArtists = artistNames.split(',').map(normalize).where((v) => v.isNotEmpty).toSet();
+    final group = groups.firstWhere((candidate) {
+      final credits = candidate['artist-credit'];
+      if (credits is! List) return false;
+      final creditedNames = credits.whereType<Map>().map((credit) {
+        final artist = credit['artist'];
+        return normalize(artist is Map ? (artist['name']?.toString() ?? '') : (credit['name']?.toString() ?? ''));
+      }).where((v) => v.isNotEmpty).toSet();
+      return normalizedArtists.isEmpty || creditedNames.isEmpty || creditedNames.intersection(normalizedArtists).isNotEmpty;
+    }, orElse: () => groups.first);
     final groupId = group['id']?.toString() ?? '';
     if (!_isMbid(groupId)) return <String, dynamic>{};
 
@@ -477,65 +635,104 @@ class MusicCatalogService {
       <String, String>{
         'release-group': groupId,
         'fmt': 'json',
-        'limit': '5',
-        'inc': 'artist-credits+labels+recordings+media+recording-rels+work-rels+recording-level-rels+work-level-rels',
+        'limit': '10',
+        'inc': 'artist-credits+labels+recordings+media+release-groups+discids+isrcs+release-rels+recording-rels+work-rels+recording-level-rels+release-group-level-rels+work-level-rels',
       },
     ));
     final rawReleases = browse['releases'];
     if (rawReleases is! List || rawReleases.isEmpty) {
       return <String, dynamic>{
         'releaseGroupMbid': groupId,
+        'releaseUrl': 'https://musicbrainz.org/release-group/$groupId',
         'composers': <String>[],
         'producers': <String>[],
+        'releaseCredits': <Map<String, dynamic>>[],
         'creditNote': 'MusicBrainz matched this album but returned no detailed release credits.',
       };
     }
+
     final releases = rawReleases.whereType<Map>()
         .map((v) => Map<String, dynamic>.from(v)).toList();
     final targetYear = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
-    releases.sort((a, b) {
-      final aStatus = (a['status']?.toString().toLowerCase() == 'official') ? 0 : 1;
-      final bStatus = (b['status']?.toString().toLowerCase() == 'official') ? 0 : 1;
-      return aStatus.compareTo(bStatus);
-    });
-    final release = releases.firstWhere(
-      (v) => targetYear.isNotEmpty && (v['date']?.toString() ?? '').startsWith(targetYear),
-      orElse: () => releases.first,
-    );
+    int releaseScore(Map<String, dynamic> value) {
+      var score = 0;
+      if ((value['status']?.toString().toLowerCase() ?? '') == 'official') score += 10;
+      if (targetYear.isNotEmpty && (value['date']?.toString() ?? '').startsWith(targetYear)) score += 20;
+      if ((value['country']?.toString() ?? '') == 'XW') score -= 1;
+      return score;
+    }
+    releases.sort((a, b) => releaseScore(b).compareTo(releaseScore(a)));
+    final release = releases.first;
     final releaseId = release['id']?.toString() ?? '';
 
-    final albumProducers = <String>{};
-    final albumComposers = <String>{};
+    final albumRoleMap = <String, Set<String>>{};
     final perTrackCredits = <String, Map<String, Set<String>>>{};
-    void readRelations(dynamic node, Map<String, Set<String>> credits) {
-      if (node is! Map) return;
+    final perTrackMbids = <String, String>{};
+    final perTrackIsrcs = <String, List<String>>{};
+
+    void addRole(Map<String, Set<String>> destination, String role, String person) {
+      final cleanRole = role.trim();
+      final cleanPerson = person.trim();
+      if (cleanRole.isEmpty || cleanPerson.isEmpty) return;
+      destination.putIfAbsent(cleanRole, () => <String>{}).add(cleanPerson);
+    }
+
+    void readRelations(dynamic node, Map<String, Set<String>> destination, [int depth = 0]) {
+      if (node is! Map || depth > 5) return;
       final row = Map<String, dynamic>.from(node);
       final relations = row['relations'];
       if (relations is! List) return;
       for (final rawRelation in relations.whereType<Map>()) {
         final relation = Map<String, dynamic>.from(rawRelation);
-        final type = (relation['type'] ?? relation['type-name'] ?? '').toString().toLowerCase();
+        final type = (relation['type'] ?? relation['type-name'] ?? '').toString().trim();
+        final attrs = relation['attributes'] is List
+            ? (relation['attributes'] as List).map((value) => value.toString()).toList()
+            : <String>[];
         final artist = relation['artist'] is Map
             ? Map<String, dynamic>.from(relation['artist'] as Map)
             : <String, dynamic>{};
-        final name = artist['name']?.toString().trim() ?? '';
-        if (name.isNotEmpty) {
-          if (type.contains('producer')) credits.putIfAbsent('producers', () => <String>{}).add(name);
-          if (type.contains('composer') || type.contains('writer') || type.contains('lyricist')) {
-            credits.putIfAbsent('composers', () => <String>{}).add(name);
-          }
-          if (type.contains('performer') || type.contains('vocal')) {
-            credits.putIfAbsent('performers', () => <String>{}).add(name);
+        final labelTarget = relation['label'] is Map
+            ? Map<String, dynamic>.from(relation['label'] as Map)
+            : <String, dynamic>{};
+        final name = artist['name']?.toString().trim().isNotEmpty == true
+            ? artist['name'].toString().trim()
+            : labelTarget['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty && type.isNotEmpty) {
+          final role = displayRole(type, attrs);
+          // MusicBrainz stores instrument/vocal specifics as relationship attributes.
+          final nonQualifierAttrs = attrs.where((value) => !const <String>{'assistant', 'associate', 'additional', 'co', 'executive', 'remix'}.contains(value.toLowerCase().trim())).toList();
+          if ((type.toLowerCase() == 'instrument' || type.toLowerCase() == 'vocal') && nonQualifierAttrs.isNotEmpty) {
+            for (final detail in nonQualifierAttrs) {
+              final detailRole = detail.isEmpty ? role : detail[0].toUpperCase() + detail.substring(1);
+              addRole(destination, detailRole, name);
+            }
+          } else {
+            addRole(destination, role, name);
           }
         }
-        if (relation['work'] is Map) readRelations(relation['work'], credits);
+        // Recording relationships can point to a work; the work contains writer,
+        // composer and lyricist credits. Walk only that bounded relationship tree.
+        if (relation['work'] is Map) readRelations(relation['work'], destination, depth + 1);
       }
     }
+
+    // Capture all personnel and company credits attached directly to this release
+    // and to the linked release group. These are separate from track-specific roles.
+    readRelations(release, albumRoleMap);
+    if (release['release-group'] is Map) {
+      readRelations(release['release-group'], albumRoleMap);
+    }
+
     final releaseMedia = release['media'] is List
         ? (release['media'] as List).whereType<Map>().map((v) => Map<String, dynamic>.from(v)).toList()
         : <Map<String, dynamic>>[];
+    final mediaFormats = <String>{};
+    var mbTrackCount = 0;
     for (final medium in releaseMedia) {
+      final format = medium['format']?.toString().trim() ?? '';
+      if (format.isNotEmpty) mediaFormats.add(format);
       final tracksRaw = medium['tracks'] is List ? medium['tracks'] as List : <dynamic>[];
+      mbTrackCount += int.tryParse(medium['track-count']?.toString() ?? '') ?? tracksRaw.length;
       for (final rawTrack in tracksRaw.whereType<Map>()) {
         final track = Map<String, dynamic>.from(rawTrack);
         final recording = track['recording'] is Map
@@ -547,40 +744,113 @@ class MusicCatalogService {
         final credits = perTrackCredits.putIfAbsent(key, () => <String, Set<String>>{});
         readRelations(recording, credits);
         readRelations(track, credits);
-        albumProducers.addAll(credits['producers'] ?? const <String>{});
-        albumComposers.addAll(credits['composers'] ?? const <String>{});
+        final recordingId = recording['id']?.toString() ?? '';
+        if (recordingId.isNotEmpty) perTrackMbids[key] = recordingId;
+        final isrcRows = recording['isrcs'] is List ? (recording['isrcs'] as List).map((value) => value.toString()).where((value) => value.trim().isNotEmpty).toList() : <String>[];
+        if (isrcRows.isNotEmpty) perTrackIsrcs[key] = isrcRows.toSet().toList()..sort();
       }
     }
-    // Attach a MusicBrainz role credit only to the corresponding track title;
-    // matching by title doesn't mutate the Spotify's display title or artist.
+
+    // Preserve the old convenience arrays while attaching the full role list to
+    // each matching Spotify track without altering Spotify's canonical title.
     for (final track in spotifyTracks) {
       final key = normalize(track['title']?.toString() ?? '');
-      final credits = perTrackCredits[key];
-      track['producers'] = (credits?['producers'] ?? const <String>{}).toList()..sort();
-      track['composers'] = (credits?['composers'] ?? const <String>{}).toList()..sort();
-      track['performers'] = (credits?['performers'] ?? const <String>{}).toList()..sort();
+      final roles = perTrackCredits[key] ?? <String, Set<String>>{};
+      List<String> valuesFor(bool Function(String role) predicate) => roles.entries
+          .where((entry) => predicate(entry.key.toLowerCase()))
+          .expand((entry) => entry.value)
+          .toSet()
+          .toList()..sort();
+      track['producers'] = valuesFor((role) => role.contains('producer'));
+      track['composers'] = valuesFor((role) => role.contains('composer') || role.contains('writer') || role.contains('lyricist'));
+      track['performers'] = valuesFor((role) => role.contains('performer') || role.contains('vocal') || role.contains('guitar') || role.contains('drum') || role.contains('piano') || role.contains('cello') || role.contains('saxophone'));
+      track['musicBrainzRecordingMbid'] = perTrackMbids[key] ?? '';
+      track['isrcs'] = perTrackIsrcs[key] ?? <String>[];
+      track['musicBrainzCredits'] = roles.entries
+          .where((entry) => entry.value.isNotEmpty)
+          .map((entry) => <String, dynamic>{'role': entry.key, 'people': entry.value.toList()..sort()})
+          .toList()
+        ..sort((a, b) => (a['role']?.toString() ?? '').compareTo(b['role']?.toString() ?? ''));
     }
+
     final labelsRaw = release['label-info'] is List ? release['label-info'] as List : <dynamic>[];
-    var label = '';
+    final labels = <String>{};
+    final catalogNumbers = <String>{};
     for (final rawLabelInfo in labelsRaw.whereType<Map>()) {
       final labelInfo = Map<String, dynamic>.from(rawLabelInfo);
       final labelObject = labelInfo['label'] is Map
           ? Map<String, dynamic>.from(labelInfo['label'] as Map)
           : <String, dynamic>{};
-      label = labelObject['name']?.toString().trim() ?? '';
-      if (label.isNotEmpty) break;
+      final labelName = labelObject['name']?.toString().trim() ?? '';
+      final catalogNumber = labelInfo['catalog-number']?.toString().trim() ?? '';
+      if (labelName.isNotEmpty) labels.add(labelName);
+      if (catalogNumber.isNotEmpty) catalogNumbers.add(catalogNumber);
     }
-    final creditSourceUrl = groupId.isEmpty ? '' : 'https://musicbrainz.org/release-group/$groupId';
+    final releaseGroup = release['release-group'] is Map
+        ? Map<String, dynamic>.from(release['release-group'] as Map)
+        : group;
+    final releaseUrl = releaseId.isEmpty
+        ? 'https://musicbrainz.org/release-group/$groupId'
+        : 'https://musicbrainz.org/release/$releaseId';
+    final releaseCredits = albumRoleMap.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .map((entry) => <String, dynamic>{'role': entry.key, 'people': entry.value.toList()..sort()})
+        .toList()
+      ..sort((a, b) => (a['role']?.toString() ?? '').compareTo(b['role']?.toString() ?? ''));
+    final producers = <String>{};
+    final composers = <String>{};
+    void aggregateAlbumRole(String role, Iterable<String> people) {
+      final normalizedRole = role.toLowerCase();
+      if (normalizedRole.contains('producer')) producers.addAll(people);
+      if (normalizedRole.contains('composer') || normalizedRole.contains('writer') || normalizedRole.contains('lyricist')) composers.addAll(people);
+    }
+    for (final row in releaseCredits) {
+      final role = row['role']?.toString() ?? '';
+      final people = row['people'] is List ? (row['people'] as List).map((v) => v.toString()) : const <String>[];
+      aggregateAlbumRole(role, people);
+    }
+    for (final track in spotifyTracks) {
+      final rows = track['musicBrainzCredits'];
+      if (rows is! List) continue;
+      for (final rawRow in rows.whereType<Map>()) {
+        final row = Map<String, dynamic>.from(rawRow);
+        final people = row['people'] is List ? (row['people'] as List).map((v) => v.toString()) : const <String>[];
+        aggregateAlbumRole(row['role']?.toString() ?? '', people);
+      }
+    }
+    final primaryType = releaseGroup['primary-type']?.toString() ?? '';
+    final secondaryTypes = releaseGroup['secondary-types'] is List
+        ? (releaseGroup['secondary-types'] as List).map((v) => v.toString()).toList()
+        : <String>[];
+    final trackCreditCount = spotifyTracks.fold<int>(0, (count, track) => count + ((track['musicBrainzCredits'] is List) ? (track['musicBrainzCredits'] as List).length : 0));
     return <String, dynamic>{
       'releaseGroupMbid': groupId,
       'releaseId': releaseId,
-      'releaseUrl': releaseId.isEmpty ? creditSourceUrl : 'https://musicbrainz.org/release/$releaseId',
-      'label': label,
-      'producers': albumProducers.toList()..sort(),
-      'composers': albumComposers.toList()..sort(),
-      'creditNote': albumProducers.isEmpty && albumComposers.isEmpty
-          ? 'MusicBrainz matched this album, but producer/composer roles were not recorded for the selected release.'
-          : 'Track-level composer and producer roles are shown where MusicBrainz records them.',
+      'releaseUrl': releaseUrl,
+      'label': labels.join(', '),
+      'producers': producers.toList()..sort(),
+      'composers': composers.toList()..sort(),
+      'releaseCredits': releaseCredits,
+      'releaseDetails': <String, dynamic>{
+        'date': release['date']?.toString() ?? '',
+        'country': release['country']?.toString() ?? '',
+        'status': release['status']?.toString() ?? '',
+        'barcode': release['barcode']?.toString() ?? '',
+        'packaging': release['packaging']?.toString() ?? '',
+        'format': mediaFormats.toList()..sort(),
+        'catalogNumbers': catalogNumbers.toList()..sort(),
+        'disambiguation': release['disambiguation']?.toString() ?? '',
+        'trackCount': mbTrackCount,
+        'mediumCount': releaseMedia.length,
+        'primaryType': primaryType,
+        'secondaryTypes': secondaryTypes,
+        'releaseGroupFirstDate': releaseGroup['first-release-date']?.toString() ?? '',
+        'quality': release['quality']?.toString() ?? '',
+      },
+      'trackCreditCount': trackCreditCount,
+      'creditNote': releaseCredits.isEmpty && trackCreditCount == 0
+          ? 'MusicBrainz matched this album, but its selected release has no detailed personnel relationships recorded.'
+          : 'Credits are grouped by role and shown for the release or individual tracks where MusicBrainz records them.',
     };
   }
 
@@ -631,6 +901,13 @@ class MusicCatalogService {
         'explicit': item['explicit'] == true,
         'previewUrl': _secureImageUrl(item['preview_url']?.toString()),
         'spotifyUrl': _spotifyExternalUrl(item),
+        'album': item['album'] is Map
+            ? ((item['album'] as Map)['name']?.toString() ?? '')
+            : '',
+        'imageUrl': _spotifyImage(
+          item['album'] is Map ? (item['album'] as Map)['images'] : null,
+        ),
+        'source': 'Spotify',
         'type': 'track',
       };
 

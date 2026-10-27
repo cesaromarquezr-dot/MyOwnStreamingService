@@ -7,6 +7,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
 import 'cinematic_title.dart';
@@ -188,7 +189,22 @@ class HomeBrowseNavigation extends StatelessWidget {
   }
 }
 
-/// Large landscape Home banner with automatic 12-second rotation and manual controls.
+/// Shared home-only hover target. Home rail cards publish their hovered item and
+/// the hero surfaces it immediately; leaving the card returns to normal rotation.
+class HomeHoverPreviewStore {
+  HomeHoverPreviewStore._();
+
+  static final ValueNotifier<MediaItem?> current =
+      ValueNotifier<MediaItem?>(null);
+
+  static void show(MediaItem item) => current.value = item;
+
+  static void clear(String mediaId) {
+    if (current.value?.id == mediaId) current.value = null;
+  }
+}
+
+/// Large landscape Home banner with automatic rotation, hover previews and controls.
 class HomeHeroCarousel extends StatefulWidget {
   final List<MediaItem> items;
   final ValueChanged<MediaItem> onOpen;
@@ -209,10 +225,19 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   Timer? _advanceTimer;
   int _index = 0;
   bool _appIsActive = true;
+  MediaItem? _hoveredMedia;
   VideoPlayerController? _previewController;
+  YoutubePlayerController? _youtubePreviewController;
   bool _previewMuted = true;
   String? _previewUrl;
+  String? _youtubePreviewUrl;
+  String? _youtubePreviewId;
   final Map<String, String> _tmdbOverviewsByMediaId = <String, String>{};
+  final Map<String, int> _tmdbSeasonCountsByMediaId = <String, int>{};
+  final Map<String, String> _tmdbYearLabelsByMediaId = <String, String>{};
+  final Map<String, String> _musicVideoUrlByMediaId = <String, String>{};
+  final Map<String, String> _tmdbTrailerUrlByMediaId = <String, String>{};
+  final Set<String> _musicVideoLookupStarted = <String>{};
   final Set<String> _overviewLookupStarted = <String>{};
   final Map<String, String> _selectedBackdropPaths = <String, String>{};
 
@@ -220,13 +245,35 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    HomeHoverPreviewStore.current.addListener(_onHomeHoverChanged);
+    _hoveredMedia = HomeHoverPreviewStore.current.value;
     ArtworkSelectionStore.revision.addListener(_onArtworkSelectionsChanged);
     unawaited(_refreshSelectedBackdrops());
     if (widget.items.isNotEmpty) {
-      _loadPreview(widget.items.first);
-      unawaited(_loadOverview(widget.items.first));
+      final initial = _hoveredMedia ?? widget.items.first;
+      _loadPreview(initial);
+      unawaited(_loadOverview(initial));
     }
     _scheduleNext();
+  }
+
+  void _onHomeHoverChanged() {
+    if (!mounted) return;
+    final next = HomeHoverPreviewStore.current.value;
+    if (_hoveredMedia?.id == next?.id) return;
+    setState(() => _hoveredMedia = next);
+    _advanceTimer?.cancel();
+    _advanceTimer = null;
+    if (next != null) {
+      _loadPreview(next);
+      unawaited(_loadOverview(next));
+    } else if (widget.items.isNotEmpty) {
+      final current =
+          widget.items[_index.clamp(0, widget.items.length - 1).toInt()];
+      _loadPreview(current);
+      unawaited(_loadOverview(current));
+      _scheduleNext();
+    }
   }
 
   @override
@@ -256,7 +303,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     }
     if (!mounted) return;
     if (next.length != _selectedBackdropPaths.length ||
-        next.entries.any((entry) => _selectedBackdropPaths[entry.key] != entry.value)) {
+        next.entries
+            .any((entry) => _selectedBackdropPaths[entry.key] != entry.value)) {
       setState(() {
         _selectedBackdropPaths
           ..clear()
@@ -291,17 +339,47 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       return;
     }
     try {
-      final overview = (await CinematicTitleMetadataService.lookupOverview(
-                title: media.title,
-                isTv: media.isSeries,
-                year: media.releaseYear,
-              ))
-              ?.trim() ??
-          '';
-      if (!mounted || overview.isEmpty) return;
-      setState(() => _tmdbOverviewsByMediaId[media.id] = overview);
+      final metadata = await CinematicTitleMetadataService.lookupHomeMetadata(
+        title: media.title,
+        isTv: media.isSeries,
+        year: media.releaseYear ?? media.seriesStartYear,
+      );
+      if (!mounted || metadata == null) return;
+      final overview = metadata['overview']?.toString().trim() ?? '';
+      final seasonCount = metadata['seasonCount'] is int
+          ? metadata['seasonCount'] as int
+          : int.tryParse(metadata['seasonCount']?.toString() ?? '');
+      final yearLabel = metadata['yearLabel']?.toString().trim() ?? '';
+      final previewUrl = metadata['previewUrl']?.toString().trim() ?? '';
+      if (previewUrl.isNotEmpty &&
+          media.trailerUrl?.trim().isNotEmpty != true &&
+          _extractYoutubeVideoId(previewUrl) != null) {
+        _tmdbTrailerUrlByMediaId[media.id] = previewUrl;
+      }
+      setState(() {
+        if (overview.isNotEmpty) {
+          _tmdbOverviewsByMediaId[media.id] = overview;
+        }
+        if (media.isSeries && seasonCount != null && seasonCount > 0) {
+          _tmdbSeasonCountsByMediaId[media.id] = seasonCount;
+        }
+        if (media.isSeries && yearLabel.isNotEmpty) {
+          _tmdbYearLabelsByMediaId[media.id] = yearLabel;
+        }
+      });
+      final isSelected = _hoveredMedia?.id == media.id ||
+          (widget.items.isNotEmpty &&
+              widget.items[_index.clamp(0, widget.items.length - 1).toInt()]
+                      .id ==
+                  media.id);
+      if (previewUrl.isNotEmpty &&
+          media.trailerUrl?.trim().isNotEmpty != true &&
+          _extractYoutubeVideoId(previewUrl) != null &&
+          isSelected) {
+        unawaited(_loadPreview(media));
+      }
     } catch (_) {
-      // Metadata lookups are best-effort; keep the local catalog overview.
+      // Metadata lookups are best-effort; keep local catalog values on error.
     }
   }
 
@@ -315,28 +393,169 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         controller.setVolume(_previewMuted ? 0 : 1);
         controller.play();
       }
+      final youtubeController = _youtubePreviewController;
+      if (youtubeController != null) {
+        youtubeController.mute();
+        youtubeController.playVideo();
+      }
     } else {
       _advanceTimer?.cancel();
       _advanceTimer = null;
       _previewController?.pause();
+      _youtubePreviewController?.pauseVideo();
+    }
+  }
+
+  String? _extractYoutubeVideoId(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null) return null;
+    String? candidate;
+    if (uri.host == 'youtu.be' || uri.host == 'www.youtu.be') {
+      candidate = uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+    } else if (const <String>{
+      'youtube.com',
+      'www.youtube.com',
+      'm.youtube.com',
+      'music.youtube.com'
+    }.contains(uri.host)) {
+      if (uri.path == '/watch') {
+        candidate = uri.queryParameters['v'];
+      } else if (uri.pathSegments.length >= 2 &&
+          const <String>{'shorts', 'embed', 'live', 'v'}
+              .contains(uri.pathSegments.first)) {
+        candidate = uri.pathSegments[1];
+      }
+    }
+    if (candidate == null) return null;
+    final cleaned = candidate.trim();
+    return RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(cleaned) ? cleaned : null;
+  }
+
+  Future<void> _disposeDirectPreview() async {
+    final old = _previewController;
+    _previewController = null;
+    _previewUrl = null;
+    if (old != null) {
+      await old.pause();
+      await old.dispose();
+    }
+  }
+
+  void _disposeYoutubePreview() {
+    final old = _youtubePreviewController;
+    _youtubePreviewController = null;
+    _youtubePreviewUrl = null;
+    _youtubePreviewId = null;
+    old?.close();
+  }
+
+  String? _effectivePreviewUrl(MediaItem media) {
+    final explicit = media.trailerUrl?.trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    return _musicVideoUrlByMediaId[media.id] ??
+        _tmdbTrailerUrlByMediaId[media.id];
+  }
+
+  bool _isMusicVideoSearchable(MediaItem media) {
+    final type = media.type.trim().toLowerCase();
+    return type == 'song' ||
+        type == 'track' ||
+        type.contains('track') ||
+        type == 'audio' ||
+        type == 'music' ||
+        type == 'album' ||
+        type == 'soundtrack' ||
+        type == 'musicrelease' ||
+        type == 'music release' ||
+        type.contains('album');
+  }
+
+  Future<void> _findMusicVideoPreview(MediaItem media) async {
+    if (!_isMusicVideoSearchable(media) ||
+        !AppController.instance.isBackendAuthenticated ||
+        !_musicVideoLookupStarted.add(media.id)) {
+      return;
+    }
+
+    final creditedArtists = media.music.take(3).join(' ');
+    final query = '${media.title} $creditedArtists official music video'.trim();
+    try {
+      final payload = await AppController.instance.backendApi.searchMusicVideos(
+        query,
+        limit: 1,
+      );
+      final rawItems = payload['items'];
+      if (rawItems is! List || rawItems.isEmpty || rawItems.first is! Map) {
+        return;
+      }
+      final item = Map<String, dynamic>.from(rawItems.first as Map);
+      final videoId = item['videoId']?.toString().trim();
+      final watchUrl = item['watchUrl']?.toString().trim();
+      final url =
+          videoId != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)
+              ? 'https://www.youtube.com/watch?v=$videoId'
+              : watchUrl;
+      if (url == null || !url.startsWith('http')) return;
+      _musicVideoUrlByMediaId[media.id] = url;
+
+      // A slow response for a card that is no longer hovered must not replace
+      // the newer title's active preview. The result remains cached for next time.
+      final stillSelected = _hoveredMedia?.id == media.id ||
+          (widget.items.isNotEmpty &&
+              widget.items[_index.clamp(0, widget.items.length - 1).toInt()]
+                      .id ==
+                  media.id);
+      if (mounted && stillSelected) await _loadPreview(media);
+    } catch (_) {
+      // Keep Home usable when the backend or YouTube search is unavailable.
     }
   }
 
   Future<void> _loadPreview(MediaItem media) async {
-    final url = media.trailerUrl?.trim();
+    final url = _effectivePreviewUrl(media);
+    if ((url == null || url.isEmpty) && _isMusicVideoSearchable(media)) {
+      unawaited(_findMusicVideoPreview(media));
+    }
     if (url == null || url.isEmpty || !url.startsWith('http')) {
-      final old = _previewController;
-      _previewController = null;
-      _previewUrl = null;
-      if (old != null) {
-        await old.pause();
-        await old.dispose();
-      }
+      _disposeYoutubePreview();
+      await _disposeDirectPreview();
       if (mounted) setState(() {});
       return;
     }
+
+    final youtubeId = _extractYoutubeVideoId(url);
+    if (youtubeId != null) {
+      await _disposeDirectPreview();
+      if (_youtubePreviewId == youtubeId && _youtubePreviewController != null) {
+        _youtubePreviewController!.mute();
+        _youtubePreviewController!.playVideo();
+        if (mounted) setState(() {});
+        return;
+      }
+      _disposeYoutubePreview();
+      _youtubePreviewUrl = url;
+      _youtubePreviewId = youtubeId;
+      final controller = YoutubePlayerController.fromVideoId(
+        videoId: youtubeId,
+        autoPlay: true,
+        params: const YoutubePlayerParams(
+          showControls: false,
+          showFullscreenButton: false,
+          enableCaption: false,
+          playsInline: true,
+          loop: true,
+        ),
+      );
+      _youtubePreviewController = controller;
+      controller.mute();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    _disposeYoutubePreview();
     if (_previewUrl == url && _previewController?.value.isInitialized == true) {
       await _previewController!.seekTo(Duration.zero);
+      await _previewController!.setVolume(_previewMuted ? 0 : 1);
       await _previewController!.play();
       return;
     }
@@ -371,7 +590,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
   void _scheduleNext() {
     _advanceTimer?.cancel();
-    if (!_appIsActive || widget.items.length < 2) return;
+    if (!_appIsActive || _hoveredMedia != null || widget.items.length < 2) {
+      return;
+    }
     _advanceTimer = Timer(const Duration(seconds: 12), () {
       if (!mounted || !_appIsActive || widget.items.length < 2) return;
       final next = (_index + 1) % widget.items.length;
@@ -400,9 +621,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    HomeHoverPreviewStore.current.removeListener(_onHomeHoverChanged);
     ArtworkSelectionStore.revision.removeListener(_onArtworkSelectionsChanged);
     _advanceTimer?.cancel();
     _previewController?.dispose();
+    _disposeYoutubePreview();
     _pageController.dispose();
     super.dispose();
   }
@@ -411,7 +634,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
     final width = MediaQuery.sizeOf(context).width;
-    final height = (width * .54).clamp(340.0, 500.0).toDouble();
+    // On desktop the hero uses roughly the upper half of the window; mobile
+    // keeps a shorter banner so the first discovery shelf remains visible.
+    final height = width < 600
+        ? (width * .72).clamp(300.0, 430.0).toDouble()
+        : (width * .43).clamp(420.0, 590.0).toDouble();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
@@ -427,13 +654,26 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                 itemCount: widget.items.length,
                 onPageChanged: (value) {
                   setState(() => _index = value);
-                  _loadPreview(widget.items[value]);
-                  unawaited(_loadOverview(widget.items[value]));
+                  final previewItem = _hoveredMedia ?? widget.items[value];
+                  _loadPreview(previewItem);
+                  unawaited(_loadOverview(previewItem));
                   _scheduleNext();
                 },
                 itemBuilder: (context, index) =>
                     _buildHeroPage(widget.items[index]),
               ),
+              if (_hoveredMedia != null)
+                Positioned.fill(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: KeyedSubtree(
+                      key: ValueKey<String>('home-hover-${_hoveredMedia!.id}'),
+                      child: _buildHeroPage(_hoveredMedia!),
+                    ),
+                  ),
+                ),
               if (widget.items.length > 1) ...[
                 Positioned(
                   left: 10,
@@ -518,13 +758,23 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ? tmdbOverview
         : media.description?.trim();
     final heroMetadata = <String>[];
-    final yearLabel = media.displayYearLabel;
+    final localYearLabel = media.displayYearLabel;
+    final tmdbYearLabel = _tmdbYearLabelsByMediaId[media.id];
+    final localSeriesYearIsPartial = media.isSeries &&
+        media.seriesEndYear == null &&
+        !media.seriesOngoing &&
+        !media.isSeriesUpcoming &&
+        (localYearLabel == null || !localYearLabel.contains('–'));
+    final yearLabel = localSeriesYearIsPartial && tmdbYearLabel != null
+        ? tmdbYearLabel
+        : (localYearLabel ?? tmdbYearLabel);
     if (yearLabel != null && yearLabel.isNotEmpty) heroMetadata.add(yearLabel);
     final editionLabel = media.displayEditionLabel;
     if (editionLabel != null && editionLabel.isNotEmpty) {
       heroMetadata.add(editionLabel);
     }
-    final seasonCount = media.displaySeasonCount;
+    final seasonCount =
+        media.displaySeasonCount ?? _tmdbSeasonCountsByMediaId[media.id];
     if (seasonCount != null) {
       heroMetadata
           .add('$seasonCount ${seasonCount == 1 ? 'Season' : 'Seasons'}');
@@ -538,7 +788,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (selectedBackdropUrl != null)
+        if (selectedBackdropUrl != null &&
+            !((_previewController != null &&
+                    _previewUrl == _effectivePreviewUrl(media) &&
+                    _previewController!.value.isInitialized) ||
+                (_youtubePreviewController != null &&
+                    _youtubePreviewUrl == _effectivePreviewUrl(media))))
           Positioned.fill(
             // Keep the entire user-selected backdrop visible. A cover-fit,
             // softly blurred copy fills the extra space around wide/tall
@@ -566,8 +821,16 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               ],
             ),
           )
+        else if (_youtubePreviewController != null &&
+            _youtubePreviewUrl == _effectivePreviewUrl(media))
+          Positioned.fill(
+            child: YoutubePlayer(
+              controller: _youtubePreviewController!,
+              aspectRatio: 16 / 9,
+            ),
+          )
         else if (_previewController != null &&
-            _previewUrl == media.trailerUrl?.trim() &&
+            _previewUrl == _effectivePreviewUrl(media) &&
             _previewController!.value.isInitialized)
           FittedBox(
             fit: BoxFit.cover,
@@ -597,8 +860,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
           ),
-        ]
-        else
+        ] else
           _heroFallback(media),
         DecoratedBox(
           decoration: BoxDecoration(
@@ -624,9 +886,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
             ),
           ),
         ),
-        if (_previewController != null &&
-            _previewUrl == media.trailerUrl?.trim() &&
-            _previewController!.value.isInitialized)
+        if ((_previewController != null &&
+                _previewUrl == _effectivePreviewUrl(media) &&
+                _previewController!.value.isInitialized) ||
+            (_youtubePreviewController != null &&
+                _youtubePreviewUrl == _effectivePreviewUrl(media)))
           Positioned(
             right: 20,
             bottom: 58,
@@ -634,7 +898,17 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               tooltip: _previewMuted ? 'Unmute preview' : 'Mute preview',
               onPressed: () async {
                 setState(() => _previewMuted = !_previewMuted);
-                await _previewController?.setVolume(_previewMuted ? 0 : 1);
+                final youtube = _youtubePreviewController;
+                if (youtube != null &&
+                    _youtubePreviewUrl == _effectivePreviewUrl(media)) {
+                  if (_previewMuted) {
+                    youtube.mute();
+                  } else {
+                    youtube.unMute();
+                  }
+                } else {
+                  await _previewController?.setVolume(_previewMuted ? 0 : 1);
+                }
               },
               icon: Icon(_previewMuted
                   ? Icons.volume_off_rounded
@@ -658,7 +932,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                     color: _discoveryAccent.withValues(alpha: .9),
                     borderRadius: BorderRadius.circular(7),
                   ),
-                  child: Text(media.type.toUpperCase(),
+                  child: Text(_heroTypeLabel(media),
                       style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
@@ -705,31 +979,56 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white70, fontSize: 12.5, height: 1.4)),
+                            color: Colors.white70,
+                            fontSize: 12.5,
+                            height: 1.4)),
                   ),
                 ],
                 const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: () => widget.onOpen(media),
-                  icon: Icon(
-                      media.playbackUrl?.trim().isNotEmpty == true
-                          ? Icons.play_arrow_rounded
-                          : Icons.info_outline_rounded,
-                      size: 22),
-                  label: UniversalText(
-                    media.playbackUrl?.trim().isNotEmpty == true
-                        ? 'Play now'
-                        : 'More info',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: media.playbackUrl?.trim().isNotEmpty == true
+                          ? () => widget.onOpen(media)
+                          : null,
+                      icon: const Icon(Icons.play_arrow_rounded, size: 23),
+                      label: const UniversalText(
+                        'Play',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        disabledBackgroundColor:
+                            Colors.white.withValues(alpha: .62),
+                        foregroundColor: Colors.black,
+                        disabledForegroundColor: Colors.black54,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => widget.onOpen(media),
+                      icon: const Icon(Icons.info_outline_rounded, size: 21),
+                      label: const UniversalText(
+                        'More info',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.black.withValues(alpha: .42),
+                        side: BorderSide(
+                            color: Colors.white.withValues(alpha: .58)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -737,6 +1036,30 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ),
       ],
     );
+  }
+
+  String _heroTypeLabel(MediaItem media) {
+    final raw = media.type.toLowerCase().trim();
+    if (media.isSeries ||
+        raw.contains('tv') ||
+        raw.contains('series') ||
+        raw.contains('show')) {
+      return 'TV SERIES';
+    }
+    if (raw.contains('album') || raw == 'soundtrack' || raw == 'musicrelease') {
+      return 'ALBUM';
+    }
+    if (raw == 'track' ||
+        raw == 'song' ||
+        raw == 'audio' ||
+        raw.contains('track')) {
+      return 'SONG';
+    }
+    if (raw == 'artist' || raw == 'musician') return 'MUSIC ARTIST';
+    if (raw.contains('movie') || raw.contains('film') || raw == 'feature') {
+      return 'MOVIE';
+    }
+    return raw.isEmpty ? 'FEATURED' : raw.toUpperCase();
   }
 
   Widget _heroFallback(MediaItem media) => DecoratedBox(
@@ -1086,7 +1409,8 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
   final List<MediaItem> library;
   final List<MediaItem> watched;
 
-  const HomeBecauseYouWatchedPeopleShelves({super.key, required this.library, required this.watched});
+  const HomeBecauseYouWatchedPeopleShelves(
+      {super.key, required this.library, required this.watched});
 
   String _norm(String value) => value.trim().toLowerCase();
 
@@ -1095,8 +1419,15 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     if (watched.isEmpty) return const SizedBox.shrink();
     final controller = AppController.instance;
     final catalog = <String, MediaItem>{};
-    for (final item in <MediaItem>[...library, ...controller.recommendations, ...controller.watched, ...controller.liked]) {
-      if (item.id.isNotEmpty && item.isAccessibleTo(controller.currentProfile) && !isExcludedEntertainmentType(item.type)) {
+    for (final item in <MediaItem>[
+      ...library,
+      ...controller.recommendations,
+      ...controller.watched,
+      ...controller.liked
+    ]) {
+      if (item.id.isNotEmpty &&
+          item.isAccessibleTo(controller.currentProfile) &&
+          !isExcludedEntertainmentType(item.type)) {
         catalog.putIfAbsent(item.id, () => item);
       }
     }
@@ -1105,17 +1436,36 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     for (final item in watched.reversed) {
       if (seen.add(item.id)) viewed.add(item);
     }
-    final shelves = <({MediaItem seed, String person, List<MediaItem> items})>[];
+    final shelves =
+        <({MediaItem seed, String person, List<MediaItem> items})>[];
     final shelfKeys = <String>{};
     for (final seed in viewed) {
-      final people = <String>{...seed.actors, ...seed.directors, ...seed.writers};
+      final people = <String>{
+        ...seed.actors,
+        ...seed.directors,
+        ...seed.writers
+      };
       for (final person in people) {
         final normalizedPerson = _norm(person);
-        if (normalizedPerson.isEmpty || !shelfKeys.add('${seed.id}:$normalizedPerson')) continue;
-        final matches = catalog.values.where((candidate) => candidate.id != seed.id && !watched.any((w) => w.id == candidate.id) && <String>{...candidate.actors, ...candidate.directors, ...candidate.writers}.any((credit) => _norm(credit) == normalizedPerson)).toList();
+        if (normalizedPerson.isEmpty ||
+            !shelfKeys.add('${seed.id}:$normalizedPerson')) {
+          continue;
+        }
+        final matches = catalog.values
+            .where((candidate) =>
+                candidate.id != seed.id &&
+                !watched.any((w) => w.id == candidate.id) &&
+                <String>{
+                  ...candidate.actors,
+                  ...candidate.directors,
+                  ...candidate.writers
+                }.any((credit) => _norm(credit) == normalizedPerson))
+            .toList();
         if (matches.isEmpty) continue;
-        matches.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-        shelves.add((seed: seed, person: person, items: matches.take(12).toList()));
+        matches.sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        shelves.add(
+            (seed: seed, person: person, items: matches.take(12).toList()));
         if (shelves.length >= 6) break;
       }
       if (shelves.length >= 6) break;
@@ -1123,11 +1473,29 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     if (shelves.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       for (final shelf in shelves) ...[
-        _DiscoverySectionHeader(title: 'Because you watched ${shelf.seed.title} featuring ${shelf.person}', subtitle: 'More movies and shows with this actor, director, or screenwriter'),
-        HomeArrowRail(height: 210, itemCount: shelf.items.length, separatorExtent: 12, padding: const EdgeInsets.symmetric(horizontal: 48), itemBuilder: (context, index) {
-          final media = shelf.items[index];
-          return _DiscoveryMediaCard(title: media.title, subtitle: '${media.displayYearLabel ?? ''} ${media.type}'.trim(), imageUrl: media.imageUrl, isOwned: controller.isOwned(media.id), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(settings: const RouteSettings(name: '/app/details'), builder: (_) => MediaDetailsScreen(media: media))));
-        }),
+        _DiscoverySectionHeader(
+            title:
+                'Because you watched ${shelf.seed.title} featuring ${shelf.person}',
+            subtitle:
+                'More movies and shows with this actor, director, or screenwriter'),
+        HomeArrowRail(
+            height: 210,
+            itemCount: shelf.items.length,
+            separatorExtent: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) {
+              final media = shelf.items[index];
+              return _DiscoveryMediaCard(
+                  title: media.title,
+                  subtitle:
+                      '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
+                  imageUrl: media.imageUrl,
+                  isOwned: controller.isOwned(media.id),
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          settings: const RouteSettings(name: '/app/details'),
+                          builder: (_) => MediaDetailsScreen(media: media))));
+            }),
       ],
     ]);
   }
@@ -1889,9 +2257,10 @@ class _HomeFranchiseProgressDetailsScreenState
               '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
           year: media.releaseYear,
           imageUrl: media.imageUrl,
-          fallbackIcon: _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
-              ? Icons.tv_rounded
-              : Icons.movie_outlined,
+          fallbackIcon:
+              _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
+                  ? Icons.tv_rounded
+                  : Icons.movie_outlined,
           onTap: () => _openMedia(media),
         ),
       )
@@ -2004,7 +2373,8 @@ class _HomeFranchiseProgressDetailsScreenState
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
                 'No titles from this group are currently indexed in your profile library. Reference examples below do not count as owned.',
-                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                style: TextStyle(
+                    color: Colors.white54, fontSize: 12, height: 1.35),
               ),
             )
           else
@@ -2583,18 +2953,23 @@ class _DiscoveryAllCollectionsScreenState
                       ? ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: collections.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final collection = collections[index];
                             final items = _itemsFor(collection);
                             return _CollectionListTile(
                               collection: collection,
                               itemCount: items.length,
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                                settings: const RouteSettings(name: '/app/page/collection-details'),
-                                builder: (_) => CollectionDetailsScreen(collection: collection),
+                              onTap: () => Navigator.of(context)
+                                  .push(MaterialPageRoute<void>(
+                                settings: const RouteSettings(
+                                    name: '/app/page/collection-details'),
+                                builder: (_) => CollectionDetailsScreen(
+                                    collection: collection),
                               )),
-                              onShuffle: () => _startRandomFromCollection(context, collection),
+                              onShuffle: () => _startRandomFromCollection(
+                                  context, collection),
                             );
                           },
                         )
@@ -2603,24 +2978,34 @@ class _DiscoveryAllCollectionsScreenState
                             entries: collections.map((collection) {
                               final members = _itemsFor(collection);
                               final posterCandidates = members
-                                  .where((item) => item.imageUrl?.trim().isNotEmpty == true)
+                                  .where((item) =>
+                                      item.imageUrl?.trim().isNotEmpty == true)
                                   .toList(growable: false);
-                              final customPoster = collection.customPosterUrl?.trim() ?? '';
+                              final customPoster =
+                                  collection.customPosterUrl?.trim() ?? '';
                               final imageUrl = customPoster.isNotEmpty
                                   ? customPoster
-                                  : (posterCandidates.isEmpty ? null : posterCandidates.first.imageUrl);
+                                  : (posterCandidates.isEmpty
+                                      ? null
+                                      : posterCandidates.first.imageUrl);
                               return LibraryViewEntry(
                                 title: collection.name,
-                                subtitle: '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim() }'}',
+                                subtitle:
+                                    '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
                                 imageUrl: imageUrl,
-                                fallbackIcon: Icons.collections_bookmark_outlined,
-                                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                                  settings: const RouteSettings(name: '/app/page/collection-details'),
-                                  builder: (_) => CollectionDetailsScreen(collection: collection),
+                                fallbackIcon:
+                                    Icons.collections_bookmark_outlined,
+                                onTap: () => Navigator.of(context)
+                                    .push(MaterialPageRoute<void>(
+                                  settings: const RouteSettings(
+                                      name: '/app/page/collection-details'),
+                                  builder: (_) => CollectionDetailsScreen(
+                                      collection: collection),
                                 )),
                                 trailing: IconButton(
                                   tooltip: 'Play a random item',
-                                  onPressed: () => _startRandomFromCollection(context, collection),
+                                  onPressed: () => _startRandomFromCollection(
+                                      context, collection),
                                   icon: const Icon(Icons.shuffle_rounded),
                                 ),
                               );

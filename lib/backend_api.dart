@@ -279,6 +279,25 @@ class BackendApi {
     );
   }
 
+  /// Finds YouTube music-video matches for a song title and artist.
+  /// The YouTube key stays in the backend; no key is shipped in the app.
+  Future<Map<String, dynamic>> searchMusicVideos(
+    String query, {
+    int limit = 6,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/videos').replace(
+      queryParameters: <String, String>{
+        'q': query.trim(),
+        'limit': '${limit.clamp(1, 10)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to search music videos.',
+    );
+  }
+
   /// Lists an artist's MusicBrainz release groups (album-level discography).
   Future<Map<String, dynamic>> getMusicDiscography(
     String artistMbid, {

@@ -23,6 +23,7 @@ import 'media_actions.dart';
 import 'navidrome_setup.dart';
 import 'social_sharing.dart';
 import 'music_catalog_screen.dart';
+import 'music_video_search_screen.dart';
 import 'library_view_modes.dart';
 
 /// A music track imported from the account's home-server library.
@@ -1128,17 +1129,27 @@ class _MusicScreenState extends State<MusicScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.music_video_rounded),
-                  title: const UniversalText('Music video'),
+                  title: const UniversalText('Play linked music video'),
                   subtitle: Text((track.musicVideoUrl?.trim().isNotEmpty ??
                           false)
-                      ? 'Play the matching music video.'
-                      : 'No matching local music video is linked to this track.'),
+                      ? 'Play the matching local or authorized video URL.'
+                      : 'No local video URL is linked to this track.'),
                   enabled: track.musicVideoUrl?.trim().isNotEmpty ?? false,
                   onTap: () => Navigator.of(sheetContext).push(
                       MaterialPageRoute<void>(
                           builder: (_) => MusicTrackDisplayScreen(
                               track: track,
                               mode: MusicTrackDisplayMode.video))),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.youtube_searched_for_rounded),
+                  title: const UniversalText('Find music video on YouTube'),
+                  subtitle: const UniversalText(
+                      'Search videos matching this artist and song title.'),
+                  onTap: () => Navigator.of(sheetContext).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => MusicVideoSearchScreen(
+                              title: track.title, artist: track.artist))),
                 ),
               ]),
         ),

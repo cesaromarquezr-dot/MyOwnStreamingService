@@ -73,13 +73,11 @@ class MediaMetadataService {
   Map<String, dynamic> providerStatus() => <String, dynamic>{
         'tmdb': <String, dynamic>{
           'configured': tmdbConfigured,
-          'purpose':
-              'Movie, TV, person, cast/crew, biography, poster, and backdrop metadata',
+          'purpose': 'Movie, TV, person, cast/crew, biography, poster, and backdrop metadata',
         },
         'omdb': <String, dynamic>{
           'configured': omdbApiKey.trim().isNotEmpty,
-          'purpose':
-              'Optional IMDb, Rotten Tomatoes, and Metascore values when supplied by OMDb',
+          'purpose': 'Optional IMDb, Rotten Tomatoes, and Metascore values when supplied by OMDb',
         },
       };
 
@@ -103,8 +101,7 @@ class MediaMetadataService {
       }
       final value = entry.value.trim();
       if (value.length > 500 || value.contains('\u0000')) {
-        throw const FormatException(
-            'TMDB query parameter is too long or invalid.');
+        throw const FormatException('TMDB query parameter is too long or invalid.');
       }
       if (value.isNotEmpty) parameters[entry.key] = value;
     }
@@ -115,8 +112,7 @@ class MediaMetadataService {
 
     final uri = Uri.https('api.themoviedb.org', '/3$safePath', parameters);
     try {
-      final request =
-          await _client.getUrl(uri).timeout(const Duration(seconds: 10));
+      final request = await _client.getUrl(uri).timeout(const Duration(seconds: 10));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (tmdbApiToken.trim().isNotEmpty) {
         request.headers.set(
@@ -124,8 +120,7 @@ class MediaMetadataService {
           'Bearer ${tmdbApiToken.trim()}',
         );
       }
-      final response =
-          await request.close().timeout(const Duration(seconds: 15));
+      final response = await request.close().timeout(const Duration(seconds: 15));
       final body = await response
           .transform(utf8.decoder)
           .join()
@@ -139,8 +134,7 @@ class MediaMetadataService {
       }
       final decoded = jsonDecode(body);
       if (decoded is! Map) {
-        throw const FormatException(
-            'TMDB returned an unexpected response format.');
+        throw const FormatException('TMDB returned an unexpected response format.');
       }
       return Map<String, dynamic>.from(decoded);
     } on TimeoutException {
@@ -176,11 +170,9 @@ class MediaMetadataService {
       'plot': 'short',
     });
     try {
-      final request =
-          await _client.getUrl(uri).timeout(const Duration(seconds: 8));
+      final request = await _client.getUrl(uri).timeout(const Duration(seconds: 8));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response =
-          await request.close().timeout(const Duration(seconds: 12));
+      final response = await request.close().timeout(const Duration(seconds: 12));
       final body = await response.transform(utf8.decoder).join().timeout(
             const Duration(seconds: 12),
           );
@@ -192,19 +184,15 @@ class MediaMetadataService {
       }
       final decoded = jsonDecode(body);
       if (decoded is! Map) {
-        throw const FormatException(
-            'OMDb returned an unexpected response format.');
+        throw const FormatException('OMDb returned an unexpected response format.');
       }
       final json = Map<String, dynamic>.from(decoded);
       final rawRatings = json['Ratings'];
       final ratings = rawRatings is List
-          ? rawRatings
-              .whereType<Map>()
-              .map((item) => <String, dynamic>{
-                    'source': item['Source']?.toString() ?? '',
-                    'value': item['Value']?.toString() ?? '',
-                  })
-              .toList(growable: false)
+          ? rawRatings.whereType<Map>().map((item) => <String, dynamic>{
+                'source': item['Source']?.toString() ?? '',
+                'value': item['Value']?.toString() ?? '',
+              }).toList(growable: false)
           : <Map<String, dynamic>>[];
       final success = json['Response']?.toString().toLowerCase() == 'true';
       return <String, dynamic>{
@@ -217,9 +205,7 @@ class MediaMetadataService {
         'imdbVotes': json['imdbVotes']?.toString(),
         'metascore': json['Metascore']?.toString(),
         'ratings': ratings,
-        if (!success)
-          'message':
-              json['Error']?.toString() ?? 'No external ratings are available.',
+        if (!success) 'message': json['Error']?.toString() ?? 'No external ratings are available.',
       };
     } on TimeoutException {
       throw const MediaMetadataUpstreamException(
@@ -234,16 +220,15 @@ class MediaMetadataService {
     if (path.isEmpty || path.length > 180 || path.contains('..')) {
       throw const FormatException('Invalid TMDB resource path.');
     }
-    final allowed =
-        RegExp(r'^search/(movie|tv|person|keyword)$').hasMatch(path) ||
-            RegExp(r'^discover/(movie|tv)$').hasMatch(path) ||
-            RegExp(
-              r'^(movie|tv)/[1-9][0-9]*(/(recommendations|images|credits|videos|keywords|reviews))?$',
-            ).hasMatch(path) ||
-            RegExp(r'^person/[1-9][0-9]*(/combined_credits)?$').hasMatch(path);
+    final allowed = RegExp(r'^search/(movie|tv|person|keyword)$').hasMatch(path) ||
+        RegExp(r'^discover/(movie|tv)$').hasMatch(path) ||
+        RegExp(
+          r'^(movie|tv)/[1-9][0-9]*(/(recommendations|images|credits|videos|keywords|reviews))?$',
+        ).hasMatch(path) ||
+        RegExp(r'^tv/[1-9][0-9]*/season/[0-9]+$').hasMatch(path) ||
+        RegExp(r'^person/[1-9][0-9]*(/combined_credits)?$').hasMatch(path);
     if (!allowed) {
-      throw const FormatException(
-          'This TMDB resource is not enabled by the backend.');
+      throw const FormatException('This TMDB resource is not enabled by the backend.');
     }
     return '/$path';
   }

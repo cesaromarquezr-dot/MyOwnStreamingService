@@ -78,6 +78,28 @@ class MusicCatalogRoutes {
         return;
       }
 
+      if (path == '$_prefix/videos') {
+        final query = request.uri.queryParameters['q']?.trim() ?? '';
+        if (query.isEmpty) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A music-video search query is required.',
+          });
+          return;
+        }
+        if (query.length > 180 || query.contains('\u0000')) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'Music-video search query must be between 1 and 180 characters.',
+          });
+          return;
+        }
+        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '6') ?? 6;
+        final result = await service.searchMusicVideos(query: query, limit: limit);
+        await _json(request, HttpStatus.ok, result);
+        return;
+      }
+
       if (path == '$_prefix/featured-albums') {
         final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
         final offset = int.tryParse(request.uri.queryParameters['offset'] ?? '0') ?? 0;

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
+import 'music_catalog_screen.dart';
 import 'cinematic_title.dart';
 import 'artwork_gallery_screen.dart';
 import 'artwork_selection_store.dart';
@@ -66,6 +67,10 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   bool _randomizeAvailableTrailers = false;
   bool _loadingProviderMetadata = false;
   String? _providerMetadataError;
+  final Map<int, List<Map<String, dynamic>>> _providerEpisodesBySeason =
+      <int, List<Map<String, dynamic>>>{};
+  final Set<int> _loadingProviderEpisodeSeasons = <int>{};
+  final Set<int> _failedProviderEpisodeSeasons = <int>{};
 
   MediaItem get media => widget.media;
 
@@ -109,6 +114,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       setState(() {
         _loadingProviderMetadata = true;
         _providerMetadataError = null;
+        _providerEpisodesBySeason.clear();
+        _failedProviderEpisodeSeasons.clear();
       });
     }
     try {
@@ -141,6 +148,9 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
             ? 'No exact TMDB title match found. Existing catalog credits have been kept unchanged.'
             : null;
       });
+      if (metadata != null && metadata.isTv && metadata.seasons.isNotEmpty) {
+        unawaited(_loadEpisodesForSelectedSeason());
+      }
       if (metadata != null) {
         unawaited(AppController.instance.mergeProviderTitleCredits(
           mediaId: media.id,
@@ -197,6 +207,12 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
 
   /// Performs `build` for this feature. Update this documentation when its contract changes.
   Widget build(BuildContext context) {
+    // Album records can be opened from many shared discovery/search/library
+    // cards. Normalize their destination here so none accidentally land in
+    // the movie/TV Details layout.
+    if (isMusicAlbumType(media.type)) {
+      return MusicAlbumPageScreen(media: media);
+    }
     return Scaffold(
       backgroundColor: const Color(0xFF090909),
       body: SafeArea(
@@ -1197,20 +1213,167 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   // TV SHOW DETECTION
   // ===========================================================================
 
-  bool get isTvShow {
-    final type = media.type.toLowerCase().trim();
+  bool get isTvShow => media.isSeries;
 
-    return type == 'tvshow' || type == 'tv_show' || type == 'tv show';
-  }
+  int? get _displaySeasonCount =>
+      seasons.isNotEmpty ? seasons.length : media.displaySeasonCount;
 
   // ===========================================================================
   // SEASONS / EPISODES
   // ===========================================================================
 
   List<Map<String, dynamic>> get seasons {
-    return media.seasons
+    final localSeasons = media.seasons
         .map((item) => Map<String, dynamic>.from(item))
-        .toList();
+        .toList(growable: false);
+    final providerSeasons = _providerTitleMetadata?.isTv == true
+        ? _providerTitleMetadata!.seasons
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false)
+        : <Map<String, dynamic>>[];
+    if (providerSeasons.isEmpty) return localSeasons;
+
+    final mergedByNumber = <int, Map<String, dynamic>>{};
+    final seasonsWithoutNumber = <Map<String, dynamic>>[];
+    for (final providerSeason in providerSeasons) {
+      final number = _integerValue(
+        providerSeason['seasonNumber'] ??
+            providerSeason['season_number'] ??
+            providerSeason['number'],
+      );
+      if (number == null) {
+        seasonsWithoutNumber.add(providerSeason);
+      } else {
+        mergedByNumber[number] = providerSeason;
+      }
+    }
+    for (final localSeason in localSeasons) {
+      final number = _integerValue(
+        localSeason['seasonNumber'] ??
+            localSeason['season_number'] ??
+            localSeason['season'] ??
+            localSeason['number'],
+      );
+      if (number == null) {
+        seasonsWithoutNumber.add(localSeason);
+        continue;
+      }
+      final providerSeason = mergedByNumber[number];
+      if (providerSeason == null) {
+        mergedByNumber[number] = localSeason;
+        continue;
+      }
+      final merged = Map<String, dynamic>.from(providerSeason);
+      for (final entry in localSeason.entries) {
+        final value = entry.value;
+        if (value != null && (value is! String || value.trim().isNotEmpty)) {
+          merged[entry.key] = value;
+        }
+      }
+      final localEpisodes = localSeason['episodes'];
+      if (localEpisodes is List && localEpisodes.isNotEmpty) {
+        merged['episodes'] = localEpisodes;
+      }
+      mergedByNumber[number] = merged;
+    }
+    final result = <Map<String, dynamic>>[
+      ...mergedByNumber.values,
+      ...seasonsWithoutNumber,
+    ];
+    result.sort((a, b) => (_integerValue(
+              a['seasonNumber'] ??
+                  a['season_number'] ??
+                  a['season'] ??
+                  a['number'],
+            ) ??
+            0)
+        .compareTo(_integerValue(
+              b['seasonNumber'] ??
+                  b['season_number'] ??
+                  b['season'] ??
+                  b['number'],
+            ) ??
+            0));
+    return result;
+  }
+
+  int? _seasonNumberFrom(Map<String, dynamic> season) => _integerValue(
+        season['seasonNumber'] ??
+            season['season_number'] ??
+            season['season'] ??
+            season['number'],
+      );
+
+  int? _episodeNumberFrom(Map<String, dynamic> episode) {
+    final explicit = _integerValue(
+      episode['episodeNumber'] ??
+          episode['episode_number'] ??
+          episode['episode'] ??
+          episode['number'],
+    );
+    if (explicit != null) return explicit;
+    final label = (episode['episodeCode'] ??
+            episode['filename'] ??
+            episode['title'] ??
+            episode['name'] ??
+            '')
+        .toString();
+    final patterns = <RegExp>[
+      RegExp(r'\bS\d{1,2}\s*E(\d{1,3})\b', caseSensitive: false),
+      RegExp(r'\bEpisode\s*#?0*(\d{1,3})\b', caseSensitive: false),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(label);
+      if (match != null) return int.tryParse(match.group(1) ?? '');
+    }
+    return null;
+  }
+
+  Future<void> _loadEpisodesForSelectedSeason() async {
+    final ordered = _orderedSeasons();
+    if (ordered.isEmpty) return;
+    final index =
+        selectedSeasonIndex >= 0 && selectedSeasonIndex < ordered.length
+            ? selectedSeasonIndex
+            : 0;
+    await _loadProviderSeasonEpisodes(ordered[index]);
+  }
+
+  Future<void> _loadProviderSeasonEpisodes(
+    Map<String, dynamic> season,
+  ) async {
+    final metadata = _providerTitleMetadata;
+    final seasonNumber = _seasonNumberFrom(season);
+    if (metadata == null ||
+        !metadata.isTv ||
+        seasonNumber == null ||
+        !CinematicTitleMetadataService.isConfigured ||
+        _providerEpisodesBySeason.containsKey(seasonNumber) ||
+        _loadingProviderEpisodeSeasons.contains(seasonNumber) ||
+        _failedProviderEpisodeSeasons.contains(seasonNumber)) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _loadingProviderEpisodeSeasons.add(seasonNumber));
+    try {
+      final episodes =
+          await CinematicTitleMetadataService.lookupTvSeasonEpisodes(
+        providerId: metadata.providerId,
+        seasonNumber: seasonNumber,
+      );
+      if (!mounted) return;
+      setState(() {
+        _providerEpisodesBySeason[seasonNumber] = episodes;
+        _failedProviderEpisodeSeasons.remove(seasonNumber);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _failedProviderEpisodeSeasons.add(seasonNumber));
+    } finally {
+      if (mounted) {
+        setState(() => _loadingProviderEpisodeSeasons.remove(seasonNumber));
+      }
+    }
   }
 
   List<Map<String, dynamic>> _orderedSeasons() {
@@ -1260,18 +1423,78 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     Map<String, dynamic> season,
   ) {
     final raw = season['episodes'];
-
-    if (raw is! List) {
-      return <Map<String, dynamic>>[];
-    }
-
-    final result = <Map<String, dynamic>>[];
-
-    for (final item in raw) {
-      if (item is Map) {
-        result.add(Map<String, dynamic>.from(item));
+    final localEpisodes = <Map<String, dynamic>>[];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) localEpisodes.add(Map<String, dynamic>.from(item));
       }
     }
+    final seasonNumber = _seasonNumberFrom(season);
+    final providerEpisodes = seasonNumber == null
+        ? <Map<String, dynamic>>[]
+        : (_providerEpisodesBySeason[seasonNumber] ?? <Map<String, dynamic>>[]);
+    if (providerEpisodes.isEmpty) return _sortEpisodes(localEpisodes);
+    if (localEpisodes.isEmpty) return _sortEpisodes(providerEpisodes);
+
+    final usedLocalIndexes = <int>{};
+    final merged = <Map<String, dynamic>>[];
+    for (final providerEpisode in providerEpisodes) {
+      final providerNumber = _episodeNumberFrom(providerEpisode);
+      var localIndex = -1;
+      for (var i = 0; i < localEpisodes.length; i++) {
+        if (usedLocalIndexes.contains(i)) continue;
+        final localNumber = _episodeNumberFrom(localEpisodes[i]);
+        if (providerNumber != null && localNumber == providerNumber) {
+          localIndex = i;
+          break;
+        }
+      }
+      if (localIndex < 0) {
+        final providerOnly = Map<String, dynamic>.from(providerEpisode);
+        providerOnly['metadataOnly'] = true;
+        merged.add(providerOnly);
+        continue;
+      }
+      usedLocalIndexes.add(localIndex);
+      final localEpisode = localEpisodes[localIndex];
+      final combined = Map<String, dynamic>.from(providerEpisode);
+      // Keep locally indexed identity/playback fields while enriching the
+      // visible name, overview, runtime, air date, rating and still from TMDB.
+      for (final key in <String>[
+        'id',
+        'playbackUrl',
+        'streamingUrl',
+        'streamUrl',
+        'url',
+        'path',
+        'filePath',
+        'mediaId',
+        'type',
+        'trailerUrl',
+        'audioTracks',
+        'subtitles',
+      ]) {
+        final value = localEpisode[key];
+        if (value != null && value.toString().trim().isNotEmpty) {
+          combined[key] = value;
+        }
+      }
+      combined['metadataOnly'] = false;
+      if ((combined['imageUrl'] == null ||
+              combined['imageUrl'].toString().isEmpty) &&
+          localEpisode['imageUrl'] != null) {
+        combined['imageUrl'] = localEpisode['imageUrl'];
+      }
+      merged.add(combined);
+    }
+    for (var i = 0; i < localEpisodes.length; i++) {
+      if (!usedLocalIndexes.contains(i)) merged.add(localEpisodes[i]);
+    }
+    return _sortEpisodes(merged);
+  }
+
+  List<Map<String, dynamic>> _sortEpisodes(List<Map<String, dynamic>> source) {
+    final result = List<Map<String, dynamic>>.from(source);
 
     int? episodeNumberFor(Map<String, dynamic> episode) {
       final explicit = _integerValue(
@@ -1333,7 +1556,48 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final orderedSeasons = _orderedSeasons();
 
     if (orderedSeasons.isEmpty) {
-      return const SizedBox.shrink();
+      if (!isTvShow) return const SizedBox.shrink();
+      final loading = _loadingProviderMetadata;
+      final message = loading
+          ? 'Loading seasons and episode guide…'
+          : (_providerMetadataError != null
+              ? 'Season and episode details could not be loaded. Check your metadata backend and try refreshing TMDB details.'
+              : 'Season and episode information will appear here when it is available from TMDB or your media server.');
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 30),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111111),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: .06)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Seasons & Episodes',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              Row(children: [
+                if (loading) ...[
+                  const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                    child: Text(message,
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 13, height: 1.4))),
+              ]),
+            ],
+          ),
+        ),
+      );
     }
 
     if (selectedSeasonIndex >= orderedSeasons.length) {
@@ -1343,6 +1607,13 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     final selectedSeason = orderedSeasons[selectedSeasonIndex];
 
     final episodes = _episodesForSeason(selectedSeason);
+    final selectedSeasonNumber = _seasonNumberFrom(selectedSeason);
+    final loadingEpisodes = selectedSeasonNumber != null &&
+        _loadingProviderEpisodeSeasons.contains(selectedSeasonNumber);
+    final seasonOverview =
+        (selectedSeason['overview'] ?? selectedSeason['description'])
+            ?.toString()
+            .trim();
 
     return Padding(
       padding: const EdgeInsets.only(
@@ -1389,13 +1660,23 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
+            if (seasonOverview != null && seasonOverview.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              Text(
+                seasonOverview,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white54, fontSize: 12, height: 1.4),
+              ),
+            ],
             const SizedBox(height: 12),
-            if (episodes.isEmpty)
+            if (episodes.isEmpty && loadingEpisodes)
+              _buildLoadingEpisodes()
+            else if (episodes.isEmpty)
               _buildNoEpisodes()
             else
-              _buildEpisodes(
-                episodes,
-              ),
+              _buildEpisodes(episodes),
           ],
         ),
       ),
@@ -1430,6 +1711,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 setState(() {
                   selectedSeasonIndex = value;
                 });
+                unawaited(_loadProviderSeasonEpisodes(orderedSeasons[value]));
               }
             },
           ),
@@ -1456,6 +1738,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
                 setState(() {
                   selectedSeasonIndex = index;
                 });
+                unawaited(_loadProviderSeasonEpisodes(season));
               },
             );
           },
@@ -1495,6 +1778,29 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   }
 
   /// Performs `_buildNoEpisodes` for this feature. Update this documentation when its contract changes.
+  Widget _buildLoadingEpisodes() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 10),
+          Text('Loading episode titles, descriptions and runtimes…',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  /// Performs `_buildNoEpisodes` for this feature. Update this documentation when its contract changes.
   Widget _buildNoEpisodes() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1503,7 +1809,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
         borderRadius: BorderRadius.circular(15),
       ),
       child: const UniversalText(
-        'No episodes are available for this season yet.',
+        "No episode details are available for this season yet. The server's local episode list will still be shown whenever it is indexed.",
         textAlign: TextAlign.center,
         style: TextStyle(
           color: Colors.white54,
@@ -1581,6 +1887,15 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
   void _playEpisode(
     Map<String, dynamic> episode,
   ) {
+    if (episode['metadataOnly'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'This episode has metadata but is not linked to a playable item in your library or Jellyfin server yet.'),
+        ),
+      );
+      return;
+    }
     final episodeMedia = _mediaFromEpisode(episode);
 
     if (episodeMedia == null) {
@@ -1674,6 +1989,11 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       rating: rating,
       ratingReason: ratingReason,
       trailerUrl: trailerUrl,
+      playbackUrl: (episode['playbackUrl'] ??
+              episode['streamingUrl'] ??
+              episode['streamUrl'] ??
+              episode['url'])
+          ?.toString(),
     );
   }
 
@@ -1932,8 +2252,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
       pills.add(_metadataPill(
           Icons.movie_filter_outlined, media.displayEditionLabel!));
     }
-    if (media.displaySeasonCount != null) {
-      final count = media.displaySeasonCount!;
+    if (_displaySeasonCount != null) {
+      final count = _displaySeasonCount!;
       pills.add(_metadataPill(Icons.live_tv_outlined,
           '$count ${count == 1 ? 'Season' : 'Seasons'}'));
     }
@@ -1997,8 +2317,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (media.displayEditionLabel != null) {
       items.add(media.displayEditionLabel!);
     }
-    if (media.displaySeasonCount != null) {
-      final count = media.displaySeasonCount!;
+    if (_displaySeasonCount != null) {
+      final count = _displaySeasonCount!;
       items.add('$count ${count == 1 ? 'Season' : 'Seasons'}');
     }
 
@@ -2723,8 +3043,8 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
     if (media.editionFeatures.isNotEmpty) {
       rows.add(_infoRow('Edition Includes', media.editionFeatures.join(' • ')));
     }
-    if (media.displaySeasonCount != null) {
-      final count = media.displaySeasonCount!;
+    if (_displaySeasonCount != null) {
+      final count = _displaySeasonCount!;
       rows.add(
           _infoRow('Seasons', '$count ${count == 1 ? 'Season' : 'Seasons'}'));
     }
@@ -3515,13 +3835,23 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   String? get episodeNumber {
-    final number = widget.episode['number'] ?? widget.episode['episodeNumber'];
+    final number = widget.episode['number'] ??
+        widget.episode['episodeNumber'] ??
+        widget.episode['episode_number'];
 
     if (number == null) {
       return null;
     }
 
     return number.toString();
+  }
+
+  String? get airDate {
+    final value = (widget.episode['airDate'] ?? widget.episode['air_date'])
+        ?.toString()
+        .trim();
+    if (value == null || value.isEmpty) return null;
+    return value.length >= 10 ? value.substring(0, 10) : value;
   }
 
   String? get runtime {
@@ -3556,33 +3886,26 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   }
 
   /// Performs `_showEpisodeLabel` for this feature. Update this documentation when its contract changes.
-  bool _showEpisodeLabel() {
-    final mode = DetailsCustomizationStore.settingsFor(
-      AppController.instance.currentProfile,
-    ).episodeNaming;
+  bool _showEpisodeLabel() => true;
 
-    return mode != 'Actual Title';
-  }
-
-  /// Performs `_episodeLabel` for this feature. Update this documentation when its contract changes.
+  /// Always identifies the season/episode separately from the title. The
+  /// preference controls wording, but the episode number remains visible.
   String _episodeLabel() {
-    final seasonNumber =
-        widget.episode['seasonNumber'] ?? widget.episode['season'];
-
-    final n = episodeNumber;
-
+    final seasonNumber = widget.episode['seasonNumber'] ??
+        widget.episode['season_number'] ??
+        widget.episode['season'];
+    final n = episodeNumber ?? '?';
+    final season = seasonNumber?.toString() ?? '?';
     switch (DetailsCustomizationStore.settingsFor(
       AppController.instance.currentProfile,
     ).episodeNaming) {
       case 'Season X, Episode Y':
-        return 'SEASON ${seasonNumber ?? '?'} • EPISODE ${n ?? '?'}';
-
+        return 'SEASON $season • EPISODE $n';
       case 'Both':
-        return 'S${seasonNumber ?? '?'}E${n ?? '?'}';
-
+        return 'S$season E$n';
       case 'Actual Title':
       default:
-        return '';
+        return 'S${season.padLeft(2, '0')} • E${n.padLeft(2, '0')}';
     }
   }
 
@@ -3688,7 +4011,7 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                       const SizedBox(height: 5),
                       Text(
                         description!,
-                        maxLines: 2,
+                        maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white54,
@@ -3697,10 +4020,13 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                         ),
                       ),
                     ],
-                    if (runtime != null) ...[
+                    if (runtime != null || airDate != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        runtime!,
+                        [
+                          if (airDate != null) 'Aired $airDate',
+                          if (runtime != null) runtime!
+                        ].join('  •  '),
                         style: const TextStyle(
                           color: Colors.white38,
                           fontSize: 11,
@@ -3721,8 +4047,10 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
+                child: Icon(
+                  widget.episode['metadataOnly'] == true
+                      ? Icons.info_outline_rounded
+                      : Icons.play_arrow_rounded,
                   color: Colors.white,
                   size: 23,
                 ),

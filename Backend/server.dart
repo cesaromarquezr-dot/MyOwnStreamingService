@@ -339,6 +339,7 @@ Future<void> main() async {
     service: MusicCatalogService(
       spotifyClientId: AppConfig.spotifyClientId,
       spotifyClientSecret: AppConfig.spotifyClientSecret,
+      youtubeApiKey: AppConfig.youtubeApiKey,
       userAgent: AppConfig.musicMetadataUserAgent,
       tmdbApiKey: AppConfig.tmdbApiKey,
       tmdbApiToken: AppConfig.tmdbApiToken,
@@ -354,6 +355,7 @@ Future<void> main() async {
     service: MediaMetadataService(
       tmdbApiKey: AppConfig.tmdbApiKey,
       tmdbApiToken: AppConfig.tmdbApiToken,
+      omdbApiKey: AppConfig.omdbApiKey,
     ),
   );
 
