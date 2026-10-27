@@ -6,12 +6,14 @@ import 'dart:math';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'app_core.dart';
 import 'cinematic_title.dart';
 import 'artwork_selection_store.dart';
+import 'artwork_gallery_screen.dart';
 import 'cinematic_discovery_studio.dart';
 import 'collection_details.dart';
 import 'library_view_modes.dart';
@@ -207,12 +209,18 @@ class HomeHoverPreviewStore {
 /// Large landscape Home banner with automatic rotation, hover previews and controls.
 class HomeHeroCarousel extends StatefulWidget {
   final List<MediaItem> items;
+
+  /// Always opens the selected media's details page.
   final ValueChanged<MediaItem> onOpen;
+
+  /// Opens playback; defaults to [onOpen] only for callers that do not provide it.
+  final ValueChanged<MediaItem>? onPlay;
 
   const HomeHeroCarousel({
     super.key,
     required this.items,
     required this.onOpen,
+    this.onPlay,
   });
 
   @override
@@ -240,6 +248,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   final Set<String> _musicVideoLookupStarted = <String>{};
   final Set<String> _overviewLookupStarted = <String>{};
   final Map<String, String> _selectedBackdropPaths = <String, String>{};
+  final Map<String, String> _selectedPosterPaths = <String, String>{};
+  bool _openingHeroArtworkGallery = false;
 
   @override
   void initState() {
@@ -262,8 +272,6 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     final next = HomeHoverPreviewStore.current.value;
     if (_hoveredMedia?.id == next?.id) return;
     setState(() => _hoveredMedia = next);
-    _advanceTimer?.cancel();
-    _advanceTimer = null;
     if (next != null) {
       _loadPreview(next);
       unawaited(_loadOverview(next));
@@ -272,18 +280,33 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           widget.items[_index.clamp(0, widget.items.length - 1).toInt()];
       _loadPreview(current);
       unawaited(_loadOverview(current));
-      _scheduleNext();
     }
+    // Hover previews must not cancel carousel rotation permanently. The timer
+    // keeps advancing and is restarted by each page change or manual action.
+    _scheduleNext();
   }
 
   @override
   void didUpdateWidget(covariant HomeHeroCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_index >= widget.items.length) _index = 0;
-    if (oldWidget.items.length != widget.items.length) _scheduleNext();
+    final itemCountChanged = oldWidget.items.length != widget.items.length;
+    if (widget.items.isEmpty || _index >= widget.items.length) {
+      _index = 0;
+      if (_pageController.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _pageController.hasClients &&
+              widget.items.isNotEmpty) {
+            _pageController.jumpToPage(0);
+          }
+        });
+      }
+    }
+    if (itemCountChanged) _scheduleNext();
     unawaited(_refreshSelectedBackdrops());
     if (widget.items.isNotEmpty) {
       unawaited(_loadOverview(widget.items[_index]));
+      unawaited(_loadPreview(widget.items[_index]));
     }
   }
 
@@ -293,23 +316,107 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
   Future<void> _refreshSelectedBackdrops() async {
     final profileId = AppController.instance.currentProfile?.id ?? 'guest';
-    final next = <String, String>{};
+    final nextBackdrops = <String, String>{};
+    final nextPosters = <String, String>{};
     for (final item in widget.items) {
-      final path = await ArtworkSelectionStore.readBackdropPath(
-        profileId: profileId,
-        mediaId: item.id,
-      );
-      if (path != null && path.isNotEmpty) next[item.id] = path;
+      final paths = await Future.wait<String?>(<Future<String?>>[
+        ArtworkSelectionStore.readBackdropPath(
+          profileId: profileId,
+          mediaId: item.id,
+        ),
+        ArtworkSelectionStore.readPosterPath(
+          profileId: profileId,
+          mediaId: item.id,
+        ),
+      ]);
+      final backdrop = paths[0];
+      final poster = paths[1];
+      if (backdrop != null && backdrop.isNotEmpty) {
+        nextBackdrops[item.id] = backdrop;
+      }
+      if (poster != null && poster.isNotEmpty) nextPosters[item.id] = poster;
     }
     if (!mounted) return;
-    if (next.length != _selectedBackdropPaths.length ||
-        next.entries
-            .any((entry) => _selectedBackdropPaths[entry.key] != entry.value)) {
+    final backdropsChanged = nextBackdrops.length !=
+            _selectedBackdropPaths.length ||
+        nextBackdrops.entries
+            .any((entry) => _selectedBackdropPaths[entry.key] != entry.value);
+    final postersChanged = nextPosters.length != _selectedPosterPaths.length ||
+        nextPosters.entries
+            .any((entry) => _selectedPosterPaths[entry.key] != entry.value);
+    if (backdropsChanged || postersChanged) {
       setState(() {
         _selectedBackdropPaths
           ..clear()
-          ..addAll(next);
+          ..addAll(nextBackdrops);
+        _selectedPosterPaths
+          ..clear()
+          ..addAll(nextPosters);
       });
+    }
+  }
+
+  Future<void> _openHeroArtworkGallery(MediaItem media) async {
+    if (!_isMovieOrShow(media) || _openingHeroArtworkGallery) return;
+    if (!CinematicTitleMetadataService.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'Connect and start the metadata backend to browse poster and backdrop choices.'),
+      ));
+      return;
+    }
+    setState(() => _openingHeroArtworkGallery = true);
+    try {
+      final metadata = await CinematicTitleMetadataService.lookupTitle(
+        title: media.title,
+        isTv: media.isSeries,
+        year: media.releaseYear ?? media.seriesStartYear,
+      );
+      if (!mounted) return;
+      if (metadata == null ||
+          (metadata.posterPaths.isEmpty && metadata.backdropPaths.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('No poster or backdrop gallery found for "${media.title}".'),
+        ));
+        return;
+      }
+      final profileId = AppController.instance.currentProfile?.id ?? 'guest';
+      final savedPoster = await ArtworkSelectionStore.readPosterPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      final savedBackdrop = await ArtworkSelectionStore.readBackdropPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => ArtworkGalleryScreen(
+            media: media,
+            metadata: metadata,
+            initialPosterPath: savedPoster ?? metadata.posterPath,
+            initialBackdropPath: savedBackdrop ?? metadata.backdropPath,
+            onPosterSet: (path) {
+              if (!mounted) return;
+              setState(() => _selectedPosterPaths[media.id] = path);
+            },
+            onBackdropSet: (path) {
+              if (!mounted) return;
+              setState(() => _selectedBackdropPaths[media.id] = path);
+            },
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not open artwork gallery: $error'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _openingHeroArtworkGallery = false);
     }
   }
 
@@ -395,7 +502,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       }
       final youtubeController = _youtubePreviewController;
       if (youtubeController != null) {
-        youtubeController.mute();
+        if (_previewMuted) {
+          youtubeController.mute();
+        } else {
+          youtubeController.unMute();
+        }
         youtubeController.playVideo();
       }
     } else {
@@ -447,6 +558,24 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     _youtubePreviewUrl = null;
     _youtubePreviewId = null;
     old?.close();
+  }
+
+  Future<void> _applyYoutubePreviewAudio(
+    YoutubePlayerController controller,
+  ) async {
+    try {
+      if (_previewMuted) {
+        await controller.mute();
+        await controller.setVolume(0);
+      } else {
+        await controller.unMute();
+        await controller.setVolume(100);
+      }
+    } catch (_) {
+      // The iframe can briefly be unavailable while a new video is loading.
+      // The desired state remains in _previewMuted and is applied again when
+      // the same preview is reused or the user presses the audio control.
+    }
   }
 
   String? _effectivePreviewUrl(MediaItem media) {
@@ -527,7 +656,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (youtubeId != null) {
       await _disposeDirectPreview();
       if (_youtubePreviewId == youtubeId && _youtubePreviewController != null) {
-        _youtubePreviewController!.mute();
+        unawaited(_applyYoutubePreviewAudio(_youtubePreviewController!));
         _youtubePreviewController!.playVideo();
         if (mounted) setState(() {});
         return;
@@ -547,7 +676,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ),
       );
       _youtubePreviewController = controller;
-      controller.mute();
+      unawaited(_applyYoutubePreviewAudio(controller));
       if (mounted) setState(() {});
       return;
     }
@@ -590,32 +719,60 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
   void _scheduleNext() {
     _advanceTimer?.cancel();
-    if (!_appIsActive || _hoveredMedia != null || widget.items.length < 2) {
-      return;
-    }
-    _advanceTimer = Timer(const Duration(seconds: 12), () {
+    if (!_appIsActive || widget.items.length < 2) return;
+    _advanceTimer = Timer(const Duration(seconds: 12), () async {
       if (!mounted || !_appIsActive || widget.items.length < 2) return;
+      if (!_pageController.hasClients) {
+        _scheduleNext();
+        return;
+      }
+      // A shelf hover preview can otherwise sit over the PageView and make
+      // the carousel appear frozen. Clear that transient override when the
+      // timer advances so the next selected carousel page is visibly shown.
+      final hovered = _hoveredMedia;
+      if (hovered != null) {
+        setState(() => _hoveredMedia = null);
+        HomeHoverPreviewStore.clear(hovered.id);
+      }
       final next = (_index + 1) % widget.items.length;
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
+      try {
+        await _pageController.animateToPage(
           next,
           duration: const Duration(milliseconds: 550),
           curve: Curves.easeInOutCubic,
         );
+      } catch (_) {
+        // The Home page or PageController may be rebuilding during settings
+        // changes. A missed animation must not permanently stop autoplay.
       }
-      _scheduleNext();
+      if (mounted) _scheduleNext();
     });
   }
 
   void _move(int delta) {
-    if (widget.items.isEmpty || !_pageController.hasClients) return;
+    if (widget.items.isEmpty) return;
+    final hovered = _hoveredMedia;
+    if (hovered != null) {
+      setState(() => _hoveredMedia = null);
+      HomeHoverPreviewStore.clear(hovered.id);
+    }
     final next = (_index + delta + widget.items.length) % widget.items.length;
-    _pageController.animateToPage(
+    if (!_pageController.hasClients) {
+      setState(() => _index = next);
+      _loadPreview(widget.items[next]);
+      unawaited(_loadOverview(widget.items[next]));
+      _scheduleNext();
+      return;
+    }
+    _pageController
+        .animateToPage(
       next,
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutCubic,
-    );
-    _scheduleNext();
+    )
+        .whenComplete(() {
+      if (mounted) _scheduleNext();
+    });
   }
 
   @override
@@ -640,106 +797,134 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ? (width * .72).clamp(300.0, 430.0).toDouble()
         : (width * .43).clamp(420.0, 590.0).toDouble();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      child: SizedBox(
-        height: height,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                itemCount: widget.items.length,
-                onPageChanged: (value) {
-                  setState(() => _index = value);
-                  final previewItem = _hoveredMedia ?? widget.items[value];
-                  _loadPreview(previewItem);
-                  unawaited(_loadOverview(previewItem));
-                  _scheduleNext();
-                },
-                itemBuilder: (context, index) =>
-                    _buildHeroPage(widget.items[index]),
-              ),
-              if (_hoveredMedia != null)
-                Positioned.fill(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 260),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    child: KeyedSubtree(
-                      key: ValueKey<String>('home-hover-${_hoveredMedia!.id}'),
-                      child: _buildHeroPage(_hoveredMedia!),
-                    ),
-                  ),
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            _move(-1);
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _move(1);
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        child: SizedBox(
+          height: height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.items.length,
+                  onPageChanged: (value) {
+                    setState(() => _index = value);
+                    final previewItem = _hoveredMedia ?? widget.items[value];
+                    _loadPreview(previewItem);
+                    unawaited(_loadOverview(previewItem));
+                    _scheduleNext();
+                  },
+                  itemBuilder: (context, index) =>
+                      _buildHeroPage(widget.items[index]),
                 ),
-              if (widget.items.length > 1) ...[
-                Positioned(
-                  left: 10,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: _heroArrow(Icons.chevron_left_rounded,
-                        () => _move(-1), 'Previous featured title'),
-                  ),
-                ),
-                Positioned(
-                  right: 10,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: _heroArrow(Icons.chevron_right_rounded,
-                        () => _move(1), 'Next featured title'),
-                  ),
-                ),
-                Positioned(
-                  right: 24,
-                  top: 18,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .56),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('${_index + 1} / ${widget.items.length}',
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              ],
-              Positioned(
-                left: 24,
-                right: 24,
-                bottom: 18,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List<Widget>.generate(widget.items.length, (index) {
-                    return GestureDetector(
-                      onTap: () {
-                        _pageController.animateToPage(index,
-                            duration: const Duration(milliseconds: 350),
-                            curve: Curves.easeOutCubic);
-                        _scheduleNext();
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        width: index == _index ? 21 : 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: index == _index
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: .45),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                if (_hoveredMedia != null)
+                  Positioned.fill(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: KeyedSubtree(
+                        key:
+                            ValueKey<String>('home-hover-${_hoveredMedia!.id}'),
+                        child: _buildHeroPage(_hoveredMedia!),
                       ),
+                    ),
+                  ),
+                if (widget.items.length > 1) ...[
+                  Positioned(
+                    left: 10,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: _heroArrow(Icons.chevron_left_rounded,
+                          () => _move(-1), 'Previous featured title'),
+                    ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: _heroArrow(Icons.chevron_right_rounded,
+                          () => _move(1), 'Next featured title'),
+                    ),
+                  ),
+                  Positioned(
+                    right: 24,
+                    top: 18,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .56),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text('${_index + 1} / ${widget.items.length}',
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: 18,
+                  child: Builder(builder: (context) {
+                    // Keep the indicator compact even if a large library produces
+                    // dozens or hundreds of hero items. Arrow keys can reach all.
+                    final visibleDots = min(9, widget.items.length);
+                    final firstDot = max(
+                      0,
+                      min(_index - visibleDots ~/ 2,
+                          widget.items.length - visibleDots),
+                    );
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List<Widget>.generate(visibleDots, (slot) {
+                        final index = firstDot + slot;
+                        return GestureDetector(
+                          onTap: () {
+                            _pageController.animateToPage(index,
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic);
+                            _scheduleNext();
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            width: index == _index ? 21 : 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: index == _index
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: .45),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+                      }),
                     );
                   }),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -747,6 +932,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   }
 
   Widget _buildHeroPage(MediaItem media) {
+    final selectedPosterUrl = CinematicTitleMetadataService.imageUrl(
+          _selectedPosterPaths[media.id],
+          size: 'w500',
+        ) ??
+        media.imageUrl;
     final selectedBackdropUrl = CinematicTitleMetadataService.imageUrl(
       _selectedBackdropPaths[media.id],
       size: 'w1280',
@@ -840,12 +1030,12 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
               child: VideoPlayer(_previewController!),
             ),
           )
-        else if (media.imageUrl?.trim().isNotEmpty == true) ...[
+        else if (selectedPosterUrl?.trim().isNotEmpty == true) ...[
           // A dark cover fills the banner behind the main artwork, avoiding
           // blank margins without sacrificing the full original poster/image.
           Positioned.fill(
             child: Image.network(
-              media.imageUrl!,
+              selectedPosterUrl!,
               fit: BoxFit.cover,
               color: Colors.black.withValues(alpha: .48),
               colorBlendMode: BlendMode.darken,
@@ -854,7 +1044,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           ),
           Positioned.fill(
             child: Image.network(
-              media.imageUrl!,
+              selectedPosterUrl,
               fit: BoxFit.contain,
               alignment: Alignment.centerRight,
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
@@ -886,35 +1076,43 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
             ),
           ),
         ),
-        if ((_previewController != null &&
-                _previewUrl == _effectivePreviewUrl(media) &&
-                _previewController!.value.isInitialized) ||
-            (_youtubePreviewController != null &&
-                _youtubePreviewUrl == _effectivePreviewUrl(media)))
+        if (_isMovieOrShow(media))
           Positioned(
-            right: 20,
+            right: 70,
             bottom: 58,
             child: IconButton.filledTonal(
-              tooltip: _previewMuted ? 'Unmute preview' : 'Mute preview',
-              onPressed: () async {
-                setState(() => _previewMuted = !_previewMuted);
-                final youtube = _youtubePreviewController;
-                if (youtube != null &&
-                    _youtubePreviewUrl == _effectivePreviewUrl(media)) {
-                  if (_previewMuted) {
-                    youtube.mute();
-                  } else {
-                    youtube.unMute();
-                  }
-                } else {
-                  await _previewController?.setVolume(_previewMuted ? 0 : 1);
-                }
-              },
-              icon: Icon(_previewMuted
-                  ? Icons.volume_off_rounded
-                  : Icons.volume_up_rounded),
+              tooltip: 'Choose poster and backdrop',
+              onPressed: _openingHeroArtworkGallery
+                  ? null
+                  : () => _openHeroArtworkGallery(media),
+              icon: const Icon(Icons.photo_library_outlined),
             ),
           ),
+        Positioned(
+          right: 20,
+          bottom: 58,
+          child: IconButton.filledTonal(
+            tooltip:
+                _previewMuted ? 'Unmute hero preview' : 'Mute hero preview',
+            onPressed: () async {
+              final nextMuted = !_previewMuted;
+              setState(() => _previewMuted = nextMuted);
+              final youtube = _youtubePreviewController;
+              if (youtube != null &&
+                  _youtubePreviewUrl == _effectivePreviewUrl(media)) {
+                await _applyYoutubePreviewAudio(youtube);
+                if (!nextMuted) youtube.playVideo();
+              } else {
+                try {
+                  await _previewController?.setVolume(nextMuted ? 0 : 1);
+                  if (!nextMuted) await _previewController?.play();
+                } catch (_) {}
+              }
+            },
+            icon:
+                Icon(_previewMuted ? Icons.mic_off_rounded : Icons.mic_rounded),
+          ),
+        ),
         Positioned(
           left: 26,
           right: 26,
@@ -991,7 +1189,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                   children: [
                     FilledButton.icon(
                       onPressed: media.playbackUrl?.trim().isNotEmpty == true
-                          ? () => widget.onOpen(media)
+                          ? () => (widget.onPlay ?? widget.onOpen)(media)
                           : null,
                       icon: const Icon(Icons.play_arrow_rounded, size: 23),
                       label: const UniversalText(

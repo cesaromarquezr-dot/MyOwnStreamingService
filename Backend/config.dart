@@ -29,6 +29,10 @@ static String get spotifyClientId => Platform.environment['SPOTIFY_CLIENT_ID']?.
 static String get spotifyClientSecret => Platform.environment['SPOTIFY_CLIENT_SECRET']?.trim() ?? '';
 /// Backend-only YouTube Data API key for music-video discovery.
 static String get youtubeApiKey => Platform.environment['YOUTUBE_API_KEY']?.trim() ?? '';
+/// Backend-only Musixmatch key for licensed lyrics-based track search.
+static String get musixmatchApiKey => Platform.environment['MUSIXMATCH_API_KEY']?.trim() ?? '';
+/// Backend-only AudD token for song recognition from a short microphone sample.
+static String get auddApiToken => Platform.environment['AUDD_API_TOKEN']?.trim() ?? '';
 static String get paypalClientId => Platform.environment['PAYPAL_CLIENT_ID']?.trim() ?? '';
 static String get paypalClientSecret => Platform.environment['PAYPAL_CLIENT_SECRET']?.trim() ?? '';
 static String get paypalBaseUrl => Platform.environment['PAYPAL_BASE_URL']?.trim() ?? 'https://api-m.sandbox.paypal.com';
@@ -122,6 +126,19 @@ _environmentInt(
 120,
 min: 1,
 max: 100000,
+);
+
+/// Maximum request-body size for JSON/API requests.
+///
+/// Defaults to 25 MiB. Configure MAX_REQUEST_BODY_BYTES in the backend
+/// environment to override it; accepted values are 1 KiB through 100 MiB.
+/// Large media payloads should use the media server/storage path, not JSON APIs.
+static int get maxRequestBodyBytes =>
+_environmentInt(
+'MAX_REQUEST_BODY_BYTES',
+25 * 1024 * 1024,
+min: 1024,
+max: 100 * 1024 * 1024,
 );
 
 /// Whether Dart terminates TLS itself.

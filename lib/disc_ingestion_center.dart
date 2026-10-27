@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_core.dart';
 import 'core/services/disc_ingestion_service.dart';
 
 const _discAccent = Color(0xFF8B7CFF);
@@ -222,7 +223,14 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
     final artworkController = TextEditingController();
     final discTitleController = TextEditingController();
     String kind = 'movie';
+    String contentCategory = 'Main Feature';
     String discType = _defaultDiscType();
+    String? parentMediaId;
+    final candidateParents = AppController.instance.library.where((item) {
+      final type = item.type.toLowerCase().replaceAll(RegExp(r'[_\s]+'), '');
+      return item.id.trim().isNotEmpty && !item.tags.any((tag) => tag.toLowerCase() == 'disc extra') &&
+          (type == 'movie' || type == 'tvshow' || type == 'show' || type == 'series');
+    }).toList(growable: false)..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     var submitting = false;
     try {
       await showDialog<void>(
@@ -258,6 +266,31 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
+                      initialValue: contentCategory,
+                      decoration: const InputDecoration(labelText: 'Content category'),
+                      items: const [
+                        DropdownMenuItem(value: 'Main Feature', child: Text('Main feature / movie')),
+                        DropdownMenuItem(value: 'Episode', child: Text('TV episode')),
+                        DropdownMenuItem(value: 'Deleted Scene', child: Text('Deleted scene')),
+                        DropdownMenuItem(value: 'Audio Commentary', child: Text('Audio commentary')),
+                        DropdownMenuItem(value: 'Behind-the-Scenes Featurette', child: Text('Behind the scenes / featurette')),
+                        DropdownMenuItem(value: 'Documentary', child: Text('Documentary')),
+                        DropdownMenuItem(value: 'Trailer', child: Text('Trailer')),
+                        DropdownMenuItem(value: 'Alternate Cut', child: Text('Alternate cut / extended scene')),
+                        DropdownMenuItem(value: 'Other Bonus Clip', child: Text('Other bonus clip')),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() {
+                          contentCategory = value;
+                          if (value == 'Main Feature' || value == 'Episode') {
+                            parentMediaId = null;
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
                       initialValue: discType,
                       decoration: const InputDecoration(labelText: 'Physical source format'),
                       items: const [
@@ -268,12 +301,30 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       ],
                       onChanged: (value) { if (value != null) setDialogState(() => discType = value); },
                     ),
+                    if (contentCategory != 'Main Feature' && contentCategory != 'Episode') ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: parentMediaId ?? '',
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Attach bonus content to movie/show (optional)'),
+                        items: <DropdownMenuItem<String>>[
+                          const DropdownMenuItem<String>(value: '', child: Text('Standalone / not linked')),
+                          ...candidateParents.map((parent) => DropdownMenuItem<String>(
+                            value: parent.id,
+                            child: Text('${parent.title}${parent.releaseYear == null ? '' : ' (${parent.releaseYear})'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                          )),
+                        ],
+                        onChanged: (value) => setDialogState(() => parentMediaId = value == null || value.isEmpty ? null : value),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text('Linked bonus content appears under Details → Information → Extras & Special Features. DVD menus, IFO/BUP navigation and interactive mini-games are not ordinary MKV files; preserve the original disc or a lawful full-disc image for those elements.', style: TextStyle(fontSize: 11, color: Colors.white54, height: 1.35)),
+                    ],
                     const SizedBox(height: 8),
                     TextField(controller: discTitleController, decoration: const InputDecoration(labelText: 'Disc / edition label (optional)')),
                     const SizedBox(height: 8),
                     TextField(controller: artworkController, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Poster artwork URL (optional)', hintText: 'https://…')),
                     const SizedBox(height: 12),
-                    const Text('This checks the Matroska/EBML header only. It does not prove the whole file is playable. A raw filesystem path will not be saved as a playback URL; connect the file through your media-server gateway for playback.', style: TextStyle(fontSize: 12, color: Colors.white60, height: 1.35)),
+                    const Text('This checks the Matroska/EBML header only. It does not prove the whole file is playable. A raw filesystem path will not be saved as a playback URL; connect the file through your media-server gateway for playback. Bonus categories are stored as tags so deleted scenes, commentaries, trailers and featurettes remain identifiable.', style: TextStyle(fontSize: 12, color: Colors.white60, height: 1.35)),
                   ],
                 ),
               ),
@@ -311,6 +362,8 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
                       releaseYear: year,
                       artworkUrl: artwork,
                       discTitle: discTitleController.text,
+                      contentCategory: contentCategory,
+                      parentMediaId: parentMediaId,
                     );
                     if (!dialogContext.mounted) return;
                     Navigator.pop(dialogContext);
@@ -392,6 +445,11 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
     final failed = jobs.where((job) => job.status == DiscRipStatus.failed).length;
     return Scaffold(
       appBar: AppBar(title: const Text('Disc Ingestion Center'), actions: [
+        IconButton(
+          tooltip: 'Import technical manifests',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DiscImportManifestScreen())),
+          icon: const Icon(Icons.fact_check_outlined),
+        ),
         IconButton(tooltip: 'Open setup guide', onPressed: () => _showGuideDialog(context), icon: const Icon(Icons.menu_book_rounded)),
       ]),
       body: ListView(
@@ -460,6 +518,8 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
               Text('Multi-Movie Disc Review', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               const Text('Scan the selected disc before ripping. Long titles are only suggestions; verify names and durations because extras, alternate cuts, and duplicate encodes can look similar.'),
+              const SizedBox(height: 8),
+              const Text('Where are the extras? Deleted scenes, featurettes, trailers, alternate cuts and some audio-commentary versions can appear as separate MakeMKV titles. Select the title indexes here or use the “all” selector, then import each resulting MKV and choose its Content category. Menu graphics, DVD navigation (IFO/BUP/VOB structure) and interactive mini-games are not usually exported as ordinary playable MKVs; preserve the original disc or an authorized full-disc image when you need those interactive elements.', style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.45)),
               const SizedBox(height: 12),
               FilledButton.icon(onPressed: _scanningTitles ? null : _scanDiscTitles, icon: _scanningTitles ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.manage_search), label: Text(_scanningTitles ? 'Scanning disc…' : 'Scan titles for review')),
               if (_discTitles.isNotEmpty) ...[
@@ -646,4 +706,127 @@ class _DiscIngestionCenterScreenState extends State<DiscIngestionCenterScreen> {
       ),
     );
   }
+}
+
+
+/// Displays local metadata manifests created during disc imports. Full file
+/// paths are intentionally excluded; a manifest is not a playable stream URL.
+class DiscImportManifestScreen extends StatefulWidget {
+  const DiscImportManifestScreen({super.key});
+
+  @override
+  State<DiscImportManifestScreen> createState() => _DiscImportManifestScreenState();
+}
+
+class _DiscImportManifestScreenState extends State<DiscImportManifestScreen> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = DiscIngestionService.instance.loadImportManifests();
+  }
+
+  String _formatBytes(dynamic raw) {
+    final bytes = (raw as num?)?.toInt() ?? 0;
+    if (bytes < 1024) return '$bytes B';
+    const units = <String>['KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var unit = -1;
+    do {
+      value /= 1024;
+      unit++;
+    } while (value >= 1024 && unit < units.length - 1);
+    return '${value.toStringAsFixed(value >= 100 ? 0 : 1)} ${units[unit]}';
+  }
+
+  List<Map<String, dynamic>> _maps(dynamic value) => value is List
+      ? value.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false)
+      : <Map<String, dynamic>>[];
+
+  String _streamDescription(Map<String, dynamic> stream) {
+    final type = stream['codecType']?.toString() ?? 'stream';
+    final codec = stream['codecName']?.toString() ?? 'unknown codec';
+    final dimensions = (stream['width'] is num && stream['height'] is num)
+        ? ' · ${stream['width']}×${stream['height']}'
+        : '';
+    final channels = stream['channels'] is num ? ' · ${stream['channels']} ch' : '';
+    final language = (stream['language']?.toString() ?? '').trim();
+    final title = (stream['title']?.toString() ?? '').trim();
+    return '$type · $codec$dimensions$channels${language.isEmpty ? '' : ' · $language'}${title.isEmpty ? '' : ' · $title'}';
+  }
+
+  Widget _manifestCard(Map<String, dynamic> manifest) {
+    final videos = _maps(manifest['videoStreams']);
+    final audio = _maps(manifest['audioStreams']);
+    final subtitles = _maps(manifest['subtitleStreams']);
+    final extras = _maps(manifest['otherStreams']);
+    final hasProbe = manifest['streamInspectionSucceeded'] == true;
+    final importedAt = DateTime.tryParse(manifest['importedAt']?.toString() ?? '');
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ExpansionTile(
+        leading: Icon(hasProbe ? Icons.verified_outlined : Icons.info_outline_rounded),
+        title: Text(manifest['title']?.toString() ?? 'Imported item', maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          '${manifest['sourceFileName'] ?? 'MKV'} · ${_formatBytes(manifest['fileSizeBytes'])}\n${manifest['contentCategory'] ?? 'Main Feature'} · ${importedAt?.toLocal().toString().split('.').first ?? 'Import date unavailable'}',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          ListTile(dense: true, title: const Text('Container signature'), subtitle: Text(manifest['containerSignatureCheck']?.toString() ?? 'Unknown')),
+          ListTile(dense: true, title: const Text('Stream inspection'), subtitle: Text(manifest['inspectionMessage']?.toString() ?? 'Not inspected')),
+          ListTile(dense: true, title: const Text('Format'), subtitle: Text(manifest['formatName']?.toString() ?? 'Unknown')),
+          if (manifest['durationSeconds'] is num)
+            ListTile(dense: true, title: const Text('Duration'), subtitle: Text('${((manifest['durationSeconds'] as num).toDouble() / 60).toStringAsFixed(1)} minutes')),
+          if (videos.isNotEmpty) ...[
+            const ListTile(dense: true, title: Text('Video streams', style: TextStyle(fontWeight: FontWeight.w800))),
+            for (final stream in videos) ListTile(dense: true, leading: const Icon(Icons.videocam_outlined), title: Text(_streamDescription(stream))),
+          ],
+          if (audio.isNotEmpty) ...[
+            const ListTile(dense: true, title: Text('Audio streams', style: TextStyle(fontWeight: FontWeight.w800))),
+            for (final stream in audio) ListTile(dense: true, leading: const Icon(Icons.audiotrack_rounded), title: Text(_streamDescription(stream))),
+          ],
+          if (subtitles.isNotEmpty) ...[
+            const ListTile(dense: true, title: Text('Subtitle streams', style: TextStyle(fontWeight: FontWeight.w800))),
+            for (final stream in subtitles) ListTile(dense: true, leading: const Icon(Icons.closed_caption_outlined), title: Text(_streamDescription(stream))),
+          ],
+          if (extras.isNotEmpty) ...[
+            const ListTile(dense: true, title: Text('Other streams', style: TextStyle(fontWeight: FontWeight.w800))),
+            for (final stream in extras) ListTile(dense: true, title: Text(_streamDescription(stream))),
+          ],
+          ListTile(dense: true, leading: const Icon(Icons.info_outline_rounded), title: const Text('Integrity and playback limits'), subtitle: Text(
+            'Checksum: ${manifest['checksumStatus'] ?? 'not computed'}. Full decode test: ${manifest['fullDecodeTested'] == true ? 'performed' : 'not performed'}. Playback URL created: ${manifest['playbackUrlCreated'] == true ? 'yes' : 'no'}. A container signature or stream probe is not a complete playback verification.')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Import Technical Manifests'),
+      actions: [
+        IconButton(
+          tooltip: 'Refresh manifests',
+          onPressed: () => setState(() => _future = DiscIngestionService.instance.loadImportManifests()),
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ],
+    ),
+    body: FutureBuilder<List<Map<String, dynamic>>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        final manifests = snapshot.data ?? const <Map<String, dynamic>>[];
+        if (manifests.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No import manifests yet. Import an MKV from the Disc Ingestion Center. If ffprobe is installed, stream and codec details will be included automatically.', textAlign: TextAlign.center)));
+        return ListView(padding: const EdgeInsets.all(16), children: [
+          const Text('Manifests are stored in application-support storage and omit full source paths. ffprobe inspection is optional; without it, only the container signature and file size are recorded.', style: TextStyle(color: Colors.white60, height: 1.45)),
+          const SizedBox(height: 12),
+          for (final manifest in manifests) _manifestCard(manifest),
+        ]);
+      },
+    ),
+  );
 }

@@ -5240,7 +5240,6 @@ class SupabaseStore {
       'suspicious_login',
     };
     for (final row in rows) {
-      if (row is! Map) continue;
       final type = row['event_type']?.toString() ?? '';
       if (watchedTypes.contains(type)) {
         result[type] = (result[type] ?? 0) + 1;

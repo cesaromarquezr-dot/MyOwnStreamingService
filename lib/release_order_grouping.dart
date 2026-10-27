@@ -124,6 +124,34 @@ class ReleaseOrderGrouping {
     return _userProvidedMovieDate(item);
   }
 
+  /// Sorts catalog items by the most precise known release date. Exact dates
+  /// win; if only a year is known, January 1 is used as a stable year-level
+  /// fallback. Items without any date/year always remain last in both orders.
+  static int compareMediaByReleaseDate(
+    MediaItem a,
+    MediaItem b, {
+    required bool newestFirst,
+  }) {
+    DateTime? sortDate(MediaItem item) {
+      final exact = releaseDateFor(item);
+      if (exact != null) return exact;
+      final year = releaseYearFor(item);
+      return year == null ? null : DateTime(year, 1, 1);
+    }
+
+    final aDate = sortDate(a);
+    final bDate = sortDate(b);
+    if (aDate == null || bDate == null) {
+      if (aDate == null && bDate == null) {
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      }
+      return aDate == null ? 1 : -1;
+    }
+    final byDate = aDate.compareTo(bDate);
+    if (byDate != 0) return newestFirst ? -byDate : byDate;
+    return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+  }
+
   /// Chooses the most precise known year for timeline placement.
   static int? releaseYearFor(MediaItem item) {
     if (item.isSeries) {

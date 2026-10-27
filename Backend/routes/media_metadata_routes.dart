@@ -53,6 +53,23 @@ class MediaMetadataRoutes {
         return;
       }
 
+      if (path == '$_prefix/omdb-ratings') {
+        final imdbId = request.uri.queryParameters['imdb_id']?.trim() ?? '';
+        if (imdbId.isEmpty) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'An IMDb title ID is required.',
+          });
+          return;
+        }
+        final payload = await service.getOmdbRatings(imdbId: imdbId);
+        await _json(request, HttpStatus.ok, <String, dynamic>{
+          'success': true,
+          ...payload,
+        });
+        return;
+      }
+
       if (path == '$_prefix/tmdb') {
         final tmdbPath = request.uri.queryParameters['path']?.trim() ?? '';
         if (tmdbPath.isEmpty) {

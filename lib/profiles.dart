@@ -4,11 +4,15 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'backend_api.dart';
 import 'app_core.dart';
+import 'artwork_selection_store.dart';
+import 'artwork_gallery_screen.dart';
+import 'core/services/cinematic_title_metadata_service.dart';
 import 'music_achievements.dart';
 import 'music.dart';
 import 'profile_content_safety.dart';
@@ -76,9 +80,15 @@ class ProfileSelectionScreen extends StatefulWidget {
 class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     with TickerProviderStateMixin {
   late final AnimationController _animationController;
+  int? _selectedBackdropIndex;
+  List<_ProfileBackdropItem> _backdropItems = <_ProfileBackdropItem>[];
+  String _backdropPoolSignature = '';
+  bool _openingArtworkGallery = false;
+  static String _lastRandomSampleSignature = '';
 
   void _onContentChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    unawaited(_refreshProfileBackdropItems(randomize: false));
   }
 
   @override
@@ -90,6 +100,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     widget.onOpened?.call();
     AppController.instance.addListener(_onContentChanged);
     MusicLibraryStore.instance.addListener(_onContentChanged);
+    unawaited(_refreshProfileBackdropItems(randomize: true));
 
     _animationController = AnimationController(
       vsync: this,
@@ -247,25 +258,31 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     Navigator.of(context).pop(AppController.instance.currentProfile);
   }
 
-  List<_ProfileBackdropItem> _profileBackdropItems() {
+  List<_ProfileBackdropItem> _buildProfileBackdropPool() {
     final items = <_ProfileBackdropItem>[];
     final seenUrls = <String>{};
     final controller = AppController.instance;
 
     for (final media in controller.library) {
       final type = media.type.trim().toLowerCase();
-      final isScreenMedia = type.contains('movie') ||
-          type.contains('show') ||
+      final isMovie = type.contains('movie') ||
+          type.contains('film') ||
+          type.contains('feature');
+      final isSeries = type.contains('show') ||
           type.contains('series') ||
           type == 'tv' ||
           type.contains('television');
+      final isScreenMedia = isMovie || isSeries;
       final url = (media.imageUrl ?? '').trim();
       if (!isScreenMedia || !_isUsableArtworkUrl(url) || !seenUrls.add(url)) {
         continue;
       }
       items.add(_ProfileBackdropItem(
+        id: 'media:${media.id}',
+        mediaId: media.id,
+        media: media,
         title: media.title,
-        type: type.contains('movie') ? 'MOVIE' : 'SERIES',
+        type: isMovie ? 'MOVIE' : 'SERIES',
         imageUrl: url,
       ));
     }
@@ -274,17 +291,362 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       final url = (track.artworkUrl ?? '').trim();
       if (!_isUsableArtworkUrl(url) || !seenUrls.add(url)) continue;
       items.add(_ProfileBackdropItem(
+        id: 'track:${track.id}',
         title: track.album.trim().isEmpty ? track.title : track.album,
         type: 'ALBUM',
         imageUrl: url,
       ));
     }
-
     return items;
   }
 
-  bool _isUsableArtworkUrl(String url) =>
-      url.startsWith('https://') || url.startsWith('http://');
+  Future<void> _refreshProfileBackdropItems({required bool randomize}) async {
+    final pool = _buildProfileBackdropPool();
+    final activeProfileId = AppController.instance.currentProfile?.id ?? 'guest';
+    final signature =
+        '$activeProfileId|${pool.map((item) => '${item.id}|${item.title}|${item.imageUrl}').join('\u0001')}';
+    if (!randomize && signature == _backdropPoolSignature) {
+      if (mounted) setState(() {});
+      return;
+    }
+    _backdropPoolSignature = signature;
+    if (pool.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _backdropItems = <_ProfileBackdropItem>[];
+          _selectedBackdropIndex = null;
+        });
+      }
+      return;
+    }
+
+    // Keep the carousel varied: include up to seven movies/series whenever
+    // those exist, then fill remaining slots with albums before topping up from
+    // the screen-media pool. Every visit reshuffles each category and the final
+    // list, producing ten picks without allowing music to crowd all screen art
+    // out of the profile-picker gallery.
+    final screenPool = pool.where((item) => item.media != null).toList()
+      ..shuffle(Random());
+    final albumPool = pool.where((item) => item.media == null).toList()
+      ..shuffle(Random());
+    final screenSampleCount = screenPool.isEmpty
+        ? 0
+        : albumPool.isEmpty
+            ? min(10, screenPool.length)
+            : min(7, screenPool.length);
+    final sample = <_ProfileBackdropItem>[
+      ...screenPool.take(screenSampleCount),
+      ...albumPool.take(10 - screenSampleCount),
+    ];
+    if (sample.length < 10) {
+      sample.addAll(screenPool
+          .skip(screenSampleCount)
+          .take(10 - sample.length));
+    }
+    sample.shuffle(Random());
+    if (pool.length > 10) {
+      String sampleSignature(List<_ProfileBackdropItem> items) {
+        final ids = items.map((item) => item.id).toList()..sort();
+        return ids.join('|');
+      }
+      if (sampleSignature(sample) == _lastRandomSampleSignature) {
+        // Avoid repeating exactly the same ten media IDs between visits. Prefer
+        // an alternative of the same type, then any unused candidate.
+        final selectedIds = sample.map((item) => item.id).toSet();
+        final preferredType = sample.last.type;
+        final alternatives = pool.where((item) => !selectedIds.contains(item.id)).toList();
+        alternatives.shuffle(Random());
+        final sameType = alternatives.where((item) => item.type == preferredType).toList();
+        sample[sample.length - 1] = sameType.isNotEmpty ? sameType.first : alternatives.first;
+      }
+      _lastRandomSampleSignature = sampleSignature(sample);
+    }
+
+    final profileId = AppController.instance.currentProfile?.id ?? 'guest';
+    final enriched = await Future.wait<_ProfileBackdropItem>(sample.map((item) async {
+      final media = item.media;
+      if (media == null) return item;
+      final savedPoster = await ArtworkSelectionStore.readPosterPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      final savedBackdrop = await ArtworkSelectionStore.readBackdropPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      final posterUrl = CinematicTitleMetadataService.imageUrl(savedPoster, size: 'w500');
+      final backdropUrl = CinematicTitleMetadataService.imageUrl(savedBackdrop, size: 'w1280');
+      return item.copyWith(
+        imageUrl: posterUrl ?? item.imageUrl,
+        backdropUrl: backdropUrl,
+      );
+    }));
+
+    if (!mounted) return;
+    setState(() {
+      _backdropItems = enriched;
+      _selectedBackdropIndex = null;
+    });
+  }
+
+  Future<void> _openArtworkGalleryForBackdropItem(_ProfileBackdropItem item) async {
+    final media = item.media;
+    if (media == null || _openingArtworkGallery) return;
+    if (!CinematicTitleMetadataService.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Connect the metadata backend to browse poster and backdrop choices.'),
+      ));
+      return;
+    }
+
+    setState(() => _openingArtworkGallery = true);
+    try {
+      final metadata = await CinematicTitleMetadataService.lookupTitle(
+        title: media.title,
+        isTv: media.isSeries,
+        year: media.releaseYear ?? media.seriesStartYear,
+      );
+      if (!mounted) return;
+      if (metadata == null ||
+          (metadata.posterPaths.isEmpty && metadata.backdropPaths.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No poster/backdrop gallery found for "${media.title}".'),
+        ));
+        return;
+      }
+      final profileId = AppController.instance.currentProfile?.id ?? 'guest';
+      final savedPoster = await ArtworkSelectionStore.readPosterPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      final savedBackdrop = await ArtworkSelectionStore.readBackdropPath(
+        profileId: profileId,
+        mediaId: media.id,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => ArtworkGalleryScreen(
+            media: media,
+            metadata: metadata,
+            profileIdOverride: 'guest',
+            initialPosterPath: savedPoster ?? metadata.posterPath,
+            initialBackdropPath: savedBackdrop ?? metadata.backdropPath,
+            onPosterSet: (path) {
+              if (!mounted) return;
+              setState(() {
+                _backdropItems = _backdropItems.map((candidate) =>
+                    candidate.mediaId == media.id
+                        ? candidate.copyWith(
+                            imageUrl: CinematicTitleMetadataService.imageUrl(path, size: 'w500') ?? candidate.imageUrl,
+                          )
+                        : candidate).toList(growable: false);
+              });
+            },
+            onBackdropSet: (path) {
+              if (!mounted) return;
+              setState(() {
+                _backdropItems = _backdropItems.map((candidate) =>
+                    candidate.mediaId == media.id
+                        ? candidate.copyWith(
+                            backdropUrl: CinematicTitleMetadataService.imageUrl(path, size: 'w1280') ?? candidate.backdropUrl,
+                          )
+                        : candidate).toList(growable: false);
+              });
+            },
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not open artwork gallery: $error'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _openingArtworkGallery = false);
+    }
+  }
+
+  bool _isUsableArtworkUrl(String url) {
+    final value = url.trim();
+    if (value.startsWith('https://') || value.startsWith('http://')) return true;
+    final uri = Uri.tryParse(value);
+    if (uri?.scheme == 'file') return File.fromUri(uri!).existsSync();
+    return value.isNotEmpty && File(value).existsSync();
+  }
+
+  Widget _profileArtworkImage(String source, {required BoxFit fit}) {
+    final value = source.trim();
+    if (value.startsWith('https://') || value.startsWith('http://')) {
+      return Image.network(
+        value,
+        fit: fit,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+      );
+    }
+    final uri = Uri.tryParse(value);
+    final file = uri?.scheme == 'file' ? File.fromUri(uri!) : File(value);
+    return Image.file(
+      file,
+      fit: fit,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+    );
+  }
+
+  Widget _buildArtworkSlider(
+    List<_ProfileBackdropItem> artwork, {
+    required double height,
+    required double cardWidth,
+  }) {
+    final visibleCount = artwork.length;
+    if (visibleCount == 0) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+        itemCount: visibleCount,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final item = artwork[index];
+          final selected = _selectedBackdropIndex == index;
+          return SizedBox(
+            width: cardWidth,
+            child: Semantics(
+              button: true,
+              selected: selected,
+              label: 'Show ${item.title} as the profile selection backdrop',
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () => setState(() => _selectedBackdropIndex = index),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selected ? Colors.white : Colors.white24,
+                        width: selected ? 2.5 : 1,
+                      ),
+                      boxShadow: selected
+                          ? const <BoxShadow>[
+                              BoxShadow(
+                                color: Colors.black54,
+                                blurRadius: 18,
+                                offset: Offset(0, 6),
+                              ),
+                            ]
+                          : const <BoxShadow>[],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _profileArtworkImage(item.imageUrl, fit: BoxFit.cover),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: <Color>[
+                                  Colors.black.withValues(alpha: .12),
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: .92),
+                                ],
+                                stops: const <double>[0, .35, 1],
+                              ),
+                            ),
+                          ),
+                          if (item.media != null)
+                            Positioned(
+                              top: 4,
+                              left: 4,
+                              child: Material(
+                                color: Colors.black.withValues(alpha: .78),
+                                shape: const CircleBorder(),
+                                child: IconButton(
+                                  tooltip: 'Choose poster and backdrop',
+                                  visualDensity: VisualDensity.compact,
+                                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                                  padding: EdgeInsets.zero,
+                                  onPressed: _openingArtworkGallery
+                                      ? null
+                                      : () => _openArtworkGalleryForBackdropItem(item),
+                                  icon: const Icon(Icons.photo_library_outlined, size: 17, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          if (selected)
+                            const Positioned(
+                              top: 8,
+                              right: 8,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.all(3),
+                                  child: Icon(
+                                    Icons.check_rounded,
+                                    size: 15,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          Positioned(
+                            left: 9,
+                            right: 8,
+                            bottom: 9,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Text(
+                                  item.type,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 9,
+                                    letterSpacing: 1.1,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  item.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    height: 1.15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Widget _buildCinematicLayout(
     BuildContext context,
@@ -388,61 +750,33 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                         ],
                       )),
                   const Spacer(),
-                  SizedBox(
-                    height: (size.height * 0.29).clamp(150.0, 260.0).toDouble(),
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: artwork.length.clamp(0, 8).toInt(),
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final item = artwork[index];
-                        return AnimatedContainer(
-                          duration: Duration(milliseconds: 500 + (index * 55)),
-                          curve: Curves.easeOutCubic,
-                          width: (size.width * 0.105)
-                              .clamp(94.0, 150.0)
-                              .toDouble(),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.network(
-                                  item.imageUrl,
-                                  fit: BoxFit.cover,
-                                  filterQuality: FilterQuality.medium,
-                                  errorBuilder: (_, __, ___) =>
-                                      const ColoredBox(color: Colors.black),
-                                ),
-                                DecoratedBox(
-                                    decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withValues(alpha: 0.9)
-                                      ]),
-                                )),
-                                Positioned(
-                                    left: 8,
-                                    right: 8,
-                                    bottom: 9,
-                                    child: Text(
-                                      item.title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600),
-                                    )),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                  const Text(
+                    'CHOOSE YOUR BACKDROP',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _selectedBackdropIndex == null
+                        ? 'Select any movie, series or album artwork below'
+                        : 'Previewing: ${artwork[_selectedBackdropIndex!.clamp(0, artwork.length - 1).toInt()].title}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildArtworkSlider(
+                    artwork,
+                    height: (size.height * 0.29)
+                        .clamp(150.0, 260.0)
+                        .toDouble(),
+                    cardWidth: (size.width * 0.105)
+                        .clamp(94.0, 150.0)
+                        .toDouble(),
                   ),
                 ],
               ),
@@ -460,14 +794,17 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     final controller = AppController.instance;
     final account = controller.currentAccount;
     final profiles = account?.profiles ?? <Profile>[];
-    final artwork = _profileBackdropItems();
+    final artwork = _backdropItems;
 
     return Scaffold(
       backgroundColor: const Color(0xFF070707),
       body: Stack(
         children: [
           if (artwork.isNotEmpty)
-            _ProfileBackdropArtwork(items: artwork)
+            _ProfileBackdropArtwork(
+              items: artwork,
+              selectedIndex: _selectedBackdropIndex,
+            )
           else
             const ColoredBox(color: Colors.black),
           if (artwork.isNotEmpty && MediaQuery.sizeOf(context).width < 760)
@@ -530,7 +867,34 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(height: 42),
+                          const SizedBox(height: 26),
+                          if (artwork.isNotEmpty) ...<Widget>[
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                _selectedBackdropIndex == null
+                                    ? 'Choose artwork to preview the backdrop'
+                                    : 'Backdrop preview: ${artwork[_selectedBackdropIndex!.clamp(0, artwork.length - 1).toInt()].title}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .78),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 9),
+                            _buildArtworkSlider(
+                              artwork,
+                              height: 148,
+                              cardWidth: (MediaQuery.sizeOf(context).width * .25)
+                                  .clamp(90.0, 124.0)
+                                  .toDouble(),
+                            ),
+                            const SizedBox(height: 26),
+                          ] else
+                            const SizedBox(height: 16),
                           if (profiles.isEmpty)
                             const _NoProfiles()
                           else
@@ -2806,24 +3170,69 @@ class _ProfileLogo extends StatelessWidget {
 /// ============================================================
 
 class _ProfileBackdropItem {
+  final String id;
+  final String? mediaId;
+  final MediaItem? media;
   final String title;
   final String type;
   final String imageUrl;
+  final String? backdropUrl;
 
-  const _ProfileBackdropItem(
-      {required this.title, required this.type, required this.imageUrl});
+  const _ProfileBackdropItem({
+    required this.id,
+    this.mediaId,
+    this.media,
+    required this.title,
+    required this.type,
+    required this.imageUrl,
+    this.backdropUrl,
+  });
+
+  _ProfileBackdropItem copyWith({String? imageUrl, String? backdropUrl}) {
+    return _ProfileBackdropItem(
+      id: id,
+      mediaId: mediaId,
+      media: media,
+      title: title,
+      type: type,
+      imageUrl: imageUrl ?? this.imageUrl,
+      backdropUrl: backdropUrl ?? this.backdropUrl,
+    );
+  }
 }
 
 /// Rotates through actual library artwork. With no valid artwork this widget
 /// is not mounted, leaving the selection screen completely black.
 class _ProfileBackdropArtwork extends StatefulWidget {
   final List<_ProfileBackdropItem> items;
+  final int? selectedIndex;
 
-  const _ProfileBackdropArtwork({required this.items});
+  const _ProfileBackdropArtwork({
+    required this.items,
+    this.selectedIndex,
+  });
 
   @override
   State<_ProfileBackdropArtwork> createState() =>
       _ProfileBackdropArtworkState();
+}
+
+Widget _profileBackdropImage(String source) {
+  final value = source.trim();
+  if (value.startsWith('https://') || value.startsWith('http://')) {
+    return Image.network(
+      value,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+    );
+  }
+  final uri = Uri.tryParse(value);
+  final file = uri?.scheme == 'file' ? File.fromUri(uri!) : File(value);
+  return Image.file(
+    file,
+    fit: BoxFit.cover,
+    errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+  );
 }
 
 class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
@@ -2839,6 +3248,7 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
     _rotation.addStatusListener((status) {
       if (status == AnimationStatus.completed &&
           mounted &&
+          widget.selectedIndex == null &&
           widget.items.length > 1) {
         setState(() => _index = (_index + 1) % widget.items.length);
         _rotation.forward(from: 0);
@@ -2870,7 +3280,13 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const ColoredBox(color: Colors.black);
-    final item = widget.items[_index];
+    final selectedIndex = widget.selectedIndex;
+    final index = selectedIndex != null &&
+            selectedIndex >= 0 &&
+            selectedIndex < widget.items.length
+        ? selectedIndex
+        : _index % widget.items.length;
+    final item = widget.items[index];
     return IgnorePointer(
       child: Stack(
         fit: StackFit.expand,
@@ -2880,11 +3296,8 @@ class _ProfileBackdropArtworkState extends State<_ProfileBackdropArtwork>
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             child: SizedBox.expand(
-              key: ValueKey<String>(item.imageUrl),
-              child: Image.network(item.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      const ColoredBox(color: Colors.black)),
+              key: ValueKey<String>(item.backdropUrl ?? item.imageUrl),
+              child: _profileBackdropImage(item.backdropUrl ?? item.imageUrl),
             ),
           ),
           Container(color: Colors.black.withValues(alpha: 0.48)),

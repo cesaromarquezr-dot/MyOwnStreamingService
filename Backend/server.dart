@@ -81,7 +81,6 @@ import 'routes/rating_routes.dart';
 import 'routes/recommendations_routes.dart';
 import 'routes/remote_access_routes.dart';
 import 'routes/operations_bot_routes.dart';
-import 'routes/review_routes.dart';
 import 'routes/search_routes.dart';
 import 'routes/self_hosting_routes.dart';
 import 'routes/server_agent_routes.dart';
@@ -114,8 +113,6 @@ import 'services/profile_governance_service.dart';
 import 'services/rating_service.dart';
 import 'services/recommendations_service.dart';
 import 'services/remote_access_service.dart';
-import 'services/review_publication_service.dart';
-import 'services/review_service.dart';
 import 'services/search_service.dart';
 import 'services/security_bot_service.dart';
 import 'services/shop_service.dart';
@@ -340,6 +337,8 @@ Future<void> main() async {
       spotifyClientId: AppConfig.spotifyClientId,
       spotifyClientSecret: AppConfig.spotifyClientSecret,
       youtubeApiKey: AppConfig.youtubeApiKey,
+      musixmatchApiKey: AppConfig.musixmatchApiKey,
+      auddApiToken: AppConfig.auddApiToken,
       userAgent: AppConfig.musicMetadataUserAgent,
       tmdbApiKey: AppConfig.tmdbApiKey,
       tmdbApiToken: AppConfig.tmdbApiToken,
@@ -484,12 +483,6 @@ Future<void> main() async {
     authentication: authentication,
   );
 
-  final reviewRoutes = ReviewRoutes(
-    authentication: authentication,
-    service: ReviewService(database),
-    publicationService: ReviewPublicationService(),
-  );
-
   final homeServerRoutes = HomeServerRoutes(
     authentication: authentication,
     service: HomeServerService(),
@@ -575,7 +568,6 @@ Future<void> main() async {
       libraryReleaseRoutes,
       playbackRoutes,
       legalRoutes,
-      reviewRoutes,
       homeServerRoutes,
       supabaseSyncRoutes,
       mediaIntelligenceRoutes,
@@ -629,7 +621,6 @@ Future<void> _handleRequest(
   LibraryReleaseRoutes libraryReleaseRoutes,
   PlaybackRoutes playbackRoutes,
   LegalRoutes legalRoutes,
-  ReviewRoutes reviewRoutes,
   HomeServerRoutes homeServerRoutes,
   SupabaseSyncRoutes supabaseSyncRoutes,
   MediaIntelligenceRoutes mediaIntelligenceRoutes,
@@ -1113,19 +1104,6 @@ Future<void> _handleRequest(
 
     if (path.startsWith('/api/v1/legal/')) {
       await legalRoutes.handle(
-        request,
-      );
-
-      responseStarted = true;
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // REVIEWS
-    // ----------------------------------------------------------
-
-    if (path.startsWith('/api/v1/reviews')) {
-      await reviewRoutes.handle(
         request,
       );
 

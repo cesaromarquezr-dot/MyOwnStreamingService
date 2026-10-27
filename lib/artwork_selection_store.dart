@@ -24,7 +24,15 @@ class ArtworkSelectionStore {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_key('poster', profileId, mediaId))?.trim();
-    return value == null || value.isEmpty ? null : value;
+    if (value != null && value.isNotEmpty) return value;
+    // Artwork chosen from the profile-selection screen may be saved before a
+    // profile is active. Treat that choice as the shared fallback while still
+    // preferring a profile-specific override whenever one exists.
+    if (profileId != 'guest') {
+      final shared = prefs.getString(_key('poster', 'guest', mediaId))?.trim();
+      if (shared != null && shared.isNotEmpty) return shared;
+    }
+    return null;
   }
 
   static Future<String?> readBackdropPath({
@@ -33,7 +41,14 @@ class ArtworkSelectionStore {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_key('backdrop', profileId, mediaId))?.trim();
-    return value == null || value.isEmpty ? null : value;
+    if (value != null && value.isNotEmpty) return value;
+    // Shared selection-picker artwork is the default for profiles that have
+    // not set their own backdrop.
+    if (profileId != 'guest') {
+      final shared = prefs.getString(_key('backdrop', 'guest', mediaId))?.trim();
+      if (shared != null && shared.isNotEmpty) return shared;
+    }
+    return null;
   }
 
   static Future<void> setPosterPath({

@@ -187,6 +187,8 @@ class MediaItem {
   final int? discNumber;
   final String? discTitleId;
   final String? discTitle;
+  /// Optional parent movie/show for an imported bonus feature.
+  final String? parentMediaId;
   final String? discMarketCountry;
   final String? originalTitle;
   final String? originalLanguage;
@@ -283,6 +285,7 @@ class MediaItem {
     this.discNumber,
     this.discTitleId,
     this.discTitle,
+    this.parentMediaId,
     this.discMarketCountry,
     this.originalTitle,
     this.originalLanguage,
@@ -681,6 +684,7 @@ class MediaItem {
           : int.tryParse(data['discNumber']?.toString() ?? ''),
       discTitleId: data['discTitleId']?.toString(),
       discTitle: data['discTitle']?.toString(),
+      parentMediaId: (data['parentMediaId'] ?? data['parent_media_id'])?.toString(),
       discMarketCountry: data['discMarketCountry']?.toString(),
       originalTitle: data['originalTitle']?.toString(),
       originalLanguage: data['originalLanguage']?.toString(),
@@ -1249,6 +1253,7 @@ class MediaItem {
       'discNumber': discNumber,
       'discTitleId': discTitleId,
       'discTitle': discTitle,
+      'parentMediaId': parentMediaId,
       'discMarketCountry': discMarketCountry,
       'originalTitle': originalTitle,
       'originalLanguage': originalLanguage,
@@ -3893,6 +3898,11 @@ class AppController extends ChangeNotifier {
     List<String> directors = const <String>[],
     List<String> writers = const <String>[],
     List<String> music = const <String>[],
+    List<String> providerGenres = const <String>[],
+    List<String> providerKeywords = const <String>[],
+    String? providerReleaseDate,
+    String? providerLastAirDate,
+    String? providerStatus,
   }) async {
     final index = library.indexWhere((item) => item.id == mediaId);
     if (index < 0) return;
@@ -3907,28 +3917,56 @@ class AppController extends ChangeNotifier {
       return values;
     }
 
+    DateTime? dateOnly(String? raw) {
+      final clean = raw?.trim() ?? '';
+      final date = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(clean)?.group(1);
+      if (date == null) return null;
+      final parsed = DateTime.tryParse(date);
+      return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
+    }
+
     final current = library[index];
     final mergedActors = merge(current.actors, actors);
     final mergedCharacters = merge(current.characters, characters);
     final mergedDirectors = merge(current.directors, directors);
     final mergedWriters = merge(current.writers, writers);
     final mergedMusic = merge(current.music, music);
+    final mergedGenres = GenreSystem.normalizeGenres(<String>[...current.genres, ...providerGenres]);
+    final mergedTags = merge(current.tags, providerKeywords);
     final currentPoster = current.imageUrl?.trim() ?? '';
     final incomingPoster = posterUrl?.trim() ?? '';
     // Keep any existing poster selection; use TMDB only when the catalog has
     // no image at all. A catalog may intentionally use custom/title-card art.
     final shouldFillPoster = currentPoster.isEmpty && incomingPoster.isNotEmpty;
+    final parsedStart = dateOnly(providerReleaseDate);
+    final parsedEnd = dateOnly(providerLastAirDate);
+    final cleanStatus = providerStatus?.trim() ?? '';
+    final normalizedStatus = cleanStatus.toLowerCase().replaceAll(RegExp(r'[_-]+'), ' ');
+    final providerOngoing = current.isSeries && const <String>{
+      'returning series', 'in production', 'planned', 'pilot', 'ongoing', 'airing',
+    }.contains(normalizedStatus);
+    final fillMovieDate = !current.isSeries && current.releaseDate == null && parsedStart != null;
+    final fillSeriesStart = current.isSeries && current.seriesStartDate == null && parsedStart != null;
+    final fillReleaseDate = current.releaseDate == null && parsedStart != null;
+    final fillSeriesEnd = current.isSeries && current.seriesEndYear == null && parsedEnd != null && !providerOngoing;
+    final fillSeriesStatus = current.isSeries && (current.seriesStatus?.trim().isNotEmpty != true) && cleanStatus.isNotEmpty;
+    final fillSeriesOngoing = current.isSeries && providerOngoing && !current.seriesOngoing;
     bool equal(List<String> a, List<String> b) =>
         a.length == b.length && List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
-    if (!shouldFillPoster &&
-        equal(mergedActors, current.actors) &&
-        equal(mergedCharacters, current.characters) &&
-        equal(mergedDirectors, current.directors) &&
-        equal(mergedWriters, current.writers) &&
-        equal(mergedMusic, current.music)) {
-      return;
-    }
+    final coreChanged = shouldFillPoster ||
+        !equal(mergedActors, current.actors) ||
+        !equal(mergedCharacters, current.characters) ||
+        !equal(mergedDirectors, current.directors) ||
+        !equal(mergedWriters, current.writers) ||
+        !equal(mergedMusic, current.music) ||
+        !equal(mergedGenres, current.genres) ||
+        !equal(mergedTags, current.tags) ||
+        fillReleaseDate || fillMovieDate || fillSeriesStart || fillSeriesEnd ||
+        fillSeriesStatus || fillSeriesOngoing;
+    if (!coreChanged) return;
 
+    final startDateText = parsedStart?.toIso8601String().substring(0, 10);
+    final endDate = parsedEnd;
     final enriched = MediaItem.fromJson(<String, dynamic>{
       ...current.toJson(),
       if (shouldFillPoster) 'imageUrl': incomingPoster,
@@ -3937,6 +3975,15 @@ class AppController extends ChangeNotifier {
       'directors': mergedDirectors,
       'writers': mergedWriters,
       'music': mergedMusic,
+      'genres': mergedGenres,
+      'tags': mergedTags,
+      if (fillReleaseDate && startDateText != null) 'releaseDate': startDateText,
+      if (fillMovieDate) 'releaseYear': current.releaseYear ?? parsedStart.year,
+      if (fillSeriesStart && startDateText != null) 'seriesStartDate': startDateText,
+      if (fillSeriesStart) 'seriesStartYear': current.seriesStartYear ?? parsedStart.year,
+      if (fillSeriesEnd && endDate != null) 'seriesEndYear': endDate.year,
+      if (fillSeriesStatus) 'seriesStatus': cleanStatus,
+      if (fillSeriesOngoing) 'seriesOngoing': true,
     });
     library[index] = enriched;
     _mergeCatalog(actorsCatalog, mergedActors);
@@ -4137,7 +4184,9 @@ class AppController extends ChangeNotifier {
   ) {
     final alreadyWatched = isWatched(media.id);
     markWatched(media);
-    if (alreadyWatched) unawaited(recordWrappedActivity(media));
+    if (alreadyWatched) {
+      unawaited(recordWrappedActivity(media));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -4377,7 +4426,9 @@ class AppController extends ChangeNotifier {
 
   void markActivityRead(String activityId) {
     final index = activity.indexWhere((entry) => entry.id == activityId);
-    if (index < 0 || activity[index].read) return;
+    if (index < 0 || activity[index].read) {
+      return;
+    }
     activity[index].read = true;
     _activityRevision++;
     _persistOrRestoreActivity();

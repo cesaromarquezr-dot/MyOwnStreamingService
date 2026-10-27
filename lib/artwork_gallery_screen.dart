@@ -15,6 +15,7 @@ class ArtworkGalleryScreen extends StatefulWidget {
     required this.initialBackdropPath,
     required this.onPosterSet,
     required this.onBackdropSet,
+    this.profileIdOverride,
   });
 
   final MediaItem media;
@@ -23,6 +24,9 @@ class ArtworkGalleryScreen extends StatefulWidget {
   final String? initialBackdropPath;
   final ValueChanged<String> onPosterSet;
   final ValueChanged<String> onBackdropSet;
+  /// Optional scope override, used by the profile picker to save a shared
+  /// default before the viewer chooses an individual profile.
+  final String? profileIdOverride;
 
   @override
   State<ArtworkGalleryScreen> createState() => _ArtworkGalleryScreenState();
@@ -35,7 +39,7 @@ class _ArtworkGalleryScreenState extends State<ArtworkGalleryScreen>
   String? _selectedBackdropPath;
   bool _saving = false;
 
-  String get _profileId =>
+  String get _profileId => widget.profileIdOverride ??
       AppController.instance.currentProfile?.id ?? 'guest';
 
   @override

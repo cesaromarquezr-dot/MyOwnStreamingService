@@ -21,6 +21,8 @@ class MusicCatalogService {
     required this.spotifyClientId,
     required this.spotifyClientSecret,
     required this.youtubeApiKey,
+    required this.musixmatchApiKey,
+    required this.auddApiToken,
     required this.userAgent,
     required this.tmdbApiKey,
     required this.tmdbApiToken,
@@ -32,6 +34,8 @@ class MusicCatalogService {
   final String spotifyClientId;
   final String spotifyClientSecret;
   final String youtubeApiKey;
+  final String musixmatchApiKey;
+  final String auddApiToken;
   final String userAgent;
   final String tmdbApiKey;
   final String tmdbApiToken;
@@ -54,6 +58,8 @@ class MusicCatalogService {
       tmdbApiToken.trim().isNotEmpty || tmdbApiKey.trim().isNotEmpty;
 
   bool get youtubeVideosConfigured => youtubeApiKey.trim().isNotEmpty;
+  bool get lyricsSearchConfigured => musixmatchApiKey.trim().isNotEmpty;
+  bool get songRecognitionConfigured => auddApiToken.trim().isNotEmpty;
 
   Map<String, dynamic> providerStatus() => <String, dynamic>{
         'spotify': <String, dynamic>{
@@ -77,6 +83,18 @@ class MusicCatalogService {
         'youtubeMusicVideos': <String, dynamic>{
           'configured': youtubeVideosConfigured,
           'purpose': 'Search embeddable music-video matches for a song and artist',
+          'apiKeyRequired': true,
+        },
+        'lyricsSearch': <String, dynamic>{
+          'configured': lyricsSearchConfigured,
+          'purpose': 'Search licensed track metadata by a remembered lyric phrase',
+          'provider': 'Musixmatch',
+          'apiKeyRequired': true,
+        },
+        'songRecognition': <String, dynamic>{
+          'configured': songRecognitionConfigured,
+          'purpose': 'Identify a song from a short user-recorded audio sample',
+          'provider': 'AudD',
           'apiKeyRequired': true,
         },
       };
@@ -325,9 +343,172 @@ class MusicCatalogService {
     };
   }
 
-  /// Returns a page of Spotify's regional new-release album catalogue for Home.
-  /// The UI can fall back to query-based search if this Spotify endpoint is
-  /// unavailable to a particular developer app.
+  /// Finds artist candidates using shared Spotify genre tags. Spotify's related-
+  /// artists endpoint is unavailable to many Development Mode apps, so this
+  /// deliberately labels its result as a genre-based similarity, not a listener graph.
+  Future<Map<String, dynamic>> relatedArtists({
+    required String artistName,
+    int limit = 12,
+  }) async {
+    final cleanName = artistName.trim();
+    if (cleanName.isEmpty) throw const FormatException('An artist name is required.');
+    if (!spotifyConfigured) {
+      return <String, dynamic>{'success': true, 'configured': false, 'items': <Map<String, dynamic>>[], 'message': 'Spotify is not configured.'};
+    }
+    final seedSearch = await _searchSpotify(cleanName, type: 'artist', limit: 5);
+    final rawArtists = seedSearch['artists'] is List ? (seedSearch['artists'] as List).whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList() : <Map<String, dynamic>>[];
+    String norm(String value) => value.toLowerCase().trim().replaceAll(RegExp(r'[\s._\-&,/()]+' ), '');
+    final targetNorm = norm(cleanName);
+    Map<String, dynamic>? seed;
+    for (final row in rawArtists) {
+      if (norm(row['name']?.toString() ?? '') == targetNorm) { seed = row; break; }
+    }
+    seed ??= rawArtists.isEmpty ? null : rawArtists.first;
+    if (seed == null || (seed['id']?.toString() ?? '').isEmpty) {
+      return <String, dynamic>{'success': true, 'configured': true, 'items': <Map<String, dynamic>>[], 'message': 'No exact Spotify artist match was found.'};
+    }
+    final seedGenres = seed['genres'] is List ? (seed['genres'] as List).map((value) => value.toString().trim()).where((value) => value.isNotEmpty).toList() : <String>[];
+    if (seedGenres.isEmpty) {
+      return <String, dynamic>{'success': true, 'configured': true, 'seedArtist': seed, 'items': <Map<String, dynamic>>[], 'message': 'Spotify has no genre tags for this artist yet.'};
+    }
+    final candidateRows = <Map<String, dynamic>>[];
+    for (final genre in seedGenres.take(4)) {
+      try {
+        final escapedGenre = genre.replaceAll('"', '');
+        final results = await _searchSpotify('genre:"$escapedGenre"', type: 'artist', limit: 10);
+        final rows = results['artists'];
+        if (rows is List) candidateRows.addAll(rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)));
+      } catch (_) {
+        // Keep useful matches from other genre queries if one provider query fails.
+      }
+    }
+    final seedId = seed['id']?.toString() ?? '';
+    final byId = <String, Map<String, dynamic>>{};
+    for (final candidate in candidateRows) {
+      final id = candidate['id']?.toString() ?? '';
+      if (id.isEmpty || id == seedId) continue;
+      final candidateGenres = candidate['genres'] is List ? (candidate['genres'] as List).map((value) => value.toString()).toList() : <String>[];
+      final shared = candidateGenres.where((genre) => seedGenres.any((seedGenre) => seedGenre.toLowerCase() == genre.toLowerCase())).toSet().toList();
+      if (shared.isEmpty) continue;
+      final existing = byId[id];
+      final score = shared.length * 100;
+      final previousScore = (existing?['similarityScore'] as num?)?.toInt() ?? -1;
+      if (score > previousScore) {
+        byId[id] = <String, dynamic>{...candidate, 'similarityScore': score, 'similarityReason': 'Shares ${shared.take(3).join(', ')}'};
+      }
+    }
+    final items = byId.values.toList()
+      ..sort((a, b) => ((b['similarityScore'] as num?)?.toInt() ?? 0).compareTo((a['similarityScore'] as num?)?.toInt() ?? 0));
+    return <String, dynamic>{
+      'success': true,
+      'configured': true,
+      'seedArtist': seed,
+      'seedGenres': seedGenres,
+      'items': items.take(limit.clamp(1, 20).toInt()).toList(growable: false),
+      'source': 'Spotify artist genre metadata',
+      'message': 'Similar-sounding artists are ranked from shared Spotify genre tags. This is not an official Spotify Fans Also Like ranking.',
+    };
+  }
+
+  /// Returns Spotify Search's best-ranked tracks for an artist. Spotify removed
+  /// the old artist top-tracks endpoint for Development Mode; this is catalog
+  /// search-ranked data and never claims to be an official chart.
+  Future<Map<String, dynamic>> popularArtistTracks({required String artistName, int limit = 10}) async {
+    final cleanName = artistName.trim();
+    if (cleanName.isEmpty) throw const FormatException('An artist name is required.');
+    if (!spotifyConfigured) return <String, dynamic>{'success': true, 'configured': false, 'items': <Map<String, dynamic>>[], 'message': 'Spotify is not configured.'};
+    final result = await _searchSpotify('artist:"${cleanName.replaceAll('"', '')}"', type: 'track', limit: limit.clamp(1, 10).toInt());
+    final raw = result['tracks'];
+    final items = raw is List ? raw.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList() : <Map<String, dynamic>>[];
+    return <String, dynamic>{'success': true, 'configured': true, 'source': 'Spotify Search', 'items': items, 'count': items.length, 'message': 'Tracks are ordered by Spotify Search relevance. Spotify no longer returns track popularity in the current Development Mode API responses.'};
+  }
+
+  /// Searches licensed track metadata using a remembered phrase. Only song
+  /// metadata and a provider link are returned; full copyrighted lyrics are not copied.
+  Future<Map<String, dynamic>> searchByLyrics({required String query, int limit = 10}) async {
+    final phrase = query.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (phrase.length < 3) throw const FormatException('Enter at least 3 characters from the lyric.');
+    if (phrase.length > 180 || phrase.contains('\u0000')) throw const FormatException('Lyric search must be 3 to 180 characters.');
+    if (!lyricsSearchConfigured) {
+      return <String, dynamic>{'success': true, 'configured': false, 'provider': 'Musixmatch', 'items': <Map<String, dynamic>>[], 'message': 'Add MUSIXMATCH_API_KEY to Backend/.env to search licensed track metadata by lyric phrase.'};
+    }
+    final uri = Uri.https('api.musixmatch.com', '/ws/1.1/track.search', <String, String>{
+      'apikey': musixmatchApiKey,
+      'q_lyrics': phrase,
+      'page': '1',
+      'page_size': '${limit.clamp(1, 10)}',
+      's_track_rating': 'desc',
+    });
+    final payload = await _getJson(uri);
+    final message = payload['message'] is Map ? Map<String, dynamic>.from(payload['message'] as Map) : <String, dynamic>{};
+    final status = message['header'] is Map ? Map<String, dynamic>.from(message['header'] as Map) : <String, dynamic>{};
+    if ((status['status_code'] as num?)?.toInt() != 200) throw const FormatException('Musixmatch could not complete this lyric search. Check your API access and terms.');
+    final body = message['body'] is Map ? Map<String, dynamic>.from(message['body'] as Map) : <String, dynamic>{};
+    final raw = body['track_list'];
+    final items = raw is List ? raw.whereType<Map>().map((entry) {
+      final item = Map<String, dynamic>.from(entry);
+      final track = item['track'] is Map ? Map<String, dynamic>.from(item['track'] as Map) : item;
+      return <String, dynamic>{
+        'id': track['track_id']?.toString() ?? '',
+        'title': track['track_name']?.toString() ?? 'Unknown title',
+        'artist': track['artist_name']?.toString() ?? 'Unknown artist',
+        'album': track['album_name']?.toString() ?? '',
+        'rating': track['track_rating'],
+        'explicit': (track['explicit'] as num?)?.toInt() == 1,
+        'providerUrl': track['track_share_url']?.toString() ?? '',
+        'source': 'Musixmatch',
+      };
+    }).toList(growable: false) : <Map<String, dynamic>>[];
+    return <String, dynamic>{'success': true, 'configured': true, 'provider': 'Musixmatch', 'query': phrase, 'items': items, 'count': items.length, 'message': items.isEmpty ? 'No matching songs were found for that lyric phrase.' : 'Matches use licensed provider metadata; full lyric text is not copied into results.'};
+  }
+
+  /// Identifies a short microphone sample using AudD. Audio is processed only
+  /// for the user-requested identification and is not written to app logs.
+  Future<Map<String, dynamic>> recognizeSong({required List<int> audioBytes, required String mimeType}) async {
+    if (!songRecognitionConfigured) {
+      return <String, dynamic>{'success': false, 'configured': false, 'provider': 'AudD', 'message': 'Add AUDD_API_TOKEN to Backend/.env to enable song recognition.'};
+    }
+    if (audioBytes.isEmpty || audioBytes.length > 5 * 1024 * 1024) throw const FormatException('Audio sample must be non-empty and no larger than 5 MB.');
+    final boundary = 'moss-${DateTime.now().microsecondsSinceEpoch}';
+    final request = await _client.postUrl(Uri.https('api.audd.io', '/')).timeout(const Duration(seconds: 8));
+    request.headers.set(HttpHeaders.contentTypeHeader, 'multipart/form-data; boundary=$boundary');
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    void writeField(String name, String value) {
+      request.add(utf8.encode('--$boundary\r\nContent-Disposition: form-data; name="$name"\r\n\r\n$value\r\n'));
+    }
+    writeField('api_token', auddApiToken);
+    writeField('return', 'spotify,apple_music,deezer');
+    final safeMime = mimeType.toLowerCase().contains('wav') ? 'audio/wav' : (mimeType.toLowerCase().contains('mpeg') ? 'audio/mpeg' : 'audio/mp4');
+    request.add(utf8.encode('--$boundary\r\nContent-Disposition: form-data; name="file"; filename="sample.${safeMime == 'audio/wav' ? 'wav' : (safeMime == 'audio/mpeg' ? 'mp3' : 'm4a')}"\r\nContent-Type: $safeMime\r\n\r\n'));
+    request.add(audioBytes);
+    request.add(utf8.encode('\r\n--$boundary--\r\n'));
+    final response = await request.close().timeout(const Duration(seconds: 25));
+    final bodyText = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
+    if (response.statusCode < 200 || response.statusCode >= 300) throw MusicCatalogUpstreamException(response.statusCode, 'Song recognition provider returned HTTP ${response.statusCode}.');
+    final payload = _decodeJsonMap(bodyText);
+    if (payload['status']?.toString() != 'success' || payload['result'] is! Map) {
+      return <String, dynamic>{'success': true, 'configured': true, 'matched': false, 'provider': 'AudD', 'message': payload['error'] is Map ? ((payload['error'] as Map)['error_message']?.toString() ?? 'No song match was found.') : 'No song match was found in this sample.'};
+    }
+    final result = Map<String, dynamic>.from(payload['result'] as Map);
+    final spotify = result['spotify'] is Map ? Map<String, dynamic>.from(result['spotify'] as Map) : <String, dynamic>{};
+    return <String, dynamic>{
+      'success': true,
+      'configured': true,
+      'matched': true,
+      'provider': 'AudD',
+      'title': result['title']?.toString() ?? '',
+      'artist': result['artist']?.toString() ?? '',
+      'album': result['album']?.toString() ?? '',
+      'releaseDate': result['release_date']?.toString() ?? '',
+      'songLink': result['song_link']?.toString() ?? '',
+      'spotifyUrl': spotify['external_urls'] is Map ? ((spotify['external_urls'] as Map)['spotify']?.toString() ?? '') : '',
+      'message': 'Song match provided by AudD. Confirm the title before adding it to your library.',
+    };
+  }
+
+  /// Returns recent albums using Spotify Search year filters. The old
+  /// /browse/new-releases endpoint was removed from Spotify's Web API access
+  /// for Development Mode apps, so this is explicitly a search-based fallback.
   Future<Map<String, dynamic>> featuredAlbums({
     int limit = 10,
     int offset = 0,
@@ -335,39 +516,46 @@ class MusicCatalogService {
     if (!spotifyConfigured) {
       return <String, dynamic>{
         'success': true,
-        'source': 'Spotify',
+        'source': 'Spotify Search',
         'items': <Map<String, dynamic>>[],
         'total': 0,
+        'configured': false,
       };
     }
-    final boundedLimit = limit.clamp(1, 20).toInt();
+    final boundedLimit = limit.clamp(1, 10).toInt();
     final boundedOffset = offset.clamp(0, 1000).toInt();
-    final payload = await _spotifyGet(
-      '/v1/browse/new-releases',
-      query: <String, String>{
-        'country': 'MX',
-        'limit': '$boundedLimit',
-        'offset': '$boundedOffset',
-      },
-    );
-    final albumsPayload = payload['albums'] is Map
-        ? Map<String, dynamic>.from(payload['albums'] as Map)
-        : <String, dynamic>{};
-    final raw = albumsPayload['items'];
-    final items = raw is List
-        ? raw.whereType<Map>().map((value) => _spotifyAlbumSummary(
-              Map<String, dynamic>.from(value),
-            )).toList(growable: false)
-        : <Map<String, dynamic>>[];
+    final nowYear = DateTime.now().year;
+    final byId = <String, Map<String, dynamic>>{};
+    for (final year in <int>[nowYear, nowYear - 1, nowYear - 2]) {
+      try {
+        final page = await _searchSpotify('year:$year', type: 'album', limit: 10);
+        final raw = page['albums'];
+        if (raw is! List) continue;
+        for (final row in raw.whereType<Map>()) {
+          final album = Map<String, dynamic>.from(row);
+          final id = album['id']?.toString() ?? '';
+          if (id.isEmpty) continue;
+          byId.putIfAbsent(id, () => album);
+        }
+      } catch (_) {
+        // Continue to older years when a provider query is temporarily unavailable.
+      }
+      if (byId.length >= (boundedOffset + boundedLimit)) break;
+    }
+    final items = byId.values.toList()
+      ..sort((a, b) => (b['releaseDate']?.toString() ?? '')
+          .compareTo(a['releaseDate']?.toString() ?? ''));
+    final pageItems = items.skip(boundedOffset).take(boundedLimit).toList(growable: false);
     return <String, dynamic>{
       'success': true,
-      'source': 'Spotify',
-      'items': items,
-      'count': items.length,
-      'total': albumsPayload['total'] ?? items.length,
+      'configured': true,
+      'source': 'Spotify Search (year-filtered catalogue)',
+      'items': pageItems,
+      'count': pageItems.length,
+      'total': items.length,
       'limit': boundedLimit,
       'offset': boundedOffset,
-      'next': albumsPayload['next'],
+      'message': 'Recent albums are discovered through Spotify Search; this is not an official Spotify New Releases feed.',
     };
   }
 
@@ -898,6 +1086,7 @@ class MusicCatalogService {
         'durationMs': item['duration_ms'],
         'trackNumber': item['track_number'],
         'discNumber': item['disc_number'] ?? 1,
+        'popularity': item['popularity'],
         'explicit': item['explicit'] == true,
         'previewUrl': _secureImageUrl(item['preview_url']?.toString()),
         'spotifyUrl': _spotifyExternalUrl(item),
@@ -1160,6 +1349,7 @@ class MusicCatalogService {
         'imageUrl': _spotifyImage(item['images']),
         'images': _spotifyImages(item['images']),
         'followers': item['followers'] is Map ? (item['followers'] as Map)['total'] : null,
+        'popularity': item['popularity'],
         'spotifyUrl': _spotifyExternalUrl(item),
         'source': 'Spotify',
         'type': 'artist',
@@ -1191,6 +1381,8 @@ class MusicCatalogService {
           'album': album['name']?.toString() ?? '',
           'durationMs': item['duration_ms'],
           'trackNumber': item['track_number'],
+          'popularity': item['popularity'],
+          'explicit': item['explicit'] == true,
           'imageUrl': _spotifyImage(album['images']),
           'images': _spotifyImages(album['images']),
           'spotifyUrl': _spotifyExternalUrl(item),

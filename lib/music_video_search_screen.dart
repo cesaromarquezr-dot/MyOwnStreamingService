@@ -13,10 +13,12 @@ class MusicVideoSearchScreen extends StatefulWidget {
     super.key,
     required this.title,
     required this.artist,
+    this.initialVideo,
   });
 
   final String title;
   final String artist;
+  final Map<String, dynamic>? initialVideo;
 
   @override
   State<MusicVideoSearchScreen> createState() => _MusicVideoSearchScreenState();
@@ -45,8 +47,20 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
         'official music video',
       ].join(' '),
     );
+    final initialVideo = widget.initialVideo;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _searchVideos();
+      if (!mounted) return;
+      if (initialVideo != null &&
+          RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(initialVideo['videoId']?.toString() ?? '')) {
+        setState(() {
+          _providerConfigured = true;
+          _videos.add(Map<String, dynamic>.from(initialVideo));
+          _message = 'Video match found for this imported track.';
+        });
+        _playVideo(initialVideo, autoPlay: true);
+      } else {
+        _searchVideos();
+      }
     });
   }
 
@@ -127,7 +141,7 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
     }
   }
 
-  void _playVideo(Map<String, dynamic> video) {
+  void _playVideo(Map<String, dynamic> video, {bool autoPlay = false}) {
     final videoId = video['videoId']?.toString() ?? '';
     if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)) return;
     _playerController?.close();
@@ -135,7 +149,7 @@ class _MusicVideoSearchScreenState extends State<MusicVideoSearchScreen> {
       _selectedVideoId = videoId;
       _playerController = YoutubePlayerController.fromVideoId(
         videoId: videoId,
-        autoPlay: false,
+        autoPlay: autoPlay,
         params: const YoutubePlayerParams(
           showControls: true,
           showFullscreenButton: true,

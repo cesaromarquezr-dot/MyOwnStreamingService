@@ -58,7 +58,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
   }
 
   void _startProviderLookupIfReady() {
-    if (!mounted || _providerLookupStarted || _imageUrl.isNotEmpty ||
+    if (!mounted ||
+        _providerLookupStarted ||
+        _imageUrl.isNotEmpty ||
         !CinematicTitleMetadataService.isConfigured) {
       return;
     }
@@ -82,7 +84,8 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
       _providerLookupStarted = false;
       _imageUrl = widget.media.imageUrl?.trim() ?? '';
       _startProviderLookupIfReady();
-    } else if (!_fallbackAttempted && _imageUrl.isEmpty &&
+    } else if (!_fallbackAttempted &&
+        _imageUrl.isEmpty &&
         (widget.media.imageUrl?.trim().isNotEmpty ?? false)) {
       _imageUrl = widget.media.imageUrl!.trim();
     }
@@ -159,9 +162,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     final title = media.title.trim();
     if (title.isEmpty) return null;
     final artist = media.music.map((value) => value.trim()).firstWhere(
-      (value) => value.isNotEmpty,
-      orElse: () => '',
-    );
+          (value) => value.isNotEmpty,
+          orElse: () => '',
+        );
     // Both provider adapters receive this search string. A plain, exact-title
     // query works with Spotify's and MusicBrainz's different query syntaxes;
     // artist/year are used below to rank exact-title matches safely.
@@ -175,26 +178,38 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
         ? Map<String, dynamic>.from(payload['spotify'] as Map)
         : <String, dynamic>{};
     final spotifyAlbums = spotify['albums'] is List
-        ? (spotify['albums'] as List).whereType<Map>().map((value) => Map<String, dynamic>.from(value)).toList()
+        ? (spotify['albums'] as List)
+            .whereType<Map>()
+            .map((value) => Map<String, dynamic>.from(value))
+            .toList()
         : <Map<String, dynamic>>[];
     String normalize(String value) => value.toLowerCase().trim().replaceAll(
-      RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-      '',
-    );
+          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+          '',
+        );
     final wantedTitle = normalize(title);
-    final candidate = spotifyAlbums.where((row) => normalize(row['title']?.toString() ?? '') == wantedTitle).toList();
+    final candidate = spotifyAlbums
+        .where(
+            (row) => normalize(row['title']?.toString() ?? '') == wantedTitle)
+        .toList();
     if (candidate.isNotEmpty) {
       final wantedArtist = normalize(artist);
       candidate.sort((a, b) {
         final aArtist = normalize(a['artist']?.toString() ?? '');
         final bArtist = normalize(b['artist']?.toString() ?? '');
-        final aArtistScore = wantedArtist.isNotEmpty && aArtist.contains(wantedArtist) ? 0 : 1;
-        final bArtistScore = wantedArtist.isNotEmpty && bArtist.contains(wantedArtist) ? 0 : 1;
-        if (aArtistScore != bArtistScore) return aArtistScore.compareTo(bArtistScore);
+        final aArtistScore =
+            wantedArtist.isNotEmpty && aArtist.contains(wantedArtist) ? 0 : 1;
+        final bArtistScore =
+            wantedArtist.isNotEmpty && bArtist.contains(wantedArtist) ? 0 : 1;
+        if (aArtistScore != bArtistScore) {
+          return aArtistScore.compareTo(bArtistScore);
+        }
         final year = media.releaseYear;
         if (year != null) {
-          final aYearScore = (a['releaseDate']?.toString() ?? '').startsWith('$year') ? 0 : 1;
-          final bYearScore = (b['releaseDate']?.toString() ?? '').startsWith('$year') ? 0 : 1;
+          final aYearScore =
+              (a['releaseDate']?.toString() ?? '').startsWith('$year') ? 0 : 1;
+          final bYearScore =
+              (b['releaseDate']?.toString() ?? '').startsWith('$year') ? 0 : 1;
           if (aYearScore != bYearScore) return aYearScore.compareTo(bYearScore);
         }
         return 0;
@@ -217,15 +232,23 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
         ? Map<String, dynamic>.from(payload['musicBrainz'] as Map)
         : <String, dynamic>{};
     final groups = musicBrainz['releaseGroups'] is List
-        ? (musicBrainz['releaseGroups'] as List).whereType<Map>().map((value) => Map<String, dynamic>.from(value)).toList()
+        ? (musicBrainz['releaseGroups'] as List)
+            .whereType<Map>()
+            .map((value) => Map<String, dynamic>.from(value))
+            .toList()
         : <Map<String, dynamic>>[];
-    final exactGroups = groups.where((group) => normalize(group['title']?.toString() ?? '') == wantedTitle).toList();
+    final exactGroups = groups
+        .where((group) =>
+            normalize(group['title']?.toString() ?? '') == wantedTitle)
+        .toList();
     exactGroups.sort((a, b) {
       final wantedArtist = normalize(artist);
       final aArtist = normalize(a['artist']?.toString() ?? '');
       final bArtist = normalize(b['artist']?.toString() ?? '');
-      final aScore = wantedArtist.isNotEmpty && aArtist.contains(wantedArtist) ? 0 : 1;
-      final bScore = wantedArtist.isNotEmpty && bArtist.contains(wantedArtist) ? 0 : 1;
+      final aScore =
+          wantedArtist.isNotEmpty && aArtist.contains(wantedArtist) ? 0 : 1;
+      final bScore =
+          wantedArtist.isNotEmpty && bArtist.contains(wantedArtist) ? 0 : 1;
       return aScore.compareTo(bScore);
     });
     for (final group in exactGroups) {
@@ -262,7 +285,9 @@ class _CatalogPosterImageState extends State<CatalogPosterImage> {
     });
   }
 
-  Widget _placeholder() => widget.placeholder ?? SizedBox(
+  Widget _placeholder() =>
+      widget.placeholder ??
+      SizedBox(
         width: widget.width,
         height: widget.height,
         child: const ColoredBox(

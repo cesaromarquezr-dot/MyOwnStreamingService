@@ -23,7 +23,9 @@ import 'media_actions.dart';
 import 'navidrome_setup.dart';
 import 'social_sharing.dart';
 import 'music_catalog_screen.dart';
+import 'cinematic_title_fonts.dart';
 import 'music_video_search_screen.dart';
+import 'music_lyrics_search_screen.dart';
 import 'library_view_modes.dart';
 
 /// A music track imported from the account's home-server library.
@@ -140,6 +142,7 @@ class MusicPageCustomization {
   }) : sectionOrder = sectionOrder ??
             [
               'Weekly Discovery',
+              'Featured Tracks',
               'AI DJ',
               'Made For You',
               'Liked Songs',
@@ -199,6 +202,7 @@ class MusicPageCustomizationStore {
     final value = _settings[key] ??= MusicPageCustomization();
     const defaults = <String>[
       'Weekly Discovery',
+      'Featured Tracks',
       'AI DJ',
       'Made For You',
       'Liked Songs',
@@ -363,8 +367,18 @@ class MusicLibraryStore extends ChangeNotifier {
 
   SharedPreferences? _playlistPreferences;
   String _playlistProfileKey = 'default';
+  Future<void> _initializationQueue = Future<void>.value();
 
-  Future<void> initializeForProfile(String? profileId) async {
+  /// Serializes profile initialization because Home and Music can both request
+  /// it during the same first frame. This prevents duplicate preview entries
+  /// and overlapping profile-preference writes.
+  Future<void> initializeForProfile(String? profileId) {
+    final next = _initializationQueue.then((_) => _initializeForProfile(profileId));
+    _initializationQueue = next.catchError((Object _) {});
+    return next;
+  }
+
+  Future<void> _initializeForProfile(String? profileId) async {
     _playlistPreferences ??= await SharedPreferences.getInstance();
     _playlistProfileKey =
         profileId?.trim().isNotEmpty == true ? profileId!.trim() : 'default';
@@ -1000,6 +1014,11 @@ class _MusicScreenState extends State<MusicScreen> {
                         tooltip: 'Search music',
                       ),
                     IconButton(
+                      onPressed: _openLyricsSearch,
+                      icon: const Icon(Icons.lyrics_outlined),
+                      tooltip: 'Find a song by lyrics or sound',
+                    ),
+                    IconButton(
                       onPressed: _openMusicCatalog,
                       icon: const Icon(Icons.library_music_rounded),
                       tooltip: 'Search Spotify, MusicBrainz, and cover art',
@@ -1160,7 +1179,17 @@ class _MusicScreenState extends State<MusicScreen> {
   List<Widget> _homeSlivers(MusicPageCustomization settings) {
     final output = <Widget>[];
     for (final section in settings.sectionOrder) {
-      if (section == 'Weekly Discovery' && settings.showWeeklyDiscovery) {
+      if (section == 'Featured Tracks') {
+        final featuredTracks = library.tracks.where((track) =>
+          _isAllowedForCurrentProfile(track) &&
+          track.featuredArtists.any((name) => name.trim().isNotEmpty)).toList(growable: false);
+        output.add(_trackSection(
+          'Featured Tracks',
+          'Songs where an artist appears with or is featured by another artist',
+          featuredTracks,
+          Icons.people_alt_rounded,
+        ));
+      } else if (section == 'Weekly Discovery' && settings.showWeeklyDiscovery) {
         output.add(_trackSection(
           'Weekly Discovery',
           'Fresh music selected from artists, genres and listening activity',
@@ -2268,6 +2297,13 @@ class _MusicScreenState extends State<MusicScreen> {
     );
   }
 
+  void _openLyricsSearch() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/app/page/music-find-song'),
+      builder: (_) => const MusicLyricsSearchScreen(),
+    ));
+  }
+
   void _showCustomization() {
     showMusicCustomization(context).then((_) {
       if (mounted) setState(() {});
@@ -2802,14 +2838,6 @@ class MusicArtistProfileScreen extends StatelessWidget {
         final featured = all
             .where((t) => t.featuredArtists.any((a) => _same(a, artistName)))
             .toList();
-        final albums = <String, List<MusicTrack>>{};
-        for (final track in primary) {
-          if (track.album.trim().isNotEmpty) {
-            albums
-                .putIfAbsent(track.album.trim(), () => <MusicTrack>[])
-                .add(track);
-          }
-        }
         final related = <String>{};
         for (final track in [...primary, ...featured]) {
           if (!_same(track.artist, artistName)) related.add(track.artist);
@@ -2817,9 +2845,14 @@ class MusicArtistProfileScreen extends StatelessWidget {
             if (!_same(guest, artistName)) related.add(guest);
           }
         }
-        final videos = primary
-            .where((t) => (t.musicVideoUrl ?? '').trim().isNotEmpty)
-            .toList();
+        final videos = <MusicTrack>{...primary, ...featured}
+            .where((t) => !_isMusicDemoTrack(t))
+            .toList(growable: false);
+        final featuringCreditsById = <String, MusicTrack>{
+          for (final track in featured) track.id: track,
+          for (final track in primary.where((track) => track.featuredArtists.isNotEmpty)) track.id: track,
+        };
+        final featuringCredits = featuringCreditsById.values.toList(growable: false);
         bool isCatalogSample(MusicTrack track) =>
             track.id.startsWith('demo-catalog-track-') ||
             track.id.startsWith('demo-preview-album-track-');
@@ -2836,9 +2869,6 @@ class MusicArtistProfileScreen extends StatelessWidget {
         final playablePrimary = primary
             .where((track) => (track.audioUrl ?? '').trim().isNotEmpty)
             .toList(growable: false);
-        final popular = primary.toList()
-          ..sort((a, b) => (MusicLibraryStore.instance.listenCounts[b.id] ?? 0)
-              .compareTo(MusicLibraryStore.instance.listenCounts[a.id] ?? 0));
         return Scaffold(
           backgroundColor: const Color(0xFF090909),
           appBar: AppBar(
@@ -2863,11 +2893,7 @@ class MusicArtistProfileScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: primary.isEmpty && featured.isEmpty
-              ? const Center(
-                  child: UniversalText(
-                      'No tracks for this artist are indexed in your library.'))
-              : DefaultTabController(
+          body: DefaultTabController(
                   length: 6,
                   child: Column(
                     children: [
@@ -2947,94 +2973,22 @@ class MusicArtistProfileScreen extends StatelessWidget {
                           child: TabBarView(children: [
                         _trackList(context, primary,
                             emptyMessage: 'No imported tracks or catalog examples found for this artist.'),
-                        _albumList(context, albums),
-                        _trackList(context, popular,
-                            emptyMessage:
-                                'Worldwide chart data is not connected yet. Your owned tracks will appear here once chart metadata is configured.',
-                            header: 'Popular in your library',
-                            showListenCounts: true),
-                        videos.isEmpty
-                            ? _empty(
-                                'No matching music videos are stored on your NAS yet.')
-                            : ListView(children: [
-                                for (final track in videos)
-                                  ListTile(
-                                    leading:
-                                        const Icon(Icons.music_video_rounded),
-                                    title: LocalizedMediaText(track.title),
-                                    subtitle: LocalizedMediaText(track.album),
-                                    trailing: Wrap(children: [
-                                      IconButton(
-                                          tooltip: 'Share music video',
-                                          icon:
-                                              const Icon(Icons.share_outlined),
-                                          onPressed: () =>
-                                              showSocialShareDialog(context,
-                                                  title:
-                                                      '${track.title} — Music Video',
-                                                  message:
-                                                      'Shared music video: ${track.title} by ${track.artist}',
-                                                  mediaReference: {
-                                                    'type': 'music_video',
-                                                    'mediaType': 'music_video',
-                                                    'mediaId': track.id,
-                                                    'title': track.title,
-                                                    'artist': track.artist,
-                                                    'album': track.album,
-                                                    'videoUrl':
-                                                        track.musicVideoUrl
-                                                  })),
-                                      IconButton(
-                                          tooltip: 'Play music video',
-                                          icon: const Icon(
-                                              Icons.play_circle_outline),
-                                          onPressed: () => Navigator.of(context)
-                                              .push(MaterialPageRoute<void>(
-                                                  builder: (_) =>
-                                                      MusicTrackDisplayScreen(
-                                                          track: track,
-                                                          mode:
-                                                              MusicTrackDisplayMode
-                                                                  .video)))),
-                                    ]),
-                                    onTap: () => Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                            builder: (_) =>
-                                                MusicTrackDisplayScreen(
-                                                    track: track,
-                                                    mode: MusicTrackDisplayMode
-                                                        .video))),
-                                  )
-                              ]),
-                        _trackList(context, featured,
-                            emptyMessage:
-                                'No featured-artist credits for this artist were found.',
-                            creditLabel: 'Featured on'),
-                        related.isEmpty
-                            ? _empty(
-                                'Similar-artist data is not available yet. Collaborations can help seed these suggestions.')
-                            : ListView(children: [
-                                const ListTile(
-                                    title: UniversalText('Fans Also Like'),
-                                    subtitle: UniversalText(
-                                        'Initial suggestions are based on shared track credits. Connect a music discovery provider for audience-based rankings.')),
-                                for (final name in related.toList()
-                                  ..sort((a, b) => a
-                                      .toLowerCase()
-                                      .compareTo(b.toLowerCase())))
-                                  ListTile(
-                                      leading: const CircleAvatar(
-                                          child: Icon(Icons.person_rounded)),
-                                      title: Text(name),
-                                      subtitle: const UniversalText(
-                                          'Related through your music library'),
-                                      trailing: const Icon(Icons.chevron_right),
-                                      onTap: () => Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  MusicArtistProfileScreen(
-                                                      artistName: name)))),
-                              ]),
+                        _SpotifyArtistDiscographySection(
+                          artistName: artistName,
+                          localTracks: primary,
+                        ),
+                        _SpotifyArtistPopularSection(
+                          artistName: artistName,
+                          localTracks: <MusicTrack>{...primary, ...featured}.toList(growable: false),
+                        ),
+                        _ArtistMusicVideosSection(tracks: videos),
+                        _trackList(context, featuringCredits,
+                            emptyMessage: 'No guest or featured-artist credits are indexed for this artist.',
+                            creditLabel: 'Featured / collaborator'),
+                        _FansAlsoLikeSection(
+                          artistName: artistName,
+                          seedArtists: related.toList(growable: false),
+                        ),
                       ])),
                     ],
                   ),
@@ -3136,147 +3090,6 @@ class MusicArtistProfileScreen extends StatelessWidget {
         ]);
   }
 
-  Widget _albumList(
-      BuildContext context, Map<String, List<MusicTrack>> albums) {
-    if (albums.isEmpty) {
-      return _empty(
-          'No imported albums or catalog examples found. Albums appear here when metadata is indexed or a sample is added.');
-    }
-    final names = albums.keys.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return ListView(children: [
-      for (final name in names)
-        ListTile(
-          leading: _art(albums[name]!.first.artworkUrl),
-          title: Text(name),
-          subtitle: Text(() {
-            final albumTracks = albums[name]!;
-            final sampleCount = albumTracks.where((track) =>
-                track.id.startsWith('demo-catalog-track-') ||
-                track.id.startsWith('demo-preview-album-track-')).length;
-            final indexedCount = albumTracks.length - sampleCount;
-            return <String>[
-              if (indexedCount > 0) '$indexedCount indexed tracks',
-              if (sampleCount > 0) '$sampleCount catalog examples (no audio)',
-            ].join(' • ');
-          }()),
-          trailing: IconButton(
-              tooltip: 'Share album',
-              icon: const Icon(Icons.share_outlined),
-              onPressed: () => showSocialShareDialog(context,
-                      title: name,
-                      message:
-                          'Shared album: $name by ${albums[name]!.first.artist}',
-                      mediaReference: {
-                        'type': 'album',
-                        'mediaType': 'album',
-                        'mediaId':
-                            'album:${albums[name]!.first.artist.toLowerCase()}:$name',
-                        'title': name,
-                        'artist': albums[name]!.first.artist,
-                        'trackIds':
-                            albums[name]!.map((track) => track.id).toList()
-                      })),
-          onTap: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: const Color(0xFF171717),
-              builder: (ctx) => SafeArea(
-                  child: SizedBox(
-                      height: MediaQuery.of(ctx).size.height * .72,
-                      child: Column(children: [
-                        ListTile(
-                            title: Text(name,
-                                style: const TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.bold)),
-                            subtitle: Text(() {
-                              final albumTracks = albums[name]!;
-                              final sampleCount = albumTracks.where((track) =>
-                                  track.id.startsWith('demo-catalog-track-') ||
-                                  track.id.startsWith('demo-preview-album-track-')).length;
-                              final indexedCount = albumTracks.length - sampleCount;
-                              return <String>[
-                                if (indexedCount > 0) '$indexedCount indexed tracks',
-                                if (sampleCount > 0) '$sampleCount catalog examples without audio',
-                              ].join(' • ');
-                            }()),
-                            trailing: IconButton(
-                                tooltip: 'Share album',
-                                icon: const Icon(Icons.share_outlined),
-                                onPressed: () => showSocialShareDialog(ctx,
-                                        title: name,
-                                        message:
-                                            'Shared album: $name by ${albums[name]!.first.artist}',
-                                        mediaReference: {
-                                          'type': 'album',
-                                          'mediaType': 'album',
-                                          'mediaId':
-                                              'album:${albums[name]!.first.artist.toLowerCase()}:$name',
-                                          'title': name,
-                                          'artist': albums[name]!.first.artist,
-                                          'trackIds': albums[name]!
-                                              .map((track) => track.id)
-                                              .toList()
-                                        }))),
-                        Expanded(
-                            child: ListView(children: [
-                          for (final track in albums[name]!)
-                            ListTile(
-                                title: LocalizedMediaText(track.title),
-                                subtitle: Text(track.duration == Duration.zero
-                                    ? track.artist
-                                    : '${track.artist} • ${track.duration.inMinutes}:${(track.duration.inSeconds % 60).toString().padLeft(2, '0')}'),
-                                trailing: Wrap(children: [
-                                  IconButton(
-                                      tooltip: 'Open artist',
-                                      icon: const Icon(
-                                          Icons.person_outline_rounded),
-                                      onPressed: () => Navigator.of(ctx).push(
-                                          MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  MusicArtistProfileScreen(
-                                                      artistName:
-                                                          track.artist)))),
-                                  IconButton(
-                                      tooltip: 'Add playable track to queue',
-                                      icon: const Icon(Icons.queue_music_rounded),
-                                      onPressed: () {
-                                        if ((track.audioUrl ?? '').trim().isEmpty) {
-                                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                                            content: Text('Catalog example only — import this track to add playable audio.'),
-                                          ));
-                                          return;
-                                        }
-                                        MusicLibraryStore.instance.addToQueue(track);
-                                      }),
-                                  IconButton(
-                                      tooltip: 'Play track',
-                                      icon: const Icon(Icons.play_arrow),
-                                      onPressed: () {
-                                        if ((track.audioUrl ?? '').trim().isEmpty) {
-                                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                                            content: Text('Catalog example only — no audio file is attached.'),
-                                          ));
-                                          return;
-                                        }
-                                        MusicPlaybackController.instance.play(track);
-                                      })
-                                ]),
-                                onTap: () {
-                                  if ((track.audioUrl ?? '').trim().isEmpty) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                                      content: Text('Catalog example only — no audio file is attached.'),
-                                    ));
-                                    return;
-                                  }
-                                  MusicPlaybackController.instance.play(track);
-                                })
-                        ]))
-                      ])))),
-        )
-    ]);
-  }
-
   Widget _art(String? url) => SizedBox(
       width: 48,
       height: 48,
@@ -3302,6 +3115,447 @@ class MusicArtistProfileScreen extends StatelessWidget {
               'Could not open artist discovery in your browser.')));
     }
   }
+}
+
+
+Map<String, dynamic> _musicCatalogMap(dynamic value) => value is Map
+    ? Map<String, dynamic>.from(value)
+    : <String, dynamic>{};
+
+List<Map<String, dynamic>> _musicCatalogRows(dynamic value) => value is List
+    ? value.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList()
+    : <Map<String, dynamic>>[];
+
+String _musicLookupKey(String value) => value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+bool _isMusicDemoTrack(MusicTrack track) =>
+    track.id.startsWith('demo-catalog-track-') || track.id.startsWith('demo-preview-album-track-');
+
+List<MusicTrack> _realArtistTracks(Iterable<MusicTrack> tracks) => tracks.where((track) => !_isMusicDemoTrack(track)).toList(growable: false);
+
+Future<Map<String, dynamic>?> _findSpotifyArtist(String artistName) async {
+  if (!AppController.instance.isBackendAuthenticated) return null;
+  final result = await AppController.instance.backendApi.searchMusicCatalog(artistName, type: 'artist', limit: 5);
+  final spotify = _musicCatalogMap(result['spotify']);
+  final candidates = _musicCatalogRows(spotify['artists']);
+  for (final candidate in candidates) {
+    if (_musicLookupKey(candidate['name']?.toString() ?? '') == _musicLookupKey(artistName)) return candidate;
+  }
+  return null;
+}
+
+List<Map<String, dynamic>> _localAlbumTrackRows(String artistName, String albumTitle) {
+  final wantedAlbum = _musicLookupKey(albumTitle);
+  final wantedArtist = _musicLookupKey(artistName);
+  return <Map<String, dynamic>>[
+    for (final track in MusicLibraryStore.instance.tracks)
+      if (!_isMusicDemoTrack(track) &&
+          _musicLookupKey(track.album) == wantedAlbum &&
+          (_musicLookupKey(track.artist) == wantedArtist ||
+              _musicLookupKey(track.artist).contains(wantedArtist) ||
+              wantedArtist.contains(_musicLookupKey(track.artist))))
+        <String, dynamic>{
+          'id': track.id,
+          'title': track.title,
+          'artist': track.artist,
+          'album': track.album,
+          'audioUrl': track.audioUrl ?? '',
+          'artworkUrl': track.artworkUrl ?? '',
+          'durationMs': track.duration.inMilliseconds,
+        },
+  ];
+}
+
+class _SpotifyArtistDiscographySection extends StatefulWidget {
+  const _SpotifyArtistDiscographySection({required this.artistName, required this.localTracks});
+  final String artistName;
+  final List<MusicTrack> localTracks;
+  @override
+  State<_SpotifyArtistDiscographySection> createState() => _SpotifyArtistDiscographySectionState();
+}
+
+class _SpotifyArtistDiscographySectionState extends State<_SpotifyArtistDiscographySection> {
+  final List<Map<String, dynamic>> _externalAlbums = <Map<String, dynamic>>[];
+  String? _spotifyId;
+  String? _error;
+  int _total = 0;
+  int _offset = 0;
+  bool _loading = true;
+  bool _loadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadFirstPage());
+  }
+
+  Future<void> _loadFirstPage() async {
+    if (!mounted) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      final artist = await _findSpotifyArtist(widget.artistName);
+      final id = artist?['id']?.toString() ?? '';
+      if (id.isEmpty) {
+        if (mounted) setState(() { _error = 'No exact Spotify artist match was found.'; _total = 0; });
+        return;
+      }
+      final page = await AppController.instance.backendApi.getSpotifyArtistAlbums(id, limit: 10, offset: 0);
+      final items = _musicCatalogRows(page['items']);
+      if (!mounted) return;
+      setState(() {
+        _spotifyId = id;
+        _externalAlbums
+          ..clear()
+          ..addAll(items);
+        _offset = items.length;
+        _total = int.tryParse(page['total']?.toString() ?? '') ?? items.length;
+        _error = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString().replaceFirst('BackendApiException: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final id = _spotifyId;
+    if (id == null || _loadingMore || _offset >= _total) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await AppController.instance.backendApi.getSpotifyArtistAlbums(id, limit: 10, offset: _offset);
+      final items = _musicCatalogRows(page['items']);
+      if (!mounted) return;
+      setState(() {
+        final seen = _externalAlbums.map((row) => row['id']?.toString() ?? '').toSet();
+        _externalAlbums.addAll(items.where((row) => (row['id']?.toString() ?? '').isNotEmpty && !seen.contains(row['id']?.toString())));
+        _offset += items.length;
+        _total = int.tryParse(page['total']?.toString() ?? '') ?? _total;
+        if (items.isEmpty) _total = _offset;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString().replaceFirst('BackendApiException: ', ''));
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final album in _externalAlbums) {
+      final title = album['title']?.toString() ?? '';
+      final key = _musicLookupKey(title);
+      if (key.isNotEmpty && seen.add(key)) rows.add(album);
+    }
+    for (final track in _realArtistTracks(widget.localTracks)) {
+      final album = track.album.trim();
+      final key = _musicLookupKey(album);
+      if (album.isNotEmpty && seen.add(key)) {
+        rows.add(<String, dynamic>{'title': album, 'artist': track.artist, 'imageUrl': track.artworkUrl ?? '', 'releaseDate': '', 'id': '', 'source': 'Local library'});
+      }
+    }
+    rows.sort((a, b) => (DateTime.tryParse(b['releaseDate']?.toString() ?? '') ?? DateTime(1900)).compareTo(DateTime.tryParse(a['releaseDate']?.toString() ?? '') ?? DateTime(1900)));
+    if (_loading && rows.isEmpty) return const Center(child: CircularProgressIndicator());
+    if (rows.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error ?? 'Discography is unavailable. Sign in and configure Spotify in Backend/.env.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        const ListTile(title: Text('Discography', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Spotify releases compared with your imported music library. Missing releases are dimmed; playback requires a local media file.')),
+        if (_error != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: Text(_error!, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+        for (final album in rows) _albumRow(context, album),
+        if (_offset < _total)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+            child: OutlinedButton.icon(
+              onPressed: _loadingMore ? null : _loadMore,
+              icon: _loadingMore ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.expand_more_rounded),
+              label: Text(_loadingMore ? 'Loading releases…' : 'Load more discography (${_externalAlbums.length} of $_total)'),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _playLocalTrackRow(Map<String, dynamic> row) {
+    final id = row['id']?.toString() ?? '';
+    for (final track in MusicLibraryStore.instance.tracks) {
+      if (track.id == id && (track.audioUrl?.trim().isNotEmpty ?? false)) {
+        unawaited(MusicPlaybackController.instance.play(track));
+        return;
+      }
+    }
+  }
+
+  Widget _albumRow(BuildContext context, Map<String, dynamic> album) {
+    final title = album['title']?.toString() ?? 'Album';
+    final artist = album['artist']?.toString() ?? widget.artistName;
+    final local = _localAlbumTrackRows(widget.artistName, title);
+    final owned = local.isNotEmpty;
+    final image = album['imageUrl']?.toString() ?? '';
+    final spotifyId = album['id']?.toString() ?? '';
+    return Opacity(
+      opacity: owned ? 1 : .48,
+      child: ListTile(
+        leading: ClipRRect(borderRadius: BorderRadius.circular(7), child: SizedBox(width: 52, height: 52, child: image.startsWith('http') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.album_rounded)) : const Icon(Icons.album_rounded))),
+        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: CinematicTitleFonts.captionStyleForTitle(title, type: 'album', baseFontSize: 14, color: Colors.white)),
+        subtitle: Text(<String>[artist, if ((album['releaseDate']?.toString() ?? '').length >= 4) album['releaseDate'].toString().substring(0, 4), owned ? 'In your library' : 'Not in library'].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        trailing: Icon(owned ? Icons.library_add_check_rounded : Icons.lock_outline_rounded, color: owned ? Colors.lightGreenAccent : Colors.white38),
+        onTap: spotifyId.isEmpty ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpotifyAlbumDetailsScreen(
+          albumTitle: title,
+          spotifyId: spotifyId,
+          isOwned: owned,
+          localArtistName: widget.artistName,
+          localTracks: local,
+          onPlayLocalTrack: _playLocalTrackRow,
+        ))),
+      ),
+    );
+  }
+}
+
+class _SpotifyArtistPopularSection extends StatefulWidget {
+  const _SpotifyArtistPopularSection({required this.artistName, required this.localTracks});
+  final String artistName;
+  final List<MusicTrack> localTracks;
+  @override
+  State<_SpotifyArtistPopularSection> createState() => _SpotifyArtistPopularSectionState();
+}
+
+class _SpotifyArtistPopularSectionState extends State<_SpotifyArtistPopularSection> {
+  late Future<Map<String, dynamic>> _future;
+  @override
+  void initState() { super.initState(); _future = _load(); }
+  Future<Map<String, dynamic>> _load() async {
+    try { return await AppController.instance.backendApi.getPopularArtistTracks(widget.artistName); }
+    catch (error) { return <String, dynamic>{'items': <Map<String, dynamic>>[], 'message': error.toString().replaceFirst('BackendApiException: ', '')}; }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+    future: _future,
+    builder: (context, snapshot) {
+      final external = _musicCatalogRows(snapshot.data?['items']);
+      final locals = _realArtistTracks(widget.localTracks);
+      final usedLocal = <String>{};
+      final rowEntries = <Map<String, dynamic>>[];
+      for (final row in external) {
+        final titleKey = _musicLookupKey(row['title']?.toString() ?? '');
+        MusicTrack? local;
+        for (final candidate in locals) {
+          if (_musicLookupKey(candidate.title) == titleKey &&
+              (candidate.audioUrl?.trim().isNotEmpty ?? false)) { local = candidate; break; }
+        }
+        if (local != null) usedLocal.add(local.id);
+        rowEntries.add(<String, dynamic>{'external': row, 'local': local});
+      }
+      for (final track in locals) {
+        if (usedLocal.contains(track.id)) continue;
+        rowEntries.add(<String, dynamic>{'local': track});
+      }
+      if (snapshot.connectionState == ConnectionState.waiting && rowEntries.isEmpty) return const Center(child: CircularProgressIndicator());
+      if (rowEntries.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(snapshot.data?['message']?.toString() ?? 'Popular tracks are unavailable until Spotify is configured.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          const ListTile(title: Text('Popular & your tracks', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Spotify catalog-ranked tracks plus all of your imported songs. Songs not in your library cannot be played here.')),
+          for (final entry in rowEntries) _trackRow(context, entry),
+        ],
+      );
+    },
+  );
+
+  Widget _trackRow(BuildContext context, Map<String, dynamic> entry) {
+    final raw = entry['external'] is Map ? Map<String, dynamic>.from(entry['external'] as Map) : <String, dynamic>{};
+    final local = entry['local'] is MusicTrack ? entry['local'] as MusicTrack : null;
+    final title = local?.title ?? raw['title']?.toString() ?? 'Track';
+    final artist = local?.artist ?? raw['artist']?.toString() ?? widget.artistName;
+    final image = local?.artworkUrl ?? raw['imageUrl']?.toString() ?? '';
+    final canPlay = local != null && (local.audioUrl?.trim().isNotEmpty ?? false);
+    final score = raw['popularity'] is num ? 'Popularity ${raw['popularity']}' : 'Spotify catalog result';
+    return Opacity(
+      opacity: canPlay ? 1 : .43,
+      child: ListTile(
+        leading: SizedBox(width: 48, height: 48, child: image.trim().startsWith('http') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_note_rounded)) : const Icon(Icons.music_note_rounded)),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(canPlay ? '$artist · In your library' : '$artist · $score · Not in library', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        trailing: IconButton(
+          tooltip: canPlay ? 'Play imported track' : 'Import this track to enable playback',
+          icon: Icon(canPlay ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
+          onPressed: canPlay ? () => unawaited(MusicPlaybackController.instance.play(local)) : null,
+        ),
+        onTap: canPlay ? () => unawaited(MusicPlaybackController.instance.play(local)) : null,
+      ),
+    );
+  }
+}
+
+class _ArtistMusicVideosSection extends StatefulWidget {
+  const _ArtistMusicVideosSection({required this.tracks});
+  final List<MusicTrack> tracks;
+  @override
+  State<_ArtistMusicVideosSection> createState() => _ArtistMusicVideosSectionState();
+}
+
+class _ArtistMusicVideosSectionState extends State<_ArtistMusicVideosSection> {
+  bool _loading = false;
+  String? _message;
+  List<Map<String, dynamic>> _rows = <Map<String, dynamic>>[];
+  final Set<String> _searched = <String>{};
+
+  @override
+  void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) => _loadVideos()); }
+  Future<void> _loadVideos() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    final rows = <Map<String, dynamic>>[];
+    try {
+      final tracks = _realArtistTracks(widget.tracks).take(8).toList(growable: false);
+      for (final track in tracks) {
+        if (!AppController.instance.isBackendAuthenticated) break;
+        if ((track.musicVideoUrl ?? '').trim().isNotEmpty) {
+          rows.add(<String, dynamic>{'track': track, 'localVideoUrl': track.musicVideoUrl});
+          continue;
+        }
+        if (_searched.contains(track.id)) continue;
+        _searched.add(track.id);
+        try {
+          final result = await AppController.instance.backendApi.searchMusicVideos('${track.artist} ${track.title} official music video', limit: 1);
+          final found = _musicCatalogRows(result['items']);
+          if (found.isNotEmpty) {
+            rows.add(<String, dynamic>{'track': track, 'video': found.first});
+          } else if (_message == null && (result['configured'] == false)) {
+            _message = result['message']?.toString();
+          }
+        } catch (_) {}
+      }
+      if (mounted) setState(() => _rows = rows);
+    } catch (error) {
+      if (mounted) setState(() => _message = error.toString().replaceFirst('BackendApiException: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _openTrackVideo(BuildContext context, Map<String, dynamic> row) {
+    final track = row['track'] as MusicTrack;
+    final video = row['video'] is Map
+        ? Map<String, dynamic>.from(row['video'] as Map)
+        : null;
+    if ((track.musicVideoUrl?.trim().isNotEmpty ?? false)) {
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => MusicTrackDisplayScreen(track: track, mode: MusicTrackDisplayMode.video),
+      ));
+    } else if (video != null && (video['videoId']?.toString() ?? '').isNotEmpty) {
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => MusicVideoSearchScreen(
+          title: track.title,
+          artist: track.artist,
+          initialVideo: video,
+        ),
+      ));
+    } else {
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => MusicVideoSearchScreen(title: track.title, artist: track.artist),
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        const ListTile(title: Text('Music Videos', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Searches for embeddable YouTube matches for songs in your imported library.')),
+        if (_loading) const LinearProgressIndicator(minHeight: 2),
+        if ((_message ?? '').isNotEmpty) Padding(padding: const EdgeInsets.all(16), child: Text(_message!, style: const TextStyle(color: Colors.white54, fontSize: 12))),
+        if (_rows.isEmpty && !_loading) Padding(padding: const EdgeInsets.all(20), child: Text(widget.tracks.isEmpty ? 'No imported tracks are indexed for this artist yet.' : 'No matching video was returned. You can search each song manually.', style: const TextStyle(color: Colors.white60))),
+        for (final row in _rows)
+          Builder(builder: (context) {
+            final track = row['track'] as MusicTrack;
+            final video = row['video'] is Map ? Map<String, dynamic>.from(row['video'] as Map) : <String, dynamic>{};
+            final title = video['title']?.toString() ?? track.title;
+            final thumb = video['thumbnailUrl']?.toString() ?? track.artworkUrl ?? '';
+            return ListTile(
+              leading: SizedBox(width: 64, height: 48, child: thumb.startsWith('http') ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_video_rounded)) : const Icon(Icons.music_video_rounded)),
+              title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+              subtitle: Text('${track.title} · ${video['channelTitle']?.toString() ?? track.artist}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              trailing: IconButton(
+                tooltip: (track.musicVideoUrl?.trim().isNotEmpty ?? false) ? 'Play stored music video' : 'Find music video',
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                onPressed: () => _openTrackVideo(context, row),
+              ),
+              onTap: () => _openTrackVideo(context, row),
+            );
+          }),
+        if (!_loading && widget.tracks.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 20), child: OutlinedButton.icon(onPressed: () { _searched.clear(); unawaited(_loadVideos()); }, icon: const Icon(Icons.refresh_rounded), label: const Text('Retry video discovery'))),
+      ],
+    );
+  }
+}
+
+class _FansAlsoLikeSection extends StatefulWidget {
+  const _FansAlsoLikeSection({required this.artistName, required this.seedArtists});
+  final String artistName;
+  final List<String> seedArtists;
+  @override
+  State<_FansAlsoLikeSection> createState() => _FansAlsoLikeSectionState();
+}
+
+class _FansAlsoLikeSectionState extends State<_FansAlsoLikeSection> {
+  late Future<Map<String, dynamic>> _future;
+  @override
+  void initState() { super.initState(); _future = _load(); }
+
+  Future<Map<String, dynamic>> _load() async {
+    try { return await AppController.instance.backendApi.getRelatedMusicArtists(widget.artistName, limit: 12); }
+    catch (error) { return <String, dynamic>{'items': <Map<String, dynamic>>[], 'message': error.toString().replaceFirst('BackendApiException: ', '')}; }
+  }
+
+  List<Map<String, dynamic>> _curatedFallback() {
+    final name = _musicLookupKey(widget.artistName);
+    const suggestions = <String, List<String>>{
+      'morgan wallen': <String>['Ella Langley', 'Blake Shelton', 'Bailey Zimmerman', 'Post Malone', 'Tate McRae'],
+      'j balvin': <String>['Maluma', 'Bad Bunny', 'Feid'],
+      'selena gomez': <String>['Taylor Swift', 'Ariana Grande'],
+    };
+    final selected = suggestions.entries.where((entry) => _musicLookupKey(entry.key) == name).expand((entry) => entry.value);
+    return selected.map((value) => <String, dynamic>{'name': value, 'similarityReason': 'Curated discovery suggestion'}).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+    future: _future,
+    builder: (context, snapshot) {
+      final byName = <String, Map<String, dynamic>>{};
+      for (final row in [..._musicCatalogRows(snapshot.data?['items']), ..._curatedFallback()]) {
+        final name = row['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty && _musicLookupKey(name) != _musicLookupKey(widget.artistName)) byName.putIfAbsent(_musicLookupKey(name), () => row);
+      }
+      for (final name in widget.seedArtists) {
+        final clean = name.trim();
+        if (clean.isNotEmpty && _musicLookupKey(clean) != _musicLookupKey(widget.artistName)) byName.putIfAbsent(_musicLookupKey(clean), () => <String, dynamic>{'name': clean, 'similarityReason': 'Found on a collaboration in your library'});
+      }
+      final rows = byName.values.toList()..sort((a, b) => (a['name']?.toString() ?? '').toLowerCase().compareTo((b['name']?.toString() ?? '').toLowerCase()));
+      if (snapshot.connectionState == ConnectionState.waiting && rows.isEmpty) return const Center(child: CircularProgressIndicator());
+      if (rows.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(snapshot.data?['message']?.toString() ?? 'No similar artists were found yet.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60))));
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          const ListTile(title: Text('Fans Also Like', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Suggestions combine available genre metadata and artists credited on your imported tracks, including cross-genre collaborations.')),
+          for (final artist in rows)
+            ListTile(
+              leading: SizedBox(width: 48, height: 48, child: (artist['imageUrl']?.toString() ?? '').startsWith('http') ? ClipOval(child: Image.network(artist['imageUrl'].toString(), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded))) : const CircleAvatar(child: Icon(Icons.person_rounded))),
+              title: Text(artist['name']?.toString() ?? 'Artist'),
+              subtitle: Text(artist['similarityReason']?.toString() ?? (artist['genres'] is List ? (artist['genres'] as List).take(3).join(' · ') : 'Explore artist'), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MusicArtistProfileScreen(artistName: artist['name']?.toString() ?? 'Artist'))),
+            ),
+        ],
+      );
+    },
+  );
 }
 
 class MusicDiscoverScreen extends StatelessWidget {

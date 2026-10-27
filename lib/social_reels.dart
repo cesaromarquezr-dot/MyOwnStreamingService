@@ -94,7 +94,7 @@ class _SocialReelsScreenState extends State<SocialReelsScreen> {
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 28),
                 child: UniversalText(
-                  'Create a short linked to a movie, show, or song. Reviews and skits can use the same vertical-video format.',
+                  'Create a short linked to a movie, show, or song. Share clips and skits from your library.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
@@ -485,7 +485,7 @@ class _SocialReelPageState extends State<_SocialReelPage> {
   }
 
   String _prettyType(String value) => switch (value) {
-        'review' => 'Video review',
+        'review' => 'Short',
         'skit' => 'Skit',
         _ => 'Short',
       };

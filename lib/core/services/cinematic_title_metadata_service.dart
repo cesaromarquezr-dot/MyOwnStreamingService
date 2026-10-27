@@ -459,6 +459,7 @@ class CinematicTitleMetadataService {
             ? details['first_air_date']
             : details['release_date'])
         ?.toString();
+    final lastAirDate = isTv ? details['last_air_date']?.toString() : null;
     final imagePayload = _asMap(details['images']);
     final externalIds = _asMap(details['external_ids']);
 
@@ -529,6 +530,7 @@ class CinematicTitleMetadataService {
       posterPath: _cleanNullable(details['poster_path']),
       backdropPath: _cleanNullable(details['backdrop_path']),
       releaseDate: releaseDate?.isNotEmpty == true ? releaseDate : null,
+      lastAirDate: lastAirDate?.trim().isNotEmpty == true ? lastAirDate : null,
       originalTitle: _cleanNullable(
         isTv ? details['original_name'] : details['original_title'],
       ),
@@ -915,6 +917,7 @@ class CinematicTitleMetadata {
     required this.posterPath,
     required this.backdropPath,
     required this.releaseDate,
+    this.lastAirDate,
     required this.originalTitle,
     required this.tagline,
     required this.homepage,
@@ -951,6 +954,8 @@ class CinematicTitleMetadata {
   final String? posterPath;
   final String? backdropPath;
   final String? releaseDate;
+  /// Final reported first-air date for a series, if TMDB provides one.
+  final String? lastAirDate;
   final String? originalTitle;
   final String? tagline;
   final String? homepage;

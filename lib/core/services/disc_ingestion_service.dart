@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app_core.dart';
@@ -422,6 +423,135 @@ class DiscIngestionService extends ChangeNotifier {
     }
   }
 
+  /// Lists recent technical manifests stored in application support storage.
+  /// Manifests intentionally omit full local/NAS paths and are not playback URLs.
+  Future<List<Map<String, dynamic>>> loadImportManifests() async {
+    try {
+      final support = await getApplicationSupportDirectory();
+      final folder = Directory('${support.path}${Platform.pathSeparator}media_import_manifests');
+      if (!await folder.exists()) return <Map<String, dynamic>>[];
+      final output = <Map<String, dynamic>>[];
+      await for (final entity in folder.list(followLinks: false)) {
+        if (entity is! File || !entity.path.toLowerCase().endsWith('.json')) continue;
+        try {
+          final decoded = jsonDecode(await entity.readAsString());
+          if (decoded is Map) output.add(Map<String, dynamic>.from(decoded));
+        } catch (_) {
+          // Ignore only the damaged manifest; the rest of the import history remains usable.
+        }
+      }
+      output.sort((a, b) => (b['importedAt']?.toString() ?? '').compareTo(a['importedAt']?.toString() ?? ''));
+      return output;
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<Map<String, dynamic>> _probeMkvStreams(String filePath) async {
+    if (!supportsLocalProcess) {
+      return <String, dynamic>{'available': false, 'success': false, 'message': 'Optional stream inspection is available only on supported desktop platforms.'};
+    }
+    try {
+      final result = await Process.run(
+        'ffprobe',
+        <String>['-v', 'error', '-show_format', '-show_streams', '-of', 'json', filePath],
+        runInShell: false,
+      ).timeout(const Duration(seconds: 15));
+      if (result.exitCode != 0) {
+        return <String, dynamic>{'available': true, 'success': false, 'message': 'ffprobe was found but could not inspect this file.'};
+      }
+      final decoded = jsonDecode(result.stdout.toString());
+      if (decoded is! Map) return <String, dynamic>{'available': true, 'success': false, 'message': 'ffprobe returned an unexpected response.'};
+      final source = Map<String, dynamic>.from(decoded);
+      final rawFormat = source['format'] is Map ? Map<String, dynamic>.from(source['format'] as Map) : <String, dynamic>{};
+      final rawStreams = source['streams'] is List ? (source['streams'] as List).whereType<Map>().map((value) => Map<String, dynamic>.from(value)).toList() : <Map<String, dynamic>>[];
+      Map<String, dynamic> summarize(Map<String, dynamic> stream) {
+        final tags = stream['tags'] is Map ? Map<String, dynamic>.from(stream['tags'] as Map) : <String, dynamic>{};
+        return <String, dynamic>{
+          'index': stream['index'],
+          'codecType': stream['codec_type']?.toString() ?? '',
+          'codecName': stream['codec_name']?.toString() ?? '',
+          'codecLongName': stream['codec_long_name']?.toString() ?? '',
+          'width': stream['width'],
+          'height': stream['height'],
+          'pixelFormat': stream['pix_fmt']?.toString() ?? '',
+          'colorTransfer': stream['color_transfer']?.toString() ?? '',
+          'colorPrimaries': stream['color_primaries']?.toString() ?? '',
+          'channels': stream['channels'],
+          'channelLayout': stream['channel_layout']?.toString() ?? '',
+          'sampleRate': stream['sample_rate']?.toString() ?? '',
+          'language': tags['language']?.toString() ?? '',
+          'title': tags['title']?.toString() ?? '',
+        };
+      }
+      final streams = rawStreams.map(summarize).toList(growable: false);
+      return <String, dynamic>{
+        'available': true,
+        'success': true,
+        'formatName': rawFormat['format_name']?.toString() ?? 'matroska',
+        'durationSeconds': double.tryParse(rawFormat['duration']?.toString() ?? ''),
+        'bitRate': rawFormat['bit_rate']?.toString() ?? '',
+        'videoStreams': streams.where((row) => row['codecType'] == 'video').toList(growable: false),
+        'audioStreams': streams.where((row) => row['codecType'] == 'audio').toList(growable: false),
+        'subtitleStreams': streams.where((row) => row['codecType'] == 'subtitle').toList(growable: false),
+        'otherStreams': streams.where((row) => !const {'video', 'audio', 'subtitle'}.contains(row['codecType'])).toList(growable: false),
+        'message': 'Stream metadata inspected by ffprobe. This does not guarantee full decoding or uninterrupted playback.',
+      };
+    } on ProcessException {
+      return <String, dynamic>{'available': false, 'success': false, 'message': 'ffprobe is not installed or is not available on PATH. The container signature check still applies.'};
+    } on TimeoutException {
+      return <String, dynamic>{'available': true, 'success': false, 'message': 'ffprobe inspection exceeded the 15-second limit and was skipped.'};
+    } catch (_) {
+      return <String, dynamic>{'available': false, 'success': false, 'message': 'Optional stream inspection failed; only the basic container signature is recorded.'};
+    }
+  }
+
+  Future<void> _saveImportManifest({
+    required MediaItem media,
+    required String filePath,
+    required int sizeBytes,
+    required String mediaKind,
+    required String discType,
+    required String contentCategory,
+  }) async {
+    final probe = await _probeMkvStreams(filePath);
+    final support = await getApplicationSupportDirectory();
+    final folder = Directory('${support.path}${Platform.pathSeparator}media_import_manifests');
+    await folder.create(recursive: true);
+    final safeId = media.id.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
+    final fileName = filePath.split(RegExp(r'[/\\]')).last;
+    final manifest = <String, dynamic>{
+      'schemaVersion': 1,
+      'mediaId': media.id,
+      'title': media.title,
+      'parentMediaId': media.parentMediaId,
+      'mediaKind': mediaKind,
+      'contentCategory': contentCategory,
+      'discType': discType,
+      'sourceFileName': fileName,
+      'container': 'Matroska / MKV',
+      'fileSizeBytes': sizeBytes,
+      'containerSignatureCheck': 'passed',
+      'streamInspectionAvailable': probe['available'] == true,
+      'streamInspectionSucceeded': probe['success'] == true,
+      'inspectionMessage': probe['message']?.toString() ?? '',
+      'formatName': probe['formatName']?.toString() ?? 'matroska (header only)',
+      'durationSeconds': probe['durationSeconds'],
+      'bitRate': probe['bitRate']?.toString() ?? '',
+      'videoStreams': probe['videoStreams'] is List ? probe['videoStreams'] : <Map<String, dynamic>>[],
+      'audioStreams': probe['audioStreams'] is List ? probe['audioStreams'] : <Map<String, dynamic>>[],
+      'subtitleStreams': probe['subtitleStreams'] is List ? probe['subtitleStreams'] : <Map<String, dynamic>>[],
+      'otherStreams': probe['otherStreams'] is List ? probe['otherStreams'] : <Map<String, dynamic>>[],
+      'checksumStatus': 'not-computed',
+      'checksumNote': 'A full-file checksum is not computed automatically because physical-media rips can be tens of gigabytes and hashing would require another full read.',
+      'fullDecodeTested': false,
+      'playbackUrlCreated': false,
+      'rawFilesystemPathStoredAsPlaybackUrl': false,
+      'importedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    await File('${folder.path}${Platform.pathSeparator}$safeId.json').writeAsString(const JsonEncoder.withIndent('  ').convert(manifest));
+  }
+
   Future<MediaItem> importMkvToLibrary({
     required String filePath,
     required String title,
@@ -430,11 +560,18 @@ class DiscIngestionService extends ChangeNotifier {
     int? releaseYear,
     String? artworkUrl,
     String? discTitle,
+    String contentCategory = 'Main Feature',
+    String? parentMediaId,
   }) async {
     final validation = await validateMkv(filePath);
     if (!validation.passed) throw StateError(validation.error ?? 'MKV validation failed.');
     final cleanTitle = title.trim();
     if (cleanTitle.isEmpty) throw ArgumentError('Enter a title before importing.');
+    final cleanParentId = parentMediaId?.trim();
+    if (cleanParentId != null && cleanParentId.isNotEmpty &&
+        !AppController.instance.library.any((item) => item.id == cleanParentId)) {
+      throw ArgumentError('The selected parent title is no longer in the library. Reopen the import dialog and choose it again.');
+    }
     if (!const {'movie', 'tv', 'music'}.contains(mediaKind)) {
       throw ArgumentError('Unsupported library type.');
     }
@@ -460,20 +597,44 @@ class DiscIngestionService extends ChangeNotifier {
       originalLanguage: inferredOriginalLanguage,
       type: mediaKind,
       imageUrl: cleanArtwork.isEmpty ? null : cleanArtwork,
-      description: 'Imported through the Disc Ingestion Center. Review the metadata and connect this item to a configured media-server playback gateway.',
+      description: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+          ? 'Imported through the Disc Ingestion Center. Review the metadata and connect this item to a configured media-server playback gateway.'
+          : 'Disc bonus material: $contentCategory. Imported through the Disc Ingestion Center. Review the metadata and connect this item to a configured media-server playback gateway.',
+      tags: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+          ? <String>[]
+          : <String>['Disc Extra', contentCategory],
+      extras: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+          ? <String>[]
+          : <String>[contentCategory],
+      editionFeatures: contentCategory == 'Main Feature' || contentCategory == 'Episode'
+          ? <String>[]
+          : <String>[contentCategory],
       releaseYear: releaseYear,
       discType: discType,
       discTitle: (discTitle ?? '').trim().isEmpty ? null : discTitle!.trim(),
+      parentMediaId: parentMediaId?.trim().isNotEmpty == true ? parentMediaId!.trim() : null,
       addedAt: DateTime.now(),
       addedByProfileId: profile?.id,
       addedByProfileName: profile?.name,
       addedSource: 'disc_ingestion_center',
     );
     await AppController.instance.addToLibrary(media);
+    try {
+      await _saveImportManifest(
+        media: media,
+        filePath: filePath,
+        sizeBytes: validation.sizeBytes,
+        mediaKind: mediaKind,
+        discType: discType,
+        contentCategory: contentCategory,
+      );
+    } catch (_) {
+      // Import must still succeed if local app-support storage is unavailable.
+    }
     final job = _jobs.firstWhereOrNull((item) => item.outputFiles.contains(filePath));
     if (job != null && !job.importedFiles.contains(filePath)) {
       job.importedFiles.add(filePath);
-      _addEvent(job, 'Added "$cleanTitle" to the app library metadata. Playback URL was not inferred from a filesystem path.');
+      _addEvent(job, 'Added "$cleanTitle" to the app library metadata. A local technical manifest was saved when app storage was available; raw paths are not playback URLs.');
       await _persist();
     }
     notifyListeners();

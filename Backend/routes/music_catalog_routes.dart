@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../middleware/authentication.dart';
 import '../services/music_catalog_service.dart';
@@ -26,7 +27,7 @@ class MusicCatalogRoutes {
       return;
     }
 
-    if (request.method != 'GET') {
+    if (request.method != 'GET' && request.method != 'POST') {
       await _json(request, HttpStatus.methodNotAllowed, <String, dynamic>{
         'success': false,
         'error': 'Method not allowed.',
@@ -75,6 +76,86 @@ class MusicCatalogRoutes {
         final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '10') ?? 10;
         final result = await service.search(query: query, type: type, limit: limit);
         await _json(request, HttpStatus.ok, result);
+        return;
+      }
+
+      if (path == '$_prefix/artist-related') {
+        final artistName = request.uri.queryParameters['name']?.trim() ?? '';
+        if (artistName.isEmpty || artistName.length > 120 || artistName.contains('\u0000')) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'An artist name between 1 and 120 characters is required.',
+          });
+          return;
+        }
+        final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '12') ?? 12;
+        await _json(request, HttpStatus.ok, await service.relatedArtists(artistName: artistName, limit: limit));
+        return;
+      }
+
+      if (path == '$_prefix/artist-popular') {
+        final artistName = request.uri.queryParameters['name']?.trim() ?? '';
+        if (artistName.isEmpty || artistName.length > 120 || artistName.contains('\u0000')) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'An artist name between 1 and 120 characters is required.',
+          });
+          return;
+        }
+        await _json(request, HttpStatus.ok, await service.popularArtistTracks(artistName: artistName));
+        return;
+      }
+
+      if (path == '$_prefix/lyrics-search') {
+        final query = request.uri.queryParameters['q']?.trim() ?? '';
+        if (query.length < 3 || query.length > 180 || query.contains('\u0000')) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{
+            'success': false,
+            'error': 'A lyric phrase between 3 and 180 characters is required.',
+          });
+          return;
+        }
+        await _json(request, HttpStatus.ok, await service.searchByLyrics(query: query));
+        return;
+      }
+
+      if (path == '$_prefix/recognize') {
+        if (request.method != 'POST') {
+          await _json(request, HttpStatus.methodNotAllowed, <String, dynamic>{'success': false, 'error': 'Use POST to identify a song.'});
+          return;
+        }
+        final contentLength = request.contentLength;
+        if (contentLength > 7 * 1024 * 1024) {
+          await _json(request, HttpStatus.requestEntityTooLarge, <String, dynamic>{'success': false, 'error': 'Audio sample payload is too large.'});
+          return;
+        }
+        final bodyBuilder = BytesBuilder(copy: false);
+        var receivedBytes = 0;
+        await for (final chunk in request) {
+          receivedBytes += chunk.length;
+          if (receivedBytes > 7 * 1024 * 1024) {
+            await _json(request, HttpStatus.requestEntityTooLarge, <String, dynamic>{'success': false, 'error': 'Audio sample payload is too large.'});
+            return;
+          }
+          bodyBuilder.add(chunk);
+        }
+        final decodedBody = jsonDecode(utf8.decode(bodyBuilder.takeBytes()));
+        if (decodedBody is! Map) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{'success': false, 'error': 'A JSON audio payload is required.'});
+          return;
+        }
+        final encodedAudio = decodedBody['audioBase64']?.toString() ?? '';
+        final mimeType = decodedBody['mimeType']?.toString() ?? 'audio/mp4';
+        if (encodedAudio.isEmpty || encodedAudio.length > 7 * 1024 * 1024) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{'success': false, 'error': 'A valid audio sample is required.'});
+          return;
+        }
+        final audio = base64Decode(encodedAudio);
+        if (audio.isEmpty || audio.length > 5 * 1024 * 1024) {
+          await _json(request, HttpStatus.badRequest, <String, dynamic>{'success': false, 'error': 'Audio sample must be no larger than 5 MB.'});
+          return;
+        }
+        await _json(request, HttpStatus.ok, await service.recognizeSong(audioBytes: audio, mimeType: mimeType));
         return;
       }
 

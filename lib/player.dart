@@ -23,23 +23,10 @@ class PlayerScreen extends StatefulWidget {
   /// Optional, richer presence label supplied by episodes, collections or TV channels.
   final String? activityLabel;
 
-  // Optional Group Watch session.
-  //
-  // Normal playback can continue using:
-  // PlayerScreen(media: media)
-  //
-  // Group Watch playback can use:
-  // PlayerScreen(
-  //   media: media,
-  //   groupWatchSessionId: session.id,
-  // )
-  final String? groupWatchSessionId;
-
   const PlayerScreen({
     super.key,
     required this.media,
     this.activityLabel,
-    this.groupWatchSessionId,
   });
 
   @override
@@ -59,8 +46,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int autoplaySeconds = 10;
 
   Timer? autoplayTimer;
-  Timer? groupWatchTimer;
-  Timer? groupWatchPositionTimer;
   Timer? controlsTimer;
   Timer? _socialActivityHeartbeat;
 
@@ -68,17 +53,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool subtitlesEnabled = false;
   String? selectedSubtitle;
 
-  String? groupWatchSessionId;
   String? _playbackSessionId;
-  bool groupWatchActionInProgress = false;
-  bool groupWatchSyncing = false;
-
-  /// Prevents excessive position writes to the Group Watch backend.
-  DateTime? _lastGroupWatchPositionSent;
-
-  /// Prevents remote polling from fighting a local seek/playback update.
-  DateTime? _lastLocalPlaybackAction;
-
   YoutubePlayerController? youtubeController;
   bool youtubePlayerReady = false;
   bool youtubeUrlInvalid = false;
@@ -92,9 +67,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool get _usesAdaptivePlayback {
     final value = widget.media.playbackUrl?.trim() ?? '';
     final uri = Uri.tryParse(value);
-    return widget.groupWatchSessionId == null &&
-        groupWatchSessionId == null &&
-        uri != null &&
+    return uri != null &&
         uri.hasAuthority &&
         uri.userInfo.isEmpty &&
         (uri.scheme == 'https' || uri.scheme == 'http');
@@ -131,7 +104,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
           },
         );
       }
-      _initializeGroupWatch();
       unawaited(_startIndependentPlaybackSession());
       unawaited(_recordQoe('play_requested'));
     }
@@ -154,13 +126,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       profileId: AppController.instance.currentProfile?.id,
     );
     if (!mounted) return;
-
-    // Group Watch selections belong to the participant/session and must not be
-    // overwritten by the local default policy when preferences finish loading.
-    if (groupWatchSessionId != null) {
-      setState(() => _autoplayNextEnabled = preferences.autoplayNext);
-      return;
-    }
 
     final originalLanguage =
         OriginalLanguageDefaults.resolveForMedia(widget.media);
@@ -437,12 +402,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() {});
       }
     }
-
-    if (groupWatchSessionId != null) {
-      _queueGroupWatchPositionSync(
-        state.position.inMilliseconds / 1000.0,
-      );
-    }
   }
 
   @override
@@ -450,8 +409,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     autoplayTimer?.cancel();
-    groupWatchTimer?.cancel();
-    groupWatchPositionTimer?.cancel();
     controlsTimer?.cancel();
     _socialActivityHeartbeat?.cancel();
     _socialActivityHeartbeat = null;
@@ -530,15 +487,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    _lastLocalPlaybackAction = DateTime.now();
-
     controller.playVideo();
     _startControlsTimer();
   }
 
   /// Performs `_pauseYoutubeVideo` for this feature. Update this documentation when its contract changes.
   void _pauseYoutubeVideo() {
-    _lastLocalPlaybackAction = DateTime.now();
 
     youtubeController?.pauseVideo();
 
@@ -569,8 +523,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final seconds = (duration * normalizedPosition).clamp(0.0, duration);
 
-    _lastLocalPlaybackAction = DateTime.now();
-
     await controller.seekTo(
       seconds: seconds,
     );
@@ -600,19 +552,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       target = duration;
     }
 
-    _lastLocalPlaybackAction = DateTime.now();
-
     await controller.seekTo(
       seconds: target,
     );
 
     _startControlsTimer();
 
-    if (groupWatchSessionId != null) {
-      await _sendGroupWatchActualPosition(
-        target,
-      );
-    }
   }
 
   /// Performs `_handleMainPlayPause` for this feature. Update this documentation when its contract changes.
@@ -630,367 +575,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _pauseYoutubeVideo();
     } else {
       _playYoutubeVideo();
-    }
-  }
-
-  // ============================================================
-  // GROUP WATCH INITIALIZATION
-  // ============================================================
-
-  /// Performs `_initializeGroupWatch` for this feature. Update this documentation when its contract changes.
-  void _initializeGroupWatch() {
-    final controller = AppController.instance;
-
-    String? sessionId = widget.groupWatchSessionId;
-
-    sessionId ??= controller.activeGroupWatchSession?.id;
-
-    if (sessionId == null || sessionId.trim().isEmpty) {
-      return;
-    }
-
-    final activeSession = controller.getGroupWatchSession(
-      sessionId,
-    );
-
-    if (activeSession == null) {
-      return;
-    }
-
-    if (activeSession.mediaId != widget.media.id) {
-      return;
-    }
-
-    groupWatchSessionId = activeSession.id;
-
-    _loadInitialGroupWatchState(
-      activeSession,
-    );
-
-    _startGroupWatchPolling();
-  }
-
-  /// Performs `_loadInitialGroupWatchState` for this feature. Update this documentation when its contract changes.
-  void _loadInitialGroupWatchState(
-    GroupWatchSession session,
-  ) {
-    final controller = AppController.instance;
-
-    final sharedSeconds = session.playbackPosition.inMilliseconds / 1000.0;
-
-    if (sharedSeconds > 0) {
-      _applyGroupWatchPosition(
-        sharedSeconds,
-        seekPlayer: false,
-      );
-    }
-
-    final profile = controller.currentProfile;
-
-    if (profile != null) {
-      final participant = session.participantForProfile(
-        profile.id,
-      );
-
-      if (participant != null) {
-        setState(() {
-          selectedAudio = participant.audioTrackId ?? '';
-
-          selectedSubtitle = participant.subtitleTrackId;
-
-          subtitlesEnabled = participant.subtitleTrackId != null;
-        });
-      }
-    }
-  }
-
-  /// Performs `_startGroupWatchPolling` for this feature. Update this documentation when its contract changes.
-  void _startGroupWatchPolling() {
-    groupWatchTimer?.cancel();
-    groupWatchPositionTimer?.cancel();
-
-    groupWatchTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) {
-        _refreshGroupWatchState();
-      },
-    );
-
-    groupWatchPositionTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) {
-        _syncCurrentPositionToGroupWatch();
-      },
-    );
-
-    _refreshGroupWatchState();
-  }
-
-  /// Performs `_refreshGroupWatchState` for this feature. Update this documentation when its contract changes.
-  Future<void> _refreshGroupWatchState() async {
-    if (!mounted || groupWatchSessionId == null || groupWatchSyncing) {
-      return;
-    }
-
-    groupWatchSyncing = true;
-
-    try {
-      final controller = AppController.instance;
-
-      final session = await controller.refreshGroupWatchSession(
-        groupWatchSessionId!,
-      );
-
-      if (!mounted || session == null) {
-        return;
-      }
-
-      if (session.mediaId != widget.media.id) {
-        return;
-      }
-
-      _applyRemoteGroupWatchState(
-        session,
-      );
-    } catch (_) {
-      // Synchronization failures should never interrupt playback.
-    } finally {
-      groupWatchSyncing = false;
-    }
-  }
-
-  /// Performs `_applyRemoteGroupWatchState` for this feature. Update this documentation when its contract changes.
-  Future<void> _applyRemoteGroupWatchState(
-    GroupWatchSession session,
-  ) async {
-    final youtube = youtubeController;
-
-    if (youtube == null) {
-      return;
-    }
-
-    final now = DateTime.now();
-
-    // Give a local action a short amount of time to settle before
-    // allowing polling to immediately override it.
-    if (_lastLocalPlaybackAction != null &&
-        now.difference(
-              _lastLocalPlaybackAction!,
-            ) <
-            const Duration(milliseconds: 700)) {
-      return;
-    }
-
-    final sharedSeconds = session.playbackPosition.inMilliseconds / 1000.0;
-
-    final currentSeconds = await youtube.currentTime;
-
-    // Synchronize position only when the difference is meaningful.
-    //
-    // Small differences are ignored so normal playback does not
-    // constantly seek back and forth.
-    if ((currentSeconds - sharedSeconds).abs() > 1.25) {
-      await _seekYoutubeByAbsoluteSeconds(
-        sharedSeconds,
-      );
-    }
-
-    if (session.isPlaying) {
-      if (youtube.value.playerState != PlayerState.playing) {
-        youtube.playVideo();
-      }
-    } else if (session.isPaused) {
-      if (youtube.value.playerState == PlayerState.playing) {
-        youtube.pauseVideo();
-      }
-    }
-
-    if (session.isEnded) {
-      if (mounted) {
-        setState(() {
-          groupWatchSessionId = null;
-        });
-      }
-
-      groupWatchTimer?.cancel();
-      groupWatchPositionTimer?.cancel();
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  /// Performs `_seekYoutubeByAbsoluteSeconds` for this feature. Update this documentation when its contract changes.
-  Future<void> _seekYoutubeByAbsoluteSeconds(
-    double seconds,
-  ) async {
-    final controller = youtubeController;
-
-    if (controller == null) {
-      return;
-    }
-
-    final duration = await controller.duration;
-
-    if (duration <= 0) {
-      return;
-    }
-
-    final target = seconds.clamp(0.0, duration);
-
-    _lastLocalPlaybackAction = DateTime.now();
-
-    await controller.seekTo(
-      seconds: target,
-    );
-  }
-
-  /// Performs `_applyGroupWatchPosition` for this feature. Update this documentation when its contract changes.
-  void _applyGroupWatchPosition(
-    double seconds, {
-    bool seekPlayer = true,
-  }) {
-    final controller = youtubeController;
-
-    if (controller == null) {
-      return;
-    }
-
-    _getNormalizedPositionFromSeconds(
-      seconds,
-    ).then(
-      (normalized) {
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          position = normalized;
-          videoFinished = normalized >= 1.0;
-        });
-
-        AppController.instance.updatePlaybackProgress(
-          widget.media.id,
-          normalized,
-        );
-
-        if (seekPlayer) {
-          _seekYoutubeByAbsoluteSeconds(
-            seconds,
-          );
-        }
-      },
-    );
-  }
-
-  /// Performs `_getNormalizedPositionFromSeconds` for this feature. Update this documentation when its contract changes.
-  Future<double> _getNormalizedPositionFromSeconds(
-    double seconds,
-  ) async {
-    final controller = youtubeController;
-
-    if (controller == null) {
-      return position;
-    }
-
-    final duration = await controller.duration;
-
-    if (duration <= 0) {
-      return position;
-    }
-
-    return (seconds / duration).clamp(0.0, 1.0).toDouble();
-  }
-
-  // ============================================================
-  // GROUP WATCH POSITION SYNCHRONIZATION
-  // ============================================================
-
-  /// Performs `_queueGroupWatchPositionSync` for this feature. Update this documentation when its contract changes.
-  void _queueGroupWatchPositionSync(
-    double seconds,
-  ) {
-    if (groupWatchSessionId == null) {
-      return;
-    }
-
-    final now = DateTime.now();
-
-    if (_lastGroupWatchPositionSent != null &&
-        now.difference(
-              _lastGroupWatchPositionSent!,
-            ) <
-            const Duration(seconds: 2)) {
-      return;
-    }
-
-    _sendGroupWatchActualPosition(
-      seconds,
-    );
-  }
-
-  /// Performs `_syncCurrentPositionToGroupWatch` for this feature. Update this documentation when its contract changes.
-  Future<void> _syncCurrentPositionToGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-
-    final youtube = youtubeController;
-
-    if (sessionId == null || youtube == null || !mounted) {
-      return;
-    }
-
-    final state = youtube.value.playerState;
-
-    if (state != PlayerState.playing) {
-      return;
-    }
-
-    try {
-      final current = await youtube.currentTime;
-
-      await _sendGroupWatchActualPosition(
-        current,
-      );
-    } catch (_) {
-      // Ignore synchronization failures.
-    }
-  }
-
-  /// Performs `_sendGroupWatchActualPosition` for this feature. Update this documentation when its contract changes.
-  Future<void> _sendGroupWatchActualPosition(
-    double seconds,
-  ) async {
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    final now = DateTime.now();
-
-    if (_lastGroupWatchPositionSent != null &&
-        now.difference(
-              _lastGroupWatchPositionSent!,
-            ) <
-            const Duration(milliseconds: 750)) {
-      return;
-    }
-
-    _lastGroupWatchPositionSent = now;
-
-    try {
-      await AppController.instance.updateGroupWatchPosition(
-        sessionId: sessionId,
-        profileId: profile.id,
-        position: Duration(
-          milliseconds: (seconds * 1000).round(),
-        ),
-      );
-    } catch (_) {
-      // Do not interrupt playback for a synchronization failure.
     }
   }
 
@@ -1018,45 +602,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       newPosition,
     );
 
-    if (groupWatchSessionId != null) {
-      _sendNormalizedGroupWatchPosition(
-        newPosition,
-      );
-    }
-
     if (newPosition >= 0.999) {
       finishVideo();
-    }
-  }
-
-  /// Performs `_sendNormalizedGroupWatchPosition` for this feature. Update this documentation when its contract changes.
-  Future<void> _sendNormalizedGroupWatchPosition(
-    double normalizedPosition,
-  ) async {
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    final youtube = youtubeController;
-
-    if (sessionId == null || profile == null || youtube == null) {
-      return;
-    }
-
-    try {
-      final duration = await youtube.duration;
-
-      if (duration <= 0) {
-        return;
-      }
-
-      final seconds = duration * normalizedPosition;
-
-      await _sendGroupWatchActualPosition(
-        seconds,
-      );
-    } catch (_) {
-      // Ignore synchronization failures.
     }
   }
 
@@ -1087,14 +634,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
     unawaited(_syncIndependentPlaybackSession(state: 'completed'));
 
-    if (groupWatchSessionId != null) {
-      _sendGroupWatchActualPosition(
-        0,
-      );
-
-      _sendGroupWatchFinishedPosition();
-    }
-
     controller.finishWatching(
       widget.media,
     );
@@ -1112,41 +651,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     startAutoplayCountdown(
       nextEpisodeTitle,
     );
-  }
-
-  /// Performs `_sendGroupWatchFinishedPosition` for this feature. Update this documentation when its contract changes.
-  Future<void> _sendGroupWatchFinishedPosition() async {
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    final youtube = youtubeController;
-
-    if (youtube == null) {
-      return;
-    }
-
-    try {
-      final duration = await youtube.duration;
-
-      if (duration <= 0) {
-        return;
-      }
-
-      await AppController.instance.updateGroupWatchPosition(
-        sessionId: sessionId,
-        profileId: profile.id,
-        position: Duration(
-          milliseconds: (duration * 1000).round(),
-        ),
-      );
-    } catch (_) {
-      // Ignore synchronization failures.
-    }
   }
 
   /// Performs `startAutoplayCountdown` for this feature. Update this documentation when its contract changes.
@@ -1294,71 +798,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  /// Performs `_changeAudioTrack` for this feature. Update this documentation when its contract changes.
-  Future<void> _changeAudioTrack(
-    String value,
-  ) async {
-    setState(() {
-      selectedAudio = value;
-    });
-
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    try {
-      await AppController.instance.setGroupWatchAudioTrack(
-        sessionId: sessionId,
-        profileId: profile.id,
-        audioTrackId: value,
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        error.toString(),
-      );
-    }
+  /// Stores the selected audio track for this local playback session.
+  Future<void> _changeAudioTrack(String value) async {
+    if (!mounted) return;
+    setState(() => selectedAudio = value);
   }
 
-  /// Performs `_changeSubtitleTrack` for this feature. Update this documentation when its contract changes.
-  Future<void> _changeSubtitleTrack(
-    String? value,
-  ) async {
+  /// Stores the selected subtitle track for this local playback session.
+  Future<void> _changeSubtitleTrack(String? value) async {
+    if (!mounted) return;
     setState(() {
       selectedSubtitle = value;
       subtitlesEnabled = value != null;
     });
-
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    try {
-      await AppController.instance.setGroupWatchSubtitleTrack(
-        sessionId: sessionId,
-        profileId: profile.id,
-        subtitleTrackId: value,
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        error.toString(),
-      );
-    }
   }
 
   /// Performs `_showSnackBar` for this feature. Update this documentation when its contract changes.
@@ -1377,314 +829,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
   }
 
-  // ============================================================
-  // GROUP WATCH CREATION FROM PLAYER
-  // ============================================================
-
-  /// Performs `showGroupShare` for this feature. Update this documentation when its contract changes.
-  Future<void> showGroupShare() async {
-    final controller = AppController.instance;
-
-    final currentProfile = controller.currentProfile;
-
-    final account = controller.currentAccount;
-
-    if (currentProfile == null || account == null) {
-      _showSnackBar(
-        'No account or profile is selected.',
-      );
-      return;
-    }
-
-    final availableProfiles = account.profiles
-        .where(
-          (profile) => profile.id != currentProfile.id,
-        )
-        .toList();
-
-    if (availableProfiles.isEmpty) {
-      _showSnackBar(
-        'There are no other profiles available to invite.',
-      );
-      return;
-    }
-
-    final selectedProfileIds = await showDialog<Set<String>>(
-      context: context,
-      builder: (_) {
-        return GroupWatchInviteDialog(
-          profiles: availableProfiles,
-        );
-      },
-    );
-
-    if (!mounted || selectedProfileIds == null || selectedProfileIds.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      groupWatchActionInProgress = true;
-    });
-
-    try {
-      final session = await controller.createBackendGroupWatchSession(
-        widget.media,
-        profileId: currentProfile.id,
-        invitedProfileIds: selectedProfileIds,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        groupWatchSessionId = session.id;
-      });
-
-      _startGroupWatchPolling();
-
-      _showSnackBar(
-        'Group Watch session created for ${session.title}.',
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        error.toString(),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          groupWatchActionInProgress = false;
-        });
-      }
-    }
-  }
-
-  // ============================================================
-  // GROUP WATCH PLAY
-  // ============================================================
-
-  /// Performs `_playGroupWatch` for this feature. Update this documentation when its contract changes.
-  Future<void> _playGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    if (groupWatchActionInProgress) {
-      return;
-    }
-
-    setState(() {
-      groupWatchActionInProgress = true;
-    });
-
-    try {
-      final controller = AppController.instance;
-
-      final session = controller.getGroupWatchSession(
-        sessionId,
-      );
-
-      if (session == null) {
-        return;
-      }
-
-      if (session.invitationsExpired && session.isWaiting) {
-        _showSnackBar(
-          'This invitation link is expired.',
-        );
-        return;
-      }
-
-      final currentYoutube = youtubeController;
-
-      if (currentYoutube != null) {
-        final currentSeconds = await currentYoutube.currentTime;
-
-        await controller.updateGroupWatchPosition(
-          sessionId: sessionId,
-          profileId: profile.id,
-          position: Duration(
-            milliseconds: (currentSeconds * 1000).round(),
-          ),
-        );
-      }
-
-      if (session.isWaiting || session.isReady) {
-        await controller.startGroupWatchSession(
-          sessionId: sessionId,
-          profileId: profile.id,
-        );
-      } else {
-        await controller.playGroupWatchSession(
-          sessionId: sessionId,
-          profileId: profile.id,
-        );
-      }
-
-      _playYoutubeVideo();
-
-      await _refreshGroupWatchState();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        error.toString(),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          groupWatchActionInProgress = false;
-        });
-      }
-    }
-  }
-
-  // ============================================================
-  // GROUP WATCH PAUSE
-  // ============================================================
-
-  /// Performs `_pauseGroupWatch` for this feature. Update this documentation when its contract changes.
-  Future<void> _pauseGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    if (groupWatchActionInProgress) {
-      return;
-    }
-
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (_) {
-        return const GroupWatchPauseReasonDialog();
-      },
-    );
-
-    if (!mounted || reason == null || reason.trim().isEmpty) {
-      return;
-    }
-
-    setState(() {
-      groupWatchActionInProgress = true;
-    });
-
-    try {
-      final youtube = youtubeController;
-
-      if (youtube != null) {
-        final currentSeconds = await youtube.currentTime;
-
-        await AppController.instance.updateGroupWatchPosition(
-          sessionId: sessionId,
-          profileId: profile.id,
-          position: Duration(
-            milliseconds: (currentSeconds * 1000).round(),
-          ),
-        );
-      }
-
-      await AppController.instance.pauseGroupWatchSession(
-        sessionId: sessionId,
-        profileId: profile.id,
-        reason: reason,
-      );
-
-      _pauseYoutubeVideo();
-
-      await _refreshGroupWatchState();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        error.toString(),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          groupWatchActionInProgress = false;
-        });
-      }
-    }
-  }
-
-  // ============================================================
-  // GROUP WATCH RESUME
-  // ============================================================
-
-  /// Performs `_resumeGroupWatch` for this feature. Update this documentation when its contract changes.
-  Future<void> _resumeGroupWatch() async {
-    final sessionId = groupWatchSessionId;
-
-    final profile = AppController.instance.currentProfile;
-
-    if (sessionId == null || profile == null) {
-      return;
-    }
-
-    if (!AppController.instance.canResumeGroupWatchSession(
-      sessionId,
-      profileId: profile.id,
-    )) {
-      _showSnackBar(
-        'Only the person who paused the Group Watch can resume it.',
-      );
-      return;
-    }
-
-    if (groupWatchActionInProgress) {
-      return;
-    }
-
-    setState(() {
-      groupWatchActionInProgress = true;
-    });
-
-    try {
-      await AppController.instance.resumeGroupWatchSession(
-        sessionId: sessionId,
-        profileId: profile.id,
-      );
-
-      _playYoutubeVideo();
-
-      await _refreshGroupWatchState();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        error.toString(),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          groupWatchActionInProgress = false;
-        });
-      }
-    }
-  }
-
-  /// Opens the X-Ray cast and production information while preserving playback.
+  /// Opens the contextual X-Ray screen at the current playback position.
   void showXRay() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
         builder: (_) => XRayScreen(
           media: widget.media,
           playbackPosition: xrayPlaybackPosition,
@@ -1733,9 +881,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // ============================================================
 
   /// Performs `_buildVideoArea` for this feature. Update this documentation when its contract changes.
-  Widget _buildVideoArea(
-    GroupWatchSession? groupSession,
-  ) {
+  Widget _buildVideoArea() {
     final controller = youtubeController;
 
     if (youtubeUrlInvalid) {
@@ -1785,21 +931,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     final controller = AppController.instance;
 
-    final groupSession = groupWatchSessionId == null
-        ? null
-        : controller.getGroupWatchSession(
-            groupWatchSessionId!,
-          );
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
           children: [
-            if (groupSession != null)
-              _buildGroupWatchBanner(
-                groupSession,
-              ),
             Expanded(
               child: Stack(
                 children: [
@@ -1810,23 +946,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Container(
                         color: Colors.black,
                         alignment: Alignment.center,
-                        child: _buildVideoArea(
-                          groupSession,
-                        ),
+                        child: _buildVideoArea(),
                       ),
                     ),
                   ),
-                  _buildTopBar(
-                    groupSession,
-                  ),
-                  if (groupSession == null &&
-                      youtubeController != null &&
-                      !videoFinished)
+                  _buildTopBar(),
+                  if (youtubeController != null && !videoFinished)
                     _buildCenterPlayerControl(),
-                  if (groupSession?.isPaused == true)
-                    _buildGroupWatchPausedOverlay(
-                      groupSession!,
-                    ),
                   if (videoFinished && creditsStarted) _buildCreditsOverlay(),
                   if (videoFinished && creditsStarted && !autoplayCancelled)
                     Positioned(
@@ -1856,9 +982,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ],
               ),
             ),
-            _buildControls(
-              groupSession,
-            ),
+            _buildControls(),
           ],
         ),
       ),
@@ -1870,9 +994,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // ============================================================
 
   /// Performs `_buildTopBar` for this feature. Update this documentation when its contract changes.
-  Widget _buildTopBar(
-    GroupWatchSession? groupSession,
-  ) {
+  Widget _buildTopBar() {
     return Positioned(
       left: 0,
       right: 0,
@@ -1928,21 +1050,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    if (groupSession != null)
-                      const Padding(
-                        padding: EdgeInsets.only(
-                          top: 2,
-                        ),
-                        child: UniversalText(
-                          'GROUP WATCH',
-                          style: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -2079,253 +1186,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // GROUP WATCH BANNER
-  // ============================================================
-
-  /// Performs `_buildGroupWatchBanner` for this feature. Update this documentation when its contract changes.
-  Widget _buildGroupWatchBanner(
-    GroupWatchSession session,
-  ) {
-    final profile = AppController.instance.currentProfile;
-
-    final isPaused = session.isPaused;
-
-    final canResume = profile != null &&
-        session.canResume(
-          profile.id,
-        );
-
-    String text;
-
-    if (session.invitationsExpired && session.isWaiting) {
-      text = 'This invitation link is expired.';
-    } else if (isPaused) {
-      if (session.pauseReason != null &&
-          session.pauseReason!.trim().isNotEmpty) {
-        text = 'Paused — ${session.pauseReason}';
-      } else {
-        text = 'Group Watch paused';
-      }
-    } else if (session.isPlaying) {
-      text = 'Group Watch is playing';
-    } else if (session.isReady) {
-      text = 'Everyone is ready';
-    } else {
-      text = 'Group Watch lobby';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 9,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151515),
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withValues(
-              alpha: 0.06,
-            ),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(
-                alpha: 0.08,
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.people_alt_rounded,
-              color: Colors.white70,
-              size: 17,
-            ),
-          ),
-          const SizedBox(
-            width: 10,
-          ),
-          Expanded(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (isPaused && canResume)
-            TextButton(
-              onPressed: groupWatchActionInProgress ? null : _resumeGroupWatch,
-              child: const UniversalText(
-                'RESUME',
-              ),
-            ),
-          if (isPaused && !canResume)
-            const UniversalText(
-              'Waiting...',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 12,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // GROUP WATCH PAUSED OVERLAY
-  // ============================================================
-
-  /// Performs `_buildGroupWatchPausedOverlay` for this feature. Update this documentation when its contract changes.
-  Widget _buildGroupWatchPausedOverlay(
-    GroupWatchSession session,
-  ) {
-    final profile = AppController.instance.currentProfile;
-
-    final canResume = profile != null &&
-        session.canResume(
-          profile.id,
-        );
-
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black.withValues(
-          alpha: 0.58,
-        ),
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(
-              maxWidth: 390,
-            ),
-            margin: const EdgeInsets.all(
-              24,
-            ),
-            padding: const EdgeInsets.all(
-              24,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFF171717),
-              borderRadius: BorderRadius.circular(
-                22,
-              ),
-              border: Border.all(
-                color: Colors.white.withValues(
-                  alpha: 0.10,
-                ),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: 0.5,
-                  ),
-                  blurRadius: 35,
-                  offset: const Offset(
-                    0,
-                    15,
-                  ),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(
-                      alpha: 0.08,
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.pause_rounded,
-                    color: Colors.white,
-                    size: 36,
-                  ),
-                ),
-                const SizedBox(
-                  height: 16,
-                ),
-                const UniversalText(
-                  'Group Watch Paused',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (session.pauseReason != null &&
-                    session.pauseReason!.trim().isNotEmpty) ...[
-                  const SizedBox(
-                    height: 9,
-                  ),
-                  Text(
-                    session.pauseReason!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-                const SizedBox(
-                  height: 20,
-                ),
-                if (canResume)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed:
-                          groupWatchActionInProgress ? null : _resumeGroupWatch,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            14,
-                          ),
-                        ),
-                      ),
-                      child: const UniversalText(
-                        'RESUME',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  const UniversalText(
-                    'Waiting for the person who paused to resume.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 14,
-                    ),
-                  ),
-              ],
             ),
           ),
         ),
@@ -2520,11 +1380,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   /// Performs `_buildControls` for this feature. Update this documentation when its contract changes.
-  Widget _buildControls(
-    GroupWatchSession? groupSession,
-  ) {
-    final isGroupPaused = groupSession?.isPaused == true;
-
+  Widget _buildControls() {
     final hasYoutube = youtubeController != null;
 
     final playing = youtubeController?.value.playerState == PlayerState.playing;
@@ -2566,7 +1422,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               value: position,
               min: 0,
               max: 1,
-              onChanged: videoFinished || isGroupPaused || !hasYoutube
+              onChanged: videoFinished || !hasYoutube
                   ? null
                   : updatePosition,
             ),
@@ -2575,7 +1431,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               _BottomControlButton(
                 icon: Icons.replay_5_rounded,
-                onPressed: videoFinished || isGroupPaused || !hasYoutube
+                onPressed: videoFinished || !hasYoutube
                     ? null
                     : () {
                         _seekYoutubeBySeconds(
@@ -2583,34 +1439,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         );
                       },
               ),
-              if (groupSession != null)
-                _BottomControlButton(
-                  icon: groupSession.isPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  onPressed: groupWatchActionInProgress
-                      ? null
-                      : groupSession.isPaused
-                          ? null
-                          : groupSession.isPlaying
-                              ? _pauseGroupWatch
-                              : _playGroupWatch,
-                  large: true,
-                )
-              else
-                _BottomControlButton(
-                  icon:
-                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  onPressed: videoFinished
-                      ? null
-                      : hasYoutube
-                          ? _handleMainPlayPause
-                          : finishVideo,
-                  large: true,
-                ),
+              _BottomControlButton(
+                icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                onPressed: videoFinished
+                    ? null
+                    : hasYoutube
+                        ? _handleMainPlayPause
+                        : finishVideo,
+                large: true,
+              ),
               _BottomControlButton(
                 icon: Icons.forward_10_rounded,
-                onPressed: videoFinished || isGroupPaused || !hasYoutube
+                onPressed: videoFinished || !hasYoutube
                     ? null
                     : () {
                         _seekYoutubeBySeconds(
@@ -2631,16 +1471,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 icon: Icons.bookmarks_outlined,
                 onPressed: _showSceneBookmarks,
               ),
-              if (groupSession == null)
-                _BottomControlButton(
-                  icon: Icons.people_alt_rounded,
-                  onPressed: groupWatchActionInProgress ? null : showGroupShare,
-                )
-              else
-                _BottomControlButton(
-                  icon: Icons.people_alt_rounded,
-                  onPressed: _showGroupWatchSessionInfo,
-                ),
               _BottomControlButton(
                 icon: Icons.people_alt_outlined,
                 onPressed: showXRay,
@@ -2656,126 +1486,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  // ============================================================
-  // GROUP WATCH INFO
-  // ============================================================
-
-  /// Performs `_showGroupWatchSessionInfo` for this feature. Update this documentation when its contract changes.
-  void _showGroupWatchSessionInfo() {
-    final sessionId = groupWatchSessionId;
-
-    if (sessionId == null) {
-      return;
-    }
-
-    final session = AppController.instance.getGroupWatchSession(
-      sessionId,
-    );
-
-    if (session == null) {
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
-        return _PremiumBottomSheet(
-          icon: Icons.people_alt_rounded,
-          title: tr('Group Watch'),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              0,
-              20,
-              25,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  session.title,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(
-                  height: 18,
-                ),
-                _InfoRow(
-                  label: 'Status',
-                  value: _groupWatchStatusLabel(
-                    session,
-                  ),
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                _InfoRow(
-                  label: 'Participants',
-                  value: '${session.participants.length}',
-                ),
-                if (session.pauseReason != null &&
-                    session.pauseReason!.trim().isNotEmpty) ...[
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  _InfoRow(
-                    label: 'Reason',
-                    value: session.pauseReason!,
-                  ),
-                ],
-                const SizedBox(
-                  height: 20,
-                ),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pop(
-                        context,
-                      );
-                    },
-                    child: const UniversalText(
-                      'CLOSE',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Performs `_groupWatchStatusLabel` for this feature. Update this documentation when its contract changes.
-  String _groupWatchStatusLabel(
-    GroupWatchSession session,
-  ) {
-    if (session.isWaiting) {
-      return 'Waiting';
-    }
-
-    if (session.isReady) {
-      return 'Ready';
-    }
-
-    if (session.isPlaying) {
-      return 'Playing';
-    }
-
-    if (session.isPaused) {
-      return 'Paused';
-    }
-
-    if (session.isEnded) {
-      return 'Ended';
-    }
-
-    return 'Unknown';
-  }
 }
 
 // ============================================================
@@ -3096,587 +1806,6 @@ class _PremiumBottomSheet extends StatelessWidget {
               height: 20,
             ),
             child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(
-          alpha: 0.045,
-        ),
-        borderRadius: BorderRadius.circular(
-          13,
-        ),
-      ),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white54,
-              fontSize: 13,
-            ),
-          ),
-          const Spacer(),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ============================================================
-// GROUP WATCH INVITE DIALOG
-// ============================================================
-
-class GroupWatchInviteDialog extends StatefulWidget {
-  final List<Profile> profiles;
-
-  const GroupWatchInviteDialog({
-    super.key,
-    required this.profiles,
-  });
-
-  @override
-  State<GroupWatchInviteDialog> createState() => _GroupWatchInviteDialogState();
-}
-
-class _GroupWatchInviteDialogState extends State<GroupWatchInviteDialog> {
-  final Set<String> selectedProfileIds = <String>{};
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(
-        20,
-      ),
-      child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 440,
-          maxHeight: 600,
-        ),
-        padding: const EdgeInsets.all(
-          22,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xFF171717),
-          borderRadius: BorderRadius.circular(
-            24,
-          ),
-          border: Border.all(
-            color: Colors.white.withValues(
-              alpha: 0.09,
-            ),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.people_alt_rounded,
-              color: Colors.white,
-              size: 34,
-            ),
-            const SizedBox(
-              height: 12,
-            ),
-            const UniversalText(
-              'Start Group Watch',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 23,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(
-              height: 7,
-            ),
-            const UniversalText(
-              'Choose who you want to invite.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(
-              height: 18,
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: widget.profiles.map(
-                  (profile) {
-                    final selected = selectedProfileIds.contains(
-                      profile.id,
-                    );
-
-                    return AnimatedContainer(
-                      duration: const Duration(
-                        milliseconds: 160,
-                      ),
-                      margin: const EdgeInsets.only(
-                        bottom: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.white.withValues(
-                                alpha: 0.10,
-                              )
-                            : Colors.white.withValues(
-                                alpha: 0.035,
-                              ),
-                        borderRadius: BorderRadius.circular(
-                          14,
-                        ),
-                        border: Border.all(
-                          color: selected
-                              ? Colors.white.withValues(
-                                  alpha: 0.20,
-                                )
-                              : Colors.transparent,
-                        ),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
-                        clipBehavior: Clip.antiAlias,
-                        child: CheckboxListTile(
-                          value: selected,
-                          onChanged: (value) {
-                            setState(() {
-                              if (value == true) {
-                                selectedProfileIds.add(profile.id);
-                              } else {
-                                selectedProfileIds.remove(profile.id);
-                              }
-                            });
-                          },
-                          activeColor: Colors.white,
-                          checkColor: Colors.black,
-                          controlAffinity: ListTileControlAffinity.trailing,
-                          title: Text(
-                            profile.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ).toList(),
-              ),
-            ),
-            const SizedBox(
-              height: 15,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pop(
-                        context,
-                      );
-                    },
-                    child: const UniversalText(
-                      'CANCEL',
-                      style: TextStyle(
-                        color: Colors.white60,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(
-                  width: 10,
-                ),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: selectedProfileIds.isEmpty
-                        ? null
-                        : () {
-                            Navigator.pop(
-                              context,
-                              Set<String>.from(
-                                selectedProfileIds,
-                              ),
-                            );
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          13,
-                        ),
-                      ),
-                    ),
-                    child: const UniversalText(
-                      'INVITE',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// GROUP WATCH PAUSE REASON DIALOG
-// ============================================================
-
-class GroupWatchPauseReasonDialog extends StatelessWidget {
-  const GroupWatchPauseReasonDialog({
-    super.key,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(
-        24,
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(
-          22,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xFF171717),
-          borderRadius: BorderRadius.circular(
-            24,
-          ),
-          border: Border.all(
-            color: Colors.white.withValues(
-              alpha: 0.09,
-            ),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.pause_circle_outline_rounded,
-              color: Colors.white,
-              size: 38,
-            ),
-            const SizedBox(
-              height: 12,
-            ),
-            const UniversalText(
-              'Why did you pause?',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(
-              height: 16,
-            ),
-            _PauseReasonTile(
-              emoji: '🔋',
-              title: tr('Voy a cargar'),
-              onTap: () {
-                Navigator.pop(
-                  context,
-                  'Voy a cargar',
-                );
-              },
-            ),
-            _PauseReasonTile(
-              emoji: '🍿',
-              title: tr('Voy por un snack'),
-              onTap: () {
-                Navigator.pop(
-                  context,
-                  'Voy por un snack',
-                );
-              },
-            ),
-            _PauseReasonTile(
-              emoji: '💬',
-              title: tr('Otro'),
-              onTap: () async {
-                final reason = await showDialog<String>(
-                  context: context,
-                  builder: (_) {
-                    return const GroupWatchCustomPauseReasonDialog();
-                  },
-                );
-
-                if (!context.mounted ||
-                    reason == null ||
-                    reason.trim().isEmpty) {
-                  return;
-                }
-
-                Navigator.of(
-                  context,
-                ).pop(
-                  reason.trim(),
-                );
-              },
-            ),
-            const SizedBox(
-              height: 6,
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(
-                  context,
-                );
-              },
-              child: const UniversalText(
-                'CANCEL',
-                style: TextStyle(
-                  color: Colors.white54,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PauseReasonTile extends StatelessWidget {
-  final String emoji;
-  final String title;
-  final VoidCallback onTap;
-
-  const _PauseReasonTile({
-    required this.emoji,
-    required this.title,
-    required this.onTap,
-  });
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 8,
-      ),
-      child: Material(
-        color: Colors.white.withValues(
-          alpha: 0.045,
-        ),
-        borderRadius: BorderRadius.circular(
-          14,
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(
-            14,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 15,
-              vertical: 13,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  emoji,
-                  style: const TextStyle(
-                    fontSize: 23,
-                  ),
-                ),
-                const SizedBox(
-                  width: 13,
-                ),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Colors.white38,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class GroupWatchCustomPauseReasonDialog extends StatefulWidget {
-  const GroupWatchCustomPauseReasonDialog({
-    super.key,
-  });
-
-  @override
-  State<GroupWatchCustomPauseReasonDialog> createState() =>
-      _GroupWatchCustomPauseReasonDialogState();
-}
-
-class _GroupWatchCustomPauseReasonDialogState
-    extends State<GroupWatchCustomPauseReasonDialog> {
-  final TextEditingController controller = TextEditingController();
-
-  @override
-
-  /// Performs `dispose` for this feature. Update this documentation when its contract changes.
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-
-  /// Performs `build` for this feature. Update this documentation when its contract changes.
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(
-          22,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xFF171717),
-          borderRadius: BorderRadius.circular(
-            22,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const UniversalText(
-              'Why did you pause?',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(
-              height: 18,
-            ),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              style: const TextStyle(
-                color: Colors.white,
-              ),
-              decoration: InputDecoration(
-                hintText: tr('Enter a reason'),
-                hintStyle: const TextStyle(
-                  color: Colors.white38,
-                ),
-                filled: true,
-                fillColor: Colors.white.withValues(
-                  alpha: 0.05,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(
-                    14,
-                  ),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(
-              height: 16,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pop(
-                        context,
-                      );
-                    },
-                    child: const UniversalText(
-                      'CANCEL',
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final value = controller.text.trim();
-
-                      if (value.isEmpty) {
-                        return;
-                      }
-
-                      Navigator.pop(
-                        context,
-                        value,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                    ),
-                    child: const UniversalText(
-                      'DONE',
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),

@@ -52,7 +52,6 @@ import 'localization.dart';
 import 'media_text_localizer.dart';
 import 'activity_timeline.dart';
 import 'social_home.dart';
-import 'account_profile_activity.dart';
 import 'streaming_experience.dart';
 import 'perfect_streaming_experience.dart';
 import 'app_accessibility.dart';
@@ -561,6 +560,7 @@ class _AppPageSurface extends StatelessWidget {
         _appPageState,
         AppController.instance,
         AppAccessibilitySettings.instance,
+        HomeCustomizationStore.revision,
       ]),
       builder: (context, _) {
         AppAccessibilitySettings.instance.ensureLoaded(
@@ -616,10 +616,24 @@ class _AppPageSurface extends StatelessWidget {
                 _appPageState.pageId != 'customize' &&
                 _appPageState.pageId != 'more' &&
                 !_appPageState.isCustomizing;
+        final configuredNav = HomeCustomizationStore.settingsFor(
+          AppController.instance.currentProfile,
+        ).navbarPosition;
+        final navPosition = const {'Top', 'Bottom', 'Left', 'Right'}.contains(configuredNav)
+            ? configuredNav
+            : 'Bottom';
+        final verticalNav = navPosition == 'Left' || navPosition == 'Right';
         const globalNavigationHeight = 84.0;
-        final bottomInset = showGlobalNavigation
-            ? globalNavigationHeight + MediaQuery.paddingOf(context).bottom
-            : 0.0;
+        const globalNavigationRailWidth = 88.0;
+        final safe = MediaQuery.paddingOf(context);
+        final bottomInset = showGlobalNavigation && navPosition == 'Bottom'
+            ? globalNavigationHeight + safe.bottom : 0.0;
+        final topInset = showGlobalNavigation && navPosition == 'Top'
+            ? globalNavigationHeight + safe.top : 0.0;
+        final leftInset = showGlobalNavigation && navPosition == 'Left'
+            ? globalNavigationRailWidth + safe.left : 0.0;
+        final rightInset = showGlobalNavigation && navPosition == 'Right'
+            ? globalNavigationRailWidth + safe.right : 0.0;
         return MediaQuery(
           data: media.copyWith(
             disableAnimations: accessibility.reduceMotion,
@@ -631,17 +645,28 @@ class _AppPageSurface extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(bottom: bottomInset),
+                  padding: EdgeInsets.only(
+                    top: topInset,
+                    bottom: bottomInset,
+                    left: leftInset,
+                    right: rightInset,
+                  ),
                   child: child,
                 ),
                 if (showGlobalNavigation)
                   Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
+                    left: navPosition == 'Left' ? 0 : (verticalNav ? null : 0),
+                    right: navPosition == 'Right' ? 0 : (verticalNav ? null : 0),
+                    top: verticalNav ? 0 : (navPosition == 'Top' ? 0 : null),
+                    bottom: verticalNav ? 0 : (navPosition == 'Bottom' ? 0 : null),
+                    width: verticalNav ? globalNavigationRailWidth : null,
+                    height: verticalNav ? null : globalNavigationHeight,
                     child: SafeArea(
-                      top: false,
-                      child: _GlobalPrimaryNavigationBar(),
+                      top: navPosition == 'Top' || verticalNav,
+                      bottom: navPosition == 'Bottom' || verticalNav,
+                      left: navPosition == 'Left' || !verticalNav,
+                      right: navPosition == 'Right' || !verticalNav,
+                      child: _GlobalPrimaryNavigationBar(vertical: verticalNav),
                     ),
                   ),
               ],
@@ -1958,7 +1983,6 @@ const List<String> _defaultHomeSectionOrder = <String>[
   'Recommendations & Mood',
   'Franchise Progress',
   'Channels',
-  'Account Activity',
   'Friends Stories',
   'Storage Progress',
   'Continue Watching',
@@ -2005,6 +2029,7 @@ class HomeCustomization {
   String homeMediaLayout;
   String heroStyle;
   String cardSize;
+  int heroItemCount;
   String navbarPosition;
   String storageBarPosition;
   double storageBarThickness;
@@ -2035,6 +2060,7 @@ class HomeCustomization {
     this.homeMediaLayout = 'Left & Right',
     this.heroStyle = 'Cinematic',
     this.cardSize = 'Medium',
+    this.heroItemCount = 8,
     this.navbarPosition = 'Bottom',
     this.storageBarPosition = 'Bottom',
     this.storageBarThickness = 12,
@@ -2048,8 +2074,7 @@ class HomeCustomization {
     List<String>? sectionOrder,
     List<String>? navigationOrder,
     List<String>? hiddenSections,
-  })  : sectionOrder =
-            sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
+  })  : sectionOrder = sectionOrder ?? List<String>.from(_defaultHomeSectionOrder),
         hiddenSections = hiddenSections ?? <String>[],
         navigationOrder = navigationOrder ??
             [
@@ -2088,30 +2113,19 @@ class HomeCustomization {
       hiddenSections.add(section);
     }
     switch (section) {
-      case 'Hero Banner':
-        showHero = visible;
-      case 'Continue Watching':
-        showContinueWatching = visible;
-      case 'Recently Watched':
-        showRecentlyWatched = visible;
-      case 'Movies':
-        showMovies = visible;
-      case 'TV Shows':
-        showTvShows = visible;
-      case 'New Additions':
-        showNewAdditions = visible;
-      case 'All Library':
-        showAllLibrary = visible;
-      case 'Library Recommendations':
-        showRecommendations = visible;
+      case 'Hero Banner': showHero = visible;
+      case 'Continue Watching': showContinueWatching = visible;
+      case 'Recently Watched': showRecentlyWatched = visible;
+      case 'Movies': showMovies = visible;
+      case 'TV Shows': showTvShows = visible;
+      case 'New Additions': showNewAdditions = visible;
+      case 'All Library': showAllLibrary = visible;
+      case 'Library Recommendations': showRecommendations = visible;
       case 'Storage Progress':
         storageBarPosition = visible ? 'Bottom' : 'Hidden';
-      case 'Friends & Communities':
-        showFriendsCommunity = visible;
-      case 'Music & Film':
-        showMusic = visible;
-      case 'Seasonal Collections':
-        showSeasonalCollections = visible;
+      case 'Friends & Communities': showFriendsCommunity = visible;
+      case 'Music & Film': showMusic = visible;
+      case 'Seasonal Collections': showSeasonalCollections = visible;
     }
   }
 
@@ -2131,6 +2145,7 @@ class HomeCustomization {
         homeMediaLayout: homeMediaLayout,
         heroStyle: heroStyle,
         cardSize: cardSize,
+        heroItemCount: heroItemCount,
         navbarPosition: navbarPosition,
         storageBarPosition: storageBarPosition,
         storageBarThickness: storageBarThickness,
@@ -2335,6 +2350,7 @@ class HomeCustomizationStore {
         'homeMediaLayout': v.homeMediaLayout,
         'heroStyle': v.heroStyle,
         'cardSize': v.cardSize,
+        'heroItemCount': v.heroItemCount,
         'navbarPosition': v.navbarPosition,
         'storageBarPosition': v.storageBarPosition,
         'storageBarThickness': v.storageBarThickness,
@@ -2396,6 +2412,7 @@ class HomeCustomizationStore {
             : (m['homeMediaLayout']?.toString() ?? 'Left & Right'),
         heroStyle: m['heroStyle']?.toString() ?? 'Cinematic',
         cardSize: m['cardSize']?.toString() ?? 'Medium',
+        heroItemCount: ((m['heroItemCount'] as num?)?.toInt() ?? 8).clamp(8, 40).toInt(),
         navbarPosition: m['navbarPosition']?.toString() ?? 'Bottom',
         storageBarPosition: m['storageBarPosition']?.toString() ?? 'Bottom',
         storageBarThickness: (m['storageBarThickness'] is num
@@ -3029,6 +3046,23 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
           value: draft.cardSize,
           values: const ['Small', 'Medium', 'Large'],
           onChanged: (value) => setState(() => draft.cardSize = value),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Hero banner item count',
+          value: '${draft.heroItemCount}',
+          values: const ['8', '10', '15', '20', '25', '30', '40'],
+          onChanged: (value) => setState(() => draft.heroItemCount = int.tryParse(value) ?? 8),
+        ),
+        const SizedBox(height: 12),
+        _dropdown(
+          label: 'Navigation bar position',
+          value: draft.navbarPosition,
+          values: const ['Bottom', 'Top', 'Left', 'Right'],
+          onChanged: (value) => setState(() {
+            draft.navbarPosition = value;
+            HomeCustomizationStore.apply(draft, AppController.instance.currentProfile);
+          }),
         ),
         const SizedBox(height: 24),
         const UniversalText('COLORS',
@@ -3770,8 +3804,7 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
     for (final section in draft.sectionOrder) {
       if (!draft.isSectionVisible(section)) continue;
       if (section == 'Friends Stories' &&
-          storyPlacement != 'home' &&
-          storyPlacement != 'both') {
+          storyPlacement != 'home' && storyPlacement != 'both') {
         continue;
       }
 
@@ -3829,59 +3862,43 @@ class _CustomizeHomeScreenState extends State<CustomizeHomeScreen> {
             isTvShow: false,
           ));
         case 'International Movies':
-          sections.add(_homePreviewMediaSection('INTERNATIONAL MOVIES',
-              'Original titles from around the world', Icons.public_rounded,
-              isTvShow: false));
+          sections.add(_homePreviewMediaSection(
+            'INTERNATIONAL MOVIES', 'Original titles from around the world',
+            Icons.public_rounded, isTvShow: false));
         case 'International Shows':
-          sections.add(_homePreviewMediaSection('INTERNATIONAL SHOWS',
-              'Original titles from around the world', Icons.public_rounded,
-              isTvShow: true));
+          sections.add(_homePreviewMediaSection(
+            'INTERNATIONAL SHOWS', 'Original titles from around the world',
+            Icons.public_rounded, isTvShow: true));
         case 'New Albums':
           sections.add(_homePreviewBar('NEW ALBUMS', Icons.album_rounded));
         case 'Recommendations & Mood':
-          sections.add(_homePreviewBar(
-              'RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
+          sections.add(_homePreviewBar('RECOMMENDATIONS & MOOD', Icons.auto_awesome_outlined));
         case 'Franchise Progress':
-          sections.add(_homePreviewBar(
-              'FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
+          sections.add(_homePreviewBar('FRANCHISE & SAGA PROGRESS', Icons.timeline_rounded));
         case 'Channels':
           sections.add(_homePreviewBar('CHANNELS', Icons.live_tv_rounded));
-        case 'Account Activity':
-          sections.add(
-              _homePreviewBar('ACCOUNT ACTIVITY', Icons.people_alt_rounded));
         case 'Friends Stories':
-          sections.add(
-              _homePreviewBar('FRIENDS STORIES', Icons.auto_stories_rounded));
+          sections.add(_homePreviewBar('FRIENDS STORIES', Icons.auto_stories_rounded));
         case 'Storage Progress':
-          sections
-              .add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
+          sections.add(_homePreviewBar('STORAGE PROGRESS', Icons.storage_rounded));
         case 'Themed Episodes':
-          sections.add(
-              _homePreviewBar('THEMED EPISODES', Icons.theater_comedy_rounded));
+          sections.add(_homePreviewBar('THEMED EPISODES', Icons.theater_comedy_rounded));
         case 'You Might Also Like':
-          sections.add(_homePreviewBar(
-              'YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
+          sections.add(_homePreviewBar('YOU MIGHT ALSO LIKE', Icons.thumb_up_alt_outlined));
         case 'Collections':
-          sections.add(_homePreviewBar(
-              'COLLECTIONS', Icons.collections_bookmark_outlined));
+          sections.add(_homePreviewBar('COLLECTIONS', Icons.collections_bookmark_outlined));
         case 'Because You Watched':
-          sections.add(_homePreviewBar(
-              'BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
+          sections.add(_homePreviewBar('BECAUSE YOU WATCHED', Icons.movie_filter_outlined));
         case 'People & Cast Recommendations':
-          sections.add(_homePreviewBar(
-              'PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
+          sections.add(_homePreviewBar('PEOPLE & CAST RECOMMENDATIONS', Icons.person_search_rounded));
         case 'Friends & Communities':
-          sections.add(
-              _homePreviewBar('FRIENDS & COMMUNITIES', Icons.groups_rounded));
+          sections.add(_homePreviewBar('FRIENDS & COMMUNITIES', Icons.groups_rounded));
         case 'Media Intelligence Tools':
-          sections.add(_homePreviewBar(
-              'MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
+          sections.add(_homePreviewBar('MEDIA INTELLIGENCE TOOLS', Icons.auto_awesome_rounded));
         case 'Music & Film':
-          sections
-              .add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
+          sections.add(_homePreviewBar('MUSIC & FILM', Icons.headphones_rounded));
         case 'Seasonal Collections':
-          sections.add(_homePreviewBar(
-              'SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
+          sections.add(_homePreviewBar('SEASONAL COLLECTIONS', Icons.calendar_month_rounded));
       }
     }
 
@@ -4969,61 +4986,86 @@ enum PrimaryDestination {
 }
 
 class _GlobalPrimaryNavigationBar extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _appPageState,
-      builder: (context, _) {
-        final selectedIndex = _appPageState.primaryIndex;
-        const destinations = <NavigationDestination>[
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.video_library_outlined),
-            selectedIcon: Icon(Icons.video_library_rounded),
-            label: 'Watch',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline_rounded),
-            selectedIcon: Icon(Icons.people_rounded),
-            label: 'Friends',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz_rounded),
-            selectedIcon: Icon(Icons.more_horiz_rounded),
-            label: 'More',
-          ),
-        ];
-        return NavigationBar(
-          height: 84,
-          selectedIndex: selectedIndex,
-          destinations: destinations,
-          onDestinationSelected: (index) {
-            if (index == 3) {
-              _showGlobalMore();
-              return;
-            }
-            final destination = PrimaryDestination.values[index];
-            final navigator = _appNavigatorKey.currentState;
-            if (navigator == null) return;
-            // Sync the page identity on the first click, so contextual Customize
-            // always targets the destination now being shown.
-            _appPageState.setPage(
-              destination.name,
-              selectedPrimaryIndex: index,
-              customizing: false,
-            );
-            navigator.pushAndRemoveUntil<void>(
+  const _GlobalPrimaryNavigationBar({this.vertical = false});
+  final bool vertical;
+
+  void _select(BuildContext context, int index) {
+    if (index == 3) {
+      _showGlobalMore();
+      return;
+    }
+    if (index == 4) {
+      final navigator = _appNavigatorKey.currentState;
+      if (navigator == null) return;
+      navigator.push<void>(MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/app/profiles'),
+        builder: (_) => ProfileSelectionScreen(
+          onOpened: () => _appPageState.setPage('profiles', selectedPrimaryIndex: 0, customizing: false),
+          onProfileSelected: (selectionContext) {
+            Navigator.of(selectionContext, rootNavigator: true).pushAndRemoveUntil<void>(
               MaterialPageRoute<void>(
-                settings: RouteSettings(name: '/main/${destination.name}'),
-                builder: (_) => MainScreen(initialDestination: destination),
+                settings: const RouteSettings(name: '/main/home'),
+                builder: (_) => const MainScreen(initialDestination: PrimaryDestination.home),
               ),
               (route) => false,
             );
           },
+        ),
+      ));
+      return;
+    }
+    final destination = PrimaryDestination.values[index];
+    final navigator = _appNavigatorKey.currentState;
+    if (navigator == null) return;
+    _appPageState.setPage(destination.name, selectedPrimaryIndex: index, customizing: false);
+    navigator.pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(
+        settings: RouteSettings(name: '/main/${destination.name}'),
+        builder: (_) => MainScreen(initialDestination: destination),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[_appPageState, AppController.instance]),
+      builder: (context, _) {
+        final selectedIndex = _appPageState.primaryIndex.clamp(0, 2).toInt();
+        final profile = AppController.instance.currentProfile;
+        final profileAvatar = profile == null
+            ? const Icon(Icons.person_outline_rounded)
+            : _MainProfileAvatar(profile: profile, size: 30);
+        if (vertical) {
+          return Material(
+            color: const Color(0xF20B0B0B),
+            child: NavigationRail(
+              backgroundColor: const Color(0xF20B0B0B),
+              selectedIndex: selectedIndex,
+              labelType: NavigationRailLabelType.all,
+              destinations: <NavigationRailDestination>[
+                const NavigationRailDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: Text('Home')),
+                const NavigationRailDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: Text('Watch')),
+                const NavigationRailDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: Text('Friends')),
+                const NavigationRailDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: Text('More')),
+                NavigationRailDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: const Text('Profile')),
+              ],
+              onDestinationSelected: (index) => _select(context, index),
+            ),
+          );
+        }
+        return NavigationBar(
+          height: 84,
+          selectedIndex: selectedIndex,
+          destinations: <NavigationDestination>[
+            const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            const NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Watch'),
+            const NavigationDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: 'Friends'),
+            const NavigationDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: 'More'),
+            NavigationDestination(icon: profileAvatar, selectedIcon: profileAvatar, label: 'Profile'),
+          ],
+          onDestinationSelected: (index) => _select(context, index),
         );
       },
     );
@@ -5081,13 +5123,11 @@ void _showGlobalMore() {
       },
       onStreamingUpgrades: () {
         Navigator.of(sheetContext).pop();
-        push(const StreamingUpgradeCenterScreen(),
-            routeName: '/app/page/streaming-upgrades');
+        push(const StreamingUpgradeCenterScreen(), routeName: '/app/page/streaming-upgrades');
       },
       onJellyfinPlugins: () {
         Navigator.of(sheetContext).pop();
-        push(const JellyfinPluginsHubScreen(),
-            routeName: '/app/page/jellyfin-plugins');
+        push(const JellyfinPluginsHubScreen(), routeName: '/app/page/jellyfin-plugins');
       },
       onImport: () {
         Navigator.of(sheetContext).pop();
@@ -5193,71 +5233,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         PrimaryDestination.friends => 'Friends',
       };
 
-  Future<void> _messageAccountProfile(String targetProfileId) async {
-    final controller = AppController.instance;
-    final profile = controller.currentProfile;
-    if (profile == null || !controller.backendApi.isAuthenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: UniversalText('Sign in to message account profiles.')),
-      );
-      return;
-    }
-    try {
-      final result =
-          await controller.backendApi.createSocialAccountConversation(
-        profileId: profile.id,
-        targetProfileId: targetProfileId,
-      );
-      final conversation = result['conversation'] is Map
-          ? Map<String, dynamic>.from(result['conversation'] as Map)
-          : <String, dynamic>{};
-      final conversationId = conversation['id']?.toString();
-      if (conversationId == null || conversationId.isEmpty || !mounted) return;
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil<void>(
-        MaterialPageRoute<void>(
-          settings: const RouteSettings(name: '/main/friends'),
-          builder: (_) => MainScreen(
-            initialDestination: PrimaryDestination.friends,
-            initialConversationId: conversationId,
-          ),
-        ),
-        (route) => false,
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(error.toString().replaceFirst('Exception: ', ''))),
-      );
-    }
-  }
-
-  void _openProfiles() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        settings: const RouteSettings(name: '/app/profiles'),
-        builder: (_) => ProfileSelectionScreen(
-          onOpened: () => _appPageState.setPage('profiles',
-              selectedPrimaryIndex: 0, customizing: false),
-          onProfileSelected: (selectionContext) {
-            Navigator.of(selectionContext, rootNavigator: true)
-                .pushAndRemoveUntil<void>(
-              MaterialPageRoute<void>(
-                settings: const RouteSettings(name: '/main/home'),
-                builder: (_) => const MainScreen(
-                    initialDestination: PrimaryDestination.home),
-              ),
-              (route) => false,
-            );
-          },
-        ),
-      ),
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
-  }
 
   Widget _pageFor(PrimaryDestination destination) {
     switch (destination) {
@@ -5266,7 +5241,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           showAppBar: false,
           onRefresh: () => setState(() {}),
           onNotifications: null,
-          onMessageProfile: _messageAccountProfile,
         );
       case PrimaryDestination.library:
         return const LibraryHubScreen();
@@ -5379,7 +5353,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 );
               },
               onSurpriseMe: _showSurpriseMe,
-              onProfile: _openProfiles,
             ),
             Expanded(
               child: AnimatedSwitcher(
@@ -5463,7 +5436,6 @@ class AppShellHeader extends StatefulWidget {
   final String pageId;
   final ValueChanged<String> onSearch;
   final VoidCallback onSurpriseMe;
-  final VoidCallback onProfile;
 
   const AppShellHeader({
     super.key,
@@ -5471,7 +5443,6 @@ class AppShellHeader extends StatefulWidget {
     required this.pageId,
     required this.onSearch,
     required this.onSurpriseMe,
-    required this.onProfile,
   });
 
   @override
@@ -5566,11 +5537,6 @@ class _AppShellHeaderState extends State<AppShellHeader> {
               icon: const Icon(Icons.shuffle_rounded),
             ),
           PageCustomizeButton(pageId: widget.pageId),
-          IconButton(
-            tooltip: 'Profiles',
-            onPressed: widget.onProfile,
-            icon: const Icon(Icons.account_circle_outlined),
-          ),
         ],
       ),
     );
@@ -5668,11 +5634,8 @@ class _MoreActionsSheet extends StatelessWidget {
                   Icons.dns_rounded, onHomeServer),
             ],
           ),
-          _moreCard(
-              Icons.auto_awesome_rounded,
-              'Streaming Upgrade Center',
-              'Watchlist, Jellyfin, search, profiles and media shortcuts',
-              onStreamingUpgrades),
+          _moreCard(Icons.auto_awesome_rounded, 'Streaming Upgrade Center',
+              'Watchlist, Jellyfin, search, profiles and media shortcuts', onStreamingUpgrades),
           _moreCard(
               Icons.extension_rounded,
               'Jellyfin Plugins',
@@ -5817,7 +5780,6 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onNotifications;
   final HomeCustomization? previewSettings;
   final bool showAppBar;
-  final ValueChanged<String>? onMessageProfile;
 
   const HomeScreen({
     super.key,
@@ -5825,7 +5787,6 @@ class HomeScreen extends StatefulWidget {
     this.onNotifications,
     this.previewSettings,
     this.showAppBar = true,
-    this.onMessageProfile,
   });
 
   @override
@@ -5845,6 +5806,11 @@ class _HomeScreenState extends State<HomeScreen>
     // Keep Home previewable before a home-server scan completes; Smart Search
     // can immediately find the explicitly labeled, non-playable demo entries.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
+    // Seed personalized New Albums and library-aware music discovery as soon
+    // as the active profile opens Home (rather than waiting for the Music tab).
+    unawaited(MusicLibraryStore.instance.initializeForProfile(
+      AppController.instance.currentProfile?.id,
+    ));
     if (AppController.instance.backendApi.isAuthenticated) {
       unawaited(_syncHomeServerMedia());
     }
@@ -6008,14 +5974,17 @@ class _HomeScreenState extends State<HomeScreen>
       ...watched,
       ...library,
     ];
+    final configuredHeroCount = settings.heroItemCount.clamp(1, 40).toInt();
     for (final item in homeHeroCandidates) {
-      if (homeHeroItems.length >= 8) break;
-      if (homeHeroSeen.add(item.id)) homeHeroItems.add(item);
+      if (homeHeroSeen.add(item.id)) {
+        homeHeroItems.add(item);
+        if (homeHeroItems.length >= configuredHeroCount) break;
+      }
     }
-    // If the current catalog is sparse, still render titles even if poster art
-    // has not finished importing yet.
+    // If the catalog is sparse, show the titles available up to the configured
+    // count, rather than silently reverting to every catalog item.
     if (homeHeroItems.isEmpty && library.isNotEmpty) {
-      homeHeroItems.addAll(library.take(8));
+      homeHeroItems.addAll(library.take(configuredHeroCount));
     }
 
     return Scaffold(
@@ -6130,7 +6099,6 @@ class _HomeScreenState extends State<HomeScreen>
                 internationalMovies: internationalMovies,
                 internationalShows: internationalShows,
                 profile: profile,
-                onMessageProfile: widget.onMessageProfile,
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
@@ -6140,19 +6108,19 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-String _normalizeOwnedAlbumLookup(String value) =>
-    value.toLowerCase().trim().replaceAll(
-          RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-          '',
-        );
+String _normalizeOwnedAlbumLookup(String value) => value.toLowerCase().trim().replaceAll(
+      RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+      '',
+    );
 
-List<Map<String, dynamic>> _localTracksForHomeAlbum(
-    String title, String artist) {
+List<Map<String, dynamic>> _localTracksForHomeAlbum(String title, String artist) {
   final wantedTitle = _normalizeOwnedAlbumLookup(title);
   final wantedArtist = _normalizeOwnedAlbumLookup(artist);
   if (wantedTitle.isEmpty) return <Map<String, dynamic>>[];
   final titleMatches = MusicLibraryStore.instance.tracks
-      .where((track) => _normalizeOwnedAlbumLookup(track.album) == wantedTitle)
+      .where((track) => !track.id.startsWith('demo-catalog-track-') &&
+          !track.id.startsWith('demo-preview-album-track-') &&
+          _normalizeOwnedAlbumLookup(track.album) == wantedTitle)
       .toList(growable: false);
   if (titleMatches.isEmpty) return <Map<String, dynamic>>[];
   final artistMatches = wantedArtist.isEmpty
@@ -6169,8 +6137,10 @@ List<Map<String, dynamic>> _localTracksForHomeAlbum(
   return [
     for (var index = 0; index < selected.length; index++)
       <String, dynamic>{
+        'id': selected[index].id,
         'title': selected[index].title,
         'artist': selected[index].artist,
+        'album': selected[index].album,
         'durationMs': selected[index].duration.inMilliseconds,
         'trackNumber': index + 1,
         'artworkUrl': selected[index].artworkUrl ?? '',
@@ -6181,6 +6151,42 @@ List<Map<String, dynamic>> _localTracksForHomeAlbum(
 
 bool _isAlbumInLocalMusicLibrary(String title, String artist) =>
     _localTracksForHomeAlbum(title, artist).isNotEmpty;
+
+void _playHomeAlbumLocalTrack(Map<String, dynamic> row) {
+  final id = row['id']?.toString() ?? '';
+  if (id.isEmpty) return;
+  for (final track in MusicLibraryStore.instance.tracks) {
+    if (track.id == id && (track.audioUrl?.trim().isNotEmpty ?? false)) {
+      unawaited(MusicPlaybackController.instance.play(track));
+      return;
+    }
+  }
+}
+
+final Map<String, String> _homeAlbumHoverPreviewTrackIds = <String, String>{};
+
+void _handleHomeAlbumHover(String albumTitle, String artistName, bool hovering) {
+  final key = '${_normalizeOwnedAlbumLookup(artistName)}|${_normalizeOwnedAlbumLookup(albumTitle)}';
+  final playback = MusicPlaybackController.instance;
+  if (hovering) {
+    final candidates = MusicLibraryStore.instance.tracks.where((track) =>
+      !track.id.startsWith('demo-catalog-track-') &&
+      !track.id.startsWith('demo-preview-album-track-') &&
+      (track.audioUrl?.trim().isNotEmpty ?? false) &&
+      _normalizeOwnedAlbumLookup(track.album) == _normalizeOwnedAlbumLookup(albumTitle) &&
+      _normalizeOwnedAlbumLookup(track.artist) == _normalizeOwnedAlbumLookup(artistName)).toList(growable: false);
+    if (candidates.isEmpty) return;
+    final index = DateTime.now().microsecondsSinceEpoch.abs() % candidates.length;
+    final track = candidates[index];
+    _homeAlbumHoverPreviewTrackIds[key] = track.id;
+    unawaited(playback.play(track));
+    return;
+  }
+  final previewId = _homeAlbumHoverPreviewTrackIds.remove(key);
+  if (previewId != null && playback.currentTrack?.id == previewId && playback.isPlaying) {
+    unawaited(playback.toggle());
+  }
+}
 
 List<Widget> _buildHomeSectionSlivers(
   BuildContext context,
@@ -6196,7 +6202,6 @@ List<Widget> _buildHomeSectionSlivers(
   required List<MediaItem> internationalMovies,
   required List<MediaItem> internationalShows,
   required Profile? profile,
-  required ValueChanged<String>? onMessageProfile,
 }) {
   if (!settings.isSectionVisible(section)) return const <Widget>[];
 
@@ -6212,17 +6217,19 @@ List<Widget> _buildHomeSectionSlivers(
             ),
             child: HomeHeroCarousel(
               items: homeHeroItems,
+              // More Info must always show details, even when the media has a playable file.
               onOpen: (media) => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
-                  settings: RouteSettings(
-                    name: media.playbackUrl?.trim().isNotEmpty == true
-                        ? '/app/player'
-                        : '/app/details',
-                  ),
-                  builder: (_) => media.playbackUrl?.trim().isNotEmpty == true
-                      ? PlayerScreen(media: media)
-                      : MediaDetailsScreen(media: media),
+                  settings: const RouteSettings(name: '/app/details'),
+                  builder: (_) => MediaDetailsScreen(media: media),
+                ),
+              ),
+              onPlay: (media) => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/player'),
+                  builder: (_) => PlayerScreen(media: media),
                 ),
               ),
             ),
@@ -6243,16 +6250,7 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Channels':
       return const <Widget>[SliverToBoxAdapter(child: HomeChannelsSection())];
     case 'Media Intelligence Tools':
-      return const <Widget>[
-        SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())
-      ];
-    case 'Account Activity':
-      return <Widget>[
-        SliverToBoxAdapter(
-          child:
-              AccountProfileActivityStrip(onMessageProfile: onMessageProfile),
-        ),
-      ];
+      return const <Widget>[SliverToBoxAdapter(child: HomeMediaIntelligenceToolsShelf())];
     case 'Friends Stories':
       return profile != null && StoryPlacementStore.showsOnHome(profile)
           ? <Widget>[
@@ -6282,8 +6280,7 @@ List<Widget> _buildHomeSectionSlivers(
           ),
         ),
         SliverToBoxAdapter(
-          child: MediaHorizontalList(
-              media: internationalMovies, enableHomePreview: true),
+          child: MediaHorizontalList(media: internationalMovies, enableHomePreview: true),
         ),
       ];
     case 'International Shows':
@@ -6296,8 +6293,7 @@ List<Widget> _buildHomeSectionSlivers(
           ),
         ),
         SliverToBoxAdapter(
-          child: MediaHorizontalList(
-              media: internationalShows, enableHomePreview: true),
+          child: MediaHorizontalList(media: internationalShows, enableHomePreview: true),
         ),
       ];
     case 'New Albums':
@@ -6306,6 +6302,25 @@ List<Widget> _buildHomeSectionSlivers(
           child: SpotifyHomeAlbumsShelf(
             isOwnedAlbum: _isAlbumInLocalMusicLibrary,
             localTracksForAlbum: _localTracksForHomeAlbum,
+            prepareMusicLibrary: () => MusicLibraryStore.instance.initializeForProfile(
+              AppController.instance.currentProfile?.id,
+            ),
+            ownedArtistNames: () {
+              final tracks = MusicLibraryStore.instance.tracks
+                  .where((track) => !track.id.startsWith('demo-catalog-track-') &&
+                      !track.id.startsWith('demo-preview-album-track-'));
+              final names = <String>{};
+              for (final track in tracks) {
+                final primary = track.artist.trim();
+                if (primary.isNotEmpty) names.add(primary);
+                for (final featured in track.featuredArtists) {
+                  if (featured.trim().isNotEmpty) names.add(featured.trim());
+                }
+              }
+              return names.toList(growable: false);
+            },
+            onAlbumHover: _handleHomeAlbumHover,
+            onPlayLocalTrack: _playHomeAlbumLocalTrack,
           ),
         ),
       ];
@@ -6324,12 +6339,9 @@ List<Widget> _buildHomeSectionSlivers(
     case 'All Library':
       return _homeMediaRail(section, library, 'Everything in your library');
     case 'Library Recommendations':
-      return _homeMediaRail(
-          section, recommendations, 'Picked for your profile');
+      return _homeMediaRail(section, recommendations, 'Picked for your profile');
     case 'Themed Episodes':
-      return const <Widget>[
-        SliverToBoxAdapter(child: HomeThemedEpisodesSection())
-      ];
+      return const <Widget>[SliverToBoxAdapter(child: HomeThemedEpisodesSection())];
     case 'You Might Also Like':
       return <Widget>[
         SliverToBoxAdapter(
@@ -6341,15 +6353,13 @@ List<Widget> _buildHomeSectionSlivers(
     case 'Because You Watched':
       return <Widget>[
         SliverToBoxAdapter(
-          child: HomeReasonedRecommendationShelves(
-              library: library, watched: watched),
+          child: HomeReasonedRecommendationShelves(library: library, watched: watched),
         ),
       ];
     case 'People & Cast Recommendations':
       return <Widget>[
         SliverToBoxAdapter(
-          child: HomeBecauseYouWatchedPeopleShelves(
-              library: library, watched: watched),
+          child: HomeBecauseYouWatchedPeopleShelves(library: library, watched: watched),
         ),
       ];
     case 'Friends & Communities':
@@ -6380,8 +6390,7 @@ List<Widget> _homeMediaRail(
   return <Widget>[
     SliverToBoxAdapter(
       child: _PremiumSectionHeader(
-        title:
-            title == 'Library Recommendations' ? 'Recommended for You' : title,
+        title: title == 'Library Recommendations' ? 'Recommended for You' : title,
         subtitle: subtitle,
       ),
     ),
@@ -6397,40 +6406,29 @@ List<Widget> _homeMediaRail(
 
 String _homeSectionDescription(String section) => switch (section) {
       'Hero Banner' => 'Featured movie/show artwork near the top of Home.',
-      'Recommendations & Mood' =>
-        'TMDB recommendations and mood-based discovery.',
-      'Franchise Progress' =>
-        'Saga timelines and franchise completion progress.',
-      'Channels' =>
-        'Channel shortcuts, including live TV and curated channels.',
-      'Account Activity' =>
-        'Activity and presence from other account profiles.',
+      'Recommendations & Mood' => 'TMDB recommendations and mood-based discovery.',
+      'Franchise Progress' => 'Saga timelines and franchise completion progress.',
+      'Channels' => 'Channel shortcuts, including live TV and curated channels.',
       'Friends Stories' => 'Stories shared by friends on the Home page.',
       'Storage Progress' => 'Local/server storage progress bar.',
       'Continue Watching' => 'Resume movies and episodes you started.',
       'Themed Episodes' => 'Seasonal and themed episode recommendations.',
       'You Might Also Like' => 'Suggestions based on your viewing history.',
       'Collections' => 'Curated, automatic, and personal collection shelves.',
-      'Because You Watched' =>
-        'Explainable recommendations related to recent viewing.',
-      'People & Cast Recommendations' =>
-        'More titles connected by known cast and creators.',
-      'Library Recommendations' =>
-        'Recommendations already available in your catalog.',
+      'Because You Watched' => 'Explainable recommendations related to recent viewing.',
+      'People & Cast Recommendations' => 'More titles connected by known cast and creators.',
+      'Library Recommendations' => 'Recommendations already available in your catalog.',
       'Friends & Communities' => 'Friend feed, suggestions, and communities.',
       'Recently Watched' => 'Titles you watched most recently.',
       'Movies' => 'Your movie collection.',
       'TV Shows' => 'Your TV collection.',
       'New Additions' => 'Recently imported movies and shows.',
       'All Library' => 'Every title in your library in one shelf.',
-      'International Movies' =>
-        'International titles using their original display names.',
-      'International Shows' =>
-        'International series using their original display names.',
+      'International Movies' => 'International titles using their original display names.',
+      'International Shows' => 'International series using their original display names.',
       'New Albums' => 'New album covers from Spotify.',
       'Music & Film' => 'Resume locally playable music.',
-      'Seasonal Collections' =>
-        'Calendar-based collections for the current season.',
+      'Seasonal Collections' => 'Calendar-based collections for the current season.',
       'Media Intelligence Tools' => 'Discovery, insight, and media tools.',
       _ => 'Show or hide this section on Home.',
     };
@@ -6600,16 +6598,14 @@ class _HomeMusicPreviewCardState extends State<_HomeMusicPreviewCard> {
                                 errorBuilder: (_, __, ___) => const ColoredBox(
                                   color: Color(0xFF252525),
                                   child: Center(
-                                    child: Icon(Icons.music_note_rounded,
-                                        size: 36),
+                                    child: Icon(Icons.music_note_rounded, size: 36),
                                   ),
                                 ),
                               )
                             : const ColoredBox(
                                 color: Color(0xFF252525),
                                 child: Center(
-                                  child:
-                                      Icon(Icons.music_note_rounded, size: 36),
+                                  child: Icon(Icons.music_note_rounded, size: 36),
                                 ),
                               ),
                       ),
@@ -7172,12 +7168,7 @@ class _MediaCardState extends State<MediaCard> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: _hovering && widget.enableHomePreview
-              ? [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: .55),
-                      blurRadius: 26,
-                      offset: const Offset(0, 8))
-                ]
+              ? [BoxShadow(color: Colors.black.withValues(alpha: .55), blurRadius: 26, offset: const Offset(0, 8))]
               : const [],
         ),
         child: InkWell(
@@ -7185,8 +7176,7 @@ class _MediaCardState extends State<MediaCard> {
           onTap: () {
             if (widget.enableHomePreview) HomeHoverPreviewStore.clear(media.id);
             final normalizedType = media.type.trim().toLowerCase();
-            final isAlbum = normalizedType.contains('album') ||
-                normalizedType == 'soundtrack';
+            final isAlbum = normalizedType.contains('album') || normalizedType == 'soundtrack';
             Navigator.push(
               context,
               MaterialPageRoute<void>(
@@ -7206,8 +7196,7 @@ class _MediaCardState extends State<MediaCard> {
                     fit: StackFit.expand,
                     children: [
                       AnimatedScale(
-                        scale:
-                            _hovering && widget.enableHomePreview ? 1.045 : 1,
+                        scale: _hovering && widget.enableHomePreview ? 1.045 : 1,
                         duration: const Duration(milliseconds: 220),
                         curve: Curves.easeOutCubic,
                         child: CatalogPosterImage(
@@ -7234,10 +7223,7 @@ class _MediaCardState extends State<MediaCard> {
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: .05),
-                                  Colors.black.withValues(alpha: .84)
-                                ],
+                                colors: [Colors.black.withValues(alpha: .05), Colors.black.withValues(alpha: .84)],
                               ),
                             ),
                           ),
@@ -7245,38 +7231,25 @@ class _MediaCardState extends State<MediaCard> {
                       if (_hovering && widget.enableHomePreview)
                         Center(
                           child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: const BoxDecoration(
-                                color: Colors.white, shape: BoxShape.circle),
-                            child: const Icon(Icons.play_arrow_rounded,
-                                color: Colors.black, size: 30),
+                            width: 48, height: 48,
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            child: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 30),
                           ),
                         ),
                       if (_hovering && widget.enableHomePreview)
                         Positioned(
-                          left: 10,
-                          right: 10,
-                          bottom: 10,
+                          left: 10, right: 10, bottom: 10,
                           child: Text(
                             media.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2, overflow: TextOverflow.ellipsis,
                             style: CinematicTitleFonts.captionStyle(
-                              media,
-                              baseFontSize: 15,
-                              color: Colors.white,
-                            ).copyWith(
-                                fontWeight: FontWeight.w900,
-                                shadows: const [
-                                  Shadow(color: Colors.black87, blurRadius: 12)
-                                ]),
+                              media, baseFontSize: 15, color: Colors.white,
+                            ).copyWith(fontWeight: FontWeight.w900, shadows: const [Shadow(color: Colors.black87, blurRadius: 12)]),
                           ),
                         ),
                       if (widget.showOwnership)
                         Positioned(
-                          top: 6,
-                          left: 6,
+                          top: 6, left: 6,
                           child: RecommendationOwnershipBadge(
                             isOwned: AppController.instance.isOwned(media.id),
                             compact: true,
@@ -7289,23 +7262,15 @@ class _MediaCardState extends State<MediaCard> {
               const SizedBox(height: 7),
               Text(
                 media.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: CinematicTitleFonts.captionStyle(
-                  media,
-                  baseFontSize: 13.2,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  media, baseFontSize: 13.2, color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               if (media.displayYearLabel != null)
                 Text(
-                  [
-                    media.displayYearLabel!,
-                    if (media.displayEditionLabel != null)
-                      media.displayEditionLabel!
-                  ].join(' • '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  [media.displayYearLabel!, if (media.displayEditionLabel != null) media.displayEditionLabel!].join(' • '),
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                 ),
             ],
@@ -7333,19 +7298,17 @@ class _CatalogAlbumDetailsEntryScreenState
     extends State<CatalogAlbumDetailsEntryScreen> {
   late final Future<String?> _spotifyAlbumId = _resolveAlbumId();
 
-  static String _normalize(String value) =>
-      value.toLowerCase().trim().replaceAll(
-            RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
-            '',
-          );
+  static String _normalize(String value) => value.toLowerCase().trim().replaceAll(
+        RegExp(r"[\s\-_.,:;!?()\[\]{}\\/]+"),
+        '',
+      );
 
   Future<String?> _resolveAlbumId() async {
     if (!AppController.instance.isBackendAuthenticated) return null;
     final title = widget.media.title.trim();
     if (title.isEmpty) return null;
     try {
-      final payload =
-          await AppController.instance.backendApi.searchMusicCatalog(
+      final payload = await AppController.instance.backendApi.searchMusicCatalog(
         title,
         type: 'album',
         limit: 10,
@@ -7363,8 +7326,7 @@ class _CatalogAlbumDetailsEntryScreenState
       final matches = raw
           .whereType<Map>()
           .map((value) => Map<String, dynamic>.from(value))
-          .where((value) =>
-              _normalize(value['title']?.toString() ?? '') == wantedTitle)
+          .where((value) => _normalize(value['title']?.toString() ?? '') == wantedTitle)
           .toList();
       if (matches.isEmpty) return null;
       matches.sort((a, b) {
@@ -7378,7 +7340,6 @@ class _CatalogAlbumDetailsEntryScreenState
                   release.startsWith(widget.media.releaseYear.toString()));
           return (hasArtist ? 0 : 2) + (yearMatch ? 0 : 1);
         }
-
         return score(a).compareTo(score(b));
       });
       final selected = matches.first;
@@ -7398,17 +7359,13 @@ class _CatalogAlbumDetailsEntryScreenState
 
   List<Map<String, dynamic>> _localTracksForAlbum() {
     final title = _normalize(widget.media.title);
-    final artistNames =
-        widget.media.music.map(_normalize).where((v) => v.isNotEmpty).toSet();
+    final artistNames = widget.media.music.map(_normalize).where((v) => v.isNotEmpty).toSet();
     var local = MusicLibraryStore.instance.tracks
         .where((track) => _normalize(track.album) == title)
         .toList(growable: false);
     if (artistNames.isNotEmpty) {
-      final artistMatches = local
-          .where((track) => artistNames.any((artist) =>
-              _normalize(track.artist).contains(artist) ||
-              artist.contains(_normalize(track.artist))))
-          .toList();
+      final artistMatches = local.where((track) => artistNames.any((artist) =>
+          _normalize(track.artist).contains(artist) || artist.contains(_normalize(track.artist)))).toList();
       if (artistMatches.isNotEmpty) local = artistMatches;
     }
     return [
@@ -7470,7 +7427,9 @@ class _CatalogAlbumDetailsEntryScreenState
       },
     );
   }
+
 }
+
 
 // ============================================================
 // ACTORS
@@ -8759,8 +8718,7 @@ class TrailersScreen extends StatelessWidget {
                 return Card(
                     child: ListTile(
                         leading: const Icon(Icons.play_circle_fill_rounded),
-                        title: LocalizedMediaText(media.title,
-                            preserveOriginal: true,
+                        title: LocalizedMediaText(media.title, preserveOriginal: true,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w800)),
                         subtitle: Text(media.type),
@@ -9012,14 +8970,30 @@ class _MainProfileAvatar extends StatelessWidget {
     final avatar = profile.avatarUrl;
     if (avatar != null && avatar.startsWith('avatar:')) {
       final index = int.tryParse(avatar.substring(6)) ?? 0;
-      const icons = [
+      const icons = <IconData>[
         Icons.person_rounded,
         Icons.face_rounded,
+        Icons.star_rounded,
+        Icons.favorite_rounded,
         Icons.pets_rounded,
-        Icons.smart_toy_rounded,
-        Icons.rocket_launch_rounded,
+        Icons.music_note_rounded,
+        Icons.movie_rounded,
         Icons.auto_awesome_rounded,
+        Icons.rocket_launch_rounded,
+        Icons.emoji_emotions_rounded,
+        Icons.public_rounded,
+        Icons.web_rounded,
+        Icons.shield_rounded,
+        Icons.bolt_rounded,
+        Icons.face_rounded, // Mouse Ears uses a stylized face badge.
+        Icons.flashlight_on,
+        Icons.pets_rounded,
+        Icons.sailing_rounded,
+        Icons.smart_toy_rounded,
+        Icons.verified_user_rounded,
       ];
+      final safeIndex = index.clamp(0, icons.length - 1).toInt();
+      final label = safeIndex == 18 ? 'G' : (safeIndex == 19 ? '007' : null);
       return Container(
         width: size,
         height: size,
@@ -9027,8 +9001,31 @@ class _MainProfileAvatar extends StatelessWidget {
           shape: BoxShape.circle,
           color: Colors.white.withValues(alpha: .08),
         ),
-        child: Icon(icons[index % icons.length],
-            size: size * .48, color: Colors.white70),
+        alignment: Alignment.center,
+        child: safeIndex == 14
+            ? SizedBox(
+                width: size * .58,
+                height: size * .58,
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.topLeft,
+                      child: CircleAvatar(radius: size * .13, backgroundColor: Colors.white),
+                    ),
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: CircleAvatar(radius: size * .13, backgroundColor: Colors.white),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: CircleAvatar(radius: size * .18, backgroundColor: Colors.white),
+                    ),
+                  ],
+                ),
+              )
+            : label != null
+                ? Text(label, style: TextStyle(color: Colors.white, fontSize: size * (label.length > 1 ? .30 : .48), fontWeight: FontWeight.w900))
+                : Icon(icons[safeIndex], size: size * .48, color: Colors.white70),
       );
     }
     if (avatar != null &&
@@ -9037,8 +9034,9 @@ class _MainProfileAvatar extends StatelessWidget {
           radius: size / 2, backgroundImage: NetworkImage(avatar));
     }
     if (avatar != null && avatar.isNotEmpty) {
-      return CircleAvatar(
-          radius: size / 2, backgroundImage: FileImage(File(avatar)));
+      final uri = Uri.tryParse(avatar);
+      final file = uri?.scheme == 'file' ? File.fromUri(uri!) : File(avatar);
+      return CircleAvatar(radius: size / 2, backgroundImage: FileImage(file));
     }
     return CircleAvatar(
         radius: size / 2,
@@ -9628,8 +9626,7 @@ class _GroupWatchDialogState extends State<GroupWatchDialog> {
                   left: 18,
                   right: 18,
                   bottom: 18,
-                  child: LocalizedMediaText(widget.media.title,
-                      preserveOriginal: true,
+                  child: LocalizedMediaText(widget.media.title, preserveOriginal: true,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -9756,8 +9753,7 @@ class _GroupWatchPreferencesScreenState
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    LocalizedMediaText(widget.media.title,
-                        preserveOriginal: true,
+                    LocalizedMediaText(widget.media.title, preserveOriginal: true,
                         style: const TextStyle(
                             fontSize: 19, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
@@ -10718,8 +10714,7 @@ class VerifiedBackupRecoveryCenterScreen extends StatelessWidget {
               const SizedBox(height: 8),
               const _RecoveryReadinessRow(
                   title: 'Server/off-site backup target configured',
-                  detail:
-                      'Not verified; separate from local settings snapshots'),
+                  detail: 'Not verified; separate from local settings snapshots'),
               const _RecoveryReadinessRow(
                   title: 'Latest backup manifest/checksum validated',
                   detail: 'Not verified from this client'),

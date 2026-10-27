@@ -166,22 +166,6 @@ Widget _memberNameLabel(Map<String, dynamic> member) {
   );
 }
 
-class _SocialReviewDraft {
-  const _SocialReviewDraft({
-    required this.media,
-    required this.score,
-    required this.body,
-    required this.shareToPage,
-    required this.communityIds,
-  });
-
-  final MediaItem media;
-  final double score;
-  final String body;
-  final bool shareToPage;
-  final List<String> communityIds;
-}
-
 /// Social center inspired by modern chat/feed products:
 /// - stories at the top of the feed
 /// - friend/community feed with lightweight reactions and comments
@@ -868,7 +852,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                   ]),
                   const SizedBox(height: 14),
                   const UniversalText(
-                    'Your page combines your social posts, media reviews, shorts, and community shares.',
+                    'Your page combines your social posts, shorts, and community shares.',
                     style: TextStyle(color: Colors.white60, height: 1.35),
                   ),
                   const SizedBox(height: 12),
@@ -880,11 +864,6 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                         onPressed: _busy ? null : _composePagePost,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
                         label: const UniversalText('Post or photo'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : _composeReview,
-                        icon: const Icon(Icons.rate_review_outlined),
-                        label: const UniversalText('Write a review'),
                       ),
                       OutlinedButton.icon(
                         onPressed: _busy ? null : () => _createShort(),
@@ -904,7 +883,7 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 leading: Icon(Icons.lock_outline_rounded),
                 title: UniversalText('Your friends-only page is ready'),
                 subtitle: UniversalText(
-                  'Share a post, a photo, or a media review to get started.',
+                  'Share a post or photo to get started.',
                 ),
               ),
             ),
@@ -1179,190 +1158,6 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
     });
   }
 
-  Future<void> _composeReview() async {
-    final profile = AppController.instance.currentProfile;
-    if (profile == null) return;
-    final media = AppController.instance.library;
-    if (media.isEmpty) {
-      _showMessage('Add media to your library before writing a review.');
-      return;
-    }
-    final communities = _list('communities')
-        .where((community) => community['joined'] == true)
-        .toList();
-    final draft = await _reviewDraftDialog(media, communities);
-    if (draft == null || draft.body.trim().isEmpty) return;
-
-    await _act(() async {
-      final label = _reviewLabel(draft.score);
-      final response = await AppController.instance.backendApi.submitReview(
-        mediaId: draft.media.id,
-        profileId: profile.id,
-        score: draft.score,
-        label: label,
-        text: draft.body.trim(),
-      );
-      final review = response['review'] is Map
-          ? Map<String, dynamic>.from(response['review'] as Map)
-          : <String, dynamic>{};
-      final reference = <String, dynamic>{
-        'type': 'review',
-        'reviewId': review['id']?.toString() ?? '',
-        'mediaId': draft.media.id,
-        'mediaTitle': draft.media.title,
-        'score': draft.score,
-        'label': label,
-      };
-      if (draft.shareToPage) {
-        await AppController.instance.backendApi.createSocialPost(
-          profileId: profile.id,
-          body: draft.body.trim(),
-          mediaReference: reference,
-        );
-      }
-      if (draft.communityIds.isNotEmpty) {
-        await AppController.instance.backendApi.createSocialPost(
-          profileId: profile.id,
-          body: draft.body.trim(),
-          communityIds: draft.communityIds,
-          mediaReference: reference,
-        );
-      }
-    });
-  }
-
-  Future<_SocialReviewDraft?> _reviewDraftDialog(
-    List<MediaItem> media,
-    List<Map<String, dynamic>> communities,
-  ) async {
-    final controller = TextEditingController();
-    var selectedMediaId = media.first.id;
-    var score = 8.0;
-    var shareToPage = true;
-    final selectedCommunities = <String>{};
-    final result = await showDialog<_SocialReviewDraft>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          scrollable: true,
-          title: const UniversalText('Write a media review'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: selectedMediaId,
-                decoration: const InputDecoration(labelText: 'Media'),
-                items: media
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item.id,
-                        child: Text(
-                          item.title,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setDialogState(() => selectedMediaId = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              Text('Score: ${score.toStringAsFixed(1)}/10'),
-              Slider(
-                min: 0,
-                max: 10,
-                divisions: 20,
-                value: score,
-                label: score.toStringAsFixed(1),
-                onChanged: (value) => setDialogState(() => score = value),
-              ),
-              TextField(
-                controller: controller,
-                maxLines: 5,
-                maxLength: 4000,
-                decoration: const InputDecoration(
-                  labelText: 'Your review',
-                ),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const UniversalText('Share to My Page'),
-                subtitle:
-                    const UniversalText('Visible to your accepted friends'),
-                value: shareToPage,
-                onChanged: (value) => setDialogState(() => shareToPage = value),
-              ),
-              if (communities.isNotEmpty) ...[
-                const UniversalText(
-                  'Also share to communities',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                for (final community in communities)
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(community['name']?.toString() ?? 'Community'),
-                    value: selectedCommunities
-                        .contains(community['id'].toString()),
-                    onChanged: (selected) {
-                      setDialogState(() {
-                        final id = community['id'].toString();
-                        if (selected == true) {
-                          selectedCommunities.add(id);
-                        } else {
-                          selectedCommunities.remove(id);
-                        }
-                      });
-                    },
-                  ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const UniversalText('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final selected = media.firstWhere(
-                  (item) => item.id == selectedMediaId,
-                );
-                Navigator.pop(
-                  dialogContext,
-                  _SocialReviewDraft(
-                    media: selected,
-                    score: score,
-                    body: controller.text,
-                    shareToPage: shareToPage,
-                    communityIds: selectedCommunities.toList(),
-                  ),
-                );
-              },
-              child: const UniversalText('Save review'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    if (result != null && !result.shareToPage && result.communityIds.isEmpty) {
-      _showMessage('Choose My Page, at least one community, or both to share.');
-      return null;
-    }
-    return result;
-  }
-
-  String _reviewLabel(double score) => switch (score) {
-        >= 8.5 => 'Excellent',
-        >= 7 => 'Good',
-        >= 5 => 'Mixed',
-        _ => 'Poor',
-      };
-
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
@@ -1476,24 +1271,6 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
               post['body']?.toString() ?? '',
               style: const TextStyle(fontSize: 15, height: 1.4),
             ),
-            if (mediaReference['type'] == 'review') ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.rate_review_outlined, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${mediaReference['mediaTitle'] ?? 'Media'} · ${mediaReference['score'] ?? ''}/10',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
             if (mediaReference['type'] == 'product') ...[
               const SizedBox(height: 10),
               _socialProductCard(mediaReference),
@@ -2705,15 +2482,6 @@ class _SocialCenterScreenState extends State<SocialCenterScreen>
                 title: UniversalText('Short'),
                 subtitle: UniversalText(
                     'Quick vertical clip tied to a movie, show, or song.'),
-              ),
-            ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, 'review'),
-              child: const ListTile(
-                leading: Icon(Icons.star_rate_rounded),
-                title: UniversalText('Video review'),
-                subtitle: UniversalText(
-                    'Review a movie, show, or song in vertical format.'),
               ),
             ),
             SimpleDialogOption(

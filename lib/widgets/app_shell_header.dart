@@ -11,7 +11,6 @@ class AppShellHeader extends StatefulWidget {
   final String pageId;
   final ValueChanged<String> onSearch;
   final VoidCallback onSurpriseMe;
-  final VoidCallback onProfile;
 
   const AppShellHeader({
     super.key,
@@ -19,7 +18,6 @@ class AppShellHeader extends StatefulWidget {
     required this.pageId,
     required this.onSearch,
     required this.onSurpriseMe,
-    required this.onProfile,
   });
 
   @override
@@ -95,11 +93,6 @@ class _AppShellHeaderState extends State<AppShellHeader> {
               icon: const Icon(Icons.shuffle_rounded),
             ),
           PageCustomizeButton(pageId: widget.pageId),
-          IconButton(
-            tooltip: 'Profiles',
-            onPressed: widget.onProfile,
-            icon: const Icon(Icons.account_circle_outlined),
-          ),
         ],
       ),
     );

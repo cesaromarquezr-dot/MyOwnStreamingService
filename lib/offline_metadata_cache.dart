@@ -28,7 +28,7 @@ class OfflineMetadataCache {
     'releaseDate', 'editionReleaseYear', 'editionReleaseDate', 'editionName',
     'editionType', 'canonicalWorkId', 'editionFeatures', 'discType',
     'discRegion', 'discCollectionId', 'discCollectionTitle', 'discNumber',
-    'discTitleId', 'discTitle', 'discMarketCountry',
+    'discTitleId', 'discTitle', 'discMarketCountry', 'parentMediaId',
   };
 
   Future<void> save(Iterable<Map<String, dynamic>> media) async {

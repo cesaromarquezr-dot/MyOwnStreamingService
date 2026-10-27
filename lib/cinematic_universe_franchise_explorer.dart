@@ -35,8 +35,11 @@ class PersonAcrossUniverses {
 
 /// Shared grouping helpers used by both the explorer and actor detail pages.
 class UniverseFranchiseIndex {
-  static String normalize(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  static String normalize(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim();
 
   static List<MediaItem> visibleWorks(Iterable<MediaItem> source) {
     final profile = AppController.instance.currentProfile;
@@ -55,8 +58,8 @@ class UniverseFranchiseIndex {
   ) {
     final target = normalize(personName);
     if (target.isEmpty) return const <MediaItem>[];
-    return visibleWorks(source
-        .where((item) => item.actors.any((name) => normalize(name) == target)));
+    return visibleWorks(source.where((item) =>
+        item.actors.any((name) => normalize(name) == target)));
   }
 
   static List<UniverseFranchiseGroup> groups(
@@ -81,14 +84,12 @@ class UniverseFranchiseIndex {
         if (cleanName.isEmpty || cleanId.isEmpty) return;
         if (kind != null && kind != 'All' && kind != groupKind) return;
         final key = '$groupKind::$cleanId';
-        final record = byKey.putIfAbsent(
-            key,
-            () => <String, dynamic>{
-                  'id': cleanId,
-                  'name': cleanName,
-                  'kind': groupKind,
-                  'works': <String, MediaItem>{},
-                });
+        final record = byKey.putIfAbsent(key, () => <String, dynamic>{
+              'id': cleanId,
+              'name': cleanName,
+              'kind': groupKind,
+              'works': <String, MediaItem>{},
+            });
         (record['works'] as Map<String, MediaItem>)[item.id] = item;
       }
 
@@ -192,13 +193,11 @@ class UniverseFranchiseIndex {
         final clean = actor.trim();
         final key = normalize(clean);
         if (key.isEmpty) continue;
-        final entry = people.putIfAbsent(
-            key,
-            () => <String, dynamic>{
-                  'name': clean,
-                  'universes': <String>{},
-                  'works': <String, MediaItem>{},
-                });
+        final entry = people.putIfAbsent(key, () => <String, dynamic>{
+              'name': clean,
+              'universes': <String>{},
+              'works': <String, MediaItem>{},
+            });
         (entry['universes'] as Set<String>).addAll(universeNames);
         (entry['works'] as Map<String, MediaItem>)[item.id] = item;
       }
@@ -208,8 +207,7 @@ class UniverseFranchiseIndex {
       final universes = (entry['universes'] as Set<String>).toList()..sort();
       if (universes.length < 2) continue;
       final works = (entry['works'] as Map<String, MediaItem>).values.toList()
-        ..sort(
-            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       result.add(PersonAcrossUniverses(
         name: entry['name'] as String,
         universeNames: universes,
@@ -302,14 +300,10 @@ class _CinematicUniverseFranchiseExplorerScreenState
             decoration: const InputDecoration(labelText: 'Explore'),
             items: const [
               DropdownMenuItem(value: 'All', child: Text('All connections')),
-              DropdownMenuItem(
-                  value: 'Universe', child: Text('Cinematic universes')),
+              DropdownMenuItem(value: 'Universe', child: Text('Cinematic universes')),
               DropdownMenuItem(value: 'Franchise', child: Text('Franchises')),
-              DropdownMenuItem(
-                  value: 'Continuity', child: Text('Continuities & timelines')),
-              DropdownMenuItem(
-                  value: 'People across universes',
-                  child: Text('People across universes')),
+              DropdownMenuItem(value: 'Continuity', child: Text('Continuities & timelines')),
+              DropdownMenuItem(value: 'People across universes', child: Text('People across universes')),
             ],
             onChanged: (value) => setState(() => _category = value ?? 'All'),
           ),
@@ -317,18 +311,15 @@ class _CinematicUniverseFranchiseExplorerScreenState
           if (_category == 'People across universes') ...[
             if (people.isEmpty)
               const _UniverseEmptyState(
-                message:
-                    'No cross-universe performers are linked yet. Add explicit universe memberships to credited titles to populate this section.',
+                message: 'No cross-universe performers are linked yet. Add explicit universe memberships to credited titles to populate this section.',
               )
             else
               for (final person in people)
                 Card(
                   child: ListTile(
-                    leading:
-                        const CircleAvatar(child: Icon(Icons.person_outline)),
+                    leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                     title: Text(person.name),
-                    subtitle: Text(
-                        '${person.universeNames.join(' · ')}\n${person.works.length} linked title${person.works.length == 1 ? '' : 's'}'),
+                    subtitle: Text('${person.universeNames.join(' · ')}\n${person.works.length} linked title${person.works.length == 1 ? '' : 's'}'),
                     isThreeLine: true,
                     trailing: const Icon(Icons.chevron_right),
                     onTap: widget.onActorTap == null
@@ -338,8 +329,7 @@ class _CinematicUniverseFranchiseExplorerScreenState
                 ),
           ] else if (groups.isEmpty)
             const _UniverseEmptyState(
-              message:
-                  'No verified universe, franchise or continuity metadata matches this search yet. The explorer does not guess memberships from title names or shared actors.',
+              message: 'No verified universe, franchise or continuity metadata matches this search yet. The explorer does not guess memberships from title names or shared actors.',
             )
           else
             for (final group in groups)
@@ -347,14 +337,12 @@ class _CinematicUniverseFranchiseExplorerScreenState
                 child: ListTile(
                   leading: Icon(_iconForKind(group.kind)),
                   title: Text(group.name),
-                  subtitle: Text(
-                      '${group.kind} · ${group.works.length} linked title${group.works.length == 1 ? '' : 's'}'),
+                  subtitle: Text('${group.kind} · ${group.works.length} linked title${group.works.length == 1 ? '' : 's'}'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push<void>(
                     context,
                     MaterialPageRoute<void>(
-                      builder: (_) =>
-                          UniverseFranchiseDetailsScreen(group: group),
+                      builder: (_) => UniverseFranchiseDetailsScreen(group: group),
                     ),
                   ),
                 ),
@@ -496,8 +484,7 @@ class _UniverseFranchiseDetailsScreenState
     required String label,
     required IconData icon,
     required _UniverseCollectionView view,
-  }) =>
-      ChoiceChip(
+  }) => ChoiceChip(
         selected: _view == view,
         avatar: Icon(icon, size: 18),
         label: Text(label),
@@ -531,8 +518,7 @@ class _UniverseFranchiseDetailsScreenState
                     '${item.franchiseName == null ? '' : '\nFranchise: ${item.franchiseName}'}'
                     '${item.continuityName == null ? '' : '\nContinuity: ${item.continuityName}'}',
                   ),
-                  isThreeLine:
-                      item.franchiseName != null || item.continuityName != null,
+                  isThreeLine: item.franchiseName != null || item.continuityName != null,
                   trailing: const Icon(Icons.open_in_new),
                   onTap: () => _openMedia(item),
                 ),
@@ -542,8 +528,7 @@ class _UniverseFranchiseDetailsScreenState
       case _UniverseCollectionView.grid:
         return LayoutBuilder(
           builder: (context, constraints) {
-            final columns =
-                (constraints.maxWidth / 155).floor().clamp(2, 5).toInt();
+            final columns = (constraints.maxWidth / 155).floor().clamp(2, 5).toInt();
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -599,12 +584,8 @@ class _UniverseFranchiseDetailsScreenState
                       DataCell(Text(item.title), onTap: () => _openMedia(item)),
                       DataCell(Text(item.type)),
                       DataCell(Text(item.releaseYear?.toString() ?? '—')),
-                      DataCell(Text((item.franchiseName ?? '').trim().isEmpty
-                          ? '—'
-                          : item.franchiseName!)),
-                      DataCell(Text((item.continuityName ?? '').trim().isEmpty
-                          ? '—'
-                          : item.continuityName!)),
+                      DataCell(Text((item.franchiseName ?? '').trim().isEmpty ? '—' : item.franchiseName!)),
+                      DataCell(Text((item.continuityName ?? '').trim().isEmpty ? '—' : item.continuityName!)),
                     ],
                   ),
               ],
@@ -634,11 +615,7 @@ class _CollectionPosterCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                  child: _CollectionPoster(
-                      item: item,
-                      width: double.infinity,
-                      height: double.infinity)),
+              Expanded(child: _CollectionPoster(item: item, width: double.infinity, height: double.infinity)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(9, 8, 9, 9),
                 child: Column(
@@ -655,8 +632,7 @@ class _CollectionPosterCard extends StatelessWidget {
                       '${item.releaseYear ?? 'Year unknown'}${showType ? ' · ${item.type}' : ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(color: Colors.white60, fontSize: 12),
+                      style: const TextStyle(color: Colors.white60, fontSize: 12),
                     ),
                   ],
                 ),
@@ -689,9 +665,7 @@ class _CollectionPoster extends StatelessWidget {
         height: targetHeight,
         child: const ColoredBox(
           color: Color(0xFF222222),
-          child: Center(
-              child:
-                  Icon(Icons.movie_outlined, color: Colors.white54, size: 28)),
+          child: Center(child: Icon(Icons.movie_outlined, color: Colors.white54, size: 28)),
         ),
       );
     }
@@ -705,9 +679,7 @@ class _CollectionPoster extends StatelessWidget {
         height: targetHeight,
         child: const ColoredBox(
           color: Color(0xFF222222),
-          child: Center(
-              child: Icon(Icons.broken_image_outlined,
-                  color: Colors.white54, size: 28)),
+          child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 28)),
         ),
       ),
     );
@@ -730,11 +702,8 @@ class ActorUniverseFranchiseSection extends StatelessWidget {
       works,
       personName: actorName,
     );
-    final linkedWorkIds = <String>{
-      for (final group in groups) ...group.works.map((item) => item.id)
-    };
-    final otherWorks =
-        works.where((item) => !linkedWorkIds.contains(item.id)).toList();
+    final linkedWorkIds = <String>{for (final group in groups) ...group.works.map((item) => item.id)};
+    final otherWorks = works.where((item) => !linkedWorkIds.contains(item.id)).toList();
 
     return _ActorUniverseSectionCard(
       actorName: actorName,
@@ -769,39 +738,28 @@ class _ActorUniverseSectionCard extends StatelessWidget {
             const Row(children: [
               Icon(Icons.hub_outlined),
               SizedBox(width: 9),
-              Text('Universes & Franchises',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              Text('Universes & Franchises', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
             ]),
             const SizedBox(height: 4),
-            Text(
-                'Projects connected to $actorName, grouped by recorded universe, continuity and franchise.',
-                style: const TextStyle(color: Colors.white60, height: 1.4)),
+            Text('Projects connected to $actorName, grouped by recorded universe, continuity and franchise.', style: const TextStyle(color: Colors.white60, height: 1.4)),
             const SizedBox(height: 10),
             if (groups.isEmpty)
-              const Text(
-                  'No universe or franchise memberships are recorded for these titles yet.',
-                  style: TextStyle(color: Colors.white54))
+              const Text('No universe or franchise memberships are recorded for these titles yet.', style: TextStyle(color: Colors.white54))
             else
               for (final group in groups)
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   leading: Icon(_iconForKind(group.kind)),
                   title: Text(group.name),
-                  subtitle: Text(
-                      '${group.kind} · ${group.works.length} title${group.works.length == 1 ? '' : 's'}'),
+                  subtitle: Text('${group.kind} · ${group.works.length} title${group.works.length == 1 ? '' : 's'}'),
                   children: [
                     for (final item in group.works)
                       ListTile(
                         contentPadding: const EdgeInsets.only(left: 8),
                         title: Text(item.title),
-                        subtitle: Text(
-                            '${item.releaseYear ?? 'Year unknown'} · ${item.type}'),
+                        subtitle: Text('${item.releaseYear ?? 'Year unknown'} · ${item.type}'),
                         trailing: const Icon(Icons.chevron_right, size: 18),
-                        onTap: () => Navigator.push<void>(
-                            context,
-                            MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    MediaDetailsScreen(media: item))),
+                        onTap: () => Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: item))),
                       ),
                   ],
                 ),
@@ -811,20 +769,15 @@ class _ActorUniverseSectionCard extends StatelessWidget {
                 tilePadding: EdgeInsets.zero,
                 leading: const Icon(Icons.movie_filter_outlined),
                 title: const Text('Other productions'),
-                subtitle: Text(
-                    '${otherWorks.length} title${otherWorks.length == 1 ? '' : 's'} without linked universe/franchise metadata'),
+                subtitle: Text('${otherWorks.length} title${otherWorks.length == 1 ? '' : 's'} without linked universe/franchise metadata'),
                 children: [
                   for (final item in otherWorks)
                     ListTile(
                       contentPadding: const EdgeInsets.only(left: 8),
                       title: Text(item.title),
-                      subtitle: Text(
-                          '${item.releaseYear ?? 'Year unknown'} · ${item.type}'),
+                      subtitle: Text('${item.releaseYear ?? 'Year unknown'} · ${item.type}'),
                       trailing: const Icon(Icons.chevron_right, size: 18),
-                      onTap: () => Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                              builder: (_) => MediaDetailsScreen(media: item))),
+                      onTap: () => Navigator.push<void>(context, MaterialPageRoute<void>(builder: (_) => MediaDetailsScreen(media: item))),
                     ),
                 ],
               ),
@@ -851,9 +804,7 @@ class _UniverseEmptyState extends StatelessWidget {
         child: Column(children: [
           const Icon(Icons.hub_outlined, size: 44, color: Colors.white38),
           const SizedBox(height: 12),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white60, height: 1.4)),
+          Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white60, height: 1.4)),
         ]),
       );
 }

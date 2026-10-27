@@ -298,6 +298,72 @@ class BackendApi {
     );
   }
 
+  /// Finds genre-adjacent artists using Spotify artist metadata. This is not
+  /// presented as an official listener-derived Spotify related-artists graph.
+  Future<Map<String, dynamic>> getRelatedMusicArtists(
+    String artistName, {
+    int limit = 12,
+  }) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/artist-related').replace(
+      queryParameters: <String, String>{
+        'name': artistName.trim(),
+        'limit': '${limit.clamp(1, 20)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load similar artists.',
+    );
+  }
+
+  /// Returns Spotify Search-ranked catalog entries for an artist. The current
+  /// Development Mode API no longer supplies track popularity values.
+  Future<Map<String, dynamic>> getPopularArtistTracks(String artistName) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/artist-popular').replace(
+      queryParameters: <String, String>{'name': artistName.trim(), 'limit': '10'},
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to load popular tracks.',
+    );
+  }
+
+  /// Searches licensed track metadata using a remembered lyric phrase.
+  /// Results contain song metadata and provider links, not copied lyrics.
+  Future<Map<String, dynamic>> searchMusicByLyrics(String phrase) async {
+    _requireAuthentication();
+    final endpoint = Uri.parse('$baseUrl/music-catalog/lyrics-search').replace(
+      queryParameters: <String, String>{'q': phrase.trim()},
+    );
+    return _requireSuccess(
+      await _networkClient.get(endpoint, headers: _headers),
+      'Unable to search by lyrics. Configure the licensed lyrics provider on the backend.',
+    );
+  }
+
+  /// Sends a user-requested short audio sample to the backend for song
+  /// recognition. The recognition token remains server-side.
+  Future<Map<String, dynamic>> identifySongFromAudio(
+    List<int> audioBytes, {
+    String mimeType = 'audio/mp4',
+  }) async {
+    _requireAuthentication();
+    if (audioBytes.isEmpty || audioBytes.length > 5 * 1024 * 1024) {
+      throw ArgumentError('Audio sample must be non-empty and no larger than 5 MB.');
+    }
+    final response = await _networkClient.post(
+      Uri.parse('$baseUrl/music-catalog/recognize'),
+      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'audioBase64': base64Encode(audioBytes),
+        'mimeType': mimeType,
+      }),
+    );
+    return _requireSuccess(response, 'Unable to identify this song.');
+  }
+
   /// Lists an artist's MusicBrainz release groups (album-level discography).
   Future<Map<String, dynamic>> getMusicDiscography(
     String artistMbid, {

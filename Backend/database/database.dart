@@ -29,7 +29,6 @@ import '../models/subscription.dart';
 import '../models/profile.dart';
 import '../models/physical_item.dart';
 import '../models/remote_worker.dart';
-import '../models/review.dart';
 import '../supabase_store.dart';
 
 class SessionRecord {
@@ -314,8 +313,7 @@ class Database {
 
   /// Payment sessions are cached here after being loaded from the durable
   /// Supabase store. Supabase remains the persistent source of truth.
-  final Map<String, PaymentSession> paymentsById =
-      <String, PaymentSession>{};
+  final Map<String, PaymentSession> paymentsById = <String, PaymentSession>{};
 
   // ---------------------------------------------------------------------------
   // SESSIONS
@@ -331,14 +329,12 @@ class Database {
   final Map<String, Set<String>> knownLoginFingerprints =
       <String, Set<String>>{};
 
-  final Map<String, String> oneTimeCodesByAccountId =
-      <String, String>{};
+  final Map<String, String> oneTimeCodesByAccountId = <String, String>{};
 
   final Map<String, DateTime> oneTimeCodeExpiryByAccountId =
       <String, DateTime>{};
 
-  final Map<String, RemoteWorker> remoteWorkersById =
-      <String, RemoteWorker>{};
+  final Map<String, RemoteWorker> remoteWorkersById = <String, RemoteWorker>{};
 
   final Map<String, RemoteImportJob> remoteImportJobsById =
       <String, RemoteImportJob>{};
@@ -361,8 +357,7 @@ class Database {
   // contain multiple content items. Music tracks reference recordings rather
   // than creating a new canonical recording for every release.
 
-  final Map<String, ArmRipJob> armRipJobsById =
-      <String, ArmRipJob>{};
+  final Map<String, ArmRipJob> armRipJobsById = <String, ArmRipJob>{};
 
   final Map<String, ArmPhysicalRelease> armPhysicalReleasesById =
       <String, ArmPhysicalRelease>{};
@@ -384,12 +379,14 @@ class Database {
     final id = item.id.trim();
     final accountId = item.accountId.trim();
     if (id.isEmpty || accountId.isEmpty || item.title.trim().isEmpty) {
-      throw ArgumentError('Physical item ID, account ID, and title are required.');
+      throw ArgumentError(
+          'Physical item ID, account ID, and title are required.');
     }
 
     final existing = physicalItemsById[id];
     if (existing != null && existing.accountId != accountId) {
-      throw StateError('A physical item cannot be reassigned to another account.');
+      throw StateError(
+          'A physical item cannot be reassigned to another account.');
     }
     if (existing != null &&
         item.ownershipHistory.length < existing.ownershipHistory.length) {
@@ -530,8 +527,7 @@ class Database {
 
     return armPhysicalReleasesById.values
         .where(
-          (release) =>
-              release.title.trim().toLowerCase() == normalizedTitle,
+          (release) => release.title.trim().toLowerCase() == normalizedTitle,
         )
         .toList();
   }
@@ -692,8 +688,7 @@ class Database {
 
     return armMusicRecordingsById.values
         .where(
-          (recording) =>
-              recording.isrc?.trim().toUpperCase() == normalizedIsrc,
+          (recording) => recording.isrc?.trim().toUpperCase() == normalizedIsrc,
         )
         .toList();
   }
@@ -808,10 +803,6 @@ class Database {
   final Map<String, LibraryAddition> libraryAdditionsById =
       <String, LibraryAddition>{};
 
-  // Media reviews are kept here by the current backend persistence abstraction.
-  final Map<String, MediaReview> reviewsById =
-      <String, MediaReview>{};
-
   // ---------------------------------------------------------------------------
   // GROUP RECOMMENDATIONS
   // ---------------------------------------------------------------------------
@@ -887,10 +878,12 @@ class Database {
 
   void persistProfile(Profile profile, Account account) {
     unawaited(
-      SupabaseStore.instance.upsertProfile(
+      SupabaseStore.instance
+          .upsertProfile(
         accountExternalId: account.id,
         profile: profile,
-      ).catchError((error, stackTrace) {
+      )
+          .catchError((error, stackTrace) {
         developer.log(
           'Profile persistence failed.',
           name: 'Database',
@@ -930,7 +923,8 @@ class Database {
     if (cleanMemberId.isEmpty) return;
 
     for (final entry in memberLoginsByEmail.entries) {
-      final index = entry.value.indexWhere((item) => item.memberId == cleanMemberId);
+      final index =
+          entry.value.indexWhere((item) => item.memberId == cleanMemberId);
       if (index == -1) continue;
       final current = entry.value[index];
       entry.value[index] = MemberLoginRecord(
@@ -1059,11 +1053,9 @@ class Database {
     final previous = accountsById[account.id];
 
     if (previous != null) {
-      final previousUsername =
-          previous.username.trim().toLowerCase();
+      final previousUsername = previous.username.trim().toLowerCase();
 
-      final previousEmail =
-          previous.email.trim().toLowerCase();
+      final previousEmail = previous.email.trim().toLowerCase();
 
       if (previousUsername != username &&
           accountIdByUsername[previousUsername] == account.id) {
@@ -1365,9 +1357,7 @@ class Database {
         final aYear = a.year;
         final bYear = b.year;
 
-        if (aYear != null &&
-            bYear != null &&
-            aYear != bYear) {
+        if (aYear != null && bYear != null && aYear != bYear) {
           return bYear.compareTo(aYear);
         }
 
@@ -1459,8 +1449,7 @@ class Database {
   ) {
     return groupRecommendationsById.values
         .where(
-          (recommendation) =>
-              recommendation.accountId == accountId,
+          (recommendation) => recommendation.accountId == accountId,
         )
         .toList();
   }
@@ -1603,7 +1592,6 @@ class Database {
     remoteImportJobsById.clear();
 
     mediaById.clear();
-    reviewsById.clear();
 
     groupRecommendationsById.clear();
 

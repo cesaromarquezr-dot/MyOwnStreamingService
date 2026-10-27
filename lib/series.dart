@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_core.dart';
+import 'release_order_grouping.dart';
 import 'details.dart';
 import 'localization.dart';
 import 'widgets/like_toggle_button.dart';
@@ -88,10 +89,36 @@ class _SeriesScreenState extends State<SeriesScreen>
         items.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
         break;
       case 'Oldest to Newest':
-        items.sort((a, b) => (a.releaseYear ?? 0).compareTo(b.releaseYear ?? 0));
+        items.sort((a, b) => ReleaseOrderGrouping.compareMediaByReleaseDate(
+              a, b, newestFirst: false));
         break;
       case 'Newest to Oldest':
-        items.sort((a, b) => (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0));
+        items.sort((a, b) => ReleaseOrderGrouping.compareMediaByReleaseDate(
+              a, b, newestFirst: true));
+        break;
+      case 'Countries A-Z':
+        items.sort((a, b) {
+          final aCountry = (a.countryOfOrigin ?? '').trim().toLowerCase();
+          final bCountry = (b.countryOfOrigin ?? '').trim().toLowerCase();
+          if (aCountry.isEmpty || bCountry.isEmpty) {
+            if (aCountry.isEmpty && bCountry.isEmpty) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            return aCountry.isEmpty ? 1 : -1;
+          }
+          final byCountry = aCountry.compareTo(bCountry);
+          return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
+        break;
+      case 'Countries Z-A':
+        items.sort((a, b) {
+          final aCountry = (a.countryOfOrigin ?? '').trim().toLowerCase();
+          final bCountry = (b.countryOfOrigin ?? '').trim().toLowerCase();
+          if (aCountry.isEmpty || bCountry.isEmpty) {
+            if (aCountry.isEmpty && bCountry.isEmpty) return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            return aCountry.isEmpty ? 1 : -1;
+          }
+          final byCountry = bCountry.compareTo(aCountry);
+          return byCountry != 0 ? byCountry : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        });
         break;
       default:
         final prioritized = internationalCatalogFirst(items);
@@ -112,8 +139,10 @@ class _SeriesScreenState extends State<SeriesScreen>
         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
         items: const [
           DropdownMenuItem(value: 'Default', child: UniversalText('Default')),
-          DropdownMenuItem(value: 'A-Z', child: UniversalText('A-Z')),
-          DropdownMenuItem(value: 'Z-A', child: UniversalText('Z-A')),
+          DropdownMenuItem(value: 'A-Z', child: UniversalText('Titles A-Z')),
+          DropdownMenuItem(value: 'Z-A', child: UniversalText('Titles Z-A')),
+          DropdownMenuItem(value: 'Countries A-Z', child: UniversalText('Countries A-Z')),
+          DropdownMenuItem(value: 'Countries Z-A', child: UniversalText('Countries Z-A')),
           DropdownMenuItem(value: 'Oldest to Newest', child: UniversalText('Oldest to Newest')),
           DropdownMenuItem(value: 'Newest to Oldest', child: UniversalText('Newest to Oldest')),
         ],
