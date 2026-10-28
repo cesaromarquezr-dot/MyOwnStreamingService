@@ -18,7 +18,10 @@ import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
 import 'page_hero_banner.dart';
 import 'country_origin_style.dart';
-import 'home_streaming_discovery.dart' show HomeHeroCarousel;
+import 'home_streaming_discovery.dart'
+    show
+        HomeHeroCarousel,
+        HomeHoverPreviewStore;
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -42,6 +45,7 @@ class _MoviesScreenState extends State<MoviesScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    HomeHoverPreviewStore.current.value = null;
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
@@ -168,6 +172,14 @@ class _MoviesScreenState extends State<MoviesScreen>
       artworkBuilder: (context, fit) => CatalogPosterImage(media: movie, fit: fit),
       fallbackIcon: Icons.movie_outlined,
       onTap: () => _openDetails(context, movie),
+      onHover: (hovering) {
+        if (_searchQuery.trim().isNotEmpty || !_heroSettings.enabled) return;
+        if (hovering) {
+          HomeHoverPreviewStore.show(movie);
+        } else {
+          HomeHoverPreviewStore.clear(movie.id);
+        }
+      },
     )).toList(growable: false);
 
     return Scaffold(
@@ -175,112 +187,134 @@ class _MoviesScreenState extends State<MoviesScreen>
       body: Stack(
         children: [
           const _MoviesBackground(),
-
           SafeArea(
             bottom: false,
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final showHero = _searchQuery.trim().isEmpty &&
+                    _heroSettings.enabled &&
+                    filteredMovies.isNotEmpty;
+                final heroPaneHeight = constraints.maxHeight * 0.54;
+                const topBarHeight = 88.0;
+                final topBar = SizedBox(
+                  height: topBarHeight,
                   child: _buildTopBar(context, movies.length),
-                ),
+                );
 
-                if (_searchQuery.trim().isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: _buildSearchSummary(
-                      filteredMovies.length,
-                    ),
-                  ),
-
-                if (filteredMovies.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _buildEmptyState(
-                      isSearching:
-                          _searchQuery.trim().isNotEmpty,
-                    ),
-                  )
-                else ...[
-                  if (_searchQuery.trim().isEmpty &&
-                      _viewMode == LibraryViewMode.grid &&
-                      _heroSettings.enabled &&
-                      filteredMovies.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: HomeHeroCarousel(
-                        items: filteredMovies,
-                        settingsKey: 'movies',
-                        onOpen: (media) => _openDetails(context, media),
-                        onPlay: _playHeroMedia,
+                return Column(
+                  children: [
+                    if (showHero)
+                      SizedBox(
+                        height: heroPaneHeight,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            HomeHeroCarousel(
+                              items: filteredMovies,
+                              settingsKey: 'movies',
+                              height: heroPaneHeight,
+                              pageIndicatorTop: topBarHeight + 8,
+                              edgeToEdge: true,
+                              onOpen: (media) => _openDetails(context, media),
+                              onPlay: _playHeroMedia,
+                            ),
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: topBarHeight,
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Color(0xB8000000), Colors.transparent],
+                                  ),
+                                ),
+                                child: _buildTopBar(context, movies.length),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      topBar,
+                    Expanded(
+                      child: CustomScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        slivers: [
+                          if (_searchQuery.trim().isNotEmpty)
+                            SliverToBoxAdapter(
+                              child: _buildSearchSummary(filteredMovies.length),
+                            ),
+                          if (filteredMovies.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: _buildEmptyState(
+                                isSearching: _searchQuery.trim().isNotEmpty,
+                              ),
+                            )
+                          else ...[
+                            if (_searchQuery.trim().isEmpty)
+                              SliverToBoxAdapter(
+                                child: _buildSectionHeader(
+                                  title: tr('Your Movies'),
+                                  subtitle: '${filteredMovies.length} titles',
+                                ),
+                              ),
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                child: LibraryViewModePicker(
+                                  scope: 'movies',
+                                  value: _viewMode,
+                                  onChanged: (mode) => setState(() => _viewMode = mode),
+                                  compact: true,
+                                ),
+                              ),
+                            ),
+                            if (_viewMode != LibraryViewMode.grid)
+                              SliverToBoxAdapter(
+                                child: LibraryCollectionView(
+                                  entries: viewEntries,
+                                  mode: _viewMode,
+                                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 42),
+                                ),
+                              )
+                            else
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 42),
+                                sliver: SliverGrid(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) {
+                                      final movie = filteredMovies[index];
+                                      return _MovieCard(
+                                        movie: movie,
+                                        index: index,
+                                        animation: _pageController,
+                                        enableHomePreview: _searchQuery.trim().isEmpty &&
+                                            _heroSettings.enabled,
+                                        onTap: () => _openDetails(context, movie),
+                                      );
+                                    },
+                                    childCount: filteredMovies.length,
+                                  ),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 235,
+                                    mainAxisExtent: 370,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 22,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ],
                       ),
                     ),
-
-                  if (_searchQuery.trim().isEmpty)
-                    SliverToBoxAdapter(
-                      child: _buildSectionHeader(
-                        title: tr('Your Movies'),
-                        subtitle:
-                            '${filteredMovies.length} titles',
-                      ),
-                    ),
-
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: LibraryViewModePicker(
-                        scope: 'movies',
-                        value: _viewMode,
-                        onChanged: (mode) => setState(() => _viewMode = mode),
-                        compact: true,
-                      ),
-                    ),
-                  ),
-
-                  if (_viewMode != LibraryViewMode.grid)
-                    SliverToBoxAdapter(
-                      child: LibraryCollectionView(
-                        entries: viewEntries,
-                        mode: _viewMode,
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 42),
-                      ),
-                    )
-                  else SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                      20,
-                      4,
-                      20,
-                      42,
-                    ),
-                    sliver: SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final movie =
-                              filteredMovies[index];
-
-                          return _MovieCard(
-                            movie: movie,
-                            index: index,
-                            animation: _pageController,
-                            onTap: () {
-                              _openDetails(
-                                context,
-                                movie,
-                              );
-                            },
-                          );
-                        },
-                        childCount: filteredMovies.length,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 235,
-                        mainAxisExtent: 370,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 22,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -372,9 +406,9 @@ class _MoviesScreenState extends State<MoviesScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         20,
-        12,
+        6,
         20,
-        12,
+        6,
       ),
       child: Row(
         children: [
@@ -392,7 +426,10 @@ class _MoviesScreenState extends State<MoviesScreen>
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     const UniversalText('Movies',
                       style: TextStyle(
@@ -402,25 +439,18 @@ class _MoviesScreenState extends State<MoviesScreen>
                         letterSpacing: -0.9,
                       ),
                     ),
-                    const SizedBox(width: 9),
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 7,
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(
-                          alpha: 0.07,
-                        ),
-                        borderRadius:
-                            BorderRadius.circular(7),
+                        color: Colors.white.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(7),
                       ),
                       child: UniversalText('$movieCount',
                         style: TextStyle(
-                          color: Colors.white.withValues(
-                            alpha: 0.65,
-                          ),
+                          color: Colors.white.withValues(alpha: 0.65),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -799,12 +829,14 @@ class _MovieCard extends StatefulWidget {
   final MediaItem movie;
   final int index;
   final Animation<double> animation;
+  final bool enableHomePreview;
   final VoidCallback onTap;
 
   const _MovieCard({
     required this.movie,
     required this.index,
     required this.animation,
+    required this.enableHomePreview,
     required this.onTap,
   });
 
@@ -815,6 +847,14 @@ class _MovieCard extends StatefulWidget {
 class _MovieCardState extends State<_MovieCard> {
   bool hovering = false;
   bool pressed = false;
+
+  @override
+  void dispose() {
+    if (hovering && widget.enableHomePreview) {
+      HomeHoverPreviewStore.clear(widget.movie.id);
+    }
+    super.dispose();
+  }
 
   @override
   /// Performs `build` for this feature. Update this documentation when its contract changes.
@@ -848,11 +888,13 @@ class _MovieCardState extends State<_MovieCard> {
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) {
+          if (widget.enableHomePreview) HomeHoverPreviewStore.show(movie);
           setState(() {
             hovering = true;
           });
         },
         onExit: (_) {
+          if (widget.enableHomePreview) HomeHoverPreviewStore.clear(movie.id);
           setState(() {
             hovering = false;
           });
@@ -1428,8 +1470,8 @@ class _GlassIconButtonState
           child: AnimatedContainer(
             duration:
                 const Duration(milliseconds: 180),
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: hovering
                   ? Colors.white.withValues(

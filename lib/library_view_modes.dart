@@ -117,6 +117,7 @@ class LibraryViewEntry {
     this.fallbackIcon = Icons.movie_outlined,
     this.trailing,
     this.onTap,
+    this.onHover,
   });
 
   final String title;
@@ -128,6 +129,7 @@ class LibraryViewEntry {
   final IconData fallbackIcon;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final ValueChanged<bool>? onHover;
 }
 
 /// A common renderer for list, grid, gallery, table, and timeline layouts.
@@ -178,18 +180,21 @@ class LibraryCollectionView extends StatelessWidget {
         child: Column(
           children: [
             for (final entry in entries)
-              Card(
-                color: Colors.white.withValues(alpha: .045),
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  leading: SizedBox(width: 52, height: 70, child: _artwork(context, entry, BoxFit.contain)),
-                  title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800)),
-                  subtitle: entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                  trailing: entry.trailing ?? const Icon(Icons.chevron_right_rounded),
-                  onTap: entry.onTap,
+              _withHover(
+                entry,
+                Card(
+                  color: Colors.white.withValues(alpha: .045),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    leading: SizedBox(width: 52, height: 70, child: _artwork(context, entry, BoxFit.contain)),
+                    title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                    trailing: entry.trailing ?? const Icon(Icons.chevron_right_rounded),
+                    onTap: entry.onTap,
+                  ),
                 ),
               ),
           ],
@@ -214,26 +219,29 @@ class LibraryCollectionView extends StatelessWidget {
         itemBuilder: (context, index) {
           if (gridItemBuilder != null) return gridItemBuilder!(context, index);
           final entry = entries[index];
-          return Card(
-            clipBehavior: Clip.antiAlias,
-            color: Colors.white.withValues(alpha: .045),
-            child: InkWell(
-              onTap: entry.onTap,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _artwork(context, entry, BoxFit.cover)),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                      const SizedBox(height: 3),
-                      entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white60, fontSize: 10)),
-                    ]),
-                  ),
-                ],
+          return _withHover(
+            entry,
+            Card(
+              clipBehavior: Clip.antiAlias,
+              color: Colors.white.withValues(alpha: .045),
+              child: InkWell(
+                onTap: entry.onTap,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _artwork(context, entry, BoxFit.cover)),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                        const SizedBox(height: 3),
+                        entry.subtitleBuilder?.call(context) ?? Text(entry.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white60, fontSize: 10)),
+                      ]),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -253,46 +261,49 @@ class LibraryCollectionView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(48, 4, 48, 30),
           itemBuilder: (context, index) {
             final entry = entries[index];
-            return SizedBox(
-              width: 170,
-              child: Card(
-                clipBehavior: Clip.antiAlias,
-                color: Colors.white.withValues(alpha: .045),
-                child: InkWell(
-                  onTap: entry.onTap,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: _artwork(context, entry, BoxFit.cover)),
-                      Padding(
-                        padding: const EdgeInsets.all(9),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            entry.subtitleBuilder?.call(context) ??
-                                Text(
-                                  entry.subtitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 10,
-                                  ),
+            return _withHover(
+              entry,
+              SizedBox(
+                width: 170,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  color: Colors.white.withValues(alpha: .045),
+                  child: InkWell(
+                    onTap: entry.onTap,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _artwork(context, entry, BoxFit.cover)),
+                        Padding(
+                          padding: const EdgeInsets.all(9),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entry.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
                                 ),
-                          ],
+                              ),
+                              const SizedBox(height: 3),
+                              entry.subtitleBuilder?.call(context) ??
+                                  Text(
+                                    entry.subtitle,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -317,15 +328,18 @@ class LibraryCollectionView extends StatelessWidget {
               ]),
             ),
             for (var i = 0; i < entries.length; i++)
-              InkWell(
-                onTap: entries[i].onTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  child: Row(children: [
-                    Expanded(flex: 5, child: Text(entries[i].title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
-                    Expanded(flex: 3, child: entries[i].subtitleBuilder?.call(context) ?? Text(entries[i].subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11))),
-                    entries[i].trailing ?? const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white54),
-                  ]),
+              _withHover(
+                entries[i],
+                InkWell(
+                  onTap: entries[i].onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    child: Row(children: [
+                      Expanded(flex: 5, child: Text(entries[i].title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+                      Expanded(flex: 3, child: entries[i].subtitleBuilder?.call(context) ?? Text(entries[i].subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11))),
+                      entries[i].trailing ?? const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white54),
+                    ]),
+                  ),
                 ),
               ),
             if (entries.isEmpty) const SizedBox.shrink(),
@@ -355,13 +369,16 @@ class LibraryCollectionView extends StatelessWidget {
               ]),
               const SizedBox(width: 12),
               Expanded(
-                child: Card(
-                  color: Colors.white.withValues(alpha: .04),
-                  child: ListTile(
-                    leading: SizedBox(width: 42, height: 60, child: _artwork(context, ordered[index], BoxFit.contain)),
-                    title: Text(ordered[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: ordered[index].subtitleBuilder?.call(context) ?? Text(ordered[index].subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                    onTap: ordered[index].onTap,
+                child: _withHover(
+                  ordered[index],
+                  Card(
+                    color: Colors.white.withValues(alpha: .04),
+                    child: ListTile(
+                      leading: SizedBox(width: 42, height: 60, child: _artwork(context, ordered[index], BoxFit.contain)),
+                      title: Text(ordered[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: ordered[index].subtitleBuilder?.call(context) ?? Text(ordered[index].subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                      onTap: ordered[index].onTap,
+                    ),
                   ),
                 ),
               ),
@@ -369,6 +386,16 @@ class LibraryCollectionView extends StatelessWidget {
           ),
         ],
       ]),
+    );
+  }
+
+  Widget _withHover(LibraryViewEntry entry, Widget child) {
+    final onHover = entry.onHover;
+    if (onHover == null) return child;
+    return MouseRegion(
+      onEnter: (_) => onHover(true),
+      onExit: (_) => onHover(false),
+      child: child,
     );
   }
 

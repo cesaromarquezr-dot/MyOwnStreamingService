@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_core.dart';
+import 'home_hero_hover_preview.dart';
+
 /// User-managed channels for local library curation and authorized live streams.
 class ChannelCenterScreen extends StatefulWidget {
   const ChannelCenterScreen({super.key});
@@ -119,9 +122,145 @@ class _ChannelCenterScreenState extends State<ChannelCenterScreen> {
   Widget _channelTile(Map<String,dynamic> c) => Card(child:ListTile(leading:CircleAvatar(child:Icon(c['kind']=='Live TV'?Icons.live_tv:Icons.tv)),title:Text(c['name']?.toString()??'Channel'),subtitle:Text('${c['kind']} · ${c['description']??''}${(c['streamUrl']?.toString().isNotEmpty??false)?'\nStream configured':''}'),isThreeLine:true,trailing:PopupMenuButton<String>(onSelected:(v)async{if(v=='edit'){await _edit(c);}else if(v=='delete'){setState(()=>_channels.remove(c));await _save();}},itemBuilder:(_)=>const[PopupMenuItem(value:'edit',child:Text('Edit')),PopupMenuItem(value:'delete',child:Text('Delete'))])));
 }
 
-/// Horizontal Home row linking to the channel manager.
+/// Horizontal Home row linking to the channel manager. Each channel tile also
+/// publishes its identity to the pinned Home hero while it is hovered.
 class HomeChannelsSection extends StatelessWidget {
   const HomeChannelsSection({super.key});
-  @override Widget build(BuildContext context) => Padding(padding:const EdgeInsets.fromLTRB(18,12,18,8),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Expanded(child:Text('Channels',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const ChannelCenterScreen())),child:const Text('Manage'))]),SizedBox(height:126,child:ListView(scrollDirection:Axis.horizontal,children:[_tile(context,'My Channels','Curated library',Icons.video_library_rounded),_tile(context,'Live TV','Authorized live streams',Icons.live_tv_rounded),_tile(context,'Superhero Channel','Movies & series',Icons.shield_rounded),_tile(context,'Comedy Channel','Movies & series',Icons.theater_comedy_rounded),_tile(context,'Horror Channel','Movies & series',Icons.movie_filter_rounded)]))]));
-  Widget _tile(BuildContext context,String title,String subtitle,IconData icon)=>Padding(padding:const EdgeInsets.only(right:10),child:SizedBox(width:164,child:Card(child:InkWell(borderRadius:BorderRadius.circular(12),onTap:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const ChannelCenterScreen())),child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:30),const SizedBox(height:8),Text(title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.bold)),Text(subtitle,maxLines:1,overflow:TextOverflow.ellipsis,style:Theme.of(context).textTheme.bodySmall)]))))));
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Channels',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                        builder: (_) => const ChannelCenterScreen()),
+                  ),
+                  child: const Text('Manage'),
+                ),
+              ],
+            ),
+            SizedBox(
+              height: 126,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _tile(context, 'My Channels', 'Curated library',
+                      Icons.video_library_rounded),
+                  _tile(context, 'Live TV', 'Authorized live streams',
+                      Icons.live_tv_rounded),
+                  _tile(context, 'Superhero Channel', 'Movies & series',
+                      Icons.shield_rounded),
+                  _tile(context, 'Comedy Channel', 'Movies & series',
+                      Icons.theater_comedy_rounded),
+                  _tile(context, 'Horror Channel', 'Movies & series',
+                      Icons.movie_filter_rounded),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  String? _channelArtwork(String title) {
+    final controller = AppController.instance;
+    final profile = controller.currentProfile;
+    final library = controller.library
+        .where((media) => media.isAccessibleTo(profile))
+        .toList(growable: false);
+    final lower = title.toLowerCase();
+    final terms = lower.contains('superhero')
+        ? const <String>['superhero', 'marvel', 'dc', 'comic', 'super hero']
+        : lower.contains('comedy')
+            ? const <String>['comedy', 'sitcom', 'funny', 'humor']
+            : lower.contains('horror')
+                ? const <String>['horror', 'scary', 'thriller', 'ghost']
+                : lower.contains('live tv')
+                    ? const <String>['live tv', 'live channel', 'television']
+                    : const <String>[];
+    String searchText(MediaItem item) => <String>[
+          item.title,
+          item.description ?? '',
+          ...item.genres,
+          ...item.tags,
+          if (item.franchiseName?.trim().isNotEmpty == true) item.franchiseName!,
+        ].join(' ').toLowerCase();
+    if (terms.isNotEmpty) {
+      for (final media in library) {
+        if (media.imageUrl?.trim().isNotEmpty == true &&
+            terms.any(searchText(media).contains)) {
+          return media.imageUrl;
+        }
+      }
+    }
+    for (final media in library) {
+      if (media.imageUrl?.trim().isNotEmpty == true) return media.imageUrl;
+    }
+    return null;
+  }
+
+  Widget _tile(
+    BuildContext context,
+    String title,
+    String subtitle,
+    IconData icon,
+  ) {
+    final normalized = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    final preview = MediaItem(
+      id: 'home-channel-$normalized',
+      title: title,
+      type: 'channel',
+      imageUrl: _channelArtwork(title),
+      description: subtitle,
+      tags: <String>['Channel', if (title.toLowerCase().contains('tv')) 'Television'],
+    );
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: HomeHeroHoverPreviewRegion(
+        media: preview,
+        child: SizedBox(
+          width: 164,
+          child: Card(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                    builder: (_) => const ChannelCenterScreen()),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 30),
+                    const SizedBox(height: 8),
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

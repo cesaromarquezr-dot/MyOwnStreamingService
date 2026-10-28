@@ -5,9 +5,9 @@ import 'localization.dart';
 import 'recommendation_ownership.dart';
 import 'home_arrow_rail.dart';
 
-/// Builds profile-local related titles from known recommendations and the
-/// account's existing library. The ranking favours shared franchise, genre,
-/// tags, cast, and format; no external catalog is required.
+/// Builds profile-local related titles from recommendations and the account's
+/// existing library/history. Owned-unwatched, owned-watched, and unowned items
+/// all remain eligible; the badge is the visual source of truth for status.
 class DetailsRecommendationsSection extends StatelessWidget {
   final MediaItem source;
   final ValueChanged<MediaItem> onOpen;
@@ -84,10 +84,6 @@ class DetailsRecommendationsSection extends StatelessWidget {
           item.id.trim().isEmpty ||
           !item.isAccessibleTo(controller.currentProfile) ||
           isExcludedEntertainmentType(item.type) ||
-          RecommendationOwnershipMatcher.isMediaOwned(
-            media: item,
-            controller: controller,
-          ) ||
           _sameWorkAsSource(item)) {
         continue;
       }
@@ -124,6 +120,15 @@ class DetailsRecommendationsSection extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = items[index];
             final imageUrl = item.imageUrl;
+            final controller = AppController.instance;
+            final ownedRecord = RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+              media: item,
+              controller: controller,
+            );
+            final isOwned = ownedRecord != null;
+            final isWatched = ownedRecord != null &&
+                (controller.isWatched(ownedRecord.id) ||
+                    controller.getPlaybackProgress(ownedRecord.id) >= 0.95);
               return SizedBox(
                 width: 132,
                 child: InkWell(
@@ -163,7 +168,8 @@ class DetailsRecommendationsSection extends StatelessWidget {
                       ),
                       const SizedBox(height: 5),
                       RecommendationOwnershipBadge(
-                        isOwned: AppController.instance.isOwned(item.id),
+                        isOwned: isOwned,
+                        isWatched: isWatched,
                         compact: true,
                       ),
                     ],

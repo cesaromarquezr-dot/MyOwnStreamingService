@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'app_core.dart';
 import 'details.dart';
 import 'home_arrow_rail.dart';
+import 'home_hero_hover_preview.dart';
 
 const Color _multiverseAccent = Color(0xFF8B7CFF);
 const Color _multiversePanel = Color(0xFF171722);
@@ -598,7 +599,17 @@ class MultiverseHubHomeShelf extends StatelessWidget {
           itemBuilder: (context, index) {
             final definition = definitions[index];
             final linkedTitles = MultiverseCatalogLogic.ownedTitlesForMultiverse(library, definition);
-            return SizedBox(
+            final previewMedia = MediaItem(
+              id: 'home-multiverse-${definition.id}',
+              title: definition.name,
+              type: 'multiverse and timeline hub',
+              imageUrl: linkedTitles.isEmpty ? null : linkedTitles.first.imageUrl,
+              description: '${definition.description} • ${definition.label} • ${linkedTitles.length} linked titles in your library',
+              genres: <String>['Multiverse', 'Timeline', definition.label],
+            );
+            return HomeHeroHoverPreviewRegion(
+              media: previewMedia,
+              child: SizedBox(
               width: 310,
               child: Material(
                 color: _multiversePanel,
@@ -633,7 +644,7 @@ class MultiverseHubHomeShelf extends StatelessWidget {
                   ),
                 ),
               ),
-            );
+            ));
           },
         ),
       ],

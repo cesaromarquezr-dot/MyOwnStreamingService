@@ -29,6 +29,7 @@ import 'cinematic_title_fonts.dart';
 import 'music_video_search_screen.dart';
 import 'music_lyrics_search_screen.dart';
 import 'library_view_modes.dart';
+import 'recommendation_ownership.dart';
 
 /// A music track imported from the account's home-server library.
 class MusicTrack {
@@ -3485,7 +3486,28 @@ class _SpotifyArtistPopularSectionState extends State<_SpotifyArtistPopularSecti
       child: ListTile(
         leading: SizedBox(width: 48, height: 48, child: image.trim().startsWith('http') ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.music_note_rounded)) : const Icon(Icons.music_note_rounded)),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(canPlay ? '$artist · In your library' : '$artist · $score · Not in library', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              local != null
+                  ? (canPlay ? '$artist · In your library' : '$artist · No playable audio source imported')
+                  : '$artist · $score',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            const SizedBox(height: 4),
+            RecommendationOwnershipBadge(
+              isOwned: local != null,
+              isWatched: local != null &&
+                  (MusicLibraryStore.instance.listenCounts[local.id] ?? 0) > 0,
+              watchedLabel: 'Listened',
+              compact: true,
+            ),
+          ],
+        ),
         trailing: IconButton(
           tooltip: canPlay ? 'Play imported track' : 'Import this track to enable playback',
           icon: Icon(canPlay ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),

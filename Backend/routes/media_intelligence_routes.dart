@@ -125,6 +125,11 @@ class MediaIntelligenceRoutes {
         return;
       }
 
+      if (request.method == 'GET' && path == '$_prefix/characters') {
+        await _searchCharacters(request);
+        return;
+      }
+
       if (request.method == 'GET' && path == '$_prefix/people/timeline') {
         final personId = _requiredId(request.uri.queryParameters['personId'], field: 'personId');
         final person = service.people[personId];
@@ -263,6 +268,99 @@ class MediaIntelligenceRoutes {
         });
       }
     }
+  }
+
+  Future<void> _searchCharacters(HttpRequest request) async {
+    final query = request.uri.queryParameters['q']?.trim() ?? '';
+    if (query.length < 2 || query.length > 120 || query.contains('\u0000')) {
+      await _json(request.response, 200, {
+        'success': true,
+        'query': query,
+        'characters': <Map<String, dynamic>>[],
+      });
+      return;
+    }
+
+    String key(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final wanted = key(query);
+    final queryTerms = _characterQueryAliases(query).map(key).toSet()..add(wanted);
+    final grouped = <String, Map<String, dynamic>>{};
+    for (final credit in service.careerCredits.values) {
+      final character = credit.characterName?.trim() ?? '';
+      final characterKey = key(character);
+      if (character.isEmpty || characterKey.isEmpty) continue;
+      // Direct name matches handle arbitrary people; curated identity aliases
+      // connect common franchise searches to explicitly registered character
+      // credits (not to invented actor/role pairings).
+      final matches = queryTerms.any((term) => term.isNotEmpty &&
+          (characterKey == term || characterKey.contains(term) ||
+              (term.length >= 5 && term.contains(characterKey))));
+      if (!matches) continue;
+      final person = service.people[credit.personId];
+      final work = service.works[credit.mediaId];
+      if (person == null || work == null) continue;
+      final group = grouped.putIfAbsent(characterKey, () => <String, dynamic>{
+        'id': 'character:$characterKey',
+        'name': character,
+        'credits': <Map<String, dynamic>>[],
+      });
+      final rows = group['credits'] as List<Map<String, dynamic>>;
+      if (!rows.any((row) =>
+          (row['person'] as Map<String, dynamic>)['id'] == person.id &&
+          (row['work'] as Map<String, dynamic>)['id'] == work.id &&
+          (row['credit'] as Map<String, dynamic>)['id'] == credit.id)) {
+        rows.add(<String, dynamic>{
+          'credit': credit.toJson(),
+          'person': person.toJson(),
+          'work': work.toJson(),
+        });
+      }
+    }
+
+    final characters = grouped.values.toList(growable: false)
+      ..sort((a, b) {
+        final aName = (a['name'] ?? '').toString();
+        final bName = (b['name'] ?? '').toString();
+        final aExact = key(aName) == wanted ? 0 : 1;
+        final bExact = key(bName) == wanted ? 0 : 1;
+        if (aExact != bExact) return aExact.compareTo(bExact);
+        return aName.toLowerCase().compareTo(bName.toLowerCase());
+      });
+
+    await _json(request.response, 200, {
+      'success': true,
+      'query': query,
+      'characters': characters.take(40).toList(growable: false),
+    });
+  }
+
+  List<String> _characterQueryAliases(String query) {
+    final compact = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (const <String>{
+      'spider', 'spiderman', 'peterparker', 'milesmorales', 'spiderverse',
+      'spidernoir', 'spidergwen', 'spiderwoman', 'spiderpunk', 'spiderham',
+      'spiderman2099', 'miguelohara', 'hobiebrown', 'gwenstacy', 'benreilly',
+    }.contains(compact)) {
+      return const <String>[
+        'Spider-Man', 'Peter Parker', 'Miles Morales', 'Spider-Gwen', 'Gwen Stacy',
+        'Spider-Noir', 'Miguel O’Hara', 'Spider-Punk', 'Hobie Brown',
+        'Spider-Ham', 'Peter Porker', 'Ben Reilly', 'Iron Spider',
+      ];
+    }
+    if (const <String>{'iron', 'ironman', 'tonystark', 'ironheart', 'ririwilliams'}
+        .contains(compact)) {
+      return const <String>['Iron Man', 'Ironheart', 'Tony Stark', 'Riri Williams'];
+    }
+    if (const <String>{'alexrusso', 'wizards', 'wizardsofwaverlyplace', 'alexvsalex'}
+        .contains(compact)) {
+      return const <String>['Alex Russo'];
+    }
+    return const <String>[];
   }
 
   Future<void> _getWorks(HttpRequest request) async {

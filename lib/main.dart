@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -5965,6 +5966,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _heroController;
+  PageHeroSettings _homePageHeroSettings = const PageHeroSettings();
 
   @override
 
@@ -5984,7 +5986,9 @@ class _HomeScreenState extends State<HomeScreen>
     }
     StoryPlacementStore.revision.addListener(_onStoryPlacementChanged);
     HomeCustomizationStore.revision.addListener(_onHomeCustomizationChanged);
+    PageHeroSettingsStore.revision.addListener(_onHomePageHeroSettingsChanged);
     unawaited(_loadStoryPlacement());
+    unawaited(_reloadHomePageHeroSettings());
     _heroController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 180),
@@ -6013,12 +6017,23 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) setState(() {});
   }
 
+  void _onHomePageHeroSettingsChanged() {
+    unawaited(_reloadHomePageHeroSettings());
+  }
+
+  Future<void> _reloadHomePageHeroSettings() async {
+    final loaded = await PageHeroSettingsStore.load('home');
+    if (!mounted) return;
+    setState(() => _homePageHeroSettings = loaded);
+  }
+
   @override
 
   /// Performs `dispose` for this feature. Update this documentation when its contract changes.
   void dispose() {
     StoryPlacementStore.revision.removeListener(_onStoryPlacementChanged);
     HomeCustomizationStore.revision.removeListener(_onHomeCustomizationChanged);
+    PageHeroSettingsStore.revision.removeListener(_onHomePageHeroSettingsChanged);
     _heroController.dispose();
     super.dispose();
   }
@@ -6149,119 +6164,199 @@ class _HomeScreenState extends State<HomeScreen>
       homeHeroItems.addAll(library.take(configuredHeroCount));
     }
 
+    final showHero = settings.sectionOrder.contains('Hero Banner') &&
+        settings.isSectionVisible('Hero Banner') &&
+        _homePageHeroSettings.enabled &&
+        homeHeroItems.isNotEmpty;
+
     return Scaffold(
       backgroundColor: homeBackground,
-      body: RefreshIndicator(
-        color: Colors.white,
-        backgroundColor: const Color(0xFF171717),
-        onRefresh: _refresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            if (widget.showAppBar)
-              SliverAppBar(
-                pinned: true,
-                floating: true,
-                automaticallyImplyLeading: false,
-                elevation: 0,
-                backgroundColor: const Color(0xE6070707),
-                surfaceTintColor: Colors.transparent,
-                titleSpacing: 20,
-                title: const UniversalText(
-                  'Home',
-                  style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Keep the app title and browse navigation in their own fixed
+            // rows, then leave a visible gap before the hero artwork.  The
+            // combined header + hero still occupies roughly the upper 58% of
+            // the viewport, leaving the lower area for independently scrolling
+            // library sections.
+            final appBarHeight = widget.showAppBar ? kToolbarHeight : 0.0;
+            const browseNavigationHeight = 58.0; // 48px row + 10px padding.
+            const heroGap = 14.0;
+            final topChromeHeight = appBarHeight + browseNavigationHeight +
+                (showHero ? heroGap : 0.0);
+            final targetUpperPaneHeight = constraints.maxHeight * 0.58;
+            final desiredHeroHeight = targetUpperPaneHeight - topChromeHeight;
+            final maxHeroHeight = math.max(
+              0.0,
+              constraints.maxHeight - topChromeHeight - (showHero ? 110.0 : 0.0),
+            ).toDouble();
+            final heroPaneHeight = showHero
+                ? math.min(
+                    maxHeroHeight,
+                    math.max(math.min(180.0, maxHeroHeight), desiredHeroHeight),
+                  ).toDouble()
+                : 0.0;
+            final homeAppBar = SizedBox(
+              height: kToolbarHeight,
+              child: Material(
+                color: const Color(0x66070707),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 20),
+                    const Expanded(
+                      child: UniversalText(
+                        'Home',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                    ),
+                    PageCustomizeButton(pageId: 'home'),
+                    ActivityButton(onPressed: widget.onNotifications),
+                    const SizedBox(width: 8),
+                  ],
                 ),
-                actions: [
-                  PageCustomizeButton(pageId: 'home'),
-                  ActivityButton(onPressed: widget.onNotifications),
-                  const SizedBox(width: 8),
-                ],
               ),
-            SliverToBoxAdapter(
-              child: HomeBrowseNavigation(
-                onExplore: _showHomeExploreMenu,
-                onMovies: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/app/page/movies'),
-                      builder: (_) => const MoviesScreen(),
-                    )),
-                onShows: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/app/page/series'),
-                      builder: (_) => const SeriesScreen(),
-                    )),
-                onMusic: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/app/page/music'),
-                      builder: (_) => const MusicScreen(),
-                    )),
-                onPhysicalMedia: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      settings:
-                          const RouteSettings(name: '/app/physical-media'),
-                      builder: (_) => const PhysicalMediaLibraryScreen(),
-                    )),
-                onLiveTv: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/app/watch/live-tv'),
-                      builder: (_) => const PublicLiveTvScreen(),
-                    )),
-                onMyTv: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/app/watch/my-tv'),
-                      builder: (_) => const MyTvScreen(),
-                    )),
+            );
+            final browseNavigation = HomeBrowseNavigation(
+              onExplore: _showHomeExploreMenu,
+              onMovies: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/movies'),
+                  builder: (_) => const MoviesScreen(),
+                ),
               ),
-            ),
-            if (library.isEmpty && homeRecommendations.isEmpty)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        UniversalText('Your library is empty',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontSize: 25, fontWeight: FontWeight.w800)),
-                        SizedBox(height: 8),
-                        UniversalText(
-                            'Please add using the 3 dots in the navbar.',
-                            textAlign: TextAlign.center,
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 14)),
+              onShows: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/series'),
+                  builder: (_) => const SeriesScreen(),
+                ),
+              ),
+              onMusic: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/page/music'),
+                  builder: (_) => const MusicScreen(),
+                ),
+              ),
+              onPhysicalMedia: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/physical-media'),
+                  builder: (_) => const PhysicalMediaLibraryScreen(),
+                ),
+              ),
+              onLiveTv: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/watch/live-tv'),
+                  builder: (_) => const PublicLiveTvScreen(),
+                ),
+              ),
+              onMyTv: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/app/watch/my-tv'),
+                  builder: (_) => const MyTvScreen(),
+                ),
+              ),
+            );
+
+            return Column(
+              children: [
+                if (widget.showAppBar) homeAppBar,
+                browseNavigation,
+                if (showHero) const SizedBox(height: heroGap),
+                if (showHero)
+                  SizedBox(
+                    height: heroPaneHeight,
+                    child: HomeHeroCarousel(
+                      items: homeHeroItems,
+                      settingsKey: 'home',
+                      height: heroPaneHeight,
+                      edgeToEdge: true,
+                      onOpen: (media) => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          settings: const RouteSettings(name: '/app/details'),
+                          builder: (_) => MediaDetailsScreen(media: media),
+                        ),
+                      ),
+                      onPlay: (media) => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          settings: const RouteSettings(name: '/app/player'),
+                          builder: (_) => PlayerScreen(media: media),
+                        ),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: Colors.white,
+                    backgroundColor: const Color(0xFF171717),
+                    onRefresh: _refresh,
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        if (library.isEmpty && homeRecommendations.isEmpty)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 28),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    UniversalText(
+                                      'Your library is empty',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 25,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    UniversalText(
+                                      'Please add using the 3 dots in the navbar.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        for (final section in settings.sectionOrder)
+                          if (section != 'Hero Banner')
+                            ..._buildHomeSectionSlivers(
+                              context,
+                              section,
+                              settings,
+                              watched,
+                              movies,
+                              tvShows,
+                              library,
+                              homeRecommendations,
+                              homeHeroItems: homeHeroItems,
+                              heroController: _heroController,
+                              profile: profile,
+                            ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
                       ],
                     ),
                   ),
                 ),
-              ),
-            for (final section in settings.sectionOrder)
-              ..._buildHomeSectionSlivers(
-                context,
-                section,
-                settings,
-                watched,
-                movies,
-                tvShows,
-                library,
-                homeRecommendations,
-                homeHeroItems: homeHeroItems,
-                heroController: _heroController,
-                profile: profile,
-              ),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -7498,6 +7593,8 @@ class _MediaCardState extends State<MediaCard> {
                           top: 6, left: 6,
                           child: RecommendationOwnershipBadge(
                             isOwned: AppController.instance.isOwned(media.id),
+                            isWatched: AppController.instance.isWatched(media.id) ||
+                                AppController.instance.getPlaybackProgress(media.id) >= 0.95,
                             compact: true,
                           ),
                         ),

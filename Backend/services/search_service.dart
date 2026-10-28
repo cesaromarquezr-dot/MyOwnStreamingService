@@ -87,6 +87,7 @@ class SearchService {
     }
 
     final catalog = database.getAllMedia();
+    final relatedTerms = _relatedTerms(normalizedQuery);
     final results = <_ScoredSearchResult>[];
 
     for (final media in catalog) {
@@ -98,14 +99,22 @@ class SearchService {
       // --------------------------------------------------------
 
       final title = _normalize(media.title);
+      final compactQuery = _compact(normalizedQuery);
+      final compactTitle = _compact(title);
+      final exactTitle = title == normalizedQuery ||
+          (compactQuery.isNotEmpty && compactTitle == compactQuery);
+      final startsTitle = title.startsWith(normalizedQuery) ||
+          (compactQuery.isNotEmpty && compactTitle.startsWith(compactQuery));
+      final containsTitle = title.contains(normalizedQuery) ||
+          (compactQuery.isNotEmpty && compactTitle.contains(compactQuery));
 
-      if (title == normalizedQuery) {
+      if (exactTitle) {
         score += 1000;
         matchedBy.add('title');
-      } else if (title.startsWith(normalizedQuery)) {
+      } else if (startsTitle) {
         score += 800;
         matchedBy.add('title');
-      } else if (title.contains(normalizedQuery)) {
+      } else if (containsTitle) {
         score += 600;
         matchedBy.add('title');
       }
@@ -230,6 +239,36 @@ class SearchService {
         if (!matchedBy.contains('year')) {
           matchedBy.add('year');
         }
+      }
+
+      // Query expansion lets a character/franchise search surface connected
+      // catalog records when the catalog explicitly contains those titles or credits.
+      // Related matches rank below direct title/credit matches.
+      var relatedScore = 0;
+      String? relatedMatchKind;
+      for (final term in relatedTerms) {
+        final relatedKey = _normalize(term);
+        if (relatedKey.isEmpty || relatedKey == normalizedQuery) continue;
+        if (_matchesText(media.title, relatedKey)) {
+          relatedScore = 90;
+          relatedMatchKind = 'relatedTitle';
+          break;
+        }
+        if (_matchList(media.characters, relatedKey) ||
+            _matchList(media.franchises, relatedKey) ||
+            _matchList(media.references, relatedKey)) {
+          if (relatedScore < 75) {
+            relatedScore = 75;
+            relatedMatchKind = 'relatedIdentity';
+          }
+        } else if (_matchList(media.actors, relatedKey) && relatedScore < 35) {
+          relatedScore = 35;
+          relatedMatchKind = 'relatedCredit';
+        }
+      }
+      if (score == 0 && relatedScore > 0) {
+        score = relatedScore;
+        if (relatedMatchKind != null) matchedBy.add(relatedMatchKind);
       }
 
       if (score > 0) {
@@ -382,6 +421,60 @@ class SearchService {
   // VALIDATION
   // ==========================================================
 
+  String _compact(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  bool _matchesText(String value, String query) {
+    final candidate = _normalize(value);
+    return candidate.contains(query) || _compact(candidate).contains(_compact(query));
+  }
+
+  List<String> _relatedTerms(String query) {
+    final key = _compact(query);
+    if (const <String>{
+      'spider', 'spiderman', 'peterparker', 'milesmorales', 'spiderverse',
+      'spidernoir', 'spidergwen', 'spiderwoman', 'spiderpunk', 'spiderham',
+      'spiderman2099', 'miguelohara', 'hobiebrown', 'gwenstacy', 'benreilly',
+    }.contains(key)) {
+      return const <String>[
+        'Spider-Man', 'Spider-Man 2', 'Spider-Man 3', 'The Amazing Spider-Man',
+        'The Amazing Spider-Man 2', 'Captain America: Civil War',
+        'Spider-Man: Homecoming', 'Avengers: Infinity War', 'Avengers: Endgame',
+        'Spider-Man: Into the Spider-Verse', 'Spider-Man: Across the Spider-Verse',
+        'Spider-Man: Far From Home', 'Spider-Man: No Way Home',
+        'Spider-Man: Brand New Day', 'Spider-Man (1967)', 'Spider-Man (1981)',
+        'Spider-Man and His Amazing Friends', 'Spider-Man: The Animated Series',
+        'Spider-Man Unlimited', 'The New Animated Series', 'The Spectacular Spider-Man',
+        'Ultimate Spider-Man', 'Spider-Man (2017)', 'Spidey and His Amazing Friends',
+        'Your Friendly Neighborhood Spider-Man', 'Spider-Noir', 'Peter Parker',
+        'Miles Morales', 'Spider-Gwen', 'Gwen Stacy', 'Spider-Man 2099',
+        'Miguel O’Hara', 'Spider-Punk', 'Hobie Brown', 'Spider-Ham', 'Peter Porker',
+        'Ben Reilly', 'Iron Spider', 'Tobey Maguire', 'Andrew Garfield', 'Tom Holland',
+        'Paul Soles', 'Neil Patrick Harris', 'Christopher Daniel Barnes', 'Drake Bell',
+        'Dan Gilvezan', 'Jake Johnson', 'Shameik Moore', 'Nicolas Cage', 'Hailee Steinfeld',
+        'Oscar Isaac', 'Daniel Kaluuya', 'John Mulaney',
+      ];
+    }
+    if (const <String>{'iron', 'ironman', 'tonystark', 'ironheart', 'ririwilliams'}.contains(key)) {
+      return const <String>[
+        'Iron Man', 'Iron Man 2', 'Iron Man 3', 'Iron Man: Armored Adventures',
+        'The Super Hero Squad Show', 'Avengers', 'Avengers: Age of Ultron',
+        'Avengers: Infinity War', 'Avengers: Endgame', 'Captain America: Civil War',
+        'Spider-Man: Homecoming', 'Ironheart', 'Tony Stark', 'Riri Williams',
+      ];
+    }
+    if (const <String>{'alexrusso', 'wizards', 'wizardsofwaverlyplace', 'alexvsalex'}.contains(key)) {
+      return const <String>[
+        'Alex Russo', 'Selena Gomez', 'Wizards of Waverly Place',
+        'Wizards of Waverly Place: The Movie', 'The Wizards Return: Alex vs. Alex',
+      ];
+    }
+    if (key == 'taylor') {
+      return const <String>['Taylor Swift', 'Taylor Lautner', 'The Ridiculous 6', 'The Twilight Saga'];
+    }
+    return const <String>[];
+  }
+
   String _validateAndNormalizeQuery(String value) {
     if (value.contains('\u0000')) {
       throw Exception('Search query contains an invalid character.');
@@ -433,7 +526,9 @@ class SearchService {
       value = value.substring(0, maximumMetadataValueLength);
     }
 
-    return _normalize(value).contains(normalizedQuery);
+    final normalizedValue = _normalize(value);
+    return normalizedValue.contains(normalizedQuery) ||
+        _compact(normalizedValue).contains(_compact(normalizedQuery));
   }
 
   bool _matchList(
@@ -462,7 +557,8 @@ class SearchService {
       }
 
       if (normalizedValue == normalizedQuery ||
-          normalizedValue.contains(normalizedQuery)) {
+          normalizedValue.contains(normalizedQuery) ||
+          _compact(normalizedValue).contains(_compact(normalizedQuery))) {
         return true;
       }
     }

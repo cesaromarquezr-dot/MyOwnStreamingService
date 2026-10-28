@@ -343,10 +343,7 @@ class _MediaDetailsScreenState extends State<MediaDetailsScreen> {
           // card below, preventing duplicate Shop buttons in Details.
           for (final section in customization.sectionOrder)
             if (section != 'Shop') _buildSection(section),
-          if (shouldShowBuySectionForOwnership(
-            isOwned: _isCurrentMediaOwned,
-          ))
-            _buildExternalPurchaseOptions(),
+          if (!_isCurrentMediaOwned) _buildExternalPurchaseOptions(),
           MediaContinuityPanel(mediaId: media.id, mediaTitle: media.title),
           MediaFranchiseConnectionsPanel(mediaId: media.id, hasSeasons: isTvShow),
           const SizedBox(height: 12),

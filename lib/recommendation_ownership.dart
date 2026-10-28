@@ -155,27 +155,44 @@ class RecommendationOwnershipMatcher {
 }
 
 /// Shared ownership wording for every recommendation shelf.
-String recommendationOwnershipLabel(bool isOwned) =>
-    isOwned ? 'Owned' : 'Not owned';
+String recommendationOwnershipLabel(bool isOwned, {bool isWatched = false}) {
+  if (!isOwned) return 'Not owned';
+  return isWatched ? 'Owned · Watched' : 'Owned · Unwatched';
+}
 
-/// Purchase links are only useful when the current profile does not already
-/// have the recommended media in its accessible library.
-bool shouldShowBuySectionForOwnership({required bool isOwned}) => !isOwned;
-
-/// Compact, consistent status marker shown on recommendation cards.
+/// Compact three-state marker for discovery and recommendation cards:
+/// blue = in the library but not completed, green = watched/listened, red = not owned.
 class RecommendationOwnershipBadge extends StatelessWidget {
   const RecommendationOwnershipBadge({
     super.key,
     required this.isOwned,
+    this.isWatched = false,
+    this.watchedLabel = 'Watched',
     this.compact = false,
   });
 
   final bool isOwned;
+  final bool isWatched;
+  final String watchedLabel;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final color = isOwned ? const Color(0xFF8BE3A1) : const Color(0xFFFFD27A);
+    final color = !isOwned
+        ? const Color(0xFFFF6B6B)
+        : isWatched
+            ? const Color(0xFF65D98A)
+            : const Color(0xFF65B9FF);
+    final label = !isOwned
+        ? 'Not owned'
+        : isWatched
+            ? 'Owned · $watchedLabel'
+            : 'Owned · Unwatched';
+    final icon = !isOwned
+        ? Icons.remove_shopping_cart_outlined
+        : isWatched
+            ? Icons.check_circle_rounded
+            : Icons.video_library_outlined;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 6 : 9,
@@ -184,19 +201,15 @@ class RecommendationOwnershipBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xE817171D),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: .7)),
+        border: Border.all(color: color.withValues(alpha: .82)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isOwned ? Icons.check_circle_rounded : Icons.shopping_bag_outlined,
-            size: compact ? 10 : 12,
-            color: color,
-          ),
+          Icon(icon, size: compact ? 10 : 12, color: color),
           const SizedBox(width: 4),
           Text(
-            recommendationOwnershipLabel(isOwned),
+            label,
             style: TextStyle(
               color: color,
               fontSize: compact ? 9 : 11,

@@ -220,7 +220,7 @@ class MediaMetadataService {
     if (path.isEmpty || path.length > 180 || path.contains('..')) {
       throw const FormatException('Invalid TMDB resource path.');
     }
-    final allowed = RegExp(r'^search/(movie|tv|person|keyword)$').hasMatch(path) ||
+    final allowed = RegExp(r'^search/(movie|tv|person|multi|keyword)$').hasMatch(path) ||
         RegExp(r'^trending/(movie|tv|person)/week$').hasMatch(path) ||
         RegExp(r'^discover/(movie|tv)$').hasMatch(path) ||
         RegExp(

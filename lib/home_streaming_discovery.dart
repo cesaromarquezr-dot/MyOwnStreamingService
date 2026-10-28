@@ -32,6 +32,10 @@ import 'recommendation_ownership.dart';
 import 'core/services/cinematic_title_metadata_service.dart';
 import 'media_artwork_auto_resolver.dart';
 import 'page_hero_banner.dart';
+import 'home_hero_hover_preview.dart';
+
+export 'home_hero_hover_preview.dart'
+    show HomeHoverPreviewStore, HomeHeroHoverPreviewRegion;
 
 const Color _discoveryAccent = Color(0xFF8B7CFF);
 const Color _discoveryPanel = Color(0xFF171722);
@@ -196,29 +200,76 @@ class HomeBrowseNavigation extends StatelessWidget {
   }
 }
 
-/// Shared home-only hover target. Home rail cards publish their hovered item and
-/// the hero surfaces it immediately; leaving the card returns to normal rotation.
-class HomeHoverPreviewStore {
-  HomeHoverPreviewStore._();
+/// Keeps the hero's visible size consistent with its pinned sliver extent.
+double homeHeroBannerContentHeightForWidth(double width) => width < 600
+    ? (width * .72).clamp(300.0, 430.0).toDouble()
+    : (width * .43).clamp(420.0, 590.0).toDouble();
 
-  static final ValueNotifier<MediaItem?> current = ValueNotifier<MediaItem?>(null);
+double homeHeroBannerExtentForWidth(double width) =>
+    homeHeroBannerContentHeightForWidth(width) + 14.0;
 
-  static void show(MediaItem item) => current.value = item;
+/// Calculates the hero's content height for a fixed top pane occupying half
+/// of the usable viewport. [fixedHeaderHeight] accounts for page chrome above
+/// the hero (for example Home's title bar and browse navigation). The carousel
+/// adds 14 px of vertical padding outside this content height.
+double homeHeroBannerContentHeightForSplit(
+  double availableHeight, {
+  double fixedHeaderHeight = 0,
+}) =>
+    max(120.0, availableHeight * 0.5 - fixedHeaderHeight - 14.0).toDouble();
 
-  static void clear(String mediaId) {
-    if (current.value?.id == mediaId) current.value = null;
-  }
+/// A fixed-height sliver header retained for callers that use sliver layouts.
+class PinnedHomeHeroSliverDelegate extends SliverPersistentHeaderDelegate {
+  final double extent;
+  final Widget child;
+
+  const PinnedHomeHeroSliverDelegate({
+    required this.extent,
+    required this.child,
+  });
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) =>
+      SizedBox(height: extent, child: child);
+
+  @override
+  bool shouldRebuild(covariant PinnedHomeHeroSliverDelegate oldDelegate) =>
+      oldDelegate.extent != extent || oldDelegate.child != child;
 }
 
 /// Large landscape Home banner with automatic rotation, hover previews and controls.
 class HomeHeroCarousel extends StatefulWidget {
   final List<MediaItem> items;
+
   /// Always opens the selected media's details page.
   final ValueChanged<MediaItem> onOpen;
+
   /// Opens playback; defaults to [onOpen] only for callers that do not provide it.
   final ValueChanged<MediaItem>? onPlay;
+
   /// Stable settings key: home, movies, or series.
   final String settingsKey;
+
+  /// Vertical offset for the hero's page-count badge. Use this when a page
+  /// has a fixed overlay toolbar so the badge doesn't overlap its actions.
+  final double pageIndicatorTop;
+
+  /// Optional fixed content height. When omitted, the legacy width-based
+  /// height is used for compatibility with existing callers.
+  final double? height;
+
+  /// Removes the usual outer inset so the artwork fills a pinned top pane.
+  final bool edgeToEdge;
 
   const HomeHeroCarousel({
     super.key,
@@ -226,6 +277,9 @@ class HomeHeroCarousel extends StatefulWidget {
     required this.onOpen,
     this.onPlay,
     this.settingsKey = 'home',
+    this.pageIndicatorTop = 18,
+    this.height,
+    this.edgeToEdge = false,
   });
 
   @override
@@ -247,10 +301,13 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   PageHeroSettings _heroSettings = const PageHeroSettings();
 
   List<MediaItem> get _items {
-    if (!_heroSettings.enabled || widget.items.isEmpty) return const <MediaItem>[];
+    if (!_heroSettings.enabled || widget.items.isEmpty) {
+      return const <MediaItem>[];
+    }
     final count = min(widget.items.length, _heroSettings.itemCount);
     return widget.items.take(count).toList(growable: false);
   }
+
   String? _previewUrl;
   String? _youtubePreviewUrl;
   String? _youtubePreviewId;
@@ -310,7 +367,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     final direct = _previewController;
     if (direct != null && direct.value.isInitialized) {
       try {
-        await direct.setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
+        await direct
+            .setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
       } catch (_) {}
     }
   }
@@ -321,6 +379,13 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (_hoveredMedia?.id == next?.id) return;
     setState(() => _hoveredMedia = next);
     if (next != null) {
+      final matchingIndex = _items.indexWhere((item) => item.id == next.id);
+      if (matchingIndex >= 0 && matchingIndex != _index) {
+        _index = matchingIndex;
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(matchingIndex);
+        }
+      }
       _loadPreview(next);
       unawaited(_loadOverview(next));
       unawaited(_loadAutomaticArtwork(next));
@@ -350,7 +415,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       }
     }
     if (itemCountChanged) _scheduleNext();
-    if (oldWidget.settingsKey != widget.settingsKey) unawaited(_loadHeroSettings());
+    if (oldWidget.settingsKey != widget.settingsKey) {
+      unawaited(_loadHeroSettings());
+    }
     unawaited(_refreshSelectedBackdrops());
     if (_items.isNotEmpty) {
       unawaited(_loadOverview(_items[_index]));
@@ -391,11 +458,13 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       }
       if (poster != null && poster.isNotEmpty) nextPosters[item.id] = poster;
       if ((backdrop == null || backdrop.isEmpty) &&
-          automaticBackdrop != null && automaticBackdrop.isNotEmpty) {
+          automaticBackdrop != null &&
+          automaticBackdrop.isNotEmpty) {
         automaticBackdrops[item.id] = automaticBackdrop;
       }
       if ((poster == null || poster.isEmpty) &&
-          automaticPoster != null && automaticPoster.isNotEmpty) {
+          automaticPoster != null &&
+          automaticPoster.isNotEmpty) {
         automaticPosters[item.id] = automaticPoster;
       }
     }
@@ -482,7 +551,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (!_isMovieOrShow(media) || _openingHeroArtworkGallery) return;
     if (!CinematicTitleMetadataService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Connect and start the metadata backend to browse poster and backdrop choices.'),
+        content: Text(
+            'Connect and start the metadata backend to browse poster and backdrop choices.'),
       ));
       return;
     }
@@ -497,7 +567,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       if (metadata == null ||
           (metadata.posterPaths.isEmpty && metadata.backdropPaths.isEmpty)) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No poster or backdrop gallery found for "${media.title}".'),
+          content:
+              Text('No poster or backdrop gallery found for "${media.title}".'),
         ));
         return;
       }
@@ -584,7 +655,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         if (overview.isNotEmpty) {
           _tmdbOverviewsByMediaId[media.id] = overview;
         }
-        if ((media.isSeries || _isTvMedia(media)) && seasonCount != null && seasonCount > 0) {
+        if ((media.isSeries || _isTvMedia(media)) &&
+            seasonCount != null &&
+            seasonCount > 0) {
           _tmdbSeasonCountsByMediaId[media.id] = seasonCount;
         }
         if (media.isSeries && yearLabel.isNotEmpty) {
@@ -593,7 +666,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       });
       final isSelected = _hoveredMedia?.id == media.id ||
           (_items.isNotEmpty &&
-              _items[_index.clamp(0, _items.length - 1).toInt()].id == media.id);
+              _items[_index.clamp(0, _items.length - 1).toInt()].id ==
+                  media.id);
       if (previewUrl.isNotEmpty &&
           media.trailerUrl?.trim().isNotEmpty != true &&
           _extractYoutubeVideoId(previewUrl) != null &&
@@ -638,11 +712,17 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     String? candidate;
     if (uri.host == 'youtu.be' || uri.host == 'www.youtu.be') {
       candidate = uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
-    } else if (const <String>{'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'}.contains(uri.host)) {
+    } else if (const <String>{
+      'youtube.com',
+      'www.youtube.com',
+      'm.youtube.com',
+      'music.youtube.com'
+    }.contains(uri.host)) {
       if (uri.path == '/watch') {
         candidate = uri.queryParameters['v'];
       } else if (uri.pathSegments.length >= 2 &&
-          const <String>{'shorts', 'embed', 'live', 'v'}.contains(uri.pathSegments.first)) {
+          const <String>{'shorts', 'embed', 'live', 'v'}
+              .contains(uri.pathSegments.first)) {
         candidate = uri.pathSegments[1];
       }
     }
@@ -709,7 +789,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       // applies the latest _previewMuted state as soon as initialization ends.
       try {
         if (direct.value.isInitialized) {
-          await direct.setVolume(_heroSettings.audioEnabled && !nextMuted ? 1 : 0);
+          await direct
+              .setVolume(_heroSettings.audioEnabled && !nextMuted ? 1 : 0);
           if (!nextMuted) await direct.play();
         }
       } catch (_) {
@@ -737,7 +818,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
     if (_effectivePreviewUrl(media)?.trim().isNotEmpty != true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('There is no video/audio preview available for this title yet.'),
+        content: Text(
+            'There is no video/audio preview available for this title yet.'),
         duration: Duration(seconds: 3),
       ));
     }
@@ -764,7 +846,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   String? _effectivePreviewUrl(MediaItem media) {
     final explicit = media.trailerUrl?.trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
-    return _musicVideoUrlByMediaId[media.id] ?? _tmdbTrailerUrlByMediaId[media.id];
+    return _musicVideoUrlByMediaId[media.id] ??
+        _tmdbTrailerUrlByMediaId[media.id];
   }
 
   bool _isMusicVideoSearchable(MediaItem media) {
@@ -802,9 +885,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       final item = Map<String, dynamic>.from(rawItems.first as Map);
       final videoId = item['videoId']?.toString().trim();
       final watchUrl = item['watchUrl']?.toString().trim();
-      final url = videoId != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)
-          ? 'https://www.youtube.com/watch?v=$videoId'
-          : watchUrl;
+      final url =
+          videoId != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)
+              ? 'https://www.youtube.com/watch?v=$videoId'
+              : watchUrl;
       if (url == null || !url.startsWith('http')) return;
       _musicVideoUrlByMediaId[media.id] = url;
 
@@ -812,7 +896,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       // the newer title's active preview. The result remains cached for next time.
       final stillSelected = _hoveredMedia?.id == media.id ||
           (_items.isNotEmpty &&
-              _items[_index.clamp(0, _items.length - 1).toInt()].id == media.id);
+              _items[_index.clamp(0, _items.length - 1).toInt()].id ==
+                  media.id);
       if (mounted && stillSelected) await _loadPreview(media);
     } catch (_) {
       // Keep Home usable when the backend or YouTube search is unavailable.
@@ -862,7 +947,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       var audioAppliedWhenReady = false;
       _youtubePreviewStateSubscription = controller.stream.listen((value) {
         // youtube_player_iframe 6.x exposes readiness through playerState; unknown means no player state has arrived yet.
-        if (value.playerState == PlayerState.unknown || audioAppliedWhenReady) return;
+        if (value.playerState == PlayerState.unknown || audioAppliedWhenReady) {
+          return;
+        }
         audioAppliedWhenReady = true;
         if (!identical(_youtubePreviewController, controller)) return;
         unawaited(_applyYoutubePreviewAudio(controller));
@@ -882,7 +969,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     _disposeYoutubePreview();
     if (_previewUrl == url && _previewController?.value.isInitialized == true) {
       await _previewController!.seekTo(Duration.zero);
-      await _previewController!.setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
+      await _previewController!
+          .setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
       await _previewController!.play();
       return;
     }
@@ -898,7 +986,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     try {
       await controller.initialize();
       await controller.setLooping(true);
-      await controller.setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
+      await controller
+          .setVolume(_heroSettings.audioEnabled && !_previewMuted ? 1 : 0);
       if (!mounted || _previewController != controller) {
         await controller.dispose();
         return;
@@ -917,8 +1006,11 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
 
   void _scheduleNext() {
     _advanceTimer?.cancel();
-    if (!_appIsActive || _items.length < 2) return;
-    _advanceTimer = Timer(Duration(seconds: _heroSettings.intervalSeconds), () async {
+    // Keep the hovered title stable while the user explores its details.
+    // _onHomeHoverChanged restarts rotation when the pointer leaves the card.
+    if (!_appIsActive || _items.length < 2 || _hoveredMedia != null) return;
+    _advanceTimer =
+        Timer(Duration(seconds: _heroSettings.intervalSeconds), () async {
       if (!mounted || !_appIsActive || _items.length < 2) return;
       if (!_pageController.hasClients) {
         _scheduleNext();
@@ -963,11 +1055,13 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       _scheduleNext();
       return;
     }
-    _pageController.animateToPage(
+    _pageController
+        .animateToPage(
       next,
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutCubic,
-    ).then((_) {
+    )
+        .then((_) {
       if (!mounted) return;
       if (_index != next) setState(() => _index = next);
       _loadPreview(_items[next]);
@@ -996,151 +1090,158 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
     final width = MediaQuery.sizeOf(context).width;
-    // On desktop the hero uses roughly the upper half of the window; mobile
-    // keeps a shorter banner so the first discovery shelf remains visible.
-    final height = width < 600
-        ? (width * .72).clamp(300.0, 430.0).toDouble()
-        : (width * .43).clamp(420.0, 590.0).toDouble();
+    // Split-pane pages pass a height derived from viewport height so the hero
+    // occupies the top pane instead of growing with a wide desktop display.
+    final height = widget.height ?? homeHeroBannerContentHeightForWidth(width);
 
     return MouseRegion(
-      onEnter: (_) { if (mounted) setState(() => _heroPointerInside = true); },
-      onExit: (_) { if (mounted) setState(() => _heroPointerInside = false); },
-      child: Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            _move(-1);
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            _move(1);
-            return KeyEventResult.handled;
-          }
-        }
-        return KeyEventResult.ignored;
+      onEnter: (_) {
+        if (mounted) setState(() => _heroPointerInside = true);
       },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-        child: SizedBox(
-        height: height,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                itemCount: _items.length,
-                onPageChanged: (value) {
-                  setState(() => _index = value);
-                  final previewItem = _hoveredMedia ?? _items[value];
-                  _loadPreview(previewItem);
-                  unawaited(_loadOverview(previewItem));
-                  unawaited(_loadAutomaticArtwork(previewItem));
-                  _scheduleNext();
-                },
-                itemBuilder: (context, index) => IgnorePointer(
-                  child: _buildHeroPage(_items[index]),
-                ),
-              ),
-              if (_hoveredMedia != null)
-                Positioned.fill(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 260),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    child: KeyedSubtree(
-                      key: ValueKey<String>('home-hover-${_hoveredMedia!.id}'),
-                      child: IgnorePointer(child: _buildHeroPage(_hoveredMedia!)),
+      onExit: (_) {
+        if (mounted) setState(() => _heroPointerInside = false);
+      },
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              _move(-1);
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              _move(1);
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Padding(
+          padding: widget.edgeToEdge
+              ? EdgeInsets.zero
+              : const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          child: SizedBox(
+            height: height,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  PageView.builder(
+                    controller: _pageController,
+                    itemCount: _items.length,
+                    onPageChanged: (value) {
+                      setState(() => _index = value);
+                      final previewItem = _hoveredMedia ?? _items[value];
+                      _loadPreview(previewItem);
+                      unawaited(_loadOverview(previewItem));
+                      unawaited(_loadAutomaticArtwork(previewItem));
+                      _scheduleNext();
+                    },
+                    itemBuilder: (context, index) => IgnorePointer(
+                      child: _buildHeroPage(_items[index]),
                     ),
                   ),
-                ),
-              Positioned(
-                left: 24,
-                right: 24,
-                bottom: 18,
-                child: Builder(builder: (context) {
-                  // Keep the indicator compact even if a large library produces
-                  // dozens or hundreds of hero items. Arrow keys can reach all.
-                  final visibleDots = min(9, _items.length);
-                  final firstDot = max(
-                    0,
-                    min(_index - visibleDots ~/ 2,
-                        _items.length - visibleDots),
-                  );
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List<Widget>.generate(visibleDots, (slot) {
-                      final index = firstDot + slot;
-                      return GestureDetector(
-                        onTap: () {
-                          _pageController.animateToPage(index,
-                              duration: const Duration(milliseconds: 350),
-                              curve: Curves.easeOutCubic);
-                          _scheduleNext();
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: index == _index ? 21 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: index == _index
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: .45),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                  if (_hoveredMedia != null)
+                    Positioned.fill(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: KeyedSubtree(
+                          key: ValueKey<String>(
+                              'home-hover-${_hoveredMedia!.id}'),
+                          child: IgnorePointer(
+                              child: _buildHeroPage(_hoveredMedia!)),
                         ),
+                      ),
+                    ),
+                  Positioned(
+                    left: 24,
+                    right: 24,
+                    bottom: 18,
+                    child: Builder(builder: (context) {
+                      // Keep the indicator compact even if a large library produces
+                      // dozens or hundreds of hero items. Arrow keys can reach all.
+                      final visibleDots = min(9, _items.length);
+                      final firstDot = max(
+                        0,
+                        min(_index - visibleDots ~/ 2,
+                            _items.length - visibleDots),
+                      );
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List<Widget>.generate(visibleDots, (slot) {
+                          final index = firstDot + slot;
+                          return GestureDetector(
+                            onTap: () {
+                              _pageController.animateToPage(index,
+                                  duration: const Duration(milliseconds: 350),
+                                  curve: Curves.easeOutCubic);
+                              _scheduleNext();
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              width: index == _index ? 21 : 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: index == _index
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: .45),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          );
+                        }),
                       );
                     }),
-                  );
-                }),
-              ),
-              ..._buildHeroControls(
-                _hoveredMedia ?? _items[_index.clamp(0, _items.length - 1).toInt()],
-                compact: width < 600,
-              ),
-              if (_items.length > 1) ...[
-                Positioned(
-                  left: 10,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: _heroArrow(Icons.chevron_left_rounded,
-                        () => _move(-1), 'Previous featured title'),
                   ),
-                ),
-                Positioned(
-                  right: 10,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: _heroArrow(Icons.chevron_right_rounded,
-                        () => _move(1), 'Next featured title'),
+                  ..._buildHeroControls(
+                    _hoveredMedia ??
+                        _items[_index.clamp(0, _items.length - 1).toInt()],
+                    compact: width < 600,
                   ),
-                ),
-                Positioned(
-                  right: 24,
-                  top: 18,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .56),
-                      borderRadius: BorderRadius.circular(20),
+                  if (_items.length > 1) ...[
+                    Positioned(
+                      left: 10,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _heroArrow(Icons.chevron_left_rounded,
+                            () => _move(-1), 'Previous featured title'),
+                      ),
                     ),
-                    child: Text('${_index + 1} / ${_items.length}',
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              ],
-            ],
+                    Positioned(
+                      right: 10,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _heroArrow(Icons.chevron_right_rounded,
+                            () => _move(1), 'Next featured title'),
+                      ),
+                    ),
+                    Positioned(
+                      right: 24,
+                      top: widget.pageIndicatorTop,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .56),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('${_index + 1} / ${_items.length}',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -1161,7 +1262,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
           _automaticBackdropPaths[media.id],
           size: 'w1280',
         );
-    Widget posterErrorFallback(BoxFit fit, {Alignment alignment = Alignment.center}) {
+    Widget posterErrorFallback(BoxFit fit,
+        {Alignment alignment = Alignment.center}) {
       final automaticPoster = _automaticPosterUrls[media.id]?.trim() ?? '';
       if (automaticPoster.isNotEmpty && automaticPoster != selectedPosterUrl) {
         return CachedNetworkImage(
@@ -1175,6 +1277,7 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
       }
       return _heroFallback(media);
     }
+
     final tmdbOverview = _tmdbOverviewsByMediaId[media.id]?.trim();
     // Movie/show heroes prefer TMDB's actual overview. Albums and titles without
     // an exact TMDB match fall back to the overview/description in the catalog.
@@ -1197,7 +1300,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
     if (editionLabel != null && editionLabel.isNotEmpty) {
       heroMetadata.add(editionLabel);
     }
-    final seasonCount = media.displaySeasonCount ?? _tmdbSeasonCountsByMediaId[media.id];
+    final seasonCount =
+        media.displaySeasonCount ?? _tmdbSeasonCountsByMediaId[media.id];
     if (seasonCount != null) {
       heroMetadata
           .add('$seasonCount ${seasonCount == 1 ? 'Season' : 'Seasons'}');
@@ -1215,10 +1319,10 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
             selectedBackdropUrl != null &&
             !(_heroSettings.artworkMode == 'Both or previews' &&
                 ((_previewController != null &&
-                      _previewUrl == _effectivePreviewUrl(media) &&
-                      _previewController!.value.isInitialized) ||
-                  (_youtubePreviewController != null &&
-                      _youtubePreviewUrl == _effectivePreviewUrl(media)))))
+                        _previewUrl == _effectivePreviewUrl(media) &&
+                        _previewController!.value.isInitialized) ||
+                    (_youtubePreviewController != null &&
+                        _youtubePreviewUrl == _effectivePreviewUrl(media)))))
           Positioned.fill(
             // Keep the backdrop contained while letting the user choose how
             // strongly it zooms on hover. ClipRRect confines the zoom to the hero.
@@ -1300,7 +1404,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                       colorBlendMode: BlendMode.darken,
                       fadeInDuration: const Duration(milliseconds: 100),
                       placeholder: (_, __) => _heroFallback(media),
-                      errorWidget: (_, __, ___) => posterErrorFallback(BoxFit.cover),
+                      errorWidget: (_, __, ___) =>
+                          posterErrorFallback(BoxFit.cover),
                     ),
                     CachedNetworkImage(
                       imageUrl: selectedPosterUrl,
@@ -1308,7 +1413,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                       alignment: Alignment.centerRight,
                       fadeInDuration: const Duration(milliseconds: 100),
                       placeholder: (_, __) => _heroFallback(media),
-                      errorWidget: (_, __, ___) => posterErrorFallback(BoxFit.contain, alignment: Alignment.centerRight),
+                      errorWidget: (_, __, ___) => posterErrorFallback(
+                          BoxFit.contain,
+                          alignment: Alignment.centerRight),
                     ),
                   ],
                 ),
@@ -1405,7 +1512,9 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white70, fontSize: 12.5, height: 1.4)),
+                            color: Colors.white70,
+                            fontSize: 12.5,
+                            height: 1.4)),
                   ),
                 ],
               ],
@@ -1417,8 +1526,29 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
   }
 
   List<Widget> _buildHeroControls(MediaItem media, {required bool compact}) {
-    final controls = <Widget>[
-      Positioned(
+    final rawType = media.type.trim().toLowerCase();
+    final entityOnly = <String>{
+          'person',
+          'actor',
+          'actress',
+          'singer',
+          'artist',
+          'band',
+          'channel',
+          'collection',
+          'franchise',
+          'franchise and saga',
+          'cinematic universe',
+          'multiverse',
+          'multiverse and timeline hub',
+        }.contains(rawType) ||
+        rawType.contains('franchise') ||
+        rawType.contains('universe') ||
+        rawType.contains('timeline') ||
+        rawType.contains('hub');
+    final controls = <Widget>[];
+    if (!entityOnly) {
+      controls.add(Positioned(
         left: compact ? 18 : 26,
         right: compact ? 108 : 126,
         bottom: compact ? 14 : 28,
@@ -1448,7 +1578,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                 }
                 if (playbackUrl.isEmpty && trailerUrl.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('No playable file or trailer is available for this title yet.'),
+                    content: Text(
+                        'No playable file or trailer is available for this title yet.'),
                     duration: Duration(seconds: 3),
                   ));
                   return;
@@ -1456,7 +1587,8 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                 widget.onOpen(playable);
               },
               icon: const Icon(Icons.play_arrow_rounded, size: 22),
-              label: const UniversalText('Play', style: TextStyle(fontWeight: FontWeight.w900)),
+              label: const UniversalText('Play',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -1464,13 +1596,15 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                   horizontal: compact ? 12 : 22,
                   vertical: compact ? 9 : 12,
                 ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
             OutlinedButton.icon(
               onPressed: () => widget.onOpen(media),
               icon: const Icon(Icons.info_outline_rounded, size: 20),
-              label: const UniversalText('More info', style: TextStyle(fontWeight: FontWeight.w900)),
+              label: const UniversalText('More info',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: Colors.black.withValues(alpha: .42),
@@ -1479,13 +1613,14 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
                   horizontal: compact ? 10 : 18,
                   vertical: compact ? 9 : 12,
                 ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
         ),
-      ),
-    ];
+      ));
+    }
     if (_isMovieOrShow(media)) {
       controls.add(Positioned(
         right: compact ? 62 : 70,
@@ -1504,38 +1639,59 @@ class _HomeHeroCarouselState extends State<HomeHeroCarousel>
         ),
       ));
     }
-    controls.add(Positioned(
-      right: compact ? 12 : 20,
-      bottom: compact ? 14 : 28,
-      child: Material(
-        color: Colors.black.withValues(alpha: .46),
-        shape: const CircleBorder(),
-        child: IconButton(
-          tooltip: !_heroSettings.audioEnabled
-              ? 'Hero preview audio disabled in Customize App'
-              : _previewMuted ? 'Turn hero preview sound on' : 'Turn hero preview sound off',
-          onPressed: _heroSettings.audioEnabled
-              ? () => unawaited(_toggleHeroPreviewAudio(media))
-              : null,
-          icon: Icon(!_heroSettings.audioEnabled || _previewMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: Colors.white),
-          constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+    final hasPotentialPreview = _isMovieOrShow(media) ||
+        _isMusicVideoSearchable(media) ||
+        _effectivePreviewUrl(media)?.trim().isNotEmpty == true;
+    if (!entityOnly && hasPotentialPreview) {
+      controls.add(Positioned(
+        right: compact ? 12 : 20,
+        bottom: compact ? 14 : 28,
+        child: Material(
+          color: Colors.black.withValues(alpha: .46),
+          shape: const CircleBorder(),
+          child: IconButton(
+            tooltip: !_heroSettings.audioEnabled
+                ? 'Hero preview audio disabled in Customize App'
+                : _previewMuted
+                    ? 'Turn hero preview sound on'
+                    : 'Turn hero preview sound off',
+            onPressed: _heroSettings.audioEnabled
+                ? () => unawaited(_toggleHeroPreviewAudio(media))
+                : null,
+            icon: Icon(
+                !_heroSettings.audioEnabled || _previewMuted
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
+                color: Colors.white),
+            constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+          ),
         ),
-      ),
-    ));
+      ));
+    }
     return controls;
   }
 
   String _heroTypeLabel(MediaItem media) {
     final raw = media.type.toLowerCase().trim();
-    if (media.isSeries || raw.contains('tv') || raw.contains('series') || raw.contains('show')) {
+    if (media.isSeries ||
+        raw.contains('tv') ||
+        raw.contains('series') ||
+        raw.contains('show')) {
       return 'TV SERIES';
     }
     if (raw.contains('album') || raw == 'soundtrack' || raw == 'musicrelease') {
       return 'ALBUM';
     }
-    if (raw == 'track' || raw == 'song' || raw == 'audio' || raw.contains('track')) return 'SONG';
+    if (raw == 'track' ||
+        raw == 'song' ||
+        raw == 'audio' ||
+        raw.contains('track')) {
+      return 'SONG';
+    }
     if (raw == 'artist' || raw == 'musician') return 'MUSIC ARTIST';
-    if (raw.contains('movie') || raw.contains('film') || raw == 'feature') return 'MOVIE';
+    if (raw.contains('movie') || raw.contains('film') || raw == 'feature') {
+      return 'MOVIE';
+    }
     return raw.isEmpty ? 'FEATURED' : raw.toUpperCase();
   }
 
@@ -1592,6 +1748,25 @@ class _ThemedEpisodeEntry {
     this.episode,
     this.imageUrl,
   });
+
+  MediaItem get previewMedia {
+    final data = episode;
+    if (data == null) return parent;
+    final episodeDescription = (data['description'] ?? '').toString().trim();
+    final summary = <String>[
+      detail,
+      if (episodeDescription.isNotEmpty) episodeDescription,
+    ].join(' • ');
+    return MediaItem(
+      id: 'home-themed-episode:${parent.id}:${data['id'] ?? title}',
+      title: title,
+      type: 'episode',
+      imageUrl: imageUrl,
+      description: summary,
+      trailerUrl: data['trailerUrl']?.toString(),
+      playbackUrl: (data['playbackUrl'] ?? data['streamingUrl'])?.toString(),
+    );
+  }
 }
 
 /// Surfaces themed specials and episodes only when the library metadata supports them.
@@ -1746,7 +1921,7 @@ class HomeThemedEpisodesSection extends StatelessWidget {
                   title: entry.title,
                   subtitle: entry.detail,
                   imageUrl: entry.imageUrl,
-                  media: entry.parent,
+                  media: entry.previewMedia,
                   onTap: () => _openEntry(context, entry),
                   width: 148,
                 );
@@ -1874,7 +2049,8 @@ class HomeYouMayAlsoLikeSection extends StatelessWidget {
                 imageUrl: media.imageUrl,
                 media: media,
                 isOwned: AppController.instance.isOwned(media.id),
-                isWatched: AppController.instance.watched.any((item) => item.id == media.id),
+                isWatched: AppController.instance.watched
+                    .any((item) => item.id == media.id),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
@@ -1893,7 +2069,8 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
   final List<MediaItem> library;
   final List<MediaItem> watched;
 
-  const HomeBecauseYouWatchedPeopleShelves({super.key, required this.library, required this.watched});
+  const HomeBecauseYouWatchedPeopleShelves(
+      {super.key, required this.library, required this.watched});
 
   String _norm(String value) => value.trim().toLowerCase();
 
@@ -1902,8 +2079,15 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     if (watched.isEmpty) return const SizedBox.shrink();
     final controller = AppController.instance;
     final catalog = <String, MediaItem>{};
-    for (final item in <MediaItem>[...library, ...controller.recommendations, ...controller.watched, ...controller.liked]) {
-      if (item.id.isNotEmpty && item.isAccessibleTo(controller.currentProfile) && !isExcludedEntertainmentType(item.type)) {
+    for (final item in <MediaItem>[
+      ...library,
+      ...controller.recommendations,
+      ...controller.watched,
+      ...controller.liked
+    ]) {
+      if (item.id.isNotEmpty &&
+          item.isAccessibleTo(controller.currentProfile) &&
+          !isExcludedEntertainmentType(item.type)) {
         catalog.putIfAbsent(item.id, () => item);
       }
     }
@@ -1912,17 +2096,35 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     for (final item in watched.reversed) {
       if (seen.add(item.id)) viewed.add(item);
     }
-    final shelves = <({MediaItem seed, String person, List<MediaItem> items})>[];
+    final shelves =
+        <({MediaItem seed, String person, List<MediaItem> items})>[];
     final shelfKeys = <String>{};
     for (final seed in viewed) {
-      final people = <String>{...seed.actors, ...seed.directors, ...seed.writers};
+      final people = <String>{
+        ...seed.actors,
+        ...seed.directors,
+        ...seed.writers
+      };
       for (final person in people) {
         final normalizedPerson = _norm(person);
-        if (normalizedPerson.isEmpty || !shelfKeys.add('${seed.id}:$normalizedPerson')) continue;
-        final matches = catalog.values.where((candidate) => candidate.id != seed.id && <String>{...candidate.actors, ...candidate.directors, ...candidate.writers}.any((credit) => _norm(credit) == normalizedPerson)).toList();
+        if (normalizedPerson.isEmpty ||
+            !shelfKeys.add('${seed.id}:$normalizedPerson')) {
+          continue;
+        }
+        final matches = catalog.values
+            .where((candidate) =>
+                candidate.id != seed.id &&
+                <String>{
+                  ...candidate.actors,
+                  ...candidate.directors,
+                  ...candidate.writers
+                }.any((credit) => _norm(credit) == normalizedPerson))
+            .toList();
         if (matches.isEmpty) continue;
-        matches.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-        shelves.add((seed: seed, person: person, items: matches.take(12).toList()));
+        matches.sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        shelves.add(
+            (seed: seed, person: person, items: matches.take(12).toList()));
         if (shelves.length >= 6) break;
       }
       if (shelves.length >= 6) break;
@@ -1930,11 +2132,31 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
     if (shelves.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       for (final shelf in shelves) ...[
-        _DiscoverySectionHeader(title: 'Because you saw ${shelf.person} in ${shelf.seed.title}', subtitle: 'More titles with this actor, actress, director, or screenwriter; status shows ownership and watch history'),
-        HomeArrowRail(height: 210, itemCount: shelf.items.length, separatorExtent: 12, padding: const EdgeInsets.symmetric(horizontal: 48), itemBuilder: (context, index) {
-          final media = shelf.items[index];
-          return _DiscoveryMediaCard(title: media.title, subtitle: '${media.displayYearLabel ?? ''} ${media.type}'.trim(), imageUrl: media.imageUrl, media: media, isOwned: controller.isOwned(media.id), isWatched: controller.watched.any((item) => item.id == media.id), onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(settings: const RouteSettings(name: '/app/details'), builder: (_) => MediaDetailsScreen(media: media))));
-        }),
+        _DiscoverySectionHeader(
+            title: 'Because you saw ${shelf.person} in ${shelf.seed.title}',
+            subtitle:
+                'More titles with this actor, actress, director, or screenwriter; status shows ownership and watch history'),
+        HomeArrowRail(
+            height: 210,
+            itemCount: shelf.items.length,
+            separatorExtent: 12,
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            itemBuilder: (context, index) {
+              final media = shelf.items[index];
+              return _DiscoveryMediaCard(
+                  title: media.title,
+                  subtitle:
+                      '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
+                  imageUrl: media.imageUrl,
+                  media: media,
+                  isOwned: controller.isOwned(media.id),
+                  isWatched:
+                      controller.watched.any((item) => item.id == media.id),
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          settings: const RouteSettings(name: '/app/details'),
+                          builder: (_) => MediaDetailsScreen(media: media))));
+            }),
       ],
     ]);
   }
@@ -1943,9 +2165,15 @@ class HomeBecauseYouWatchedPeopleShelves extends StatelessWidget {
 bool _isMovieOrShowForRecommendation(MediaItem? item) {
   if (item == null || isExcludedEntertainmentType(item.type)) return false;
   final type = item.type.trim().toLowerCase();
-  return item.isSeries || type == 'movie' || type == 'film' || type == 'feature' ||
-      type.contains('movie') || type.contains('film') || type.contains('tv') ||
-      type.contains('show') || type.contains('series');
+  return item.isSeries ||
+      type == 'movie' ||
+      type == 'film' ||
+      type == 'feature' ||
+      type.contains('movie') ||
+      type.contains('film') ||
+      type.contains('tv') ||
+      type.contains('show') ||
+      type.contains('series');
 }
 
 /// Explainable Home rails seeded from the newest title, recent viewing, and
@@ -2000,7 +2228,12 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       {Set<String> excludeIds = const <String>{}}) {
     final controller = AppController.instance;
     final byId = <String, MediaItem>{};
-    for (final item in <MediaItem>[...library, ...controller.recommendations, ...controller.watched, ...controller.liked]) {
+    for (final item in <MediaItem>[
+      ...library,
+      ...controller.recommendations,
+      ...controller.watched,
+      ...controller.liked
+    ]) {
       if (item.id.trim().isEmpty ||
           item.id == seed.id ||
           excludeIds.contains(item.id) ||
@@ -2093,14 +2326,24 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 48),
             itemBuilder: (context, index) {
               final media = items[index];
+              final controller = AppController.instance;
+              final ownedRecord =
+                  RecommendationOwnershipMatcher.findOwnedMediaForMedia(
+                media: media,
+                controller: controller,
+              );
+              final isOwned = ownedRecord != null;
+              final isWatched = ownedRecord != null &&
+                  (controller.isWatched(ownedRecord.id) ||
+                      controller.getPlaybackProgress(ownedRecord.id) >= 0.95);
               return _DiscoveryMediaCard(
                 title: media.title,
                 subtitle:
                     '${media.displayYearLabel ?? ''} ${media.type}'.trim(),
                 imageUrl: media.imageUrl,
                 media: media,
-                isOwned: AppController.instance.isOwned(media.id),
-                isWatched: AppController.instance.watched.any((item) => item.id == media.id),
+                isOwned: isOwned,
+                isWatched: isWatched,
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   settings: const RouteSettings(name: '/app/details'),
                   builder: (_) => MediaDetailsScreen(media: media),
@@ -2161,7 +2404,9 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
       ));
     }
     final controller = AppController.instance;
-    final likedTitles = controller.liked.where(_isMovieOrShowForRecommendation).toList(growable: false);
+    final likedTitles = controller.liked
+        .where(_isMovieOrShowForRecommendation)
+        .toList(growable: false);
     final likedSeed = likedTitles.isEmpty ? null : likedTitles.last;
     if (likedSeed != null) {
       children.add(_mediaShelf(
@@ -2173,7 +2418,8 @@ class HomeReasonedRecommendationShelves extends StatelessWidget {
     }
     if (watchedSeed != null || likedSeed != null) {
       children.add(_HomeExternalTitleRecommendationShelves(
-        watchedSeed: _isMovieOrShowForRecommendation(watchedSeed) ? watchedSeed : null,
+        watchedSeed:
+            _isMovieOrShowForRecommendation(watchedSeed) ? watchedSeed : null,
         likedSeed: likedSeed,
       ));
     }
@@ -2300,7 +2546,8 @@ class _HomeExternalTitleRecommendationShelvesState
   }
 
   @override
-  void didUpdateWidget(covariant _HomeExternalTitleRecommendationShelves oldWidget) {
+  void didUpdateWidget(
+      covariant _HomeExternalTitleRecommendationShelves oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.watchedSeed?.id != widget.watchedSeed?.id ||
         oldWidget.likedSeed?.id != widget.likedSeed?.id) {
@@ -2313,8 +2560,7 @@ class _HomeExternalTitleRecommendationShelvesState
     final seeds = <({String reason, MediaItem media})>[
       if (widget.watchedSeed != null)
         (reason: 'watched', media: widget.watchedSeed!),
-      if (widget.likedSeed != null)
-        (reason: 'liked', media: widget.likedSeed!),
+      if (widget.likedSeed != null) (reason: 'liked', media: widget.likedSeed!),
     ];
     for (final seed in seeds) {
       final key = _key(seed.reason, seed.media);
@@ -2327,30 +2573,43 @@ class _HomeExternalTitleRecommendationShelvesState
           year: seed.media.releaseYear ?? seed.media.seriesStartYear,
         );
         if (metadata == null) {
-          if (mounted) setState(() => _recommendations[key] = const <CinematicTitleRecommendation>[]);
+          if (mounted) {
+            setState(() =>
+                _recommendations[key] = const <CinematicTitleRecommendation>[]);
+          }
           continue;
         }
-        final fetched = await CinematicTitleMetadataService.lookupRecommendations(
+        final fetched =
+            await CinematicTitleMetadataService.lookupRecommendations(
           providerId: metadata.providerId,
           isTv: metadata.isTv,
           limit: 18,
         );
-        final sourceKey = RecommendationOwnershipMatcher.normalizeTitle(seed.media.title);
+        final sourceKey =
+            RecommendationOwnershipMatcher.normalizeTitle(seed.media.title);
         final seen = <String>{};
         final cleaned = <CinematicTitleRecommendation>[];
         for (final item in fetched) {
-          final titleKey = '${item.isTv}:${RecommendationOwnershipMatcher.normalizeTitle(item.title)}';
-          if (item.providerId <= 0 || item.title.trim().isEmpty ||
+          final titleKey =
+              '${item.isTv}:${RecommendationOwnershipMatcher.normalizeTitle(item.title)}';
+          if (item.providerId <= 0 ||
+              item.title.trim().isEmpty ||
               (item.isTv == seed.media.isSeries &&
-               RecommendationOwnershipMatcher.normalizeTitle(item.title) == sourceKey) ||
+                  RecommendationOwnershipMatcher.normalizeTitle(item.title) ==
+                      sourceKey) ||
               !seen.add(titleKey)) {
             continue;
           }
           cleaned.add(item);
         }
-        if (mounted) setState(() => _recommendations[key] = List.unmodifiable(cleaned));
+        if (mounted) {
+          setState(() => _recommendations[key] = List.unmodifiable(cleaned));
+        }
       } catch (_) {
-        if (mounted) setState(() => _recommendations[key] = const <CinematicTitleRecommendation>[]);
+        if (mounted) {
+          setState(() =>
+              _recommendations[key] = const <CinematicTitleRecommendation>[]);
+        }
       } finally {
         if (mounted) setState(() => _loading.remove(key));
       }
@@ -2360,23 +2619,33 @@ class _HomeExternalTitleRecommendationShelvesState
   Widget _shelf(String reason, MediaItem? seed) {
     if (seed == null) return const SizedBox.shrink();
     final key = _key(reason, seed);
-    final items = _recommendations[key] ?? const <CinematicTitleRecommendation>[];
-    if (items.isEmpty && !_loading.contains(key)) return const SizedBox.shrink();
-    final title = reason == 'liked' ? 'Because you liked “${seed.title}”' : 'Because you watched “${seed.title}”';
+    final items =
+        _recommendations[key] ?? const <CinematicTitleRecommendation>[];
+    if (items.isEmpty && !_loading.contains(key)) {
+      return const SizedBox.shrink();
+    }
+    final title = reason == 'liked'
+        ? 'Because you liked “${seed.title}”'
+        : 'Because you watched “${seed.title}”';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _DiscoverySectionHeader(
           title: title,
-          subtitle: 'Catalog recommendations including titles you own, have watched, or have not added yet',
+          subtitle:
+              'Catalog recommendations including titles you own, have watched, or have not added yet',
         ),
         if (items.isEmpty && _loading.contains(key))
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 0, 20, 14),
             child: Row(children: [
-              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
               SizedBox(width: 10),
-              Text('Finding related movies and shows…', style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text('Finding related movies and shows…',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
             ]),
           )
         else
@@ -2403,7 +2672,8 @@ class _HomeExternalTitleRecommendationShelvesState
 }
 
 class HomeExternalPeopleRecommendationShelves extends StatefulWidget {
-  const HomeExternalPeopleRecommendationShelves({super.key, required this.watched});
+  const HomeExternalPeopleRecommendationShelves(
+      {super.key, required this.watched});
   final List<MediaItem> watched;
 
   @override
@@ -2433,9 +2703,11 @@ class _HomeExternalPeopleRecommendationShelvesState
   }
 
   @override
-  void didUpdateWidget(covariant HomeExternalPeopleRecommendationShelves oldWidget) {
+  void didUpdateWidget(
+      covariant HomeExternalPeopleRecommendationShelves oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_chooseSource(oldWidget.watched)?.id != _chooseSource(widget.watched)?.id) {
+    if (_chooseSource(oldWidget.watched)?.id !=
+        _chooseSource(widget.watched)?.id) {
       unawaited(_load());
     }
   }
@@ -2444,10 +2716,22 @@ class _HomeExternalPeopleRecommendationShelvesState
     final source = _chooseSource(widget.watched);
     final request = ++_sequence;
     if (source == null || !CinematicTitleMetadataService.isConfigured) {
-      if (mounted) setState(() { _source = source; _shelves = const []; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _source = source;
+          _shelves = const [];
+          _loading = false;
+        });
+      }
       return;
     }
-    if (mounted) setState(() { _source = source; _shelves = const []; _loading = true; });
+    if (mounted) {
+      setState(() {
+        _source = source;
+        _shelves = const [];
+        _loading = true;
+      });
+    }
     try {
       final metadata = await CinematicTitleMetadataService.lookupTitle(
         title: source.title,
@@ -2457,11 +2741,14 @@ class _HomeExternalPeopleRecommendationShelvesState
       if (!mounted || request != _sequence) return;
       if (metadata == null) return;
       final credits = metadata.castCredits
-          .where((credit) => credit.personId != null && credit.name.trim().isNotEmpty)
+          .where((credit) =>
+              credit.personId != null && credit.name.trim().isNotEmpty)
           .take(4)
           .toList(growable: false);
-      final output = <({String person, List<CinematicTitleRecommendation> items})>[];
-      final sourceKey = RecommendationOwnershipMatcher.normalizeTitle(source.title);
+      final output =
+          <({String person, List<CinematicTitleRecommendation> items})>[];
+      final sourceKey =
+          RecommendationOwnershipMatcher.normalizeTitle(source.title);
       for (final credit in credits) {
         final items = await CinematicTitleMetadataService.lookupPersonCredits(
           personId: credit.personId!,
@@ -2469,14 +2756,25 @@ class _HomeExternalPeopleRecommendationShelvesState
         );
         if (!mounted || request != _sequence) return;
         final seen = <String>{};
-        final cleaned = items.where((item) {
-          final key = '${item.isTv}:${RecommendationOwnershipMatcher.normalizeTitle(item.title)}';
-          return RecommendationOwnershipMatcher.normalizeTitle(item.title) != sourceKey && seen.add(key);
-        }).take(18).toList(growable: false);
-        if (cleaned.isNotEmpty) output.add((person: credit.name, items: cleaned));
+        final cleaned = items
+            .where((item) {
+              final key =
+                  '${item.isTv}:${RecommendationOwnershipMatcher.normalizeTitle(item.title)}';
+              return RecommendationOwnershipMatcher.normalizeTitle(
+                          item.title) !=
+                      sourceKey &&
+                  seen.add(key);
+            })
+            .take(18)
+            .toList(growable: false);
+        if (cleaned.isNotEmpty) {
+          output.add((person: credit.name, items: cleaned));
+        }
         if (output.length >= 4) break;
       }
-      if (mounted && request == _sequence) setState(() => _shelves = List.unmodifiable(output));
+      if (mounted && request == _sequence) {
+        setState(() => _shelves = List.unmodifiable(output));
+      }
     } catch (_) {
       // Local cast-based recommendations remain available if TMDB is unreachable.
     } finally {
@@ -2487,7 +2785,9 @@ class _HomeExternalPeopleRecommendationShelvesState
   @override
   Widget build(BuildContext context) {
     final source = _source;
-    if (source == null || (_shelves.isEmpty && !_loading)) return const SizedBox.shrink();
+    if (source == null || (_shelves.isEmpty && !_loading)) {
+      return const SizedBox.shrink();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2499,7 +2799,8 @@ class _HomeExternalPeopleRecommendationShelvesState
         for (final shelf in _shelves) ...[
           _DiscoverySectionHeader(
             title: 'Because you saw ${shelf.person} in “${source.title}”',
-            subtitle: 'More movies and shows featuring ${shelf.person}; badges show ownership and watch history',
+            subtitle:
+                'More movies and shows featuring ${shelf.person}; badges show ownership and watch history',
           ),
           HomeArrowRail(
             height: 260,
@@ -2523,15 +2824,28 @@ class _HomeTmdbRecommendationCard extends StatelessWidget {
 
   final CinematicTitleRecommendation recommendation;
 
+  MediaItem get _previewMedia => MediaItem(
+        id: 'home-tmdb-recommendation-${recommendation.isTv ? 'tv' : 'movie'}-${recommendation.providerId}',
+        title: recommendation.title,
+        type: recommendation.isTv ? 'tvshow' : 'movie',
+        imageUrl: recommendation.posterUrl ?? recommendation.backdropUrl,
+        description: recommendation.overview,
+        releaseYear: recommendation.releaseYear,
+        rating: recommendation.voteAverage,
+      );
+
   bool _wasWatched(AppController controller) {
-    final target = RecommendationOwnershipMatcher.normalizeTitle(recommendation.title);
+    final target =
+        RecommendationOwnershipMatcher.normalizeTitle(recommendation.title);
     return controller.watched.any((item) =>
         item.isAccessibleTo(controller.currentProfile) &&
         item.isSeries == recommendation.isTv &&
         <String>{
           RecommendationOwnershipMatcher.normalizeTitle(item.title),
-          RecommendationOwnershipMatcher.normalizeTitle(item.originalTitle ?? ''),
-          RecommendationOwnershipMatcher.normalizeTitle(item.canonicalTitle ?? ''),
+          RecommendationOwnershipMatcher.normalizeTitle(
+              item.originalTitle ?? ''),
+          RecommendationOwnershipMatcher.normalizeTitle(
+              item.canonicalTitle ?? ''),
         }.contains(target));
   }
 
@@ -2570,76 +2884,98 @@ class _HomeTmdbRecommendationCard extends StatelessWidget {
     );
     final watched = _wasWatched(controller);
     final poster = recommendation.posterUrl;
-    return SizedBox(
-      width: 150,
-      child: Material(
-        color: _discoveryPanel,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => unawaited(_open(context)),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: Stack(fit: StackFit.expand, children: [
-                      if (poster != null)
-                        CachedNetworkImage(
-                          imageUrl: poster,
-                          fit: BoxFit.cover,
-                          fadeInDuration: const Duration(milliseconds: 100),
-                          placeholder: (_, __) => _mediaFallback(),
-                          errorWidget: (_, __, ___) => _mediaFallback(),
-                        )
-                      else
-                        _mediaFallback(),
-                      Positioned(
-                        left: 5,
-                        top: 5,
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          RecommendationOwnershipBadge(isOwned: owned, compact: true),
-                          if (watched || owned) ...[
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                              decoration: BoxDecoration(color: const Color(0xE817171D), borderRadius: BorderRadius.circular(999)),
-                              child: Text(
-                                watched ? 'WATCHED' : 'NOT WATCHED',
-                                style: TextStyle(
-                                  color: watched ? const Color(0xFF92D9FF) : const Color(0xFFFFD27A),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                          ],
+    return HomeHeroHoverPreviewRegion(
+        media: _previewMedia,
+        child: SizedBox(
+          width: 150,
+          child: Material(
+            color: _discoveryPanel,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => unawaited(_open(context)),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Stack(fit: StackFit.expand, children: [
+                          if (poster != null)
+                            CachedNetworkImage(
+                              imageUrl: poster,
+                              fit: BoxFit.cover,
+                              fadeInDuration: const Duration(milliseconds: 100),
+                              placeholder: (_, __) => _mediaFallback(),
+                              errorWidget: (_, __, ___) => _mediaFallback(),
+                            )
+                          else
+                            _mediaFallback(),
+                          Positioned(
+                            left: 5,
+                            top: 5,
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  RecommendationOwnershipBadge(
+                                      isOwned: owned,
+                                      isWatched: watched,
+                                      compact: true),
+                                  if (watched || owned) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                          color: const Color(0xE817171D),
+                                          borderRadius:
+                                              BorderRadius.circular(999)),
+                                      child: Text(
+                                        watched ? 'WATCHED' : 'NOT WATCHED',
+                                        style: TextStyle(
+                                          color: watched
+                                              ? const Color(0xFF92D9FF)
+                                              : const Color(0xFFFFD27A),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ]),
+                          ),
                         ]),
                       ),
-                    ]),
-                  ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(recommendation.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1)),
+                    const SizedBox(height: 4),
+                    Text(
+                        '${recommendation.mediaTypeLabel}${recommendation.releaseYear == null ? '' : ' · ${recommendation.releaseYear}'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 10)),
+                  ],
                 ),
-                const SizedBox(height: 7),
-                Text(recommendation.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, height: 1.1)),
-                const SizedBox(height: 4),
-                Text('${recommendation.mediaTypeLabel}${recommendation.releaseYear == null ? '' : ' · ${recommendation.releaseYear}'}',
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white60, fontSize: 10)),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 
   Widget _mediaFallback() => const ColoredBox(
         color: Color(0xFF252433),
-        child: Center(child: Icon(Icons.movie_outlined, size: 34, color: Colors.white24)),
+        child: Center(
+            child: Icon(Icons.movie_outlined, size: 34, color: Colors.white24)),
       );
 }
 
@@ -2648,7 +2984,20 @@ class _HomeReasonedTrackCard extends StatelessWidget {
   const _HomeReasonedTrackCard({required this.track});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) {
+    final previewMedia = MediaItem(
+      id: 'home-reasoned-track-${track.id}',
+      title: track.title,
+      type: 'song',
+      imageUrl: track.artworkUrl,
+      description: '${track.artist} • ${track.album}',
+      trailerUrl: track.musicVideoUrl,
+      music: <String>[track.artist, ...track.featuredArtists],
+      genres: track.allGenreTags,
+    );
+    return HomeHeroHoverPreviewRegion(
+      media: previewMedia,
+      child: SizedBox(
         width: 138,
         child: Material(
           color: _discoveryPanel,
@@ -2679,10 +3028,12 @@ class _HomeReasonedTrackCard extends StatelessWidget {
                             CachedNetworkImage(
                                 imageUrl: track.artworkUrl!,
                                 fit: BoxFit.cover,
-                                fadeInDuration: const Duration(milliseconds: 100),
+                                fadeInDuration:
+                                    const Duration(milliseconds: 100),
                                 placeholder: (_, __) => const ColoredBox(
                                     color: Color(0xFF252532),
-                                    child: Center(child: Icon(Icons.music_note_rounded))),
+                                    child: Center(
+                                        child: Icon(Icons.music_note_rounded))),
                                 errorWidget: (_, __, ___) => const ColoredBox(
                                     color: Color(0xFF252532),
                                     child: Icon(Icons.music_note_rounded)))
@@ -2692,11 +3043,18 @@ class _HomeReasonedTrackCard extends StatelessWidget {
                                 child: Center(
                                     child: Icon(Icons.music_note_rounded,
                                         size: 34))),
-                          const Positioned(
+                          Positioned(
                             top: 6,
                             left: 6,
                             child: RecommendationOwnershipBadge(
-                                isOwned: true, compact: true),
+                              isOwned: true,
+                              isWatched: (MusicLibraryStore
+                                          .instance.listenCounts[track.id] ??
+                                      0) >
+                                  0,
+                              watchedLabel: 'Listened',
+                              compact: true,
+                            ),
                           ),
                         ]),
                       ),
@@ -2716,7 +3074,9 @@ class _HomeReasonedTrackCard extends StatelessWidget {
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// Compact Home shelves that compare profile-owned titles with complete
@@ -2891,136 +3251,156 @@ class _HomeFranchiseProgressCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = group.totalTitles;
     final percent = group.completionPercent;
-    return SizedBox(
-      width: 284,
-      child: Material(
-        color: const Color(0xFF171722),
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              settings: RouteSettings(
-                name: isUniverse
-                    ? '/app/cinematic-universe/${group.id}'
-                    : '/app/franchise/${group.id}',
-              ),
-              builder: (_) => _HomeFranchiseProgressDetailsScreen(
-                group: group,
-              ),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(15, 13, 15, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      isUniverse
-                          ? Icons.auto_awesome_rounded
-                          : Icons.account_tree_rounded,
-                      color: _discoveryAccent,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        group.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: Colors.white54,
-                    ),
-                  ],
-                ),
-                if (group.isFeaturedExample) ...[
-                  const SizedBox(height: 3),
-                  const Text(
-                    'FEATURED EXAMPLE • catalog totals may be refreshed by metadata import',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        total == null
-                            ? '${group.ownedTotalTitles} titles owned'
-                            : '${group.ownedTotalTitles} / $total titles',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    if (percent != null)
-                      Text(
-                        '$percent%',
-                        style: const TextStyle(
-                          color: Color(0xFF9DE5B0),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 7),
-                if (group.completionFraction != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: group.completionFraction,
-                      minHeight: 5,
-                      backgroundColor: Colors.white12,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Color(0xFF9DE5B0),
-                      ),
-                    ),
-                  )
-                else
-                  const Text(
-                    'Full catalog total not imported',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white38, fontSize: 10),
-                  ),
-                const SizedBox(height: 9),
-                _HomeHubCountRow(
-                  label: 'Movies you own',
-                  owned: group.ownedMovies,
-                  total: group.totalMovies,
-                ),
-                const SizedBox(height: 3),
-                _HomeHubCountRow(
-                  label: 'Shows you own',
-                  owned: group.ownedShows,
-                  total: group.totalShows,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    final firstArtwork =
+        group.ownedTitles.isEmpty ? null : group.ownedTitles.first;
+    final previewMedia = MediaItem(
+      id: 'home-${isUniverse ? 'universe' : 'franchise'}-${group.id}',
+      title: group.name,
+      type: isUniverse ? 'cinematic universe' : 'franchise and saga',
+      imageUrl: firstArtwork?.imageUrl,
+      description: <String>[
+        if (group.exampleNote?.trim().isNotEmpty == true)
+          group.exampleNote!.trim(),
+        '${group.ownedTotalTitles} movies and shows in your library',
+        if (total != null) '$total titles identified for this collection',
+      ].join(' • '),
+      genres: <String>[
+        if (isUniverse) 'Cinematic Universe' else 'Franchise',
+        'Saga'
+      ],
     );
+    return HomeHeroHoverPreviewRegion(
+        media: previewMedia,
+        child: SizedBox(
+          width: 284,
+          child: Material(
+            color: const Color(0xFF171722),
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  settings: RouteSettings(
+                    name: isUniverse
+                        ? '/app/cinematic-universe/${group.id}'
+                        : '/app/franchise/${group.id}',
+                  ),
+                  builder: (_) => _HomeFranchiseProgressDetailsScreen(
+                    group: group,
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(15, 13, 15, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          isUniverse
+                              ? Icons.auto_awesome_rounded
+                              : Icons.account_tree_rounded,
+                          color: _discoveryAccent,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            group.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: Colors.white54,
+                        ),
+                      ],
+                    ),
+                    if (group.isFeaturedExample) ...[
+                      const SizedBox(height: 3),
+                      const Text(
+                        'FEATURED EXAMPLE • catalog totals may be refreshed by metadata import',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            total == null
+                                ? '${group.ownedTotalTitles} titles owned'
+                                : '${group.ownedTotalTitles} / $total titles',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (percent != null)
+                          Text(
+                            '$percent%',
+                            style: const TextStyle(
+                              color: Color(0xFF9DE5B0),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    if (group.completionFraction != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          value: group.completionFraction,
+                          minHeight: 5,
+                          backgroundColor: Colors.white12,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF9DE5B0),
+                          ),
+                        ),
+                      )
+                    else
+                      const Text(
+                        'Full catalog total not imported',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white38, fontSize: 10),
+                      ),
+                    const SizedBox(height: 9),
+                    _HomeHubCountRow(
+                      label: 'Movies you own',
+                      owned: group.ownedMovies,
+                      total: group.totalMovies,
+                    ),
+                    const SizedBox(height: 3),
+                    _HomeHubCountRow(
+                      label: 'Shows you own',
+                      owned: group.ownedShows,
+                      total: group.totalShows,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ));
   }
 }
 
@@ -3103,9 +3483,10 @@ class _HomeFranchiseProgressDetailsScreenState
               '${_homeMediaTypeLabel(media.type)} • ${media.displayYearLabel ?? 'Year unknown'}',
           year: media.releaseYear,
           imageUrl: media.imageUrl,
-          fallbackIcon: _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
-              ? Icons.tv_rounded
-              : Icons.movie_outlined,
+          fallbackIcon:
+              _homeMediaTypeLabel(media.type).toLowerCase().contains('show')
+                  ? Icons.tv_rounded
+                  : Icons.movie_outlined,
           onTap: () => _openMedia(media),
         ),
       )
@@ -3218,7 +3599,8 @@ class _HomeFranchiseProgressDetailsScreenState
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
                 'No titles from this group are currently indexed in your profile library. Reference examples below do not count as owned.',
-                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.35),
+                style: TextStyle(
+                    color: Colors.white54, fontSize: 12, height: 1.35),
               ),
             )
           else
@@ -3401,65 +3783,86 @@ class HomeCollectionShelves extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 48),
               itemBuilder: (context, index) {
                 final collection = visible[index];
-                final count = _itemsFor(collection).length;
-                return SizedBox(
-                  width: 236,
-                  child: Material(
-                    color: const Color(0xFF171722),
-                    borderRadius: BorderRadius.circular(15),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => _openCollection(context, collection),
-                      child: Padding(
-                        padding: const EdgeInsets.all(13),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: _discoveryAccent.withValues(alpha: .14),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                collection.isAutomatic
-                                    ? Icons.auto_awesome_mosaic_rounded
-                                    : Icons.collections_bookmark_rounded,
-                                color: _discoveryAccent,
-                              ),
+                final collectionItems = _itemsFor(collection);
+                final count = collectionItems.length;
+                final previewMedia = MediaItem(
+                  id: 'home-collection-${collection.id}',
+                  title: collection.name,
+                  type: 'collection',
+                  imageUrl: collectionItems.isEmpty
+                      ? null
+                      : collectionItems.first.imageUrl,
+                  description: collection.description.trim().isNotEmpty
+                      ? '${collection.description} • $count titles'
+                      : '$count titles in this collection',
+                  tags: <String>[
+                    if (collection.isAutomatic) 'Auto-curated',
+                    'Collection'
+                  ],
+                );
+                return HomeHeroHoverPreviewRegion(
+                    media: previewMedia,
+                    child: SizedBox(
+                      width: 236,
+                      child: Material(
+                        color: const Color(0xFF171722),
+                        borderRadius: BorderRadius.circular(15),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => _openCollection(context, collection),
+                          child: Padding(
+                            padding: const EdgeInsets.all(13),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color:
+                                        _discoveryAccent.withValues(alpha: .14),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    collection.isAutomatic
+                                        ? Icons.auto_awesome_mosaic_rounded
+                                        : Icons.collections_bookmark_rounded,
+                                    color: _discoveryAccent,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(collection.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 12)),
+                                      const SizedBox(height: 4),
+                                      Text('$count titles',
+                                          style: const TextStyle(
+                                              color: Colors.white60,
+                                              fontSize: 11)),
+                                      if (collection.isAutomatic)
+                                        const Text('Auto-curated',
+                                            style: TextStyle(
+                                                color: Colors.white38,
+                                                fontSize: 9)),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right_rounded,
+                                    color: Colors.white54),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(collection.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 12)),
-                                  const SizedBox(height: 4),
-                                  Text('$count titles',
-                                      style: const TextStyle(
-                                          color: Colors.white60, fontSize: 11)),
-                                  if (collection.isAutomatic)
-                                    const Text('Auto-curated',
-                                        style: TextStyle(
-                                            color: Colors.white38,
-                                            fontSize: 9)),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right_rounded,
-                                color: Colors.white54),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                );
+                    ));
               },
             ),
           if (visible.isEmpty)
@@ -3798,18 +4201,23 @@ class _DiscoveryAllCollectionsScreenState
                       ? ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: collections.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final collection = collections[index];
                             final items = _itemsFor(collection);
                             return _CollectionListTile(
                               collection: collection,
                               itemCount: items.length,
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                                settings: const RouteSettings(name: '/app/page/collection-details'),
-                                builder: (_) => CollectionDetailsScreen(collection: collection),
+                              onTap: () => Navigator.of(context)
+                                  .push(MaterialPageRoute<void>(
+                                settings: const RouteSettings(
+                                    name: '/app/page/collection-details'),
+                                builder: (_) => CollectionDetailsScreen(
+                                    collection: collection),
                               )),
-                              onShuffle: () => _startRandomFromCollection(context, collection),
+                              onShuffle: () => _startRandomFromCollection(
+                                  context, collection),
                             );
                           },
                         )
@@ -3818,24 +4226,34 @@ class _DiscoveryAllCollectionsScreenState
                             entries: collections.map((collection) {
                               final members = _itemsFor(collection);
                               final posterCandidates = members
-                                  .where((item) => item.imageUrl?.trim().isNotEmpty == true)
+                                  .where((item) =>
+                                      item.imageUrl?.trim().isNotEmpty == true)
                                   .toList(growable: false);
-                              final customPoster = collection.customPosterUrl?.trim() ?? '';
+                              final customPoster =
+                                  collection.customPosterUrl?.trim() ?? '';
                               final imageUrl = customPoster.isNotEmpty
                                   ? customPoster
-                                  : (posterCandidates.isEmpty ? null : posterCandidates.first.imageUrl);
+                                  : (posterCandidates.isEmpty
+                                      ? null
+                                      : posterCandidates.first.imageUrl);
                               return LibraryViewEntry(
                                 title: collection.name,
-                                subtitle: '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim() }'}',
+                                subtitle:
+                                    '${members.length} title${members.length == 1 ? '' : 's'}${collection.description.trim().isEmpty ? '' : ' · ${collection.description.trim()}'}',
                                 imageUrl: imageUrl,
-                                fallbackIcon: Icons.collections_bookmark_outlined,
-                                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                                  settings: const RouteSettings(name: '/app/page/collection-details'),
-                                  builder: (_) => CollectionDetailsScreen(collection: collection),
+                                fallbackIcon:
+                                    Icons.collections_bookmark_outlined,
+                                onTap: () => Navigator.of(context)
+                                    .push(MaterialPageRoute<void>(
+                                  settings: const RouteSettings(
+                                      name: '/app/page/collection-details'),
+                                  builder: (_) => CollectionDetailsScreen(
+                                      collection: collection),
                                 )),
                                 trailing: IconButton(
                                   tooltip: 'Play a random item',
-                                  onPressed: () => _startRandomFromCollection(context, collection),
+                                  onPressed: () => _startRandomFromCollection(
+                                      context, collection),
                                   icon: const Icon(Icons.shuffle_rounded),
                                 ),
                               );
@@ -4188,7 +4606,7 @@ class _DiscoverySectionHeader extends StatelessWidget {
       );
 }
 
-class _DiscoveryMediaCard extends StatelessWidget {
+class _DiscoveryMediaCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final String? imageUrl;
@@ -4199,106 +4617,166 @@ class _DiscoveryMediaCard extends StatelessWidget {
   final bool? isOwned;
   final bool isWatched;
 
-  const _DiscoveryMediaCard(
-      {required this.title,
-      required this.subtitle,
-      required this.imageUrl,
-      this.media,
-      required this.onTap,
-      this.width = 148,
-      this.posterOnly = false,
-      this.isOwned,
-      this.isWatched = false});
+  const _DiscoveryMediaCard({
+    required this.title,
+    required this.subtitle,
+    required this.imageUrl,
+    this.media,
+    required this.onTap,
+    this.width = 148,
+    this.posterOnly = false,
+    this.isOwned,
+    this.isWatched = false,
+  });
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: width,
-        child: Material(
-          color: Colors.white.withValues(alpha: .04),
-          borderRadius: BorderRadius.circular(15),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Stack(fit: StackFit.expand, children: [
-                  if (imageUrl?.trim().isNotEmpty == true)
-                    CachedNetworkImage(
-                      imageUrl: imageUrl!,
-                      fit: BoxFit.cover,
-                      fadeInDuration: const Duration(milliseconds: 100),
-                      placeholder: (_, __) => _resolvedArtwork(),
-                      errorWidget: (_, __, ___) => _resolvedArtwork(),
-                    )
-                  else
-                    _resolvedArtwork(),
-                  if (!posterOnly)
-                    const Positioned(
-                        right: 8,
-                        bottom: 8,
-                        child: Icon(Icons.play_circle_fill_rounded,
-                            size: 27, color: Colors.white)),
-                  if (isOwned != null)
-                    Positioned(
-                      left: 7,
-                      top: 7,
-                      child: RecommendationOwnershipBadge(
-                        isOwned: isOwned!,
-                        compact: true,
-                      ),
-                    ),
-                  if (isWatched || isOwned == true)
-                    Positioned(
-                      left: 7,
-                      bottom: 7,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xE817171D),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: (isWatched ? const Color(0xFF92D9FF) : const Color(0xFFFFD27A)).withValues(alpha: .8)),
-                        ),
-                        child: Text(
-                          isWatched ? 'WATCHED' : 'NOT WATCHED',
-                          style: TextStyle(
-                            color: isWatched ? const Color(0xFF92D9FF) : const Color(0xFFFFD27A),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: .3,
+  State<_DiscoveryMediaCard> createState() => _DiscoveryMediaCardState();
+}
+
+class _DiscoveryMediaCardState extends State<_DiscoveryMediaCard> {
+  bool _hovering = false;
+
+  MediaItem get _previewMedia =>
+      widget.media ??
+      MediaItem(
+        id: 'home-discovery-card:${widget.title.toLowerCase()}',
+        title: widget.title,
+        type: 'catalog item',
+        imageUrl: widget.imageUrl,
+        description: widget.subtitle,
+      );
+
+  void _setHovering(bool value) {
+    if (mounted && _hovering != value) setState(() => _hovering = value);
+    if (value) {
+      HomeHoverPreviewStore.show(_previewMedia);
+    } else {
+      HomeHoverPreviewStore.clear(_previewMedia.id);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_hovering) HomeHoverPreviewStore.clear(_previewMedia.id);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => _setHovering(true),
+        onExit: (_) => _setHovering(false),
+        child: SizedBox(
+          width: widget.width,
+          child: AnimatedScale(
+            scale: _hovering ? 1.035 : 1.0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            child: Material(
+              color: _hovering
+                  ? Colors.white.withValues(alpha: .085)
+                  : Colors.white.withValues(alpha: .04),
+              borderRadius: BorderRadius.circular(15),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: widget.onTap,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Stack(fit: StackFit.expand, children: [
+                        if (widget.imageUrl?.trim().isNotEmpty == true)
+                          CachedNetworkImage(
+                            imageUrl: widget.imageUrl!,
+                            fit: BoxFit.cover,
+                            fadeInDuration: const Duration(milliseconds: 100),
+                            placeholder: (_, __) => _resolvedArtwork(),
+                            errorWidget: (_, __, ___) => _resolvedArtwork(),
+                          )
+                        else
+                          _resolvedArtwork(),
+                        if (!widget.posterOnly)
+                          const Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: Icon(Icons.play_circle_fill_rounded,
+                                size: 27, color: Colors.white),
                           ),
-                        ),
+                        if (widget.isOwned != null)
+                          Positioned(
+                            left: 7,
+                            top: 7,
+                            child: RecommendationOwnershipBadge(
+                              isOwned: widget.isOwned!,
+                              isWatched: widget.isWatched,
+                              compact: true,
+                            ),
+                          ),
+                        if (widget.isWatched || widget.isOwned == true)
+                          Positioned(
+                            left: 7,
+                            bottom: 7,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xE817171D),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: (widget.isWatched
+                                          ? const Color(0xFF92D9FF)
+                                          : const Color(0xFFFFD27A))
+                                      .withValues(alpha: .8),
+                                ),
+                              ),
+                              child: Text(
+                                widget.isWatched ? 'WATCHED' : 'NOT WATCHED',
+                                style: TextStyle(
+                                  color: widget.isWatched
+                                      ? const Color(0xFF92D9FF)
+                                      : const Color(0xFFFFD27A),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: .3,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(9, 7, 9, 2),
+                      child: Text(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w800),
                       ),
                     ),
-                ]),
+                    if (!widget.posterOnly)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(9, 0, 9, 8),
+                        child: Text(
+                          widget.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 10),
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 7),
+                  ],
+                ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(9, 7, 9, 2),
-                child: Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w800)),
-              ),
-              if (!posterOnly)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(9, 0, 9, 8),
-                  child: Text(subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(color: Colors.white54, fontSize: 10)),
-                )
-              else
-                const SizedBox(height: 7),
-            ]),
+            ),
           ),
         ),
       );
 
   Widget _resolvedArtwork() {
-    final media = this.media;
-    if (media == null) return _mediaFallback();
+    final media = _previewMedia;
     if (MediaArtworkAutoResolver.isAlbum(media)) {
       final artist = media.music.map((value) => value.trim()).firstWhere(
             (value) => value.isNotEmpty,
@@ -4324,10 +4802,19 @@ class _DiscoveryMediaCard extends StatelessWidget {
     return _mediaFallback();
   }
 
-  Widget _mediaFallback() => const ColoredBox(
-      color: Color(0xFF252433),
-      child: Center(
-          child: Icon(Icons.movie_outlined, size: 34, color: Colors.white24)));
+  Widget _mediaFallback() => Container(
+        color: const Color(0xFF252532),
+        alignment: Alignment.center,
+        child: Icon(
+          _previewMedia.type.toLowerCase().contains('music') ||
+                  _previewMedia.type.toLowerCase().contains('song') ||
+                  _previewMedia.type.toLowerCase().contains('album')
+              ? Icons.music_note_rounded
+              : Icons.movie_outlined,
+          size: 34,
+          color: Colors.white24,
+        ),
+      );
 }
 
 class _SearchPill extends StatelessWidget {

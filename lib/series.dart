@@ -18,7 +18,10 @@ import 'catalog_poster_image.dart';
 import 'library_view_modes.dart';
 import 'page_hero_banner.dart';
 import 'country_origin_style.dart';
-import 'home_streaming_discovery.dart' show HomeHeroCarousel;
+import 'home_streaming_discovery.dart'
+    show
+        HomeHeroCarousel,
+        HomeHoverPreviewStore;
 
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key});
@@ -43,6 +46,7 @@ class _SeriesScreenState extends State<SeriesScreen>
   /// Performs `initState` for this feature. Update this documentation when its contract changes.
   void initState() {
     super.initState();
+    HomeHoverPreviewStore.current.value = null;
 
     // Seed browseable catalog examples when Movies/TV is opened directly.
     AppController.instance.ensureDemoPreviewMedia(notify: false);
@@ -344,13 +348,12 @@ class _SeriesScreenState extends State<SeriesScreen>
   Widget build(BuildContext context) {
     final shows = _getShows();
 
-    final useFeaturedGrid = _viewMode == LibraryViewMode.grid &&
-        _searchQuery.trim().isEmpty &&
-        _heroSettings.enabled;
-    final featuredShow = useFeaturedGrid && shows.isNotEmpty ? shows.first : null;
-    final remainingShows = useFeaturedGrid && shows.length > 1
-        ? shows.sublist(1)
-        : (useFeaturedGrid ? <MediaItem>[] : shows);
+    // Keep every show available in the lower scroll pane. The hero is a live
+    // preview, not a replacement for the first library item.
+    final remainingShows = shows;
+    final showHero = _searchQuery.trim().isEmpty &&
+        _heroSettings.enabled &&
+        shows.isNotEmpty;
     final viewEntries = remainingShows.map((show) => LibraryViewEntry(
       title: show.title,
       subtitle: [
@@ -371,12 +374,21 @@ class _SeriesScreenState extends State<SeriesScreen>
       artworkBuilder: (context, fit) => CatalogPosterImage(media: show, fit: fit),
       fallbackIcon: Icons.live_tv_outlined,
       onTap: () => _openShow(show),
+      onHover: (hovering) {
+        if (_searchQuery.trim().isNotEmpty || !_heroSettings.enabled) return;
+        if (hovering) {
+          HomeHoverPreviewStore.show(show);
+        } else {
+          HomeHoverPreviewStore.clear(show.id);
+        }
+      },
     )).toList(growable: false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        toolbarHeight: 64,
         backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
@@ -420,166 +432,167 @@ class _SeriesScreenState extends State<SeriesScreen>
         children: [
           const _CinematicBackground(),
           SafeArea(
+            top: !showHero,
             child: shows.isEmpty
                 ? const _EmptyState()
-                : CustomScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      if (featuredShow != null && _heroSettings.enabled)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: HomeHeroCarousel(
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final heroPaneHeight = constraints.maxHeight * 0.54;
+
+                      return Column(
+                        children: [
+                          if (showHero)
+                            HomeHeroCarousel(
                               items: shows,
                               settingsKey: 'series',
+                              height: heroPaneHeight,
+                              pageIndicatorTop: 76,
+                              edgeToEdge: true,
                               onOpen: _openShow,
                               onPlay: _playHeroMedia,
                             ),
-                          ),
-                        ),
-                      if (_viewMode == LibraryViewMode.grid && _searchQuery.trim().isEmpty && shows.any((show) => show.tvIntros.isNotEmpty))
-                        SliverToBoxAdapter(
-                          child: _TvIntrosSection(
-                            shows: shows.where((show) => show.tvIntros.isNotEmpty).toList(),
-                            onTap: _openShow,
-                          ),
-                        ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            18,
-                            0,
-                            18,
-                            16,
-                          ),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                child: UniversalText('Your TV Shows',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.4,
-                                  ),
-                                ),
-                              ),
-                              _sortDropdown(),
-                              const SizedBox(width: 8),
-                              if (_searchQuery.trim().isNotEmpty)
-                                UniversalText('${shows.length} result${shows.length == 1 ? '' : 's'}',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(
-                                      alpha: 0.48,
+                          Expanded(
+                            child: CustomScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              slivers: [
+                                if (_viewMode == LibraryViewMode.grid &&
+                                    _searchQuery.trim().isEmpty &&
+                                    shows.any((show) => show.tvIntros.isNotEmpty))
+                                  SliverToBoxAdapter(
+                                    child: _TvIntrosSection(
+                                      shows: shows
+                                          .where((show) => show.tvIntros.isNotEmpty)
+                                          .toList(),
+                                      onTap: _openShow,
                                     ),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
                                   ),
-                                )
-                              else
-                                UniversalText('${shows.length} show${shows.length == 1 ? '' : 's'}',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(
-                                      alpha: 0.48,
-                                    ),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          child: LibraryViewModePicker(
-                            scope: 'shows',
-                            value: _viewMode,
-                            onChanged: (mode) => setState(() => _viewMode = mode),
-                            compact: true,
-                          ),
-                        ),
-                      ),
-                      if (remainingShows.isEmpty &&
-                          _searchQuery.trim().isNotEmpty)
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 70,
-                            ),
-                            child: _NoSearchResults(),
-                          ),
-                        )
-                      else if (_viewMode != LibraryViewMode.grid)
-                        SliverToBoxAdapter(
-                          child: LibraryCollectionView(
-                            entries: viewEntries,
-                            mode: _viewMode,
-                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(
-                            18,
-                            0,
-                            18,
-                            32,
-                          ),
-                          sliver: SliverGrid(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final animationStart =
-                                    (index * 0.055).clamp(0.0, 0.65);
-
-                                final animationEnd =
-                                    (animationStart + 0.35).clamp(0.0, 1.0);
-
-                                final animation = CurvedAnimation(
-                                  parent: _animationController,
-                                  curve: Interval(
-                                    animationStart,
-                                    animationEnd,
-                                    curve: Curves.easeOutCubic,
-                                  ),
-                                );
-
-                                return AnimatedBuilder(
-                                  animation: animation,
-                                  builder: (context, child) {
-                                    return Opacity(
-                                      opacity: animation.value,
-                                      child: Transform.translate(
-                                        offset: Offset(
-                                          0,
-                                          28 * (1 - animation.value),
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                                    child: Row(
+                                      children: [
+                                        const Expanded(
+                                          child: UniversalText(
+                                            'Your TV Shows',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 21,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: -0.4,
+                                            ),
+                                          ),
                                         ),
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  child: _ShowCard(
-                                    show: remainingShows[index],
-                                    onTap: () {
-                                      _openShow(remainingShows[index]);
-                                    },
+                                        _sortDropdown(),
+                                        const SizedBox(width: 8),
+                                        UniversalText(
+                                          _searchQuery.trim().isNotEmpty
+                                              ? '${shows.length} result${shows.length == 1 ? '' : 's'}'
+                                              : '${shows.length} show${shows.length == 1 ? '' : 's'}',
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(alpha: 0.48),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                );
-                              },
-                              childCount: remainingShows.length,
-                            ),
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 220,
-                              childAspectRatio: 0.64,
-                              crossAxisSpacing: 15,
-                              mainAxisSpacing: 22,
+                                ),
+                                if (_searchQuery.trim().isNotEmpty)
+                                  SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                                      child: Text(
+                                        'Search results for “${_searchQuery.trim()}”',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                                    child: LibraryViewModePicker(
+                                      scope: 'shows',
+                                      value: _viewMode,
+                                      onChanged: (mode) => setState(() => _viewMode = mode),
+                                      compact: true,
+                                    ),
+                                  ),
+                                ),
+                                if (remainingShows.isEmpty &&
+                                    _searchQuery.trim().isNotEmpty)
+                                  const SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 70,
+                                      ),
+                                      child: _NoSearchResults(),
+                                    ),
+                                  )
+                                else if (_viewMode != LibraryViewMode.grid)
+                                  SliverToBoxAdapter(
+                                    child: LibraryCollectionView(
+                                      entries: viewEntries,
+                                      mode: _viewMode,
+                                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
+                                    ),
+                                  )
+                                else
+                                  SliverPadding(
+                                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
+                                    sliver: SliverGrid(
+                                      delegate: SliverChildBuilderDelegate(
+                                        (context, index) {
+                                          final animationStart =
+                                              (index * 0.055).clamp(0.0, 0.65);
+                                          final animationEnd =
+                                              (animationStart + 0.35).clamp(0.0, 1.0);
+                                          final animation = CurvedAnimation(
+                                            parent: _animationController,
+                                            curve: Interval(
+                                              animationStart,
+                                              animationEnd,
+                                              curve: Curves.easeOutCubic,
+                                            ),
+                                          );
+                                          return AnimatedBuilder(
+                                            animation: animation,
+                                            builder: (context, child) => Opacity(
+                                              opacity: animation.value,
+                                              child: Transform.translate(
+                                                offset: Offset(0, 28 * (1 - animation.value)),
+                                                child: child,
+                                              ),
+                                            ),
+                                            child: _ShowCard(
+                                              show: remainingShows[index],
+                                              enableHomePreview: _searchQuery.trim().isEmpty &&
+                                                  _heroSettings.enabled,
+                                              onTap: () => _openShow(remainingShows[index]),
+                                            ),
+                                          );
+                                        },
+                                        childCount: remainingShows.length,
+                                      ),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                                        maxCrossAxisExtent: 220,
+                                        childAspectRatio: 0.64,
+                                        crossAxisSpacing: 15,
+                                        mainAxisSpacing: 22,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                        ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
           ),
         ],
@@ -757,11 +770,13 @@ class _FeaturedShowState extends State<_FeaturedShow> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) {
+        HomeHoverPreviewStore.show(show);
         setState(() {
           _hovering = true;
         });
       },
       onExit: (_) {
+        HomeHoverPreviewStore.clear(show.id);
         setState(() {
           _hovering = false;
         });
@@ -962,10 +977,12 @@ class _FeaturedShowState extends State<_FeaturedShow> {
 
 class _ShowCard extends StatefulWidget {
   final MediaItem show;
+  final bool enableHomePreview;
   final VoidCallback onTap;
 
   const _ShowCard({
     required this.show,
+    required this.enableHomePreview,
     required this.onTap,
   });
 
@@ -980,10 +997,24 @@ class _ShowCardState extends State<_ShowCard> {
   /// Performs `_setHovering` for this feature. Update this documentation when its contract changes.
   void _setHovering(bool value) {
     if (!mounted) return;
-
+    if (widget.enableHomePreview) {
+      if (value) {
+        HomeHoverPreviewStore.show(widget.show);
+      } else {
+        HomeHoverPreviewStore.clear(widget.show.id);
+      }
+    }
     setState(() {
       _hovering = value;
     });
+  }
+
+  @override
+  void dispose() {
+    if (_hovering && widget.enableHomePreview) {
+      HomeHoverPreviewStore.clear(widget.show.id);
+    }
+    super.dispose();
   }
 
   @override
@@ -1281,8 +1312,8 @@ class _GlassIconButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(15),
         child: Container(
-          width: 46,
-          height: 46,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.09),
             borderRadius: BorderRadius.circular(15),

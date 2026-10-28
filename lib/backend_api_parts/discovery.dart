@@ -101,6 +101,28 @@ extension BackendApiDiscoveryMethods on BackendApi {
         : <Map<String, dynamic>>[];
   }
 
+  /// Searches the authenticated global media catalog, not just locally owned files.
+  /// Results are metadata records; local membership and playback access are
+  /// still resolved by the app's profile-aware library.
+  Future<Map<String, dynamic>> searchGlobalMedia(
+    String query, {
+    int limit = 50,
+  }) async {
+    _requireAuthentication();
+    final clean = query.trim();
+    if (clean.isEmpty) return <String, dynamic>{'results': <dynamic>[]};
+    final uri = Uri.parse('$baseUrl/search').replace(
+      queryParameters: <String, String>{
+        'q': clean,
+        'limit': '${limit.clamp(1, 100)}',
+      },
+    );
+    return _requireSuccess(
+      await _networkClient.get(uri, headers: _headers),
+      'Unable to search the global media catalog.',
+    );
+  }
+
   Future<List<Map<String, dynamic>>> searchMediaPeople(
       {String query = ''}) async {
     _requireAuthentication();

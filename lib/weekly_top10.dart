@@ -6,11 +6,13 @@ import 'media_metadata_catalog_screen.dart';
 import 'music.dart';
 import 'profile_content_safety.dart';
 import 'home_arrow_rail.dart';
+import 'home_hero_hover_preview.dart';
 
 /// Category shelves are intentionally data-driven so Home customization can
 /// reorder or hide each chart independently.
 class WeeklyTop10Shelf extends StatefulWidget {
-  const WeeklyTop10Shelf({super.key, required this.chartKey, required this.title});
+  const WeeklyTop10Shelf(
+      {super.key, required this.chartKey, required this.title});
 
   final String chartKey;
   final String title;
@@ -43,8 +45,12 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
   void didUpdateWidget(covariant WeeklyTop10Shelf oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.chartKey != widget.chartKey) {
-      final wasMusicChart = const <String>{'albums', 'songs', 'singers', 'bands'}
-          .contains(oldWidget.chartKey);
+      final wasMusicChart = const <String>{
+        'albums',
+        'songs',
+        'singers',
+        'bands'
+      }.contains(oldWidget.chartKey);
       if (wasMusicChart && !_isMusicChart) {
         MusicLibraryStore.instance.removeListener(_refreshMusicChart);
       } else if (!wasMusicChart && _isMusicChart) {
@@ -65,8 +71,12 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
     super.dispose();
   }
 
-  bool get _isMusicChart => const <String>{'albums', 'songs', 'singers', 'bands'}
-      .contains(widget.chartKey);
+  bool get _isMusicChart => const <String>{
+        'albums',
+        'songs',
+        'singers',
+        'bands'
+      }.contains(widget.chartKey);
 
   void _refreshMusicChart() {
     if (_isMusicChart && mounted && !_musicInitializing) {
@@ -97,7 +107,8 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         'actors' || 'actresses' => '/trending/person/week',
         _ => '/trending/movie/week',
       };
-      final peopleChart = widget.chartKey == 'actors' || widget.chartKey == 'actresses';
+      final peopleChart =
+          widget.chartKey == 'actors' || widget.chartKey == 'actresses';
       final rows = <Map<String, dynamic>>[];
       // TMDB's trending people list is mixed-gender. Fetch further pages only
       // when needed so each actor/actress chart can fill up to ten entries.
@@ -109,7 +120,9 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         );
         final rawResults = payload['results'];
         if (rawResults is List) {
-          rows.addAll(rawResults.whereType<Map>().map((row) => Map<String, dynamic>.from(row)));
+          rows.addAll(rawResults
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row)));
         }
         if (!peopleChart) break;
         final matchingPeople = rows.where((row) {
@@ -120,13 +133,16 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         }).length;
         if (matchingPeople >= 10) break;
       }
-      final filtered = rows.where((row) {
-        if (!peopleChart) return true;
-        final gender = row['gender'] is num
-            ? (row['gender'] as num).toInt()
-            : int.tryParse(row['gender']?.toString() ?? '0') ?? 0;
-        return widget.chartKey == 'actresses' ? gender == 1 : gender == 2;
-      }).take(10).toList(growable: false);
+      final filtered = rows
+          .where((row) {
+            if (!peopleChart) return true;
+            final gender = row['gender'] is num
+                ? (row['gender'] as num).toInt()
+                : int.tryParse(row['gender']?.toString() ?? '0') ?? 0;
+            return widget.chartKey == 'actresses' ? gender == 1 : gender == 2;
+          })
+          .take(10)
+          .toList(growable: false);
       final items = <_RankedItem>[];
       for (var index = 0; index < filtered.length; index++) {
         final row = filtered[index];
@@ -134,23 +150,56 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         final isShow = widget.chartKey == 'shows';
         final id = row['id']?.toString() ?? '';
         final title = (person
-                ? row['name']
-                : (row[isShow ? 'name' : 'title'] ?? row['name'] ?? row['title']))
-            ?.toString()
-            .trim() ?? '';
+                    ? row['name']
+                    : (row[isShow ? 'name' : 'title'] ??
+                        row['name'] ??
+                        row['title']))
+                ?.toString()
+                .trim() ??
+            '';
         if (id.isEmpty || title.isEmpty) continue;
-        final dateText = (row[isShow ? 'first_air_date' : 'release_date'] ?? '').toString();
+        final dateText =
+            (row[isShow ? 'first_air_date' : 'release_date'] ?? '').toString();
         final parsedDate = DateTime.tryParse(dateText);
-        final poster = (person ? row['profile_path'] : row['poster_path'])?.toString() ?? '';
-        final imageUrl = poster.startsWith('/') ? 'https://image.tmdb.org/t/p/w500$poster' : null;
+        final poster =
+            (person ? row['profile_path'] : row['poster_path'])?.toString() ??
+                '';
+        final imageUrl = poster.startsWith('/')
+            ? 'https://image.tmdb.org/t/p/w500$poster'
+            : null;
         final knownFor = row['known_for_department']?.toString().trim() ?? '';
+        final knownForPayload = row['known_for'];
+        final knownForTitles = knownForPayload is List
+            ? knownForPayload
+                .whereType<Map>()
+                .map((entry) =>
+                    (entry['title'] ?? entry['name'] ?? '').toString().trim())
+                .where((value) => value.isNotEmpty)
+                .take(4)
+                .toList(growable: false)
+            : const <String>[];
         final mediaType = isShow ? 'tvshow' : 'movie';
         final countryCodes = row['origin_country'];
         final origin = countryCodes is List
-            ? countryCodes.map((value) => countryNameFromCode(value.toString())).where((value) => value.isNotEmpty).join(', ')
+            ? countryCodes
+                .map((value) => countryNameFromCode(value.toString()))
+                .where((value) => value.isNotEmpty)
+                .join(', ')
             : '';
         final media = person
-            ? null
+            ? MediaItem(
+                id: 'tmdb-person-$id',
+                title: title,
+                type: widget.chartKey == 'actresses' ? 'actress' : 'actor',
+                imageUrl: imageUrl,
+                description: <String>[
+                  if (knownFor.isNotEmpty) knownFor,
+                  if (knownForTitles.isNotEmpty)
+                    'Known for ${knownForTitles.join(', ')}',
+                  'Trending this week',
+                ].join(' • '),
+                actors: knownForTitles,
+              )
             : MediaItem(
                 id: 'tmdb-$mediaType-$id',
                 title: title,
@@ -160,22 +209,31 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
                 releaseDate: parsedDate,
                 releaseYear: parsedDate?.year,
                 countryOfOrigin: origin.isEmpty ? null : origin,
-                rating: row['vote_average'] is num ? (row['vote_average'] as num).toDouble() : null,
+                rating: row['vote_average'] is num
+                    ? (row['vote_average'] as num).toDouble()
+                    : null,
               );
         items.add(_RankedItem(
           rank: index + 1,
           title: title,
           subtitle: person
-              ? (knownFor.isEmpty ? 'Trending this week' : '$knownFor • Trending this week')
-              : <String>[if (parsedDate != null) '${parsedDate.year}', if (origin.isNotEmpty) origin, 'Trending this week'].join(' • '),
+              ? (knownFor.isEmpty
+                  ? 'Trending this week'
+                  : '$knownFor • Trending this week')
+              : <String>[
+                  if (parsedDate != null) '${parsedDate.year}',
+                  if (origin.isNotEmpty) origin,
+                  'Trending this week'
+                ].join(' • '),
           imageUrl: imageUrl,
           media: media,
           onTap: person
               ? () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => MediaMetadataCatalogScreen(initialType: 'person', initialQuery: title),
+                    builder: (_) => MediaMetadataCatalogScreen(
+                        initialType: 'person', initialQuery: title),
                   ))
               : () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => MediaDetailsScreen(media: media!),
+                    builder: (_) => MediaDetailsScreen(media: media),
                   )),
         ));
       }
@@ -183,14 +241,17 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
       setState(() {
         _items = items;
         _loading = false;
-        _message = items.isEmpty ? 'No ranked results are available for this chart right now.' : null;
+        _message = items.isEmpty
+            ? 'No ranked results are available for this chart right now.'
+            : null;
       });
     } catch (error) {
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _items = <_RankedItem>[];
         _loading = false;
-        _message = 'Weekly chart unavailable. Check TMDB settings and backend access.';
+        _message =
+            'Weekly chart unavailable. Check TMDB settings and backend access.';
       });
       debugPrint('Weekly Top 10 TMDB chart failed: $error');
     }
@@ -236,7 +297,9 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         final ordered = trackList.where((track) => score(track) > 0).toList()
           ..sort((a, b) {
             final byScore = score(b).compareTo(score(a));
-            return byScore != 0 ? byScore : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+            return byScore != 0
+                ? byScore
+                : a.title.toLowerCase().compareTo(b.title.toLowerCase());
           });
         for (final track in ordered.take(10)) {
           ranked.add(_musicItem(
@@ -244,22 +307,44 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
             track.title,
             track.artist,
             track.artworkUrl,
-            MediaItem(id: 'weekly-song-${track.id}', title: track.title, type: 'song', imageUrl: track.artworkUrl, music: <String>[track.artist, ...track.featuredArtists]),
+            MediaItem(
+              id: 'weekly-song-${track.id}',
+              title: track.title,
+              type: 'song',
+              imageUrl: track.artworkUrl,
+              description: '${track.artist} • ${track.album}',
+              trailerUrl: track.musicVideoUrl,
+              music: <String>[track.artist, ...track.featuredArtists],
+              genres: track.allGenreTags,
+            ),
           ));
         }
       } else if (widget.chartKey == 'albums') {
         final grouped = <String, _AlbumAggregate>{};
         for (final track in trackList) {
           if (score(track) <= 0 || track.album.trim().isEmpty) continue;
-          final key = '${track.album.toLowerCase().trim()}|${track.artist.toLowerCase().trim()}';
-          final value = grouped.putIfAbsent(key, () => _AlbumAggregate(track.album, track.artist, track.artworkUrl));
+          final key =
+              '${track.album.toLowerCase().trim()}|${track.artist.toLowerCase().trim()}';
+          final value = grouped.putIfAbsent(
+              key,
+              () =>
+                  _AlbumAggregate(track.album, track.artist, track.artworkUrl));
           value.score += score(track);
           value.artworkUrl ??= track.artworkUrl;
         }
-        final ordered = grouped.values.toList()..sort((a, b) => b.score.compareTo(a.score));
+        final ordered = grouped.values.toList()
+          ..sort((a, b) => b.score.compareTo(a.score));
         for (final album in ordered.take(10)) {
-          final media = MediaItem(id: 'weekly-album-${album.title}-${album.artist}', title: album.title, type: 'album', imageUrl: album.artworkUrl, music: <String>[album.artist]);
-          ranked.add(_musicItem(ranked.length + 1, album.title, album.artist, album.artworkUrl, media));
+          final media = MediaItem(
+            id: 'weekly-album-${album.title}-${album.artist}',
+            title: album.title,
+            type: 'album',
+            imageUrl: album.artworkUrl,
+            description: album.artist,
+            music: <String>[album.artist],
+          );
+          ranked.add(_musicItem(ranked.length + 1, album.title, album.artist,
+              album.artworkUrl, media));
         }
       } else {
         final artistScores = <String, int>{};
@@ -268,7 +353,8 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         for (final track in trackList) {
           final plays = score(track);
           if (plays <= 0) continue;
-          final names = <String>{track.artist, ...track.featuredArtists}.where((name) => name.trim().isNotEmpty);
+          final names = <String>{track.artist, ...track.featuredArtists}
+              .where((name) => name.trim().isNotEmpty);
           for (final name in names) {
             final key = name.toLowerCase().trim();
             artistScores[key] = (artistScores[key] ?? 0) + plays;
@@ -279,15 +365,37 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
         bool isBand(String name) {
           final value = name.toLowerCase().trim();
           if (value == 'the weeknd' || value == 'the kid laroi') return false;
-          return RegExp(r'\b(band|orchestra|ensemble|collective|quartet|trio|choir|group|company)\b').hasMatch(value) ||
-              value.startsWith('the ') || value.contains(' & ') || value.contains(' and ');
+          return RegExp(
+                      r'\b(band|orchestra|ensemble|collective|quartet|trio|choir|group|company)\b')
+                  .hasMatch(value) ||
+              value.startsWith('the ') ||
+              value.contains(' & ') ||
+              value.contains(' and ');
         }
+
         final wantBands = widget.chartKey == 'bands';
-        final keys = artistScores.keys.where((key) => isBand(artistNames[key] ?? '') == wantBands).toList()
+        final keys = artistScores.keys
+            .where((key) => isBand(artistNames[key] ?? '') == wantBands)
+            .toList()
           ..sort((a, b) => artistScores[b]!.compareTo(artistScores[a]!));
         for (final key in keys.take(10)) {
           final name = artistNames[key] ?? key;
-          ranked.add(_musicItem(ranked.length + 1, name, 'Your plays this week', artistImages[key], null));
+          ranked.add(_musicItem(
+            ranked.length + 1,
+            name,
+            'Your plays this week',
+            artistImages[key],
+            MediaItem(
+              id: 'weekly-${wantBands ? 'band' : 'artist'}-${key.replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
+              title: name,
+              type: wantBands ? 'band' : 'artist',
+              imageUrl: artistImages[key],
+              description:
+                  '${wantBands ? 'Band' : 'Singer / artist'} • Your plays this week',
+              music: <String>[name],
+            ),
+            openArtistProfile: true,
+          ));
         }
       }
 
@@ -310,14 +418,21 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
     }
   }
 
-  _RankedItem _musicItem(int rank, String title, String subtitle, String? imageUrl, MediaItem? media) {
+  _RankedItem _musicItem(
+    int rank,
+    String title,
+    String subtitle,
+    String? imageUrl,
+    MediaItem? media, {
+    bool openArtistProfile = false,
+  }) {
     return _RankedItem(
       rank: rank,
       title: title,
       subtitle: subtitle,
       imageUrl: imageUrl,
       media: media,
-      onTap: media == null
+      onTap: openArtistProfile || media == null
           ? () => Navigator.of(context).push(MaterialPageRoute<void>(
                 builder: (_) => MusicArtistProfileScreen(artistName: title),
               ))
@@ -329,7 +444,9 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loading && _items.isEmpty && _message == null) return const SizedBox.shrink();
+    if (!_loading && _items.isEmpty && _message == null) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 18, bottom: 10),
       child: Column(
@@ -340,22 +457,31 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(widget.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 3),
-                    Text(_subtitle, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.title,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 3),
+                        Text(_subtitle,
+                            style: const TextStyle(
+                                color: Colors.white54, fontSize: 11)),
+                      ]),
                 ),
                 const Icon(Icons.trending_up_rounded, color: Colors.white54),
               ],
             ),
           ),
           if (_loading)
-            const SizedBox(height: 130, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+            const SizedBox(
+                height: 130,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
           else if (_items.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-              child: Text(_message ?? 'No chart entries available.', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              child: Text(_message ?? 'No chart entries available.',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
             )
           else
             HomeArrowRail(
@@ -363,7 +489,8 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
               itemCount: _items.length,
               separatorExtent: 12,
               padding: const EdgeInsets.symmetric(horizontal: 48),
-              itemBuilder: (context, index) => _RankedPosterCard(item: _items[index]),
+              itemBuilder: (context, index) =>
+                  _RankedPosterCard(item: _items[index]),
             ),
         ],
       ),
@@ -371,8 +498,16 @@ class _WeeklyTop10ShelfState extends State<WeeklyTop10Shelf> {
   }
 
   String get _subtitle => switch (widget.chartKey) {
-        'movies' || 'shows' || 'actors' || 'actresses' => 'TMDB trending over the last week',
-        'albums' || 'songs' || 'singers' || 'bands' => "Your profile's listening activity over the last 7 days",
+        'movies' ||
+        'shows' ||
+        'actors' ||
+        'actresses' =>
+          'TMDB trending over the last week',
+        'albums' ||
+        'songs' ||
+        'singers' ||
+        'bands' =>
+          "Your profile's listening activity over the last 7 days",
         _ => 'Weekly chart',
       };
 }
@@ -392,6 +527,16 @@ class _RankedItem {
   final String? imageUrl;
   final MediaItem? media;
   final VoidCallback onTap;
+
+  MediaItem get previewMedia =>
+      media ??
+      MediaItem(
+        id: 'weekly-chart-item-${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
+        title: title,
+        type: 'chart item',
+        imageUrl: imageUrl,
+        description: subtitle,
+      );
 }
 
 class _AlbumAggregate {
@@ -408,51 +553,73 @@ class _RankedPosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 140,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(13),
-        onTap: item.onTap,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(13),
-              child: Stack(fit: StackFit.expand, children: [
-                if (item.imageUrl?.trim().isNotEmpty == true)
-                  Image.network(item.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fallback())
-                else
-                  _fallback(),
-                Positioned(
-                  left: 7,
-                  top: 7,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                    decoration: BoxDecoration(color: Colors.black.withValues(alpha: .84), borderRadius: BorderRadius.circular(8)),
-                    child: Text('#${item.rank}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
-                  ),
+    return HomeHeroHoverPreviewRegion(
+        media: item.previewMedia,
+        child: SizedBox(
+          width: 140,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: item.onTap,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: Stack(fit: StackFit.expand, children: [
+                    if (item.imageUrl?.trim().isNotEmpty == true)
+                      Image.network(item.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _fallback())
+                    else
+                      _fallback(),
+                    Positioned(
+                      left: 7,
+                      top: 7,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 5),
+                        decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: .84),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text('#${item.rank}',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13)),
+                      ),
+                    ),
+                  ]),
                 ),
-              ]),
-            ),
+              ),
+              const SizedBox(height: 7),
+              Text(item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 12.5)),
+              Text(item.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(color: Colors.white54, fontSize: 10.5)),
+            ]),
           ),
-          const SizedBox(height: 7),
-          Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
-          Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 10.5)),
-        ]),
-      ),
-    );
+        ));
   }
 
   Widget _fallback() => Container(
         color: const Color(0xFF202020),
         alignment: Alignment.center,
-        child: const Icon(Icons.trending_up_rounded, color: Colors.white38, size: 34),
+        child: const Icon(Icons.trending_up_rounded,
+            color: Colors.white38, size: 34),
       );
 }
 
 class WeeklyTop10LeaderboardShelf extends StatelessWidget {
   const WeeklyTop10LeaderboardShelf({super.key});
 
-  static const List<(String, String, IconData)> _categories = <(String, String, IconData)>[
+  static const List<(String, String, IconData)> _categories =
+      <(String, String, IconData)>[
     ('movies', 'Movies', Icons.movie_rounded),
     ('shows', 'Shows', Icons.tv_rounded),
     ('albums', 'Albums', Icons.album_rounded),
@@ -473,20 +640,25 @@ class WeeklyTop10LeaderboardShelf extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white.withValues(alpha: .12)),
-          gradient: const LinearGradient(colors: <Color>[Color(0xFF20202A), Color(0xFF101013)]),
+          gradient: const LinearGradient(
+              colors: <Color>[Color(0xFF20202A), Color(0xFF101013)]),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('RANKING OF ALL TOP 10S', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const Text('RANKING OF ALL TOP 10S',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          const Text('Open any weekly chart to see its full ranked list.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+          const Text('Open any weekly chart to see its full ranked list.',
+              style: TextStyle(color: Colors.white60, fontSize: 12)),
           const SizedBox(height: 14),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final category in _categories)
               ActionChip(
                 avatar: Icon(category.$3, size: 17),
                 label: Text('Top 10 ${category.$2}'),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => WeeklyTop10RankingsScreen(initialChartKey: category.$1),
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) =>
+                      WeeklyTop10RankingsScreen(initialChartKey: category.$1),
                 )),
               ),
           ]),
@@ -494,7 +666,9 @@ class WeeklyTop10LeaderboardShelf extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const WeeklyTop10RankingsScreen())),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const WeeklyTop10RankingsScreen())),
               icon: const Icon(Icons.leaderboard_rounded),
               label: const Text('View all rankings'),
             ),
